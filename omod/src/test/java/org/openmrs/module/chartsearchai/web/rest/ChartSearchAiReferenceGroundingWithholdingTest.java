@@ -210,6 +210,16 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 * no verdict anywhere in the {@code reference} bucket, and every verdict it does find in the
 	 * {@code chart} bucket. The biconditional is meaningful because every fixture citation carries a
 	 * non-null verdict, so a null on the wire can only have been withheld.
+	 *
+	 * <p><b>It is a property of THIS FIXTURE and of {@code groundedForWire}, never of the system.</b>
+	 * The service here is a stub that hands the controller citations with verdicts already attached
+	 * and never reaches {@code CitationGroundingVerifier} — which is exactly why the verifier's own
+	 * withholdings cannot move this case, and why they keep growing without it noticing: a chart
+	 * citation the MODULE attached (issue #305), one of a compound claim unit (#302), one whose
+	 * negative rests on a finding (#284), and since issue #294 one of a record that names no drug all
+	 * reach a client as a chart-group null. So do NOT read a green here as "every chart citation
+	 * carries a verdict". What it states is narrower and is the whole of what it is for: the
+	 * SERIALIZER adds no withholding of its own beyond the reference group's, and removes none.
 	 */
 	@Test
 	public void everyWithheldVerdictIsExactlyAReferenceGroupCitation() throws Exception {

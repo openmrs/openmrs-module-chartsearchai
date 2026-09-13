@@ -351,8 +351,9 @@ public class ChartSearchAiConstants {
 	 * cost is one LLM round-trip per answer. Some citations are never put to
 	 * the judge at all: module-supplied reference material (issue #106/#122); a
 	 * COMPOUND claim unit, a statement attaching its citations to different pieces of
-	 * itself (issue #302); and a citation the MODULE attached rather than the model
-	 * emitting it (issue #305). {@code CitationGroundingVerifier.Disposition} is
+	 * itself (issue #302); a citation the MODULE attached rather than the model
+	 * emitting it (issue #305); and a citation of a record that NAMES NO DRUG though it is about one
+	 * (issue #294). {@code CitationGroundingVerifier.Disposition} is
 	 * canonical for that set and for how much each is held back. Still a separate opt-in from the
 	 * cheap Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
 	 */
@@ -786,8 +787,11 @@ public class ChartSearchAiConstants {
 	 * {@link #REFERENCE_GROUP_CHART}, so it is graded normally (decided in #118: one drug asserted of
 	 * this patient has no subject roles to swap, so a passing verdict is real assurance) — "the module
 	 * injected it" is a different question from this group. That parenthesis is the ordinary shape and
-	 * not every shape; {@code ChartSearchAiUtils.isGroundingDemoteOnly}'s javadoc carries what a
-	 * codes-only display does to it (issue #294).
+	 * not every shape, and since issue #294 the exception is held back one step further DOWN rather
+	 * than here: a record of this type whose order the module could read no name for still groups as
+	 * chart evidence and is still not demote-only, but its citation publishes no verdict, keyed on the
+	 * mapping's own {@code orderDrugNamed} stamp and never on this type.
+	 * {@code CitationGroundingVerifier.Disposition.UNVERIFIABLE} is canonical for it.
 	 *
 	 * <p>Since issue #201 the group decides the wire value outright: a citation in this group
 	 * serializes {@code grounded: null} whatever the pass concluded. Demote-only had already ruled

@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -39,13 +40,23 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * the module does with a grounding verdict for an injected {@code active_drug_order} record whose
  * display names no drug.
  *
- * <p><b>This records a measurement, not a desired end state.</b> The exposure is that
- * {@code RESOURCE_TYPE_ACTIVE_DRUG_ORDER} groups as {@code REFERENCE_GROUP_CHART}, so unlike
- * {@code drug_reference} and {@code safety_finding} its verdict is NOT withheld at the wire by
- * {@code ChartSearchAiRestController.groundedForWire} (#201) — a {@code false} reaches a client as
- * <em>Unsupported</em>, in red, on the module's own reconciliation record. #294 asks for the
- * measurement before any remedy, and takes no decision on which remedy. ADR Decision 38 records the
- * exposure; Decision 41's residue narrows it.
+ * <p><b>This recorded a measurement until the remedy landed, and now records the remedy.</b> The
+ * exposure was that {@code RESOURCE_TYPE_ACTIVE_DRUG_ORDER} groups as {@code REFERENCE_GROUP_CHART},
+ * so unlike {@code drug_reference} and {@code safety_finding} its verdict is NOT withheld at the wire
+ * by {@code ChartSearchAiRestController.groundedForWire} (#201) — a {@code false} reached a client as
+ * <em>Unsupported</em>, in red, on the module's own reconciliation record. The measurement #294 asked
+ * for first was run and answered yes (ADR Decision 38's owed-measurement section), and the remedy is
+ * that such a citation is now {@code Disposition.UNVERIFIABLE}: no verdict in either direction, in
+ * either mode. <b>The cases below therefore assert the opposite of what they asserted when this class
+ * was written</b>, which is the behaviour change the issue asks for and not a loosened assertion —
+ * the preconditions and the judge-recording are unchanged and what moved is the published value. The
+ * arrangement each case RUNS is unchanged too, though it is now built per case rather than in
+ * {@code setUp}, so that the named non-regression added beside them differs from them in one call.
+ *
+ * <p><b>Nothing is withheld at the WIRE, and that is the point of siting it here.</b> The remedy
+ * leaves {@code RecordReference.getGrounded()} null, so {@code groundedForWire} publishes null with
+ * no second carve-out of its own and the guard #294's text worried about is untouched. Which is why
+ * these cases read the verdict off the answer's reference and assert nothing about serialization.
  *
  * <p><b>What this class adds, and what it deliberately does not.</b> Two things about this record
  * were already pinned and are NOT repeated here:
@@ -67,17 +78,14 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p><b>It does not measure a cosine, and cannot.</b> Tier-1 compares embeddings, and no embedding
  * model runs here — {@code resolveEmbedder()} returns {@code null}, which models a deployment with
- * none. What that buys here is that the judge's answer is the only thing that can decide, so the
- * verdict these cases read is unambiguously the one under test. It is NOT that a null embedder is
- * irrelevant to whether the judge is asked: candidacy needs a claim SENTENCE, and selecting one
- * embeds wherever more than one sentence cites the record — give this stub a second citing sentence
- * and both cases publish {@code null} instead. The single-sentence answer below is what keeps that
- * path out, and nothing more general about it is claimed here. Whether a
- * codes-only record's REAL e5 embedding falls
- * under a given {@code chartsearchai.grounding.minCosine} is a question only the live measurement on
- * #294 can answer, and the floor is an operator setting the module's own global-property text says
- * to raise. So the assertion below is conditional by construction: given a judge that refuses, the
- * refusal is what the answer carries. The live run is what says whether a real judge refuses.
+ * none. That means the {@code null} these cases read is OVER-DETERMINED for Tier-1: a change that
+ * merely dropped this record from Tier-2 candidacy would leave them green. <b>So the discriminating
+ * half of each case below is that the judge was never ASKED</b>, and the tier the null must survive a
+ * real cosine in is pinned where a cosine can be arranged —
+ * {@code CitationGroundingVerifierTest.codesOnlyActiveOrder_aCosineFailIsWithheldRatherThanPublished}
+ * is the case that separates this remedy from demote-only, because demote-only keeps a fail. What
+ * this class adds over those is the COMPOSED path: the real injector minting the record and stamping
+ * it, the real verifier reading the stamp, joined through {@code search}.
  */
 public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextSensitiveTest {
 
@@ -148,10 +156,20 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_GROUNDING_ENTAILMENT_ENABLED, "true");
 		patient = Context.getPatientService().getPatient(7);
-		// Order matters and is not incidental: the ATC map goes on through the real ConceptService
-		// while the concept still validates, and only then are its names voided. makeOrderNameless
-		// carries why.
 		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, ORDER_ATC, ORDER_ATC_SIBLING);
+	}
+
+	/**
+	 * Voids every name the order could be read by, which is what routes it through
+	 * {@code namedByCodesOnly}. Per-case rather than in {@link #setUp}, so the named non-regression
+	 * below differs from its siblings in this ONE call and nothing else.
+	 *
+	 * <p>Order matters and is not incidental: the ATC map goes on through the real
+	 * {@code ConceptService} while the concept still validates, and only then are its names voided —
+	 * which is why the map stays in {@code setUp} and this does not.
+	 * {@code DrugReferenceTestSupport.makeOrderNameless} carries why.
+	 */
+	private static void makeTheOrderNameless() {
 		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 	}
 
@@ -183,11 +201,15 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
-	 * The measurement. A codes-only {@code active_drug_order} record, injected by the real
-	 * reconciliation and cited by the model in a sentence of its own, is GRADED: the judge's refusal
-	 * arrives on the answer's reference as {@code false}, with nothing in the composed path
-	 * interposing on it — and the type is not grounding-demote-only, so the wire publishes what it
-	 * finds there.
+	 * The remedy, through the composed path. A codes-only {@code active_drug_order} record, injected
+	 * by the real reconciliation and cited by the model in a sentence of its own, publishes NO verdict
+	 * — and the judge is never asked, which is the half of this that a null Tier-1 embedder cannot
+	 * account for.
+	 *
+	 * <p>This case asserted {@code false} when it was written, and that {@code false} is what issue
+	 * #294 was filed about; a live query produced it on a sentence the record supports. The
+	 * preconditions below are unchanged, so what moved is the published value and nothing about the
+	 * arrangement.
 	 *
 	 * <p>Issue #284's withholding cannot reach this arrangement, and the reason is simpler than
 	 * the intersection rule: this chart carries NO reference material at all — one obs and the
@@ -196,7 +218,8 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * finding in the chart, and is already pinned; see the class javadoc.
 	 */
 	@Test
-	public void aCodesOnlyActiveOrderCitationCarriesTheJudgesRefusalThroughTheComposedPath() {
+	public void aCodesOnlyActiveOrderCitationPublishesNoVerdictThroughTheComposedPath() {
+		makeTheOrderNameless();
 		CitesTheActiveOrderAlone provider = new CitesTheActiveOrderAlone();
 		FixedJudge judge = new FixedJudge(Boolean.FALSE);
 		TestableService service = serviceUnderTest(provider, judge);
@@ -210,37 +233,42 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 				"precondition: the cited record's display must name no drug, or these cases measure a "
 						+ "different record than #294 is about");
 		assertFalse(ChartSearchAiUtils.isGroundingDemoteOnly(order.getResourceType()),
-				"precondition: this type is chart evidence, so its verdict is NOT withheld at the "
-						+ "wire — that is the exposure #294 is about");
+				"precondition: this type is still chart evidence and still not reference material — "
+						+ "the remedy did NOT re-key isGroundingDemoteOnly, which would blank the "
+						+ "verdict for every active-order citation including the named ones");
 		assertFalse(order.isAttachedByTheModule(),
 				"precondition: the MODEL cited this record inline, so it is not the module's own "
-						+ "attachment, which would be UNVERIFIABLE in either mode (#305)");
-		assertEquals(Boolean.FALSE, order.getGrounded(),
-				"a refused claim about a record naming no drug arrives as false — the value "
-						+ "groundedForWire publishes for a chart-group citation, and the one a client "
-						+ "that keys its badge on resourceType rather than on group renders as "
-						+ "Unsupported (#201's defect, which README tells a conforming client to "
-						+ "avoid by rendering false and null alike as unverified)");
-		assertTheJudgeWasAskedAboutTheRecord(judge);
+						+ "attachment, which would be UNVERIFIABLE for a different reason (#305)");
+		assertNull(order.getGrounded(),
+				"a record that names no drug gives neither tier a question that is this citation's "
+						+ "own, so nothing is published — the false this case used to assert is what "
+						+ "a client keying its badge on resourceType rendered as Unsupported, in red, "
+						+ "on the module's own reconciliation record (#294)");
+		assertTheJudgeWasNotAsked(judge);
 	}
 
 	/**
-	 * The other direction: the same arrangement with the judge accepting publishes {@code true}, so
-	 * the composed path is not hardwired to either verdict and the exposure above is a property of
-	 * what the pass CONCLUDES rather than of the record's type. What a LIVE run publishes for such a
-	 * record, and under which regime, is ADR Decision 38's owed-measurement section — read it there
-	 * rather than inferring it from here. Nothing it records was measured on this case's claim shape,
-	 * a medication claim naming a drug the record does not name, and it says so of its own regime
-	 * table.
+	 * The other direction, so the rule is not mistaken for a one-sided demotion: with the judge
+	 * ACCEPTING, the same citation still publishes nothing. <b>What that separates is
+	 * {@code Disposition.UNVERIFIABLE} from {@code GRADED}</b>, where the judge's yes would be
+	 * published. It separates it from {@code DEMOTE_ONLY} in NEITHER direction, and an earlier draft
+	 * of this sentence claimed it did on the yes side: measured, building the demote-only remedy
+	 * instead leaves all three cases HERE green, because demote-only does not ask the judge either and
+	 * {@code resolveEmbedder()} returns null, so both dispositions publish nothing in this class. The
+	 * demote-only boundary is separated by a cosine FAIL, which THIS class cannot arrange at all;
+	 * {@code CitationGroundingVerifierTest}'s {@code codesOnlyActiveOrder_*} cases are where it is.
+	 * <b>No claim is made here about which of them is the only one</b> — two successive drafts of
+	 * such a claim were measured false, and the register of what each case covers is the cases
+	 * themselves.
 	 *
-	 * <p>Worth pinning beside its sibling because the deliberate non-extension of the demote-only
-	 * carve-out to this type means a pass VERIFIES here rather than rendering unverified — ADR
-	 * Decision 25's carve-out is scoped to reference prose, and
-	 * {@code CitationGroundingVerifierTest.activeDrugOrder_highCosinePassRendersVerifiedNotDemoted}
-	 * is where that decision is recorded.
+	 * <p>Since the judge is never asked, the verdict it would have given is not what this case
+	 * varies — it varies the stub, and asserts the answer does not depend on it. Worth keeping as its
+	 * own case rather than folding into the one above: a regression that asked the judge and then
+	 * dropped a {@code false} would be green on the sibling alone.
 	 */
 	@Test
-	public void theSameCitationCarriesAnAcceptanceThroughToo() {
+	public void theSameCitationPublishesNothingWhicheverWayTheJudgeWouldHaveAnswered() {
+		makeTheOrderNameless();
 		CitesTheActiveOrderAlone provider = new CitesTheActiveOrderAlone();
 		FixedJudge judge = new FixedJudge(Boolean.TRUE);
 		TestableService service = serviceUnderTest(provider, judge);
@@ -252,10 +280,51 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 				+ answer.getReferences());
 		assertEquals("[" + order.getIndex() + "] " + CODES_ONLY_RECORD, provider.citedRecord,
 				"precondition: the cited record's display must name no drug");
-		assertEquals(Boolean.TRUE, order.getGrounded(),
-				"an accepted claim publishes true for this type — demote-only is scoped to "
-						+ "drug-reference prose, not to everything the module injects");
-		assertTheJudgeWasAskedAboutTheRecord(judge);
+		assertNull(order.getGrounded(),
+				"nothing is published in either direction; demote-only would have withheld this yes "
+						+ "and kept a no, which is the exposure #294 is about");
+		assertTheJudgeWasNotAsked(judge);
+	}
+
+	/**
+	 * The non-regression, on the same composed path and differing in ONE thing: the order has a name.
+	 * Its citation is still graded and its verdict still published, which is the property a carve-out
+	 * keyed on the TYPE could not have preserved — ADR Decision 38's remedies sub-section measured
+	 * that cost, and this case is what would have reddened.
+	 *
+	 * <p>Its unit counterpart is
+	 * {@code CitationGroundingVerifierTest.aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector},
+	 * which asserts the stamp's TRUE directly; this one is the composed-path half and asserts only
+	 * what the ANSWER carries. <b>They are not interchangeable, and an earlier draft of this sentence
+	 * said they were.</b> Measured: collapsing the writer to "FALSE or nothing" reddens the unit case
+	 * and {@code DrugReferenceInjectorTest.theInjectedActiveOrderRecordStatesWhetherItNamesItsDrug},
+	 * and leaves all three cases HERE green — because a record stamped {@code null} is graded exactly
+	 * as one stamped {@code TRUE}, which is all this case can see. What it covers that they do not is
+	 * the wiring: the real injector and the real verifier joined through {@code search}.
+	 *
+	 * <p>The arrangement is this class's own minus {@link #makeTheOrderNameless}: order 111 keeps
+	 * concept 88's names, so {@code PatientClinicalContextBuilder} takes the display from a name and
+	 * never reaches the code-only rung. The ATC map stays in {@code setUp}, so the two arrangements
+	 * differ in the naming and not in what the dictionary knows.
+	 */
+	@Test
+	public void aNamedActiveOrderCitationStillCarriesTheJudgesVerdictThrough() {
+		CitesTheActiveOrderAlone provider = new CitesTheActiveOrderAlone();
+		FixedJudge judge = new FixedJudge(Boolean.FALSE);
+		TestableService service = serviceUnderTest(provider, judge);
+
+		ChartAnswer answer = service.search(patient, QUESTION);
+
+		RecordReference order = activeOrderReference(answer);
+		assertNotNull(order, "the unrepresented order must reach the answer as a cited record, was: "
+				+ answer.getReferences());
+		assertFalse(provider.citedRecord.contains("[ATC "),
+				"precondition: this arrangement's order must be NAMED, or it measures the same record "
+						+ "as the cases above; cited record was: " + provider.citedRecord);
+		assertEquals(Boolean.FALSE, order.getGrounded(),
+				"a named active-order citation is graded as before (#118): the rule reaches the "
+						+ "record that names no drug and no other");
+		assertTheJudgeWasAskedAbout(judge, stripMarker(provider.citedRecord));
 	}
 
 	/** Exposes the seams, and keeps warmup out of a test about a reference list. */
@@ -305,9 +374,11 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 
 	/**
 	 * A judge that answers the same way for every pair it is handed, and RECORDS the pairs. Recording
-	 * is not decoration: a constant-returning stub that discarded its inputs would leave both cases
-	 * green if the composed path handed Tier-2 a truncated premise, so the phrase "a judge that
-	 * refuses a medication claim ABOUT THIS RECORD" would be untested. What it does NOT test is claim
+	 * is not decoration, though what it buys moved with the remedy. For the two codes-only cases it
+	 * proves an ABSENCE — that no pair was handed over at all — which a stub discarding its inputs
+	 * could not show. For the NAMED non-regression it still proves content: a constant-returning stub
+	 * that discarded its inputs would leave that case green if the composed path handed Tier-2 a
+	 * truncated premise, so "a judge asked about THIS record" would be untested. What it does NOT test is claim
 	 * SELECTION — this answer offers one sentence, so there is one unit to pick.
 	 * {@code CitationGroundingVerifierTest.ConjunctionAwareJudge} records for the same reason.
 	 */
@@ -337,20 +408,53 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
-	 * What Tier-2 was actually asked: one pair, whose premise is the codes-only record WHOLE and whose
-	 * statement carries the model's own medication claim. Asserted in both cases, because it is the
-	 * difference between "the judge refused a claim about this record" and "the judge refused
-	 * something". The premise side is an equality and is the load-bearing half; the statement side is
-	 * a containment, so a marker or prefix left on it still passes.
+	 * That Tier-2 was asked about THIS record: one pair, whose premise is the cited record's text
+	 * WHOLE and whose statement carries the model's own medication claim.
+	 *
+	 * <p>The premise side is an EQUALITY and is the load-bearing half — it is the difference between
+	 * "the judge refused a claim about this record" and "the judge refused something", so a composed
+	 * path that handed Tier-2 a truncated premise could not pass. The statement side is a
+	 * containment, so a marker or prefix left on it still passes. Parameterised on the expected
+	 * record rather than fixed to the codes-only one, because the case that still asks this is the
+	 * NAMED non-regression; an earlier draft asserted only the pair COUNT there, which is the weaker
+	 * form this javadoc exists to argue against.
 	 */
-	private static void assertTheJudgeWasAskedAboutTheRecord(FixedJudge judge) {
-		assertEquals(Collections.singletonList(CODES_ONLY_RECORD), judge.sourcesSeen,
-				"Tier-2's premise must be the codes-only record text, whole");
+	private static void assertTheJudgeWasAskedAbout(FixedJudge judge, String record) {
+		assertEquals(Collections.singletonList(record), judge.sourcesSeen,
+				"Tier-2's premise must be the cited record's text, whole");
 		assertEquals(1, judge.statementsSeen.size(),
 				"one citation, one claim unit, was: " + judge.statementsSeen);
 		assertTrue(judge.statementsSeen.get(0).contains(CLAIM),
 				"and the statement must be the model's own medication claim, was: "
 						+ judge.statementsSeen.get(0));
+	}
+
+	/** The record text out of the numbered chart line the provider cited, which carries a leading
+	 *  {@code "[N] "} the judge's premise does not. */
+	private static String stripMarker(String citedChartLine) {
+		return citedChartLine.substring(citedChartLine.indexOf("] ") + 2);
+	}
+
+	/**
+	 * That Tier-2 was not asked at ALL — no premise and no statement. This is the discriminating
+	 * assertion of the two codes-only cases, because the {@code null} verdict beside it is
+	 * over-determined here: {@code resolveEmbedder()} returns null, so Tier-1 reaches no verdict
+	 * either way.
+	 *
+	 * <p>It is the counterpart of {@link #assertTheJudgeWasAskedAbout}, which those cases used before
+	 * the remedy. The premise-side equality that made "the judge refused a claim about this record"
+	 * stronger than "the judge refused something" moved with the behaviour: there is now no pair to
+	 * inspect, so the recording exists to prove its ABSENCE rather than its content.
+	 * {@link FixedJudge} still records, for that.
+	 */
+	private static void assertTheJudgeWasNotAsked(FixedJudge judge) {
+		assertEquals(Collections.emptyList(), judge.sourcesSeen,
+				"the judge must be handed no premise at all: it refuses a medication claim about a "
+						+ "record naming no drug by construction, so its answer would be about the "
+						+ "record's silence rather than about the citation — and the pair would spend "
+						+ "a slot of the per-answer entailment cap chart claims rely on");
+		assertEquals(Collections.emptyList(), judge.statementsSeen,
+				"and no statement either, was: " + judge.statementsSeen);
 	}
 
 	/**

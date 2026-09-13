@@ -322,22 +322,28 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * from the list the reconciliation walks. So the model could deny a medication the chart held, which
 	 * is the #118 divergence the reconciliation exists to repair.
 	 *
-	 * <p><b>The exposure this records rather than fixes.</b> {@code RESOURCE_TYPE_ACTIVE_DRUG_ORDER}
-	 * groups as {@code REFERENCE_GROUP_CHART}, so unlike {@code drug_reference} and
-	 * {@code safety_finding} its grounding verdict IS published on the wire. A record naming no drug
-	 * cannot entail a medication claim, so a citation of this record can be graded and published
-	 * {@code grounded=false} — reaching a client as "Unsupported". That is a new exposure, and it is
-	 * accepted here only because the alternative is the order being invisible: the module denying a
-	 * prescription the chart records is worse than substantiating it with a code. Issue #294 carries it
-	 * forward from #290.
+	 * <p><b>The exposure this once recorded rather than fixed, and what closed it.</b>
+	 * {@code RESOURCE_TYPE_ACTIVE_DRUG_ORDER} groups as {@code REFERENCE_GROUP_CHART}, so unlike
+	 * {@code drug_reference} and {@code safety_finding} its grounding verdict IS published on the wire.
+	 * A record naming no drug cannot entail a medication claim, so a citation of THIS record was graded
+	 * and published {@code grounded=false} — reaching a client as "Unsupported". #290 accepted that
+	 * because the alternative was the order being invisible, and #294 carried it forward, measured it
+	 * and then closed it.
 	 *
-	 * <p><b>#294's measurement has since been run, and the sentence above is confirmed rather than
-	 * qualified.</b> A codes-only record's citation published {@code grounded=false} on a real query —
-	 * asked whether the patient has an active order whose drug the chart does not name, the model says
-	 * so, cites the record, and the judge refuses it. Gated on entailment: Tier-1 cosine accepts the
-	 * same citation at both the shipped and the advised floor. ADR Decision 38's owed-measurement
-	 * section carries the arrangement and the regime split;
-	 * {@code CodesOnlyActiveOrderGroundingContextTest} is the composed-path half.
+	 * <p>The measurement confirmed the exposure: a codes-only record's citation published
+	 * {@code grounded=false} on a real query — asked whether the patient has an active order whose drug
+	 * the chart does not name, the model says so, cites the record, and the judge refuses it, on a
+	 * sentence the record supports. Gated on entailment there: Tier-1 cosine accepted the same
+	 * citation at both the shipped and the advised floor. ADR Decision 38's owed-measurement section
+	 * carries the arrangement and the regime split.
+	 *
+	 * <p><b>The remedy is not in this class's reach and does not change what it pins.</b> The record's
+	 * text is unchanged — this case's assertion stands byte for byte — and the injector now also stamps
+	 * the mapping with whether that text names a drug, which the grounding pass reads to publish NO
+	 * verdict for such a citation in either mode. So the display is still what a clinician and the
+	 * model read; what moved is what a client is told about a citation of it.
+	 * {@code CodesOnlyActiveOrderGroundingContextTest} is the composed-path half and
+	 * {@code CitationGroundingVerifierTest}'s codes-only cases are the tier-by-tier one.
 	 */
 	@Test
 	public void theCodeOnlyDisplayIsWhatReachesTheChartAsACitableRecord() {

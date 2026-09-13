@@ -68,9 +68,11 @@ import org.springframework.stereotype.Service;
  *
  * <p>That one classification also decides whether the citation can be grounding-verified (issue
  * #122): reference material is demote-only, so its verdict is never {@code true}, while chart
- * evidence is graded normally so far as PROVENANCE decides it. Who made the CLAIM is a second axis
- * this classification does not reach — a citation the MODULE attached is chart evidence and is still
- * not graded (issue #305) — and ADR Decision 80 draws that axis rather than this javadoc. Both
+ * evidence is graded normally so far as PROVENANCE decides it. Two further axes this classification
+ * does not reach each leave a chart-evidence citation ungraded all the same: who made the CLAIM (a
+ * citation the MODULE attached, issue #305, drawn by ADR Decision 80 rather than by this javadoc),
+ * and whether the RECORD names the drug of the order it is about — the stamp this class writes onto
+ * its own {@code active_drug_order} mapping, ADR Decision 93. Both
  * consequences of the classification follow from the single provenance judgement and
  * both are asserted by that guard — they used to be two separate registrations, and the second was
  * missed when {@code safety_finding} was added. Since issue #201 it decides a third thing: a
@@ -630,8 +632,17 @@ public class DrugReferenceInjector {
 		// before reference material), so the clinician reads evidence then conclusion.
 		for (PatientClinicalContext.ActiveDrugOrder order : unrepresented) {
 			String rendered = renderActiveOrder(order);
+			// The ONE place RecordMapping.orderDrugNamed is written (issue #294). This record's text is
+			// the order's display wrapped by renderActiveOrder, so whether it names a drug is whether
+			// the DISPLAY does — DrugSafetyValidator.displayNamesADrug, which is canonical for that
+			// question and asked of the ORDER, never of the string just rendered. Its answer decides
+			// whether a citation of this record can be graded at all: the code-only stand-in of issue
+			// #290 asserts no drug, so neither grounding tier is asked a question that is the
+			// citation's own, and the verdict published was #201's defect one group over. Stamped
+			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
-					order.getUuid(), null, rendered));
+					order.getUuid(), null, rendered, null, 0, null, null, null,
+					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}

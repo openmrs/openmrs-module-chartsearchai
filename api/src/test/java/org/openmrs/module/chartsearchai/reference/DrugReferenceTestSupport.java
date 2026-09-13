@@ -290,7 +290,7 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The real rendered text of the active-order record the REAL injector injects for an active
 	 * order the chart cannot substantiate (issue #118) — the real reconciliation → render chain,
-	 * not a hand-assembled imitation of the format. The second cross-package accessor, for the
+	 * not a hand-assembled imitation of the format. One of the cross-package accessors, for the
 	 * grounding tests: how this record text embeds against an answer sentence is exactly what
 	 * decides whether treating it as ordinary chart evidence is right, so a test asserting that
 	 * must read the text production actually produces.
@@ -327,14 +327,18 @@ public final class DrugReferenceTestSupport {
 	 * test outside this package gets the arrangement production produces rather than an imitation of
 	 * its display string.
 	 *
+	 * <p>The display is BUILT by {@code PatientClinicalContextBuilder.codeOnlyDisplay}, the one place
+	 * production makes it, rather than spelled here — a literal would keep passing if that label or
+	 * separator moved, against a string production never emits. So a caller supplies the codes and
+	 * nothing else.
+	 *
 	 * @param orderUuid the {@code Order} uuid the reconciliation carries
-	 * @param display the code-only display the builder synthesizes, e.g. {@code [ATC N02BA01]}
-	 * @param atcCodes the codes that display was built from
+	 * @param atcCodes the codes the display is built from
 	 */
-	public static RecordMapping injectedCodesOnlyActiveOrderMapping(String orderUuid, String display,
+	public static RecordMapping injectedCodesOnlyActiveOrderMapping(String orderUuid,
 			Set<String> atcCodes) {
-		return injectedActiveOrderMapping(PatientClinicalContext.ActiveDrugOrder
-				.namedByCodesOnly(orderUuid, display, atcCodes));
+		return injectedActiveOrderMapping(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+				orderUuid, PatientClinicalContextBuilder.codeOnlyDisplay(atcCodes), atcCodes));
 	}
 
 	/**
@@ -352,7 +356,7 @@ public final class DrugReferenceTestSupport {
 	 * DDInter excerpt through {@code DrugSafetyValidator.validate} and
 	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
 	 * (through the same {@code set*} seams the other helpers here use, in place of production's
-	 * autowiring). The third cross-package accessor, for the grounding tests.
+	 * autowiring). Another of the cross-package accessors, for the grounding tests. They are not numbered: two more were added beside them for issue #294 and an ordinal here rots every time one is.
 	 *
 	 * <p>Returns the {@link RecordMapping} rather than only its text because a grounding test needs
 	 * the resource type and the citation index too, and because the argument for treating this record

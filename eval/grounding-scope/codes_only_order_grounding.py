@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
 """Live grounding harness for a codes-only `active_drug_order` record (issue #294).
 
-Answers the question #294 asks — does a real query publish `grounded=false` for an
-injected active-order record whose display names no drug, and how often — on the RUNNING
-standalone, over the full production path (real querystore retrieval, real LLM answer,
-real Tier-1 e5 cosine and real Tier-2 entailment). No stub can answer it: whether such a
-record's real embedding clears `chartsearchai.grounding.minCosine`, and whether a real
-model makes a medication claim about a record that names no drug, are both properties of
-systems this repo does not implement.
+It was written to ANSWER #294's question — does a real query publish `grounded=false` for an
+injected active-order record whose display names no drug — and it did: yes, under entailment,
+on a sentence the record supports. ADR Decision 38's owed-measurement section carries that run.
+
+**Since the remedy (ADR Decision 93) it is a REGRESSION harness, and what it looks for has
+inverted.** Such a citation is now `Disposition.UNVERIFIABLE`: the module publishes no verdict
+for it in either mode. So in the `codes_only_record` block below, `true` or `false` is a
+REGRESSION — the remedy has been lost — and `null` is the expected reading. Do not read that
+`null` as a clean bill of health on its own: grounding being off, the record going uncited, or
+the request failing all print `null` too, which is why the block distinguishes "NOT CITED" from
+a cited record with no verdict, and why the regime grid still varies entailment and the floor.
+
+Everything below still runs on the RUNNING standalone over the full production path (real
+querystore retrieval, real LLM answer, real Tier-1 e5 cosine and real Tier-2 entailment),
+because the thing that would signal a regression is the same thing no stub can produce: whether
+a real model makes a medication claim about a record that names no drug, and what the pipeline
+then publishes for it end to end.
 
 It reuses `grounding_scope_ab.py`'s `get_gp`/`set_gp`/`req` and its `verdict_tag`. It does
 NOT use that module's `search`, and the reason is worth stating because the obvious reading
@@ -165,9 +175,16 @@ def cell(label, question, entailment, floor):
         # broken key, with the tag the only line that moved. The tag carries what the measurement
         # needs anyway: `attached` and `withheld` are the two non-verdicts, so a true/false/null
         # tag is already a chart-group citation the model made itself.
+        # Since ADR Decision 93 a verdict here is a REGRESSION, so it is labelled rather than left
+        # for a reader to interpret. `verdict_tag` cannot make this call itself and must not be
+        # taught to: it reads WIRE keys, and nothing on the wire distinguishes this record's null
+        # from any other citation's — RecordReference carries no display. This file can only do it
+        # because it already knows which record it built, by ORDER_UUID.
         "codes_only_record": ([
             {"index": r.get("index"), "resourceType": r.get("resourceType"),
-             "verdict": gsab.verdict_tag(r)} for r in ours]
+             "verdict": gsab.verdict_tag(r),
+             "expected": "null — no verdict is published for a record naming no drug (#294)",
+             "regression": gsab.verdict_tag(r) is not None} for r in ours]
             or "NOT CITED"),
     }
     print(json.dumps(out, indent=2), flush=True)

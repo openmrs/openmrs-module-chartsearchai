@@ -723,12 +723,13 @@ public class PatientChartSerializer {
 		 * default them to "no attribution, nothing withheld".
 		 *
 		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null} ("the module
-		 * cannot say") and, since issues #337 and #305, {@link #findingSeverity} and
-		 * {@link #derivedFrom} as well. The full one is the WIDEST, which is three rungs below rather
-		 * than one, and the distinction is worth the name because a caller reaching for "the full
-		 * constructor" through this javadoc would silently drop a drug-order record's currency answer, a
-		 * finding's rating or an injected record's provenance. Do not name the next rung as the full
-		 * one: this sentence did, and the ladder has now grown under it twice.
+		 * cannot say") and, since issues #337, #305 and #294, {@link #findingSeverity},
+		 * {@link #derivedFrom} and {@link #orderDrugNamed} as well. The WIDEST is four rungs below
+		 * rather than one, and the distinction is worth the name because a caller reaching for "the
+		 * full constructor" through this javadoc would silently drop a drug-order record's currency
+		 * answer, a finding's rating, an injected record's provenance or whether it names its drug. Do
+		 * not name the next rung as the full one: this sentence did, and the ladder has now grown under
+		 * it three times.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {

@@ -1302,9 +1302,13 @@ public interface ChartSearchService {
 		 * the distinction the next paragraph draws. A withholding the VERIFIER
 		 * itself applies leaves no verdict here to read at all: a compound claim
 		 * unit under entailment (issue #302); the judge's negative on a composite
-		 * claim (issue #284, whose count is logged once per answer instead); and a
+		 * claim (issue #284, whose count is logged once per answer instead); a
 		 * citation the MODULE attached rather than the model emitting it (issue
-		 * #305), in either mode. A
+		 * #305), in either mode; and a citation of a record that NAMES NO DRUG
+		 * though it is about one — the code-only active-order stand-in of issue
+		 * #290 — also in either mode (issue #294).
+		 * {@code CitationGroundingVerifier.Disposition} is canonical for that set;
+		 * this list is a reader's convenience and the constant is what to trust. A
 		 * {@code null} verdict must be rendered as "unverified", never as
 		 * "verified".
 		 *

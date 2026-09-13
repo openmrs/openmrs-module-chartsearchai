@@ -49,16 +49,19 @@ public class ArchitectureGuardTest {
 			"org/openmrs/module/chartsearchai/api/ChartSearchService$ChartAnswer";
 
 	/** The descriptor tail that tells RecordMapping's provenance-carrying constructor from every OTHER
-	 *  one: it is the only one whose LAST parameter is a list (issue #305). It was also the widest
-	 *  until issue #294 added a rung below it, so read it as "the one that takes a provenance list"
-	 *  and never as "the widest" — {@link #ORDER_NAMING_ARITY} is that one now. */
+	 *  one: it is the only one whose LAST parameter is a list (issue #305). Read it as exactly that —
+	 *  NOT as "the widest", which it stopped being when issue #294 added a rung below it
+	 *  ({@link #ORDER_NAMING_TAIL}), and NOT as "the only one that takes a provenance list", which it
+	 *  also stopped being: the widest takes one too, in front of its own trailing stamp, and is
+	 *  guarded by the sibling case rather than by this one. */
 	private static final String DERIVED_FROM_TAIL = "Ljava/util/List;)V";
 
-	/** The parameter count of RecordMapping's widest constructor — the only one taking the
-	 *  order-naming stamp of issue #294. Identified by ARITY rather than by a descriptor tail,
-	 *  because the order-currency rung ends in the same {@code Boolean} and a tail cannot tell the
-	 *  two apart. */
-	private static final int ORDER_NAMING_ARITY = 11;
+	/** The descriptor tail that tells RecordMapping's widest constructor — the only one taking the
+	 *  order-naming stamp of issue #294 — from every other one. TWO types, not one: the
+	 *  order-currency rung ends in the same {@code Boolean}, so a single-type tail cannot tell them
+	 *  apart, and the provenance list in front of it is what makes this pair unique. Verified against
+	 *  {@code javap -s}: the only other {@code Boolean}-tailed descriptor ends {@code ILjava/lang/Boolean;)V}. */
+	private static final String ORDER_NAMING_TAIL = "Ljava/util/List;Ljava/lang/Boolean;)V";
 
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
 	private static final String COVERAGE_TYPE =
@@ -161,6 +164,29 @@ public class ArchitectureGuardTest {
 	 */
 	@Test
 	public void theProvenanceCarryingMappingConstructorHasOneCaller() throws IOException {
+		assertSoleInjectorCallerOfMappingConstructor(DERIVED_FROM_TAIL, "a provenance list",
+				"See this test's javadoc for the checks that break silently otherwise.");
+	}
+
+	/**
+	 * The shared body of the two cases above: exactly one {@code RecordMapping} constructor matches
+	 * {@code tail}, and only {@code DrugReferenceInjector} invokes it.
+	 *
+	 * <p>One method rather than two copies because the two differ only in the selector and the
+	 * wording — and the copy drifted the first time it was made, losing the several-arities canary
+	 * below within a single commit, while its javadoc still claimed every canary fails on an empty
+	 * discovery.
+	 *
+	 * <p>Every canary here fails on an empty discovery, because a guard that finds nothing forbids
+	 * nothing: the classes directory, the mapping's own class file, more than one constructor arity,
+	 * exactly one matching {@code tail}, and the caller set being the one expected rather than empty.
+	 *
+	 * <p><b>Its reach is the API module's classes, which is the whole of what this walk reads.</b> An
+	 * omod-side caller is invisible to it, as it is to the {@code groundedForWire} guard that states
+	 * the same limit for its own scope.
+	 */
+	private static void assertSoleInjectorCallerOfMappingConstructor(String tail, String what,
+			String consequence) throws IOException {
 		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
 		assertTrue(Files.isDirectory(classes),
 				"no " + classes + "; a guard that discovers nothing forbids nothing");
@@ -172,18 +198,17 @@ public class ArchitectureGuardTest {
 		List<String> constructors = constructorDescriptors(mapping);
 		assertTrue(constructors.size() > 1,
 				"expected RecordMapping to publish several constructor arities and found "
-						+ constructors.size() + "; with one there is no narrower one for a caller with no "
-						+ "provenance to use and this guard is vacuous");
+						+ constructors.size() + "; with one there is no narrower one for a caller that "
+						+ "carries none of this to use, and this guard is vacuous");
 		List<String> carrying = new ArrayList<>();
 		for (String descriptor : constructors) {
-			if (descriptor.endsWith(DERIVED_FROM_TAIL)) {
+			if (descriptor.endsWith(tail)) {
 				carrying.add(descriptor);
 			}
 		}
 		assertEquals(1, carrying.size(),
-				"exactly one RecordMapping constructor may take a provenance list — every OTHER one "
-						+ "defaults it to empty. Found " + carrying.size() + ": "
-						+ carrying);
+				"exactly one RecordMapping constructor may END in " + what + ", which is how this case "
+						+ "tells it from the others. Found " + carrying.size() + ": " + carrying);
 
 		List<String> callers = new ArrayList<>();
 		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
@@ -196,12 +221,10 @@ public class ArchitectureGuardTest {
 		}
 		assertEquals(java.util.Collections.singletonList(
 				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
-				"the constructor that carries a provenance list may be invoked from DrugReferenceInjector "
-						+ "and nowhere else in this module's classes, which is what this walk reads — see "
-						+ "this test's javadoc for the checks that break silently otherwise. Callers "
-						+ "found: " + callers);
+				"the constructor that carries " + what + " may be invoked from DrugReferenceInjector and "
+						+ "nowhere else in the API module's classes, which is what this walk reads. "
+						+ consequence + " Callers found: " + callers);
 	}
-
 
 	/**
 	 * The stamp that says whether an injected active-order record NAMES its order's drug is written in
@@ -221,72 +244,25 @@ public class ArchitectureGuardTest {
 	 * one is the only one whose last parameter is a list, while this one shares its {@code Boolean}
 	 * tail with the order-currency rung, so it is found by ARITY.
 	 *
-	 * <p>What it cannot answer: the pool says which CLASS invokes that constructor, not what it
-	 * passes. The injector could pass the stamp for a record that is not an active order and this
-	 * stays green — what covers that is
-	 * {@code CitationGroundingVerifierTest.aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector},
-	 * over a real arrangement. Every canary here fails on an empty discovery.
+	 * <p>What it cannot answer: the pool says which CLASS invokes that constructor, not WHAT it
+	 * passes. The injector could stamp a record that is not an active order and this stays green.
+	 * An earlier draft of this sentence named
+	 * {@code CitationGroundingVerifierTest.aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector}
+	 * as the cover for that, and a review MEASURED it false — stamping {@code FALSE} on every
+	 * injected {@code drug_reference} mapping left the whole build green, that case included, because
+	 * it reads only the {@code active_drug_order} mapping. The cover is
+	 * {@code DrugReferenceInjectorTest.onlyTheActiveOrderRecordCarriesTheOrderNamingStamp}, which
+	 * reads the OTHER records of a real injection. That hole was worth closing rather than
+	 * documenting: {@code UNVERIFIABLE} outranks {@code DEMOTE_ONLY}, so a stamped
+	 * {@code drug_reference} citation would silently lose the Tier-1 off-topic {@code false} that
+	 * issues #106/#122 deliberately keep.
 	 */
 	@Test
 	public void theOrderNamingStampIsWrittenInOnePlace() throws IOException {
-		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
-		assertTrue(Files.isDirectory(classes),
-				"no " + classes + "; a guard that discovers nothing forbids nothing");
-		Path mapping = classes.resolve(
-				"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer$RecordMapping.class");
-		assertTrue(Files.exists(mapping),
-				"no RecordMapping class file at " + mapping + ", so this guard would forbid nothing");
-
-		List<String> widest = new ArrayList<>();
-		for (String descriptor : constructorDescriptors(mapping)) {
-			if (parameterCount(descriptor) == ORDER_NAMING_ARITY) {
-				widest.add(descriptor);
-			}
-		}
-		assertEquals(1, widest.size(),
-				"exactly one RecordMapping constructor may take the order-naming stamp — it is the "
-						+ "widest, and every shorter one defaults it to null, \"the module cannot say\". "
-						+ "Found " + widest.size() + ": " + widest);
-
-		List<String> callers = new ArrayList<>();
-		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
-			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
-					.filter(f -> !f.equals(mapping)).collect(java.util.stream.Collectors.toList())) {
-				if (constantPoolStrings(file).contains(widest.get(0))) {
-					callers.add(classes.relativize(file).toString());
-				}
-			}
-		}
-		assertEquals(java.util.Collections.singletonList(
-				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
-				"the constructor that carries the order-naming stamp may be invoked from "
-						+ "DrugReferenceInjector and nowhere else in this module's classes. A second "
-						+ "writer would withhold grounding verdicts for chart citations silently — see "
-						+ "this test's javadoc. Callers found: " + callers);
-	}
-
-	/** The number of parameters a method descriptor declares, read off the descriptor itself so a
-	 *  case can tell two constructors apart by arity where their tails agree. Object and array types
-	 *  are consumed whole; the primitives this module's mapping constructors use ({@code int}) are one
-	 *  character each. */
-	private static int parameterCount(String descriptor) {
-		int count = 0;
-		int i = descriptor.indexOf('(') + 1;
-		int end = descriptor.lastIndexOf(')');
-		while (i < end) {
-			char c = descriptor.charAt(i);
-			if (c == '[') {
-				i++;
-				continue;
-			}
-			if (c == 'L') {
-				i = descriptor.indexOf(';', i) + 1;
-			} else {
-				i++;
-			}
-			count++;
-		}
-		return count;
+		assertSoleInjectorCallerOfMappingConstructor(ORDER_NAMING_TAIL,
+				"the order-naming stamp of issue #294",
+				"A second writer would withhold grounding verdicts for chart citations silently — "
+						+ "see this test's javadoc.");
 	}
 
 	/**

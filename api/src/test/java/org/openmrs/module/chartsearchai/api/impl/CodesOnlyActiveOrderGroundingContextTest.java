@@ -49,8 +49,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * that such a citation is now {@code Disposition.UNVERIFIABLE}: no verdict in either direction, in
  * either mode. <b>The cases below therefore assert the opposite of what they asserted when this class
  * was written</b>, which is the behaviour change the issue asks for and not a loosened assertion —
- * the arrangement, the preconditions and the judge-recording are unchanged, and what moved is the
- * published value.
+ * the preconditions and the judge-recording are unchanged and what moved is the published value. The
+ * arrangement each case RUNS is unchanged too, though it is now built per case rather than in
+ * {@code setUp}, so that the named non-regression added beside them differs from them in one call.
  *
  * <p><b>Nothing is withheld at the WIRE, and that is the point of siting it here.</b> The remedy
  * leaves {@code RecordReference.getGrounded()} null, so {@code groundedForWire} publishes null with
@@ -283,6 +284,12 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * keyed on the TYPE could not have preserved — ADR Decision 38's remedies sub-section measured
 	 * that cost, and this case is what would have reddened.
 	 *
+	 * <p>Its unit counterpart is
+	 * {@code CitationGroundingVerifierTest.aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector},
+	 * which asserts the stamp's TRUE directly; this one is the composed-path half and asserts only
+	 * what the answer carries. The same mutation reddens both — neither catches anything the other
+	 * does not — and they are kept apart for the reason the codes-only pair is.
+	 *
 	 * <p>The arrangement is this class's own minus {@link #makeTheOrderNameless}: order 111 keeps
 	 * concept 88's names, so {@code PatientClinicalContextBuilder} takes the display from a name and
 	 * never reaches the code-only rung. The ATC map stays in {@code setUp}, so the two arrangements
@@ -305,8 +312,7 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		assertEquals(Boolean.FALSE, order.getGrounded(),
 				"a named active-order citation is graded as before (#118): the rule reaches the "
 						+ "record that names no drug and no other");
-		assertEquals(1, judge.sourcesSeen.size(),
-				"and the judge is still asked about it, was: " + judge.sourcesSeen);
+		assertTheJudgeWasAskedAbout(judge, stripMarker(provider.citedRecord));
 	}
 
 	/** Exposes the seams, and keeps warmup out of a test about a reference list. */
@@ -397,6 +403,34 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * distinction moved with the behaviour: there is now no pair to inspect, so the recording exists
 	 * to prove its absence rather than its content. {@link FixedJudge} still records, for that.
 	 */
+	/**
+	 * That Tier-2 was asked about THIS record: one pair, whose premise is the cited record's text
+	 * WHOLE and whose statement carries the model's own medication claim.
+	 *
+	 * <p>The premise side is an EQUALITY and is the load-bearing half — it is the difference between
+	 * "the judge refused a claim about this record" and "the judge refused something", so a composed
+	 * path that handed Tier-2 a truncated premise could not pass. The statement side is a
+	 * containment, so a marker or prefix left on it still passes. Parameterised on the expected
+	 * record rather than fixed to the codes-only one, because the case that still asks this is the
+	 * NAMED non-regression; an earlier draft asserted only the pair COUNT there, which is the weaker
+	 * form this javadoc exists to argue against.
+	 */
+	private static void assertTheJudgeWasAskedAbout(FixedJudge judge, String record) {
+		assertEquals(Collections.singletonList(record), judge.sourcesSeen,
+				"Tier-2's premise must be the cited record's text, whole");
+		assertEquals(1, judge.statementsSeen.size(),
+				"one citation, one claim unit, was: " + judge.statementsSeen);
+		assertTrue(judge.statementsSeen.get(0).contains(CLAIM),
+				"and the statement must be the model's own medication claim, was: "
+						+ judge.statementsSeen.get(0));
+	}
+
+	/** The record text out of the numbered chart line the provider cited, which carries a leading
+	 *  {@code "[N] "} the judge's premise does not. */
+	private static String stripMarker(String citedChartLine) {
+		return citedChartLine.substring(citedChartLine.indexOf("] ") + 2);
+	}
+
 	private static void assertTheJudgeWasNotAsked(FixedJudge judge) {
 		assertEquals(Collections.emptyList(), judge.sourcesSeen,
 				"the judge must be handed no premise at all: it refuses a medication claim about a "

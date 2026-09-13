@@ -1218,4 +1218,90 @@ public class DrugReferenceInjectorTest {
 		assertFalse(injected.contains("Contraindicated with:"), "ATC entry has no contraindication rules");
 		assertFalse(injected.contains("Interactions:"), "ATC entry has no interaction rules");
 	}
+
+	// ---- what the injector STAMPS on the active-order record it mints (issue #294) ----
+
+	/**
+	 * The stamp is FALSE for the code-only stand-in, TRUE for an order the module can name, and it is
+	 * decided by {@code DrugSafetyValidator.displayNamesADrug} — both of whose conjuncts matter HERE
+	 * and not only at the chip sites that predate this caller.
+	 *
+	 * <p>The third order is the one the conjunct nothing else pinned at this site covers: it answers
+	 * {@code hasKnownName()} TRUE — the public constructor defaults it so — while its display is
+	 * blank, which {@code renderActiveOrder} turns into the record {@code "Active drug order: ."}
+	 * That record names no drug, so the stamp must be FALSE; asking {@code hasKnownName()} alone here
+	 * would say TRUE and hand the grounding pass a record to grade that asserts nothing. The builder
+	 * produces no such order, which is why this one is hand-built — and why, without this case, a
+	 * "simplification" of the call site to {@code hasKnownName()} would pass the whole suite.
+	 */
+	@Test
+	public void theInjectedActiveOrderRecordStatesWhetherItNamesItsDrug() {
+		Set<String> codes = DrugReferenceTestSupport.set("N02BA01");
+
+		assertEquals(Boolean.FALSE,
+				DrugReferenceTestSupport.injectedCodesOnlyActiveOrderMapping("order-codes", codes)
+						.getOrderDrugNamed(),
+				"the code-only stand-in names no drug, so its citation is ungradeable (#294)");
+		assertEquals(Boolean.TRUE,
+				DrugReferenceTestSupport.injectedNamedActiveOrderMapping("order-named", "Simvastatin 20mg")
+						.getOrderDrugNamed(),
+				"an order the module can name states that it does, and is graded as before (#118)");
+
+		RecordMapping blank = DrugReferenceTestSupport.injectedActiveOrderMapping(
+				new PatientClinicalContext.ActiveDrugOrder("order-blank", "",
+						DrugReferenceTestSupport.set("simvastatin")));
+		assertEquals("Active drug order: .", blank.getText(),
+				"precondition: a blank display renders a record naming nothing at all");
+		assertEquals(Boolean.FALSE, blank.getOrderDrugNamed(),
+				"and a blank display is the ABSENCE of a name, whatever hasKnownName() says — the "
+						+ "second conjunct of displayNamesADrug, which only this case reaches here");
+	}
+
+	/**
+	 * The stamp is written on the active-order record and on NO other record of the same injection.
+	 *
+	 * <p>Nothing else can see this. {@code ArchitectureGuardTest.theOrderNamingStampIsWrittenInOnePlace}
+	 * reads the constant pool, so it knows which CLASS invokes the stamping constructor and not which
+	 * of that class's five mapping constructions passes what; and every case that reads the stamp
+	 * filters to the {@code active_drug_order} record first. Measured: stamping {@code FALSE} on the
+	 * injected {@code drug_reference} mapping leaves the entire build green without this.
+	 *
+	 * <p>It is worth a case because the failure is silent and fails the wrong way.
+	 * {@code Disposition.UNVERIFIABLE} outranks {@code DEMOTE_ONLY}, so a {@code drug_reference}
+	 * citation carrying {@code FALSE} would stop publishing the Tier-1 off-topic {@code false} that
+	 * issues #106/#122 keep for exactly that record class — the grounding signal for reference
+	 * material would go quiet with no error anywhere.
+	 *
+	 * <p>It asserts {@code null} and not "not FALSE": {@code null} is the module declining to say,
+	 * which is the only honest answer for a record that is not about one of this patient's orders.
+	 */
+	@Test
+	public void onlyTheActiveOrderRecordCarriesTheOrderNamingStamp() {
+		DrugReferenceInjector inj =
+				DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService());
+		PatientChart result = inj.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null, null, null, null, null,
+						java.util.Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+								"order-codes", "[ATC N02BA01]", DrugReferenceTestSupport.set("N02BA01")))),
+				"can I give her ibuprofen?");
+
+		List<RecordMapping> stamped = new ArrayList<RecordMapping>();
+		List<String> otherTypes = new ArrayList<String>();
+		for (RecordMapping mapping : result.getMappings()) {
+			if (mapping.getOrderDrugNamed() != null) {
+				stamped.add(mapping);
+			} else {
+				otherTypes.add(mapping.getResourceType());
+			}
+		}
+		assertFalse(otherTypes.isEmpty(),
+				"precondition: this injection must produce records BESIDES the active order, or the "
+						+ "case forbids nothing; mappings were: " + result.getMappings().size());
+		assertEquals(1, stamped.size(),
+				"exactly one record of this injection may carry the order-naming stamp, was: " + stamped);
+		assertEquals(ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
+				stamped.get(0).getResourceType(),
+				"and it is the active-order record; every other record states null, which is the "
+						+ "module declining to say rather than saying no");
+	}
 }

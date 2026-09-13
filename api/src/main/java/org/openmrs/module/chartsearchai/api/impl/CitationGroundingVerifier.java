@@ -85,8 +85,9 @@ import org.springframework.stereotype.Service;
  * answer where each line cites its own record runs no Tier-1 embeds at all. A consequence pinned in
  * tests: a broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
  * claim sentences the judge is ASKED about — previously it silently downgraded every citation to
- * "unverified". Since issue #302 it is not asked about a compound claim unit, and since #305 not
- * about a citation the module attached either (see {@link Disposition#UNVERIFIABLE}); the former on such a
+ * "unverified". Since issue #302 it is not asked about a compound claim unit, since #305 not
+ * about a citation the module attached, and since #294 not about a record that names no drug (all
+ * three on {@link Disposition#UNVERIFIABLE}); the first on such a
  * deployment has no tier left and renders unverified; see the compound-claim paragraph below.
  *
  * <p><strong>Module-supplied reference citations are demote-only.</strong> A record whose
@@ -139,10 +140,8 @@ import org.springframework.stereotype.Service;
  * injected {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is NOT reference
  * material and is graded normally — see the carve-out site in {@link #verify} for why that is
  * right, and why "the module injected it" is the wrong test. One RECORD of that type is held back
- * even so, and by a different rule: one whose order the module could read no name for names no drug,
- * so it is {@link Disposition#UNVERIFIABLE} (issue #294). That is keyed on the mapping's own stamp
- * and not on the type, so the named record — the ordinary shape, and the one #118 injected the type
- * for — is untouched.
+ * even so, and by a different rule keyed on the mapping rather than on the type:
+ * {@link Disposition#UNVERIFIABLE}, which is canonical for it (issue #294).
  *
  * <p><strong>A COMPOUND claim unit is UNVERIFIABLE, which is stronger than demote-only.</strong> A claim unit
  * that attaches its citations to different pieces of its own text — more than one citation, with
@@ -286,9 +285,10 @@ import org.springframework.stereotype.Service;
  * reference side is the same shape reversed. So a chart citation nothing anchors has its statement —
  * and what that statement rests on — read out of the whole answer, and an UNANCHORED reference
  * citation counts toward every claim, because it was offered in support of the answer without saying
- * where. See {@link AnswerCitations}. One subclass is exempt since issue #305: a citation the MODULE
- * attached is anchored by nothing and has no statement selected for it AT ALL, claim selection being
- * skipped for it.</li>
+ * where. See {@link AnswerCitations}. Two subclasses have no statement selected for them AT ALL, claim selection being
+ * skipped: a citation the MODULE attached, which is anchored by nothing (issue #305), and a citation
+ * of a record that names no drug, which is anchored like any other but has nothing to be asked about
+ * (issue #294).</li>
  * </ul>
  *
  * <p>The cost, stated rather than implied: a chart citation the model attached to the WRONG record
@@ -378,7 +378,8 @@ public class CitationGroundingVerifier {
 	 * {@code null} when querystore's provider can't be resolved — Tier-1 cosine checks are then
 	 * skipped and Tier-2 entailment (the authoritative pass) still applies to every citation it is
 	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit — nor,
-	 * since #305, one the module attached, which selects no claim at all — the former of which
+	 * since #305, one the module attached, nor, since #294, one of a record that names no drug, the
+	 * last two selecting no claim at all — the first of which
 	 * renders unverified on any deployment, so an absent embedder cannot change its verdict. It can
 	 * still change the LOG: where several sentences cite the record, claim selection embeds to choose
 	 * between them, and that failure is counted in the run's embedding-failure summary. Never throws.
@@ -466,8 +467,8 @@ public class CitationGroundingVerifier {
 		 * the cosine is not standing in for a judge that could not be asked, but it is still being
 		 * measured against a record that asserts nothing, and its FAIL is the same false
 		 * <em>Unsupported</em>. That is what separates this from DEMOTE_ONLY, which keeps the fail —
-		 * demoting would have left #294's own harm standing through Tier-1, the more so at the ~0.82
-		 * floor this module's global-property text advises for e5. Membership is the mapping's own
+		 * demoting would have left #294's own harm standing through Tier-1, the more so at the raised
+		 * floor {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE} advises for an e5 deployment. Membership is the mapping's own
 		 * {@code RecordMapping.getOrderDrugNamed()} stamp, so it reaches the RECORD that names no drug
 		 * and not the TYPE: a NAMED {@code active_drug_order} citation is graded and published exactly
 		 * as before, which a carve-out in {@link ChartSearchAiUtils#isGroundingDemoteOnly} could not

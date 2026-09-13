@@ -463,10 +463,12 @@ public class DrugSafetyValidator {
 		}
 		if (!context.chartReadForSafety()) {
 			// WARN, and it says what this SURFACE does about the state rather than that the state
-			// happened: since issue #247 the builder's own catches are loud too, so an operator sees
-			// the failing read named where it is read and its consequence named here. Neither line
-			// subsumes the other — the builder's names WHICH read failed and fires wherever a context
-			// is built (with a stack trace for any cause but a missing privilege, where the message
+			// happened: since issue #247 the builder's own catches are loud too — and since issue #413
+			// so is the branch that drops an order whose coded drug could not be read — so an operator
+			// sees the failing read named where it is read and its consequence named here. Neither line
+			// subsumes the other — the builder's names WHICH read failed, or WHICH order was dropped,
+			// and fires wherever a context is built (with a stack trace for any cause but a missing
+			// privilege, where the message
 			// already names the privilege); this one says what THIS surface does about it, which the
 			// builder cannot know. A configuration fault an operator can fix, which this package's
 			// loudness rule says is loud wherever the data came from.
@@ -477,18 +479,45 @@ public class DrugSafetyValidator {
 			// null-patient shape, which stamps both flags unread. "Were not read" rather than "could
 			// not be", because for a null patient there was nothing to read.
 			//
+			// And it names every CAUSE, for the same reason one wording could not serve two sides
+			// (issue #413). Since that issue the order stamp falls two ways, and the remedy differs:
+			// a read core gates on Get Orders that did not happen, and a read that DID happen and left
+			// an order off the list because its coded Drug could not be read, which no privilege
+			// fixes. Told to check Get Orders for the second, an operator verifies a privilege the
+			// role already holds, sees screened:false still, and reads the same line on the next poll
+			// — the round trip the two-branch form above was rewritten to remove, for a cause no grant
+			// can reach. The builder's own WARN names the order; this one says what the surface does.
+			//
 			// Once per request per patient, deliberately: the state is persistent and a polling banner
 			// will repeat it, but a throttle would hide the one line a diagnosis needs.
 			List<String> unread = new ArrayList<String>();
 			if (!context.contraindicationRecordsRead()) {
 				unread.add("allergy and condition records (core's Get Allergies, Get Conditions)");
 			}
-			if (!context.activeDrugOrdersRead()) {
+			if (!context.activeDrugOrderReadCompleted()) {
 				unread.add("active orders (core's Get Orders)");
 			}
-			log.warn("Standing chart alerts: {} were not read for this patient, so the chart is "
-					+ "reported as NOT screened rather than as clear. Check that the querying role holds "
-					+ "the privileges named.", unread);
+			if (unread.isEmpty()) {
+				// Both reads completed, and this branch is inside !chartReadForSafety(), so the order
+				// left off the list is the only thing left for the verdict to be resting on: the
+				// sentence needs no guard of its own. Nothing to grant for it, so the privilege
+				// instruction is not merely unhelpful here but wrong, and it is dropped rather than
+				// softened.
+				log.warn("Standing chart alerts: this patient's active orders were read but at least one "
+						+ "of them could not be accounted for, so the chart is reported as NOT screened "
+						+ "rather than as clear. There is no privilege to grant for it; the order is named "
+						+ "in its own WARN from PatientClinicalContextBuilder.");
+			}
+			else {
+				log.warn("Standing chart alerts: {} were not read for this patient, so the chart is "
+						+ "reported as NOT screened rather than as clear. Check that the querying role holds "
+						+ "the privileges named.{}", unread,
+						context.activeDrugOrderUnaccountedFor()
+								? " An active order was also left off the list although that read"
+										+ " completed, which no privilege fixes; it is named in its own"
+										+ " WARN from PatientClinicalContextBuilder."
+								: "");
+			}
 			return StandingChartAlerts.notScreened();
 		}
 		return StandingChartAlerts.screened(

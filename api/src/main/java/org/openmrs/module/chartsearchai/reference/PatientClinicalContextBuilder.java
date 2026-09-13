@@ -117,7 +117,13 @@ final class PatientClinicalContextBuilder {
 		// PatientClinicalContext.activeDrugOrdersRead(). The catch degrades this dimension to an
 		// empty list, which is right for a chip and wrong for a surface whose whole payload is the
 		// join between these orders and the records below.
-		boolean activeDrugOrdersRead = true;
+		//
+		// The two CAUSES rather than the stamp, which PatientClinicalContext derives from them: the
+		// operator's remedy differs between them — one is a privilege core gates the read on, the other
+		// a failed entity read with no privilege to grant — and nothing downstream can tell them apart
+		// once they are folded (issue #413). Independent, so a pass that hits both records both.
+		boolean activeDrugOrderReadCompleted = true;
+		boolean activeDrugOrderUnaccountedFor = false;
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
@@ -246,14 +252,14 @@ final class PatientClinicalContextBuilder {
 							+ "drug could not be read, so it is left off this patient's medication list "
 							+ "entirely and the active-order read is reported as incomplete rather than "
 							+ "clean.", drugOrder.getUuid());
-					activeDrugOrdersRead = false;
+					activeDrugOrderUnaccountedFor = true;
 				}
 			}
 		}
 		catch (RuntimeException e) {
 			warnUnreadable("active drug orders", "the drug-safety layer is screening as though there "
 					+ "were none", e, PrivilegeConstants.GET_ORDERS);
-			activeDrugOrdersRead = false;
+			activeDrugOrderReadCompleted = false;
 		}
 
 		// Whether the two contraindication reads below actually happened. Each catch degrades its
@@ -315,8 +321,8 @@ final class PatientClinicalContextBuilder {
 		}
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
-				activeOrders, null, contraindicationRecordsRead, activeDrugOrdersRead, allergyRecords,
-				conditionRecords);
+				activeOrders, null, contraindicationRecordsRead, activeDrugOrderReadCompleted,
+				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

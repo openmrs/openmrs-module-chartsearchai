@@ -28,6 +28,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
 
 /**
  * A {@code Drug} the module cannot read costs that order its coded NAME, and not the chart's whole
@@ -128,6 +129,16 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	/** The logger the two WARN assertions capture — the builder's own, so a line from a neighbouring
 	 *  class in the same package cannot satisfy them. */
 	private static final String BUILDER_LOGGER = PatientClinicalContextBuilder.class.getName();
+
+	/** The standing surface's own logger — the operator-facing line, which is a different channel
+	 *  from the builder's and says what the SURFACE does rather than which read failed. */
+	private static final String VALIDATOR_LOGGER = DrugSafetyValidator.class.getName();
+
+	/** The remedy the standing line offers where a read is gated on a core privilege. */
+	private static final String PRIVILEGE_REMEDY = "Check that the querying role holds";
+
+	/** A drug the curated seed carries, used only to make the enrichment copy happen. */
+	private static final String ENRICHING_DRUG = "ibuprofen";
 
 	/** A phrase from the accessor's own WARN, and one from the drop's. Both lines name the order, so
 	 *  the uuid alone would let EITHER satisfy either assertion — measured: lowering the drop's line
@@ -701,8 +712,9 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * had migrated back out to a call site would satisfy a count and reinstate the defect.
 	 *
 	 * <p><b>What these three assertions are for, and what they are not.</b> They catch the ordinary
-	 * edit — a fourth read added beside the three that were wrong, a catch narrowed to the exception
-	 * this suite happens to stage. They are text over one file, so an edit that sets out to evade
+	 * edit — a fourth read added beside the three that were wrong, a permitted read dereferenced
+	 * further, a catch narrowed to the exception this suite happens to stage. They are text over one
+	 * file, so an edit that sets out to evade
 	 * them can: a decoy {@code catch (RuntimeException …)} placed inside the accessor while the real
 	 * handler is narrowed; a read made through a second local of the same type, or with the receiver
 	 * wrapped onto its own line, or sharing a line with a permitted read. Each was measured green,
@@ -714,9 +726,12 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * {@code getDrug ()} is not. It is about that spelling alone, so it
 	 * says nothing about a read on the {@code Drug} the accessor RETURNS that is spelled some other
 	 * way — through a differently named local, or wrapped so that {@code drug.get} falls across two
-	 * lines. The ordinary spelling of that read IS caught, by the allow-list below: measured,
-	 * {@code drug.getDisplayName()}, {@code drug.getFullName(…)} and {@code drug.getDrugId()} at a
-	 * call site each redden this case. None of the three residues is worth a cleverer pattern: what
+	 * lines, which is the residue the allow-list keeps after it stopped matching over the whole line:
+	 * a chain WRITTEN across two lines is admitted where one written on a single line is not. The
+	 * ordinary spelling of that read IS caught, by the allow-list below: measured,
+	 * {@code drug.getDisplayName()}, {@code drug.getFullName(…)}, {@code drug.getDrugId()} and
+	 * {@code drug.getConcept().getName()} at a call site each redden this case. None of those
+	 * residues is worth a cleverer pattern: what
 	 * this guard is for is the ordinary edit, and the behavioural cases above redden for any of those
 	 * that this fixture's orders reach.
 	 */
@@ -761,14 +776,126 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 			String statement = scan.statementAt(at);
 			boolean allowed = false;
 			for (String read : READS_ON_THE_RETURNED_DRUG) {
-				allowed = allowed || statement.contains(read);
+				// Matched AT this offset, and refused where the permitted read is itself dereferenced.
+				// Asking whether the LINE contains a permitted spelling admits anything chained off one:
+				// drug.getConcept().getName() reaches the drug's own lazy concept — the very hazard the
+				// message below names — outside the accessor's try, and was measured green here.
+				allowed = allowed || (scan.literalOffsets(read).contains(at)
+						&& !scan.literalOffsets(read + ".").contains(at));
 			}
 			assertTrue(allowed, "line " + scan.lineOf(at) + " reads something other than "
 					+ java.util.Arrays.toString(READS_ON_THE_RETURNED_DRUG) + " on the Drug the accessor"
-					+ " returned: \"" + statement + "\". Materialising the entity does not materialise"
+					+ " returned, or dereferences one of them further: \"" + statement + "\"."
+					+ " Materialising the entity does not materialise"
 					+ " its lazy collections, and getFullName/getDisplayName reach its own lazy concept,"
+					+ " as does a getName() chained onto the getConcept() below,"
 					+ " so such a read can throw where the three above cannot — outside the accessor's"
 					+ " try, which is issue #413's defect again. Give it its own try in the accessor.");
 		}
 	}
+
+	/**
+	 * The operator's remedy, which is a different question from the verdict: the standing surface's
+	 * own WARN must not send an operator to grant a privilege where there is none to grant.
+	 *
+	 * <p>The other arm is the case below, and it is not decoration: an assertion over this arm alone
+	 * is satisfied by a line that never varies, which would be the privilege sentence taken away
+	 * from the cause issue #247 put it there for.
+	 *
+	 * <p>Before this branch the dropped-order arm logged the privilege line verbatim: an operator
+	 * whose {@code /chartalerts} flipped to {@code screened: false} because one order points at an
+	 * unreadable {@code drug} row was told to check a privilege the role already held, saw the flag
+	 * stay false, and read the same line on the next poll — the round trip the two-branch form of
+	 * this message was written for issue #247 to remove, for a cause no grant can reach.
+	 */
+	@Test
+	public void theStandingSurfaceOffersNoPrivilegeToGrantForAnOrderItCouldNotAccountFor()
+			throws Exception {
+		DrugReferenceTestSupport.nameTheConcept(ORDERED_CONCEPT, "");
+		pointTheOrderAtADrugRowThatIsGone(ORDER);
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		try (LogCapture capture = LogCapture.on(VALIDATOR_LOGGER)) {
+			assertFalse(validator.standingChartAlerts(patient).isScreened(),
+					"precondition: this fixture must leave the chart unscreened, or the line under test"
+							+ " is never reached");
+			assertFalse(capture.hasMessageAt(Level.WARN, PRIVILEGE_REMEDY),
+					"the standing surface must not tell an operator to check a privilege for an order it"
+							+ " read and could not account for — the read happened and every privilege is"
+							+ " held, so the grant changes nothing and the flag stays false (issue #413);"
+							+ " was: " + capture.describeAll());
+			assertTrue(capture.hasMessageAt(Level.WARN, "could not be accounted for"),
+					"and it must still say what it found, or an empty alert list beside screened:false"
+							+ " has no operator-facing explanation at all; was: " + capture.describeAll());
+		}
+	}
+
+	/**
+	 * The other arm of that branch, and what makes it a branch: a read core DOES gate on a privilege
+	 * still names it. Without this case the message could be rewritten to state the no-privilege
+	 * wording unconditionally and the case above would stay green, which would take the
+	 * {@code Get Orders} remedy away from the cause issue #247 put it there for.
+	 *
+	 * <p>Refusing the privilege is what fails the read the way production fails it — the same
+	 * arrangement {@code ChartReadFailureLoudnessContextTest} makes for the BUILDER's line, which is
+	 * a different channel: that one names which read failed, this one what the surface does about it.
+	 */
+	@Test
+	public void theStandingSurfaceStillNamesThePrivilegeForAReadCoreGatesOnOne() {
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		DrugReferenceTestSupport.refusingPrivilege(PrivilegeConstants.GET_ORDERS, () -> {
+			try (LogCapture capture = LogCapture.on(VALIDATOR_LOGGER)) {
+				assertFalse(validator.standingChartAlerts(patient).isScreened(),
+						"precondition: refusing Get Orders must leave the chart unscreened");
+				assertTrue(capture.hasMessageAt(Level.WARN, PRIVILEGE_REMEDY, "Get Orders"),
+						"a read core gates on a privilege must still send an operator to grant it; was: "
+								+ capture.describeAll());
+			}
+			return null;
+		});
+	}
+
+	/**
+	 * The stamp survives the enrichment the real pass applies, which is where this shape has cost two
+	 * regressions before — {@code StandingChartAlertsTest.bothChartReadStampsSurviveTheEnrichmentThePassApplies}
+	 * pins the same copy for the two stamps that predate issue #413.
+	 *
+	 * <p>The context is the real builder's, on the chart this class drops an order from. The entry
+	 * list is resolved off the loaded dataset rather than off that chart's surviving orders, because
+	 * {@code withReferenceNames} returns the context UNTOUCHED for an empty list and the curated seed
+	 * names none of patient 2's remaining prescriptions — measured, which is why the first version of
+	 * this case failed its own precondition. The copy is the subject here and it does not read the
+	 * entries beyond their aliases, so what the list resolved FROM cannot change what is measured.
+	 *
+	 * <p>Dropping the new field from that copy flips the enriched context back to a complete read,
+	 * silently and fail-OPEN, and every other case in this class reads the RAW context.
+	 */
+	@Test
+	public void theDroppedOrdersMarkSurvivesTheEnrichmentThePassApplies() throws Exception {
+		Patient secondPatient = Context.getPatientService().getPatient(2);
+		DrugReferenceTestSupport.nameTheConcept(SECOND_PATIENT_CONCEPT, "");
+		pointTheOrderAtADrugRowThatIsGone(SECOND_PATIENT_ORDER);
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
+
+		PatientClinicalContext raw = PatientClinicalContextBuilder.build(secondPatient);
+		assertFalse(raw.activeDrugOrdersRead(),
+				"precondition: the raw context must already report the incomplete read");
+		List<DrugReference> orderEntries = service.findByDrugName(ENRICHING_DRUG);
+		assertFalse(orderEntries.isEmpty(),
+				"precondition: the entry list must be non-empty, or withReferenceNames returns the "
+						+ "context untouched and this case reaches no copy at all");
+
+		PatientClinicalContext enriched = service.withReferenceNames(raw, orderEntries);
+
+		assertFalse(enriched.activeDrugOrdersRead(),
+				"the enriched copy must still carry the mark the raw context set, or a dropped order is "
+						+ "forgotten between the builder and the reader (issue #413)");
+		assertFalse(DrugReferenceTestSupport.validator(service).standingChartAlerts(enriched)
+				.isScreened(),
+				"and the one reader that asks for both stamps must still refuse to certify the screen");
+	}
+
 }

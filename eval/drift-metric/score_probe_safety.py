@@ -814,11 +814,11 @@ def findings_incompletely_stated(cell):
     **`cited` was REDEFINED on 2026-09-13 by #409, and numbers quoted against this column before
     that date are not comparable with a capture taken after it.** The module used to count a finding
     as cited when the model's structured `citations` array named it, whether or not any `[N]` marker
-    in the answer did; it now counts the markers, intersected with the same resolution. The new
-    reading admits a subset of the old one on every input, so this column can only have risen — and
-    the A/B refusal below will NOT catch such a pair, both arms publishing the key. There is no
-    build marker in a capture to test; this note is the whole of the guard. ADR Decision 93 carries
-    which recorded figures it invalidates.
+    in the answer did; it now counts the markers, intersected with the same resolution. The A/B
+    refusal below will NOT catch such a pair, both arms publishing the key, and a capture carries no
+    build marker to test — so this note is the whole of the guard. ADR Decision 93 is the one ledger
+    of which recorded figures it invalidates, and of which way a re-measurement can be expected to
+    move (for the repair arm, neither: that change also refused a blank original).
 
     Scoped by the MEASUREMENT and not by `label`, because `carried > 0` already says the prompt held
     a finding and that is the population — a cell can carry a finding and still label ABSTAIN, which

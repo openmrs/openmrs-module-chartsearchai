@@ -284,7 +284,8 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>Why a client could not read it off anything already published.</b> The response's
 	 * {@code references} carry what the answer's citations RESOLVED to, which since issue #409 is
-	 * neither half of this pair — see below; {@code reference_slice_records} is the base of a different population
+	 * neither half of this pair — see below; {@code reference_slice_records} is the base of a
+	 * different population
 	 * (every reference-group record, monographs and class notes included) and reaches the audit row
 	 * rather than the response. {@code interactionPairs} counts what the SCREEN found and reported
 	 * and is true of a response whose prose dropped one, which is the reported defect exactly. On the
@@ -352,18 +353,8 @@ public interface ChartSearchService {
 			return carried;
 		}
 
-		/**
-		 * @return how many of them the ANSWER cited: the citations its own resolution admitted,
-		 *         narrowed to the ones a marker in the answer text anchors (issue #409). A finding the
-		 *         model listed in its structured {@code citations} array and named in no sentence is
-		 *         not one of these, which is what makes {@code cited < carried} readable as "a
-		 *         screened finding did not reach the prose". It is NOT the count of
-		 *         {@code safety_finding} entries in {@code references}, which stays the resolution's
-		 *         own union and can therefore be larger; and {@code cited == carried} still certifies
-		 *         nothing about how those findings were stated.
-		 *         {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} is canonical for the
-		 *         reading, including what a blank answer means there
-		 */
+		/** @return how many of them the ANSWER cited — see this type's own javadoc, which is canonical
+		 *          for the reading and for what it does not assert */
 		public int getCited() {
 			return cited;
 		}

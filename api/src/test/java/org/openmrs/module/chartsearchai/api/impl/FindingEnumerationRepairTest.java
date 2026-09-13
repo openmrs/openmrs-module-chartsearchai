@@ -446,8 +446,9 @@ public class FindingEnumerationRepairTest {
 		};
 	}
 
-	/** The same, for a model whose structured citations array does not agree with its prose — one
-	 *  list per call, short lists sending an empty array as every case here did before issue #409. */
+	/** {@link #answeringInTurn(String...)}, for a model whose structured citations array does not
+	 *  agree with its prose — one list per call, short lists sending an empty array as every case
+	 *  here did before issue #409. */
 	private static StubProvider answeringInTurn(List<List<Integer>> citations, String... answers) {
 		return new StubProvider(citations, answers);
 	}

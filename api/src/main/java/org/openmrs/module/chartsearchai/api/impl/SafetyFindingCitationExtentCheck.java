@@ -64,7 +64,8 @@ import org.slf4j.LoggerFactory;
  *       {@link LlmInferenceService#extractCitedReferences} admitted, narrowed to the indexes a
  *       marker in the prose carries. {@link #citedFindingIndexes} is canonical for what each of
  *       the three tests contributes and for what a blank answer means there; ADR Decision 93 is
- *       canonical for what that supersedes in Decision 83. A citation the MODULE attached (issue #305) is not one the
+ *       canonical for what that supersedes in Decision 83. A citation the MODULE attached (issue
+ *       #305) is not one the
  *       answer made and is not counted; that filter is belt and braces on today's path, where only
  *       the two contraindication factories set the flag and they set it on chart records rather
  *       than findings, and it is here because the rule that a scorer counts the model's own
@@ -118,7 +119,7 @@ import org.slf4j.LoggerFactory;
  * the endpoint users hit is covered. Not the progressive-reasoning preview, which discards its
  * answer and resolves no citations, and not a cached answer, which was measured when it was produced
  * — the same scoping its siblings state. {@link #carriedFindingIndexes} is this class's other
- * published projection of that population and has no production caller of its own; its javadoc is
+ * published projection of that population; its javadoc is
  * canonical for what it is for, and for what {@code measureFindingCitations} shares with it rather
  * than calling it.
  * &rarr; ADR Decision 83.
@@ -148,7 +149,7 @@ final class SafetyFindingCitationExtentCheck {
 	 * instead, needing the walk the projection was taken from as well and not walking twice to get
 	 * both. What this is, is the COMPOSED projection, and its other reader is
 	 * {@code FindingEnumerationClauseContextTest.theSharedWalkHandsTheFindingsBackInTheOrderTheInjectorWroteThem}'s
-	 * content leg. Keep it composed if a production caller returns.
+	 * content leg.
 	 *
 	 * <p>Keyed on the INDEX, the injector's own sequential numbering — one increment per finding
 	 * record, in the sole producer of these mappings — so it is unique across a chart by

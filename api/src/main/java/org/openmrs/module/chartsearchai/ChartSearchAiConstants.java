@@ -567,9 +567,9 @@ public class ChartSearchAiConstants {
 	 * them, on the grounds that the client already renders every finding in full — issue #403.
 	 *
 	 * <p>Ships ON since the fourteen-cell measurement: over ADR Decision 84's own corpus this arm
-	 * stated every carried finding on 8 of 12 cells against the previous default's 5 — both figures
-	 * scored off {@code findingCitations} before issue #409 redefined {@code cited}, so they are not
-	 * comparable with a capture taken after it and no re-measurement has been made — dropped a
+	 * stated every carried finding on 8 of 12 cells against the previous default's 5 — scored off
+	 * {@code findingCitations} before issue #409 redefined {@code cited}; ADR Decision 93 is the one
+	 * ledger of what that invalidates — dropped a
 	 * cited finding's rating on none, and left verdict-led, the abstention controls and licensing
 	 * untouched — a strict improvement at one inference instead of two. It does NOT reach the
 	 * scorer's exit 0, which wants no cell short at all; the arm that does is

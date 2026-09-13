@@ -716,7 +716,7 @@ Since [#395](https://github.com/openmrs/openmrs-module-chartsearchai/issues/395)
 response states `findingCitations` — how many injected safety findings the prompt carried against how
 many the answer anchored a citation marker for (that reading, rather than the model's structured
 `citations` array, since [#409](https://github.com/openmrs/openmrs-module-chartsearchai/issues/409);
-a capture taken before it is not comparable on this cell). `score_probe_safety.py` now reads it as a **completeness cell**, beside a
+ADR Decision 93 is the one ledger of which recorded figures that invalidates). `score_probe_safety.py` now reads it as a **completeness cell**, beside a
 **rating cell** over `unstatedFindingSeverities`. Two keys because they trade: an arm can state every
 finding by dropping every rating, and the completeness cell alone scores that a clean win.
 

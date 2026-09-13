@@ -648,27 +648,35 @@ final class PatientClinicalContextBuilder {
 	 * {@code UnreadableOrderDrugTest}, {@code ActiveOrderConceptIdentityTest} and
 	 * {@code ActiveOrderAdministrationTermsTest} — mutate them and read the failures.
 	 *
-	 * <p><b>No {@code Drug} leaves this method.</b> Initialising a proxy is atomic, so all three reads
-	 * are served from the loaded target and
-	 * cannot throw once the fetch above succeeded. That does NOT extend to the whole entity, and the
+	 * <p><b>The FIRST of the three is the one that can throw, and the catch below is for it.</b>
+	 * {@code getName()} initialises the proxy, so it is where a row that is not there surfaces — which
+	 * is what {@code UnreadableOrderDrugTest} stages, and why that catch is not dead code. Do not read
+	 * the atomicity argument as covering it: what atomicity buys is that ONCE that read succeeds the
+	 * target is loaded, so {@code getConcept()} and {@code getDosageForm()} are served from it and
+	 * cannot throw. That does NOT extend to the whole entity, and the
 	 * exceptions are the plausible next reads rather than exotic ones: {@code Drug.hbm.xml} maps
 	 * {@code ingredients} and {@code drugReferenceMaps} as lazy {@code <set>}s, which initialising the
 	 * entity does not initialise; {@code getFullName(Locale)} dereferences the drug's own lazy
 	 * {@code concept}; and {@code getDisplayName()} does the same wherever the drug's own name is
 	 * blank. Any of those can still throw on a detached {@code Drug}. A fourth read belongs in this
-	 * same {@code try} and on {@link CodedDrug}, never at a call site. While that class carries values
-	 * rather than the entity, a call site has no {@code Drug} to read and the compiler says so; what
-	 * keeps it that way is {@code UnreadableOrderDrugTest}, not the compiler, which would be equally
-	 * content with the entity put back.
+	 * same {@code try} and on {@link CodedDrug}, never at a call site.
 	 *
-	 * <p><b>What that costs on the path nobody can reach.</b> Where one of the three DID throw, this
-	 * returns {@link CodedDrug#UNREADABLE} and so discards a name the line above had already read
-	 * successfully, and the order is reported as one whose coded drug could not be read — which of
-	 * that name is not quite true. The alternative is a partial answer, and the atomicity above says
-	 * the case does not arise; what it replaces is worse on both counts, since before issue #421 the
-	 * same throw was raised OUTSIDE this method — costing the whole order loop AND stamping
-	 * {@code activeDrugOrderReadCompleted} false, so the chart was reported unread rather than one
-	 * order degraded.
+	 * <p><b>What the compiler does and does not forbid at a call site.</b> While {@link CodedDrug}
+	 * carries values rather than the entity, there is no returned {@code Drug} for a call site to
+	 * dereference and the compiler says so — which is the spelling the old text guard policed. It does
+	 * NOT stop a call site fetching its own, {@code drugOrder.getDrug().getName()} compiling as well
+	 * as it ever did; the assertion that {@code getDrug()} is named exactly once is still the only
+	 * thing forbidding that, and it is text. Both halves are {@code UnreadableOrderDrugTest}'s, not
+	 * the compiler's, which would be equally content with the entity put back on the carrier.
+	 *
+	 * <p><b>What a throw from the latter two would cost, on the path atomicity closes.</b> It would
+	 * return {@link CodedDrug#UNREADABLE} and so discard the name {@code getName()} had already
+	 * returned — arguments being evaluated left to right — and the order would be reported as one
+	 * whose coded drug could not be read, which of that name is not quite true. The alternative is a
+	 * partial answer, and the paragraph above says the case does not arise; what it replaces is worse
+	 * on both counts, since before issue #421 the same throw was raised OUTSIDE this method — costing
+	 * the whole order loop AND stamping {@code activeDrugOrderReadCompleted} false, so the chart was
+	 * reported unread rather than one order degraded.
 	 *
 	 * <p>The association fetch and the null test sit INSIDE the {@code try} with the read that can
 	 * throw. Neither can throw today — reading the field hands back the proxy uninitialised — but
@@ -728,8 +736,10 @@ final class PatientClinicalContextBuilder {
 	 * {@code try}, which is issue #413's defect; a text guard over the spellings of that dereference
 	 * was tried and does not discriminate, because a receiver or a chain wrapped across two lines
 	 * reads no differently to the compiler and quite differently to a scan. Holding no {@code Drug}
-	 * makes every such spelling a compile error instead — there is none at a call site to dereference,
-	 * however it is written. That holds only while this class hands none back, which is the one thing
+	 * makes every spelling of THAT dereference a compile error instead — however it is written, there
+	 * is no returned entity at a call site to write it about. It does not reach a call site that
+	 * fetches its own; see {@link #drug}'s own paragraph on what the compiler leaves to the text
+	 * assertion. And it holds only while this class hands none back, which is the one thing
 	 * {@code UnreadableOrderDrugTest} asks of it here; putting a {@code Drug} field or accessor back
 	 * restores the hazard and reddens that case.
 	 *
@@ -759,7 +769,7 @@ final class PatientClinicalContextBuilder {
 		private final Concept concept;
 
 		/** The drug's dosage form, read here rather than as an argument expression at the call site —
-		 *  the point {@link #addAdministration} has always made about it. */
+		 *  the point {@link #addAdministration} makes about it, since a correction recorded there. */
 		private final Concept dosageForm;
 
 		private final boolean unreadable;

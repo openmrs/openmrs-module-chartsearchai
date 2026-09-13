@@ -15,7 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -748,7 +751,9 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * <p><b>And the third assertion is about the {@code Drug} alone, deliberately.</b> It walks the
 	 * builder and every class nested in it, so a SECOND carrier holding the entity is caught as well
 	 * as {@code CodedDrug} — measured, a name-keyed version of this assertion was green on exactly
-	 * that edit. What it admits on purpose is the two {@code Concept} proxies the carrier holds, the
+	 * that edit — and it reads DECLARED types, so the entity cannot leave arrayed or inside a
+	 * collection either; {@link #handsOutTheEntity} carries what it still admits. What it admits on
+	 * purpose is the two {@code Concept} proxies the carrier holds, the
 	 * drug's own concept and its dose form: {@code Drug.hbm.xml} maps both default-lazy, so a read of
 	 * one at a call site compiles and can throw just as a read of the entity could, and measured, a
 	 * {@code coded.dosageForm.getUuid()} added at a call site leaves this class green. That is not
@@ -822,18 +827,57 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 */
 	private static void collectEntityCarriers(Class<?> type, List<String> found) {
 		for (Field field : type.getDeclaredFields()) {
-			if (Drug.class.equals(field.getType())) {
+			if (handsOutTheEntity(field.getGenericType())) {
 				found.add(type.getSimpleName() + " field " + field.getName());
 			}
 		}
 		for (Method method : type.getDeclaredMethods()) {
-			if (Drug.class.equals(method.getReturnType())) {
+			if (handsOutTheEntity(method.getGenericReturnType())) {
 				found.add(type.getSimpleName() + " method " + method.getName() + "()");
 			}
 		}
 		for (Class<?> nested : type.getDeclaredClasses()) {
 			collectEntityCarriers(nested, found);
 		}
+	}
+
+	/**
+	 * Whether {@code type} would put a {@code Drug} in a caller's hands — the declared type rather
+	 * than the raw one, so the entity cannot leave wrapped.
+	 *
+	 * <p>Measured, against an exact {@code Drug.class.equals} version of this: {@code Drug[]} and
+	 * {@code List<Drug>} each escaped it and left the whole class green, which is why arrays and type
+	 * ARGUMENTS are walked. Assignability is asked BOTH ways, so a subtype of {@code Drug} is caught
+	 * and so is a field declared as a supertype it satisfies — {@code OpenmrsObject}, say.
+	 *
+	 * <p><b>{@code Object} is deliberately excluded, and that is the residue.</b> Every reference type
+	 * is assignable to it, so including it would flag every {@code Object}-typed member in the file
+	 * and discriminate nothing; excluding it means a {@code Drug} widened to plain {@code Object} is
+	 * handed out under this check, and reflection cannot tell that member from any other. Measured to
+	 * escape. A reviewer is what catches it, which is the same answer this class gives for the
+	 * evasions its text assertions decline to chase.
+	 */
+	private static boolean handsOutTheEntity(Type type) {
+		if (type instanceof ParameterizedType) {
+			for (Type argument : ((ParameterizedType) type).getActualTypeArguments()) {
+				if (handsOutTheEntity(argument)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		if (type instanceof GenericArrayType) {
+			return handsOutTheEntity(((GenericArrayType) type).getGenericComponentType());
+		}
+		if (!(type instanceof Class)) {
+			return false;
+		}
+		Class<?> erased = (Class<?>) type;
+		if (erased.isArray()) {
+			return handsOutTheEntity(erased.getComponentType());
+		}
+		return !Object.class.equals(erased)
+				&& (Drug.class.isAssignableFrom(erased) || erased.isAssignableFrom(Drug.class));
 	}
 
 	/**

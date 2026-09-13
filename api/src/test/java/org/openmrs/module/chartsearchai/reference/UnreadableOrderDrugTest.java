@@ -725,7 +725,7 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 *
 	 * <p><b>The third assertion stopped being text, and that is issue #421.</b> It used to permit a
 	 * short allow-list of reads on the {@code Drug} the accessor handed back and refuse everything
-	 * else. A text rule cannot answer that question: measured on {@code 01337385}, a chain written
+	 * else. No text rule in that family answered the question: measured on {@code 01337385}, a chain written
 	 * {@code drug.getConcept()} + newline + {@code .getName();} in {@code addDrugName} left the whole
 	 * api suite green, and so did a receiver wrapped as {@code drug} + newline + {@code .getConcept();}
 	 * — the second for a different reason, the needle {@code drug.get} matching no offset at all, so
@@ -751,8 +751,9 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * <p><b>And the third assertion is about the {@code Drug} alone, deliberately.</b> It walks the
 	 * builder and every class nested in it, so a SECOND carrier holding the entity is caught as well
 	 * as {@code CodedDrug} — measured, a name-keyed version of this assertion was green on exactly
-	 * that edit — and it reads DECLARED types, so the entity cannot leave arrayed or inside a
-	 * collection either; {@link #handsOutTheEntity} carries what it still admits. What it admits on
+	 * that edit — and it reads DECLARED types, so an entity arrayed or inside a PARAMETERIZED
+	 * collection is caught too; {@link #handsOutTheEntity} carries what it still admits, which is not
+	 * nothing. What it admits on
 	 * purpose is the two {@code Concept} proxies the carrier holds, the
 	 * drug's own concept and its dose form: {@code Drug.hbm.xml} maps both default-lazy, so a read of
 	 * one at a call site compiles and can throw just as a read of the entity could, and measured, a
@@ -842,20 +843,22 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * Whether {@code type} would put a {@code Drug} in a caller's hands — the declared type rather
-	 * than the raw one, so the entity cannot leave wrapped.
+	 * Whether {@code type} would put a {@code Drug} in a caller's hands — asked of the DECLARED type,
+	 * so an entity wrapped in an array or a parameterized collection is caught rather than erased past.
 	 *
 	 * <p>Measured, against an exact {@code Drug.class.equals} version of this: {@code Drug[]} and
 	 * {@code List<Drug>} each escaped it and left the whole class green, which is why arrays and type
 	 * ARGUMENTS are walked. Assignability is asked BOTH ways, so a subtype of {@code Drug} is caught
 	 * and so is a field declared as a supertype it satisfies — {@code OpenmrsObject}, say.
 	 *
-	 * <p><b>{@code Object} is deliberately excluded, and that is the residue.</b> Every reference type
-	 * is assignable to it, so including it would flag every {@code Object}-typed member in the file
-	 * and discriminate nothing; excluding it means a {@code Drug} widened to plain {@code Object} is
-	 * handed out under this check, and reflection cannot tell that member from any other. Measured to
-	 * escape. A reviewer is what catches it, which is the same answer this class gives for the
-	 * evasions its text assertions decline to chase.
+	 * <p><b>Two residues, and neither is worth a cleverer predicate.</b> {@code Object} is deliberately
+	 * excluded: every reference type is assignable to it, so including it would flag every
+	 * {@code Object}-typed member in the file and discriminate nothing — which means a {@code Drug}
+	 * widened to plain {@code Object} is handed out under this check, and reflection cannot tell that
+	 * member from any other. And a RAW collection carries no type argument to walk, so a
+	 * {@code private final List drugs} escapes where {@code List<Drug>} does not. Both measured. A
+	 * reviewer is what catches them, which is the same answer this class gives for the evasions its
+	 * text assertions decline to chase.
 	 */
 	private static boolean handsOutTheEntity(Type type) {
 		if (type instanceof ParameterizedType) {

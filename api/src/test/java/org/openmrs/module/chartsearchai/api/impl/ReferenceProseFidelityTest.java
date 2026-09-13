@@ -569,6 +569,76 @@ public class ReferenceProseFidelityTest {
 	}
 
 	@Test
+	public void aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith() {
+		// Issue #337, round four. An ELISION is a report — the check's own class javadoc says so, and
+		// says why: the answer states no word the record does not and has still dropped content out
+		// of a sentence a clinician reads. Until this case only SOME elisions were: a cut written
+		// with three ASCII dots put a terminator in the gap, which the weak gap question read as the
+		// answer ending its sentence, so the ASCII spelling was silent where every other spelling
+		// reported. Which elisions the check saw was therefore decided by the glyph the model chose.
+		//
+		// The markers are LITERALS and the assertion is over all three together, for the reason
+		// everyWayASentenceCanEndInTheSharedRule… gives: a case that iterated the reported spellings
+		// off some constant would pass while the ASCII one stayed silent, which is the whole defect.
+		// Measured before the fix, through this same arrangement: the first two reported and the
+		// third did not.
+		for (String marker : new String[] { " … ", " — ", " ... " }) {
+			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + marker
+					+ "such as antimalarials [" + finding.getIndex() + "]."));
+			try (LogCapture capture = LogCapture.on(CHECK)) {
+				service.search(patient(), QUESTION);
+				assertTrue(warnStating(capture, "[" + finding.getIndex() + "]"),
+						"a cut marked \"" + marker.trim() + "\" drops content out of a sentence a "
+								+ "clinician reads exactly as the other spellings do, and must be "
+								+ "reported alike. Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
+	public void aGapCarryingAnotherSentenceEndBesideTheCutStillEndsAnAnswerSentence() {
+		// The elision rule is a SKIP over the dots and not an answer of its own, which is what keeps
+		// every other way a sentence can end working inside the same gap. Two rows, because they
+		// exercise different arms: a line break beside the cut, which is the arm the system prompt's
+		// "numbered lines or simple newlines" makes load-bearing and which
+		// everyWayASentenceCanEndInTheSharedRule… pins on its own; and a full stop ahead of the cut,
+		// which is the ordinary terminator arm. Implemented as an early "no" for a gap containing a
+		// dots run, both rows flip to a report — and run as a mutation over the whole api suite that
+		// form reddens this case and no other, because no case predating the rule puts a dots run in
+		// a gap for it to be seen in.
+		for (String gap : new String[] { " ...\n", ". ... " }) {
+			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + gap
+					+ "such as antimalarials [" + finding.getIndex() + "]."));
+			try (LogCapture capture = LogCapture.on(PACKAGE)) {
+				service.search(patient(), QUESTION);
+				assertFalse(capture.describeAll().isEmpty(),
+						"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+				assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+						"a gap carrying a sentence end of its own still ends the answer's sentence, "
+								+ "whatever else stands in it. Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
+	public void aTwoDotGapIsATerminatorAndNotACutTheAnswerMarked() {
+		// The run length from below. Three dots is the established spelling of an elision; two is a
+		// typo, and reading it as a marked cut would spend the check's precision on a slip. Silence
+		// is the safe direction, so the boundary sits where the spelling is unambiguous — and this
+		// case is what stops it being widened to "any dot run" without the widening being seen.
+		service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may"))
+				+ " .. such as antimalarials [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"two dots is a terminator, not a cut the answer marked. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
 	public void aReproductionOneWordShortOfTheFloorIsNotReported() {
 		// The floor from the other side. The case above reproduces exactly twelve words and must be
 		// reported, which forbids raising the floor; this one reproduces eleven and must be silent,

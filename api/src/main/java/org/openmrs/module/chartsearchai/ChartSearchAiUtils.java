@@ -90,6 +90,24 @@ public class ChartSearchAiUtils {
 	public static final String SENTENCE_TERMINATORS = ".!?";
 
 	/**
+	 * The terminator an ASCII elision is a run of. <b>A MEMBER of {@link #SENTENCE_TERMINATORS} and
+	 * not a second set</b> — nothing here adds a character this module reads as ending a sentence.
+	 * It is spelled as a character because the rule {@link #mayEndASentence} applies it in is about a
+	 * RUN of one member, which set membership cannot express; ask that method, never this field.
+	 */
+	private static final char ELISION_DOT = '.';
+
+	/**
+	 * How many consecutive {@link #ELISION_DOT}s spell a cut the writer MARKED rather than a sentence
+	 * end. Three, because three is the established ASCII spelling of the character {@code …}; two is
+	 * a slip, and reading a slip as a marked cut would spend {@link #mayEndASentence}'s caller's
+	 * precision on it. The boundary fails toward silence, which is the direction that caller needs —
+	 * {@code ReferenceProseFidelityTest.aTwoDotGapIsATerminatorAndNotACutTheAnswerMarked} is what
+	 * stops the rule being widened to any dot run without the widening being seen.
+	 */
+	private static final int MIN_ELISION_DOTS = 3;
+
+	/**
 	 * Where one sentence of an answer or a record ends and the next begins: a {@code .}, {@code !}
 	 * or {@code ?} followed by whitespace, or a line break. The SPLITTING question over
 	 * {@link #SENTENCE_TERMINATORS}: {@code CitationGroundingVerifier} cuts a text into the units it
@@ -113,18 +131,34 @@ public class ChartSearchAiUtils {
 	 * @return whether a sentence COULD have ended inside {@code between} — the text separating two
 	 *         adjacent words — which is a deliberately weaker question than
 	 *         {@link #SENTENCE_BOUNDARY} asks. Any terminator anywhere in the gap answers yes, and
-	 *         so does a line break; nothing has to follow the terminator.
+	 *         so does a line break; nothing has to follow the terminator. <b>One arrangement of one
+	 *         member answers no</b>: a run of {@link #MIN_ELISION_DOTS} or more {@link #ELISION_DOT}s
+	 *         is a cut the writer MARKED, and is stepped over rather than read as an ending — see the
+	 *         paragraph below.
 	 *
 	 *         <p><b>Weaker on purpose, and the weakness is the correctness.</b> Its caller
 	 *         ({@code ReferenceProseFidelityCheck}) uses the answer only to STAY SILENT, so a gap
-	 *         read as a sentence end can only suppress a report and never cause one — which is what
-	 *         makes that check's "loses recall, never precision" property true. Since issue #337's
+	 *         read as a sentence end suppresses a report rather than causing one — which is what
+	 *         makes that check's "loses recall, never precision" property true everywhere but at the
+	 *         one carve-out the next paragraph is about. Since issue #337's
 	 *         second round that suppression is client-visible as well as log-local, the check's
 	 *         answer being published: what it costs is an entry in
 	 *         {@code ChartAnswer.getUnfaithfullyRenderedCitations()}, which is why that key's client
-	 *         contract says an absent entry is not a certificate of faithfulness. The direction is
-	 *         unchanged — it still cannot manufacture one. Asking
-	 *         {@code SENTENCE_BOUNDARY} instead was measured wrong in exactly that direction: it
+	 *         contract says an absent entry is not a certificate of faithfulness.
+	 *
+	 *         <p><b>The elision carve-out is where that direction is spent, and it is spent
+	 *         deliberately.</b> An ASCII elision is a run of a member of this set, so before #337's
+	 *         fourth round a cut the answer marked {@code ...} silenced the caller while the same cut
+	 *         marked {@code …}, an em dash or {@code […]} was reported — which elisions that check saw
+	 *         was decided by the glyph the model chose. Reading the run as a marked cut moves one gap
+	 *         shape from silence to a report, and that is the ONE way this predicate can now cause one.
+	 *         It is not a new KIND of report: measured through the real {@code LlmInferenceService}
+	 *         before the change, every other spelling of a cut already reported both a resumption and
+	 *         a fresh sentence after it. The rule steps OVER the run rather than answering for the
+	 *         whole gap, so a line break or a second terminator beside the cut still ends the
+	 *         sentence. Asking
+	 *         {@code SENTENCE_BOUNDARY} instead spends that direction everywhere rather than at one
+	 *         marked cut, and was measured rather than argued: it
 	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the
 	 *         model closed — {@code ."} or {@code .)} , and this module's own reference prose is full
 	 *         of {@code (SSRIs)} and {@code (M1)} — is not a boundary, and a faithful quotation
@@ -142,6 +176,19 @@ public class ChartSearchAiUtils {
 		}
 		for (int at = 0; at < between.length(); at++) {
 			char c = between.charAt(at);
+			if (c == ELISION_DOT) {
+				int past = at;
+				while (past < between.length() && between.charAt(past) == ELISION_DOT) {
+					past++;
+				}
+				if (past - at >= MIN_ELISION_DOTS) {
+					// A cut the writer marked, not a sentence end. Stepping OVER the run rather than
+					// answering "no" for the whole gap is what keeps every other arm reachable: a
+					// line break or a second terminator beside the cut still ends the sentence.
+					at = past - 1;
+					continue;
+				}
+			}
 			if (SENTENCE_TERMINATORS.indexOf(c) >= 0 || c == '\r' || c == '\n') {
 				return true;
 			}

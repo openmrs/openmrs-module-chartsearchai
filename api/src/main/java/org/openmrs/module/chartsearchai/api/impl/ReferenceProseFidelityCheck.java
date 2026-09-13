@@ -67,9 +67,12 @@ import org.slf4j.LoggerFactory;
  *       consecutive words of a record it cites. With nothing reproduced there is no reproduction to
  *       be unfaithful to, and this is what keeps ordinary prose out: an answer that summarises in
  *       its own words shares only short phrases with its sources;</li>
- *   <li>it reports a SUBSTITUTION and never a truncation. Where the answer stops reproducing and
- *       ends its sentence, it has stated nothing the record does not, and reporting it would fire
- *       on every answer that quotes one clause of a 150-word mechanism — which is most of them.
+ *   <li>it reports a SUBSTITUTION and never an UNMARKED truncation. Where the answer stops
+ *       reproducing and ends its sentence, it has stated nothing the record does not, and reporting
+ *       it would fire on every answer that quotes one clause of a 150-word mechanism — which is most
+ *       of them. A cut the answer MARKED is the exception and always was for three spellings of the
+ *       marker; since this issue's fourth round it is the exception for the fourth too, which is the
+ *       elision paragraph below.
  *       That under-reports the ticket's weaker cousin, a hazard dropped by stopping early, and it
  *       is the safe direction for a check whose failure mode is being ignored. Half of that cousin
  *       is covered since the same issue's third round, by {@link SafetyFindingSeverityFidelityCheck}:
@@ -128,11 +131,16 @@ import org.slf4j.LoggerFactory;
  * </ul>
  *
  * <p><b>Which way a boundary misreading fails, and why the gap question is the WEAK one.</b> Both
- * bit-driven conditions are SILENCING, so a gap read as a sentence end can only add silence: on the
+ * bit-driven conditions are SILENCING, so a gap read as a sentence end adds silence: on the
  * record side it takes the "reproduced a sentence and moved on" exit, on the answer side the
- * "stopped copying" one. So a misread boundary costs a REPORT and never causes one — but only
+ * "stopped copying" one. So a misread boundary costs a REPORT rather than causing one — but only
  * because the bit is {@link ChartSearchAiUtils#mayEndASentence}, which says yes to a terminator
- * ANYWHERE in the gap. Asking {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} instead makes that false
+ * ANYWHERE in the gap, and only outside the ONE exception that predicate's own javadoc carries: a
+ * run of dots spelling an elision is stepped over, and a gap whose only sentence-ending evidence is
+ * such a run therefore moves from silence to a report. That is the single shape in which this
+ * check's "loses recall, never precision" reading does not hold, and ADR Decision 95 is canonical
+ * for why it is spent there.
+ * Asking {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} instead makes that false
  * in the other direction, and it was measured rather than argued: it wants the terminator followed
  * IMMEDIATELY by whitespace, so an answer that quotes the record verbatim, closes the quotation
  * ({@code ."}) and starts its own next sentence has no answer-side boundary, falls through to the
@@ -141,16 +149,25 @@ import org.slf4j.LoggerFactory;
  * predicate).
  *
  * <p><b>An ELISION is a report, and that is the intended reading rather than a false alarm.</b> An
- * answer that reproduces a record's opening, marks a cut with {@code …} or an em dash, and resumes
- * is reported — it states no word the record does not, and it has still dropped content out of a
- * sentence a clinician reads, which is issue #337's SECOND capture exactly (<em>"neuromuscular
- * blockers, aminoglycoside antibiotics,"</em> excised from a botulinum toxin warning whose partner
- * is an aminoglycoside). What that costs is a WARN whose wording — "states different words" — reads
- * oddly of a marked cut. What it MISSES is the same elision written with three ASCII dots, whose
- * first dot the weak gap question reads as a sentence end: {@code ...} is silent where {@code …} is
- * reported. Which elisions are seen therefore depends on the glyph the model chose, and no
- * arrangement of these two rules removes that — closing it means a gap question that is not
- * silencing, and then a closed quotation is a false report again.
+ * answer that reproduces a record's opening, marks a cut, and carries on is reported — it states no
+ * word the record does not, and it has still dropped content out of a sentence a clinician reads,
+ * which is the content half of issue #337's SECOND capture (<em>"neuromuscular blockers,
+ * aminoglycoside antibiotics,"</em> excised from a botulinum toxin warning whose partner is an
+ * aminoglycoside). That capture marked its cut with nothing at all, which leaves no terminator in the
+ * gap and has always been reported; what this paragraph is about is the MARKED cut beside it. What it
+ * costs is a WARN whose wording — "states different words" — reads oddly of a marked cut.
+ *
+ * <p><b>Until #337's fourth round it depended on the glyph.</b> An ASCII elision is a run of a member
+ * of the terminator set, so the weak gap question read its first dot as a sentence end and
+ * {@code ...} was silent where {@code …}, an em dash and {@code […]} were reported. That is closed in
+ * {@link ChartSearchAiUtils#mayEndASentence}, which steps over a run of three or more dots — and in
+ * that method rather than here, because the gap is all this check hands it and a rule about the
+ * terminator set belongs to the set's own entry point. The earlier reading of this residue said no
+ * arrangement of the two rules could close it without making a closed quotation a false report again;
+ * that is refuted by the shape of the fix — {@code ."} carries a run of ONE and is untouched — and by
+ * measurement, since the shapes it was written to protect were already reported under every other
+ * spelling of a cut. {@code ReferenceProseFidelityTest.aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith}
+ * holds the three spellings together; the residues are ADR Decision 95's.
  *
  * <p><b>What the WARN carries, and what it deliberately does not.</b> The patient, the cited
  * record's index, how many words were reproduced, and the word offset in the record at which the
@@ -522,11 +539,12 @@ final class ReferenceProseFidelityCheck {
 	 *
 	 * <p>The bit is read by {@link ChartSearchAiUtils#mayEndASentence}, the deliberately WEAK question
 	 * over the terminator set {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} splits
-	 * {@link CitationGroundingVerifier}'s units on: any terminator anywhere in the gap answers yes.
-	 * Both of this check's uses of the bit are silencing, so the weaker reading can only suppress a
-	 * report — and the stronger one was measured to cause a false one, on a quotation the model closed
-	 * with {@code ."} before starting its own next sentence. It is deliberately not part of
-	 * {@link #word} equality; the class javadoc says why.
+	 * {@link CitationGroundingVerifier}'s units on: any terminator anywhere in the gap answers yes,
+	 * save a run of dots spelling an elision, which since #337's fourth round it steps over.
+	 * Both of this check's uses of the bit are silencing, so the weaker reading suppresses a report
+	 * everywhere except at that one marked cut — and the stronger one was measured to cause a false
+	 * one, on a quotation the model closed with {@code ."} before starting its own next sentence. It
+	 * is deliberately not part of {@link #word} equality; the class javadoc says why.
 	 */
 	private static final class Words {
 

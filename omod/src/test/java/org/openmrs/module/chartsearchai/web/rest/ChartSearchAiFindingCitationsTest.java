@@ -95,7 +95,7 @@ public class ChartSearchAiFindingCitationsTest {
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null,
 				Collections.<Integer> emptyList(), Collections.<Integer> emptyList(),
-				Collections.<ChartSearchService.UnstatedFindingSeverity> emptyList(), null, stated,
+				Collections.<ChartSearchService.UnstatedFindingSeverity> emptyList(), null, null, stated,
 				null, null);
 	}
 

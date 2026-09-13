@@ -704,6 +704,27 @@ public class PatientChartSerializer {
 		private final Boolean orderDrugNamed;
 
 		/**
+		 * The daily dosing ceilings an injected {@code drug_reference} record's own text states for
+		 * this patient's age — {@code null} on every other record, and on one whose text states none
+		 * (issue #276). Each element is the ceiling as the record spells it, the bytes
+		 * {@code DrugReferenceInjector.dosingNumbers} writes after {@code "maximum "} (for example
+		 * {@code "4000 mg/day"}), and the list is STRICTEST FIRST and distinct.
+		 *
+		 * <p>Written in exactly ONE place, {@code DrugReferenceInjector}'s {@code drug_reference}
+		 * mapping, collected from the clauses that method actually APPENDED rather than from the
+		 * bands behind them — a band publishing no daily maximum contributes nothing, because the
+		 * text states nothing, and a sibling row the section skipped is not in the record to be
+		 * quoted. Never re-derived from {@link #getText()}: that is {@link #orderActive}'s rule
+		 * (issue #317) and {@link #orderDrugNamed}'s (issue #294), and here it would parse numbers
+		 * out of operator-authored free text that can pair anything with anything.
+		 *
+		 * <p>The ORDER is the load-bearing part and is decided where the numbers are doubles, in the
+		 * writer; a consumer reads position 0 as "the strictest this record publishes" and never
+		 * sorts the list itself, which as strings would order {@code "300"} before {@code "50"}.
+		 */
+		private final List<String> dosingCeilings;
+
+		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
 		 * treats a null/blank text as "cannot verify" and leaves the citation
@@ -786,17 +807,30 @@ public class PatientChartSerializer {
 				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
 				List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					findingSeverity, derivedFrom, null);
+					findingSeverity, derivedFrom, null, null);
 		}
 
 		/**
 		 * The widest constructor, including whether the record names the drug of the order it is about
-		 * — see {@link #orderDrugNamed}. Every shorter constructor defaults it to {@code null}, "the
-		 * module cannot say".
+		 * — see {@link #orderDrugNamed} — and the ceilings its text states, see
+		 * {@link #dosingCeilings}. Every shorter constructor defaults both to {@code null}, "the
+		 * module cannot say" and "this producer measured no ceilings".
+		 *
+		 * <p><b>Issue #276 inserted {@code dosingCeilings} BEFORE {@code orderDrugNamed} rather than
+		 * appending it or giving it a rung of its own, and the placement is load-bearing.</b>
+		 * {@code ArchitectureGuardTest} tells two constructors from the rest by their descriptor
+		 * TAILS: the provenance rung is the only one ending in a list, and this one the only one
+		 * ending in a list followed by a {@code Boolean}. Appended after {@code orderDrugNamed} this
+		 * tail would match nothing and {@code theOrderNamingStampIsWrittenInOnePlace} would fail with
+		 * zero; added as a rung below, it would end in a list and
+		 * {@code theProvenanceCarryingMappingConstructorHasOneCaller} would fail with two; and
+		 * inserted here while KEEPING the old eleven-argument rung, that rung would stop being a
+		 * prefix of this one and the {@code widest=true} canary would fail. So the rung gained the
+		 * parameter instead of being joined by a sibling.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
-				List<Integer> derivedFrom, Boolean orderDrugNamed) {
+				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -812,6 +846,14 @@ public class PatientChartSerializer {
 			this.derivedFrom = derivedFrom == null || derivedFrom.isEmpty()
 					? Collections.<Integer> emptyList()
 					: Collections.unmodifiableList(new ArrayList<Integer>(derivedFrom));
+			// Copied and wrapped for the reason derivedFrom is. Unlike it this stays NULLABLE and an
+			// empty list collapses INTO that null, deliberately: the field has one consumer, whose
+			// gate is "fewer than two ceilings to compare", and a record stating none and a record
+			// stating one are the same answer to it as a record nobody measured. So the field states
+			// the ceilings or it states nothing, and no reader is left deciding which kind of
+			// nothing it holds — a distinction nothing would pin.
+			this.dosingCeilings = dosingCeilings == null || dosingCeilings.isEmpty() ? null
+					: Collections.unmodifiableList(new ArrayList<String>(dosingCeilings));
 			this.orderDrugNamed = orderDrugNamed;
 		}
 
@@ -945,6 +987,18 @@ public class PatientChartSerializer {
 		 */
 		public Boolean getOrderDrugNamed() {
 			return orderDrugNamed;
+		}
+
+		/**
+		 * @return the daily dosing ceilings this record's own text states for the patient it was
+		 *         built for, STRICTEST FIRST and distinct, each spelled as the record spells it
+		 *         ({@code "4000 mg/day"}); {@code null} where this record states none — see
+		 *         {@link #dosingCeilings}, which is canonical for what is carried and by whom.
+		 *         Unmodifiable when non-null. Position 0 is the strictest; never sort it at a
+		 *         consumer.
+		 */
+		public List<String> getDosingCeilings() {
+			return dosingCeilings;
 		}
 
 		/**

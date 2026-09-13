@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.openmrs.Patient;
@@ -641,7 +643,7 @@ public class DrugReferenceInjector {
 			// citation's own, and the verdict published was #201's defect one group over. Stamped
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
-					order.getUuid(), null, rendered, null, 0, null, null, null,
+					order.getUuid(), null, rendered, null, 0, null, null, null, null,
 					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -659,8 +661,15 @@ public class DrugReferenceInjector {
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
+			// Through the WIDEST constructor since issue #276, which is why two of its arguments are
+			// spelled null here. Neither is this site writing a stamp: `derivedFrom` empty is "derived
+			// from no chart record of this patient's" (issue #305) and `orderDrugNamed` null is "the
+			// module cannot say" (issue #294) — both exactly what a record about a reference entry
+			// asserts, and both what every shorter rung would have defaulted them to. The stamps are
+			// still written in one place each, the mapping above this one.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
-					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions));
+					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
+					null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -3477,10 +3486,23 @@ public class DrugReferenceInjector {
 		 *  else. */
 		final int withheldInteractions;
 
-		RenderedReference(String text, String source, int withheldInteractions) {
+		/** The daily ceilings {@link #text} states for this patient's age, strictest first and
+		 *  distinct — {@code PatientChartSerializer.RecordMapping.getDosingCeilings()}'s carrier, and
+		 *  EMPTY wherever the text states no ceiling, which is every record of a dataset publishing no
+		 *  age bands at all — the shipped {@code ddinter} source, for one (issue #276). Rides on the rendering for the
+		 *  reason {@link #source} and {@link #withheldInteractions} do: everything in {@link #text}
+		 *  is quotable, and a model told to cite records has recited this class's own bookkeeping
+		 *  into a clinician-facing answer (issue #117). Unlike those two it is also IN the text —
+		 *  it is a copy of what the text says rather than something about it, which is what lets a
+		 *  post-answer check compare the two. */
+		final List<String> dosingCeilings;
+
+		RenderedReference(String text, String source, int withheldInteractions,
+				List<String> dosingCeilings) {
 			this.text = text;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
+			this.dosingCeilings = dosingCeilings;
 		}
 	}
 
@@ -3726,6 +3748,10 @@ public class DrugReferenceInjector {
 		// reaches.
 		sb.append(rowAttribution(ref, substance.subject));
 
+		// Strictest first and de-duplicated by construction, both decided here where the ceilings are
+		// still doubles rather than at the consumer, which sees only the spellings (issue #276). It
+		// collects what the two sections below APPEND and nothing else — see collectCeiling.
+		SortedMap<Double, String> ceilings = new TreeMap<Double, String>();
 		DrugReference.AgeBand band = ref.bandForAge(age);
 		if (band != null) {
 			sb.append(" Dosing for ages ").append(band.getMinYears()).append("-").append(band.getMaxYears())
@@ -3734,13 +3760,16 @@ public class DrugReferenceInjector {
 				sb.append(" (no pediatric daily maximum published for this age — consult a dosing reference)");
 			}
 			sb.append(".");
+			// Inside the branch that appended the sentence, and dailyCeiling declines the very case
+			// the advice above covers, so the two cannot disagree about whether a ceiling was stated.
+			collectCeiling(ceilings, band);
 		}
 
 		// AFTER the sentence it extends, unlike the attribution clause above: this is more content of the
 		// same kind rather than a qualifier on it, and issue #208's "qualifier before the content" rule is
 		// about the latter. A model reading forward meets the row's own ceiling, then the others.
 		appendSection(sb, " Also published for other rows of this substance: ",
-				otherRowDosing(ref, substance.rows, band, age));
+				otherRowDosing(ref, substance.rows, band, age, ceilings));
 
 		// The dataset is operator-editable: a null/blank element in any section must degrade to
 		// "skip that element" — never a thrown exception (which would fail the whole query) and
@@ -3924,7 +3953,8 @@ public class DrugReferenceInjector {
 		// clinician-facing answers (issue #117). Trimmed and blank-coalesced for the same reason the
 		// sections above are — the dataset is operator-editable.
 		String source = ChartSearchAiUtils.firstNonBlank(ref.getSource());
-		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld);
+		return new RenderedReference(sb.toString(), source != null ? source.trim() : null, withheld,
+				new ArrayList<String>(ceilings.values()));
 	}
 
 	/**
@@ -4110,7 +4140,7 @@ public class DrugReferenceInjector {
 	 *        carried no number at all while {@code anyActionableBand} let a chip warn on a sibling's
 	 */
 	private static List<String> otherRowDosing(DrugReference ref, List<DrugReference> rows,
-			DrugReference.AgeBand band, Integer age) {
+			DrugReference.AgeBand band, Integer age, SortedMap<Double, String> ceilings) {
 		List<String> items = new ArrayList<String>();
 		// Asked of the RENDERED row alone, and that is sufficient rather than lax — but only because of
 		// something invisible here: `collect` keys a declared substance on substanceKey(), which is a
@@ -4150,6 +4180,11 @@ public class DrugReferenceInjector {
 			// reports it today; if one is added, this needs no change.
 			items.add(row.getName() + " " + numbers + " (ages " + other.getMinYears() + "-"
 					+ other.getMaxYears() + ")");
+			// AFTER the add and inside the same branch, so the mapping's list is a claim about the
+			// items this section actually states (issue #276). A row any skip above dropped is a row
+			// this record does not name, and a ceiling collected past one of them would be a number
+			// no reader of this record can find. Move this call above them and it collects those.
+			collectCeiling(ceilings, other);
 		}
 		return items;
 	}
@@ -4162,11 +4197,66 @@ public class DrugReferenceInjector {
 	private static String dosingNumbers(DrugReference.AgeBand band) {
 		StringBuilder sb = new StringBuilder(DrugReference.formatNumber(band.getMgPerKgMin())).append("-")
 				.append(DrugReference.formatNumber(band.getMgPerKgMax())).append(" mg/kg per dose");
-		if (band.getMaxDailyDoseMg() > 0) {
-			sb.append(", maximum ").append(DrugReference.formatNumber(band.getMaxDailyDoseMg()))
-					.append(" mg/day");
+		String ceiling = dailyCeiling(band);
+		if (ceiling != null) {
+			sb.append(", maximum ").append(ceiling);
 		}
 		return sb.toString();
+	}
+
+	/** @return the daily ceiling {@code band} publishes, spelled as this record states it and WITHOUT
+	 *          the {@code "maximum "} cue in front of it — or null where the band publishes none, the
+	 *          same condition under which {@link #dosingNumbers} says nothing about a daily maximum
+	 *          and {@link #render} appends its "no pediatric daily maximum published" advice instead.
+	 *
+	 *          <p><b>It is one expression serving two consumers, and that is the point</b> (issue
+	 *          #276). {@link #dosingNumbers} appends it to the text a model reads; {@link #collectCeiling}
+	 *          puts it on the mapping a post-answer check compares against that text. Written twice
+	 *          they could come to spell one dataset's ceiling two ways, and the check would then ask
+	 *          whether an answer states a string the record never contained — silently, and
+	 *          fail-open, since a needle nothing matches reports nothing.
+	 *
+	 *          <p>The cue is deliberately NOT part of it. The needle has to survive being quoted out
+	 *          of the record's own sentence and into the model's, where the words in front of the
+	 *          number are the model's own; what must survive is the number and its unit. */
+	private static String dailyCeiling(DrugReference.AgeBand band) {
+		if (band.getMaxDailyDoseMg() <= 0) {
+			return null;
+		}
+		return DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day";
+	}
+
+	/**
+	 * Records the ceiling {@code band} publishes into {@code into}, keyed on the NUMBER so the map
+	 * orders strictest-first and collapses two rows publishing one ceiling into one entry — issue
+	 * #276.
+	 *
+	 * <p><b>Called only where the text states that ceiling, never where a band merely publishes
+	 * one.</b> The mapping's list is a claim about what this RECORD says, so a row whose item
+	 * {@link #otherRowDosing} skipped, or a rendered row whose dosing sentence {@link #render} did
+	 * not append, contributes nothing. Deriving the list from the bands instead would carry ceilings
+	 * the record does not state, and the check downstream would report an answer for not quoting a
+	 * number it was never given.
+	 *
+	 * <p><b>The key is the double and never the spelling</b>, which is what makes "strictest first"
+	 * true rather than approximately true: as strings a ceiling of {@code 300} sorts before one of
+	 * {@code 50}, and a reversed list silences the check on exactly the arrangement it exists for.
+	 * {@code DosingCeilingFidelityTest.theCeilingsAreOrderedByNUMBERAndNotByTheirSpelling} is what
+	 * holds that, over a fixture built for it — no pair in the ceilings fixture orders differently
+	 * the two ways, so before it existed a sort of the spellings was green.
+	 *
+	 * <p><b>Not every part of the call-site discipline is independently observable, said rather than
+	 * left to look tested.</b> Moving this call above {@link #otherRowDosing}'s blank-name skip, or
+	 * above its "these rows would print the same numbers" skip, reddens nothing on today's fixtures:
+	 * the second collapses into this map's own key, and no fixture carries a row with a ceiling and
+	 * no name. The placement is the loop's statement of what the list means — the ceilings a reader
+	 * of this record can find in it — rather than insurance the suite checks.
+	 */
+	private static void collectCeiling(SortedMap<Double, String> into, DrugReference.AgeBand band) {
+		String ceiling = dailyCeiling(band);
+		if (ceiling != null) {
+			into.put(Double.valueOf(band.getMaxDailyDoseMg()), ceiling);
+		}
 	}
 
 	/** Appends one section of a rendered record — {@code lead}, the items joined by the {@code "; "}

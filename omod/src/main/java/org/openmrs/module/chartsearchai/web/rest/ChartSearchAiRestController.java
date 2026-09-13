@@ -48,6 +48,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedDosingCeiling;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
@@ -1602,6 +1603,8 @@ public class ChartSearchAiRestController {
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
 		target.put("unstatedFindingSeverities",
 			serializeUnstatedFindingSeverities(answer.getUnstatedFindingSeverities()));
+		target.put("unstatedDosingCeilings",
+			serializeUnstatedDosingCeilings(answer.getUnstatedDosingCeilings()));
 		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
 		target.put("findingCitations",
 				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
@@ -1649,6 +1652,44 @@ public class ChartSearchAiRestController {
 	 * {@link #serializeSafetyWarnings} publishes, which keeps #347's other half satisfied: the
 	 * marshaller refuses {@code Collections}' immutable wrappers, and the accessor hands one out.
 	 */
+	/**
+	 * The wire shape of {@code unstatedDosingCeilings}: one object per offending citation,
+	 * {@code citation} the index the answer printed in brackets, {@code statedCeiling} the dosing
+	 * ceiling that record publishes and the answer quoted, and {@code unstatedCeiling} the stricter
+	 * one from the same record that the answer states nowhere — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/276">#276</a>.
+	 * {@code null} for an answer whose check stated no measurement and an empty list for one that ran
+	 * and named none, the distinction {@link #putModuleStatements} preserves for every key in this
+	 * family. {@code ChartSearchService.UnstatedDosingCeiling} is canonical for what each entry does
+	 * and does not assert — in particular that it is NOT a claim that the answer is wrong.
+	 *
+	 * <p>Both ceilings are spelled exactly as the cited record spells them, so a client can render
+	 * them beside the citation without units of its own. They are reference material rather than
+	 * anything about the patient, which is what makes them publishable at all; no prose from the
+	 * answer or from the rest of the record reaches this key.
+	 *
+	 * <p><b>Spelled out as a map rather than handed to the mapper</b>, for the reason
+	 * {@link #serializeUnstatedFindingSeverities} states of its own key: the KEYS are the contract
+	 * README states, so they are written as literals and pinned as literals by
+	 * {@code ChartSearchAiUnstatedDosingCeilingTest.theSearchResponseNamesTheCeilingTheAnswerLeftUnstated},
+	 * which compares the raw map — so renaming an accessor cannot silently move a documented key.
+	 */
+	private List<Map<String, Object>> serializeUnstatedDosingCeilings(
+			List<UnstatedDosingCeiling> unstated) {
+		if (unstated == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (UnstatedDosingCeiling entry : unstated) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("statedCeiling", entry.getStatedCeiling());
+			map.put("unstatedCeiling", entry.getUnstatedCeiling());
+			out.add(map);
+		}
+		return out;
+	}
+
 	private List<Map<String, Object>> serializeUnstatedFindingSeverities(
 			List<UnstatedFindingSeverity> unstated) {
 		if (unstated == null) {

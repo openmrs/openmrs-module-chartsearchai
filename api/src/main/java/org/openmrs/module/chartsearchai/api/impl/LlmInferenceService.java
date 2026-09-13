@@ -216,6 +216,13 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// And the sixth (issue #276): the cited reference records whose answer quoted one dosing
+			// ceiling and left a stricter one from the same record unstated. Carried rather than
+			// re-derived for the reason its neighbours are — the ceilings travel on the chart, and
+			// the chart is gone by REST time.
+			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
+					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			// And the fifth (issue #395): the base the four above had none for. Each of them judges a
 			// finding the answer DID cite, so an answer that drops one entirely is outside all four
 			// — this counts the findings the prompt carried against the ones the answer cited.
@@ -238,7 +245,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
+					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
+					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
@@ -616,7 +624,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null,
+					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
@@ -625,7 +633,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// reference record and then rewritten inside the sentence it was copying (issue #337),
 			// and, since issue #377, the chart citations offered as evidence of an active drug order
 			// that cannot be one, and, since #337's third round, a cited finding whose RATING the
-			// answer states nowhere. None blocks: the class-code check reports only to the log and
+			// answer states nowhere, and, since issue #276, a cited reference record whose answer
+			// quoted one of its dosing ceilings and left a stricter one from it unstated. None blocks: the class-code check reports only to the log and
 			// the rest carry their answers onto the ChartAnswer this method RETURNS, so no consumer
 			// above waits on any of them. Microseconds for the first and the third — measured by
 			// calling their own entry points from a throwaway same-package case, the active-order
@@ -660,6 +669,11 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// The sixth, carried the same way and stating null on the early `done` for the same
+			// reason (issue #276): the check runs here, after the user-visible handoff.
+			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
+					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #395): the check runs here, after the user-visible handoff. It is two
 			// walks, one decode of the answer's markers and a set
@@ -689,7 +703,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
+					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
+					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
 			outcome = "ok";
 			return answer;

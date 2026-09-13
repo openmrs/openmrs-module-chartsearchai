@@ -170,7 +170,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// Issue #398, before every check below and before grounding: each of them judges the
 			// answer this method is about to publish, so a repair running after any of them would
 			// leave that key describing prose the caller never receives.
-			List<Integer> owedRepair = findingsOwedARepair(cited, chart.getMappings());
+			List<Integer> owedRepair = findingsOwedARepair(response.getAnswer(), cited,
+					chart.getMappings());
 			if (!owedRepair.isEmpty()) {
 				// Into llmMs and not beside it: the repair IS a second inference, and a timing line
 				// that left it out would under-report precisely the cost this feature adds, on the
@@ -589,7 +590,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// watching the answer being written sees the continuation arrive rather than finding it
 			// only in the final object. That ordering is the whole reason the repair appends
 			// instead of replacing — by here the short answer has already been streamed.
-			List<Integer> owedRepair = findingsOwedARepair(cited, chart.getMappings());
+			List<Integer> owedRepair = findingsOwedARepair(response.getAnswer(), cited,
+					chart.getMappings());
 			if (!owedRepair.isEmpty()) {
 				// Into llmMs, for the reason the sibling path states.
 				long repairStart = System.currentTimeMillis();
@@ -730,12 +732,12 @@ public class LlmInferenceService implements ChartSearchService {
 	 * place, so the two answer paths cannot come to disagree about either; an empty list is both
 	 * "the repair is off" and "the answer cited them all", which are the same instruction to a caller.
 	 */
-	private List<Integer> findingsOwedARepair(List<RecordReference> cited,
+	private List<Integer> findingsOwedARepair(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
 		if (!resolveFindingEnumerationRepair()) {
 			return Collections.emptyList();
 		}
-		return SafetyFindingCitationExtentCheck.uncitedFindingIndexes(cited, mappings);
+		return SafetyFindingCitationExtentCheck.uncitedFindingIndexes(answer, cited, mappings);
 	}
 
 	/**

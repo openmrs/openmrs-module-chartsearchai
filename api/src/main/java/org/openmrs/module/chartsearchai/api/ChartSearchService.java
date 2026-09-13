@@ -344,7 +344,18 @@ public interface ChartSearchService {
 			return carried;
 		}
 
-		/** @return how many of them the answer's own citation resolution admitted */
+		/**
+		 * @return how many of them the ANSWER cited: the citations its own resolution admitted,
+		 *         narrowed to the ones a marker in the answer text anchors (issue #409). A finding the
+		 *         model listed in its structured {@code citations} array and named in no sentence is
+		 *         not one of these, which is what makes {@code cited < carried} readable as "a
+		 *         screened finding did not reach the prose". It is NOT the count of
+		 *         {@code safety_finding} entries in {@code references}, which stays the resolution's
+		 *         own union and can therefore be larger; and {@code cited == carried} still certifies
+		 *         nothing about how those findings were stated.
+		 *         {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} is canonical for the
+		 *         reading, including what a blank answer means there
+		 */
 		public int getCited() {
 			return cited;
 		}

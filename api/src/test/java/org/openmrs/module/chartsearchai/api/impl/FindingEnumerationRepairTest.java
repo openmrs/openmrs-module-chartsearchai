@@ -155,6 +155,33 @@ public class FindingEnumerationRepairTest {
 	}
 
 	@Test
+	public void aFindingOnlyTheStructuredArrayNamesIsStillOwedARepair() {
+		// Issue #409's Failure Mode A reaching the repair. The first answer enumerates every finding
+		// but the last and its structured citations array lists ALL of them. The array made that
+		// finding read as cited, so nothing was owed and the model was asked once — the shortfall the
+		// reporter saw published as carried 10, cited 10. What the repair is owed for is the findings
+		// the PROSE left unanchored.
+		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
+		Integer dropped = findings.get(findings.size() - 1);
+		StubProvider provider = new StubProvider(
+				Collections.singletonList(new ArrayList<Integer>(findings)),
+				enumerationCiting(allButLast), continuationCiting(dropped));
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(2, provider.calls(),
+				"a finding the prose never anchored is owed a repair however the structured array "
+						+ "lists it");
+		assertTrue(provider.questionAt(1).contains(String.valueOf(dropped)),
+				"and the second question must name it. Asked: " + provider.questionAt(1));
+		assertTrue(answer.getAnswer().contains("[" + dropped + "]"),
+				"and the answer the caller receives must state it. Answer: " + answer.getAnswer());
+		assertEquals(findings.size(), answer.getFindingCitationExtent().getCited(),
+				"and the repaired answer's prose anchors every finding");
+	}
+
+	@Test
 	public void anAnswerThatAlreadyStatesEveryFindingIsNotAskedAgain() {
 		// The other half of the pair: the case above fails if nothing repairs, this one fails if the
 		// repair fires on a complete answer. Neither alone discriminates, and a second call here is
@@ -404,9 +431,20 @@ public class FindingEnumerationRepairTest {
 
 		private final String[] answers;
 
+		private final List<List<Integer>> citations;
+
 		private final List<String> questions = new ArrayList<String>();
 
 		private StubProvider(String... answers) {
+			this(Collections.<List<Integer>> emptyList(), answers);
+		}
+
+		/** The structured-citations arity, one list per call — issue #409's Mode A is a first answer
+		 *  whose array names a finding its prose never anchors, which the varargs form cannot say.
+		 *  A call past the end of {@code citations} sends an empty array, as every case here did
+		 *  before it existed. */
+		private StubProvider(List<List<Integer>> citations, String... answers) {
+			this.citations = citations;
 			this.answers = answers;
 		}
 
@@ -421,7 +459,8 @@ public class FindingEnumerationRepairTest {
 		private LlmResponse canned(String question) {
 			questions.add(question);
 			int at = Math.min(questions.size() - 1, answers.length - 1);
-			return new LlmResponse(answers[at], Collections.<Integer> emptyList());
+			return new LlmResponse(answers[at],
+					at < citations.size() ? citations.get(at) : Collections.<Integer> emptyList());
 		}
 
 		@Override

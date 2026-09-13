@@ -25,8 +25,11 @@ import org.slf4j.LoggerFactory;
 /**
  * Measures how many injected safety findings the prompt carried against how many the answer cited —
  * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">#395</a>. A
- * deterministic count: no model call, no embedding, no cosine floor, no scan of the answer's prose
- * at all beyond deciding whether there is any.
+ * deterministic count: no model call, no embedding, no cosine floor. It reads the answer only for
+ * the citation markers it anchors, through the shared decode step and never a dialect of its own
+ * (issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>),
+ * pinned by
+ * {@code ArchitectureGuardTest.safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep}.
  *
  * <p><b>The failure.</b> Measured live on a RefApp 3.7.1 standalone against the bundled knowledge
  * base, with the drug-reference layer enabled and {@code chartMode=fullChart}, two runs
@@ -55,13 +58,15 @@ import org.slf4j.LoggerFactory;
  *       Never the {@code safetyWarnings} chips, which are a different and usually larger population
  *       (seventeen against seven on the measured run) and which CLAUDE.md forbids as the source of
  *       an extent;</li>
- *   <li>CITED — the subset of those the answer's own resolution admitted, taken from
- *       {@link LlmInferenceService#extractCitedReferences} rather than re-derived from the markers,
- *       which is what keeps "which records did this answer cite" to one answer. A citation the
- *       MODULE attached (issue #305) is not one the answer made and is not counted; that filter is
- *       belt and braces on today's path, where only the two contraindication factories set the flag
- *       and they set it on chart records rather than findings, and it is here because the rule that
- *       a scorer counts the model's own citations is stated of this module generally.</li>
+ *   <li>CITED — the subset of those the answer ANCHORED: what
+ *       {@link LlmInferenceService#extractCitedReferences} admitted, narrowed to the indexes a
+ *       marker in the prose carries. {@link #citedFindingIndexes} is canonical for why both halves
+ *       decide and for what a blank answer means there; ADR Decision 93 is canonical for what that
+ *       supersedes in Decision 83. A citation the MODULE attached (issue #305) is not one the
+ *       answer made and is not counted; that filter is belt and braces on today's path, where only
+ *       the two contraindication factories set the flag and they set it on chart records rather
+ *       than findings, and it is here because the rule that a scorer counts the model's own
+ *       citations is stated of this module generally.</li>
  * </ul>
  *
  * <p><b>A COUNT and deliberately not an accusation</b>, which is the one design decision in this
@@ -82,6 +87,10 @@ import org.slf4j.LoggerFactory;
  *       has none to judge, while this one counts citations and
  *       {@code extractCitedReferences} resolves the structured array for a blank answer on purpose.
  *       Counting what really did resolve is a fact; reporting it as a dropped hazard would not be;</li>
+ *   <li>it narrows nothing but its own count. The reference list a client receives stays
+ *       {@code extractCitedReferences}' union, so an answer whose array named a finding its prose
+ *       did not publishes that finding as a reference beside a {@code cited} that excludes it —
+ *       divergence by design, and ADR Decision 93 carries why the union is not narrowed with it;</li>
  *   <li>it never rewrites the answer, and it names no word of the answer or of any record — both
  *       carry patient data, the discipline {@link ClassCodeFidelityCheck} states. A citation index
  *       is the module's own bookkeeping.</li>
@@ -91,9 +100,14 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>whether a cited finding was stated CORRECTLY, or stated at all. That is the four
  *       neighbours' question, and {@code cited == carried} is therefore not a certificate;</li>
- *   <li>a finding the answer states in prose without citing it, which it counts as uncited, and a
- *       finding cited but never discussed, which it counts as cited. Both are why this publishes a
- *       base and not an accusation;</li>
+ *   <li>a finding the answer states in prose without anchoring a marker for it, which it counts as
+ *       uncited, and a finding whose marker it anchors while saying nothing about it, which it
+ *       counts as cited. Both are why this publishes a base and not an accusation;</li>
+ *   <li>a marker the shared decode step cannot read. An uncorroborated compact group — {@code [5,
+ *       12]} with the array naming neither part, or only one — is left unrewritten by
+ *       {@code LlmAnswerExtractor.normalizeSlashCitations}, deliberately, because an uncorroborated
+ *       numeric bracket is a clinical value; a finding anchored only there is counted uncited. This
+ *       count is conservative in that direction by mandate, not by accident;</li>
  *   <li>whether an uncited finding MATTERED. The injector renders findings the screen raised, and
  *       not every one of them bears on the question the way the reported seventh did.</li>
  * </ul>
@@ -176,22 +190,24 @@ final class SafetyFindingCitationExtentCheck {
 	 * what the repair's own question is composed in, and a maintainer reading the WARN beside it sees
 	 * one list.
 	 *
-	 * <p><b>It answers about CITATION and not about prose.</b> A finding whose substance the answer
-	 * names in words while citing no marker for it is uncited here, because {@code cited} is
-	 * {@code LlmInferenceService.extractCitedReferences}' own output and that is the only reading of
-	 * "the answer cited it" this module has. So a repair driven by this can ask again for a finding
-	 * the answer did mention — fail-open toward asking, which costs a call and cannot lose content.
+	 * <p><b>It answers about the MARKER and not about the prose around it.</b> A finding whose
+	 * substance the answer names in words while anchoring no marker for it is uncited here, because
+	 * {@link #citedFindingIndexes} is the only reading of "the answer cited it" this module has. So
+	 * a repair driven by this can ask again for a finding the answer did mention — fail-open toward
+	 * asking, which costs a call and cannot lose content.
 	 *
+	 * @param answer the answer prose, read for the markers it anchors — see
+	 *            {@link #citedFindingIndexes} for what a blank one means here
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@code LlmInferenceService.extractCitedReferences}
 	 * @param mappings the chart's records, the carrier of the carried population
 	 * @return the uncited carried finding indexes, empty where the answer cited every one of them
 	 *         and where the chart carried none
 	 */
-	static List<Integer> uncitedFindingIndexes(List<RecordReference> cited,
+	static List<Integer> uncitedFindingIndexes(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
 		List<RecordMapping> findings = ChartSearchAiUtils.safetyFindingMappings(mappings);
-		return uncitedOf(findings, citedFindingIndexes(cited, indexesOf(findings)));
+		return uncitedOf(findings, citedFindingIndexes(answer, cited, indexesOf(findings)));
 	}
 
 	/** The projection both readers share: the walk's own findings, less the ones cited. The
@@ -208,16 +224,37 @@ final class SafetyFindingCitationExtentCheck {
 		return uncited;
 	}
 
-	/** Which of {@code carried} the answer's own resolution admitted. A citation the module attached
-	 *  is not one the answer made (issue #305); the set de-duplicates, so one finding cited in two
-	 *  sentences is one cited finding. Shared by the extent and by {@link #uncitedFindingIndexes} so
-	 *  the count and the complement cannot disagree about what "cited" means. */
-	private static Set<Integer> citedFindingIndexes(List<RecordReference> cited, Set<Integer> carried) {
+	/**
+	 * Which of {@code carried} the ANSWER cited: the resolution's own admissions, narrowed to the
+	 * ones a marker in {@code answer} anchors. A citation the module attached is not one the answer
+	 * made (issue #305); the set de-duplicates, so one finding cited in two sentences is one cited
+	 * finding. Shared by the extent and by {@link #uncitedFindingIndexes} so the count and the
+	 * complement cannot disagree about what "cited" means.
+	 *
+	 * <p><b>Both halves decide, and neither alone is this question</b> — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>. The
+	 * resolution admits the UNION of the model's structured citations array and its inline markers,
+	 * deliberately and for the reference list's sake, so on its own it counts a finding the model
+	 * listed in the array and named in no sentence — which is the reported defect, a response
+	 * claiming full coverage for prose that dropped a hazard. The markers on their own are not the
+	 * question either: a bracketed clinical value the chart has no record for would become a
+	 * citation, which is what taking the resolution as the base still prevents.
+	 *
+	 * <p><b>A blank or null answer keeps the resolution alone.</b> There is no prose to anchor
+	 * anything, {@code extractCitedReferences} resolves the array there on purpose, and counting
+	 * what really did resolve is a fact — the same reason the WARN, and not the count, is what a
+	 * degenerate output silences.
+	 */
+	private static Set<Integer> citedFindingIndexes(String answer, List<RecordReference> cited,
+			Set<Integer> carried) {
+		Set<Integer> anchored = ChartSearchAiUtils.isBlank(answer) ? null
+				: ChartSearchAiUtils.citedIndexes(answer);
 		Set<Integer> citedFindings = new LinkedHashSet<Integer>();
 		if (cited != null) {
 			for (RecordReference citation : cited) {
 				Integer index = Integer.valueOf(citation.getIndex());
-				if (!citation.isAttachedByTheModule() && carried.contains(index)) {
+				if (!citation.isAttachedByTheModule() && carried.contains(index)
+						&& (anchored == null || anchored.contains(index))) {
 					citedFindings.add(index);
 				}
 			}
@@ -230,8 +267,9 @@ final class SafetyFindingCitationExtentCheck {
 	 * reporting at WARN when it cited fewer.
 	 *
 	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
-	 * @param answer the answer prose, unchanged by this method and read only to tell a degenerate
-	 *            output from a real one, which gates the WARN and never the count
+	 * @param answer the answer prose, unchanged by this method and read for two things: the markers
+	 *            it anchors, which decide the COUNT ({@link #citedFindingIndexes}), and whether it is
+	 *            degenerate at all, which gates the WARN
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences}
 	 * @param mappings the chart's records, cited or not — the carrier of the CARRIED population
@@ -256,7 +294,7 @@ final class SafetyFindingCitationExtentCheck {
 			}
 			// Shared with uncitedFindingIndexes, so the count and its complement cannot come to
 			// disagree about what "cited" means (issue #398).
-			Set<Integer> citedFindings = citedFindingIndexes(cited, carried);
+			Set<Integer> citedFindings = citedFindingIndexes(answer, cited, carried);
 			if (citedFindings.size() < carried.size() && !ChartSearchAiUtils.isBlank(answer)) {
 				List<Integer> uncited = uncitedOf(findings, citedFindings);
 				// Neither the answer nor any record text is logged — they carry patient data, and the

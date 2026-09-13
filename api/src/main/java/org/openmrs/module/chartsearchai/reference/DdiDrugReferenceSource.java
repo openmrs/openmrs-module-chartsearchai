@@ -64,7 +64,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p><b>This is the module's DEFAULT source, and the bundled dataset is the WHOLE knowledge base</b>
  * (ADR Decision 36) — 2283 substances, 8234 mechanisms, 295,184 interaction rows, byte-identical to the
  * openmrs-ddi-knowledge-base release it came from, so a refresh is a file copy and its provenance is
- * checkable by hash. It used to be a 16-drug excerpt with the full file left to the operator to download,
+ * checkable by hash.
+ *
+ * <p><b>The release it came from, and the hash to check it against.</b> Commit
+ * {@code 66489ff3207bcb809968c3de81cfba94d05692ae} of {@code pbiondich/openmrs-ddi-knowledge-base},
+ * file {@code out/ddi_knowledge_base.json}: 34,882,241 bytes, sha256
+ * {@code b55f8b147a11a6b394f669f3d007253d595f9016005e42f92a689f249e4f1b2a}. In the source and not only
+ * in the pull request that copied it in, because this repository squash-merges — a hash recorded in a
+ * commit message that is later superseded is not in the permanent record, and the file's own
+ * {@code metadata} block carries a {@code schema_version} and no source ref, so nothing in-tree said
+ * which release this is. Checkable without fetching 34 MB again: git's own blob id for this resource is
+ * {@code 021ee454697b20cedfddb0d918737f91f23bd8d2} ({@code git hash-object}), which is the id that
+ * release's {@code out} tree entry carries — that identity is what was verified when this paragraph was
+ * written, rather than the claim being taken on trust. A refresh moves every figure in this paragraph
+ * and the packed size below, and whoever copies the file in restates them.
+ *
+ * <p>It used to be a 16-drug excerpt with the full file left to the operator to download,
  * which meant an install that enabled the feature and configured nothing got four curated drugs. Measured
  * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar for
  * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes (read off the built api jar's entry

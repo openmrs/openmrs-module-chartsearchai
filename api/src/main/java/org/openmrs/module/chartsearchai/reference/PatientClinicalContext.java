@@ -257,11 +257,37 @@ public class PatientClinicalContext {
 	 *         #413. This is the one gated by core's {@code Get Orders}.
 	 *
 	 *         <p><b>A cause, not a stamp.</b> Nothing may publish it and nothing may build a verdict
-	 *         out of it: {@link #chartReadForSafety()} is the conjunction of the two stamps and this
-	 *         moves none of it. Its one reader is
-	 *         {@code DrugSafetyValidator.standingChartAlerts}, whose operator MESSAGE is already
-	 *         excepted from the one-spelling rule below because naming which read failed is a
+	 *         out of this ACCESSOR: {@link #chartReadForSafety()} is the conjunction of the two
+	 *         STAMPS, which it reaches through {@link #activeDrugOrdersRead()}. The flag itself is
+	 *         emphatically not inert — it is a term of that verdict, and {@code false} here forces it
+	 *         false; what must not happen is a second reader re-deriving a verdict from the cause
+	 *         instead of the stamp, which would state a different answer about one chart. Its one
+	 *         reader is {@code DrugSafetyValidator.standingChartAlerts}, whose operator MESSAGE is
+	 *         already excepted from the one-spelling rule below because naming which read failed is a
 	 *         different question from whether any did.
+	 *
+	 *         <p>An earlier wording of this paragraph said {@code chartReadForSafety()} "is the
+	 *         conjunction of the two stamps and this moves none of it", which is false of the flag and
+	 *         was the reason the distinction needed stating (issue
+	 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/421">#421</a>).
+	 *         A maintainer taking it at face value would treat the flag as diagnostic-only and change
+	 *         how a copy path sets or defaults it, believing the verdict and the {@code screened} key
+	 *         could not move; they do move, silently and fail-OPEN — the standing surface certifying
+	 *         an unread chart as screened beside an empty alert list, which is the confusion issue
+	 *         #247 introduced the stamp to prevent. That the flag moves the verdict is pinned by
+	 *         {@code StandingChartAlertsTest.bothChartReadStampsSurviveTheEnrichmentThePassApplies}.
+	 *
+	 *         <p><b>The imperative above is held by review and by nothing else, which is stated rather
+	 *         than left to be assumed.</b> A second reader is what it forbids, and no guard here
+	 *         expresses that: a whole-tree source scan cannot admit the one legitimate reader without
+	 *         excusing the entire file it sits in — {@code DrugSafetyValidator}, which is exactly
+	 *         where a verdict-building reader would be written — and the source-text form of "exactly
+	 *         one caller" is recorded in {@code ArchitectureGuardTest} as having been defeated by
+	 *         review twice and replaced by a constant-pool question, which is class-granular and so
+	 *         blind in the same file. A guard reddening on a harmless re-spelling while missing the
+	 *         harmful reader would be one more guard that does not discriminate what it claims. What
+	 *         narrows the exposure instead is the compiler: this accessor is package-private, so the
+	 *         population of possible readers is this package.
 	 */
 	boolean activeDrugOrderReadCompleted() {
 		return activeDrugOrderReadCompleted;

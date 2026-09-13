@@ -134,16 +134,15 @@ final class PatientClinicalContextBuilder {
 				// Resolved here rather than at each of them so one unreadable drug is one degradation and
 				// one log line, and so those reads cannot disagree about whether this order has a drug.
 				CodedDrug coded = drug(drugOrder);
-				Drug drug = coded.drug;
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
 				// flattened set (every name of every order together) cannot.
 				Set<String> orderNames = new LinkedHashSet<String>();
-				addDrugName(orderNames, drugOrder, drug);
+				addDrugName(orderNames, drugOrder, coded.name);
 				drugNames.addAll(orderNames);
 				Concept concept = drugOrder.getConcept();
-				if (drug != null && drug.getConcept() != null) {
-					concept = drug.getConcept();
+				if (coded.concept != null) {
+					concept = coded.concept;
 				}
 				// Per-order codes for the same reason as the per-order names above, read once off the
 				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
@@ -160,7 +159,7 @@ final class PatientClinicalContextBuilder {
 				// narrow ONE prescription's classification and a union over the medication list would
 				// attribute one order's route to another.
 				Set<String> orderAdministration = new LinkedHashSet<String>();
-				addAdministration(orderAdministration, drugOrder, drug);
+				addAdministration(orderAdministration, drugOrder, coded.dosageForm);
 				// Resolved once and read by both the skip test and the label below, so the two cannot
 				// answer differently about which codes this order has.
 				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
@@ -580,19 +579,25 @@ final class PatientClinicalContextBuilder {
 	 * <p>Read through {@code addRaw} rather than behind an {@code isNonCodedDrug()} gate: that method IS
 	 * {@code StringUtils.isNotBlank(drugNonCoded)}, and {@code addRaw} already drops null, blank and
 	 * whitespace-only values, so the gate would be a second spelling of the same test — two places to
-	 * keep in step for no answer either could give alone. That is what {@code drugNonCoded} needs and
-	 * it is NOT enough for the coded drug beside it: {@code drugNonCoded} is the plain String column,
-	 * while {@code DrugOrder.getDrug()} returns an ENTITY behind a lazy association, so it is taken
-	 * through {@link #drug}, which is where the reason lives (issue #413). An earlier wording of this
-	 * paragraph had those two accessors the wrong way round and called the guard unnecessary.
+	 * keep in step for no answer either could give alone. That is what {@code drugNonCoded} needs, and
+	 * since issue #421 it is all the coded drug's name needs here too — but the two get there
+	 * differently and the difference is the whole of issue #413. {@code drugNonCoded} is the plain
+	 * String column and can be read at this call site; {@code DrugOrder.getDrug()} returns an ENTITY
+	 * behind a lazy association, so it is read in {@link #drug}'s own {@code try} and arrives here
+	 * already a String. An earlier wording of this paragraph had those two accessors the wrong way
+	 * round and called the guard unnecessary; a later one, written when this method still took the
+	 * entity, said {@code addRaw} was not enough for it. Neither is a reason to read the association
+	 * here.
 	 *
-	 * @param drug the already-materialized coded {@code Drug}, or null where the order carries none or
-	 *             it could not be read — {@link #drug} is the only thing that may decide which
+	 * @param codedDrugName the coded drug's own name as {@link #drug} read it, or null where the order
+	 *             carries no coded drug or it could not be read — that method is the only thing that
+	 *             may decide which, and since issue #421 it hands over the NAME rather than the
+	 *             entity, so there is no {@code Drug} here to dereference. {@link #addRaw} drops null
+	 *             and blank alike, which is why the null test this parameter replaced is gone rather
+	 *             than restated
 	 */
-	private static void addDrugName(Set<String> names, DrugOrder drugOrder, Drug drug) {
-		if (drug != null) {
-			addRaw(names, drug.getName());
-		}
+	private static void addDrugName(Set<String> names, DrugOrder drugOrder, String codedDrugName) {
+		addRaw(names, codedDrugName);
 		addRaw(names, drugOrder.getDrugNonCoded());
 		addConceptName(names, drugOrder.getConcept());
 	}
@@ -633,15 +638,26 @@ final class PatientClinicalContextBuilder {
 	 * {@code UnreadableOrderDrugTest.oneUnreadableDrugCostsThatOrderItsCodedNameAndNothingElse} goes
 	 * red when the line is dropped.
 	 *
-	 * <p><b>What a non-null return does and does not promise.</b> Initialising a proxy is atomic, so
-	 * the three reads this loop makes on the returned object — {@code getName()},
-	 * {@code getConcept()} and {@code getDosageForm()} — are served from the loaded target and
-	 * cannot throw. That does NOT extend to the whole entity, and the exceptions are the plausible
-	 * next reads rather than exotic ones: {@code Drug.hbm.xml} maps {@code ingredients} and
-	 * {@code drugReferenceMaps} as lazy {@code <set>}s, which initialising the entity does not
-	 * initialise; {@code getFullName(Locale)} dereferences the drug's own lazy {@code concept}; and
-	 * {@code getDisplayName()} does the same wherever the drug's own name is blank. Any of those can
-	 * still throw on a detached {@code Drug}. A read of one of them wants its own {@code try}, here.
+	 * <p><b>The three reads happen HERE, and no {@code Drug} leaves this method</b> (issue #421).
+	 * {@code getName()}, {@code getConcept()} and {@code getDosageForm()} are the three the loop
+	 * needs, and initialising a proxy is atomic, so all three are served from the loaded target and
+	 * cannot throw once the fetch above succeeded. That does NOT extend to the whole entity, and the
+	 * exceptions are the plausible next reads rather than exotic ones: {@code Drug.hbm.xml} maps
+	 * {@code ingredients} and {@code drugReferenceMaps} as lazy {@code <set>}s, which initialising the
+	 * entity does not initialise; {@code getFullName(Locale)} dereferences the drug's own lazy
+	 * {@code concept}; and {@code getDisplayName()} does the same wherever the drug's own name is
+	 * blank. Any of those can still throw on a detached {@code Drug}. A fourth read belongs in this
+	 * same {@code try} and on {@link CodedDrug}, never at a call site. While that class carries values
+	 * rather than the entity, a call site has no {@code Drug} to read and the compiler says so; what
+	 * keeps it that way is {@code UnreadableOrderDrugTest}, not the compiler, which would be equally
+	 * content with the entity put back.
+	 *
+	 * <p><b>What that costs on the path nobody can reach.</b> Where one of the three DID throw, this
+	 * returns {@link CodedDrug#UNREADABLE} and so discards a name the line above had already read
+	 * successfully, and the order is reported as one whose coded drug could not be read — which of
+	 * that name is not quite true. The alternative is a partial answer, and the atomicity above says
+	 * the case does not arise; what it replaces is worse either way, since before issue #421 the same
+	 * throw was raised OUTSIDE this method and cost the whole order loop.
 	 *
 	 * <p>The association fetch and the null test sit INSIDE the {@code try} with the read that can
 	 * throw. Neither can throw today — reading the field hands back the proxy uninitialised — but
@@ -657,11 +673,12 @@ final class PatientClinicalContextBuilder {
 			if (drug == null) {
 				return CodedDrug.NONE;
 			}
-			// Read for its side effect and never tested: a Drug whose name is null is still a Drug the
-			// module READ, and returning NONE for it would classify the order from its own concept
-			// rather than the drug's (#353's subject) and skip the dose form, silently.
-			drug.getName();
-			return new CodedDrug(drug, false);
+			// getName() also materialises the proxy, and a null answer is not an empty result: a Drug
+			// whose name is null is still a Drug the module READ, and returning NONE for it would
+			// classify the order from its own concept rather than the drug's (#353's subject) and skip
+			// the dose form, silently. The other two are read HERE rather than by the loop, which is
+			// what leaves no Drug reference outside this method (issue #421).
+			return new CodedDrug(drug.getName(), drug.getConcept(), drug.getDosageForm(), false);
 		}
 		catch (RuntimeException e) {
 			// Named without its stack trace, and NOT on warnUnreadable's grounds — that method drops a
@@ -688,26 +705,49 @@ final class PatientClinicalContextBuilder {
 	 *
 	 * <p><b>There are two empty answers and only one of them may move a stamp.</b> An order carrying
 	 * no coded drug at all is the ordinary shape of a free-text prescription and nothing failed; an
-	 * order whose coded drug could not be READ is a fact about this pass. Both leave
-	 * {@link #drug} with no {@code Drug} to hand back, and the {@code build} loop has no second way to
+	 * order whose coded drug could not be READ is a fact about this pass. Both leave this carrying
+	 * nothing the loop can use, and the {@code build} loop has no second way to
 	 * tell them apart — asking {@code drugOrder.getDrug()} again would be the very dereference this
 	 * accessor exists to be the only one of. Where they are confused, an order that simply never had a
 	 * name is enough to report a chart unread, which costs a client every chip on it.
+	 *
+	 * <p><b>It carries the three VALUES the loop needs and never the entity</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/421">#421</a>). Handing
+	 * back the {@code Drug} let the loop dereference a lazy association outside {@link #drug}'s
+	 * {@code try}, which is issue #413's defect; a text guard over the spellings of that dereference
+	 * was tried and does not discriminate, because a receiver or a chain wrapped across two lines
+	 * reads no differently to the compiler and quite differently to a scan. Carrying the values makes
+	 * every such spelling a compile error instead — there is no {@code Drug} at a call site to
+	 * dereference, however it is written. That holds only while this class hands none back, which is
+	 * the one thing {@code UnreadableOrderDrugTest} asks of it here; putting a {@code Drug} field or
+	 * accessor back restores the hazard and reddens that case.
 	 */
 	private static final class CodedDrug {
 
 		/** The order carries no coded drug. Not a failure. */
-		private static final CodedDrug NONE = new CodedDrug(null, false);
+		private static final CodedDrug NONE = new CodedDrug(null, null, null, false);
 
 		/** The order carries one and this pass could not read it. */
-		private static final CodedDrug UNREADABLE = new CodedDrug(null, true);
+		private static final CodedDrug UNREADABLE = new CodedDrug(null, null, null, true);
 
-		private final Drug drug;
+		/** The coded drug's own name, or null where there is none to read. {@code addRaw} drops null
+		 *  and blank alike, so the loop needs no guard of its own for it. */
+		private final String name;
+
+		/** The drug's own concept, which issue #353 records as reaching different reference entries
+		 *  from the one the order was written against. */
+		private final Concept concept;
+
+		/** The drug's dosage form, read here rather than as an argument expression at the call site —
+		 *  the point {@link #addAdministration} has always made about it. */
+		private final Concept dosageForm;
 
 		private final boolean unreadable;
 
-		private CodedDrug(Drug drug, boolean unreadable) {
-			this.drug = drug;
+		private CodedDrug(String name, Concept concept, Concept dosageForm, boolean unreadable) {
+			this.name = name;
+			this.concept = concept;
+			this.dosageForm = dosageForm;
 			this.unreadable = unreadable;
 		}
 	}
@@ -862,7 +902,8 @@ final class PatientClinicalContextBuilder {
 	 * the same case, and an earlier wording of this paragraph said it was: the read that initialises
 	 * the {@code Drug} proxy would be the ARGUMENT expression, evaluated at this call site before
 	 * {@link #addConceptNames} opens anything. It comes in materialized from {@link #drug} instead
-	 * (issue #413).
+	 * (issue #413) — and since issue #421 as the CONCEPT rather than the drug carrying it, so the
+	 * argument expression at the call site can no longer be made to reach that association at all.
 	 *
 	 * <p>A failed read degrades to nothing recorded, which is the reading that narrows nothing, so the
 	 * failure is fail-SAFE here in a way it is not for a contraindication record (issue #208 item 2)
@@ -872,11 +913,11 @@ final class PatientClinicalContextBuilder {
 	 * the one way (issue #293) and a blank name is dropped rather than stored as a term that matches
 	 * nothing.
 	 */
-	private static void addAdministration(Set<String> terms, DrugOrder drugOrder, Drug drug) {
+	private static void addAdministration(Set<String> terms, DrugOrder drugOrder, Concept dosageForm) {
 		addConceptNames(terms, drugOrder.getRoute());
-		if (drug != null) {
-			addConceptNames(terms, drug.getDosageForm());
-		}
+		// No null test: addConceptNames returns on a null concept, so the guard this parameter
+		// replaced would be a second spelling of that one.
+		addConceptNames(terms, dosageForm);
 	}
 
 	/**

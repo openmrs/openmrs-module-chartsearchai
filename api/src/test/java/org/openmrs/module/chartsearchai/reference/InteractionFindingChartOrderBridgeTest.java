@@ -138,7 +138,8 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	/**
 	 * Two brand-named orders whose displays name neither substance, so BOTH sides of the
 	 * Acetylsalicylic acid x Warfarin pair are bridged and the clause carries two items — which is
-	 * what lets the cases below read a refusal on one item against a number kept on the other.
+	 * what lets the three cases taking this context read a refusal on one item against a number kept
+	 * on the other.
 	 * Only the CHART varies between them.
 	 */
 	private static PatientClinicalContext twoBrandNamedOrders() {

@@ -923,7 +923,7 @@ public class DrugReferenceInjector {
 	 * on (issue #305). The readings differ and {@link #numberOfRecord}'s javadoc is where that is
 	 * drawn.
 	 *
-	 * <p><b>One resolution read two ways, and not two resolutions that agree.</b> Before issue #379
+	 * <p><b>One resolution read several ways, and not several resolutions that agree.</b> Before #379
 	 * this walk lived inside the reconciliation and threw the identity of the matching record away, so
 	 * a second walk was the only way to recover it — and the two could then disagree about which
 	 * records substantiate an order, which is the shape issue #151 forbids. Substantiated is now
@@ -1186,7 +1186,7 @@ public class DrugReferenceInjector {
 		 *         <p><b>Rival RECORDS are a third refusal and the leg's own</b> (issue #379's second
 		 *         round, the residue ADR Decision 80 recorded as owed against Decision 77's
 		 *         measurement). Two records of this chart carrying one order's uuid are both that
-		 *         order, and the sentence above says nothing about WHICH — so the leg asks
+		 *         order, and the quoted sentence says nothing about WHICH — so the leg asks
 		 *         {@link #numberOfRecord}, issue #305's reading of the same index, and the two
 		 *         affirmative claims this class makes are one reading.
 		 *

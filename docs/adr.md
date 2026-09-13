@@ -7049,6 +7049,33 @@ never a muted one.*
    already-returned `Concept` passes no `@Authorized` gate, so the sentence this rule is written
    to produce would have no privilege to name.
 
+   **Amended by #413: naming no privilege is why a sub-read does not come to `warnUnreadable`, and
+   it was never sufficient to decide the LEVEL.** `PatientClinicalContextBuilder.drug` is a sub-read
+   inside the same `try`, names no privilege either, and WARNs. The argument for that is what its
+   failure costs, stated rather than reduced to a criterion that sorts the five: the order loses its
+   coded name, it is classified from its own concept instead of the drug's
+   ([Decision 68](#decision-68-an-active-order-joins-the-reference-data-by-the-concept-it-was-written-against-not-only-by-the-names-a-locale-elects)'s
+   different concept), and where nothing else names it and it carries no ATC code it is dropped from
+   the list. A first wording claimed the four could never cost as much, and that is false — an
+   `addConceptName` failure on an order with no coded drug and no codes reaches the same drop.
+
+   **The stamp is gated on the failed DRUG read, never on the drop alone.** Where the dropped order is one whose
+   `Drug` could not be read, `activeDrugOrdersRead` goes false rather than certifying an empty
+   medication list as screened — this decision's own subject, one order down. Where an order is
+   dropped having simply never had a name, a code or a coded drug, nothing failed and the stamp is
+   left alone. The difference was measured and it is not cosmetic: through the real
+   `standingChartAlerts`, one such order under the wider rule cost a patient her entire alert list,
+   chips raised on other orders the module read perfectly included. That population keeps its
+   pre-existing silent skip, and its own certified-empty-screen residue is older than #413 and not
+   closed here.
+
+   **The other residue is the DEGRADED order, and it is deliberately unflagged.** An order that keeps
+   its concept name but lost its drug name stays on the list under a `true` stamp, so a screen that
+   saw fewer names than the chart holds still publishes as complete — the same shape as the PARTIAL
+   read this decision's own Context paragraph records, now reachable by a second route. Closing it
+   needs a per-order completeness signal, which is a different change; the WARN is what an operator
+   has meanwhile.
+
    **Age and weight are loud too, and the stamp question is a different question.** They are
    outside the verdict because the verdict is built from the two stamps and neither of these
    carries one — adding stamps for them is a further change and is not made here — but that scopes

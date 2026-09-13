@@ -23,6 +23,7 @@ import org.openmrs.Concept;
 import org.openmrs.ConceptMap;
 import org.openmrs.ConceptName;
 import org.openmrs.Condition;
+import org.openmrs.Drug;
 import org.openmrs.DrugOrder;
 import org.openmrs.Obs;
 import org.openmrs.Order;
@@ -123,15 +124,20 @@ final class PatientClinicalContextBuilder {
 					continue;
 				}
 				DrugOrder drugOrder = (DrugOrder) order;
+				// The order's coded Drug, materialized ONCE for the three reads below (issue #413).
+				// Resolved here rather than at each of them so one unreadable drug is one degradation and
+				// one log line, and so those reads cannot disagree about whether this order has a drug.
+				CodedDrug coded = drug(drugOrder);
+				Drug drug = coded.drug;
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
 				// flattened set (every name of every order together) cannot.
 				Set<String> orderNames = new LinkedHashSet<String>();
-				addDrugName(orderNames, drugOrder);
+				addDrugName(orderNames, drugOrder, drug);
 				drugNames.addAll(orderNames);
 				Concept concept = drugOrder.getConcept();
-				if (drugOrder.getDrug() != null && drugOrder.getDrug().getConcept() != null) {
-					concept = drugOrder.getDrug().getConcept();
+				if (drug != null && drug.getConcept() != null) {
+					concept = drug.getConcept();
 				}
 				// Per-order codes for the same reason as the per-order names above, read once off the
 				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
@@ -148,7 +154,7 @@ final class PatientClinicalContextBuilder {
 				// narrow ONE prescription's classification and a union over the medication list would
 				// attribute one order's route to another.
 				Set<String> orderAdministration = new LinkedHashSet<String>();
-				addAdministration(orderAdministration, drugOrder);
+				addAdministration(orderAdministration, drugOrder, drug);
 				// Resolved once and read by both the skip test and the label below, so the two cannot
 				// answer differently about which codes this order has.
 				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
@@ -171,15 +177,24 @@ final class PatientClinicalContextBuilder {
 				// reaches this branch is a name that could not be READ — addConceptName swallowing a
 				// RuntimeException from a detached or lazy-init proxy while addAtcCodes succeeds in a
 				// separate try, voided names, or a blank recorded name (addRaw drops it, so getName()
-				// need not be null at all).
+				// need not be null at all). Since issue #413 a coded Drug whose own name could not be
+				// read reaches it too, by the same route one field over: drug() degrades to null and the
+				// order keeps only what its concept and free text name it with.
 				//
 				// The name set stays EMPTY because it is matched against chart prose, so a code in it
 				// would match free text; the cost of that is in the ADR. The display is built from the
 				// normalized codes rather than the raw ones so that the label, the test below and the
 				// codes ActiveDrugOrder stores cannot disagree — NOT as a defence against a blank code,
-				// which addRaw already dropped. An order with no name and no code is still skipped:
-				// nothing can name it and no chip can be raised for it, which is what the old skip was
-				// right about. The WARN is the only trace that a chip is speaking for an order the module
+				// which addRaw already dropped. An order with no name and no code is still skipped: no
+				// chip can be raised for it, which is what the old skip was right about. Since issue #413
+				// that population has a second member — an order whose ONLY name was the coded Drug, whose
+				// concept is unnamed and which carries no ATC code — and the else below is what keeps the
+				// skip honest for THAT member: the order is named in a WARN and the pass reports itself
+				// unread, rather than an empty medication list being certified as a clean screen. The older
+				// member, an order that simply never had a name, is untouched and still skipped in silence;
+				// the branch says why it is not treated alike.
+				//
+				// The code-only WARN below is the trace that a chip is speaking for an order the module
 				// could not name; it does not distinguish a name that could not be read from a concept
 				// that has none, because no consumer behaves differently on that today. It REPEATS, and
 				// that is accepted rather than overlooked: build() is called once by
@@ -209,6 +224,29 @@ final class PatientClinicalContextBuilder {
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
 							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
 							orderConceptUuid));
+				} else if (coded.unreadable) {
+					// Neither rung, and the reason is a read this pass could not make. The skip itself
+					// is older than issue #413 and is untouched below; what #413 adds is a way INTO it,
+					// and saying the active orders were READ while one of them is missing because of a
+					// failed read is the confusion the stamp exists to prevent (#247) — on the standing
+					// surface it is a patient with a prescription certified as a screened empty chart.
+					// So the pass reports itself unread, which is what it did before this loop guarded
+					// the drug read; what #413 changed is that the orders BESIDE this one keep their
+					// place on the list.
+					//
+					// Gated on the FAILED read and never on the drop alone, and the difference is not
+					// cosmetic: an order that simply never had a name, a code or a coded drug is dropped
+					// here too, nothing having failed to read, and stamping the pass unread for it would
+					// hand a client screened:false — every chip on the chart withheld, including ones
+					// raised on other orders the module read perfectly. Measured through the real
+					// standingChartAlerts: one such order costs the whole alert list. That population is
+					// left exactly as it was, silently skipped, and its own certified-empty-screen
+					// residue is older than this issue and not closed here.
+					log.warn("Active drug order {} has no readable name and no ATC code because its coded "
+							+ "drug could not be read, so it is left off this patient's medication list "
+							+ "entirely and the active-order read is reported as incomplete rather than "
+							+ "clean.", drugOrder.getUuid());
+					activeDrugOrdersRead = false;
 				}
 			}
 		}
@@ -321,6 +359,10 @@ final class PatientClinicalContextBuilder {
 	 * records not yet walked included. Raising them is a change to how loud a HEALTHY install is per
 	 * record, which issue #247 measured nothing about; {@link #conceptUuid}'s own javadoc carries
 	 * what its failure costs.
+	 *
+	 * <p><b>{@link #drug} is enclosed by the same catch and is NOT one of them</b> (issue #413): it
+	 * names no privilege either, so it does not come here, but it WARNs rather than degrading at
+	 * {@code log.debug}. Its own javadoc carries why.
 	 *
 	 * <p><b>The stack trace is kept for every cause but the expected one.</b> An
 	 * {@code APIAuthenticationException} is a role missing one of {@code privileges} and nothing
@@ -532,16 +574,136 @@ final class PatientClinicalContextBuilder {
 	 * <p>Read through {@code addRaw} rather than behind an {@code isNonCodedDrug()} gate: that method IS
 	 * {@code StringUtils.isNotBlank(drugNonCoded)}, and {@code addRaw} already drops null, blank and
 	 * whitespace-only values, so the gate would be a second spelling of the same test — two places to
-	 * keep in step for no answer either could give alone. Unguarded for the same reason
-	 * {@code getDrug()} beside it is: it is a plain String column on a {@code DrugOrder} the caller has
-	 * already materialized, not a lazy association like the concept {@code addConceptName} wraps.
+	 * keep in step for no answer either could give alone. That is what {@code drugNonCoded} needs and
+	 * it is NOT enough for the coded drug beside it: {@code drugNonCoded} is the plain String column,
+	 * while {@code DrugOrder.getDrug()} returns an ENTITY behind a lazy association, so it is taken
+	 * through {@link #drug}, which is where the reason lives (issue #413). An earlier wording of this
+	 * paragraph had those two accessors the wrong way round and called the guard unnecessary.
+	 *
+	 * @param drug the already-materialized coded {@code Drug}, or null where the order carries none or
+	 *             it could not be read — {@link #drug} is the only thing that may decide which
 	 */
-	private static void addDrugName(Set<String> names, DrugOrder drugOrder) {
-		if (drugOrder.getDrug() != null && drugOrder.getDrug().getName() != null) {
-			addRaw(names, drugOrder.getDrug().getName());
+	private static void addDrugName(Set<String> names, DrugOrder drugOrder, Drug drug) {
+		if (drug != null) {
+			addRaw(names, drug.getName());
 		}
 		addRaw(names, drugOrder.getDrugNonCoded());
 		addConceptName(names, drugOrder.getConcept());
+	}
+
+	/**
+	 * Materializes the coded {@code Drug} {@code drugOrder} was written against — the ONE place this
+	 * module may touch that association (issue #413).
+	 *
+	 * <p><b>It is a lazy association, whatever the field name suggests.</b> {@code Order.hbm.xml}
+	 * maps it {@code <many-to-one name="drug" class="org.openmrs.Drug" not-null="false"
+	 * column="drug_inventory_id" access="field"/>} with no {@code lazy} attribute, and
+	 * {@code Drug.hbm.xml} puts no {@code lazy="false"} on the class, so the default
+	 * {@code lazy="proxy"} applies: {@code getDrug()} hands back an UNINITIALISED proxy and a null
+	 * test on it initialises nothing. The plain String column with a similar name is
+	 * {@code getDrugNonCoded()}, which needs none of this. This is the one home for that fact;
+	 * {@code UnreadableOrderDrugTest} cites it rather than restating it.
+	 *
+	 * <p><b>Its own {@code try}, for the reason {@link #conceptUuid} states in full</b> — the catch
+	 * is outside the {@code for}, so an unguarded dereference costs this order and every order AFTER
+	 * it, rather than this one alone.
+	 * <p><b>The failure WARNs, where the four per-concept reads {@link #warnUnreadable} enumerates
+	 * degrade at {@code log.debug}.</b> What a null here costs is the argument for that, stated rather
+	 * than reduced to a principle: the order loses its coded name; it is classified from
+	 * {@code drugOrder.getConcept()} instead of the drug's own concept, which issue #353 records as a
+	 * different concept reaching different reference entries; and where nothing else names it and it
+	 * carries no ATC code it reaches neither rung in {@code build} and is left off the list — the
+	 * skip that does that is older than this issue; what the branch beside it adds is the WARN and
+	 * the stamp that then reports the pass unread. Free text alone keeps it, so that last needs the
+	 * concept to be unnamed too. No claim is made here that the four could never cost as much — an
+	 * {@code addConceptName} failure on an order with no coded drug and no codes reaches the same
+	 * DROP, though not the same branch, the stamp being gated on a failed drug read — only that this
+	 * one does, often enough that an operator is told.
+	 *
+	 * <p><b>The read below is what materialises the proxy, and it must be a real property.</b> An
+	 * identifier read would not: Hibernate answers {@code getDrugId()} off an uninitialised proxy
+	 * without loading the row, so an accessor written that way would return an uninitialised proxy
+	 * and move the throw back out to the caller — which is the defect itself, and is why
+	 * {@code UnreadableOrderDrugTest.oneUnreadableDrugCostsThatOrderItsCodedNameAndNothingElse} goes
+	 * red when the line is dropped.
+	 *
+	 * <p><b>What a non-null return does and does not promise.</b> Initialising a proxy is atomic, so
+	 * the three reads this loop makes on the returned object — {@code getName()},
+	 * {@code getConcept()} and {@code getDosageForm()} — are served from the loaded target and
+	 * cannot throw. That does NOT extend to the whole entity, and the exceptions are the plausible
+	 * next reads rather than exotic ones: {@code Drug.hbm.xml} maps {@code ingredients} and
+	 * {@code drugReferenceMaps} as lazy {@code <set>}s, which initialising the entity does not
+	 * initialise; {@code getFullName(Locale)} dereferences the drug's own lazy {@code concept}; and
+	 * {@code getDisplayName()} does the same wherever the drug's own name is blank. Any of those can
+	 * still throw on a detached {@code Drug}. A read of one of them wants its own {@code try}, here.
+	 *
+	 * <p>The association fetch and the null test sit INSIDE the {@code try} with the read that can
+	 * throw. Neither can throw today — reading the field hands back the proxy uninitialised — but
+	 * putting them outside would leave one dereference of this association whose failure lands in the
+	 * loop-wide catch, which is the shape this method exists to remove.
+	 *
+	 * @return what was found — never null; see {@link CodedDrug}, whose two empty forms the
+	 *         {@code build} loop must not confuse
+	 */
+	private static CodedDrug drug(DrugOrder drugOrder) {
+		try {
+			Drug drug = drugOrder.getDrug();
+			if (drug == null) {
+				return CodedDrug.NONE;
+			}
+			// Read for its side effect and never tested: a Drug whose name is null is still a Drug the
+			// module READ, and returning NONE for it would classify the order from its own concept
+			// rather than the drug's (#353's subject) and skip the dose form, silently.
+			drug.getName();
+			return new CodedDrug(drug, false);
+		}
+		catch (RuntimeException e) {
+			// Named without its stack trace, and NOT on warnUnreadable's grounds — that method drops a
+			// trace only where the message names a privilege to grant, and keeps it for every other
+			// RuntimeException on the reasoning that there the trace IS the diagnosis. The reason here is
+			// its own: this read is a single known line, so the frames say where it threw when that was
+			// never in question, while e.toString() carries what a reader needs (the Hibernate exception
+			// and the row it could not load). The condition also persists until someone acts on it, and
+			// build() runs twice per /search against an endpoint with no rate limit, so the frames would
+			// repeat for its life. Restore the trace if a second call site ever makes the line ambiguous.
+			log.warn("Could not read the coded drug of active drug order {} ({}); it keeps only the names "
+					+ "its own concept and free text give it, is classified from that concept rather than the "
+					+ "drug's, and is left off the medication list altogether if that leaves it with no name "
+					+ "and no ATC code — in which case the line below reports this whole medication read "
+					+ "as incomplete. Every other order keeps its place on the list either way.",
+					drugOrder.getUuid(),
+					e.toString());
+			return CodedDrug.UNREADABLE;
+		}
+	}
+
+	/**
+	 * What {@link #drug} found, and why the answer is not simply a nullable {@code Drug} (issue #413).
+	 *
+	 * <p><b>There are two empty answers and only one of them may move a stamp.</b> An order carrying
+	 * no coded drug at all is the ordinary shape of a free-text prescription and nothing failed; an
+	 * order whose coded drug could not be READ is a fact about this pass. Both leave
+	 * {@link #drug} with no {@code Drug} to hand back, and the {@code build} loop has no second way to
+	 * tell them apart — asking {@code drugOrder.getDrug()} again would be the very dereference this
+	 * accessor exists to be the only one of. Where they are confused, an order that simply never had a
+	 * name is enough to report a chart unread, which costs a client every chip on it.
+	 */
+	private static final class CodedDrug {
+
+		/** The order carries no coded drug. Not a failure. */
+		private static final CodedDrug NONE = new CodedDrug(null, false);
+
+		/** The order carries one and this pass could not read it. */
+		private static final CodedDrug UNREADABLE = new CodedDrug(null, true);
+
+		private final Drug drug;
+
+		private final boolean unreadable;
+
+		private CodedDrug(Drug drug, boolean unreadable) {
+			this.drug = drug;
+			this.unreadable = unreadable;
+		}
 	}
 
 	/**
@@ -688,10 +850,13 @@ final class PatientClinicalContextBuilder {
 	 * <p>Through {@link #addConceptNames} for both — EVERY name the dictionary publishes for the
 	 * concept and not the one {@code Concept.getName()} elects, which is that method's whole subject
 	 * and where the reason lives. Not {@link #addConceptName}: that one is the order-NAME path's read
-	 * and widening it would change which reference entries an order reaches. {@code getRoute()} and
-	 * {@code getDrug()} are evaluated outside the try like {@code addDrugName}'s {@code getDrug()} is
-	 * and for the same reason — reading the association returns the proxy, and it is the name read on
-	 * it that can throw.
+	 * and widening it would change which reference entries an order reaches. {@code getRoute()} is
+	 * evaluated outside the try and is safe there — reading that association returns the proxy, and it
+	 * is the name read on it, inside {@link #addConceptNames}, that can throw. The dosage form is NOT
+	 * the same case, and an earlier wording of this paragraph said it was: the read that initialises
+	 * the {@code Drug} proxy would be the ARGUMENT expression, evaluated at this call site before
+	 * {@link #addConceptNames} opens anything. It comes in materialized from {@link #drug} instead
+	 * (issue #413).
 	 *
 	 * <p>A failed read degrades to nothing recorded, which is the reading that narrows nothing, so the
 	 * failure is fail-SAFE here in a way it is not for a contraindication record (issue #208 item 2)
@@ -701,10 +866,10 @@ final class PatientClinicalContextBuilder {
 	 * the one way (issue #293) and a blank name is dropped rather than stored as a term that matches
 	 * nothing.
 	 */
-	private static void addAdministration(Set<String> terms, DrugOrder drugOrder) {
+	private static void addAdministration(Set<String> terms, DrugOrder drugOrder, Drug drug) {
 		addConceptNames(terms, drugOrder.getRoute());
-		if (drugOrder.getDrug() != null) {
-			addConceptNames(terms, drugOrder.getDrug().getDosageForm());
+		if (drug != null) {
+			addConceptNames(terms, drug.getDosageForm());
 		}
 	}
 

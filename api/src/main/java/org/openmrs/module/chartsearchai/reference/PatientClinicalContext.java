@@ -215,7 +215,12 @@ public class PatientClinicalContext {
 	}
 
 	/**
-	 * @return whether the patient's ACTIVE ORDERS were read at all. The sibling of
+	 * @return whether the patient's active orders were read AND can all be accounted for. Since issue
+	 *         #413 those are two things: the read itself failing is one way to `false`, and the other
+	 *         is an order whose coded {@code Drug} could not be read being left off the list
+	 *         entirely, nothing else naming it and no ATC code covering it. A per-order degradation
+	 *         that keeps the order on the list does NOT move this, which is the residue ADR Decision
+	 *         91 names. The sibling of
 	 *         {@link #contraindicationRecordsRead()} on the other side of the join, and a second
 	 *         flag rather than a widening of that one because the two answer different readers:
 	 *         the injector asks the first before stating what this patient's RECORDS do not
@@ -1088,6 +1093,16 @@ public class PatientClinicalContext {
 		 *         {@link #getNames()} are — EVERY name the order's route concept publishes and every
 		 *         name its drug's dosage-form concept publishes, either source or both, empty when
 		 *         neither is recorded or neither could be read (issue #234).
+		 *
+		 *         <p>Since issue #413 the dose-form half is also absent for an order whose coded
+		 *         {@code Drug} could not be read at all, the form being recorded on that entity — so
+		 *         for such an order this is the route's names alone. The site narrowing below still
+		 *         narrows on those wherever the route names a site, and declines only where the dose
+		 *         form was the order's one way of saying it — the locally applied presentation the
+		 *         "Both sources and not one" paragraph below measures against the 3.7.1 route set.
+		 *         Nothing recorded is the reading that narrows nothing, the
+		 *         same fail-safe direction {@code PatientClinicalContextBuilder.addAdministration}
+		 *         states for a failed read of either source.
 		 *
 		 *         <p>Every name and not the one {@code Concept.getName()} elects, which returns the
 		 *         locale-PREFERRED spelling first: on the 3.7.1 reference dictionary that hides the

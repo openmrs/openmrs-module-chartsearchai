@@ -1100,7 +1100,10 @@ public interface ChartSearchService {
 		 * default has {@code chartsearchai.drugReference.enabled} off, so the pass returns before it
 		 * has a context and this key reads {@code null} on the early {@code done} and on the final
 		 * payload alike. A client must not treat {@code null} there as a protocol violation.</li>
-		 * <li>{@code FALSE} — at least one of the three did not complete. An empty
+		 * <li>{@code FALSE} — at least one of the three did not complete, or (since issue #413) the
+		 * active-order read completed but could not account for one of the orders: an order whose
+		 * coded {@code Drug} could not be read, which nothing else names and no ATC code covers, is
+		 * left off the medication list, and the verdict says so rather than certifying it. An empty
 		 * {@code safetyWarnings} beside it is NOT a measurement of none and must not be rendered as
 		 * a clear chart — and a NON-empty one beside it is not complete either, because a read that
 		 * threw part-way leaves what it had already collected in place. "Did not complete" rather

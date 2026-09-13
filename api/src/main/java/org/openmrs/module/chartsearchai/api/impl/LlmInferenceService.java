@@ -662,8 +662,9 @@ public class LlmInferenceService implements ChartSearchService {
 							response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #395): the check runs here, after the user-visible handoff. It is the
-			// cheapest of the five — two walks and a set intersection, and of the answer only whether
-			// there is any prose at all rather than a scan of it — and it
+			// cheapest of the five — two walks, one decode of the answer's markers and a set
+			// intersection (issue #409 added the decode; before it, this read of the answer was only
+			// whether there was any prose at all) — and it
 			// still runs here rather than ahead of the handoff, because a client that got a zeroed
 			// extent on the early event and a real one on the final would read the first as a
 			// measurement.
@@ -731,10 +732,21 @@ public class LlmInferenceService implements ChartSearchService {
 	 * The findings this answer owes a repair for — issue #398. The gate and the population in one
 	 * place, so the two answer paths cannot come to disagree about either; an empty list is both
 	 * "the repair is off" and "the answer cited them all", which are the same instruction to a caller.
+	 *
+	 * <p><b>A BLANK answer owes nothing, and that gate is here rather than in the append step.</b> Its
+	 * citations do resolve — {@code extractCitedReferences} reads the structured array for a blank
+	 * answer on purpose — so findings really are owed by the count, and nothing downstream would stop
+	 * the pass. Two things make it the one original to refuse. A continuation appended to nothing IS
+	 * the answer, so this pass would have composed the lead, where the rule is that the original's
+	 * opening is never re-decided. And it is what keeps "may only ADD" true of the published count:
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} reads a blank answer's resolution
+	 * and a real answer's MARKERS, so appending here flips the reading underneath the key and can
+	 * LOWER it (issue #409).
+	 * &rarr; {@code FindingEnumerationRepairTest.aBlankAnswerIsNotRepairedAtAll}
 	 */
 	private List<Integer> findingsOwedARepair(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
-		if (!resolveFindingEnumerationRepair()) {
+		if (!resolveFindingEnumerationRepair() || ChartSearchAiUtils.isBlank(answer)) {
 			return Collections.emptyList();
 		}
 		return SafetyFindingCitationExtentCheck.uncitedFindingIndexes(answer, cited, mappings);

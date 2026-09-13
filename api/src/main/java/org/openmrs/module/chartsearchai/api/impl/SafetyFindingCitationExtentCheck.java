@@ -221,9 +221,11 @@ final class SafetyFindingCitationExtentCheck {
 	 * continuation the published count cannot see, which is the seam #409 opened between them — so
 	 * the reading lives here, in the private helper both reach, and is never spelled at the caller.
 	 *
-	 * <p>It walks the mappings a second time rather than sharing {@link #uncitedFindingIndexes}'
-	 * walk, and that is deliberate: the two are asked of DIFFERENT answers on the same request, so
-	 * there is no walk to share.
+	 * <p>It walks the mappings itself rather than taking {@link #uncitedFindingIndexes}' walk: its
+	 * caller holds a chart and an answer, not a walk, and threading one across
+	 * {@code LlmInferenceService} is the coupling this signature exists to avoid. The walk is over
+	 * the mappings and not the answer, so on one request it is the same walk repeated; the
+	 * efficiency of that is recorded in ADR Decision 93 rather than argued here.
 	 */
 	static Set<Integer> citedFindingIndexes(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
@@ -252,14 +254,24 @@ final class SafetyFindingCitationExtentCheck {
 	 * finding. Shared by the extent and by {@link #uncitedFindingIndexes} so the count and the
 	 * complement cannot disagree about what "cited" means.
 	 *
-	 * <p><b>Both halves decide, and neither alone is this question</b> — issue
-	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>. The
-	 * resolution admits the UNION of the model's structured citations array and its inline markers,
-	 * deliberately and for the reference list's sake, so on its own it counts a finding the model
-	 * listed in the array and named in no sentence — which is the reported defect, a response
-	 * claiming full coverage for prose that dropped a hazard. The markers on their own are not the
-	 * question either: a bracketed clinical value the chart has no record for would become a
-	 * citation, which is what taking the resolution as the base still prevents.
+	 * <p><b>What each of the three tests contributes, stated rather than implied</b> — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.
+	 * {@code carried} is what keeps a bracketed clinical value out: a chart has no record at that
+	 * index, so no membership test against the resolution is doing that work. The MARKERS are what
+	 * #409 added, and they are what decides a non-blank answer — the resolution admits the UNION of
+	 * the model's structured array and its inline markers, deliberately and for the reference list's
+	 * sake, so on its own it counted a finding the model listed in the array and named in no
+	 * sentence. The RESOLUTION is what a blank answer is read by, below, and it carries the #305
+	 * filter.
+	 *
+	 * <p><b>So for a NON-BLANK answer the resolution test is inert today, and that is measured
+	 * rather than assumed.</b> An index a marker anchors is in {@code seen} by construction, maps to
+	 * a record whenever it is in {@code carried}, and is therefore never
+	 * {@code attachedByTheModule}; replacing this branch with {@code anchored} against
+	 * {@code carried} alone leaves the whole api suite green. It stays because the two readers share
+	 * this helper and the blank branch is not inert, and because dropping the #305 filter here would
+	 * make this the one counter in the family that does not apply it. Do not read the intersection
+	 * as two live gates.
 	 *
 	 * <p><b>A blank or null answer keeps the resolution alone.</b> There is no prose to anchor
 	 * anything, {@code extractCitedReferences} resolves the array there on purpose, and counting
@@ -268,9 +280,16 @@ final class SafetyFindingCitationExtentCheck {
 	 */
 	private static Set<Integer> citedFindingIndexes(String answer, List<RecordReference> cited,
 			Set<Integer> carried) {
+		Set<Integer> citedFindings = new LinkedHashSet<Integer>();
+		if (carried.isEmpty() || cited == null || cited.isEmpty()) {
+			// Before the scan, not after it: nothing here can admit an index outside `carried`, so a
+			// chart that carried no finding has no answer to read. measureFindingCitations resolves
+			// the same gate for itself and returns earlier still; this one is for the other two
+			// readers, which are handed no carried set to test.
+			return citedFindings;
+		}
 		Set<Integer> anchored = ChartSearchAiUtils.isBlank(answer) ? null
 				: ChartSearchAiUtils.citedIndexes(answer);
-		Set<Integer> citedFindings = new LinkedHashSet<Integer>();
 		if (cited != null) {
 			for (RecordReference citation : cited) {
 				Integer index = Integer.valueOf(citation.getIndex());

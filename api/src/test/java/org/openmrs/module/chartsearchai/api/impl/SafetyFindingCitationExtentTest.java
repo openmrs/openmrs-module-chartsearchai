@@ -483,8 +483,9 @@ public class SafetyFindingCitationExtentTest {
 			this(answer, Collections.<Integer> emptyList());
 		}
 
-		/** The structured-citations arity: the one arrangement that reaches this check with cited
-		 *  records and no prose to read them in. */
+		/** The structured-citations arity, for the two arrangements in which the array and the prose
+		 *  disagree: a blank answer with cited records and no prose to read them in, and — since issue
+		 *  #409 — real prose whose markers name fewer records than the array does. */
 		private StubProvider(String answer, List<Integer> citations) {
 			this.answer = answer;
 			this.citations = citations;

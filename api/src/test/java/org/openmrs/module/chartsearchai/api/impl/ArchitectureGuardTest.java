@@ -614,6 +614,16 @@ public class ArchitectureGuardTest {
 	 * maintainer may record the rejected alternative in this class's own javadoc — which ADR
 	 * Decision 59 spells character for character — without breaking the build.
 	 */
+	@Test
+	public void classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep() throws IOException {
+		assertMarkersReachedOnlyThroughTheSharedDecodeStep("ClassCodeFidelityCheck.java", 1,
+				"the marker rule has grown a dialect of its own — a regex, a hand-rolled scan, "
+						+ "or the shared pattern matched directly — and no behavioural case can see it",
+				"ClassCodeFidelityCheck must compile exactly one pattern — ATC_CLASS_CODE. A second "
+						+ "one is either a citation-marker dialect (use ChartSearchAiUtils.citedIndexes) "
+						+ "or a second compiled reading of the code shape (reuse ATC_CLASS_CODE).");
+	}
+
 	/**
 	 * The second class whose answer depends on reading the answer's own markers, and the one whose
 	 * marker reading is the newest — issue
@@ -628,54 +638,37 @@ public class ArchitectureGuardTest {
 	 * The pattern count is ZERO rather than one — this class compiles none, having no shape of its
 	 * own to recognise — so a first {@code Pattern.compile} here is already a dialect.
 	 *
-	 * <p>The same residue its neighbour names applies unchanged: this reads SOURCE TEXT, so a
+	 * <p>The same residue that case names applies unchanged: this reads SOURCE TEXT, so a
 	 * dialect written BESIDE a retained {@code citedIndexes} call is out of its reach.
 	 */
 	@Test
 	public void safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep()
 			throws IOException {
-		List<String> lines = getSourceCache().get("SafetyFindingCitationExtentCheck.java");
-		org.junit.jupiter.api.Assertions.assertNotNull(lines,
-				"precondition: SafetyFindingCitationExtentCheck.java was not found by the source scan, "
-						+ "so this rule would pass vacuously");
-		int compiles = 0;
-		boolean callsDecodeStep = false;
-		List<String> ownDialect = new ArrayList<>();
-		for (int i = 0; i < lines.size(); i++) {
-			String line = lines.get(i);
-			String trimmed = line.trim();
-			if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
-				continue;
-			}
-			if (line.contains("ChartSearchAiUtils.citedIndexes(")) {
-				callsDecodeStep = true;
-			}
-			if (line.contains("Pattern.compile(")) {
-				compiles++;
-			}
-			if (line.contains("\\[") || line.contains("INLINE_CITATION")) {
-				ownDialect.add("line " + (i + 1) + ": " + trimmed);
-			}
-		}
-		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep,
-				"SafetyFindingCitationExtentCheck must read citation markers through "
-						+ "ChartSearchAiUtils.citedIndexes. If that call is gone, either the count has "
-						+ "stopped asking what the PROSE anchored — the issue #409 defect — or the "
-						+ "question has grown a dialect of its own.");
-		org.junit.jupiter.api.Assertions.assertEquals(0, compiles,
+		assertMarkersReachedOnlyThroughTheSharedDecodeStep("SafetyFindingCitationExtentCheck.java", 0,
+				"either the count has stopped asking what the PROSE anchored — the issue #409 "
+						+ "defect — or the question has grown a dialect of its own",
 				"SafetyFindingCitationExtentCheck must compile no pattern of its own; markers are "
 						+ "decoded by ChartSearchAiUtils.citedIndexes.");
-		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(),
-				"SafetyFindingCitationExtentCheck must not spell a bracketed regex of its own nor name "
-						+ "INLINE_CITATION. Found: " + ownDialect);
 	}
 
-	@Test
-	public void classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep() throws IOException {
-		List<String> lines = getSourceCache().get("ClassCodeFidelityCheck.java");
-		org.junit.jupiter.api.Assertions.assertNotNull(lines,
-				"precondition: ClassCodeFidelityCheck.java was not found by the source scan, so this "
-						+ "rule would pass vacuously");
+	/**
+	 * The scan both marker-consumer rules above run, in one place so their needle set cannot drift
+	 * apart — a renamed decode step or a third dialect spelling fixed in one copy and not the other
+	 * would leave the second blind, and both rules report success by finding nothing.
+	 *
+	 * @param fileName the source file, as {@code getSourceCache()} keys it
+	 * @param expectedCompiles how many patterns the class is allowed to compile — every one of them
+	 *            for a shape of its own, never for a marker
+	 * @param decodeStepConsequence what a MISSING {@code citedIndexes} call means for this class,
+	 *            which differs between them and is the half of the message worth writing twice
+	 * @param compileMessage what the class's own patterns are for
+	 */
+	private void assertMarkersReachedOnlyThroughTheSharedDecodeStep(String fileName,
+			int expectedCompiles, String decodeStepConsequence, String compileMessage)
+			throws IOException {
+		List<String> lines = getSourceCache().get(fileName);
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: " + fileName
+				+ " was not found by the source scan, so this rule would pass vacuously");
 		int compiles = 0;
 		boolean callsDecodeStep = false;
 		List<String> ownDialect = new ArrayList<>();
@@ -697,19 +690,13 @@ public class ArchitectureGuardTest {
 				ownDialect.add("line " + (i + 1) + ": " + trimmed);
 			}
 		}
-		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep,
-				"ClassCodeFidelityCheck must read citation markers through "
-						+ "ChartSearchAiUtils.citedIndexes. If that call is gone, the marker rule has "
-						+ "grown a dialect of its own — a regex, a hand-rolled scan, or the shared "
-						+ "pattern matched directly — and no behavioural case can see it.");
-		org.junit.jupiter.api.Assertions.assertEquals(1, compiles,
-				"ClassCodeFidelityCheck must compile exactly one pattern — ATC_CLASS_CODE. A second "
-						+ "one is either a citation-marker dialect (use ChartSearchAiUtils.citedIndexes) "
-						+ "or a second compiled reading of the code shape (reuse ATC_CLASS_CODE).");
-		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(),
-				"ClassCodeFidelityCheck must not spell a bracketed regex of its own nor name "
-						+ "INLINE_CITATION; markers are decoded by ChartSearchAiUtils.citedIndexes. "
-						+ "Found: " + ownDialect);
+		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep, fileName
+				+ " must read citation markers through ChartSearchAiUtils.citedIndexes. If that call is "
+				+ "gone, " + decodeStepConsequence + ".");
+		org.junit.jupiter.api.Assertions.assertEquals(expectedCompiles, compiles, compileMessage);
+		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(), fileName
+				+ " must not spell a bracketed regex of its own nor name INLINE_CITATION; markers are "
+				+ "decoded by ChartSearchAiUtils.citedIndexes. Found: " + ownDialect);
 	}
 
 	/**

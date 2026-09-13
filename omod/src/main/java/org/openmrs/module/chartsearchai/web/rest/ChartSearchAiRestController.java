@@ -1673,8 +1673,7 @@ public class ChartSearchAiRestController {
 	 * prompt that carried no finding, which is the shipped default's ordinary state). See
 	 * {@code ChartSearchService.FindingCitationExtent}, which is canonical for what each value does
 	 * and does not assert — in particular that {@code cited == carried} certifies nothing about how
-	 * those findings were stated, and that {@code cited} is not the number of {@code safety_finding}
-	 * entries in {@code references}, which is resolved differently and can be larger.
+	 * those findings were stated.
 	 *
 	 * <p>The same shape as {@link #serializePairChipExtent} and {@link #serializeActiveOrderClaims},
 	 * and deliberately not folded into either: that one counts drug PAIRS a screen found and

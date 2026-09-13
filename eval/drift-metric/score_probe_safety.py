@@ -811,6 +811,15 @@ def has_extent_measurement(cell):
 def findings_incompletely_stated(cell):
     """The #397 defect: the answer cited fewer injected safety findings than the prompt carried.
 
+    **`cited` was REDEFINED on 2026-09-13 by #409, and numbers quoted against this column before
+    that date are not comparable with a capture taken after it.** The module used to count a finding
+    as cited when the model's structured `citations` array named it, whether or not any `[N]` marker
+    in the answer did; it now counts the markers, intersected with the same resolution. The new
+    reading admits a subset of the old one on every input, so this column can only have risen — and
+    the A/B refusal below will NOT catch such a pair, both arms publishing the key. There is no
+    build marker in a capture to test; this note is the whole of the guard. ADR Decision 93 carries
+    which recorded figures it invalidates.
+
     Scoped by the MEASUREMENT and not by `label`, because `carried > 0` already says the prompt held
     a finding and that is the population — a cell can carry a finding and still label ABSTAIN, which
     is what `fixtures/probe-safety/finding-no-chip/` is. A dropped hazard is a dropped hazard

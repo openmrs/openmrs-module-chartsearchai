@@ -245,6 +245,37 @@ public class FindingEnumerationRepairTest {
 	}
 
 	@Test
+	public void aBlankAnswerIsNotRepairedAtAll() {
+		// A blank answer is the ABSENCE of an answer, and two things follow that make it the one
+		// original this pass must refuse. Its citations still resolve — the structured array is read
+		// for a blank answer on purpose — so findings really are owed, and appending to it would make
+		// the continuation the whole answer: a lead this pass composed, where the rule is that the
+		// original's opening is never re-decided.
+		//
+		// And it is what keeps "may only ADD" true of the published count. The extent reads a blank
+		// answer's resolution and a real answer's markers (issue #409), so a continuation appended
+		// here would flip the reading underneath the key and LOWER it — the one direction this pass
+		// is not allowed to move it.
+		List<Integer> resolved = findings.subList(0, findings.size() - 1);
+		StubProvider provider = new StubProvider(
+				Arrays.asList(new ArrayList<Integer>(resolved)),
+				"   ", continuationCiting(findings.get(findings.size() - 1)));
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(resolved.size(), answer.getFindingCitationExtent().getCited(),
+				"the premise: a blank answer's structured array really did resolve, so findings are "
+						+ "owed and only the blank-original gate can stop the repair");
+		assertEquals(1, provider.calls(),
+				"and the model must be asked exactly once: an answer that does not exist owes no "
+						+ "repair. Asked: " + provider.calls());
+		assertEquals("   ", answer.getAnswer(),
+				"and the degenerate answer must reach the caller as it was. Answer: "
+						+ answer.getAnswer());
+	}
+
+	@Test
 	public void withTheRepairOffTheAnswerAndItsExtentAreExactlyWhatTheyWereBefore() {
 		// The gate. This is the shipped default and it is the whole of ADR Decision 84's measured
 		// behaviour, so this case is what says the repair is an addition to that arrangement rather

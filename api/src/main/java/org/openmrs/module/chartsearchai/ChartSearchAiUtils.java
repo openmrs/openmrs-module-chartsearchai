@@ -288,10 +288,13 @@ public class ChartSearchAiUtils {
 	 * faithfulness check from the very record injected to stop the answer contradicting the safety
 	 * chips (#118). <b>"One drug name" is the ordinary shape and not every shape</b>: an order the
 	 * module can read no name for renders as its ATC codes alone, so that record asserts no drug and
-	 * the clause above does not hold of it. It stays graded regardless — issue #294 asked what that
-	 * costs before anything is changed, and ADR Decision 38's owed-measurement section is the answer,
-	 * including what a type-keyed carve-out here was measured to cost — which is NOT the
-	 * display-keyed, wire-sited remedy that issue proposes.
+	 * the clause above does not hold of it. <b>This method is still not where that is answered, and
+	 * issue #294 did not change it.</b> Such a record is chart evidence, so a carve-out here would
+	 * withhold the verdict of every {@code active_drug_order} citation including the named ones — the
+	 * cost ADR Decision 38's remedies sub-section measured. It is held back at the grading layer
+	 * instead, per RECORD rather than per type, by
+	 * {@code CitationGroundingVerifier.Disposition.UNVERIFIABLE} off the mapping's own
+	 * {@code orderDrugNamed} stamp, which is canonical for the reasoning.
 	 *
 	 * <p>Conversely a {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING} is
 	 * patient-specific but module-derived, and its rendering ("&lt;Drug&gt; interacts with active order

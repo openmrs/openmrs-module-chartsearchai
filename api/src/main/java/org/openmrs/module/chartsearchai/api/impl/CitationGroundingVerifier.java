@@ -57,8 +57,9 @@ import org.springframework.stereotype.Service;
  * decided by the pairing rather than earned by the record. This is what
  * catches the subject/polarity flips cosine cannot — for chart records; the citations excepted from
  * it are module-supplied reference material, a COMPOUND claim unit, a citation the MODULE attached
- * ({@link Disposition#UNVERIFIABLE}, issue #305) and — for its NEGATIVE only — a COMPOSITE claim,
- * each below or on the constant named for it. It runs on Tier-1 passes
+ * (issue #305), a record that NAMES NO DRUG though it is about one (issue #294) — the three of those
+ * being {@link Disposition#UNVERIFIABLE} — and, for its NEGATIVE only, a COMPOSITE claim, each below
+ * or on the constant named for it. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
  * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
@@ -84,8 +85,9 @@ import org.springframework.stereotype.Service;
  * answer where each line cites its own record runs no Tier-1 embeds at all. A consequence pinned in
  * tests: a broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
  * claim sentences the judge is ASKED about — previously it silently downgraded every citation to
- * "unverified". Since issue #302 it is not asked about a compound claim unit, and since #305 not
- * about a citation the module attached either (see {@link Disposition#UNVERIFIABLE}); the former on such a
+ * "unverified". Since issue #302 it is not asked about a compound claim unit, since #305 not
+ * about a citation the module attached, and since #294 not about a record that names no drug (all
+ * three on {@link Disposition#UNVERIFIABLE}); the first on such a
  * deployment has no tier left and renders unverified; see the compound-claim paragraph below.
  *
  * <p><strong>Module-supplied reference citations are demote-only.</strong> A record whose
@@ -137,7 +139,9 @@ import org.springframework.stereotype.Service;
  * verdicts tracked embedding noise, and it also spent Tier-2 cap slots meant for chart claims. An
  * injected {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is NOT reference
  * material and is graded normally — see the carve-out site in {@link #verify} for why that is
- * right, and why "the module injected it" is the wrong test.
+ * right, and why "the module injected it" is the wrong test. One RECORD of that type is held back
+ * even so, and by a different rule keyed on the mapping rather than on the type:
+ * {@link Disposition#UNVERIFIABLE}, which is canonical for it (issue #294).
  *
  * <p><strong>A COMPOUND claim unit is UNVERIFIABLE, which is stronger than demote-only.</strong> A claim unit
  * that attaches its citations to different pieces of its own text — more than one citation, with
@@ -260,7 +264,10 @@ import org.springframework.stereotype.Service;
  * carve-out is deliberately NOT extended to for
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} — the record issue #118 injected for
  * reconciliation, kept gradable by the carve-out comment in {@link #verify} — and it is why a
- * composite citation is not simply made demote-only. And NOT because a "yes" on a genuinely composite
+ * composite citation is not simply made demote-only. Issue #294's rule is not a counter-example to
+ * that: it withholds the "yes" as well, because it rests on the record asserting nothing rather than
+ * on the claim being composed, and so it is UNVERIFIABLE rather than an extension of demote-only.
+ * And NOT because a "yes" on a genuinely composite
  * statement would be informative — by the paragraph above it cannot be, since a correct judge answers
  * "no" there by construction. It is kept because the TRIGGER is a proxy that over-fires (see the cost
  * paragraph below), and on the shapes it is wrong about a "yes" is a real verification.</li>
@@ -278,9 +285,10 @@ import org.springframework.stereotype.Service;
  * reference side is the same shape reversed. So a chart citation nothing anchors has its statement —
  * and what that statement rests on — read out of the whole answer, and an UNANCHORED reference
  * citation counts toward every claim, because it was offered in support of the answer without saying
- * where. See {@link AnswerCitations}. One subclass is exempt since issue #305: a citation the MODULE
- * attached is anchored by nothing and has no statement selected for it AT ALL, claim selection being
- * skipped for it.</li>
+ * where. See {@link AnswerCitations}. Two subclasses have no statement selected for them AT ALL, claim selection being
+ * skipped: a citation the MODULE attached, which is anchored by nothing (issue #305), and a citation
+ * of a record that names no drug, which is anchored like any other but has nothing to be asked about
+ * (issue #294).</li>
  * </ul>
  *
  * <p>The cost, stated rather than implied: a chart citation the model attached to the WRONG record
@@ -370,7 +378,8 @@ public class CitationGroundingVerifier {
 	 * {@code null} when querystore's provider can't be resolved — Tier-1 cosine checks are then
 	 * skipped and Tier-2 entailment (the authoritative pass) still applies to every citation it is
 	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit — nor,
-	 * since #305, one the module attached, which selects no claim at all — the former of which
+	 * since #305, one the module attached, nor, since #294, one of a record that names no drug, the
+	 * last two selecting no claim at all — the first of which
 	 * renders unverified on any deployment, so an absent embedder cannot change its verdict. It can
 	 * still change the LOG: where several sentences cite the record, claim selection embeds to choose
 	 * between them, and that failure is counted in the run's embedding-failure summary. Never throws.
@@ -422,7 +431,8 @@ public class CitationGroundingVerifier {
 
 		/**
 		 * Nothing is published in either direction, because neither tier is asked a question that is
-		 * this citation's own. The arrangements below reach it from opposite directions.
+		 * this citation's own. The arrangements below reach that from different directions — what the
+		 * citation is missing is the claim, the claimant, or the record's content in turn.
 		 *
 		 * <p><b>Do not read "nothing is published" as "nothing is spent".</b> Two drafts of a rule
 		 * about which arm pays an embedding have now been refuted by measurement, so none is made
@@ -439,6 +449,33 @@ public class CitationGroundingVerifier {
 		 * to entailment mode — with Tier-2 off the cosine would stand in for a judge that was never
 		 * asked, and publishing its FALSE would render the module's own deterministic provenance as
 		 * <em>Unsupported</em>, which is issue #201's defect one record over.
+		 *
+		 * <p>A record that NAMES NO DRUG though it is about one (#294): the code-only stand-in issue
+		 * #290 injects for an active order the module could read no name for, whose whole text is its
+		 * ATC codes labelled as codes. The claim is not that the record is worthless — it is the #118
+		 * reconciliation's own evidence that the prescription EXISTS — but that neither tier can weigh
+		 * a medication claim against it. A correct judge refuses one by construction, because the
+		 * record cannot name the drug whatever the citation is worth; and the cosine that would stand
+		 * in has nothing but an identifier to compare a sentence against. Published, the refusal reads as a verdict
+		 * about the claim when it is a statement about the module's own naming gap, and a client keying
+		 * its badge on {@code resourceType} renders the module's own reconciliation record
+		 * <em>Unsupported</em>, in red — #201's defect reached through the chart group its carve-out
+		 * does not cover. A real query has done exactly that, on a sentence the record supports; ADR
+		 * Decision 38's owed-measurement section carries the run.
+		 *
+		 * <p>NOT scoped to entailment mode. The OUTCOME is what it shares with the attached case — a
+		 * published FAIL is a false <em>Unsupported</em> either way — and not the mechanism, which is
+		 * the opposite one: there the cosine would stand in for a judge that was never asked, here the
+		 * judge could have been asked and still could not weigh the pair. What makes Tier-1 no better
+		 * is the record, not the mode: it is measured against a text that asserts nothing. That is what
+		 * separates this from DEMOTE_ONLY, which keeps the fail — demoting would have left #294's own
+		 * harm standing through Tier-1, the more so at the raised floor
+		 * {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE} advises for an e5 deployment.
+		 * Membership is the mapping's own
+		 * {@code RecordMapping.getOrderDrugNamed()} stamp, so it reaches the RECORD that names no drug
+		 * and not the TYPE: a NAMED {@code active_drug_order} citation is graded and published exactly
+		 * as before, which a carve-out in {@link ChartSearchAiUtils#isGroundingDemoteOnly} could not
+		 * have preserved.
 		 *
 		 * <p>Ranks above {@link #DEMOTE_ONLY} — a reference-group citation inside a compound unit is
 		 * unverifiable, not merely demotable. That precedence is why this is one ordered choice rather
@@ -478,7 +515,8 @@ public class CitationGroundingVerifier {
 	 * carries no text, or that cannot be embedded, are returned with a
 	 * {@code null} verdict ("could not verify"). Citations are also held back deliberately, by
 	 * different amounts and under different conditions: module-supplied reference material, a
-	 * COMPOUND claim unit under entailment, and a citation the MODULE attached, in either mode.
+	 * COMPOUND claim unit under entailment, a citation the MODULE attached, and a citation of a record
+	 * that NAMES NO DRUG though it is about one — the last two in either mode.
 	 * {@link Disposition} says how much each is held back and the class javadoc says why; the
 	 * reasons a published {@code grounded} reads {@code null} are enumerated once, in ADR
 	 * Decision 11's {@code grounded} paragraph, and neither set is restated here.
@@ -512,8 +550,9 @@ public class CitationGroundingVerifier {
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
 	 * record text — except the kinds that never enter Tier-2: citations of module-supplied reference
-	 * material, citations of a COMPOUND claim unit (both in the class javadoc) and, since issue #305,
-	 * a citation the MODULE attached ({@link Disposition#UNVERIFIABLE}) — is confirmed by a
+	 * material, citations of a COMPOUND claim unit (both in the class javadoc), since issue #305 a
+	 * citation the MODULE attached, and since issue #294 a citation of a record that NAMES NO DRUG
+	 * though it is about one (the last two {@link Disposition#UNVERIFIABLE}) — is confirmed by a
 	 * Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
@@ -548,6 +587,14 @@ public class CitationGroundingVerifier {
 		// near-identically to its source whether or not it swaps subject roles — so a passing
 		// verdict would be false assurance (issue #106).
 		Set<Integer> demoteOnlyIndexes = new HashSet<Integer>();
+		// Records that NAME NO DRUG though they are about one (issue #294). Read off the mapping's own
+		// stamp, RecordMapping.getOrderDrugNamed, written once by the injector off the ORDER — never
+		// re-derived from the text below, which is the rule #317 states for the sibling stamp and for
+		// the same reason. FALSE is the only membership: null is "the module cannot say", which is
+		// every retrieved chart record, and reading it as membership would blank the grounding feature
+		// for chart evidence — the inverse of the #201 rule and the cost the type-keyed carve-out was
+		// measured to have.
+		Set<Integer> namesNoDrugIndexes = new HashSet<Integer>();
 		if (mappings != null) {
 			for (RecordMapping mapping : mappings) {
 				textByIndex.put(mapping.getIndex(), mapping.getText());
@@ -581,12 +628,17 @@ public class CitationGroundingVerifier {
 				// nothing to remember.
 				//
 				// "One drug name" is the ordinary shape and not every shape: a codes-only
-				// active-order display asserts none. That changes nothing this gate does, and issue
-				// #294 measured what it costs — ChartSearchAiUtils.isGroundingDemoteOnly's javadoc
-				// carries the qualification, ADR Decision 38's owed-measurement section the run. A
-				// remedy mutating this gate starts there.
+				// active-order display asserts none. That is issue #294, and the remedy did NOT mutate
+				// this gate — the record is still chart evidence and still not reference material, so
+				// this set is unchanged. It is held back one step further instead, by
+				// namesNoDrugIndexes above, which reads the injector's own per-record stamp rather
+				// than a type. That set's own comment carries the pointer to what a carve-out HERE
+				// was measured to cost; it is not repeated at both sites.
 				if (ChartSearchAiUtils.isGroundingDemoteOnly(mapping.getResourceType())) {
 					demoteOnlyIndexes.add(Integer.valueOf(mapping.getIndex()));
+				}
+				if (Boolean.FALSE.equals(mapping.getOrderDrugNamed())) {
+					namesNoDrugIndexes.add(Integer.valueOf(mapping.getIndex()));
 				}
 			}
 		}
@@ -640,6 +692,10 @@ public class CitationGroundingVerifier {
 		//   * the MODULE attached the citation rather than the model emitting it (issue #305), in
 		//     either mode: UNVERIFIABLE. The enum constant is canonical for why; asked before claim
 		//     selection, so none runs.
+		//   * the RECORD names no drug though it is about one — the code-only active-order stand-in of
+		//     issue #290 — in either mode: UNVERIFIABLE (issue #294). The enum constant is canonical
+		//     for why. Read off the mapping's own stamp and asked before claim selection, like the
+		//     one above, so none runs and no cosine is spent.
 		//   * its CLAIM UNIT is compound and entailment is on (issue #302): UNVERIFIABLE, no verdict in
 		//     either direction. Both tiers are asking the wrong-sized question there — the judge is
 		//     asked to entail a conjunction the record answers for only part of, and cosine is measured
@@ -697,7 +753,25 @@ public class CitationGroundingVerifier {
 			// gave the skipped result a claim sentence would make an attached citation a judge
 			// candidate the moment this arm was gone.
 			boolean attachedByTheModule = reference.isAttachedByTheModule();
-			Tier1Result tier1 = attachedByTheModule
+			// A record that NAMES NO DRUG selects no claim either (issue #294), for the reason on
+			// Disposition.UNVERIFIABLE: nothing published means nothing to choose a statement for. It
+			// joins the skip above rather than only the disposition below so that no cosine is spent
+			// where selectClaim's argmax would run — several sentences citing one record — and so that
+			// a Tier-1-only pass spends none at all. Unlike the attached case this citation IS
+			// anchored, so the skip is an economy here and a necessity there.
+			//
+			// The two sites are NOT equally observable, and the pair behaves exactly as #305's does.
+			// Measured: THIS skip is what the suite sees — remove it and
+			// codesOnlyActiveOrder_spendsNoEmbeddingEvenWhereTheClaimWouldHaveToBeChosen reddens with
+			// 3 embedding passes, and it alone. The arm in the disposition below is a statement of
+			// intent that NO case discriminates: with it gone the empty Tier1Result withholds by
+			// accident, because no claim sentence means no Tier-2 candidate and no deferred cosine, so
+			// the whole suite stays green. It stays for the reason the attached arm stays — candidacy
+			// is expressed as `== GRADED` (see Disposition), so a later change that gave the skipped
+			// result a claim sentence would make this citation a judge candidate the moment the arm
+			// was gone.
+			boolean namesNoDrug = namesNoDrugIndexes.contains(Integer.valueOf(reference.getIndex()));
+			Tier1Result tier1 = attachedByTheModule || namesNoDrug
 					? new Tier1Result(null, null, null, false)
 					: entailmentEnabled
 							? selectClaim(reference.getIndex(), textByIndex, sentences, citations,
@@ -705,7 +779,13 @@ public class CitationGroundingVerifier {
 							: verdictTier1(reference.getIndex(), textByIndex, sentences, citations,
 									floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
-			disposition[i] = attachedByTheModule || (entailmentEnabled && tier1.compoundClaim)
+			// The three reasons are named in one local rather than left as a multi-line condition in
+			// the arm: this ternary's ORDER is what makes UNVERIFIABLE outrank DEMOTE_ONLY, the class
+			// javadoc calls that precedence load-bearing and says it lives here, and a wrapped
+			// condition makes the arms the hardest part of it to read.
+			boolean unverifiable =
+					attachedByTheModule || namesNoDrug || (entailmentEnabled && tier1.compoundClaim);
+			disposition[i] = unverifiable
 					? Disposition.UNVERIFIABLE
 					: demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))
 							? Disposition.DEMOTE_ONLY
@@ -1308,16 +1388,6 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
-	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
-	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
-	 * claim reads as its own statement rather than a dangling continuation.
-	 *
-	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
-	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
-	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
-	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
-	 */
-	/**
 	 * Most whitespace-separated words an enumerated item may carry and still be treated as a NAME
 	 * rather than a clause. The split is only sound while the shared preamble carries the sentence's
 	 * SUBJECT; an item long enough to be a clause may carry its own, and then the siblings' claims lose
@@ -1418,6 +1488,16 @@ public class CitationGroundingVerifier {
 					+ "|denies|denied|takes|took|receives|received|presents|remains)\\b",
 			Pattern.CASE_INSENSITIVE);
 
+	/**
+	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
+	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
+	 * claim reads as its own statement rather than a dangling continuation.
+	 *
+	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
+	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
+	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
+	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
+	 */
 	private static final Pattern LEADING_ITEM_SEPARATOR =
 			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
 

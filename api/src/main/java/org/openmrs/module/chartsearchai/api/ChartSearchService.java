@@ -301,11 +301,19 @@ public interface ChartSearchService {
 	 * against seven records), and CLAUDE.md's own rule forbids inferring an extent from the chip
 	 * count.
 	 *
-	 * <p><b>What {@code cited} counts.</b> How many of those records the answer's own citation
-	 * resolution admitted — {@code LlmInferenceService.extractCitedReferences}, never a
-	 * re-derivation from the markers, so "which records did this answer cite" keeps one answer. A
-	 * finding cited twice counts once. A citation the MODULE attached (issue #305) is one the answer
-	 * did not make, and is not counted.
+	 * <p><b>What {@code cited} counts.</b> How many of those records the ANSWER cited: the citations
+	 * {@code LlmInferenceService.extractCitedReferences} admitted, narrowed to the ones a marker in
+	 * the answer text anchors (issue #409 — before it, the resolution alone, which counted a finding
+	 * the model listed in its structured array and named in no sentence). A blank answer, having no
+	 * prose to anchor anything, is still counted by the resolution alone. A finding cited twice
+	 * counts once. A citation the MODULE attached (issue #305) is one the answer did not make, and is
+	 * not counted. {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} is canonical for the
+	 * reading; ADR Decision 93 for what it supersedes.
+	 *
+	 * <p><b>It is NOT the number of {@code safety_finding} entries in {@code references}</b>, which
+	 * stays that resolution's own union and can therefore be larger — the two answer different
+	 * questions, and a client that reads one off the other is wrong on exactly the response #409
+	 * reports.
 	 *
 	 * <p><b>A COUNT and deliberately not an accusation.</b> Over the unit of one finding the
 	 * residues run in BOTH directions: an answer that states a finding in prose and omits its marker

@@ -25,11 +25,13 @@ import org.slf4j.LoggerFactory;
 /**
  * Measures how many injected safety findings the prompt carried against how many the answer cited —
  * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">#395</a>. A
- * deterministic count: no model call, no embedding, no cosine floor. It reads the answer only for
- * the citation markers it anchors, through the shared decode step and never a dialect of its own
+ * deterministic count: no model call, no embedding, no cosine floor. Of the answer it reads the
+ * citation markers it anchors — through the shared decode step, never a dialect of its own — and
+ * whether there is any prose at all, which gates the WARN
  * (issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>),
  * pinned by
- * {@code ArchitectureGuardTest.safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep}.
+ * {@code ArchitectureGuardTest.safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep}
+ * for the first of those.
  *
  * <p><b>The failure.</b> Measured live on a RefApp 3.7.1 standalone against the bundled knowledge
  * base, with the drug-reference layer enabled and {@code chartMode=fullChart}, two runs
@@ -103,11 +105,10 @@ import org.slf4j.LoggerFactory;
  *   <li>a finding the answer states in prose without anchoring a marker for it, which it counts as
  *       uncited, and a finding whose marker it anchors while saying nothing about it, which it
  *       counts as cited. Both are why this publishes a base and not an accusation;</li>
- *   <li>a marker the shared decode step cannot read. An uncorroborated compact group — {@code [5,
- *       12]} with the array naming neither part, or only one — is left unrewritten by
- *       {@code LlmAnswerExtractor.normalizeSlashCitations}, deliberately, because an uncorroborated
- *       numeric bracket is a clinical value; a finding anchored only there is counted uncited. This
- *       count is conservative in that direction by mandate, not by accident;</li>
+ *   <li>a marker the shared decode step cannot read, which
+ *       {@code LlmAnswerExtractor.normalizeSlashCitations} leaves intact on purpose. A finding
+ *       anchored only there is counted uncited; ADR Decision 93 is canonical for the mechanism and
+ *       for why the count is conservative in that direction by mandate;</li>
  *   <li>whether an uncited finding MATTERED. The injector renders findings the screen raised, and
  *       not every one of them bears on the question the way the reported seventh did.</li>
  * </ul>
@@ -176,8 +177,8 @@ final class SafetyFindingCitationExtentCheck {
 	}
 
 	/**
-	 * The carried findings the answer's own citation resolution did not admit, in the order the
-	 * injector wrote them — issue
+	 * The carried findings the answer did not cite — {@link #citedFindingIndexes}' complement, in the
+	 * order the injector wrote them — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/398">#398</a>.
 	 *
 	 * <p><b>It is the walk {@link #measureFindingCitations}'s WARN already did, named so a second
@@ -290,13 +291,11 @@ final class SafetyFindingCitationExtentCheck {
 		}
 		Set<Integer> anchored = ChartSearchAiUtils.isBlank(answer) ? null
 				: ChartSearchAiUtils.citedIndexes(answer);
-		if (cited != null) {
-			for (RecordReference citation : cited) {
-				Integer index = Integer.valueOf(citation.getIndex());
-				if (!citation.isAttachedByTheModule() && carried.contains(index)
-						&& (anchored == null || anchored.contains(index))) {
-					citedFindings.add(index);
-				}
+		for (RecordReference citation : cited) {
+			Integer index = Integer.valueOf(citation.getIndex());
+			if (!citation.isAttachedByTheModule() && carried.contains(index)
+					&& (anchored == null || anchored.contains(index))) {
+				citedFindings.add(index);
 			}
 		}
 		return citedFindings;

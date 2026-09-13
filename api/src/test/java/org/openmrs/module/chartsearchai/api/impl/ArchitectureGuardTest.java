@@ -625,8 +625,8 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The second class whose answer depends on reading the answer's own markers, and the one whose
-	 * marker reading is the newest — issue
+	 * The same rule over {@code SafetyFindingCitationExtentCheck}, whose marker reading is the
+	 * newest — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>. Its
 	 * published count is the findings the resolution admitted INTERSECTED with the markers the prose
 	 * anchors, so a maintainer who drops the intersection puts the key back where #409 found it —
@@ -639,7 +639,11 @@ public class ArchitectureGuardTest {
 	 * own to recognise — so a first {@code Pattern.compile} here is already a dialect.
 	 *
 	 * <p>The same residue that case names applies unchanged: this reads SOURCE TEXT, so a
-	 * dialect written BESIDE a retained {@code citedIndexes} call is out of its reach.
+	 * dialect written BESIDE a retained {@code citedIndexes} call is out of its reach. And these two
+	 * are not the whole family — other classes read the answer's markers, some of them through
+	 * {@code INLINE_CITATION} directly because they need a marker's text OFFSET, which CLAUDE.md's
+	 * inline-citation rule licenses and this rule would forbid. No count of the guarded ones is
+	 * published here; grep {@code citedIndexes(} over {@code api/src/main} for the current set.
 	 */
 	@Test
 	public void safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep()

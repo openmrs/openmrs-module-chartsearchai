@@ -168,6 +168,35 @@ public class ActiveOrderReconciliationTest {
 	}
 
 	@Test
+	public void anActiveOrderTwoOfTheChartsRecordsCarryTheUuidOfIsStillNotInjected() {
+		// Issue #379 round two made the CITATION refuse a uuid more than one record carries, and this
+		// question must not follow it there. Substantiation is fail-open by design — it decides only
+		// whether to WARN and inject — and an order the chart holds two records of is the opposite of
+		// unrepresented. Were this reading narrowed to the citation's, every double-indexed order
+		// would be reported missing and get a duplicate record injected for it, which is the harm
+		// .anActiveOrderTheChartAlreadyCarriesIsNotInjected above is written against; and the order
+		// class that has no name insurance at all (ActiveDrugOrder.namedByCodesOnly, issue #290) is
+		// matched by uuid ALONE, so nothing would catch it for them.
+		//
+		// NEITHER RECORD NAMES THE DRUG, and that is what makes this case discriminate rather than
+		// merely pass: with the drug's name in the text the #118 name leg answers too, so the order
+		// stays substantiated however the uuid leg reads and the narrowing is invisible. Measured —
+		// with both records reading "Simvastatin Co 20mg" this case stayed green under exactly the
+		// mutation it is written for.
+		PatientChart chart = DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, SIMVASTATIN_ORDER_UUID,
+						"Zolvimix Co 20mg. Dose: 20 Milligram Oral Once daily"),
+				DrugReferenceTestSupport.drugOrderRecord(2, SIMVASTATIN_ORDER_UUID,
+						"Zolvimix Co 20mg. Dose: 20 Milligram Oral Once daily"));
+
+		PatientChart result = injector().injectRecords(chart, oneActiveOrder(),
+				"what are her active medications?");
+
+		assertSame(chart, result,
+				"two records of one order still substantiate it, so the chart is returned untouched");
+	}
+
+	@Test
 	public void anActiveOrderIsMatchedByNameWhenTheUuidsDoNotLineUp() {
 		// The uuid match is exact (querystore indexes a drug_order document under the Order uuid),
 		// but it must not be the ONLY match: were that contract to change, every order would look

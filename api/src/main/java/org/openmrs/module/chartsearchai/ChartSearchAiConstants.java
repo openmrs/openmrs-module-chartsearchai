@@ -539,8 +539,9 @@ public class ChartSearchAiConstants {
 	 *  order at all, one prescription named two ways between the prose and the chips, and a
 	 *  {@code CYP450} identifier no cited record states — so the default now rests on evidence rather
 	 *  than on the absence of it (ADR Decision 81), and Decision 77 records the costs a rendered
-	 *  marker carries besides. The drift-metric probe the ticket names as a precondition is still
-	 *  owed, and turning this on is how it gets run. It gates the
+	 *  marker carries besides. <b>The drift-metric probe the ticket names as a precondition HAS since
+	 *  been run</b>, twice, and the default did not move either time; Decision 77 carries both arms
+	 *  and what they leave open, so do not re-run this flip expecting a different answer. It gates the
 	 *  rendered marker alone; the resolution's other reader (the issue #118 reconciliation) and
 	 *  {@code ReferenceProseFidelityCheck}'s marker stripping are unconditional, so the flag is safe to
 	 *  flip in either direction. */

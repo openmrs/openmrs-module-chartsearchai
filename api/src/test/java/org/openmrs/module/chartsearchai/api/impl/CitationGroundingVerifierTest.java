@@ -1269,8 +1269,10 @@ public class CitationGroundingVerifierTest {
 		assertEquals(Boolean.TRUE, record.getOrderDrugNamed(),
 				"precondition, and the TRUE half of the stamp's three-valued contract: the injector "
 						+ "STATES that this record names its drug rather than staying silent. Nothing "
-						+ "downstream tells TRUE from null today — both grade — so without this a "
-						+ "writer collapsed to \"FALSE or nothing\" would pass the whole suite");
+						+ "downstream tells TRUE from null today — both grade — so a writer collapsed "
+						+ "to \"FALSE or nothing\" is only visible to a case that reads the stamp. "
+						+ "DrugReferenceInjectorTest.theInjectedActiveOrderRecordStatesWhetherItNamesItsDrug "
+						+ "is the other one, beside the writer");
 		String sentence = "The patient has an active order for Simvastatin Co 20mg ["
 				+ record.getIndex() + "].";
 		embeddings.register(sentence, AXIS_A);

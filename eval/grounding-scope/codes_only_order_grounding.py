@@ -182,9 +182,15 @@ def cell(label, question, entailment, floor):
         # because it already knows which record it built, by ORDER_UUID.
         "codes_only_record": ([
             {"index": r.get("index"), "resourceType": r.get("resourceType"),
-             "verdict": gsab.verdict_tag(r),
+             "verdict": tag,
              "expected": "null — no verdict is published for a record naming no drug (#294)",
-             "regression": gsab.verdict_tag(r) is not None} for r in ours]
+             # A REGRESSION is a published VERDICT, so the two non-verdict strings verdict_tag
+             # returns are excluded by name rather than by `is not None`: `withheld` (#201) and
+             # `attached` (#305) are not verdicts and would not mean the remedy had been lost.
+             # Neither is expected for this record — it is chart-group and the model cites it
+             # itself — and that is why they are excluded rather than asserted against.
+             "regression": tag in (True, False)}
+            for r in ours for tag in [gsab.verdict_tag(r)]]
             or "NOT CITED"),
     }
     print(json.dumps(out, indent=2), flush=True)

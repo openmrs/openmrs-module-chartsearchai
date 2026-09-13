@@ -310,14 +310,27 @@ public final class DrugReferenceTestSupport {
 	 * mapping would assert the very answer under test.
 	 */
 	static RecordMapping injectedActiveOrderMapping(PatientClinicalContext.ActiveDrugOrder order) {
-		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
-				ctx(60, null, null, null, null, null, Collections.singletonList(order)),
-				"what are the patient's active medications?");
-		return chart.getMappings().stream()
+		return injectedActiveOrderChart(order, "what are the patient's active medications?")
+				.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(m.getResourceType()))
 				.findFirst()
 				.orElseThrow(() -> new IllegalStateException(
 						"no active-order record was injected for order: " + order.getDisplay()));
+	}
+
+	/**
+	 * The WHOLE chart the real injector produces for {@code order} and {@code question} — the one
+	 * arrangement behind every active-order accessor here, so they cannot drift apart, which is the
+	 * reason {@link #injectedDdinterChart} exists on the other family.
+	 *
+	 * <p>A caller wanting the other records of that injection — the reference entries and findings the
+	 * question raises — takes this rather than rebuilding the wiring, which is how the context and the
+	 * injector come to differ between a helper and the case that uses it.
+	 */
+	static PatientChart injectedActiveOrderChart(PatientClinicalContext.ActiveDrugOrder order,
+			String question) {
+		return injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null, Collections.singletonList(order)), question);
 	}
 
 	/**
@@ -356,7 +369,9 @@ public final class DrugReferenceTestSupport {
 	 * DDInter excerpt through {@code DrugSafetyValidator.validate} and
 	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
 	 * (through the same {@code set*} seams the other helpers here use, in place of production's
-	 * autowiring). Another of the cross-package accessors, for the grounding tests. They are not numbered: two more were added beside them for issue #294 and an ordinal here rots every time one is.
+	 * autowiring). Another of the
+	 * cross-package accessors, for the grounding tests. They are deliberately not numbered: an
+	 * ordinal here rots the next time one is added beside them.
 	 *
 	 * <p>Returns the {@link RecordMapping} rather than only its text because a grounding test needs
 	 * the resource type and the citation index too, and because the argument for treating this record

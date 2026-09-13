@@ -463,10 +463,11 @@ public class CitationGroundingVerifier {
 		 * does not cover. A real query has done exactly that, on a sentence the record supports; ADR
 		 * Decision 38's owed-measurement section carries the run.
 		 *
-		 * <p>NOT scoped to entailment mode, for the reason the attached case is not: with Tier-2 off
-		 * the cosine is not standing in for a judge that could not be asked, but it is still being
-		 * measured against a record that asserts nothing, and its FAIL is the same false
-		 * <em>Unsupported</em>. That is what separates this from DEMOTE_ONLY, which keeps the fail —
+		 * <p>NOT scoped to entailment mode. The OUTCOME is what it shares with the attached case — a
+		 * published FAIL is a false <em>Unsupported</em> either way — and not the mechanism, which is
+		 * the opposite one: there the cosine would stand in for a judge that was never asked, here the
+		 * judge could have been asked and still could not weigh the pair. What makes Tier-1 no better
+		 * is the record, not the mode: it is measured against a text that asserts nothing. That is what separates this from DEMOTE_ONLY, which keeps the fail —
 		 * demoting would have left #294's own harm standing through Tier-1, the more so at the raised
 		 * floor {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE} advises for an e5 deployment. Membership is the mapping's own
 		 * {@code RecordMapping.getOrderDrugNamed()} stamp, so it reaches the RECORD that names no drug
@@ -629,8 +630,8 @@ public class CitationGroundingVerifier {
 				// this gate — the record is still chart evidence and still not reference material, so
 				// this set is unchanged. It is held back one step further instead, by
 				// namesNoDrugIndexes above, which reads the injector's own per-record stamp rather
-				// than a type. ADR Decision 38's owed-measurement section carries the run that
-				// decided it, including what a carve-out HERE was measured to cost.
+				// than a type. That set's own comment carries the pointer to what a carve-out HERE
+				// was measured to cost; it is not repeated at both sites.
 				if (ChartSearchAiUtils.isGroundingDemoteOnly(mapping.getResourceType())) {
 					demoteOnlyIndexes.add(Integer.valueOf(mapping.getIndex()));
 				}
@@ -776,9 +777,14 @@ public class CitationGroundingVerifier {
 							: verdictTier1(reference.getIndex(), textByIndex, sentences, citations,
 									floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
-			disposition[i] = attachedByTheModule || namesNoDrug
-					|| (entailmentEnabled && tier1.compoundClaim)
-							? Disposition.UNVERIFIABLE
+			// The three reasons are named in one local rather than left as a multi-line condition in
+			// the arm: this ternary's ORDER is what makes UNVERIFIABLE outrank DEMOTE_ONLY, the class
+			// javadoc calls that precedence load-bearing and says it lives here, and a wrapped
+			// condition makes the arms the hardest part of it to read.
+			boolean unverifiable =
+					attachedByTheModule || namesNoDrug || (entailmentEnabled && tier1.compoundClaim);
+			disposition[i] = unverifiable
+					? Disposition.UNVERIFIABLE
 					: demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))
 							? Disposition.DEMOTE_ONLY
 							: Disposition.GRADED;

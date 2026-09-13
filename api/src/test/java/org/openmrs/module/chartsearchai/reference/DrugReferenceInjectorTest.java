@@ -1277,12 +1277,10 @@ public class DrugReferenceInjectorTest {
 	 */
 	@Test
 	public void onlyTheActiveOrderRecordCarriesTheOrderNamingStamp() {
-		DrugReferenceInjector inj =
-				DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService());
-		PatientChart result = inj.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-				DrugReferenceTestSupport.ctx(60, null, null, null, null, null,
-						java.util.Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
-								"order-codes", "[ATC N02BA01]", DrugReferenceTestSupport.set("N02BA01")))),
+		Set<String> codes = DrugReferenceTestSupport.set("N02BA01");
+		PatientChart result = DrugReferenceTestSupport.injectedActiveOrderChart(
+				PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly("order-codes",
+						PatientClinicalContextBuilder.codeOnlyDisplay(codes), codes),
 				"can I give her ibuprofen?");
 
 		List<RecordMapping> stamped = new ArrayList<RecordMapping>();
@@ -1294,11 +1292,21 @@ public class DrugReferenceInjectorTest {
 				otherTypes.add(mapping.getResourceType());
 			}
 		}
-		assertFalse(otherTypes.isEmpty(),
-				"precondition: this injection must produce records BESIDES the active order, or the "
-						+ "case forbids nothing; mappings were: " + result.getMappings().size());
+		assertTrue(otherTypes.contains(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE),
+				"precondition: this injection must INJECT a drug_reference record beside the active "
+						+ "order, or the case forbids nothing about the records the injector mints — "
+						+ "the chart's own pre-existing record would satisfy a mere \"something else "
+						+ "is here\". Unstamped types were: " + otherTypes);
+		List<String> stampedTypes = new ArrayList<String>();
+		for (RecordMapping mapping : stamped) {
+			stampedTypes.add(mapping.getResourceType() + "=" + mapping.getOrderDrugNamed());
+		}
+		// The types and not the mappings: RecordMapping has no toString, so printing the list itself
+		// yields identity hashes. This message is the whole diagnostic for a hole that is otherwise
+		// silent, so it has to name which record was wrongly stamped.
 		assertEquals(1, stamped.size(),
-				"exactly one record of this injection may carry the order-naming stamp, was: " + stamped);
+				"exactly one record of this injection may carry the order-naming stamp, was: "
+						+ stampedTypes);
 		assertEquals(ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
 				stamped.get(0).getResourceType(),
 				"and it is the active-order record; every other record states null, which is the "

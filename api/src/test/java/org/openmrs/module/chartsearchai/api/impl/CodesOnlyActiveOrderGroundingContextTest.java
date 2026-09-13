@@ -287,8 +287,12 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * <p>Its unit counterpart is
 	 * {@code CitationGroundingVerifierTest.aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector},
 	 * which asserts the stamp's TRUE directly; this one is the composed-path half and asserts only
-	 * what the answer carries. The same mutation reddens both — neither catches anything the other
-	 * does not — and they are kept apart for the reason the codes-only pair is.
+	 * what the ANSWER carries. <b>They are not interchangeable, and an earlier draft of this sentence
+	 * said they were.</b> Measured: collapsing the writer to "FALSE or nothing" reddens the unit case
+	 * and {@code DrugReferenceInjectorTest.theInjectedActiveOrderRecordStatesWhetherItNamesItsDrug},
+	 * and leaves all three cases HERE green — because a record stamped {@code null} is graded exactly
+	 * as one stamped {@code TRUE}, which is all this case can see. What it covers that they do not is
+	 * the wiring: the real injector and the real verifier joined through {@code search}.
 	 *
 	 * <p>The arrangement is this class's own minus {@link #makeTheOrderNameless}: order 111 keeps
 	 * concept 88's names, so {@code PatientClinicalContextBuilder} takes the display from a name and
@@ -394,16 +398,6 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
-	 * That Tier-2 was not asked at ALL — no premise and no statement. This is the discriminating
-	 * assertion of the two cases above, because the {@code null} verdict beside it is over-determined
-	 * here: {@code resolveEmbedder()} returns null, so Tier-1 reaches no verdict either way.
-	 *
-	 * <p>It replaced an assertion that the judge WAS asked, whose premise-side equality was what made
-	 * "the judge refused a claim about this record" stronger than "the judge refused something". That
-	 * distinction moved with the behaviour: there is now no pair to inspect, so the recording exists
-	 * to prove its absence rather than its content. {@link FixedJudge} still records, for that.
-	 */
-	/**
 	 * That Tier-2 was asked about THIS record: one pair, whose premise is the cited record's text
 	 * WHOLE and whose statement carries the model's own medication claim.
 	 *
@@ -431,6 +425,18 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		return citedChartLine.substring(citedChartLine.indexOf("] ") + 2);
 	}
 
+	/**
+	 * That Tier-2 was not asked at ALL — no premise and no statement. This is the discriminating
+	 * assertion of the two codes-only cases, because the {@code null} verdict beside it is
+	 * over-determined here: {@code resolveEmbedder()} returns null, so Tier-1 reaches no verdict
+	 * either way.
+	 *
+	 * <p>It is the counterpart of {@link #assertTheJudgeWasAskedAbout}, which those cases used before
+	 * the remedy. The premise-side equality that made "the judge refused a claim about this record"
+	 * stronger than "the judge refused something" moved with the behaviour: there is now no pair to
+	 * inspect, so the recording exists to prove its ABSENCE rather than its content.
+	 * {@link FixedJudge} still records, for that.
+	 */
 	private static void assertTheJudgeWasNotAsked(FixedJudge judge) {
 		assertEquals(Collections.emptyList(), judge.sourcesSeen,
 				"the judge must be handed no premise at all: it refuses a medication claim about a "

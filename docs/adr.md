@@ -2602,7 +2602,7 @@ Two guards keep a synthesized display from behaving like a name. It is withheld 
 
 ### THE OWED MEASUREMENT, RUN (2026-09-11). A real query DOES publish `grounded=false` for one of these records
 
-Issue [#294](https://github.com/openmrs/openmrs-module-chartsearchai/issues/294) asked whether a real query publishes `grounded=false` for a codes-only `active_drug_order` record, and how often. It reserves the remedy choice and so does this section.
+Issue [#294](https://github.com/openmrs/openmrs-module-chartsearchai/issues/294) asked whether a real query publishes `grounded=false` for a codes-only `active_drug_order` record, and how often. It reserved the remedy choice and so did this section; the choice has since been made and is [Decision 93](#decision-93-a-record-that-names-no-drug-grounds-no-claim). What follows is the measurement, unchanged — it is the evidence that decision rests on.
 
 **This section records what was run and what came back, and stops there.** Four successive drafts of it were refuted by review — each one a sentence characterizing how far the measurement reached rather than a sentence saying what happened, and each replaced by a better-sounding characterization that was also false. The observations below have survived every pass. That is the form to add to, if anyone extends this.
 

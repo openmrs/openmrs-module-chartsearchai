@@ -114,11 +114,9 @@ public class ArchitectureGuardTest {
 	 * The constructor that can carry a provenance list is invoked from exactly one class in THIS
 	 * module, which is all this walk can see (issue #305).
 	 *
-	 * <p><b>The api module is the scope, and it is not the whole of production.</b> The walk reads
-	 * {@code api/target/classes}; {@code ModuleSourceRoot} exposes {@code apiRoot()} and no omod root,
-	 * and api's test phase runs before omod is built in any case. So a construction in omod — where
-	 * {@code RecordMapping}'s widest constructor is public and reachable — would leave {@code callers}
-	 * equal to the expected singleton and this case green. The omod builds no mappings today.
+	 * <p><b>The api module is the scope, and it is not the whole of production</b> — said once, on
+	 * {@link #assertSoleInjectorCallerOfMappingConstructor}, which is where the walk lives. The omod
+	 * builds no mappings today.
 	 *
 	 * <p>Judgements elsewhere rest on this and none of them could see it — how many is not a count
 	 * kept here, since each states its own dependence where it is written. The residue
@@ -158,18 +156,19 @@ public class ArchitectureGuardTest {
 	 * over a real arrangement that injects such a record. The two halves are different kinds of
 	 * question on purpose; neither alone is the property those three judgements need.
 	 *
-	 * <p>Every canary here fails on an empty discovery, because a guard that finds nothing forbids
-	 * nothing: the classes directory, the mapping's own class file, more than one constructor arity,
-	 * exactly one that takes a list, and at least one caller.
+	 * <p>The canaries that stop this forbidding nothing are enumerated once, on
+	 * {@link #assertSoleInjectorCallerOfMappingConstructor}, which holds them. A copy of that list
+	 * stood here and had already drifted from the code it described — it named "at least one caller",
+	 * which the walk does not check and never did.
 	 */
 	@Test
 	public void theProvenanceCarryingMappingConstructorHasOneCaller() throws IOException {
-		assertSoleInjectorCallerOfMappingConstructor(DERIVED_FROM_TAIL, "a provenance list",
+		assertSoleInjectorCallerOfMappingConstructor(DERIVED_FROM_TAIL, "a provenance list", false,
 				"See this test's javadoc for the checks that break silently otherwise.");
 	}
 
 	/**
-	 * The shared body of the two cases above: exactly one {@code RecordMapping} constructor matches
+	 * The shared body of both constructor cases in this file: exactly one {@code RecordMapping} constructor matches
 	 * {@code tail}, and only {@code DrugReferenceInjector} invokes it.
 	 *
 	 * <p>One method rather than two copies because the two differ only in the selector and the
@@ -186,7 +185,7 @@ public class ArchitectureGuardTest {
 	 * the same limit for its own scope.
 	 */
 	private static void assertSoleInjectorCallerOfMappingConstructor(String tail, String what,
-			String consequence) throws IOException {
+			boolean widest, String consequence) throws IOException {
 		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
 		assertTrue(Files.isDirectory(classes),
 				"no " + classes + "; a guard that discovers nothing forbids nothing");
@@ -209,6 +208,21 @@ public class ArchitectureGuardTest {
 		assertEquals(1, carrying.size(),
 				"exactly one RecordMapping constructor may END in " + what + ", which is how this case "
 						+ "tells it from the others. Found " + carrying.size() + ": " + carrying);
+		// A tail selects by the LAST parameter, so a rung added BELOW the widest keeps its own tail,
+		// matches NEITHER selector, and is guarded by nothing — both cases stay green while a second
+		// class writes through the new widest. Measured, on a mutation adding a 12th parameter plus a
+		// second writer. The caller asserting `widest` is the one whose subject is the widest
+		// constructor, and this is what makes a new rung redden rather than silently disarm it. It is
+		// deliberately NOT asserted for the provenance case, whose subject stopped being the widest
+		// when issue #294 added a rung below it and is identified by its own tail regardless.
+		if (widest) {
+			for (String descriptor : constructors) {
+				assertTrue(descriptor.length() <= carrying.get(0).length(),
+						"the constructor this case guards must still be the WIDEST, or a rung has been "
+								+ "added below it that no selector reaches and nothing forbids a second "
+								+ "writer of. Guarded: " + carrying.get(0) + "; wider: " + descriptor);
+			}
+		}
 
 		List<String> callers = new ArrayList<>();
 		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
@@ -240,9 +254,9 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>Modelled on {@link #theProvenanceCarryingMappingConstructorHasOneCaller} and asking the same
 	 * kind of question of the constant pool, for the reasons that case's javadoc gives about the
-	 * source-text form it replaced. It differs in how it identifies the constructor: the provenance
-	 * one is the only one whose last parameter is a list, while this one shares its {@code Boolean}
-	 * tail with the order-currency rung, so it is found by ARITY.
+	 * source-text form it replaced. It differs only in the selector, {@link #ORDER_NAMING_TAIL}, whose
+	 * javadoc says why this constructor needs a two-type tail where the provenance one needs a
+	 * single-type one, and is canonical for it.
 	 *
 	 * <p>What it cannot answer: the pool says which CLASS invokes that constructor, not WHAT it
 	 * passes. The injector could stamp a record that is not an active order and this stays green.
@@ -260,7 +274,7 @@ public class ArchitectureGuardTest {
 	@Test
 	public void theOrderNamingStampIsWrittenInOnePlace() throws IOException {
 		assertSoleInjectorCallerOfMappingConstructor(ORDER_NAMING_TAIL,
-				"the order-naming stamp of issue #294",
+				"the order-naming stamp of issue #294", true,
 				"A second writer would withhold grounding verdicts for chart citations silently — "
 						+ "see this test's javadoc.");
 	}

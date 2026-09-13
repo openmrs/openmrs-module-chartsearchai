@@ -1988,4 +1988,21 @@ public final class DrugReferenceTestSupport {
 						&& w.getDrug().equalsIgnoreCase(drug))
 				.map(SafetyWarning::getDetail).findFirst().orElse("");
 	}
+
+	/**
+	 * The ONE active drug order {@code context} holds, with the emptiness that is issue #413's defect
+	 * reported as itself rather than as an index out of bounds.
+	 *
+	 * <p>Extracted when {@code UnreadableOrderDrugTest} wanted "exactly one active drug order, then
+	 * take it" and several classes in this package already had their own copy of it. Those copies
+	 * stand and are not migrated here, which is a scope choice rather than a judgement that they
+	 * should keep them. This is where the next one goes.
+	 */
+	static PatientClinicalContext.ActiveDrugOrder onlyActiveOrder(PatientClinicalContext context) {
+		assertEquals(1, context.getActiveDrugOrders().size(),
+				"expected exactly one active drug order — where a case arranged an unreadable record, an"
+						+ " empty list is the read abandoned at it (issue #413), was: "
+						+ context.getActiveDrugOrders());
+		return context.getActiveDrugOrders().get(0);
+	}
 }

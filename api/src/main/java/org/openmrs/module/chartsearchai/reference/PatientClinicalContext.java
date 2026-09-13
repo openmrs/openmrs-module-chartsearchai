@@ -106,8 +106,11 @@ public class PatientClinicalContext {
 	 *  empty, only about whether the emptiness means anything. */
 	private final boolean contraindicationRecordsRead;
 
-	/** @see #activeDrugOrdersRead() */
-	private final boolean activeDrugOrdersRead;
+	/** @see #activeDrugOrderReadCompleted() */
+	private final boolean activeDrugOrderReadCompleted;
+
+	/** @see #activeDrugOrderUnaccountedFor() */
+	private final boolean activeDrugOrderUnaccountedFor;
 
 	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
@@ -149,14 +152,18 @@ public class PatientClinicalContext {
 	 * the ACTIVE ORDER read did — see {@link #contraindicationRecordsRead}. Package-private and defaulted to {@code true} everywhere
 	 * else on purpose: only {@link PatientClinicalContextBuilder}, which performs those reads, is in a
 	 * position to say otherwise, and a caller assembling a context by hand knows what it put in it.
+	 *
+	 * <p>It states the READ and not {@link #activeDrugOrdersRead()}, which since issue #413 is the
+	 * narrower conjunction. For a caller assembling a context by hand the two coincide, there being no
+	 * order for it to have dropped; the builder is the one caller that must say which it means.
 	 */
 	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
-			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead) {
+			boolean contraindicationRecordsRead, boolean activeDrugOrderReadCompleted) {
 		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
 				activeDrugOrders, activeDrugReferenceNames, contraindicationRecordsRead,
-				activeDrugOrdersRead, null, null);
+				activeDrugOrderReadCompleted, false, null, null);
 	}
 
 	/**
@@ -173,12 +180,14 @@ public class PatientClinicalContext {
 	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
-			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead,
+			boolean contraindicationRecordsRead, boolean activeDrugOrderReadCompleted,
+			boolean activeDrugOrderUnaccountedFor,
 			Map<String, Set<String>> allergyRecordUuids, Map<String, Set<String>> conditionRecordUuids) {
 		this.allergyRecordUuids = lowerKeys(allergyRecordUuids);
 		this.conditionRecordUuids = lowerKeys(conditionRecordUuids);
 		this.contraindicationRecordsRead = contraindicationRecordsRead;
-		this.activeDrugOrdersRead = activeDrugOrdersRead;
+		this.activeDrugOrderReadCompleted = activeDrugOrderReadCompleted;
+		this.activeDrugOrderUnaccountedFor = activeDrugOrderUnaccountedFor;
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
@@ -203,8 +212,8 @@ public class PatientClinicalContext {
 		// reference names for EVERY request.
 		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
 				allergyTokens, conditionTokens, activeDrugOrders, referenceNames,
-				contraindicationRecordsRead, activeDrugOrdersRead, allergyRecordUuids,
-				conditionRecordUuids);
+				contraindicationRecordsRead, activeDrugOrderReadCompleted, activeDrugOrderUnaccountedFor,
+				allergyRecordUuids, conditionRecordUuids);
 	}
 
 	/** @return whether the allergy and condition lists were read at all — see
@@ -215,7 +224,16 @@ public class PatientClinicalContext {
 	}
 
 	/**
-	 * @return whether the patient's ACTIVE ORDERS were read at all. The sibling of
+	 * @return whether the patient's active orders were read AND can all be accounted for. Since issue
+	 *         #413 those are two things: the read itself failing is one way to {@code false}
+	 *         ({@link #activeDrugOrderReadCompleted()}), and the other
+	 *         is an order whose coded {@code Drug} could not be read being left off the list
+	 *         entirely, nothing else naming it and no ATC code covering it
+	 *         ({@link #activeDrugOrderUnaccountedFor()}). Those two are the CAUSES and this is the
+	 *         stamp; a reader publishing a verdict asks this one, and only the operator message that
+	 *         has to name a remedy asks them. A per-order degradation
+	 *         that keeps the order on the list does NOT move this, which is the residue ADR Decision
+	 *         91 names. The sibling of
 	 *         {@link #contraindicationRecordsRead()} on the other side of the join, and a second
 	 *         flag rather than a widening of that one because the two answer different readers:
 	 *         the injector asks the first before stating what this patient's RECORDS do not
@@ -230,7 +248,41 @@ public class PatientClinicalContext {
 	 *         issue #247 the answer path asks it too, through {@link #chartReadForSafety()}.
 	 */
 	boolean activeDrugOrdersRead() {
-		return activeDrugOrdersRead;
+		return activeDrugOrderReadCompleted && !activeDrugOrderUnaccountedFor;
+	}
+
+	/**
+	 * @return whether the {@code getActiveOrders} call itself completed — the FIRST of the two ways
+	 *         {@link #activeDrugOrdersRead()} can answer {@code false}, and the only one before issue
+	 *         #413. This is the one gated by core's {@code Get Orders}.
+	 *
+	 *         <p><b>A cause, not a stamp.</b> Nothing may publish it and nothing may build a verdict
+	 *         out of it: {@link #chartReadForSafety()} is the conjunction of the two stamps and this
+	 *         moves none of it. Its one reader is
+	 *         {@code DrugSafetyValidator.standingChartAlerts}, whose operator MESSAGE is already
+	 *         excepted from the one-spelling rule below because naming which read failed is a
+	 *         different question from whether any did.
+	 */
+	boolean activeDrugOrderReadCompleted() {
+		return activeDrugOrderReadCompleted;
+	}
+
+	/**
+	 * @return whether an order was left off the list although the read itself completed — the coded
+	 *         {@code Drug} of an order nothing else could name having failed to read (issue #413). The
+	 *         SECOND of the two ways {@link #activeDrugOrdersRead()} answers {@code false}, and the
+	 *         one with no privilege to grant for it.
+	 *
+	 *         <p>A cause and not a stamp, on the same terms as
+	 *         {@link #activeDrugOrderReadCompleted()}. The two are independent, so a pass can report
+	 *         both, and the message that reads them states each it finds rather than the first.
+	 *
+	 *         <p>{@code false} here is not a certificate that every order is accounted for: the
+	 *         DEGRADED order — one that lost its coded name but kept its concept's, so it stays on the
+	 *         list — moves neither this nor the stamp, which is the residue ADR Decision 91 names.
+	 */
+	boolean activeDrugOrderUnaccountedFor() {
+		return activeDrugOrderUnaccountedFor;
 	}
 
 	/**
@@ -258,7 +310,7 @@ public class PatientClinicalContext {
 	 *         {@code ChartSearchService.ChartAnswer.getChartReadForSafety()}.
 	 */
 	boolean chartReadForSafety() {
-		return contraindicationRecordsRead && activeDrugOrdersRead;
+		return contraindicationRecordsRead && activeDrugOrdersRead();
 	}
 
 	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying
@@ -1088,6 +1140,16 @@ public class PatientClinicalContext {
 		 *         {@link #getNames()} are — EVERY name the order's route concept publishes and every
 		 *         name its drug's dosage-form concept publishes, either source or both, empty when
 		 *         neither is recorded or neither could be read (issue #234).
+		 *
+		 *         <p>Since issue #413 the dose-form half is also absent for an order whose coded
+		 *         {@code Drug} could not be read at all, the form being recorded on that entity — so
+		 *         for such an order this is the route's names alone. The site narrowing below still
+		 *         narrows on those wherever the route names a site, and declines only where the dose
+		 *         form was the order's one way of saying it — the locally applied presentation the
+		 *         "Both sources and not one" paragraph below measures against the 3.7.1 route set.
+		 *         Nothing recorded is the reading that narrows nothing, the
+		 *         same fail-safe direction {@code PatientClinicalContextBuilder.addAdministration}
+		 *         states for a failed read of either source.
 		 *
 		 *         <p>Every name and not the one {@code Concept.getName()} elects, which returns the
 		 *         locale-PREFERRED spelling first: on the 3.7.1 reference dictionary that hides the

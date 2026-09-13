@@ -856,6 +856,14 @@ public class DrugReferenceInjector {
 	 * reached this list at all — but if the uuid contract drifts, this class of order is where the
 	 * drift shows up as a permanent repair rather than as a caught discrepancy.
 	 *
+	 * <p>Issue #413 adds a partially insured member beside it: an order whose coded {@code Drug}
+	 * could not be read keeps whatever its concept and free text name it with, so {@code namedIn} can
+	 * still be true. What it can miss is chart prose that renders the prescription under the DRUG's
+	 * name, which is the spelling querystore's order text prefers — and misses it only where the
+	 * concept is named differently, the two coinciding often enough that the standard dataset's own
+	 * order 111 matches either way. So the name fallback is sometimes narrower for such an order than
+	 * for a healthy one, without being unavailable.
+	 *
 	 * <p><strong>Two ways that fallback used to over-match, both fixed, both of which suppressed the
 	 * WARN as well as the repair</strong> — so the discrepancy became invisible rather than merely
 	 * unrepaired, which is worse than not having the check.

@@ -661,8 +661,8 @@ public class LlmInferenceService implements ChartSearchService {
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same
-			// reason (issue #395): the check runs here, after the user-visible handoff. It is the
-			// cheapest of the five — two walks, one decode of the answer's markers and a set
+			// reason (issue #395): the check runs here, after the user-visible handoff. It is two
+			// walks, one decode of the answer's markers and a set
 			// intersection (issue #409 added the decode; before it, this read of the answer was only
 			// whether there was any prose at all) — and it
 			// still runs here rather than ahead of the handoff, because a client that got a zeroed

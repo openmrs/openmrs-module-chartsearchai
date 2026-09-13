@@ -130,9 +130,11 @@ final class PatientClinicalContextBuilder {
 					continue;
 				}
 				DrugOrder drugOrder = (DrugOrder) order;
-				// The order's coded Drug, materialized ONCE for the three reads below (issue #413).
-				// Resolved here rather than at each of them so one unreadable drug is one degradation and
-				// one log line, and so those reads cannot disagree about whether this order has a drug.
+				// The order's coded Drug, materialized ONCE (issue #413) — and since issue #421 read out
+				// there too, so what arrives here is the name, concept and dose form rather than the
+				// entity. One unreadable drug is therefore one degradation and one log line, the three
+				// values cannot disagree about whether this order has a drug, and no lazy association
+				// is reachable from this loop to be dereferenced outside that method's try.
 				CodedDrug coded = drug(drugOrder);
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
@@ -631,16 +633,20 @@ final class PatientClinicalContextBuilder {
 	 * DROP, though not the same branch, the stamp being gated on a failed drug read — only that this
 	 * one does, often enough that an operator is told.
 	 *
-	 * <p><b>The read below is what materialises the proxy, and it must be a real property.</b> An
-	 * identifier read would not: Hibernate answers {@code getDrugId()} off an uninitialised proxy
-	 * without loading the row, so an accessor written that way would return an uninitialised proxy
-	 * and move the throw back out to the caller — which is the defect itself, and is why
-	 * {@code UnreadableOrderDrugTest.oneUnreadableDrugCostsThatOrderItsCodedNameAndNothingElse} goes
-	 * red when the line is dropped.
+	 * <p><b>The three reads happen HERE, they are what materialises the proxy, and each must be a real
+	 * property</b> (issue #421). {@code getName()}, {@code getConcept()} and {@code getDosageForm()}
+	 * are the three the loop needs; an identifier read would not do, Hibernate answering
+	 * {@code getDrugId()} off an uninitialised proxy without loading the row. Before issue #421 that
+	 * mattered because an accessor reading no real property handed the loop back an uninitialised
+	 * proxy and moved the throw out to the caller, which was the defect itself; now it matters because
+	 * these reads ARE the answer, so one that loaded nothing would report an unreadable row as a drug
+	 * with no name, concept or dose form — the confusion {@link CodedDrug} exists to prevent, one
+	 * value over. Measured: replacing all three with constants reddens cases across
+	 * {@code UnreadableOrderDrugTest}, {@code ActiveOrderConceptIdentityTest} and
+	 * {@code ActiveOrderAdministrationTermsTest} — mutate them and read the failures.
 	 *
-	 * <p><b>The three reads happen HERE, and no {@code Drug} leaves this method</b> (issue #421).
-	 * {@code getName()}, {@code getConcept()} and {@code getDosageForm()} are the three the loop
-	 * needs, and initialising a proxy is atomic, so all three are served from the loaded target and
+	 * <p><b>No {@code Drug} leaves this method.</b> Initialising a proxy is atomic, so all three reads
+	 * are served from the loaded target and
 	 * cannot throw once the fetch above succeeded. That does NOT extend to the whole entity, and the
 	 * exceptions are the plausible next reads rather than exotic ones: {@code Drug.hbm.xml} maps
 	 * {@code ingredients} and {@code drugReferenceMaps} as lazy {@code <set>}s, which initialising the

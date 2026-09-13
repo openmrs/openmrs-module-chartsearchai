@@ -54,7 +54,16 @@ import org.openmrs.util.PrivilegeConstants;
  * a real database can be in: the order pointing at a {@code drug} row that is not there, which
  * Hibernate's default {@code not-found="exception"} answers with an
  * {@code org.hibernate.ObjectNotFoundException}. Both are {@code RuntimeException}s raised by
- * initialising this one association, through the same three call sites, which is the defect.
+ * initialising this one association, which is what the three call sites above each did.
+ *
+ * <p><b>Since issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/421">#421</a> there is one
+ * such site rather than three</b>, and the difference is what this class's structural case pins:
+ * {@code PatientClinicalContextBuilder.drug} reads the name, concept and dose form inside its own
+ * {@code try} and hands back those VALUES, so the loop holds no {@code Drug} to dereference. The
+ * behavioural cases below are unchanged by that and still drive the real builder; what changed is
+ * that the guard beneath them asks a question the compiler can answer rather than one a text scan
+ * has to spell.
  *
  * <p><b>The fixture COMMITS, and that is why it restores by hand.</b> The repointing is raw SQL —
  * the technique {@code NonCodedDrugOrderNameTest} already arranges order 111 with — around core's

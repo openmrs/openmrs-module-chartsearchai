@@ -8367,8 +8367,8 @@ public class DrugSafetyValidator {
 	 * where the shared subgroup is one {@link DrugReference#isUnclassifyingAtcCode} vetoes, which is
 	 * not a match at all and lets the group answer (issue #167).
 	 *
-	 * <p><b>What "is the same drug" means, and why it takes two legs (issue #185).</b> Neither
-	 * subsumes the other.
+	 * <p><b>What "is the same drug" means, and why it takes three legs (issue #185).</b> None
+	 * subsumes another.
 	 * <ul>
 	 *   <li>{@link DrugReference#substanceGroupKey()} against the substances the partner's ORDER is
 	 *       recorded as naming (see {@link OrderPartner#substances}). This is the question the skip is
@@ -8382,6 +8382,15 @@ public class DrugSafetyValidator {
 	 *       class (A02BC) as active order Omeprazole 20mg}. Deciding identity by the substance key
 	 *       rather than by something a row happens to publish is the correction issues #164/#187 made
 	 *       for the two cross-reactivity routes to that same symptom; this is the third route.</li>
+	 *   <li>The substances that partner's ORDER could equally BE, where its name named none of them
+	 *       (see {@link OrderPartner#readingsOfOneOrder}, and
+	 *       {@link #substancesTheOrderNameDoesNotName} for the rule). Identity the module cannot
+	 *       resolve rather than a proxy for it: a brand is an ALIAS of every row that carries it, so
+	 *       one prescription resolves to two substances at one rank and the leg above — which asks
+	 *       whether the partner IS {@code ref} — answers no for the sibling reading. A patient on
+	 *       {@code Nexium 40mg} alone was told esomeprazole duplicates her {@code active order
+	 *       Omeprazole} (pull request #392's review). It cannot reach a combination whose name SPELLS
+	 *       its constituents, which are named and so keep their own chips.</li>
 	 *   <li>A shared exact ATC code, which identity does not replace <b>where the partner's codes are
 	 *       the CHART's</b> — see {@link OrderPartner#codesFromDataset} for the scoping issue #228 had
 	 *       to add, and why the leg is wrong on a partner reached by name. Where the context carries only
@@ -8460,12 +8469,15 @@ public class DrugSafetyValidator {
 		Object refSubstance = ref.substanceGroupKey();
 		for (OrderPartner partner : coMedications.resolved()) {
 			if (partner.substances.contains(refSubstance)
+					|| partner.readingsOfOneOrder.contains(refSubstance)
 					|| (!partner.codesFromDataset
 							&& !Collections.disjoint(partner.codes, refCodes))) {
 				// Restating existing therapy is not a duplicate. Identity first because it is the
-				// question; the exact-code leg second because it answers where the dataset cannot name
+				// question; then the substances one order's own name could not tell this partner from,
+				// which is identity the module cannot resolve rather than a proxy for it (see that
+				// field); the exact-code leg last because it answers where the dataset cannot name
 				// the partner — and only where the partner's codes are the CHART's, which is what the
-				// guard says. See this method's javadoc for why both are needed and why the code leg's
+				// guard says. See this method's javadoc for why each is needed and why the code leg's
 				// one over-skip is deliberate.
 				continue;
 			}
@@ -8710,13 +8722,22 @@ public class DrugSafetyValidator {
 		 * way. A partner reached from an order's NAME rather than from a code is a partner the dataset
 		 * named, so it stands for exactly one substance and holds exactly that one — never the rest of
 		 * the tablet, or a question about one constituent of an unmapped combination would lose the chip
-		 * naming the other, which is the loss the paragraph above describes.
+		 * naming the other, which is the loss the paragraph above describes. That loss is no longer
+		 * argued: filling this set with everything the order's name implies — the remedy pull request
+		 * #392's review proposed for the sibling-reading defect — reddens
+		 * {@code AmbiguousBrandNamedOrderTest.anUnmappedCombinationSpellingBothItsSubstancesStillReportsTheOther},
+		 * while {@code DuplicateTherapySelfChipTest}, {@code PartialOrderCoveragePartnerTest} and
+		 * {@code OneOrderNameAcrossOneResponseTest} stay green under it. That is why the answer to that
+		 * defect is {@link #readingsOfOneOrder} beside this and not a widening of this.
 		 *
-		 * <p>On that rung it is the WHOLE of the skip, not a second opinion beside the exact-code leg:
-		 * that leg is scoped out there ({@link #codesFromDataset}), because with the partner's codes
-		 * taken from the dataset it would be asking whether two reference rows share a code, which this
-		 * knowledge base says is not identity. So deleting this one line raises the self-chip issue #185
-		 * exists to prevent — measured 2026-08-13, three cases redden.
+		 * <p>On that rung it is the whole of the IDENTITY answer, not a second opinion beside the
+		 * exact-code leg: that leg is scoped out there ({@link #codesFromDataset}), because with the
+		 * partner's codes taken from the dataset it would be asking whether two reference rows share a
+		 * code, which this knowledge base says is not identity. So deleting this one line raises the
+		 * self-chip issue #185 exists to prevent — measured 2026-08-13, three cases redden. What it is
+		 * not the whole of any more is the SKIP: {@link #readingsOfOneOrder} answers beside it for the
+		 * substances one order's name could not tell apart, which is a different question and is
+		 * written on a different line of the same loop.
 		 *
 		 * <p>Worth recording that it was not always so: while the code leg still applied here, deleting
 		 * this line left every api test green, because the leg answered the same question wherever such
@@ -8753,6 +8774,40 @@ public class DrugSafetyValidator {
 		 * KB to say which substances a combination row contains, which it does not publish.
 		 */
 		private final Set<Object> substances = new LinkedHashSet<Object>();
+
+		/**
+		 * The substances this co-medication may BE, where the order it came from named none of them —
+		 * {@link DrugReference#substanceGroupKey()} values, populated on the issue #228 name rung alone
+		 * by {@link DrugSafetyValidator#substancesTheOrderNameDoesNotName}, which is where the naming
+		 * rule and its bound live.
+		 *
+		 * <p><b>Not the same question as {@link #substances}</b>, and the two must not be merged. That
+		 * one is what the prescription CONTAINS — a combination's constituents, each a therapy of its
+		 * own; this one is what it might be INSTEAD — one drug the module cannot name, reached through
+		 * an alias two rows share. A brand is the shape that produces it: {@code Nexium} is an alias of
+		 * both the {@code Esomeprazole} and the {@code Omeprazole} rows, so one prescription resolves
+		 * twice and a question about either was related to the other as a second active order
+		 * (pull request #392).
+		 *
+		 * <p><b>Read by {@link DrugSafetyValidator#classRelationships}' restating-existing-therapy skip
+		 * and by nothing else.</b> Not by {@link DrugSafetyValidator#alreadyACoMedication}, which would
+		 * collapse the readings into one partner — see the writer for what that costs a combination
+		 * brand — and not by {@code CoMedications.partnerNaming}, which indexes a co-medication under
+		 * every key of {@link #substances} (issue #339) and would then let a chip NAME a prescription
+		 * after a substance nothing says it is.
+		 *
+		 * <p><b>The residue, which this does not close and is not the defect it was written for.</b>
+		 * Both readings remain co-medications, so a question about a THIRD substance of the subgroup
+		 * still relates it to each of them by name: on the shipped knowledge base a chart whose only
+		 * order is {@code Nexium 40mg}, asked about pantoprazole, raises one chip naming
+		 * {@code active order Omeprazole} and one naming {@code active order Esomeprazole} (measured
+		 * through the real {@code validate}). Keeping both is what a combination BRAND needs — RxNorm
+		 * files one under each ingredient it really contains, so dropping the second reading loses
+		 * every class only its codes reach — and nothing in the knowledge base tells the two shapes
+		 * apart. What the skip removes is the stronger claim: that a drug duplicates a therapy the
+		 * patient's one prescription may itself BE.
+		 */
+		private final Set<Object> readingsOfOneOrder = new LinkedHashSet<Object>();
 
 		/**
 		 * The reference entry this partner's label was RESOLVED from — the top rung of the ladder in
@@ -9679,8 +9734,12 @@ public class DrugSafetyValidator {
 			if (!governedByTheNameLeg(order, context)) {
 				continue;
 			}
-			for (Map.Entry<Object, List<DrugReference>> named
-					: substanceRowsNamedBy(order, cache, impliedByName).entrySet()) {
+			Map<Object, List<DrugReference>> rowsBySubstance =
+					substanceRowsNamedBy(order, cache, impliedByName);
+			// Which of those substances this order's own name cannot tell apart — resolved once for the
+			// order, because it is a property of the NAME rather than of any one substance it reached.
+			Set<Object> indistinguishable = substancesTheOrderNameDoesNotName(order, rowsBySubstance);
+			for (Map.Entry<Object, List<DrugReference>> named : rowsBySubstance.entrySet()) {
 				if (alreadyACoMedication(byIdentity, named.getKey())) {
 					continue;
 				}
@@ -9696,11 +9755,76 @@ public class DrugSafetyValidator {
 						row.normalizedAtcCodes(), cache, impliedByName));
 				partner.codesFromDataset = true;
 				// This partner IS this substance, so restating it is not duplicating it — and with the
-				// exact-code leg scoped out above, this is the WHOLE of that skip here.
+				// exact-code leg scoped out above, this is the whole of the IDENTITY answer here.
 				partner.substances.add(named.getKey());
+				if (indistinguishable.contains(named.getKey())) {
+					// …and where the order's name named none of them, restating any of the others is not
+					// duplicating it either: they are readings of this one prescription. Only onto a
+					// partner that is itself one of those readings, so a constituent the name DOES spell
+					// keeps its own chip. See the field.
+					partner.readingsOfOneOrder.addAll(indistinguishable);
+				}
 				byIdentity.put(named.getKey(), partner);
 			}
 		}
+	}
+
+	/**
+	 * @return the substances {@code rowsBySubstance} holds that {@code order}'s own recorded names do
+	 *         NOT name — empty where the name names every one of them, and empty for an order whose
+	 *         names imply a single substance, which has nothing to be told apart from.
+	 *
+	 *         <p><b>The question is naming and not counting</b>, and the distinction is the one
+	 *         {@link DrugReferenceService#substancesNamedByBridge} draws for the dictionary bridge
+	 *         (issue #353), on the same pair of substances: "the module knows the prescription is one
+	 *         of these and cannot say which" ({@code Nexium} → Esomeprazole AND Omeprazole) is not
+	 *         "the prescription genuinely CONTAINS all of these" ({@code Metronidazole and
+	 *         secnidazole}). A brand is an ALIAS of every row that carries it, so both claim the order's
+	 *         name at one rank and {@link DrugReference#nameMatchStrength} has no tie to break; a
+	 *         spelled-out combination NAMES each constituent, so each is a therapy of its own. Counting
+	 *         the substances cannot tell those apart, which is why this asks
+	 *         {@link DrugReferenceService#findNamedSubstances} — CLAUDE.md's designated accessor for
+	 *         which of the substances a recorded name implies it actually NAMES, and asked here before
+	 *         a chip prints one of them as a SECOND prescription.
+	 *
+	 *         <p><b>One row per substance, elected with {@link DrugReference#canonicalRow}</b>, which is
+	 *         that accessor's own contract for the candidate list and the same fold
+	 *         {@code substancesNamedByBridge} makes over its bridged answer. Unfolded, two rows of one
+	 *         substance tie with each other and the unique-strongest-claimant clause refuses a name
+	 *         nothing else contests.
+	 *
+	 *         <p><b>Read by the restating-existing-therapy skip alone</b>
+	 *         ({@link OrderPartner#readingsOfOneOrder}) and deliberately not by
+	 *         {@link #alreadyACoMedication}: folding these substances into ONE co-medication would drop
+	 *         the partner the second one supplies, and with it every class its codes reach that the
+	 *         survivor's do not — which for a combination BRAND, filed under each ingredient it really
+	 *         contains, is a duplicate-therapy chip about a drug the patient is genuinely on.
+	 *
+	 *         <p>Resolved only for an order implying more than one substance, which on an ordinary
+	 *         chart is no order at all: {@code findNamedSubstances}' third clause costs a dataset sweep
+	 *         per unresolvable constituent, and the early return keeps the common case from paying for
+	 *         a question it cannot have.
+	 */
+	private Set<Object> substancesTheOrderNameDoesNotName(PatientClinicalContext.ActiveDrugOrder order,
+			Map<Object, List<DrugReference>> rowsBySubstance) {
+		if (rowsBySubstance.size() < 2) {
+			return Collections.emptySet();
+		}
+		List<DrugReference> candidates = new ArrayList<DrugReference>(rowsBySubstance.size());
+		for (List<DrugReference> rows : rowsBySubstance.values()) {
+			DrugReference elected = null;
+			for (DrugReference row : rows) {
+				elected = DrugReference.canonicalRow(elected, row);
+			}
+			candidates.add(elected);
+		}
+		Set<Object> unnamed = new LinkedHashSet<Object>(rowsBySubstance.keySet());
+		for (String name : order.getNames()) {
+			for (DrugReference named : drugReferenceService.findNamedSubstances(name, candidates)) {
+				unnamed.remove(named.substanceGroupKey());
+			}
+		}
+		return unnamed;
 	}
 
 	/**

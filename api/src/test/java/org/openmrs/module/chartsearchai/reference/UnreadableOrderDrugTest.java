@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -171,11 +173,6 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 *  — a {@code LazyInitializationException} from a detached proxy — cannot be staged in a test
 	 *  that holds an open session. */
 	private static final String BROAD_CATCH = "catch (RuntimeException";
-
-	/** What the accessor hands back in the entity's place (issue #421). Named as a string because it
-	 *  is private and nested, so the compiler gives a test no other way to ask about its shape. */
-	private static final String CARRIER =
-			"org.openmrs.module.chartsearchai.reference.PatientClinicalContextBuilder$CodedDrug";
 
 	/** The one method that may reach the association. */
 	private static final String GUARDED_ACCESSOR =
@@ -746,10 +743,20 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * The residues that remain: the text pair reads ONE file, so {@code drugOrder.getDrug()} called
 	 * from another class is outside them — there is none today, and nothing here would notice one
 	 * arriving; and the {@code getDrug()} needle carries no receiver, so a call wrapped across lines
-	 * IS caught while one spelled {@code getDrug ()} is not. The third assertion is about
-	 * {@code CodedDrug}'s own shape, so it says nothing about an entity smuggled out inside some other
-	 * carrier. None of those is worth a cleverer pattern: what this guard is for is the ordinary edit,
-	 * and the behavioural cases above redden for any of them that this fixture's orders reach.
+	 * IS caught while one spelled {@code getDrug ()} is not.
+	 *
+	 * <p><b>And the third assertion is about the {@code Drug} alone, deliberately.</b> It walks the
+	 * builder and every class nested in it, so a SECOND carrier holding the entity is caught as well
+	 * as {@code CodedDrug} — measured, a name-keyed version of this assertion was green on exactly
+	 * that edit. What it admits on purpose is the two {@code Concept} proxies the carrier holds, the
+	 * drug's own concept and its dose form: {@code Drug.hbm.xml} maps both default-lazy, so a read of
+	 * one at a call site compiles and can throw just as a read of the entity could, and measured, a
+	 * {@code coded.dosageForm.getUuid()} added at a call site leaves this class green. That is not
+	 * this guard's subject and must not become it — the loop NEEDS those two, and what keeps them safe
+	 * is that every helper reading a concept opens its own {@code try}, which
+	 * {@code PatientClinicalContextBuilder.conceptUuid}'s javadoc is the one home for. None of these
+	 * residues is worth a cleverer pattern: what this guard is for is the ordinary edit, and the
+	 * behavioural cases above redden for any of them that this fixture's orders reach.
 	 */
 	@Test
 	public void nothingReachesTheDrugAssociationExceptTheGuardedAccessor() throws IOException {
@@ -783,29 +790,12 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 						+ " which is the whole reason this assertion is structural rather than"
 						+ " behavioural.");
 
-		Class<?> coded;
-		try {
-			coded = Class.forName(CARRIER);
-		}
-		catch (ClassNotFoundException e) {
-			throw new AssertionError("no " + CARRIER + ", so this assertion would forbid nothing."
-					+ " Update the name along with the class it names — and if the accessor now returns"
-					+ " the entity itself, that is issue #413's defect restored.", e);
-		}
 		List<String> handingBackAnEntity = new ArrayList<String>();
-		for (java.lang.reflect.Field field : coded.getDeclaredFields()) {
-			if (Drug.class.equals(field.getType())) {
-				handingBackAnEntity.add("field " + field.getName());
-			}
-		}
-		for (java.lang.reflect.Method method : coded.getDeclaredMethods()) {
-			if (Drug.class.equals(method.getReturnType())) {
-				handingBackAnEntity.add("method " + method.getName() + "()");
-			}
-		}
+		collectEntityCarriers(PatientClinicalContextBuilder.class, handingBackAnEntity);
 		assertTrue(handingBackAnEntity.isEmpty(),
-				CARRIER + " must hand the build loop no Drug — it carries the VALUES the accessor read"
-						+ " inside its own try — and hands one back through " + handingBackAnEntity
+				"nothing in " + PatientClinicalContextBuilder.class.getSimpleName() + " may hand the"
+						+ " build loop a Drug — the accessor reads what the loop needs inside its own try"
+						+ " and carries the VALUES — and one is handed back through " + handingBackAnEntity
 						+ ". A Drug reachable at a call site is a lazy association dereferenced outside"
 						+ " that try, and the catch it would land in is outside the active-order loop, so"
 						+ " it costs that order and every order after it (issue #413). Materialising the"
@@ -813,6 +803,37 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 						+ " getFullName/getDisplayName reach its own lazy concept, so a further read can"
 						+ " throw where the three the accessor makes cannot. Read it in the accessor and"
 						+ " carry the value (issue #421).");
+	}
+
+	/**
+	 * Every field and every return type declared by {@code type} and, recursively, by the classes
+	 * nested inside it — the walk rather than a lookup keyed on one carrier's name, because the
+	 * question is whether ANY of them hands a {@code Drug} out.
+	 *
+	 * <p>Measured: a SECOND private nested carrier holding the entity, handed out on {@code CodedDrug}
+	 * and dereferenced in the build loop, is issue #413's defect exactly and left a name-keyed version
+	 * of this assertion green. {@code DrugReferenceSourceValidityChannelTest.collectSources} walks
+	 * nested types for the same reason, and its javadoc records the same hole in the same words.
+	 *
+	 * <p>Reflection does not report anonymous or local classes, so one declared inside a method body
+	 * is outside this walk; and it asks about fields and RETURN types, so a parameter of that type is
+	 * too. Neither is reachable from the loop today — there is nothing there holding a {@code Drug} to
+	 * pass — and nothing here would notice one arriving.
+	 */
+	private static void collectEntityCarriers(Class<?> type, List<String> found) {
+		for (Field field : type.getDeclaredFields()) {
+			if (Drug.class.equals(field.getType())) {
+				found.add(type.getSimpleName() + " field " + field.getName());
+			}
+		}
+		for (Method method : type.getDeclaredMethods()) {
+			if (Drug.class.equals(method.getReturnType())) {
+				found.add(type.getSimpleName() + " method " + method.getName() + "()");
+			}
+		}
+		for (Class<?> nested : type.getDeclaredClasses()) {
+			collectEntityCarriers(nested, found);
+		}
 	}
 
 	/**

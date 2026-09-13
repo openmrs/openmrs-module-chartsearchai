@@ -132,9 +132,12 @@ final class PatientClinicalContextBuilder {
 				DrugOrder drugOrder = (DrugOrder) order;
 				// The order's coded Drug, materialized ONCE (issue #413) — and since issue #421 read out
 				// there too, so what arrives here is the name, concept and dose form rather than the
-				// entity. One unreadable drug is therefore one degradation and one log line, the three
-				// values cannot disagree about whether this order has a drug, and no lazy association
-				// is reachable from this loop to be dereferenced outside that method's try.
+				// entity. One unreadable drug is therefore one degradation and one log line, and the
+				// three values cannot disagree about whether this order has a drug. What that does NOT
+				// mean is that this loop holds no lazy association: two of the three are Concept
+				// proxies, and reading one still throws where the concept cannot be loaded — which is
+				// conceptUuid's subject, and why addAtcCodes, addConceptNames and conceptUuid each open
+				// a try of their own. What #421 removed is the DRUG half of that hazard.
 				CodedDrug coded = drug(drugOrder);
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
@@ -662,8 +665,10 @@ final class PatientClinicalContextBuilder {
 	 * returns {@link CodedDrug#UNREADABLE} and so discards a name the line above had already read
 	 * successfully, and the order is reported as one whose coded drug could not be read — which of
 	 * that name is not quite true. The alternative is a partial answer, and the atomicity above says
-	 * the case does not arise; what it replaces is worse either way, since before issue #421 the same
-	 * throw was raised OUTSIDE this method and cost the whole order loop.
+	 * the case does not arise; what it replaces is worse on both counts, since before issue #421 the
+	 * same throw was raised OUTSIDE this method — costing the whole order loop AND stamping
+	 * {@code activeDrugOrderReadCompleted} false, so the chart was reported unread rather than one
+	 * order degraded.
 	 *
 	 * <p>The association fetch and the null test sit INSIDE the {@code try} with the read that can
 	 * throw. Neither can throw today — reading the field hands back the proxy uninitialised — but
@@ -717,16 +722,25 @@ final class PatientClinicalContextBuilder {
 	 * accessor exists to be the only one of. Where they are confused, an order that simply never had a
 	 * name is enough to report a chart unread, which costs a client every chip on it.
 	 *
-	 * <p><b>It carries the three VALUES the loop needs and never the entity</b> (issue
+	 * <p><b>It carries what the loop needs of the drug, and never the {@code Drug}</b> (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/421">#421</a>). Handing
-	 * back the {@code Drug} let the loop dereference a lazy association outside {@link #drug}'s
+	 * back the entity let the loop dereference the DRUG association outside {@link #drug}'s
 	 * {@code try}, which is issue #413's defect; a text guard over the spellings of that dereference
 	 * was tried and does not discriminate, because a receiver or a chain wrapped across two lines
-	 * reads no differently to the compiler and quite differently to a scan. Carrying the values makes
-	 * every such spelling a compile error instead — there is no {@code Drug} at a call site to
-	 * dereference, however it is written. That holds only while this class hands none back, which is
-	 * the one thing {@code UnreadableOrderDrugTest} asks of it here; putting a {@code Drug} field or
-	 * accessor back restores the hazard and reddens that case.
+	 * reads no differently to the compiler and quite differently to a scan. Holding no {@code Drug}
+	 * makes every such spelling a compile error instead — there is none at a call site to dereference,
+	 * however it is written. That holds only while this class hands none back, which is the one thing
+	 * {@code UnreadableOrderDrugTest} asks of it here; putting a {@code Drug} field or accessor back
+	 * restores the hazard and reddens that case.
+	 *
+	 * <p><b>Two of the three are {@code Concept} proxies, and that hazard is untouched.</b>
+	 * {@code Drug.hbm.xml} maps {@code concept} and {@code dosageForm} as default-lazy
+	 * {@code many-to-one}s, so this hands them out uninitialised and a read of one at a call site
+	 * compiles and can throw — {@link #conceptUuid} is the one home for what that costs and why the
+	 * three helpers that read a concept ({@link #addAtcCodes}, {@link #addConceptNames} and that
+	 * method) each open a {@code try} of their own. Nothing about issue #421 changes it: a fourth read
+	 * of {@code coded.concept} or {@code coded.dosageForm} needs the same treatment its neighbours
+	 * already have, and no guard here would catch one written without it.
 	 */
 	private static final class CodedDrug {
 

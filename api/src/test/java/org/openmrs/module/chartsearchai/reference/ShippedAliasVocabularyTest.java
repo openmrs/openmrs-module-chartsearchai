@@ -13,9 +13,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -55,6 +59,11 @@ public class ShippedAliasVocabularyTest {
 	 *  production reads it — {@code DrugReference.matchesText} has no length floor, which is the whole
 	 *  reason those synonyms are a hazard — so it is a measurement boundary and not a rule. */
 	private static final int SHORT = 5;
+
+	/** The pinned list's own resource, one lower-cased brand per line, sorted as
+	 *  {@link Collections#sort} orders them. A file rather than a literal because there are thousands
+	 *  of them and a diff is the whole point. */
+	private static final String PINNED_BRAND_NAMES = "chartsearchai-test/shipped-brand-aliases.txt";
 
 	private static Set<String> distinctAliases() {
 		Set<String> distinct = new LinkedHashSet<String>();
@@ -111,14 +120,21 @@ public class ShippedAliasVocabularyTest {
 	 * mineral-oil eye ointment) survived it, because the dictionary carries {@code sty} and not
 	 * {@code stye}, and measured through the real {@code findImpliedByQuery} "The patient has a stye on
 	 * the right upper eyelid" resolved Mineral oil (found in review of the refresh that introduced it,
-	 * #392). So the short BRAND aliases are asserted as a sorted list too, which is how {@code Align},
-	 * {@code Today} and {@code Ella} were caught before it and how the next {@code stye} is caught: a
-	 * refresh puts the brand that joined into this diff, where it can be read. What this case holds is
-	 * therefore three things: every short alias that is not a declared brand is one of the seven
-	 * substance names; the short brand aliases are exactly this list; and no brand alias is three
+	 * #392).
+	 *
+	 * <p><b>Which brand JOINED on a refresh is not this case's question any more</b>, and the reason is
+	 * that a band cannot be picked where the hazard has no length: {@code matchesText} has no length
+	 * floor, so {@code propel} (six characters, a brand of the Mometasone rows) is the same hazard as
+	 * {@code stye} (four) and no short-tail list can see it — restoring it to the shipped file left the
+	 * whole api suite green while this case was asserting the 193 short brand aliases. That assertion
+	 * was therefore replaced, in the same review, by
+	 * {@link #theShippedVocabularyCarriesExactlyTheBrandNamesPinnedBesideIt}, which pins the WHOLE
+	 * declared brand set; the short list was a projection of it and so a second thing to update rather
+	 * than a second guard. What this case holds is the two things that pin is not: every short alias
+	 * that is not a declared brand is one of the seven substance names, and no brand alias is three
 	 * characters or fewer.
 	 *
-	 * <p>Asserted as the lists, in sorted order, so a knowledge-base refresh reports WHICH word joined
+	 * <p>Asserted as the list, in sorted order, so a knowledge-base refresh reports WHICH word joined
 	 * rather than that a number moved.
 	 */
 	@Test
@@ -127,55 +143,101 @@ public class ShippedAliasVocabularyTest {
 		assertTrue(brands.size() > 1000,
 			"precondition: the shipped file declares brand names (knowledge-base schema 1.3)");
 		List<String> shortNonBrandAliases = new ArrayList<String>();
-		List<String> shortBrandAliases = new ArrayList<String>();
 		List<String> tooShortBrands = new ArrayList<String>();
 		for (String alias : distinctAliases()) {
-			if (alias.length() <= SHORT) {
-				(brands.contains(alias) ? shortBrandAliases : shortNonBrandAliases).add(alias);
+			if (alias.length() <= SHORT && !brands.contains(alias)) {
+				shortNonBrandAliases.add(alias);
 			}
 			if (alias.length() <= 3 && brands.contains(alias)) {
 				tooShortBrands.add(alias);
 			}
 		}
 		Collections.sort(shortNonBrandAliases);
-		Collections.sort(shortBrandAliases);
 
 		assertEquals(java.util.Arrays.asList("clove", "hemin", "iron", "kava", "opium", "urea", "yeast"),
 			shortNonBrandAliases,
 			"every alias of " + SHORT + " characters or fewer that is not a declared brand name must be a"
 					+ " substance name — the property ADR Decision 68 declines to give up, and a new member"
 					+ " here is a change to that argument rather than a number to update");
-		assertEquals(SHORT_BRAND_ALIASES, shortBrandAliases,
-			"the brand aliases of " + SHORT + " characters or fewer, as the shipped file carried them on"
-					+ " 2026-09-09 — a refresh that adds one must be read for whether the newcomer is a name"
-					+ " someone asks a drug by or a word ordinary clinical prose carries (stye, propel),"
-					+ " and the knowledge base's exclusion list updated before this list is");
 		assertEquals(Collections.emptyList(), tooShortBrands,
 			"a brand alias of three characters or fewer is an acronym the knowledge base excludes at"
 					+ " source; one reaching here means that exclusion was lost on a refresh");
 	}
 
-	/** The 193 brand aliases of {@link #SHORT} characters or fewer in the shipped file, produced by
-	 *  {@link DrugReference#getAliases()} over the real load and intersected with the raw
-	 *  {@code brand_names}; sorted. Every member was read when the list was pinned. */
-	private static final List<String> SHORT_BRAND_ALIASES = java.util.Arrays.asList(
-			"aceon", "actiq", "actos", "adbry", "addyi", "adoxa", "advil", "afrin", "ajovy", "akten",
-			"aleve", "alli", "alora", "alrex", "alyq", "amrix", "anoro", "arava", "arbli", "ascor", "atgam",
-			"atryn", "avar", "aveed", "avita", "avoca", "axtle", "azopt", "azor", "baza", "beser", "bicnu",
-			"bidil", "bkemv", "botox", "breo", "bumex", "bupap", "calan", "capex", "carac", "cequa",
-			"chooz", "cipro", "coreg", "creon", "curae", "cutar", "ddavp", "depen", "dex4", "dhivy",
-			"digex", "digox", "dilt", "disal", "doans", "dodex", "doral", "doryx", "doxil", "duopa",
-			"ecoza", "edex", "emcyt", "emgel", "emsam", "enoby", "esgic", "evdi", "evivo", "eylea", "feiba",
-			"fiasp", "flac", "frova", "glydo", "glyrx", "gvoke", "halog", "hemax", "hulio", "hycet", "ifex",
-			"infed", "inova", "inzo", "iodip", "iosat", "ipol", "ivra", "jalyn", "koate", "kofal", "kuric",
-			"kuvan", "lasix", "lidum", "lopid", "luxiq", "mapap", "mobic", "mvasi", "nasop", "nemex",
-			"neuac", "nexha", "nityr", "nocto", "norco", "nuox", "nuwiq", "nytol", "ofev", "okebo", "olux",
-			"onfi", "onyda", "opvee", "oseni", "ovace", "paxil", "phexx", "pretz", "proin", "qdolo",
-			"qlosi", "qmiiz", "qnasl", "qtern", "qvar", "rayos", "rebif", "repan", "revia", "ringl",
-			"sebex", "selrx", "sileo", "siliq", "skyla", "sprix", "sular", "sutab", "symfi", "taltz",
-			"tdvax", "tigan", "tobi", "tolak", "tovet", "tpoxx", "triaz", "tums", "urex", "urso", "utira",
-			"uzedy", "vanos", "vevye", "vfend", "vonjo", "vtol", "vuity", "vykat", "wakix", "wyost",
-			"xalix", "xanax", "xbryk", "xgeva", "xiclo", "xoten", "xromi", "xyrem", "xywav", "xyzal",
-			"yonsa", "yutiq", "zensa", "zetia", "ziac", "ziana", "zilxi", "zimhi", "zingo", "zocor",
-			"zomig", "zosyn", "zybic", "zyflo", "zylet", "zyvox");
+	/**
+	 * Every brand name the shipped file declares, pinned beside it as a sorted list, so a
+	 * knowledge-base refresh diffs to exactly the brands that joined and the ones that left.
+	 *
+	 * <p><b>Why the whole set and not a short tail.</b> A brand alias is a hazard when it is also an
+	 * ordinary word — the word then resolves a drug through {@code DrugReference.matchesText}, which
+	 * has no length floor, and the drug reaches the prompt as citable evidence with a safety finding
+	 * attached (measured on {@code stye} in review of #392: "The patient has a stye on the right upper
+	 * eyelid" resolved Mineral oil and raised an interaction finding against a levofloxacin order).
+	 * Being ordinary has nothing to do with being short. The list this replaced held the brand aliases
+	 * of five characters or fewer, and {@code propel} — a brand of the three Mometasone rows, and the
+	 * second ordinary word that upstream exclusion rule let through — is six, so restoring it to the
+	 * shipped file left the whole api suite green. Pinning the set itself is what removes the choice of
+	 * band; it also removes the second list, since the short one was a projection of this one.
+	 *
+	 * <p><b>What a reader does with the diff.</b> A refresh regenerates this file; the diff is then
+	 * read for brands that are words ordinary clinical prose carries in another sense, and any such
+	 * word is excluded UPSTREAM — the knowledge base's {@code src/curation.json} {@code brand_exclusions}
+	 * — before this list is regenerated. This file is the record of what was read, not a place to
+	 * silence a brand: a name dropped here without being dropped upstream still resolves.
+	 *
+	 * <p>Produced through the real load, as everything else here is: {@link DrugReference#getAliases()}
+	 * over {@code DrugReferenceTestSupport.shippedEntries()}, intersected with the raw
+	 * {@code brand_names} the file declares. The first assertion is what makes the intersection safe to
+	 * pin — every declared brand is carried, so nothing can leave this list by being dropped between
+	 * the file and the alias vocabulary.
+	 */
+	@Test
+	public void theShippedVocabularyCarriesExactlyTheBrandNamesPinnedBesideIt() throws Exception {
+		Set<String> aliases = distinctAliases();
+		List<String> carried = new ArrayList<String>();
+		List<String> declaredButNotCarried = new ArrayList<String>();
+		for (String brand : shippedBrandNames()) {
+			(aliases.contains(brand) ? carried : declaredButNotCarried).add(brand);
+		}
+		Collections.sort(carried);
+		Collections.sort(declaredButNotCarried);
+
+		List<String> pinned = pinnedBrandNames();
+		List<String> joined = new ArrayList<String>(carried);
+		joined.removeAll(new HashSet<String>(pinned));
+		List<String> gone = new ArrayList<String>(pinned);
+		gone.removeAll(new HashSet<String>(carried));
+
+		assertEquals(Collections.emptyList(), declaredButNotCarried,
+			"every brand the file declares must reach the alias vocabulary, or this pin is over a subset"
+					+ " that a parser or validity change can shrink silently");
+		assertEquals(Collections.emptyList(), joined,
+			"brands the shipped knowledge base now declares that " + PINNED_BRAND_NAMES + " does not —"
+					+ " read each one for whether it is a name someone asks a drug by or a word ordinary"
+					+ " clinical prose carries in another sense (stye, propel), exclude any such word"
+					+ " upstream, and only then regenerate that file");
+		assertEquals(Collections.emptyList(), gone,
+			"brands " + PINNED_BRAND_NAMES + " carries that the shipped knowledge base no longer declares"
+					+ " — a brand leaving is as much a change to what resolves as one joining");
+		assertEquals(pinned.size(), carried.size(),
+			"and the pinned file must carry each brand exactly once");
+	}
+
+	private static List<String> pinnedBrandNames() throws Exception {
+		try (InputStream in = ShippedAliasVocabularyTest.class.getClassLoader()
+				.getResourceAsStream(PINNED_BRAND_NAMES)) {
+			assertNotNull(in, PINNED_BRAND_NAMES + " should be on the test classpath");
+			List<String> pinned = new ArrayList<String>();
+			try (BufferedReader reader = new BufferedReader(
+					new InputStreamReader(in, StandardCharsets.UTF_8))) {
+				for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+					if (!line.trim().isEmpty()) {
+						pinned.add(line.trim());
+					}
+				}
+			}
+			return pinned;
+		}
+	}
+
 }

@@ -4901,11 +4901,16 @@ accept, on the default dataset, with nothing thrown. Both are now excluded by na
 3,028 single-word brands kept, 16 are words a 370k-entry English list knows and the system dictionary
 does not, and read one by one the ordinary words among them are those two (the rest are trademarks
 that larger list lowercases — Actos, Valium, Prolia — which is why it cannot replace the rule). So the
-next lacuna is found the way this one was, by reading, and
-`ShippedAliasVocabularyTest.everyShortAliasTheShippedVocabularyCarriesIsItselfASubstance` now asserts
-three things so that reading has a diff to happen in: the non-brand short aliases as the list of
-seven; the 193 short brand aliases as a sorted list, so a refresh reports WHICH brand joined; and
-that no brand alias is three characters or fewer.
+next lacuna is found the way this one was, by reading, and the test gives that reading a diff to
+happen in. **The short tail was the wrong unit for it and was replaced in review**: the hazard is a brand
+that is also an ordinary word, `matchesText` has no length floor, and `Propel` is six characters —
+restoring it to the shipped file left the whole api suite green while the case asserted the 193 short
+brand aliases. So `ShippedAliasVocabularyTest.theShippedVocabularyCarriesExactlyTheBrandNamesPinnedBesideIt`
+pins every brand the shipped file declares (3,861 of them, produced by `DrugReference.getAliases()` over the
+real load and intersected with the raw `brand_names`) as a sorted test resource, and fails naming exactly the
+brands that joined and left — `[propel]` under that mutation. Its neighbour keeps the two statements a
+whole-set pin does not make: the non-brand short aliases are the list of seven, and no brand alias is three
+characters or fewer.
 
 Of the dictionary those names would be harvested from (the 3.7.1 reference-application demo dictionary,
 2026-09-02, raw `SELECT`s over `concept` and `concept_name`): the 171 bridged CIEL concepts it carries

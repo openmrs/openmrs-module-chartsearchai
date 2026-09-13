@@ -45,6 +45,9 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 	/** Concept 88 (ASPIRIN), the concept on patient 7's single active drug order (order 111). */
 	private static final int ORDERED_CONCEPT = 88;
 
+	/** Patient 7's single active drug order, the one every case here mutates. */
+	private static final int ORDER = 111;
+
 	/** How a francophone dictionary spells that concept — added to it by this class's locale case, and
 	 *  written without its accents so the file needs no encoding of its own to say what it means. */
 	private static final String FRENCH_SPELLING = "Acide acetylsalicylique";
@@ -88,7 +91,7 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 	public void anOrderWithNoCodedDrugRecordsItsOwnConcept() {
 		Context.getAdministrationService().executeSQL(
 			"update drug_order set drug_inventory_id = null, drug_non_coded = 'Cotrimoxazole 960mg'"
-					+ " where order_id = 111",
+					+ " where order_id = " + ORDER,
 			false);
 		Context.flushSession();
 		Context.clearSession();
@@ -108,13 +111,7 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 	@Test
 	public void anOrderNoNameCouldBeReadForRecordsItsConceptToo() {
 		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, "N02BA01");
-		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
-				+ " drug_non_coded = null where order_id = 111", false);
-		Context.getAdministrationService()
-				.executeSQL("update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT,
-					false);
-		Context.flushSession();
-		Context.clearSession();
+		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 
 		PatientClinicalContext.ActiveDrugOrder order = theOrder();
 		assertFalse(order.hasKnownName(),
@@ -153,7 +150,8 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 		Context.getAdministrationService().setGlobalProperty(
 			OpenmrsConstants.GLOBAL_PROPERTY_LOCALE_ALLOWED_LIST, allowed + ", fr");
 		Context.getAdministrationService().executeSQL(
-			"update drug_order set drug_inventory_id = null, drug_non_coded = null where order_id = 111",
+			"update drug_order set drug_inventory_id = null, drug_non_coded = null where order_id = "
+					+ ORDER,
 			false);
 		Concept ordered = Context.getConceptService().getConcept(ORDERED_CONCEPT);
 		ordered.setFullySpecifiedName(new ConceptName(FRENCH_SPELLING, Locale.FRENCH));
@@ -219,7 +217,8 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 	private void pointTheDrugAt(int conceptId) {
 		Context.getAdministrationService().executeSQL(
 			"update drug set concept_id = " + conceptId
-					+ " where drug_id = (select drug_inventory_id from drug_order where order_id = 111)",
+					+ " where drug_id = (select drug_inventory_id from drug_order"
+					+ " where order_id = " + ORDER + ")",
 			false);
 		Context.flushSession();
 		Context.clearSession();

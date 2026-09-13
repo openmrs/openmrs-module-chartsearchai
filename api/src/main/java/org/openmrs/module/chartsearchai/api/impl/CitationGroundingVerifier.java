@@ -579,6 +579,12 @@ public class CitationGroundingVerifier {
 				// interacts with B"), whereas this record is one drug name asserted of this patient,
 				// so a passing verdict is real assurance. Keyed off the group it stays graded, with
 				// nothing to remember.
+				//
+				// "One drug name" is the ordinary shape and not every shape: a codes-only
+				// active-order display asserts none. That changes nothing this gate does, and issue
+				// #294 measured what it costs — ChartSearchAiUtils.isGroundingDemoteOnly's javadoc
+				// carries the qualification, ADR Decision 38's owed-measurement section the run. A
+				// remedy mutating this gate starts there.
 				if (ChartSearchAiUtils.isGroundingDemoteOnly(mapping.getResourceType())) {
 					demoteOnlyIndexes.add(Integer.valueOf(mapping.getIndex()));
 				}

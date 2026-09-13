@@ -263,7 +263,7 @@ public class ChartSearchAiInteractionPairExtentTest {
 		// any third caller, including an answer site that had dropped the statement. Scoped for the
 		// same reason the putSafetyChips assertion below is: measured on this very guard, a file-wide
 		// read let a chips-writer/extent-writer split pass green.
-		assertTrue(bodyOf(source, "public ResponseEntity<Object> chartAlerts(")
+		assertTrue(ChartSearchAiStreamingTest.bodyOf(source, "public ResponseEntity<Object> chartAlerts(")
 				.contains("serializeSafetyWarnings("),
 				"the third naming must be the standing chart-alert surface's own; a third caller "
 						+ "elsewhere is an answer payload building the chip array without the statement "
@@ -285,7 +285,7 @@ public class ChartSearchAiInteractionPairExtentTest {
 		// a chips-writer and an extent-writer passed the guard whose message forbids exactly that
 		// (measured — the split builds green under a file-wide read). A later site can then call the
 		// chips half alone, which is #336 with the guard still green.
-		String body = bodyOf(source, "private void putSafetyChips(");
+		String body = ChartSearchAiStreamingTest.bodyOf(source, "private void putSafetyChips(");
 		assertTrue(body.contains("target.put(\"safetyWarnings\", serializeSafetyWarnings(answer.getSafetyWarnings()));")
 				&& body.contains("target.put(\"interactionPairs\", serializePairChipExtent(answer.getPairChipExtent()));"),
 				"putSafetyChips must write BOTH keys ITSELF; splitting them across methods re-opens the "
@@ -293,20 +293,6 @@ public class ChartSearchAiInteractionPairExtentTest {
 		// What this does NOT reach: a payload that publishes the chips under some OTHER key name. No
 		// source scan can, and nothing in the module does it today — mutate a site and read which of
 		// the three assertions above answers, rather than trusting this one to answer for all of them.
-	}
-
-	/** @return the source text of the method whose declaration starts with {@code declaration}, from
-	 *          its opening brace to the closing brace in the first column of a member. Fails naming
-	 *          the declaration when it is absent, so a rename cannot leave the guard reading an empty
-	 *          string and passing. */
-	private static String bodyOf(String source, String declaration) {
-		int at = source.indexOf(declaration);
-		assertTrue(at >= 0, "no method declared \"" + declaration + "\" — the guard would otherwise "
-				+ "assert about an empty body and pass");
-		int open = source.indexOf('{', at);
-		int close = source.indexOf("\n\t}", open);
-		assertTrue(open >= 0 && close > open, "could not delimit the body of \"" + declaration + "\"");
-		return source.substring(open, close);
 	}
 
 	private class CappedScreenStubService implements ChartSearchService {

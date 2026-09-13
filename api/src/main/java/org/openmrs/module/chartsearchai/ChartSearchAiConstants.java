@@ -785,7 +785,9 @@ public class ChartSearchAiConstants {
 	 * <p>{@link #RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is injected but groups as
 	 * {@link #REFERENCE_GROUP_CHART}, so it is graded normally (decided in #118: one drug asserted of
 	 * this patient has no subject roles to swap, so a passing verdict is real assurance) — "the module
-	 * injected it" is a different question from this group.
+	 * injected it" is a different question from this group. That parenthesis is the ordinary shape and
+	 * not every shape; {@code ChartSearchAiUtils.isGroundingDemoteOnly}'s javadoc carries what a
+	 * codes-only display does to it (issue #294).
 	 *
 	 * <p>Since issue #201 the group decides the wire value outright: a citation in this group
 	 * serializes {@code grounded: null} whatever the pass concluded. Demote-only had already ruled

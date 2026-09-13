@@ -54,6 +54,9 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 	/** Concept 88 (ASPIRIN), the concept behind patient 7's single active drug order. */
 	private static final int ORDERED_CONCEPT = 88;
 
+	/** Patient 7's single active drug order, the one these cases mutate. */
+	private static final int ORDER = 111;
+
 	private Patient patient;
 
 	@BeforeEach
@@ -183,16 +186,10 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 	}
 
 	/** Order 111 with nothing left that can name it — the shape {@code namedByCodesOnly} stands in for.
-	 *  The same three columns {@code NamelessActiveOrderPartnerTest} clears, and cleared for the reason
-	 *  that file records: leaving {@code drug_non_coded} to the dataset would make the arrangement
-	 *  contingent on data this file does not control. */
+	 *  Which columns that means and why all three must go is
+	 *  {@link DrugReferenceTestSupport#makeOrderNameless}'s own javadoc, the one home for it. */
 	private void makeTheOrderNameless() {
-		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
-				+ " drug_non_coded = null where order_id = 111", false);
-		Context.getAdministrationService()
-				.executeSQL("update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT,
-					false);
-		flush();
+		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 	}
 
 	/** The route concept order 111 currently records, read back from the row {@link #recordRoute} set. */

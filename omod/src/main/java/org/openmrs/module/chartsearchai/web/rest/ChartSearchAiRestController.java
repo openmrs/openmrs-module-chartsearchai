@@ -1318,6 +1318,18 @@ public class ChartSearchAiRestController {
 	 * gives about its own field: the key's unconditional presence is what lets a client read it
 	 * without first asking whether it is there.
 	 *
+	 * <p><b>{@code restsOnAnUncorroboratedChartMatch} is the chip's own provenance answer</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/374">#374</a>), read off
+	 * {@link SafetyWarning#restsOnAnUncorroboratedChartMatch()} and never re-derived here. It exists for
+	 * the reason {@code severity} above does: the module had made the judgement, the two injected
+	 * records stated it, and the only clinician-facing surface said nothing — so a chip asserted a
+	 * contraindication of the chart while the {@code safety_finding} beside it hedged. That accessor is
+	 * canonical for what the value means, including the two folds that make {@code false} weaker than
+	 * it reads, and {@code README.md} carries the client contract. Two things NOT to conclude from this
+	 * paragraph's placement beside {@code severity}: the flag is not a strength and must not be read as
+	 * one (ADR Decision 44), and {@code detail} is unchanged by it, so the qualification is the
+	 * client's to render. ADR Decision 92.
+	 *
 	 * <p><b>{@code chartOrderBridges} names which of the patient's own active orders each substance
 	 * the chip NAMES was resolved from</b>, where the order's own displayed name does not reach that
 	 * substance (issue
@@ -1353,8 +1365,10 @@ public class ChartSearchAiRestController {
 	 * pins the JSON field set. And this is the only value on the payload that is not a JDK type, so
 	 * XStream names its element after the CLASS
 	 * ({@code org.openmrs.module.chartsearchai.reference.SafetyWarning_-ChartOrderBridge}) where every
-	 * other element is a {@code map}/{@code list}/{@code string}; README scopes the documented field
-	 * names to JSON for that reason. XStream marshals FIELDS, so a PRIVATE field added to that class
+	 * other element takes one of XStream's own built-in names; README scopes the documented field
+	 * names to JSON for that reason. A closed list of those names stood here and is not kept — it read
+	 * {@code map}/{@code list}/{@code string} while the payload already carried {@code null} and
+	 * {@code linked-hash-map}, and issue #374 added {@code boolean}. XStream marshals FIELDS, so a PRIVATE field added to that class
 	 * also reaches an XML client, and neither of {@code ChartSearchAiChartOrderBridgeTest}'s other two
 	 * cases sees it —
 	 * {@code theTwoHalvesAreSeparateFieldsAndNotASentenceToParse} reads GETTERS, and
@@ -1414,6 +1428,13 @@ public class ChartSearchAiRestController {
 			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.
 			map.put("chartOrderBridges",
 				new ArrayList<SafetyWarning.ChartOrderBridge>(warning.chartOrderBridges()));
+			// Issue #374. Needs no copy: the value is an immutable autoboxed Boolean, so there is
+			// nothing for a caller to mutate, and XStream has a converter for it (verified by
+			// marshalling a payload carrying it). "It is a JDK type" is NOT the criterion and was
+			// written here once — both wrappers the paragraph above names are JDK types, and the
+			// non-JDK ChartOrderBridge marshals fine; what XStream refuses is java.util.Collections'
+			// immutable collection wrappers specifically.
+			map.put("restsOnAnUncorroboratedChartMatch", warning.restsOnAnUncorroboratedChartMatch());
 			out.add(map);
 		}
 		return out;

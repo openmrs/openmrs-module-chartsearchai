@@ -625,6 +625,12 @@ public class PatientChartSerializer {
 	 * field is in both places as well, {@code orderCurrencyLabel} rendering it into the body. So is
 	 * {@link #getDate()}. "Never as prose" is a rule about metadata the model has no business
 	 * reciting, which none of those three is.
+	 *
+	 * <p>{@link #getOrderDrugNamed()} (issue #294) is a fourth of the kind the module reads back to
+	 * decide what to publish, and the one that says something about {@link #getText()} rather than
+	 * standing beside it: whether that text names the drug of the order it is about. It is never
+	 * rendered, and a reader must not look for it in the prose — deciding it from the text is exactly
+	 * what {@link #getOrderActive()}'s rule forbids, for the same reason.
 	 */
 	public static class RecordMapping {
 

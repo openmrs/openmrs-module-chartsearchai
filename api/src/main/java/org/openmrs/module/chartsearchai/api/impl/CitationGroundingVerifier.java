@@ -57,8 +57,9 @@ import org.springframework.stereotype.Service;
  * decided by the pairing rather than earned by the record. This is what
  * catches the subject/polarity flips cosine cannot — for chart records; the citations excepted from
  * it are module-supplied reference material, a COMPOUND claim unit, a citation the MODULE attached
- * ({@link Disposition#UNVERIFIABLE}, issue #305) and — for its NEGATIVE only — a COMPOSITE claim,
- * each below or on the constant named for it. It runs on Tier-1 passes
+ * (issue #305), a record that NAMES NO DRUG though it is about one (issue #294) — the three of those
+ * being {@link Disposition#UNVERIFIABLE} — and, for its NEGATIVE only, a COMPOSITE claim, each below
+ * or on the constant named for it. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
  * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
@@ -429,7 +430,8 @@ public class CitationGroundingVerifier {
 
 		/**
 		 * Nothing is published in either direction, because neither tier is asked a question that is
-		 * this citation's own. The arrangements below reach it from opposite directions.
+		 * this citation's own. The arrangements below reach that from different directions — what the
+		 * citation is missing is the claim, the claimant, or the record's content in turn.
 		 *
 		 * <p><b>Do not read "nothing is published" as "nothing is spent".</b> Two drafts of a rule
 		 * about which arm pays an embedding have now been refuted by measurement, so none is made
@@ -509,7 +511,8 @@ public class CitationGroundingVerifier {
 	 * carries no text, or that cannot be embedded, are returned with a
 	 * {@code null} verdict ("could not verify"). Citations are also held back deliberately, by
 	 * different amounts and under different conditions: module-supplied reference material, a
-	 * COMPOUND claim unit under entailment, and a citation the MODULE attached, in either mode.
+	 * COMPOUND claim unit under entailment, a citation the MODULE attached, and a citation of a record
+	 * that NAMES NO DRUG though it is about one — the last two in either mode.
 	 * {@link Disposition} says how much each is held back and the class javadoc says why; the
 	 * reasons a published {@code grounded} reads {@code null} are enumerated once, in ADR
 	 * Decision 11's {@code grounded} paragraph, and neither set is restated here.
@@ -543,8 +546,9 @@ public class CitationGroundingVerifier {
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
 	 * record text — except the kinds that never enter Tier-2: citations of module-supplied reference
-	 * material, citations of a COMPOUND claim unit (both in the class javadoc) and, since issue #305,
-	 * a citation the MODULE attached ({@link Disposition#UNVERIFIABLE}) — is confirmed by a
+	 * material, citations of a COMPOUND claim unit (both in the class javadoc), since issue #305 a
+	 * citation the MODULE attached, and since issue #294 a citation of a record that NAMES NO DRUG
+	 * though it is about one (the last two {@link Disposition#UNVERIFIABLE}) — is confirmed by a
 	 * Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
@@ -684,6 +688,10 @@ public class CitationGroundingVerifier {
 		//   * the MODULE attached the citation rather than the model emitting it (issue #305), in
 		//     either mode: UNVERIFIABLE. The enum constant is canonical for why; asked before claim
 		//     selection, so none runs.
+		//   * the RECORD names no drug though it is about one — the code-only active-order stand-in of
+		//     issue #290 — in either mode: UNVERIFIABLE (issue #294). The enum constant is canonical
+		//     for why. Read off the mapping's own stamp and asked before claim selection, like the
+		//     one above, so none runs and no cosine is spent.
 		//   * its CLAIM UNIT is compound and entailment is on (issue #302): UNVERIFIABLE, no verdict in
 		//     either direction. Both tiers are asking the wrong-sized question there — the judge is
 		//     asked to entail a conjunction the record answers for only part of, and cosine is measured
@@ -747,6 +755,17 @@ public class CitationGroundingVerifier {
 			// where selectClaim's argmax would run — several sentences citing one record — and so that
 			// a Tier-1-only pass spends none at all. Unlike the attached case this citation IS
 			// anchored, so the skip is an economy here and a necessity there.
+			//
+			// The two sites are NOT equally observable, and the pair behaves exactly as #305's does.
+			// Measured: THIS skip is what the suite sees — remove it and
+			// codesOnlyActiveOrder_spendsNoEmbeddingEvenWhereTheClaimWouldHaveToBeChosen reddens with
+			// 3 embedding passes, and it alone. The arm in the disposition below is a statement of
+			// intent that NO case discriminates: with it gone the empty Tier1Result withholds by
+			// accident, because no claim sentence means no Tier-2 candidate and no deferred cosine, so
+			// the whole suite stays green. It stays for the reason the attached arm stays — candidacy
+			// is expressed as `== GRADED` (see Disposition), so a later change that gave the skipped
+			// result a claim sentence would make this citation a judge candidate the moment the arm
+			// was gone.
 			boolean namesNoDrug = namesNoDrugIndexes.contains(Integer.valueOf(reference.getIndex()));
 			Tier1Result tier1 = attachedByTheModule || namesNoDrug
 					? new Tier1Result(null, null, null, false)

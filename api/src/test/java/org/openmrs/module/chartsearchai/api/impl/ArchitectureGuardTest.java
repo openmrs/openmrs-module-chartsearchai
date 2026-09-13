@@ -181,8 +181,8 @@ public class ArchitectureGuardTest {
 			}
 		}
 		assertEquals(1, carrying.size(),
-				"exactly one RecordMapping constructor may take a provenance list — it is the widest, "
-						+ "and every shorter one defaults it to empty. Found " + carrying.size() + ": "
+				"exactly one RecordMapping constructor may take a provenance list — every OTHER one "
+						+ "defaults it to empty. Found " + carrying.size() + ": "
 						+ carrying);
 
 		List<String> callers = new ArrayList<>();

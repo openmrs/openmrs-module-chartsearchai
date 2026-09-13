@@ -296,7 +296,7 @@ public final class DrugReferenceTestSupport {
 	 * must read the text production actually produces.
 	 */
 	public static String injectedActiveOrderText(String orderUuid, String display) {
-		return injectedActiveOrderMapping(activeOrder(orderUuid, display)).getText();
+		return injectedNamedActiveOrderMapping(orderUuid, display).getText();
 	}
 
 	/**

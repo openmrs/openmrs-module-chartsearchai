@@ -1221,12 +1221,46 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void codesOnlyActiveOrder_spendsNoEmbeddingEvenWhereTheClaimWouldHaveToBeChosen() {
+		// The claim-selection SKIP, which nothing else in the suite discriminates: drop it and every
+		// assertion above stays green, because the disposition alone already withholds the verdict and
+		// excludes the pair from Tier-2. What it buys is the work, so the work is what this counts.
+		// TWO sentences cite the record, which is selectClaim's ambiguous branch — the one where the
+		// cosine argmax runs EAGERLY under entailment to choose between them. That is the arrangement
+		// in which skipping is worth anything; with one candidate the selection defers and spends
+		// nothing either way. The counterpart for a citation the module attached is
+		// aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing.
+		RecordMapping record = codesOnlyActiveOrderMapping();
+		int n = record.getIndex();
+		String answer = "The patient is taking metformin 500mg twice daily [" + n + "]. "
+				+ "She also has an unnamed active order [" + n + "].";
+		embeddings.register(record.getText(), AXIS_A);
+		llm.verdict = Boolean.FALSE;
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(n))),
+				Arrays.asList(record), FLOOR, TIER2_ON);
+
+		assertEquals(0, embeddings.embedCalls,
+				"no claim is selected for a citation nothing will be published for, so the argmax "
+						+ "between the two citing sentences must not run — on a CPU deployment that "
+						+ "argmax is the dominant grounding cost");
+		assertEquals(0, llm.calls, "and the judge is not asked either");
+		assertNull(result.get(0).getGrounded(), "and nothing is published");
+	}
+
+	@Test
 	public void aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector() {
 		// The non-regression the type-keyed remedy fails: the rule reaches the record that names no
 		// drug and no other. This mapping comes off the same real injector as the three above, so the
 		// only difference between them is the one the rule keys on.
 		RecordMapping record = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
 				.injectedNamedActiveOrderMapping("order-uuid-named", "Simvastatin Co 20mg");
+		assertEquals(Boolean.TRUE, record.getOrderDrugNamed(),
+				"precondition, and the TRUE half of the stamp's three-valued contract: the injector "
+						+ "STATES that this record names its drug rather than staying silent. Nothing "
+						+ "downstream tells TRUE from null today — both grade — so without this a "
+						+ "writer collapsed to \"FALSE or nothing\" would pass the whole suite");
 		String sentence = "The patient has an active order for Simvastatin Co 20mg ["
 				+ record.getIndex() + "].";
 		embeddings.register(sentence, AXIS_A);

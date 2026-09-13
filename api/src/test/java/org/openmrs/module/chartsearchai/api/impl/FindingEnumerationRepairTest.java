@@ -163,7 +163,7 @@ public class FindingEnumerationRepairTest {
 		// the PROSE left unanchored.
 		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
 		Integer dropped = findings.get(findings.size() - 1);
-		StubProvider provider = new StubProvider(
+		StubProvider provider = answeringInTurn(
 				Collections.singletonList(new ArrayList<Integer>(findings)),
 				enumerationCiting(allButLast), continuationCiting(dropped));
 		TestableService service = newService(chart, provider, true);
@@ -229,7 +229,7 @@ public class FindingEnumerationRepairTest {
 		Integer dropped = findings.get(findings.size() - 1);
 		Integer alreadyStated = findings.get(0);
 		String original = enumerationCiting(allButLast);
-		StubProvider provider = new StubProvider(
+		StubProvider provider = answeringInTurn(
 				Arrays.asList(Collections.<Integer> emptyList(), Collections.singletonList(dropped)),
 				original, "That interaction [" + alreadyStated + "] is the reason.");
 		TestableService service = newService(chart, provider, true);
@@ -251,7 +251,7 @@ public class FindingEnumerationRepairTest {
 		// holds is that the gate is there, and its first assertion is what tells the two apart — a
 		// repair that ran here does not merely add text, it LOWERS the published count.
 		List<Integer> resolved = findings.subList(0, findings.size() - 1);
-		StubProvider provider = new StubProvider(
+		StubProvider provider = answeringInTurn(
 				Arrays.asList(new ArrayList<Integer>(resolved)),
 				"   ", continuationCiting(findings.get(findings.size() - 1)));
 		TestableService service = newService(chart, provider, true);
@@ -324,7 +324,7 @@ public class FindingEnumerationRepairTest {
 		// the rest would spend a second inference restating what the answer already said.
 		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
 		Integer dropped = findings.get(findings.size() - 1);
-		StubProvider provider = new StubProvider(
+		StubProvider provider = answeringInTurn(
 				Arrays.asList(new ArrayList<Integer>(findings)),
 				enumerationCiting(allButLast), continuationCiting(dropped));
 		TestableService service = newService(chart, provider, true);
@@ -352,7 +352,7 @@ public class FindingEnumerationRepairTest {
 		// `LlmInferenceService.findingsOwedARepair`'s javadoc for both reasons — and the gate must
 		// not be wired into one answer method only.
 		List<Integer> resolved = findings.subList(0, findings.size() - 1);
-		StubProvider provider = new StubProvider(
+		StubProvider provider = answeringInTurn(
 				Arrays.asList(new ArrayList<Integer>(resolved)),
 				"   ", continuationCiting(findings.get(findings.size() - 1)));
 		TestableService service = newService(chart, provider, true);
@@ -444,6 +444,12 @@ public class FindingEnumerationRepairTest {
 			public void accept(ChartAnswer value) {
 			}
 		};
+	}
+
+	/** The same, for a model whose structured citations array does not agree with its prose — one
+	 *  list per call, short lists sending an empty array as every case here did before issue #409. */
+	private static StubProvider answeringInTurn(List<List<Integer>> citations, String... answers) {
+		return new StubProvider(citations, answers);
 	}
 
 	private static StubProvider answeringInTurn(String... answers) {

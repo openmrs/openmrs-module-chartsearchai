@@ -156,7 +156,8 @@ public class ChartSearchAiUtils {
 	 * ({@code CitationGroundingVerifier}), safety echo-scoping ({@code DrugSafetyValidator}) and —
 	 * since issue #338 — the check that asks whether a marker sits INSIDE a class-code parenthetical
 	 * ({@code ClassCodeFidelityCheck}) and — since issue #377 — the active-order citation check
-	 * ({@code ActiveOrderCitationFidelityCheck}), so those consumers cannot drift. A caller matches
+	 * ({@code ActiveOrderCitationFidelityCheck}) and — since issue #409 — the finding-citation extent
+	 * ({@code SafetyFindingCitationExtentCheck}), so those consumers cannot drift. A caller matches
 	 * {@link #INLINE_CITATION} directly only for what a set of indexes cannot carry — a marker's text
 	 * offset, or the text with markers removed — which is the two-reason split CLAUDE.md's own
 	 * inline-citation rule states. Returns an empty set for null/blank text.

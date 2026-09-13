@@ -283,8 +283,8 @@ public interface ChartSearchService {
 	 * arrangement {@code conditionRuleCoverage} and {@code activeOrderClaims} already use.
 	 *
 	 * <p><b>Why a client could not read it off anything already published.</b> The response's
-	 * {@code references} carry only what was cited, so they are the {@code cited} half with no base
-	 * to read it against; {@code reference_slice_records} is the base of a different population
+	 * {@code references} carry what the answer's citations RESOLVED to, which since issue #409 is
+	 * neither half of this pair — see below; {@code reference_slice_records} is the base of a different population
 	 * (every reference-group record, monographs and class notes included) and reaches the audit row
 	 * rather than the response. {@code interactionPairs} counts what the SCREEN found and reported
 	 * and is true of a response whose prose dropped one, which is the reported defect exactly. On the

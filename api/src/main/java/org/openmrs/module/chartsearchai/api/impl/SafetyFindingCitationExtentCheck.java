@@ -62,9 +62,9 @@ import org.slf4j.LoggerFactory;
  *       an extent;</li>
  *   <li>CITED — the subset of those the answer ANCHORED: what
  *       {@link LlmInferenceService#extractCitedReferences} admitted, narrowed to the indexes a
- *       marker in the prose carries. {@link #citedFindingIndexes} is canonical for why both halves
- *       decide and for what a blank answer means there; ADR Decision 93 is canonical for what that
- *       supersedes in Decision 83. A citation the MODULE attached (issue #305) is not one the
+ *       marker in the prose carries. {@link #citedFindingIndexes} is canonical for what each of
+ *       the three tests contributes and for what a blank answer means there; ADR Decision 93 is
+ *       canonical for what that supersedes in Decision 83. A citation the MODULE attached (issue #305) is not one the
  *       answer made and is not counted; that filter is belt and braces on today's path, where only
  *       the two contraindication factories set the flag and they set it on chart records rather
  *       than findings, and it is here because the rule that a scorer counts the model's own
@@ -86,9 +86,9 @@ import org.slf4j.LoggerFactory;
  *       returns a zeroed statement before touching the citations;</li>
  *   <li>a BLANK or absent answer is silent — the WARN only. The extent is still STATED for it, and
  *       that difference from its siblings is deliberate: they judge prose and a degenerate output
- *       has none to judge, while this one counts citations and
- *       {@code extractCitedReferences} resolves the structured array for a blank answer on purpose.
- *       Counting what really did resolve is a fact; reporting it as a dropped hazard would not be;</li>
+ *       has none to judge, while this one counts citations and a blank answer's really do
+ *       resolve — {@link #citedFindingIndexes} carries why. Counting what did resolve is a fact;
+ *       reporting it as a dropped hazard would not be;</li>
  *   <li>it narrows nothing but its own count. The reference list a client receives stays
  *       {@code extractCitedReferences}' union, so an answer whose array named a finding its prose
  *       did not publishes that finding as a reference beside a {@code cited} that excludes it —
@@ -140,13 +140,13 @@ final class SafetyFindingCitationExtentCheck {
 	 * injection-order contract and why there is one selection at all; {@code findingSubjects} is the
 	 * other projection off it.
 	 *
-	 * <p><b>Nothing in PRODUCTION calls this method, and that is stated rather than left to be
-	 * found.</b> {@link LlmInferenceService#severalFindingsAboutOneDrug} counts the shared walk's own
-	 * records, which is what its conjunct means; {@link #measureFindingCitations} shares
-	 * {@link #indexesOf} instead, needing the walk the projection was taken from as well and not
-	 * walking twice to get both. What this is, is the COMPOSED projection — the entry point the
-	 * projection's own contract can be put to without a caller chaining the two production steps
-	 * itself, and its reader is
+	 * <p><b>Its production caller is {@link #citedFindingIndexes}'s composed overload</b>, which
+	 * holds a chart and needs the index set rather than the walk — the caller the paragraph this
+	 * replaces asked for when it said to keep the method composed if one returned (issue #409).
+	 * {@link LlmInferenceService#severalFindingsAboutOneDrug} counts the shared walk's own records,
+	 * which is what its conjunct means; {@link #measureFindingCitations} shares {@link #indexesOf}
+	 * instead, needing the walk the projection was taken from as well and not walking twice to get
+	 * both. What this is, is the COMPOSED projection, and its other reader is
 	 * {@code FindingEnumerationClauseContextTest.theSharedWalkHandsTheFindingsBackInTheOrderTheInjectorWroteThem}'s
 	 * content leg. Keep it composed if a production caller returns.
 	 *
@@ -222,16 +222,15 @@ final class SafetyFindingCitationExtentCheck {
 	 * continuation the published count cannot see, which is the seam #409 opened between them — so
 	 * the reading lives here, in the private helper both reach, and is never spelled at the caller.
 	 *
-	 * <p>It walks the mappings itself rather than taking {@link #uncitedFindingIndexes}' walk: its
-	 * caller holds a chart and an answer, not a walk, and threading one across
-	 * {@code LlmInferenceService} is the coupling this signature exists to avoid. The walk is over
-	 * the mappings and not the answer, so on one request it is the same walk repeated; the
-	 * efficiency of that is recorded in ADR Decision 93 rather than argued here.
+	 * <p>It reaches the carried population through {@link #carriedFindingIndexes}, the composed
+	 * projection, rather than taking {@link #uncitedFindingIndexes}' walk: its caller holds a chart
+	 * and an answer, not a walk, and threading one across {@code LlmInferenceService} is the coupling
+	 * this signature exists to avoid. On one request that repeats a walk of the mappings, which is
+	 * bounded by the chart and not by the answer.
 	 */
 	static Set<Integer> citedFindingIndexes(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
-		return citedFindingIndexes(answer, cited,
-				indexesOf(ChartSearchAiUtils.safetyFindingMappings(mappings)));
+		return citedFindingIndexes(answer, cited, carriedFindingIndexes(mappings));
 	}
 
 	/** The projection both readers share: the walk's own findings, less the ones cited. The

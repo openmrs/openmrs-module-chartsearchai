@@ -626,6 +626,13 @@ public class PatientChartSerializer {
 	 * {@link #getDate()}. "Never as prose" is a rule about metadata the model has no business
 	 * reciting, which none of those three is.
 	 *
+	 * <p>{@link #getDosingCeilings()} (issue #276) is the exception to "about the record rather than
+	 * part of it": it is a COPY of numbers {@link #getText()} itself states, carried so that a
+	 * post-answer check can compare the answer against them without parsing that text — which is
+	 * what makes it the one field here whose correctness is a claim about the text rather than
+	 * beside it. It is never rendered from, the text being written first and this collected from
+	 * what was written.
+	 *
 	 * <p>{@link #getOrderDrugNamed()} (issue #294) is a fourth of the kind the module reads back to
 	 * decide what to publish, and the one that says something about {@link #getText()} rather than
 	 * standing beside it: whether that text names the drug of the order it is about. It is never

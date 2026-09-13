@@ -750,9 +750,9 @@ public interface ChartSearchService {
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<UnstatedFindingSeverity>(unstatedFindingSeverities));
 			// And once more (issue #276), under the same rule again: null is the absence of a
-			// measurement, empty a measurement of none. Empty is the OVERWHELMINGLY common answer
-			// here — no bundled dataset files a substance as one row per presentation — so a reader
-			// treating it as a certificate of faithfulness would be wrong about almost every
+			// measurement, empty a measurement of none. Empty is the commonest answer by far here —
+			// no bundled dataset files a substance as several rows CARRYING AGE BANDS — so a
+			// reader treating it as a certificate of faithfulness would be wrong about almost every
 			// response; DosingCeilingFidelityCheck's javadoc is canonical for what it cannot see.
 			this.unstatedDosingCeilings = unstatedDosingCeilings == null ? null
 					: java.util.Collections.unmodifiableList(
@@ -1188,8 +1188,13 @@ public interface ChartSearchService {
 		 * (so an answer stating the stricter ceiling anywhere is silent) and that it is blind to
 		 * whether a number was quoted AS a ceiling. <b>And empty says very little on a stock
 		 * install</b>: {@code chartsearchai.drugReference.enabled} defaults to false, and no bundled
-		 * dataset files a substance as more than one row — the shipped {@code ddinter} source
-		 * publishes no age bands at all — so on a default deployment there is nothing here to find.
+		 * dataset files a substance as more than one row CARRYING AGE BANDS — the curated seed sets no
+		 * substance name at all, so every substance in it is one row, and the {@code ddinter} parser
+		 * sets no age band on any row, however many rows a substance has there. So on a default
+		 * deployment there is nothing here to find. The two sources are excluded for DIFFERENT
+		 * reasons and neither excludes the other's: {@code DrugSafetyValidator}'s
+		 * {@code ceilingAttribution} javadoc states the same joint condition for the dose chip's own
+		 * cross-row clause.
 		 * Null's reachable cause is the async-grounding path's early {@code done}, built before the
 		 * check runs; on a cache hit the ORIGINAL request's list is replayed with the rest.
 		 *

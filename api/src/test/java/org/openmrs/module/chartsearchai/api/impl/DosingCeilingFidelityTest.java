@@ -321,6 +321,42 @@ public class DosingCeilingFidelityTest {
 						+ "client reading [] there would read it as a measurement of none");
 	}
 
+	@Test
+	public void aCheckThatThrowsIsReportedAndTheAnswerStillReturns() {
+		// The guard exists so a diagnostic can never break a clinical answer, and the mechanism has to
+		// be a read THIS check makes and nothing before it does, or the throw lands somewhere else and
+		// the case proves another class's catch. `extractCitedReferences` reads `getResourceType()`;
+		// `ClassCodeFidelityCheck` and the prose check read `getText()`; the active-order check reads
+		// `getOrderActive()`; the severity check reads `getFindingSeverity()` — all earlier, and none
+		// of them reads `getDosingCeilings()`, which is why overriding that one reaches here.
+		PatientChart throwing = new PatientChart(
+				"Patient" + System.lineSeparator() + System.lineSeparator()
+						+ "[1] Drug reference: Acetylsalicylic acid." + System.lineSeparator(),
+				Arrays.<RecordMapping> asList(new RecordMapping(1,
+						org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
+						"acetylsalicylic-acid", null, "Drug reference: Acetylsalicylic acid.") {
+
+					@Override
+					public List<String> getDosingCeilings() {
+						throw new IllegalStateException("dosing ceilings unavailable");
+					}
+				}),
+				Collections.<Integer> emptyList());
+		TestableService onThrowing = newService(throwing);
+		onThrowing.setLlmProvider(answering("The maximum daily dose is 4000 mg/day [1]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = onThrowing.search(patient(), QUESTION);
+			assertTrue(answer.getAnswer().contains("[1]"),
+					"the answer must come back whatever the check does; got: " + answer.getAnswer());
+			assertTrue(capture.hasMessageAt(Level.WARN, "Dosing-ceiling check failed"),
+					"and the check's own failure must not be silent. Captured: "
+							+ capture.describeAll());
+			assertEquals(null, answer.getUnstatedDosingCeilings(),
+					"a failed check states NO measurement, which is not a measurement of none — the "
+							+ "distinction the wire preserves");
+		}
+	}
+
 	/**
 	 * @return the one mapping carrying dosing ceilings, selected by the FIELD and never by a resource
 	 *         type — the same rule the check itself obeys, so a test that passed by naming

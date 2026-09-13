@@ -68,7 +68,7 @@ import org.slf4j.LoggerFactory;
  * {@code resourceType.equals(drug_reference)}, which {@code CLAUDE.md} forbids outright (issue
  * #122), and never {@code referenceGroup}, which names a grounding rule. It is also the cheapest
  * gate: on the shipped default {@code chartsearchai.drugReference.enabled} is false, the injector
- * never runs, no record carries ceilings, and this returns before touching the answer.
+ * never runs, no record carries ceilings, and this returns before scanning the answer for anything.
  *
  * <p><b>The walk is strictest-first, which is what makes the report's own claim structural.</b>
  * {@code getDosingCeilings()} is ordered by the writer, where the numbers are still doubles. The
@@ -81,10 +81,12 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Conservative by construction</b>, for the reason its siblings are:
  * <ul>
- *   <li>it says nothing about a record carrying fewer than two ceilings — a record with one cannot
- *       have a stricter one gone unstated, and a record with none is every record this module did
- *       not inject for a reference entry. It cannot tell those apart, by construction: what
- *       reaches it is one nullable list;</li>
+ *   <li>it says nothing about a record carrying fewer than two ceilings. A record with one cannot
+ *       have a stricter one gone unstated; a record with NONE is every record this module did not
+ *       inject for a reference entry, and also every reference record whose own text states no
+ *       ceiling — a row publishing no band for this patient's age, or none carrying a daily
+ *       maximum. It cannot tell any of those apart, by construction: what reaches it is one
+ *       nullable list;</li>
  *   <li>an answer stating NO ceiling of a record is silent. A question about that drug's allergies
  *       cites the same record and quotes no number, and a check that reported it would cry wolf on
  *       every answer that was never about dosing;</li>
@@ -125,10 +127,8 @@ import org.slf4j.LoggerFactory;
  *       <em>"give 4000 mg"</em> does not trip the report and <em>"Aspirin 300 mg tablets"</em> does
  *       not silence it. The residue is an answer quoting the laxer ceiling in the record's own
  *       spelling while stating the stricter one in another (<em>"300 mg per day"</em>,
- *       <em>"300mg/day"</em>): that is reported. Both spellings are the record's own, so the common
- *       case is an answer reciting the record;</li>
- *   <li>an answer that states every ceiling of one record and drops a second record's. Each record
- *       is judged alone, which is what {@code getDosingCeilings()} carries;</li>
+ *       <em>"300mg/day"</em>): that is reported. The record spells both of its ceilings the same
+ *       way, so an answer reciting it states both in the form the needle matches;</li>
  *   <li>whether the ceiling the answer stated is the RIGHT one for this patient. It is not a dosing
  *       check, and on the arrangement it was measured on no row is identifiable as the subject at
  *       all — both rows claimed the recorded name equally, which is why
@@ -266,8 +266,8 @@ final class DosingCeilingFidelityCheck {
 	/**
 	 * @return whether {@code answer} states {@code ceiling}, through the scan this module shares for
 	 *         that question, memoised in the caller's own per-call map. Extracted so the strictest
-	 *         ceiling and the quoted one cannot come to be asked two different ways — they are asked
-	 *         in two places, three lines apart, which is exactly how that drift starts.
+	 *         ceiling and the quoted one cannot come to be asked two different ways — two call sites
+	 *         in one short loop, which is exactly how that drift starts.
 	 */
 	private static boolean answerStates(String answer, String ceiling, Map<String, Boolean> memo) {
 		Boolean known = memo.get(ceiling);

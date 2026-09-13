@@ -4205,9 +4205,10 @@ public class DrugReferenceInjector {
 	}
 
 	/** @return the daily ceiling {@code band} publishes, spelled as this record states it and WITHOUT
-	 *          the {@code "maximum "} cue in front of it — or null where the band publishes none, the
-	 *          same condition under which {@link #dosingNumbers} says nothing about a daily maximum
-	 *          and {@link #render} appends its "no pediatric daily maximum published" advice instead.
+	 *          the {@code "maximum "} cue in front of it — or null where the band publishes none. That
+	 *          is the same condition under which {@link #dosingNumbers} says nothing about a daily
+	 *          maximum, and, for the RENDERED row alone, the one under which {@link #render} appends
+	 *          its "no pediatric daily maximum published" advice instead.
 	 *
 	 *          <p><b>It is one expression serving two consumers, and that is the point</b> (issue
 	 *          #276). {@link #dosingNumbers} appends it to the text a model reads; {@link #collectCeiling}

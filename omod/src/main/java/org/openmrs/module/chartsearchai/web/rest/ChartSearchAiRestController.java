@@ -1652,6 +1652,21 @@ public class ChartSearchAiRestController {
 	 * {@link #serializeSafetyWarnings} publishes, which keeps #347's other half satisfied: the
 	 * marshaller refuses {@code Collections}' immutable wrappers, and the accessor hands one out.
 	 */
+	private List<Map<String, Object>> serializeUnstatedFindingSeverities(
+			List<UnstatedFindingSeverity> unstated) {
+		if (unstated == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (UnstatedFindingSeverity entry : unstated) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("rating", entry.getRating());
+			out.add(map);
+		}
+		return out;
+	}
+
 	/**
 	 * The wire shape of {@code unstatedDosingCeilings}: one object per offending citation,
 	 * {@code citation} the index the answer printed in brackets, {@code statedCeiling} the dosing
@@ -1685,21 +1700,6 @@ public class ChartSearchAiRestController {
 			map.put("citation", entry.getCitation());
 			map.put("statedCeiling", entry.getStatedCeiling());
 			map.put("unstatedCeiling", entry.getUnstatedCeiling());
-			out.add(map);
-		}
-		return out;
-	}
-
-	private List<Map<String, Object>> serializeUnstatedFindingSeverities(
-			List<UnstatedFindingSeverity> unstated) {
-		if (unstated == null) {
-			return null;
-		}
-		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
-		for (UnstatedFindingSeverity entry : unstated) {
-			Map<String, Object> map = new LinkedHashMap<String, Object>();
-			map.put("citation", entry.getCitation());
-			map.put("rating", entry.getRating());
 			out.add(map);
 		}
 		return out;

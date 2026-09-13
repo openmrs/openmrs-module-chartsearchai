@@ -216,13 +216,6 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
-			// And the sixth (issue #276): the cited reference records whose answer quoted one dosing
-			// ceiling and left a stricter one from the same record unstated. Carried rather than
-			// re-derived for the reason its neighbours are — the ceilings travel on the chart, and
-			// the chart is gone by REST time.
-			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
-					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
-							response.getAnswer(), cited, chart.getMappings());
 			// And the fifth (issue #395): the base the four above had none for. Each of them judges a
 			// finding the answer DID cite, so an answer that drops one entirely is outside all four
 			// — this counts the findings the prompt carried against the ones the answer cited.
@@ -230,6 +223,15 @@ public class LlmInferenceService implements ChartSearchService {
 			// the carrier of the population, is gone by REST time.
 			FindingCitationExtent findingCitationExtent =
 					SafetyFindingCitationExtentCheck.measureFindingCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
+			// And the sixth (issue #276): the cited reference records whose answer quoted one of the
+			// dosing ceilings they publish and left a stricter one from the same record unstated.
+			// LAST, after the extent, so the comment above keeps counting the four checks that judge
+			// a cited FINDING — this one judges a cited reference record and is not among them.
+			// Carried rather than re-derived for the reason its neighbours are: the ceilings travel
+			// on the chart, and the chart is gone by REST time.
+			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
+					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
 							response.getAnswer(), cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
@@ -633,8 +635,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// reference record and then rewritten inside the sentence it was copying (issue #337),
 			// and, since issue #377, the chart citations offered as evidence of an active drug order
 			// that cannot be one, and, since #337's third round, a cited finding whose RATING the
-			// answer states nowhere, and, since issue #276, a cited reference record whose answer
-			// quoted one of its dosing ceilings and left a stricter one from it unstated. None blocks: the class-code check reports only to the log and
+			// answer states nowhere, how many findings the prompt carried against how many the
+			// answer cited, and, last, a cited reference record whose answer quoted one of its
+			// dosing ceilings and left a stricter one from it unstated (issue #276). None blocks: the class-code check reports only to the log and
 			// the rest carry their answers onto the ChartAnswer this method RETURNS, so no consumer
 			// above waits on any of them. Microseconds for the first and the third — measured by
 			// calling their own entry points from a throwaway same-package case, the active-order
@@ -669,11 +672,6 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
-			// The sixth, carried the same way and stating null on the early `done` for the same
-			// reason (issue #276): the check runs here, after the user-visible handoff.
-			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
-					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
-							response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #395): the check runs here, after the user-visible handoff. It is two
 			// walks, one decode of the answer's markers and a set
@@ -684,6 +682,13 @@ public class LlmInferenceService implements ChartSearchService {
 			// measurement.
 			FindingCitationExtent findingCitationExtent =
 					SafetyFindingCitationExtentCheck.measureFindingCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
+			// The sixth, carried the same way and stating null on the early `done` for the same
+			// reason (issue #276): the check runs here, after the user-visible handoff. LAST for the
+			// reason it is last in `search` — the comment above counts the four finding checks, and
+			// this one judges a cited reference record instead.
+			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
+					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
 							response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();

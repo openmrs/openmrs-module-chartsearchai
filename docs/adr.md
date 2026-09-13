@@ -2320,6 +2320,8 @@ The path default is the **upstream release's own filename**, so refreshing the k
 
 Measured through the production `DdiDrugReferenceSource.parse` over the shipped file: **0.6 s** to parse cold (~0.4 s warm), **~30 MB** retained for the module's lifetime, **2.1 MB** of packed jar. The parse is lazy and once per module lifetime, so the cost lands on the first drug question after a restart. The interning the parser already does for mechanism notes and severities is what keeps 590,312 partner links inside 30 MB.
 
+**That packed-jar figure is the schema 1.0 file's, and it moved with the schema 1.3 refresh (pull request #392).** The bundled resource now packs to **4,031,048 bytes** — 3.8 MB, read off the built api jar's own entry for it with `unzip -v` after `mvn package -pl api` (2026-09-14; entry `chartsearchai/ddi-knowledge-base.json`, 34,882,241 bytes uncompressed). All but about 40 KB of the increase is `disease_notes`, `disease_interactions` and `derived_interactions`, three tables nothing reads yet (issue #391), so the retained-heap figure above does not move with it; the parse timings above were re-measured on the refreshed file in that review and hold. The consequences list below is stated with the new figure — a decision that argues a whole-KB default has to quote the cost that default actually carries, and until the review that found it this one was quoting 2.1 MB for a resource that packs to 3.8 MB, understating the packed cost it authorizes by about 1.8x of that 2.1 MB.
+
 The excerpt survives as a **test fixture** (`DrugReferenceTestSupport.DDI_EXCERPT`), because a case asserting "this record renders exactly these partners", "this entry has one partner" or "13 were withheld" needs a dataset whose partner lists it can state — lisinopril alone has 730 in the full KB, and pointing those cases at the shipped default would test the prompt budget's truncation instead of the behaviour each one is about.
 
 ### What the default gives up: dosing
@@ -2370,7 +2372,7 @@ Bundled byte-identical to the upstream release, so it can be verified rather tha
 - **−** The dose-excess arm is dormant by default; an install that needs dose ceilings must select `sourceFormat=json` or supply a dosing dataset.
 - **−** The module becomes a redistributor of a third-party academic dataset, with the attribution, NC licence terms and governance caveat that carries.
 - **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff.
-- **−** +2.1 MB of packed jar, ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover ~2.1 MB and is untouched here.)
+- **−** +3.8 MB of packed jar (4,031,048 bytes for the entry, schema 1.3 — see the measurement above), ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover the same 3.8 MB and is untouched here.)
 
 ## Decision 55: Each operand of the name scan is folded once where it is produced
 

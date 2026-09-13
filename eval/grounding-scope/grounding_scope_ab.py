@@ -63,9 +63,12 @@ Issue #294 adds a cause that is NOT on the entailment gate and so is present in
 both arms: a citation of an injected active-order record the module could read
 no drug name for publishes no verdict at all. It reads on the wire as a plain
 `None`, indistinguishable from "not checked" -- no wire field marks the shape --
-so it is one more unnamed contributor to a null-side count. It moves no A/B class
-(both arms are null), and the six cases below are condition-shaped, so such a
-record is unlikely to be cited at all; "unlikely" is not "cannot".
+so it is one more unnamed contributor to a null-side count. It moves no A/B class,
+both arms being null. Do NOT discount it the way the paragraph below discounts
+#284: most of the cases below are condition-shaped, but the last two ask what
+medications the patient is taking, which is the question shape that cites an
+injected active-order record. So this cause is MORE likely to appear here than
+that one, not less.
 
 Issue #284 adds one more cause of a sentence-side null, on the same entailment
 gate: a chart citation whose claim also rests on a module-supplied safety

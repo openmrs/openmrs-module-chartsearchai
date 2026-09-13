@@ -290,10 +290,14 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The real rendered text of the active-order record the REAL injector injects for an active
 	 * order the chart cannot substantiate (issue #118) — the real reconciliation → render chain,
-	 * not a hand-assembled imitation of the format. One of the cross-package accessors, for the
-	 * grounding tests: how this record text embeds against an answer sentence is exactly what
-	 * decides whether treating it as ordinary chart evidence is right, so a test asserting that
-	 * must read the text production actually produces.
+	 * not a hand-assembled imitation of the format.
+	 *
+	 * <p>The TEXT and not the mapping, which is the narrower shape and now the rarer need: the cases
+	 * that grade such a record take {@link #injectedNamedActiveOrderMapping} instead, since issue
+	 * #294 put per-record answers on the mapping that a text cannot carry. What is left for this is a
+	 * caller that must choose the record's INDEX itself — one composing it with another record built
+	 * separately — and so builds the mapping by hand around a real rendered text. Its call site says
+	 * why it cannot take the mapping whole.
 	 */
 	public static String injectedActiveOrderText(String orderUuid, String display) {
 		return injectedNamedActiveOrderMapping(orderUuid, display).getText();

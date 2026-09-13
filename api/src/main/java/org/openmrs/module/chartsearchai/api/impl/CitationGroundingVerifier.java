@@ -467,9 +467,11 @@ public class CitationGroundingVerifier {
 		 * published FAIL is a false <em>Unsupported</em> either way — and not the mechanism, which is
 		 * the opposite one: there the cosine would stand in for a judge that was never asked, here the
 		 * judge could have been asked and still could not weigh the pair. What makes Tier-1 no better
-		 * is the record, not the mode: it is measured against a text that asserts nothing. That is what separates this from DEMOTE_ONLY, which keeps the fail —
-		 * demoting would have left #294's own harm standing through Tier-1, the more so at the raised
-		 * floor {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE} advises for an e5 deployment. Membership is the mapping's own
+		 * is the record, not the mode: it is measured against a text that asserts nothing. That is what
+		 * separates this from DEMOTE_ONLY, which keeps the fail — demoting would have left #294's own
+		 * harm standing through Tier-1, the more so at the raised floor
+		 * {@link ChartSearchAiConstants#GP_GROUNDING_MIN_COSINE} advises for an e5 deployment.
+		 * Membership is the mapping's own
 		 * {@code RecordMapping.getOrderDrugNamed()} stamp, so it reaches the RECORD that names no drug
 		 * and not the TYPE: a NAMED {@code active_drug_order} citation is graded and published exactly
 		 * as before, which a carve-out in {@link ChartSearchAiUtils#isGroundingDemoteOnly} could not
@@ -1386,16 +1388,6 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
-	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
-	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
-	 * claim reads as its own statement rather than a dangling continuation.
-	 *
-	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
-	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
-	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
-	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
-	 */
-	/**
 	 * Most whitespace-separated words an enumerated item may carry and still be treated as a NAME
 	 * rather than a clause. The split is only sound while the shared preamble carries the sentence's
 	 * SUBJECT; an item long enough to be a clause may carry its own, and then the siblings' claims lose
@@ -1496,6 +1488,16 @@ public class CitationGroundingVerifier {
 					+ "|denies|denied|takes|took|receives|received|presents|remains)\\b",
 			Pattern.CASE_INSENSITIVE);
 
+	/**
+	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
+	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
+	 * claim reads as its own statement rather than a dangling continuation.
+	 *
+	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
+	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
+	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
+	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
+	 */
 	private static final Pattern LEADING_ITEM_SEPARATOR =
 			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
 

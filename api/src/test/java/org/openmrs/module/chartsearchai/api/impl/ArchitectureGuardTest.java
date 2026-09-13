@@ -149,7 +149,7 @@ public class ArchitectureGuardTest {
 	 * out of the picture.
 	 *
 	 * <p><b>What it cannot answer, and what does — both halves measured.</b> The pool says which
-	 * CLASS invokes the wide constructor, not which of that class's four mapping constructions passes
+	 * CLASS invokes the wide constructor, not which of that class's five mapping constructions passes
 	 * a non-empty list. A second caller reddens THIS case; giving the injector's own
 	 * {@code drug_reference} construction a one-element derivation leaves it green and reddens
 	 * {@code FindingChartRecordProvenanceContextTest.aChartRecordNamesNoProvenanceOfItsOwn} instead,
@@ -171,8 +171,10 @@ public class ArchitectureGuardTest {
 	 * The shared body of both constructor cases in this file: exactly one {@code RecordMapping} constructor matches
 	 * {@code tail}, and only {@code DrugReferenceInjector} invokes it.
 	 *
-	 * <p>One method rather than two copies because the two differ only in the selector and the
-	 * wording — and the copy drifted the first time it was made, losing the several-arities canary
+	 * <p>One method rather than two copies because the two differ in a selector, the wording, and one
+	 * flag — {@code widest}, which is not decoration: it turns the prefix canary below ON for the case
+	 * whose subject IS the widest constructor and off for the other, so a third case added by copying
+	 * either call site must decide it rather than inherit it — and the copy drifted the first time it was made, losing the several-arities canary
 	 * below within a single commit, while its javadoc still claimed every canary fails on an empty
 	 * discovery.
 	 *
@@ -216,11 +218,18 @@ public class ArchitectureGuardTest {
 		// deliberately NOT asserted for the provenance case, whose subject stopped being the widest
 		// when issue #294 added a rung below it and is identified by its own tail regardless.
 		if (widest) {
+			String guarded = parameters(carrying.get(0));
 			for (String descriptor : constructors) {
-				assertTrue(descriptor.length() <= carrying.get(0).length(),
-						"the constructor this case guards must still be the WIDEST, or a rung has been "
-								+ "added below it that no selector reaches and nothing forbids a second "
-								+ "writer of. Guarded: " + carrying.get(0) + "; wider: " + descriptor);
+				// Every other rung must be a PREFIX of the guarded one, which says two things at once
+				// and exactly: the guarded constructor is the widest, and the ladder is still a prefix
+				// chain of it. A length comparison would say the first only approximately — a NARROWER
+				// rung taking longer type names is lexically longer, and would fire this with a message
+				// about a rung "added below" that was not.
+				assertTrue(guarded.startsWith(parameters(descriptor)),
+						"the constructor this case guards must still be the WIDEST and every other rung "
+								+ "a prefix of it, or a rung has been added that no selector reaches and "
+								+ "nothing forbids a second writer of. Guarded: " + carrying.get(0)
+								+ "; not a prefix of it: " + descriptor);
 			}
 		}
 
@@ -254,9 +263,11 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>Modelled on {@link #theProvenanceCarryingMappingConstructorHasOneCaller} and asking the same
 	 * kind of question of the constant pool, for the reasons that case's javadoc gives about the
-	 * source-text form it replaced. It differs only in the selector, {@link #ORDER_NAMING_TAIL}, whose
+	 * source-text form it replaced. It differs in its selector, {@link #ORDER_NAMING_TAIL} — whose
 	 * javadoc says why this constructor needs a two-type tail where the provenance one needs a
-	 * single-type one, and is canonical for it.
+	 * single-type one, and is canonical for it — and in passing {@code widest}, which the sibling does
+	 * not, because the provenance constructor stopped being the widest when issue #294 added a rung
+	 * below it.
 	 *
 	 * <p>What it cannot answer: the pool says which CLASS invokes that constructor, not WHAT it
 	 * passes. The injector could stamp a record that is not an active order and this stays green.
@@ -266,10 +277,8 @@ public class ArchitectureGuardTest {
 	 * injected {@code drug_reference} mapping left the whole build green, that case included, because
 	 * it reads only the {@code active_drug_order} mapping. The cover is
 	 * {@code DrugReferenceInjectorTest.onlyTheActiveOrderRecordCarriesTheOrderNamingStamp}, which
-	 * reads the OTHER records of a real injection. That hole was worth closing rather than
-	 * documenting: {@code UNVERIFIABLE} outranks {@code DEMOTE_ONLY}, so a stamped
-	 * {@code drug_reference} citation would silently lose the Tier-1 off-topic {@code false} that
-	 * issues #106/#122 deliberately keep.
+	 * reads the OTHER records of a real injection and states why the hole was worth closing rather
+	 * than documenting.
 	 */
 	@Test
 	public void theOrderNamingStampIsWrittenInOnePlace() throws IOException {
@@ -277,6 +286,12 @@ public class ArchitectureGuardTest {
 				"the order-naming stamp of issue #294", true,
 				"A second writer would withhold grounding verdicts for chart citations silently — "
 						+ "see this test's javadoc.");
+	}
+
+	/** The parameter section of a method descriptor — everything between the parentheses — so two
+	 *  rungs of a constructor ladder can be compared as prefixes without parsing types. */
+	private static String parameters(String descriptor) {
+		return descriptor.substring(descriptor.indexOf('(') + 1, descriptor.lastIndexOf(')'));
 	}
 
 	/**

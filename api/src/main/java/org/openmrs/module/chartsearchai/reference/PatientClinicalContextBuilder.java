@@ -723,9 +723,10 @@ final class PatientClinicalContextBuilder {
 	 * {@code DrugReferenceInjector} renders a reference row's codes in.
 	 *
 	 * <p>Package-private rather than private so a test arranging this rung can BUILD the display
-	 * rather than spell an imitation of it — {@code DrugReferenceTestSupport}'s codes-only
-	 * accessor. A literal there would keep passing if the label or the separator here ever moved,
-	 * against a string production never emits.
+	 * rather than spell an imitation of it — {@code DrugReferenceTestSupport}'s codes-only accessor
+	 * and, since it, any case in that package arranging such an order directly. A literal there would
+	 * keep passing if the label or the separator here ever moved, against a string production never
+	 * emits.
 	 */
 	static String codeOnlyDisplay(Set<String> normalizedCodes) {
 		return "[ATC " + String.join(", ", new TreeSet<String>(normalizedCodes)) + "]";

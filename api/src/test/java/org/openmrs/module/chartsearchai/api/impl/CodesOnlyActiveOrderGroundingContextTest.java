@@ -249,9 +249,15 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 
 	/**
 	 * The other direction, so the rule is not mistaken for a one-sided demotion: with the judge
-	 * ACCEPTING, the same citation still publishes nothing. That is what separates
-	 * {@code Disposition.UNVERIFIABLE} from {@code DEMOTE_ONLY} on the yes side; the no side is
-	 * separated by a cosine, which this class cannot arrange — see the class javadoc for where it is.
+	 * ACCEPTING, the same citation still publishes nothing. <b>What that separates is
+	 * {@code Disposition.UNVERIFIABLE} from {@code GRADED}</b>, where the judge's yes would be
+	 * published. It separates it from {@code DEMOTE_ONLY} in NEITHER direction, and an earlier draft
+	 * of this sentence claimed it did on the yes side: measured, building the demote-only remedy
+	 * instead leaves all three cases HERE green, because demote-only does not ask the judge either and
+	 * {@code resolveEmbedder()} returns null, so both dispositions publish nothing in this class. The
+	 * demote-only boundary is separated by a cosine FAIL, which only
+	 * {@code CitationGroundingVerifierTest.codesOnlyActiveOrder_aCosineFailIsWithheldRatherThanPublished}
+	 * can arrange.
 	 *
 	 * <p>Since the judge is never asked, the verdict it would have given is not what this case
 	 * varies — it varies the stub, and asserts the answer does not depend on it. Worth keeping as its
@@ -366,9 +372,11 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 
 	/**
 	 * A judge that answers the same way for every pair it is handed, and RECORDS the pairs. Recording
-	 * is not decoration: a constant-returning stub that discarded its inputs would leave both cases
-	 * green if the composed path handed Tier-2 a truncated premise, so the phrase "a judge that
-	 * refuses a medication claim ABOUT THIS RECORD" would be untested. What it does NOT test is claim
+	 * is not decoration, though what it buys moved with the remedy. For the two codes-only cases it
+	 * proves an ABSENCE — that no pair was handed over at all — which a stub discarding its inputs
+	 * could not show. For the NAMED non-regression it still proves content: a constant-returning stub
+	 * that discarded its inputs would leave that case green if the composed path handed Tier-2 a
+	 * truncated premise, so "a judge asked about THIS record" would be untested. What it does NOT test is claim
 	 * SELECTION — this answer offers one sentence, so there is one unit to pick.
 	 * {@code CitationGroundingVerifierTest.ConjunctionAwareJudge} records for the same reason.
 	 */

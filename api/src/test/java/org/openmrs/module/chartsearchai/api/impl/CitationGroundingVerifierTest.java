@@ -1076,6 +1076,12 @@ public class CitationGroundingVerifierTest {
 	 *  the whole mapping off the real reconciliation → render chain, never hand-built, because the
 	 *  per-record stamps the injector writes are what decide how such a citation is graded (issue
 	 *  #294). {@code DrugReferenceTestSupport}'s accessor says the same thing on its own side. */
+	/** The answer sentence the three named-order cases cite that record with. Shared for the reason
+	 *  {@link #NAMED_ORDER_DISPLAY} is: the sentence has to name the record the mapping renders. */
+	private static String namedOrderSentence(int index) {
+		return "The patient has an active order for " + NAMED_ORDER_DISPLAY + " [" + index + "].";
+	}
+
 	private static RecordMapping namedActiveDrugOrderMapping(String uuid, String display) {
 		return org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
 				.injectedNamedActiveOrderMapping(uuid, display);
@@ -1097,9 +1103,9 @@ public class CitationGroundingVerifierTest {
 		// change this rule — such a record is still chart evidence and still graded by the carve-out
 		// this case is about — it is held back one step further down, by Disposition.UNVERIFIABLE,
 		// which is canonical for it (issue #294). The codesOnlyActiveOrder_* cases below are that.
-		RecordMapping mapping = namedActiveDrugOrderMapping("order-uuid-7", "Simvastatin Co 20mg");
+		RecordMapping mapping = namedActiveDrugOrderMapping(NAMED_ORDER_UUID, NAMED_ORDER_DISPLAY);
 		int n = mapping.getIndex();
-		String sentence = "The patient has an active order for Simvastatin Co 20mg [" + n + "].";
+		String sentence = namedOrderSentence(n);
 		embeddings.register(sentence, AXIS_A);
 		embeddings.register(mapping.getText(), AXIS_A);
 
@@ -1121,9 +1127,9 @@ public class CitationGroundingVerifierTest {
 		// names no drug the MODULE suppresses it, one layer earlier and per record rather than per
 		// type (issue #294); this case is the NAMED record, where it is published. Inverts
 		// drugReference_neverEntersTier2Entailment.
-		RecordMapping mapping = namedActiveDrugOrderMapping("order-uuid-7", "Simvastatin Co 20mg");
+		RecordMapping mapping = namedActiveDrugOrderMapping(NAMED_ORDER_UUID, NAMED_ORDER_DISPLAY);
 		int n = mapping.getIndex();
-		String sentence = "The patient has an active order for Simvastatin Co 20mg [" + n + "].";
+		String sentence = namedOrderSentence(n);
 		embeddings.register(sentence, AXIS_A);
 		embeddings.register(mapping.getText(), AXIS_A);
 		llm.verdict = Boolean.FALSE;
@@ -1155,6 +1161,15 @@ public class CitationGroundingVerifierTest {
 	 *  than three copies: they must stay the same claim for the three verdict regimes to be
 	 *  comparable. */
 	private static final String CODES_ONLY_CLAIM = "The patient is taking metformin 500mg twice daily";
+
+	/** The NAMED active order the three non-regressions are about, for the same reason — the third of
+	 *  them exists to differ from the codes-only trio in exactly one thing, so a one-word drift in
+	 *  this display would leave it comparing a different record with nothing saying so. A one-word
+	 *  drift is not hypothetical here: {@code coMedicationRecord} below names a "Simvastatin 20mg",
+	 *  which is a DIFFERENT fixture for a different arrangement and deliberately not this one. */
+	private static final String NAMED_ORDER_DISPLAY = "Simvastatin Co 20mg";
+
+	private static final String NAMED_ORDER_UUID = "order-uuid-7";
 
 	/**
 	 * The real {@code active_drug_order} mapping the real injector produces for an order the module
@@ -1260,12 +1275,51 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void codesOnlyActiveOrder_doesNotConsumeTheEntailmentCapOfChartCitations() {
+		// The cap-boundary pin, arranged like its three siblings
+		// (drugReference_/safetyFinding_/compoundClaim_doesNotConsumeTheEntailmentCap...): the excluded
+		// citation comes FIRST, followed by exactly cap-many gradable ones. What it pins is the
+		// OUTCOME the ADR cites — the slot this rule does not spend is one a real chart citation
+		// takes, which is the difference between an authoritative entailment verdict and a cosine
+		// fallback FOR THAT CITATION. Remove the #294 rule and the last chart citation comes back
+		// `false`, its Tier-1 verdict; that is measured, and it is what this case exists for.
+		//
+		// It does NOT discriminate what its siblings discriminate — whether the exclusion sits inside
+		// the budget branch — and saying so matters, because the recipe invites that reading. A
+		// codes-only citation is kept out of Tier-2 twice over: claim selection is skipped for it, so
+		// `tier1.bestSentence` is null and the outer guard already refuses it whatever the budget
+		// branch does. Measured: moving the disposition test inside that branch reddens a #284 case
+		// and leaves this one green.
+		int cap = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
+		RecordMapping codesOnly = codesOnlyActiveOrderMapping();
+		int n = codesOnly.getIndex();
+		StringBuilder answer = new StringBuilder(CODES_ONLY_CLAIM).append(" [").append(n).append("]. ");
+		List<RecordReference> refs = new ArrayList<RecordReference>(Arrays.asList(reference(n)));
+		List<RecordMapping> maps = new ArrayList<RecordMapping>(Arrays.asList(codesOnly));
+		for (int i = 1; i <= cap; i++) {
+			int index = n + i;
+			answer.append("claim ").append(i).append(" [").append(index).append("]. ");
+			refs.add(reference(index));
+			maps.add(mapping(index, "record " + i));
+		}
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer.toString(), refs, maps, FLOOR, TIER2_ON);
+
+		assertEquals(cap, llm.calls,
+				"the chart citations alone fill the cap; the excluded codes-only pair must not count");
+		assertEquals(Boolean.TRUE, result.get(refs.size() - 1).getGrounded(),
+				"the last chart citation must still get its Tier-2 verdict — a consumed slot would "
+						+ "leave it on its Tier-1 verdict instead");
+		assertNull(result.get(0).getGrounded(), "and the codes-only citation itself publishes nothing");
+	}
+
+	@Test
 	public void aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector() {
 		// The non-regression the type-keyed remedy fails: the rule reaches the record that names no
 		// drug and no other. This mapping comes off the same real injector as the three above, so the
 		// only difference between them is the one the rule keys on.
-		RecordMapping record = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
-				.injectedNamedActiveOrderMapping("order-uuid-named", "Simvastatin Co 20mg");
+		RecordMapping record = namedActiveDrugOrderMapping("order-uuid-named", NAMED_ORDER_DISPLAY);
 		assertEquals(Boolean.TRUE, record.getOrderDrugNamed(),
 				"precondition, and the TRUE half of the stamp's three-valued contract: the injector "
 						+ "STATES that this record names its drug rather than staying silent. Nothing "
@@ -1273,8 +1327,7 @@ public class CitationGroundingVerifierTest {
 						+ "to \"FALSE or nothing\" is only visible to a case that reads the stamp. "
 						+ "DrugReferenceInjectorTest.theInjectedActiveOrderRecordStatesWhetherItNamesItsDrug "
 						+ "is the other one, beside the writer");
-		String sentence = "The patient has an active order for Simvastatin Co 20mg ["
-				+ record.getIndex() + "].";
+		String sentence = namedOrderSentence(record.getIndex());
 		embeddings.register(sentence, AXIS_A);
 		embeddings.register(record.getText(), AXIS_A);
 		llm.verdict = Boolean.TRUE;

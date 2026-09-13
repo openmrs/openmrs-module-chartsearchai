@@ -1307,8 +1307,12 @@ public interface ChartSearchService {
 		 * #305), in either mode; and a citation of a record that NAMES NO DRUG
 		 * though it is about one — the code-only active-order stand-in of issue
 		 * #290 — also in either mode (issue #294).
-		 * {@code CitationGroundingVerifier.Disposition} is canonical for that set;
-		 * this list is a reader's convenience and the constant is what to trust. A
+		 * <b>This list is a reader's convenience, not the register.</b> Three of the four are
+		 * arrangements of {@code CitationGroundingVerifier}'s own {@code Disposition}, canonical for
+		 * those and where a maintainer inside the module reads them; the composite withholding of
+		 * issue #284 is NOT one of them — it is applied where the verdict is assembled. ADR Decision
+		 * 11's {@code grounded} paragraph enumerates all of them, for a reader outside the module who
+		 * cannot see that constant at all. A
 		 * {@code null} verdict must be rendered as "unverified", never as
 		 * "verified".
 		 *

@@ -1284,19 +1284,23 @@ public class DrugReferenceInjectorTest {
 				"can I give her ibuprofen?");
 
 		List<RecordMapping> stamped = new ArrayList<RecordMapping>();
-		List<String> otherTypes = new ArrayList<String>();
+		List<String> allTypes = new ArrayList<String>();
 		for (RecordMapping mapping : result.getMappings()) {
+			allTypes.add(mapping.getResourceType());
 			if (mapping.getOrderDrugNamed() != null) {
 				stamped.add(mapping);
-			} else {
-				otherTypes.add(mapping.getResourceType());
 			}
 		}
-		assertTrue(otherTypes.contains(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE),
+		// Over EVERY mapping, not over the unstamped residue. Taken from the residue this precondition
+		// is defeated by the very mutation the case exists for: a second writer stamping the
+		// drug_reference record moves it OUT of the residue, so the precondition fires first and
+		// reports that the injection stopped producing one — sending a maintainer to look at matching
+		// and rendering instead of at the second writer.
+		assertTrue(allTypes.contains(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE),
 				"precondition: this injection must INJECT a drug_reference record beside the active "
 						+ "order, or the case forbids nothing about the records the injector mints — "
 						+ "the chart's own pre-existing record would satisfy a mere \"something else "
-						+ "is here\". Unstamped types were: " + otherTypes);
+						+ "is here\". Types were: " + allTypes);
 		List<String> stampedTypes = new ArrayList<String>();
 		for (RecordMapping mapping : stamped) {
 			stampedTypes.add(mapping.getResourceType() + "=" + mapping.getOrderDrugNamed());

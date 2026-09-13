@@ -1076,15 +1076,15 @@ public class CitationGroundingVerifierTest {
 	 *  the whole mapping off the real reconciliation → render chain, never hand-built, because the
 	 *  per-record stamps the injector writes are what decide how such a citation is graded (issue
 	 *  #294). {@code DrugReferenceTestSupport}'s accessor says the same thing on its own side. */
+	private static RecordMapping namedActiveDrugOrderMapping(String uuid, String display) {
+		return org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
+				.injectedNamedActiveOrderMapping(uuid, display);
+	}
+
 	/** The answer sentence the three named-order cases cite that record with. Shared for the reason
 	 *  {@link #NAMED_ORDER_DISPLAY} is: the sentence has to name the record the mapping renders. */
 	private static String namedOrderSentence(int index) {
 		return "The patient has an active order for " + NAMED_ORDER_DISPLAY + " [" + index + "].";
-	}
-
-	private static RecordMapping namedActiveDrugOrderMapping(String uuid, String display) {
-		return org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
-				.injectedNamedActiveOrderMapping(uuid, display);
 	}
 
 	@Test
@@ -1288,8 +1288,10 @@ public class CitationGroundingVerifierTest {
 		// the budget branch — and saying so matters, because the recipe invites that reading. A
 		// codes-only citation is kept out of Tier-2 twice over: claim selection is skipped for it, so
 		// `tier1.bestSentence` is null and the outer guard already refuses it whatever the budget
-		// branch does. Measured: moving the disposition test inside that branch reddens a #284 case
-		// and leaves this one green.
+		// branch does. Measured: moving the disposition test inside that branch leaves this case green
+		// and reddens the three siblings named above — which is where that position IS guarded, and
+		// they are the cases to read for it. (An earlier version of this comment said it reddens a
+		// #284 case. It does not; none of those moved.)
 		int cap = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
 		RecordMapping codesOnly = codesOnlyActiveOrderMapping();
 		int n = codesOnly.getIndex();

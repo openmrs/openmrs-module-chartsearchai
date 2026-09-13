@@ -9589,7 +9589,8 @@ public class DrugSafetyValidator {
 	 *         {@link OrderPartner} write sites ask before letting a display stand as a partner's name,
 	 *         written once so they cannot drift (issue #292).
 	 *
-	 *         <p><b>Since issue #294 there is a FOURTH caller, asking for a fourth reason:</b>
+	 *         <p><b>A FOURTH caller, since issue #294, asking for a fourth reason</b> (the third is
+	 *         the paragraph below this one, which came first):
 	 *         {@code DrugReferenceInjector}'s {@code active_drug_order} mapping, deciding whether the
 	 *         record it is about to inject NAMES the drug — the stamp
 	 *         {@code PatientChartSerializer.RecordMapping.orderDrugNamed} carries to the grounding

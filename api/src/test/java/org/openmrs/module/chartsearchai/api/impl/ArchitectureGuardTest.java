@@ -174,7 +174,8 @@ public class ArchitectureGuardTest {
 	 * <p>One method rather than two copies because the two differ in a selector, the wording, and one
 	 * flag — {@code widest}, which is not decoration: it turns the prefix canary below ON for the case
 	 * whose subject IS the widest constructor and off for the other, so a third case added by copying
-	 * either call site must decide it rather than inherit it — and the copy drifted the first time it was made, losing the several-arities canary
+	 * either call site must decide it rather than inherit it — and the copy drifted the first time it
+	 * was made, losing the several-arities canary
 	 * below within a single commit, while its javadoc still claimed every canary fails on an empty
 	 * discovery.
 	 *

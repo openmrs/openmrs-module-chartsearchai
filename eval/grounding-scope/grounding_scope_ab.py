@@ -74,9 +74,11 @@ Issue #284 adds one more cause of a sentence-side null, on the same entailment
 gate: a chart citation whose claim also rests on a module-supplied safety
 finding has the judge's NEGATIVE withheld. So a null-side count is an upper
 bound over that too, and this harness cannot attribute a cell between the two.
-Its six cases are condition-shaped rather than drug-safety questions, so a
-finding is unlikely to be injected at all -- but that has not been re-measured,
-and "unlikely" is not "cannot". Do not quote a tally here over a change to the
+Most of its cases are condition-shaped rather than drug-safety questions, so a
+finding is unlikely to be injected for those -- but that has not been re-measured,
+and "unlikely" is not "cannot". It said "six cases" until the #294 sweep counted
+them: CASES holds EIGHT, and the last two are medication questions, which is the
+shape this discount is weakest for. Do not restate the count; read it off CASES. Do not quote a tally here over a change to the
 #284 rule.
 
 Only the MODEL's own CHART-group citations are measurable here. A reference-group

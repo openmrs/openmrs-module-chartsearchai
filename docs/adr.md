@@ -7207,7 +7207,7 @@ The question is a per-record fact and is carried as one. `PatientChartSerializer
 
 ### Why UNVERIFIABLE and not demote-only
 
-Demote-only withholds a Tier-1 PASS and keeps the FAIL, which is right for recited reference prose and wrong here — the kept fail would leave #294's own harm standing through Tier-1 instead of through the judge. **The argument is not restated here: `Disposition.UNVERIFIABLE`'s javadoc carries it**, beside the code it decides, and it is what the rest of this module points at for the mechanism. What belongs here is the choice and its witness: `CitationGroundingVerifierTest.codesOnlyActiveOrder_aCosineFailIsWithheldRatherThanPublished` is the case that separates the two, and under demote-only it publishes `false`.
+Demote-only withholds a Tier-1 PASS and keeps the FAIL, which is right for recited reference prose and wrong here — the kept fail would leave #294's own harm standing through Tier-1 instead of through the judge. **The argument is not restated here: `Disposition.UNVERIFIABLE`'s javadoc carries it**, beside the code it decides, and it is what the rest of this module points at for the mechanism. What belongs here is the choice and a witness: under the demote-only remedy `CitationGroundingVerifierTest.codesOnlyActiveOrder_aCosineFailIsWithheldRatherThanPublished` publishes `false` rather than nothing. It is not the only case that moves — the `codesOnlyActiveOrder_*` family is the register, and an exclusivity claim over it has been measured false twice.
 
 ### Why not the two remedies #294 itself proposed
 

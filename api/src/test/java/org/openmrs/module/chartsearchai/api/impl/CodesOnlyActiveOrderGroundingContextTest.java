@@ -255,9 +255,11 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * of this sentence claimed it did on the yes side: measured, building the demote-only remedy
 	 * instead leaves all three cases HERE green, because demote-only does not ask the judge either and
 	 * {@code resolveEmbedder()} returns null, so both dispositions publish nothing in this class. The
-	 * demote-only boundary is separated by a cosine FAIL, which only
-	 * {@code CitationGroundingVerifierTest.codesOnlyActiveOrder_aCosineFailIsWithheldRatherThanPublished}
-	 * can arrange.
+	 * demote-only boundary is separated by a cosine FAIL, which THIS class cannot arrange at all;
+	 * {@code CitationGroundingVerifierTest}'s {@code codesOnlyActiveOrder_*} cases are where it is.
+	 * <b>No claim is made here about which of them is the only one</b> — two successive drafts of
+	 * such a claim were measured false, and the register of what each case covers is the cases
+	 * themselves.
 	 *
 	 * <p>Since the judge is never asked, the verdict it would have given is not what this case
 	 * varies — it varies the stub, and asserts the answer does not depend on it. Worth keeping as its

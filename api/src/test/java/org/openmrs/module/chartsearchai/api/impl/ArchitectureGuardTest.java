@@ -158,8 +158,7 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>The canaries that stop this forbidding nothing are enumerated once, on
 	 * {@link #assertSoleInjectorCallerOfMappingConstructor}, which holds them. A copy of that list
-	 * stood here and had already drifted from the code it described — it named "at least one caller",
-	 * which the walk does not check and never did.
+	 * stood here until the two cases were unified.
 	 */
 	@Test
 	public void theProvenanceCarryingMappingConstructorHasOneCaller() throws IOException {

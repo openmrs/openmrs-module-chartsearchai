@@ -170,7 +170,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// Issue #398, before every check below and before grounding: each of them judges the
 			// answer this method is about to publish, so a repair running after any of them would
 			// leave that key describing prose the caller never receives.
-			List<Integer> owedRepair = findingsOwedARepair(cited, chart.getMappings());
+			List<Integer> owedRepair = findingsOwedARepair(response.getAnswer(), cited,
+					chart.getMappings());
 			if (!owedRepair.isEmpty()) {
 				// Into llmMs and not beside it: the repair IS a second inference, and a timing line
 				// that left it out would under-report precisely the cost this feature adds, on the
@@ -589,7 +590,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// watching the answer being written sees the continuation arrive rather than finding it
 			// only in the final object. That ordering is the whole reason the repair appends
 			// instead of replacing — by here the short answer has already been streamed.
-			List<Integer> owedRepair = findingsOwedARepair(cited, chart.getMappings());
+			List<Integer> owedRepair = findingsOwedARepair(response.getAnswer(), cited,
+					chart.getMappings());
 			if (!owedRepair.isEmpty()) {
 				// Into llmMs, for the reason the sibling path states.
 				long repairStart = System.currentTimeMillis();
@@ -659,9 +661,10 @@ public class LlmInferenceService implements ChartSearchService {
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same
-			// reason (issue #395): the check runs here, after the user-visible handoff. It is the
-			// cheapest of the five — two walks and a set intersection, and of the answer only whether
-			// there is any prose at all rather than a scan of it — and it
+			// reason (issue #395): the check runs here, after the user-visible handoff. It is two
+			// walks, one decode of the answer's markers and a set
+			// intersection (issue #409 added the decode; before it, this read of the answer was only
+			// whether there was any prose at all) — and it
 			// still runs here rather than ahead of the handoff, because a client that got a zeroed
 			// extent on the early event and a real one on the final would read the first as a
 			// measurement.
@@ -729,13 +732,24 @@ public class LlmInferenceService implements ChartSearchService {
 	 * The findings this answer owes a repair for — issue #398. The gate and the population in one
 	 * place, so the two answer paths cannot come to disagree about either; an empty list is both
 	 * "the repair is off" and "the answer cited them all", which are the same instruction to a caller.
+	 *
+	 * <p><b>A BLANK answer owes nothing, and that gate is here rather than in the append step.</b> Its
+	 * citations do resolve — {@code extractCitedReferences} reads the structured array for a blank
+	 * answer on purpose — so findings really are owed by the count, and nothing downstream would stop
+	 * the pass. Two things make it the one original to refuse. A continuation appended to nothing IS
+	 * the answer, so this pass would have composed the lead, where the rule is that the original's
+	 * opening is never re-decided. And it is what keeps "may only ADD" true of the published count:
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} reads a blank answer's resolution
+	 * and a real answer's MARKERS, so appending here flips the reading underneath the key and can
+	 * LOWER it (issue #409).
+	 * &rarr; {@code FindingEnumerationRepairTest.aBlankAnswerIsNotRepairedAtAll}
 	 */
-	private List<Integer> findingsOwedARepair(List<RecordReference> cited,
+	private List<Integer> findingsOwedARepair(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
-		if (!resolveFindingEnumerationRepair()) {
+		if (!resolveFindingEnumerationRepair() || ChartSearchAiUtils.isBlank(answer)) {
 			return Collections.emptyList();
 		}
-		return SafetyFindingCitationExtentCheck.uncitedFindingIndexes(cited, mappings);
+		return SafetyFindingCitationExtentCheck.uncitedFindingIndexes(answer, cited, mappings);
 	}
 
 	/**
@@ -759,11 +773,13 @@ public class LlmInferenceService implements ChartSearchService {
 	/**
 	 * The repaired answer, or {@code original} where the repair bought nothing — issue #398.
 	 *
-	 * <p><b>It may only ADD.</b> The continuation is kept only where the answer's own citation
-	 * resolution admits at least one finding that was uncited before it, so a model answering the
-	 * follow-up with prose carrying no marker leaves the response byte for byte as it was. That is
-	 * the direction this pass is allowed to move the two published keys it touches: an appended
-	 * continuation can raise {@code findingCitations.cited} and cannot lower it.
+	 * <p><b>It may only ADD, and only what the count can see.</b> The continuation is kept only where
+	 * its own prose anchors at least one finding that was uncited before it —
+	 * {@link SafetyFindingCitationExtentCheck#citedFindingIndexes}, the reading the published count
+	 * uses, so the two cannot come to disagree (issue #409). A follow-up carrying no marker, or
+	 * naming the owed records only in its structured array, leaves the response byte for byte as it
+	 * was. That is the direction this pass is allowed to move the two published keys it touches: an
+	 * appended continuation can raise {@code findingCitations.cited} and cannot lower it.
 	 *
 	 * <p><b>The lead is not re-decided.</b> The continuation goes AFTER the original answer, whose
 	 * opening is what {@code score_directness.classify} reads — the property ADR Decision 84
@@ -774,11 +790,14 @@ public class LlmInferenceService implements ChartSearchService {
 		if (continuation == null || ChartSearchAiUtils.isBlank(continuation.getAnswer())) {
 			return original;
 		}
-		Set<Integer> nowCited = new LinkedHashSet<Integer>();
-		for (RecordReference reference : extractCitedReferences(continuation.getAnswer(),
-				continuation.getCitations(), mappings)) {
-			nowCited.add(Integer.valueOf(reference.getIndex()));
-		}
+		// The SAME reading the published count uses, reached through the check's own helper rather
+		// than spelled here (issue #409): a continuation whose structured array names an owed finding
+		// its prose anchors nowhere raises nothing the extent can see, so keeping it would append
+		// text to the caller's answer and leave the shortfall standing.
+		Set<Integer> nowCited = SafetyFindingCitationExtentCheck.citedFindingIndexes(
+				continuation.getAnswer(), extractCitedReferences(continuation.getAnswer(),
+						continuation.getCitations(), mappings),
+				mappings);
 		if (Collections.disjoint(nowCited, uncited)) {
 			log.debug("Finding-enumeration repair discarded: the continuation cites none of {}",
 					uncited);

@@ -715,10 +715,63 @@ public class ArchitectureGuardTest {
 	 */
 	@Test
 	public void classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep() throws IOException {
-		List<String> lines = getSourceCache().get("ClassCodeFidelityCheck.java");
-		org.junit.jupiter.api.Assertions.assertNotNull(lines,
-				"precondition: ClassCodeFidelityCheck.java was not found by the source scan, so this "
-						+ "rule would pass vacuously");
+		assertMarkersReachedOnlyThroughTheSharedDecodeStep("ClassCodeFidelityCheck.java", 1,
+				"the marker rule has grown a dialect of its own — a regex, a hand-rolled scan, "
+						+ "or the shared pattern matched directly — and no behavioural case can see it",
+				"ClassCodeFidelityCheck must compile exactly one pattern — ATC_CLASS_CODE. A second "
+						+ "one is either a citation-marker dialect (use ChartSearchAiUtils.citedIndexes) "
+						+ "or a second compiled reading of the code shape (reuse ATC_CLASS_CODE).");
+	}
+
+	/**
+	 * The same rule over {@code SafetyFindingCitationExtentCheck}, whose marker reading is the
+	 * newest — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>. Its
+	 * published count is the findings the resolution admitted INTERSECTED with the markers the prose
+	 * anchors, so a maintainer who drops the intersection puts the key back where #409 found it —
+	 * reporting full coverage for an answer whose prose named one finding fewer — and every
+	 * behavioural case that could see it would have to be written again.
+	 *
+	 * <p>Stated the same way as its neighbour above and for the reason that case's javadoc records:
+	 * the POSITIVE assertion is what closes a relocation, the two negatives are defence in depth.
+	 * The pattern count is ZERO rather than one — this class compiles none, having no shape of its
+	 * own to recognise — so a first {@code Pattern.compile} here is already a dialect.
+	 *
+	 * <p>The same residue that case names applies unchanged: this reads SOURCE TEXT, so a
+	 * dialect written BESIDE a retained {@code citedIndexes} call is out of its reach. And these two
+	 * are not the whole family — other classes read the answer's markers, some of them through
+	 * {@code INLINE_CITATION} directly because they need a marker's text OFFSET, which CLAUDE.md's
+	 * inline-citation rule licenses and this rule would forbid. No count of the guarded ones is
+	 * published here; grep {@code citedIndexes(} over {@code api/src/main} for the current set.
+	 */
+	@Test
+	public void safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep()
+			throws IOException {
+		assertMarkersReachedOnlyThroughTheSharedDecodeStep("SafetyFindingCitationExtentCheck.java", 0,
+				"either the count has stopped asking what the PROSE anchored — the issue #409 "
+						+ "defect — or the question has grown a dialect of its own",
+				"SafetyFindingCitationExtentCheck must compile no pattern of its own; markers are "
+						+ "decoded by ChartSearchAiUtils.citedIndexes.");
+	}
+
+	/**
+	 * The scan both marker-consumer rules above run, in one place so their needle set cannot drift
+	 * apart — a renamed decode step or a third dialect spelling fixed in one copy and not the other
+	 * would leave the second blind, and both rules report success by finding nothing.
+	 *
+	 * @param fileName the source file, as {@code getSourceCache()} keys it
+	 * @param expectedCompiles how many patterns the class is allowed to compile — every one of them
+	 *            for a shape of its own, never for a marker
+	 * @param decodeStepConsequence what a MISSING {@code citedIndexes} call means for this class,
+	 *            which differs between them and is the half of the message worth writing twice
+	 * @param compileMessage what the class's own patterns are for
+	 */
+	private void assertMarkersReachedOnlyThroughTheSharedDecodeStep(String fileName,
+			int expectedCompiles, String decodeStepConsequence, String compileMessage)
+			throws IOException {
+		List<String> lines = getSourceCache().get(fileName);
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: " + fileName
+				+ " was not found by the source scan, so this rule would pass vacuously");
 		int compiles = 0;
 		boolean callsDecodeStep = false;
 		List<String> ownDialect = new ArrayList<>();
@@ -740,19 +793,13 @@ public class ArchitectureGuardTest {
 				ownDialect.add("line " + (i + 1) + ": " + trimmed);
 			}
 		}
-		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep,
-				"ClassCodeFidelityCheck must read citation markers through "
-						+ "ChartSearchAiUtils.citedIndexes. If that call is gone, the marker rule has "
-						+ "grown a dialect of its own — a regex, a hand-rolled scan, or the shared "
-						+ "pattern matched directly — and no behavioural case can see it.");
-		org.junit.jupiter.api.Assertions.assertEquals(1, compiles,
-				"ClassCodeFidelityCheck must compile exactly one pattern — ATC_CLASS_CODE. A second "
-						+ "one is either a citation-marker dialect (use ChartSearchAiUtils.citedIndexes) "
-						+ "or a second compiled reading of the code shape (reuse ATC_CLASS_CODE).");
-		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(),
-				"ClassCodeFidelityCheck must not spell a bracketed regex of its own nor name "
-						+ "INLINE_CITATION; markers are decoded by ChartSearchAiUtils.citedIndexes. "
-						+ "Found: " + ownDialect);
+		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep, fileName
+				+ " must read citation markers through ChartSearchAiUtils.citedIndexes. If that call is "
+				+ "gone, " + decodeStepConsequence + ".");
+		org.junit.jupiter.api.Assertions.assertEquals(expectedCompiles, compiles, compileMessage);
+		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(), fileName
+				+ " must not spell a bracketed regex of its own nor name INLINE_CITATION; markers are "
+				+ "decoded by ChartSearchAiUtils.citedIndexes. Found: " + ownDialect);
 	}
 
 	/**

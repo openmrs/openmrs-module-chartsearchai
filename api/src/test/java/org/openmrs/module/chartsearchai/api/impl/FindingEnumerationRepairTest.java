@@ -155,6 +155,33 @@ public class FindingEnumerationRepairTest {
 	}
 
 	@Test
+	public void aFindingOnlyTheStructuredArrayNamesIsStillOwedARepair() {
+		// Issue #409's Failure Mode A reaching the repair. The first answer enumerates every finding
+		// but the last and its structured citations array lists ALL of them. The array made that
+		// finding read as cited, so nothing was owed and the model was asked once — the shortfall the
+		// reporter saw published as carried 10, cited 10. What the repair is owed for is the findings
+		// the PROSE left unanchored.
+		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
+		Integer dropped = findings.get(findings.size() - 1);
+		StubProvider provider = answeringInTurn(
+				Collections.singletonList(new ArrayList<Integer>(findings)),
+				enumerationCiting(allButLast), continuationCiting(dropped));
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(2, provider.calls(),
+				"a finding the prose never anchored is owed a repair however the structured array "
+						+ "lists it");
+		assertTrue(provider.questionAt(1).contains(String.valueOf(dropped)),
+				"and the second question must name it. Asked: " + provider.questionAt(1));
+		assertTrue(answer.getAnswer().contains("[" + dropped + "]"),
+				"and the answer the caller receives must state it. Answer: " + answer.getAnswer());
+		assertEquals(findings.size(), answer.getFindingCitationExtent().getCited(),
+				"and the repaired answer's prose anchors every finding");
+	}
+
+	@Test
 	public void anAnswerThatAlreadyStatesEveryFindingIsNotAskedAgain() {
 		// The other half of the pair: the case above fails if nothing repairs, this one fails if the
 		// repair fires on a complete answer. Neither alone discriminates, and a second call here is
@@ -189,6 +216,57 @@ public class FindingEnumerationRepairTest {
 						+ "original answer byte for byte. Answer: " + answer.getAnswer());
 		assertEquals(findings.size() - 1, answer.getFindingCitationExtent().getCited(),
 				"and the extent must report the shortfall that still stands, not hide it");
+	}
+
+	@Test
+	public void aContinuationWhoseArrayAloneNamesTheOwedFindingIsDiscardedToo() {
+		// The seam between the two mechanisms. Since issue #409 a finding counts as cited where the
+		// PROSE anchors it, so a continuation that anchors only a finding already stated — while its
+		// structured array names the owed one — buys nothing the extent can see. Keeping it would
+		// append text to the caller's answer and leave the shortfall standing, which is the one thing
+		// "it may only ADD" is supposed to rule out. The keep-gate must read what the count reads.
+		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
+		Integer dropped = findings.get(findings.size() - 1);
+		Integer alreadyStated = findings.get(0);
+		String original = enumerationCiting(allButLast);
+		StubProvider provider = answeringInTurn(
+				Arrays.asList(Collections.<Integer> emptyList(), Collections.singletonList(dropped)),
+				original, "That interaction [" + alreadyStated + "] is the reason.");
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(2, provider.calls(), "the premise: the repair did run");
+		assertEquals(original, answer.getAnswer(),
+				"a continuation whose prose anchors no owed finding must be discarded whole, however "
+						+ "its structured array lists them. Answer: " + answer.getAnswer());
+		assertEquals(findings.size() - 1, answer.getFindingCitationExtent().getCited(),
+				"and the extent must report the shortfall that still stands");
+	}
+
+	@Test
+	public void aBlankAnswerIsNotRepairedAtAll() {
+		// A blank answer is the ABSENCE of an answer, and it is the one original this pass refuses.
+		// `LlmInferenceService.findingsOwedARepair`'s javadoc carries both reasons; what this case
+		// holds is that the gate is there, and its first assertion is what tells the two apart — a
+		// repair that ran here does not merely add text, it LOWERS the published count.
+		List<Integer> resolved = findings.subList(0, findings.size() - 1);
+		StubProvider provider = answeringInTurn(
+				Arrays.asList(new ArrayList<Integer>(resolved)),
+				"   ", continuationCiting(findings.get(findings.size() - 1)));
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(resolved.size(), answer.getFindingCitationExtent().getCited(),
+				"the premise: a blank answer's structured array really did resolve, so findings are "
+						+ "owed and only the blank-original gate can stop the repair");
+		assertEquals(1, provider.calls(),
+				"and the model must be asked exactly once: an answer that does not exist owes no "
+						+ "repair. Asked: " + provider.calls());
+		assertEquals("   ", answer.getAnswer(),
+				"and the degenerate answer must reach the caller as it was. Answer: "
+						+ answer.getAnswer());
 	}
 
 	@Test
@@ -232,6 +310,60 @@ public class FindingEnumerationRepairTest {
 						+ answer.getAnswer());
 		assertEquals(findings.size(), answer.getFindingCitationExtent().getCited(),
 				"with the extent measured over the repaired prose");
+	}
+
+	@Test
+	public void searchStreaming_readsTheAnswerTheCallerReceivedWhenItDecidesWhatIsOwed() {
+		// The streaming call site of the issue #409 gate, which nothing covered: handing that site a
+		// string other than the answer leaves every case above green, `search` being the only path
+		// they drive. Both halves of the gate read it — which findings the prose anchored, and
+		// whether there is any prose at all — so a case that pins the SCOPING here pins the read.
+		//
+		// The ticket's own shape: the prose enumerates every finding but the last while the
+		// structured array names them all. What is owed is the one the prose left out, and asking for
+		// the rest would spend a second inference restating what the answer already said.
+		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
+		Integer dropped = findings.get(findings.size() - 1);
+		StubProvider provider = answeringInTurn(
+				Arrays.asList(new ArrayList<Integer>(findings)),
+				enumerationCiting(allButLast), continuationCiting(dropped));
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.searchStreaming(patient(), QUESTION, noop(), noop(),
+				noopCitations(), noopAnswer());
+
+		assertEquals(2, provider.calls(),
+				"the streaming path owes the repair on this shape too");
+		String repairQuestion = provider.questionAt(1);
+		assertTrue(repairQuestion.contains(String.valueOf(dropped)),
+				"and must name the finding the prose left out. Asked: " + repairQuestion);
+		for (Integer cited : allButLast) {
+			assertTrue(!repairQuestion.contains(String.valueOf(cited)),
+					"and must not name one the prose stated — record " + cited + " carries a marker. "
+							+ "Asked: " + repairQuestion);
+		}
+		assertEquals(findings.size(), answer.getFindingCitationExtent().getCited(),
+				"with the extent measured over the repaired prose");
+	}
+
+	@Test
+	public void searchStreaming_doesNotRepairABlankAnswerEither() {
+		// The other half of the same read, on the same path. A blank original owes nothing — see
+		// `LlmInferenceService.findingsOwedARepair`'s javadoc for both reasons — and the gate must
+		// not be wired into one answer method only.
+		List<Integer> resolved = findings.subList(0, findings.size() - 1);
+		StubProvider provider = answeringInTurn(
+				Arrays.asList(new ArrayList<Integer>(resolved)),
+				"   ", continuationCiting(findings.get(findings.size() - 1)));
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.searchStreaming(patient(), QUESTION, noop(), noop(),
+				noopCitations(), noopAnswer());
+
+		assertEquals(resolved.size(), answer.getFindingCitationExtent().getCited(),
+				"the premise: the blank answer's structured array resolved, so findings are owed");
+		assertEquals(1, provider.calls(),
+				"and the model must be asked exactly once on this path too");
 	}
 
 	@Test
@@ -312,6 +444,13 @@ public class FindingEnumerationRepairTest {
 			public void accept(ChartAnswer value) {
 			}
 		};
+	}
+
+	/** {@link #answeringInTurn(String...)}, for a model whose structured citations array does not
+	 *  agree with its prose — one list per call, short lists sending an empty array as every case
+	 *  here did before issue #409. */
+	private static StubProvider answeringInTurn(List<List<Integer>> citations, String... answers) {
+		return new StubProvider(citations, answers);
 	}
 
 	private static StubProvider answeringInTurn(String... answers) {
@@ -404,9 +543,20 @@ public class FindingEnumerationRepairTest {
 
 		private final String[] answers;
 
+		private final List<List<Integer>> citations;
+
 		private final List<String> questions = new ArrayList<String>();
 
 		private StubProvider(String... answers) {
+			this(Collections.<List<Integer>> emptyList(), answers);
+		}
+
+		/** The structured-citations arity, one list per call — issue #409's Mode A is a first answer
+		 *  whose array names a finding its prose never anchors, which the varargs form cannot say.
+		 *  A call past the end of {@code citations} sends an empty array, as every case here did
+		 *  before it existed. */
+		private StubProvider(List<List<Integer>> citations, String... answers) {
+			this.citations = citations;
 			this.answers = answers;
 		}
 
@@ -421,7 +571,8 @@ public class FindingEnumerationRepairTest {
 		private LlmResponse canned(String question) {
 			questions.add(question);
 			int at = Math.min(questions.size() - 1, answers.length - 1);
-			return new LlmResponse(answers[at], Collections.<Integer> emptyList());
+			return new LlmResponse(answers[at],
+					at < citations.size() ? citations.get(at) : Collections.<Integer> emptyList());
 		}
 
 		@Override

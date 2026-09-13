@@ -31,6 +31,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -249,6 +250,37 @@ public class SafetyFindingCitationExtentTest {
 	}
 
 	@Test
+	public void aFindingTheStructuredArrayListsButTheProseNeverAnchorsIsNotACitedFinding() {
+		// Issue #409's Failure Mode A, and the reason this key needed a reading of its own. The
+		// answer enumerated every finding but the last while the model's structured citations array
+		// listed ALL of them, and the response went out saying carried 10, cited 10 — full coverage
+		// claimed for prose that named nine. The array is the model's own claim about what it cited;
+		// this key's whole question is what the PROSE stated, so a finding no marker anchors is
+		// uncited here however the array lists it.
+		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
+		Integer dropped = findings.get(findings.size() - 1);
+		service.setLlmProvider(new StubProvider(enumerationCiting(allButLast), findings));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			FindingCitationExtent extent = answer.getFindingCitationExtent();
+			assertNotNull(extent, "the check ran, so it must state a measurement");
+			assertEquals(findings.size(), extent.getCarried(),
+					"the prompt carried every injected finding");
+			assertEquals(findings.size() - 1, extent.getCited(),
+					"and the prose anchored all but one of them: the array listing [" + dropped
+							+ "] is not the answer citing it");
+			assertTrue(warnStating(capture, "[" + dropped + "]", "patient=1"),
+					"the finding no marker in the prose names must be reported in one line, carrying "
+							+ "the patient. Captured: " + capture.describeAll());
+			assertTrue(referenceIndexes(answer).contains(dropped),
+					"and the reference list is NOT narrowed with it: extractCitedReferences keeps an "
+							+ "array entry with no inline anchor, which is its own pinned decision, so "
+							+ "the two populations diverge here deliberately. References: "
+							+ referenceIndexes(answer));
+		}
+	}
+
+	@Test
 	public void searchStreaming_statesItOnThePrimaryProductionPathToo() {
 		// /search/stream is the path users hit: a measurement wired only into search() would be
 		// absent from production traffic while every non-streaming case here stayed green.
@@ -319,6 +351,17 @@ public class SafetyFindingCitationExtentTest {
 			separator = ", ";
 		}
 		return prose.append(".").toString();
+	}
+
+	/** The indexes the answer's reference list carries, so a case can assert on the population
+	 *  {@code extractCitedReferences} resolved as well as on the one this check counts — the two
+	 *  are not the same since issue #409 and a case that read only the count could not show it. */
+	private static List<Integer> referenceIndexes(ChartAnswer answer) {
+		List<Integer> indexes = new ArrayList<Integer>();
+		for (RecordReference reference : answer.getReferences()) {
+			indexes.add(Integer.valueOf(reference.getIndex()));
+		}
+		return indexes;
 	}
 
 	private int indexOfType(String resourceType) {
@@ -440,8 +483,9 @@ public class SafetyFindingCitationExtentTest {
 			this(answer, Collections.<Integer> emptyList());
 		}
 
-		/** The structured-citations arity: the one arrangement that reaches this check with cited
-		 *  records and no prose to read them in. */
+		/** The structured-citations arity, for the two arrangements in which the array and the prose
+		 *  disagree: a blank answer with cited records and no prose to read them in, and — since issue
+		 *  #409 — real prose whose markers name fewer records than the array does. */
 		private StubProvider(String answer, List<Integer> citations) {
 			this.answer = answer;
 			this.citations = citations;

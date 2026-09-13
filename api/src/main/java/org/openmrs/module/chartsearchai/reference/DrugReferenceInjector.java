@@ -942,7 +942,7 @@ public class DrugReferenceInjector {
 	 * medications question does declare the drug-order type complete, so the population it changes is
 	 * the scoped charts that do not.
 	 */
-	private static final class DrugOrderRecords {
+	 static final class DrugOrderRecords {
 
 		/** Resource uuid to the numbers of EVERY record carrying it, in the order the mapping list
 		 *  holds them. Type-agnostic: a resource uuid is globally unique, so a record carrying this
@@ -972,7 +972,7 @@ public class DrugReferenceInjector {
 		 *  {@code "5mg tablet, 1 daily"} was reported substantiated. */
 		private final Map<Integer, String> liveDrugOrderTexts = new LinkedHashMap<Integer, String>();
 
-		private DrugOrderRecords(List<RecordMapping> mappings) {
+		 DrugOrderRecords(List<RecordMapping> mappings) {
 			for (RecordMapping mapping : mappings == null
 					? Collections.<RecordMapping>emptyList() : mappings) {
 				if (mapping.getResourceUuid() != null) {
@@ -1067,10 +1067,10 @@ public class DrugReferenceInjector {
 		 *         and its records deliberately do not NAME the drug — with the name there the name leg
 		 *         answers too and the narrowing is invisible.
 		 */
-		private List<Integer> numbersFor(PatientClinicalContext.ActiveDrugOrder order) {
+		 List<Integer> numbersFor(PatientClinicalContext.ActiveDrugOrder order) {
 			List<Integer> own = recordsCarrying(order);
 			if (!own.isEmpty()) {
-				return own;
+				return Collections.unmodifiableList(own);
 			}
 			List<Integer> named = new ArrayList<Integer>();
 			for (Map.Entry<Integer, String> record : liveDrugOrderTexts.entrySet()) {
@@ -1100,28 +1100,18 @@ public class DrugReferenceInjector {
 			return !recordsCarrying(order).isEmpty();
 		}
 
-		/** @return the numbers of every record carrying {@code order}'s own uuid, EMPTY where it has
-		 *          none or has no uuid — the one lookup {@link #numbersFor},
-		 *          {@link #isOneOfItsOwnRecords} and {@link #recordsOfActiveOrders} share, so they
-		 *          cannot come to disagree about which records an order IS. The READING of that list
-		 *          is each caller's own.
+		/**
+		 * @return the numbers of every record carrying {@code order}'s own uuid, EMPTY where it has
+		 *         none or has no uuid — the one lookup {@link #numbersFor},
+		 *         {@link #isOneOfItsOwnRecords} and {@link #recordsOfActiveOrders} share, so they
+		 *         cannot come to disagree about which records an order IS. The READING of that list
+		 *         is each caller's own.
 		 *
-		 *          <p><b>The stored list itself, not a copy or an unmodifiable view.</b> Wrapping would
-		 *          put an allocation per ORDER on a path reached whatever
-		 *          {@code chartsearchai.drugSafety.citeOrderRecords} says — the issue #118
-		 *          reconciliation, which has gates of its own but not that one. What it costs is that
-		 *          {@link #numbersFor} can hand the list onward, stated next.
-		 *
-		 *          <p><b>{@link #numbersFor} hands this list OUT of the class</b>, on its uuid leg,
-		 *          where its name leg returns a fresh one. So a consumer that REMOVED FROM or ADDED TO
-		 *          that result would mutate the index in place and flip {@link #numberOfRecord}'s
-		 *          reading, turning both affirmative refusals into a confident citation. Reordering it
-		 *          is a different matter and is unobservable: every read of a list from here asks
-		 *          {@code isEmpty()} or unions it, and {@link #numberOfRecord} indexes it only at size
-		 *          one — measured by reversing the stored order, which leaves the whole build green.
-		 *          Nothing would catch a SIZE change either: replacing the uuid leg with the singleton
-		 *          it returned before issue #379's second round is green too. Its one consumer asks
-		 *          {@code isEmpty()}; a second that needs more owes the copy. */
+		 *         <p>The stored list stays raw for its internal readers. On its uuid leg,
+		 *         {@link #numbersFor} returns an unmodifiable view, so a caller cannot mutate this
+		 *         index and change {@link #numberOfRecord}'s citation decision.
+		 */
+
 		private List<Integer> recordsCarrying(PatientClinicalContext.ActiveDrugOrder order) {
 			List<Integer> carrying = order.getUuid() == null ? null
 					: recordsByResourceUuid.get(order.getUuid());

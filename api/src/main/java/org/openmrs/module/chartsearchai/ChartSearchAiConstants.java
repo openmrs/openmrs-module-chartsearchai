@@ -786,8 +786,11 @@ public class ChartSearchAiConstants {
 	 * {@link #REFERENCE_GROUP_CHART}, so it is graded normally (decided in #118: one drug asserted of
 	 * this patient has no subject roles to swap, so a passing verdict is real assurance) — "the module
 	 * injected it" is a different question from this group. That parenthesis is the ordinary shape and
-	 * not every shape; {@code ChartSearchAiUtils.isGroundingDemoteOnly}'s javadoc carries what a
-	 * codes-only display does to it (issue #294).
+	 * not every shape, and since issue #294 the exception is held back one step further DOWN rather
+	 * than here: a record of this type whose order the module could read no name for still groups as
+	 * chart evidence and is still not demote-only, but its citation publishes no verdict, keyed on the
+	 * mapping's own {@code orderDrugNamed} stamp and never on this type.
+	 * {@code CitationGroundingVerifier.Disposition.UNVERIFIABLE} is canonical for it.
 	 *
 	 * <p>Since issue #201 the group decides the wire value outright: a citation in this group
 	 * serializes {@code grounded: null} whatever the pass concluded. Demote-only had already ruled

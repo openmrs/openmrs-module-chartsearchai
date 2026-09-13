@@ -121,6 +121,22 @@ public class ProjectInstructionsGuardTest {
 	 * that two branches adding one rule each cannot both land, and the answer stays trimming rather
 	 * than a bigger number, because the direction is still down.
 	 *
+	 * <p><b>The ROOT budget was raised from 23,000 to 24,000 on 2026-09-13, and it is the first raise
+	 * this file has taken — the two above are the reference file's.</b> Issue #294's remedy adds one
+	 * rule spanning three packages, so it has no nested file to sit in, and the root file was 10 bytes
+	 * under the cap. Trimming came first and recovered 222 bytes, all of it evidence with a home the
+	 * bullet already cited: two defeated sweeps in the prose-fidelity bullet (ADR Decision 61 says how
+	 * each was defeated), the throw mechanism in the order-currency bullet (Decisions 46/47), and the
+	 * #178 anecdote on the search-mode bullet. The residue is a directive — which stamp is read, that
+	 * it is UNVERIFIABLE rather than demote-only, and the two ways to blank the named record's verdict
+	 * — so it belongs here rather than in the decision it points at.
+	 *
+	 * <p><b>What 24,000 buys is about 300 bytes, which is NOT the tenth the principle below asks for,
+	 * and that is stated rather than left to be found.</b> It is the same state the reference file has
+	 * been in twice: the next branch to add an ordinary rule here trips this again, and the answer
+	 * stays trimming, because the direction for the root file — the only one every session pays for —
+	 * is still down.
+	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once
 	 * {@link #noBulletCarriesMoreProseThanItsBudget} had been satisfied — room for a few rules, not
@@ -135,7 +151,7 @@ public class ProjectInstructionsGuardTest {
 
 	private static Map<Path, Integer> budgets() {
 		Map<Path, Integer> m = new LinkedHashMap<>();
-		m.put(ROOT_INSTRUCTIONS, 23_000);
+		m.put(ROOT_INSTRUCTIONS, 24_000);
 		m.put(REFERENCE_INSTRUCTIONS, 76_000);
 		return m;
 	}

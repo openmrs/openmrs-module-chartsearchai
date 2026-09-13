@@ -1137,6 +1137,112 @@ public class CitationGroundingVerifierTest {
 				"and Tier-2's verdict must be authoritative for it, overriding the Tier-1 cosine pass");
 	}
 
+	// ---- a codes-only active-order citation is ungradeable, in either mode (issue #294) ----
+
+	/** The code-only stand-in's own uuid and codes. Which drug the codes denote is irrelevant to every
+	 *  case below and asserting it would be an unverified claim, so nothing here names a substance. */
+	private static final String CODES_ONLY_ORDER_UUID = "order-uuid-codes-only";
+
+	private static final String CODES_ONLY_DISPLAY = "[ATC M01AE02, M01AE04]";
+
+	/**
+	 * The real {@code active_drug_order} mapping the real injector produces for an order the module
+	 * could read no name for — through {@code ActiveDrugOrder.namedByCodesOnly} and the real render
+	 * chain, never hand-built, because the per-record answers the injector stamps on that mapping are
+	 * exactly what these cases are about.
+	 */
+	private static RecordMapping codesOnlyActiveOrderMapping() {
+		return org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
+				.injectedCodesOnlyActiveOrderMapping(CODES_ONLY_ORDER_UUID, CODES_ONLY_DISPLAY,
+						new java.util.LinkedHashSet<String>(Arrays.asList("M01AE02", "M01AE04")));
+	}
+
+	@Test
+	public void codesOnlyActiveOrder_aCosineFailIsWithheldRatherThanPublished() {
+		// THE discriminating case for issue #294's remedy, and the reason the disposition is
+		// UNVERIFIABLE rather than DEMOTE_ONLY. Demote-only withholds a PASS and keeps a FAIL — so
+		// under it this citation would still publish false, which is the exposure #294 is about,
+		// reached through Tier-1 instead of through the judge. A record naming no drug gives the
+		// cosine nothing but an identifier to compare against, so its fail says no more about the
+		// citation than the judge's refusal does.
+		RecordMapping record = codesOnlyActiveOrderMapping();
+		String sentence = "The patient is taking metformin 500mg twice daily [" + record.getIndex() + "].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record.getText(), AXIS_B); // orthogonal -> cosine 0.0, a Tier-1 FAIL
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(record.getIndex()))),
+				Arrays.asList(record), FLOOR, TIER1_ONLY);
+
+		assertNull(result.get(0).getGrounded(),
+				"a cosine fail on a record that names no drug must publish NOTHING — keeping it is "
+						+ "demote-only, and demote-only leaves #294's own false standing via Tier-1");
+	}
+
+	@Test
+	public void codesOnlyActiveOrder_aCosinePassIsWithheldToo() {
+		// The other direction, so the rule is not mistaken for a one-sided demotion: nothing is
+		// published either way. A pass here would be assurance drawn from a record that asserts no
+		// drug at all, which is the clause isGroundingDemoteOnly's javadoc says does not hold of it.
+		RecordMapping record = codesOnlyActiveOrderMapping();
+		String sentence = "The patient has an active drug order [" + record.getIndex() + "].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record.getText(), AXIS_A); // identical direction -> cosine 1.0, a PASS
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(record.getIndex()))),
+				Arrays.asList(record), FLOOR, TIER1_ONLY);
+
+		assertNull(result.get(0).getGrounded(),
+				"neither tier is asked a question this citation's own, so a pass is withheld with "
+						+ "the fail");
+	}
+
+	@Test
+	public void codesOnlyActiveOrder_neverEntersTier2AndPublishesNothing() {
+		// Under entailment the judge is not asked at all, so the pair never reaches the per-answer cap
+		// that chart claims rely on — the half of this rule a wire-level carve-out could not buy.
+		RecordMapping record = codesOnlyActiveOrderMapping();
+		String sentence = "The patient is taking metformin 500mg twice daily [" + record.getIndex() + "].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record.getText(), AXIS_A);
+		llm.verdict = Boolean.FALSE;
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(record.getIndex()))),
+				Arrays.asList(record), FLOOR, TIER2_ON);
+
+		assertEquals(0, llm.calls,
+				"the judge must not be asked whether a record naming no drug entails a medication "
+						+ "claim: it refuses by construction, so the answer is about the record's "
+						+ "silence and not about the citation");
+		assertNull(result.get(0).getGrounded(),
+				"and nothing is published in either direction (issue #294)");
+	}
+
+	@Test
+	public void aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector() {
+		// The non-regression the type-keyed remedy fails: the rule reaches the record that names no
+		// drug and no other. This mapping comes off the same real injector as the three above, so the
+		// only difference between them is the one the rule keys on.
+		RecordMapping record = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
+				.injectedNamedActiveOrderMapping("order-uuid-named", "Simvastatin Co 20mg");
+		String sentence = "The patient has an active order for Simvastatin Co 20mg ["
+				+ record.getIndex() + "].";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(record.getText(), AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(record.getIndex()))),
+				Arrays.asList(record), FLOOR, TIER2_ON);
+
+		assertEquals(1, llm.calls, "a named active-order citation is still judged (#118)");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"and its verdict is still published — #294's rule is about a record that names no "
+						+ "drug, not about the type");
+	}
+
 	// ---- the grounding registry every resource type must be decided in (issue #122) ----
 
 	/**

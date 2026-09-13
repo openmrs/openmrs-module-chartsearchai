@@ -9589,6 +9589,17 @@ public class DrugSafetyValidator {
 	 *         {@link OrderPartner} write sites ask before letting a display stand as a partner's name,
 	 *         written once so they cannot drift (issue #292).
 	 *
+	 *         <p><b>Since issue #294 there is a FOURTH caller, asking for a fourth reason:</b>
+	 *         {@code DrugReferenceInjector}'s {@code active_drug_order} mapping, deciding whether the
+	 *         record it is about to inject NAMES the drug — the stamp
+	 *         {@code PatientChartSerializer.RecordMapping.orderDrugNamed} carries to the grounding
+	 *         pass, which publishes no verdict for a citation of a record that names none. Package-
+	 *         private for it; the reconciliation is in this package too. {@code CLAUDE.md}'s rule is
+	 *         met the same way the third caller meets it: the refusal is the point, because a record
+	 *         reading {@code Active drug order: [ATC N02BA01].} asserts no drug for either grounding
+	 *         tier to weigh, and this is not a display being let DISPLACE a name another source
+	 *         supplied.
+	 *
 	 *         <p><b>Since issue #349 there is a third caller, and it asks for a third reason:</b>
 	 *         {@link #addChartOrderBridge}, deciding whether a display is worth PRINTING beside a
 	 *         substance name that stays. {@code CLAUDE.md}'s rule — ask before letting a display
@@ -9611,7 +9622,7 @@ public class DrugSafetyValidator {
 	 *         {@code nameKnown} to true, and hand-built contexts are how much of this behaviour is
 	 *         pinned.
 	 */
-	private static boolean displayNamesADrug(PatientClinicalContext.ActiveDrugOrder order) {
+	static boolean displayNamesADrug(PatientClinicalContext.ActiveDrugOrder order) {
 		return order != null && order.hasKnownName() && !ChartSearchAiUtils.isBlank(order.getDisplay());
 	}
 

@@ -630,8 +630,17 @@ public class DrugReferenceInjector {
 		// before reference material), so the clinician reads evidence then conclusion.
 		for (PatientClinicalContext.ActiveDrugOrder order : unrepresented) {
 			String rendered = renderActiveOrder(order);
+			// The ONE place RecordMapping.orderDrugNamed is written (issue #294). This record's text is
+			// the order's display wrapped by renderActiveOrder, so whether it names a drug is whether
+			// the DISPLAY does — DrugSafetyValidator.displayNamesADrug, which is canonical for that
+			// question and asked of the ORDER, never of the string just rendered. Its answer decides
+			// whether a citation of this record can be graded at all: the code-only stand-in of issue
+			// #290 asserts no drug, so neither grounding tier is asked a question that is the
+			// citation's own, and the verdict published was #201's defect one group over. Stamped
+			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
-					order.getUuid(), null, rendered));
+					order.getUuid(), null, rendered, null, 0, null, null, null,
+					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}

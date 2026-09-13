@@ -671,6 +671,33 @@ public class PatientChartSerializer {
 		private final List<Integer> derivedFrom;
 
 		/**
+		 * Whether the drug of the {@code Order} this record is about is NAMED in the record — {@code
+		 * TRUE} it is, {@code FALSE} this module rendered the record for an active order whose display
+		 * is not a drug name, and {@code null} the module cannot say, which is every record that is not
+		 * one this module injected for an active order (issue #294).
+		 *
+		 * <p>Written in exactly ONE place, {@code DrugReferenceInjector}'s {@code active_drug_order}
+		 * mapping, off {@code DrugSafetyValidator.displayNamesADrug} — canonical for that question, and
+		 * asked of the ORDER. Never re-derived from {@link #getText()}: that is the rule
+		 * {@link #orderActive} carries for the same reason (issue #317), and a bare
+		 * {@code [ATC N02BA01]} is not something a text test can tell from a drug name a clinician
+		 * typed.
+		 *
+		 * <p><b>The record and the display are one string by construction, which is what makes this a
+		 * fact about the RECORD and not only about the order.</b>
+		 * {@code DrugReferenceInjector.renderActiveOrder} is {@code "Active drug order: " +
+		 * order.getDisplay() + "."}, so the display is the whole of what the record says the drug is.
+		 * A richer rendering would leave the stamp {@code FALSE} for a record that had since gained a
+		 * name — withholding a verdict it could then give, which is the fail-safe direction — so
+		 * whoever changes that method re-decides this stamp with it.
+		 *
+		 * <p><b>{@code null} is not a certificate.</b> It says this producer stated no answer, never
+		 * that the record names a drug; a querystore-retrieved {@code drug_order} for a nameless order
+		 * is exactly that case and is graded as before.
+		 */
+		private final Boolean orderDrugNamed;
+
+		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
 		 * treats a null/blank text as "cannot verify" and leaves the citation
@@ -708,10 +735,11 @@ public class PatientChartSerializer {
 		 * it) and for every caller that has not read the patient's orders.
 		 *
 		 * <p>Not the full constructor since issue #337: it defaults {@link #findingSeverity} to
-		 * {@code null}, which is right for every record that is not an injected safety finding, and
-		 * since issue #305 {@link #derivedFrom} to empty with it. The rung below is not the full one
-		 * either — the WIDEST is two below — so reaching through this javadoc for "the full constructor"
-		 * means reading down to the one that takes every field.
+		 * {@code null}, which is right for every record that is not an injected safety finding, since
+		 * issue #305 {@link #derivedFrom} to empty with it, and since issue #294
+		 * {@link #orderDrugNamed} to {@code null} as well. The rung below is not the full one either —
+		 * the WIDEST is three below — so reaching through this javadoc for "the full constructor" means
+		 * reading down to the one that takes every field.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
@@ -725,9 +753,10 @@ public class PatientChartSerializer {
 		 * injected {@code safety_finding}, the one thing that has a rating at all.
 		 *
 		 * <p>Not the full constructor since issue #305: it defaults {@link #derivedFrom} to empty, which
-		 * is right for every record that was not derived from a chart record of this patient's. The one
-		 * below is the widest, and naming it that rather than "the full one" is deliberate — the two
-		 * rungs above this said "the full one is below" and were each overtaken by the next issue.
+		 * is right for every record that was not derived from a chart record of this patient's, and
+		 * since issue #294 {@link #orderDrugNamed} to {@code null} with it. The WIDEST is two below —
+		 * the rungs above this one each said "the full one is below" and were each overtaken by the
+		 * next issue, this one included, which is why every rung now names a rung rather than the end.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, String findingSeverity) {
@@ -736,14 +765,31 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * The widest constructor, including the provenance of an injected record — see
+		 * The provenance overload, carrying the chart records an injected record was derived from — see
 		 * {@link #getDerivedFrom()}. Every shorter constructor defaults it to empty, "derived from no
 		 * chart record", which is right for a chart record (it IS the record) and for every injected
 		 * record whose provenance the module could not resolve.
+		 *
+		 * <p>Not the full constructor since issue #294: it defaults {@link #orderDrugNamed} to {@code
+		 * null}, "the module cannot say", which is right for every record but one this module injected
+		 * for an active order. The one below is the widest — and the ladder has now grown under a
+		 * "the full one is below" sentence three times, so this one names the rung rather than the end.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
 				List<Integer> derivedFrom) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
+					findingSeverity, derivedFrom, null);
+		}
+
+		/**
+		 * The widest constructor, including whether the record names the drug of the order it is about
+		 * — see {@link #orderDrugNamed}. Every shorter constructor defaults it to {@code null}, "the
+		 * module cannot say".
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
+				List<Integer> derivedFrom, Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -759,6 +805,7 @@ public class PatientChartSerializer {
 			this.derivedFrom = derivedFrom == null || derivedFrom.isEmpty()
 					? Collections.<Integer> emptyList()
 					: Collections.unmodifiableList(new ArrayList<Integer>(derivedFrom));
+			this.orderDrugNamed = orderDrugNamed;
 		}
 
 		public int getIndex() {
@@ -876,6 +923,21 @@ public class PatientChartSerializer {
 		 */
 		public List<Integer> getDerivedFrom() {
 			return derivedFrom;
+		}
+
+		/**
+		 * @return whether this record names the drug of the {@code Order} it is about — {@code TRUE} it
+		 *         does, {@code FALSE} this module rendered it for an active order whose display is not
+		 *         a drug name, {@code null} the module cannot say. See {@link #orderDrugNamed}, which
+		 *         is canonical for the single writer, for why it is never re-derived from
+		 *         {@link #getText()}, and for why {@code null} is not a certificate.
+		 *
+		 *         <p>Its one reader is the citation-grounding pass, which publishes NO verdict for a
+		 *         citation of a record answering {@code FALSE}: a record that names no drug gives
+		 *         neither tier a question that is the citation's own (issue #294).
+		 */
+		public Boolean getOrderDrugNamed() {
+			return orderDrugNamed;
 		}
 
 		/**

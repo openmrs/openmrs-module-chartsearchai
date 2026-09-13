@@ -296,15 +296,54 @@ public final class DrugReferenceTestSupport {
 	 * must read the text production actually produces.
 	 */
 	public static String injectedActiveOrderText(String orderUuid, String display) {
+		return injectedActiveOrderMapping(activeOrder(orderUuid, display)).getText();
+	}
+
+	/**
+	 * The real active-order {@link RecordMapping} the REAL injector produces for an order the chart
+	 * cannot substantiate (issue #118) — the whole mapping rather than only its text, so a caller can
+	 * read the per-record answers the injector stamps on it as well as the prose it rendered.
+	 *
+	 * <p>{@link #injectedActiveOrderText} is the older, narrower reading of this same call and now
+	 * delegates to it. A test that needs a mapping must come through here rather than hand-building
+	 * one: the stamps are what decides how such a citation is graded (issue #294), so a hand-built
+	 * mapping would assert the very answer under test.
+	 */
+	static RecordMapping injectedActiveOrderMapping(PatientClinicalContext.ActiveDrugOrder order) {
 		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
-				ctx(60, null, null, null, null, null,
-						Collections.singletonList(activeOrder(orderUuid, display))),
+				ctx(60, null, null, null, null, null, Collections.singletonList(order)),
 				"what are the patient's active medications?");
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(m.getResourceType()))
-				.map(RecordMapping::getText).findFirst()
+				.findFirst()
 				.orElseThrow(() -> new IllegalStateException(
-						"no active-order record was injected for order: " + display));
+						"no active-order record was injected for order: " + order.getDisplay()));
+	}
+
+	/**
+	 * The real injected active-order mapping for an order the module could read NO name for — the
+	 * code-only stand-in of issue #290, whose record names its codes and no drug. Built through
+	 * {@code PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly} and the real render chain, so a
+	 * test outside this package gets the arrangement production produces rather than an imitation of
+	 * its display string.
+	 *
+	 * @param orderUuid the {@code Order} uuid the reconciliation carries
+	 * @param display the code-only display the builder synthesizes, e.g. {@code [ATC N02BA01]}
+	 * @param atcCodes the codes that display was built from
+	 */
+	public static RecordMapping injectedCodesOnlyActiveOrderMapping(String orderUuid, String display,
+			Set<String> atcCodes) {
+		return injectedActiveOrderMapping(PatientClinicalContext.ActiveDrugOrder
+				.namedByCodesOnly(orderUuid, display, atcCodes));
+	}
+
+	/**
+	 * The real injected active-order mapping for an order the module CAN name — the ordinary shape,
+	 * and the counterpart of {@link #injectedCodesOnlyActiveOrderMapping} for a case asserting that
+	 * the codes-only rule reaches only the record it is about.
+	 */
+	public static RecordMapping injectedNamedActiveOrderMapping(String orderUuid, String display) {
+		return injectedActiveOrderMapping(activeOrder(orderUuid, display));
 	}
 
 	/**

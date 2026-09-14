@@ -49,8 +49,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * rather than recomputed beside it, which no value comparison can see. And
  * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s reflective guard compares every public
  * accessor's own reading against the key it names, over a fixture that since #374 carries a chip
- * answering true — which is what generalises the comparison past this class's own chips. Mutate
- * the serializer's put and read all three.
+ * answering true — and since issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a> carries it off
+ * the ALLERGY arm's sentence rather than this class's CONDITION one, which is what generalises the
+ * comparison past this class's own chips AND past its one population. Mutate the serializer's put and
+ * read all three.
  *
  * <p>Two things are deliberately NOT asserted here, each because something else already holds them.
  * That the key reaches {@code GET /chartsearchai/chartalerts} is
@@ -176,9 +179,11 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 			"a chip with nothing to hedge must not be hedged: " + unhedged);
 
 		// The pair that makes the two assertions above discriminate: chip 2 is chip 0's sentence
-		// verbatim and answers false, so nothing but this key separates them. A value re-derived from
-		// any other published field reddens HERE, which is what stops the source pin below from being
-		// the only thing standing between a maintainer and a detail-sniff.
+		// verbatim and answers false, so nothing but this key separates them. A value computed from the
+		// other published fields ALONE reddens HERE, which is what stops the source pin below from
+		// being the only thing standing between a maintainer and a detail-sniff. A value that READS the
+		// accessor and then narrows it does not, unless its predicate fails on chip 0's own sentence —
+		// issue #412, and the severity-wire fixture's allergy-shaped true chip is what holds that axis.
 		JsonNode twin = chips.get(2);
 		assertEquals(uncorroborated.get("detail").asText(), twin.get("detail").asText(),
 			"precondition: chip 2 carries chip 0's sentence verbatim");
@@ -206,7 +211,14 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *
 	 * <p><b>It is not what stops a re-derivation, and must not be relied on as such.</b> That is
 	 * {@link #theChipStatesWhetherItsChartMatchIsCorroborated}'s identical-detail chip pair, which
-	 * makes any value computed from another published field disagree with the accessor on behaviour.
+	 * makes a value computed from the other published fields ALONE — one that has to DIFFER between
+	 * chips 0 and 2 — disagree with the accessor on behaviour. <b>It does not reach a value that READS
+	 * the accessor and then narrows it</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>): such a
+	 * narrowing reddens here only where its predicate fails on chip 0's own sentence, and one scoped to
+	 * that sentence leaves this class green. What holds the narrowing axis is
+	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire},
+	 * whose fixture since #412 answers true off the ALLERGY arm's sentence.
 	 * This case adds the thing no value comparison can see: that the published value came from the
 	 * accessor rather than from something that happens to agree with it on this fixture — the
 	 * two-resolutions-that-agree shape issue #151 records.
@@ -248,7 +260,10 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *         while two statements write the key and the surviving one re-derives the value. What
 	 *         bounds that is not this method: it is the identical-detail chip pair in
 	 *         {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, which such a re-derivation would
-	 *         still have to satisfy on VALUES. This method guards spelling, and only spelling.
+	 *         still have to satisfy on VALUES — and that pair bounds a value computed from the other
+	 *         published fields ALONE, never one that reads the accessor and narrows it, which is issue
+	 *         #412 and is held in the severity-wire fixture instead. This method guards spelling, and
+	 *         only spelling.
 	 */
 	private static String liveCode(String source) {
 		StringBuilder out = new StringBuilder(source.length());

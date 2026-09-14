@@ -97,9 +97,36 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
-	/** Chips 8 and 9 share this sentence and differ only in their provenance answer. */
+	/**
+	 * Chips 8 and 9 share this sentence and differ only in their provenance answer.
+	 *
+	 * <p><b>It is the ALLERGY arm's sentence, and that is the fact under test rather than a detail of
+	 * the fixture</b> (issue <a
+	 * href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>). The key is
+	 * published for both populations the accessor answers for — ADR Decision 92's own trade-off records
+	 * that a self-named ALLERGY rule the corroborating union does not redeem answers true too — and
+	 * until #412 the true-answering chip of either omod fixture carried the CONDITION sentence. So a
+	 * serializer narrowing the published value to the condition population agreed with the accessor on
+	 * every chip either fixture held. Measured on this change's own branch, by AND-ing the serializer's
+	 * put with {@code warning.getDetail().contains("active condition")} — which leaves the source pin
+	 * below satisfied, one key write and one accessor read — and running {@code mvn -o clean install}
+	 * from the root: the whole build was green before this sentence moved, and
+	 * {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} red after it.
+	 * Re-apply that mutation and read the failure. The CONDITION half stays held by
+	 * {@code ChartSearchAiUncorroboratedChartMatchTest}, whose true-answering chip is issue #309's own
+	 * reproduction.
+	 *
+	 * <p>The arm's real sentence and not an invented one: {@code DrugSafetyValidator}'s single
+	 * {@code SafetyWarning.contraindication} call site writes {@code displayLabel} + {@code " is
+	 * contraindicated by an "} + {@code recorded} + {@code ": "} + the rule's note or token, with
+	 * {@code recorded} from {@code recordedContraindicationKind}, and the shipped seed's own
+	 * self-named {@code ibuprofen} allergy rule produces exactly this string —
+	 * {@code SubjectMatterScopedContraindicationTest.theDrugSideStillFiresWhenTheAnswerCitesTheOrderRecord}
+	 * asserts it off a real {@code validate} run over {@code DrugReferenceTestSupport.curatedService()},
+	 * the module's own bundled seed.
+	 */
 	private static final String UNCORROBORATED_CONTRAINDICATION =
-			"Naltrexone is contraindicated by an active condition: acute hepatitis or liver failure";
+			"Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy";
 
 	/**
 	 * The fixture chips. <b>The cases below index this list positionally, so the indices are the
@@ -137,7 +164,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       that is not enough: a value re-derived from another published field also agrees with every
 	 *       chip, until two chips share every other field. Built by the curated-rule arm's own
 	 *       package-private factory through {@code SafetyWarningFixtures}, and by the public
-	 *       constructor, respectively.</li>
+	 *       constructor, respectively. <b>Their sentence is the ALLERGY arm's since issue #412</b> —
+	 *       {@link #UNCORROBORATED_CONTRAINDICATION} carries why, and what it buys is the one axis the
+	 *       chip 8/9 pair cannot reach by itself.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -188,15 +217,16 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 										"Aspirin 81mg"))),
 				// Mutate the put to `false` and read this class's failure. SafetyWarningFixtures' own
 				// javadoc carries why reaching the package-private factory from here is not a widening
-				// of production API.
-				SafetyWarningFixtures.uncorroboratedContraindication("Naltrexone",
+				// of production API. The drug moves with the sentence, so the chip is one the
+				// contraindication arm would really build (issue #412).
+				SafetyWarningFixtures.uncorroboratedContraindication("Ibuprofen",
 						UNCORROBORATED_CONTRAINDICATION),
 				// Chip 8's sentence VERBATIM, answering false. Without it every other published field
 				// separates the two answers, so a value re-derived from `detail` agrees with the
 				// accessor on every chip in the list and the comparison below passes — measured on
 				// this change's polish round, with the real put commented out and a sniff beside it.
 				// Delete this chip, re-apply that mutation and read the green build.
-				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Naltrexone",
+				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
 						UNCORROBORATED_CONTRAINDICATION));
 	}
 

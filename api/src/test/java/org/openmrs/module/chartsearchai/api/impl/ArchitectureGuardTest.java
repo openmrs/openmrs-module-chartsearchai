@@ -61,6 +61,18 @@ public class ArchitectureGuardTest {
 	 *  order-currency rung ends in the same {@code Boolean}, so a single-type tail cannot tell them
 	 *  apart, and the provenance list in front of it is what makes this pair unique. Verified against
 	 *  {@code javap -s}: the only other {@code Boolean}-tailed descriptor ends {@code ILjava/lang/Boolean;)V}. */
+	/** The CAUSE a reader could build a chart-read verdict out of, instead of the stamp
+	 *  {@code PatientClinicalContext.activeDrugOrdersRead()} derives from it (issue #421). */
+	private static final String ORDER_READ_CAUSE = "activeDrugOrderReadCompleted";
+
+	/** The class files that may name {@link #ORDER_READ_CAUSE}: the one that DECLARES it, the builder
+	 *  — which names it only as a local variable and invokes it nowhere — and the one legitimate
+	 *  reader, the operator MESSAGE that has to say which read failed. */
+	private static final List<String> MAY_NAME_THE_ORDER_READ_CAUSE = java.util.Arrays.asList(
+			"org/openmrs/module/chartsearchai/reference/PatientClinicalContext.class",
+			"org/openmrs/module/chartsearchai/reference/PatientClinicalContextBuilder.class",
+			"org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.class");
+
 	private static final String ORDER_NAMING_TAIL = "Ljava/util/List;Ljava/lang/Boolean;)V";
 
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
@@ -1190,18 +1202,6 @@ public class ArchitectureGuardTest {
 			fail(sb.toString());
 		}
 	}
-
-	/** The CAUSE a reader could build a chart-read verdict out of, instead of the stamp
-	 *  {@code PatientClinicalContext.activeDrugOrdersRead()} derives from it (issue #421). */
-	private static final String ORDER_READ_CAUSE = "activeDrugOrderReadCompleted";
-
-	/** The class files that may name {@link #ORDER_READ_CAUSE}: the one that DECLARES it, the builder
-	 *  — which names it only as a local variable and invokes it nowhere — and the one legitimate
-	 *  reader, the operator MESSAGE that has to say which read failed. */
-	private static final List<String> MAY_NAME_THE_ORDER_READ_CAUSE = java.util.Arrays.asList(
-			"org/openmrs/module/chartsearchai/reference/PatientClinicalContext.class",
-			"org/openmrs/module/chartsearchai/reference/PatientClinicalContextBuilder.class",
-			"org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.class");
 
 	/**
 	 * {@code PatientClinicalContext.activeDrugOrderReadCompleted()} is a CAUSE, and no second reader

@@ -873,10 +873,13 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * measured, the last in both arrangements because they answer differently. A reviewer is what catches them, which
 	 * is the same answer this class gives for the evasions its text assertions decline to chase.
 	 *
-	 * <p>Because assignability is asked both ways, an unrelated member typed {@code Serializable} or
-	 * {@code Comparable} is reported too. That is the predicate working as intended — such a member
-	 * CAN hold a {@code Drug} — but the failure message will read as though one is already there, so
-	 * check what the member is for before treating the report as the defect.
+	 * <p>Because assignability is asked both ways, an unrelated member typed as a supertype
+	 * {@code Drug} satisfies is reported too — measured, {@code Serializable} and
+	 * {@code OpenmrsObject} both are. That is the predicate working as intended, such a member being
+	 * able to hold one; but the failure message will read as though a {@code Drug} is already there,
+	 * so check what the member is for before treating the report as the defect. An unrelated
+	 * interface {@code Drug} does NOT implement is not reported — measured of {@code Comparable},
+	 * which an earlier wording of this paragraph named as though it were.
 	 */
 	private static boolean handsOutTheEntity(Type type) {
 		return handsOutTheEntity(type, new java.util.HashSet<Type>());

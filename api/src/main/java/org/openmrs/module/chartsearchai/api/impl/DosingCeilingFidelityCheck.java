@@ -132,9 +132,15 @@ import org.slf4j.LoggerFactory;
  *       cue would — the needle is {@code "4000 mg/day"} and not {@code "4000"}, so
  *       <em>"give 4000 mg"</em> does not trip the report and <em>"Aspirin 300 mg tablets"</em> does
  *       not silence it. The residue is an answer quoting the laxer ceiling in the record's own
- *       spelling while stating the stricter one in another (<em>"300 mg per day"</em>,
- *       <em>"300mg/day"</em>): that is reported. The record spells both of its ceilings the same
- *       way, so an answer reciting it states both in the form the needle matches;</li>
+ *       spelling while stating the stricter one in ANOTHER: that is reported. The respellings worth
+ *       naming are <em>"300 mg per day"</em>, <em>"300mg/day"</em>, and — the one this check's own
+ *       needle rule makes ordinary — a decimal written without its leading zero, since
+ *       {@code DrugReference.formatNumber} always writes {@code "0.5 mg/day"} while a clinician
+ *       writes <em>".5 mg/day"</em>. An answer stating the stricter ceiling ONLY in that form is
+ *       silent (the laxer's needle is refused inside it); one stating it that way AND the laxer in
+ *       full is reported. Measured. The record spells both of its ceilings the same way, so an
+ *       answer reciting IT states both in the form the needle matches, and that is the common
+ *       case;</li>
  *   <li>whether the ceiling the answer stated is the RIGHT one for this patient. It is not a dosing
  *       check, and on the arrangement it was measured on no row is identifiable as the subject at
  *       all — both rows claimed the recorded name equally, which is why

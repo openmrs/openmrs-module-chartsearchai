@@ -823,7 +823,9 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * <p>Measured: a SECOND private nested carrier holding the entity, handed out on {@code CodedDrug}
 	 * and dereferenced in the build loop, is issue #413's defect exactly and left a name-keyed version
 	 * of this assertion green. {@code DrugReferenceSourceValidityChannelTest.collectSources} walks
-	 * nested types for the same reason, and its javadoc records the same hole in the same words.
+	 * nested types for the same reason, its javadoc recording the same SHAPE of hole — a nested
+	 * declaration escaping a name-keyed scan — for a scan keyed on file names rather than on one
+	 * carrier's name.
 	 *
 	 * <p>Reflection does not report anonymous or local classes, so one declared inside a method body
 	 * is outside this walk; and it asks about fields and RETURN types, so a parameter of that type is

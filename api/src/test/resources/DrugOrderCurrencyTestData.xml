@@ -127,6 +127,20 @@
 	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2099-01-08 00:00:00.0"
 	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
 	        uuid="9321eeee-0000-4000-8000-00000000321e" care_setting="1" encounter_id="6" />
+	<!--
+	  7. ORDER 9323 — a live order that exists to be DISCONTINUED by a test, and by exactly one.
+	     The case that drives the real OrderService.discontinueOrder writes to the database, and four
+	     other cases in that class read standard order 3 expecting it in force — so it discontinues
+	     this row instead of that one. Whether the test base class rolls back is then not a question
+	     anyone has to answer, which is the point: leaked test state produces wrong results without
+	     throwing, and no other case reads this order.
+	-->
+	<orders order_id="9323" order_type_id="1" order_number="ORD-9323" urgency="ROUTINE"
+	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2008-01-02 00:00:00.0"
+	        creator="1" date_created="2008-01-02 00:00:00.0" voided="false" patient_id="2"
+	        uuid="9323aaab-0000-4000-8000-00000000323a" care_setting="1" encounter_id="6" />
+
 	<orders order_id="9322" order_type_id="1" order_number="ORD-9322" urgency="ROUTINE"
 	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
 	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-07 00:00:00.0"
@@ -147,6 +161,9 @@
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
 	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
 	<drug_order order_id="9322" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<drug_order order_id="9323" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
 	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
 </dataset>

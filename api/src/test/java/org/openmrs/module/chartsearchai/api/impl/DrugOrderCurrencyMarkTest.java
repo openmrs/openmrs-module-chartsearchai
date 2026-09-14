@@ -122,6 +122,10 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	 *  a date. The pair that witnesses {@code SerializedRecord.orderStopDate}'s contract. */
 	private static final int LIVE_WITH_FUTURE_EXPIRY_ORDER_ID = 9321;
 
+	/** This file's dataset: a live order existing only to be discontinued by the one case that
+	 *  writes, so no other case in this class can be perturbed by that write. */
+	private static final int ORDER_TO_DISCONTINUE_ID = 9323;
+
 	private static final String MEDICATIONS_QUESTION = "what medications is the patient taking?";
 
 	private CountingQueryStoreStub queryStore;
@@ -773,8 +777,12 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// claim. Both records of the discontinuation are covered, because the published sentence says
 		// both: the prescription through the chart below, and the DISCONTINUE record core returns
 		// through the direct assertion on it, which is where its own end instant shows up.
-		Order live = Context.getOrderService().getOrder(LIVE_ORDER_ID);
-		assertTrue(live.isActive(), "precondition: order 3 must start in force");
+		// This order exists for this one case, and that is deliberate: the call below WRITES, and four
+		// other cases here read standard order 3 expecting it in force. Discontinuing a dedicated row
+		// means no other case can be perturbed whether or not the base class rolls back — leaked test
+		// state gives wrong answers without throwing, so it is designed out rather than relied upon.
+		Order live = Context.getOrderService().getOrder(ORDER_TO_DISCONTINUE_ID);
+		assertTrue(live.isActive(), "precondition: this order must start in force");
 		assertNull(live.getEffectiveStopDate(), "precondition: and carry no end date of its own");
 		Order stub = Context.getOrderService().discontinueOrder(live, "harden probe, made permanent",
 				new Date(), live.getOrderer(), live.getEncounter());
@@ -784,11 +792,11 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 				"the DISCONTINUE record core creates carries an end date of its own too, which is the "
 						+ "other half of what README and ADR Decision 97 tell a client");
 
-		Order discontinued = Context.getOrderService().getOrder(LIVE_ORDER_ID);
+		Order discontinued = Context.getOrderService().getOrder(ORDER_TO_DISCONTINUE_ID);
 		assertFalse(discontinued.isActive(), "core now considers the prescription out of force");
 		assertNotNull(discontinued.getEffectiveStopDate(),
 				"and publishes an end for it — the fact the client contract rests on");
-		chartOf(drugOrderDoc(LIVE_ORDER_ID));
+		chartOf(drugOrderDoc(ORDER_TO_DISCONTINUE_ID));
 
 		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
 

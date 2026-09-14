@@ -760,6 +760,46 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aRealDiscontinuationLeavesThePrescriptionCarryingItsStopDate() {
+		// The claim the published contract rests on, driven rather than reasoned. README and ADR
+		// Decision 97 both tell a client that an ordinary discontinuation is SERVED by this key rather
+		// than skipped, and that sentence exists because two earlier attempts to characterise the
+		// population from core's source were each measured false. So it is pinned here, through the
+		// real OrderService.discontinueOrder on a real live order: the prescription comes back out of
+		// force AND carrying the instant it was stopped, which is what reaches a clinician.
+		//
+		// Deliberately not asserting a fixed date — the discontinuation instant is "now" — so what is
+		// asserted is the relationship between core's answer and the chart record's, which is the
+		// claim. Both records of the discontinuation are covered, because the published sentence says
+		// both: the prescription through the chart below, and the DISCONTINUE record core returns
+		// through the direct assertion on it, which is where its own end instant shows up.
+		Order live = Context.getOrderService().getOrder(LIVE_ORDER_ID);
+		assertTrue(live.isActive(), "precondition: order 3 must start in force");
+		assertNull(live.getEffectiveStopDate(), "precondition: and carry no end date of its own");
+		Order stub = Context.getOrderService().discontinueOrder(live, "harden probe, made permanent",
+				new Date(), live.getOrderer(), live.getEncounter());
+		Context.flushSession();
+
+		assertNotNull(stub.getEffectiveStopDate(),
+				"the DISCONTINUE record core creates carries an end date of its own too, which is the "
+						+ "other half of what README and ADR Decision 97 tell a client");
+
+		Order discontinued = Context.getOrderService().getOrder(LIVE_ORDER_ID);
+		assertFalse(discontinued.isActive(), "core now considers the prescription out of force");
+		assertNotNull(discontinued.getEffectiveStopDate(),
+				"and publishes an end for it — the fact the client contract rests on");
+		chartOf(drugOrderDoc(LIVE_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		RecordMapping mapping = mappingFor(chart, discontinued.getUuid());
+		assertEquals(Boolean.FALSE, mapping.getOrderActive(), "the record says the order has ended");
+		assertEquals(discontinued.getEffectiveStopDate(), mapping.getOrderStopDate(),
+				"and carries core's own end instant, so a discontinued prescription is served rather "
+						+ "than absent from the statement");
+	}
+
+	@Test
 	public void aLiveOrderStatesNoStopDate() {
 		chartOf(drugOrderDoc(LIVE_ORDER_ID));
 

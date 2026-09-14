@@ -345,6 +345,37 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
+	public void aDecimalWrittenWithoutItsLeadingZeroStillSTATESTheCeiling() throws IOException {
+		// The third separator shape, and the one that decides how the rule must be worded. A clinician
+		// — and a model copying one — writes a sub-unit dose as ".5 mg/day" as readily as "0.5 mg/day",
+		// and the record's own spelling is always the latter (`formatNumber` of a double). So an
+		// answer stating the STRICTEST ceiling in the naked form must still count as stating it: read
+		// otherwise, the walk finds the strictest unstated, finds "5 mg/day" inside that very ".5",
+		// and accuses the answer of dropping the number it just gave.
+		//
+		// It is why the rule is "the separator is not preceded by a LETTER" and not "the separator
+		// sits between two digits": before that ".5" had no digit to its left, so nothing refused it.
+		PatientChart decimals = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of levothyroxine?", "Levothyroxine (paediatric)");
+		RecordMapping mapping = soleRecordCarryingCeilings(decimals);
+		assertEquals(Arrays.asList("0.5 mg/day", "5 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the record spells the stricter ceiling WITH its leading zero");
+		TestableService service = newService(decimals);
+		service.setLlmProvider(answering("The maximum for this presentation is .5 mg/day ["
+				+ mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of levothyroxine?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"\".5 mg/day\" states the stricter ceiling, however the record spells it. "
+							+ "Captured: " + capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(),
+					"and nothing is published, or the answer is accused of dropping the very number "
+							+ "it led with");
+		}
+	}
+
+	@Test
 	public void aSeparatorThatIsNotBETWEENDigitsLeavesAStatedCeilingStated() throws IOException {
 		// The other side of the rule, and the one that decides how far it may reach. The refusal is
 		// about a separator sitting BETWEEN two digits — that is what makes the needle a fragment of

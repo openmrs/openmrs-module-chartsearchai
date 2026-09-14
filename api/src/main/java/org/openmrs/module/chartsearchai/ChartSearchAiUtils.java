@@ -1153,17 +1153,24 @@ public class ChartSearchAiUtils {
 	 * through the real answer path by
 	 * {@code DosingCeilingFidelityTest.aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}. So
 	 * this one additionally refuses a match whose preceding character is a {@code '.'} or {@code ','}
-	 * BETWEEN TWO DIGITS, which is what makes the needle the tail of a longer number rather than a
-	 * statement of its own — a decimal tail, or a group after a thousands separator
-	 * ({@code "1,500 mg/day"} does not state {@code "500 mg/day"}).
+	 * that NO LETTER precedes, which is what makes the needle the tail of a longer number rather than
+	 * a statement of its own — a decimal tail ({@code "2.5 mg/day"} does not state
+	 * {@code "5 mg/day"}), a group after a thousands separator ({@code "1,500 mg/day"} does not state
+	 * {@code "500 mg/day"}), and a decimal written without its leading zero ({@code ".5 mg/day"} does
+	 * not state {@code "5 mg/day"} either).
 	 *
-	 * <p><b>Between two digits, and not merely preceded by one of those characters.</b> A comma
-	 * punctuating a list and a full stop ending the sentence before the number are neither, and
-	 * refusing there would deny that the text states a ceiling it prints —
-	 * {@code DosingCeilingFidelityCheck} would then accuse an answer of dropping a number it gave,
-	 * which is the one direction that check must never fail in. Both sides are pinned:
-	 * {@code DosingCeilingFidelityTest.aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}
-	 * and {@code .aSeparatorThatIsNotBETWEENDigitsLeavesAStatedCeilingStated}.
+	 * <p><b>Worded off the LETTER and not off a digit, which is the second attempt at this rule.</b>
+	 * The first asked whether the separator sat between two digits, and a naked decimal has no digit
+	 * to its left — so {@code ".5 mg/day"} was read as stating {@code "5 mg/day"}, and an answer that
+	 * had led with the stricter ceiling was accused of dropping it. A letter before the separator is
+	 * what makes it punctuation: a full stop ending the previous sentence, or a comma between list
+	 * items after a unit ({@code "2000 mg/day,500 mg/day"} states both). Refusing there would deny
+	 * that the text states a ceiling it prints, which is the one direction
+	 * {@code DosingCeilingFidelityCheck} must never fail in. All three shapes are pinned, in
+	 * {@code DosingCeilingFidelityTest}: {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
+	 * {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
+	 * {@code .aDecimalWrittenWithoutItsLeadingZeroStillSTATESTheCeiling} and
+	 * {@code .aSeparatorThatIsNotBETWEENDigitsLeavesAStatedCeilingStated}.
 	 *
 	 * <p><b>A second entry point rather than a widened {@link #statesWord}, and rather than a test at
 	 * the call site.</b> Two questions, two named entry points, one scan underneath, which is the
@@ -1209,15 +1216,18 @@ public class ChartSearchAiUtils {
 		String needle = word.toLowerCase(Locale.ROOT);
 		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
 			int after = at + needle.length();
-			// BETWEEN two digits, which is the whole of the rule: a separator with a digit on each
-			// side is part of a number, so the needle is its tail rather than a statement of its own.
-			// A comma punctuating a list and a full stop ending a sentence are neither, and refusing
-			// there would deny that the text states a ceiling it prints — the direction
-			// DosingCeilingFidelityCheck must never fail in. At index 1 there is no left digit to
-			// find, so nothing is refused and the needle stands.
-			if (at > 1 && refuseNumericFragment
+			// The separator is part of a NUMBER unless a letter precedes it. A letter before it makes
+			// it punctuation — a full stop ending the previous sentence, a comma between list items
+			// ("2000 mg/day,500 mg/day") — and refusing there would deny that the text states a
+			// ceiling it prints, the direction DosingCeilingFidelityCheck must never fail in.
+			// Anything else before it is part of the number: a digit ("2.5", "1,500"), and also
+			// NOTHING, which is the naked decimal a clinician writes for a sub-unit dose (".5"). The
+			// `at < 2` arm carries that second case and keeps `charAt(at - 2)` in range; it is an
+			// index bound as much as a rule, and nothing pins that half on its own — mutate it to
+			// `at >= 1` and the read throws, which this check's own catch turns into "no measurement".
+			if (at > 0 && refuseNumericFragment
 					&& (haystack.charAt(at - 1) == '.' || haystack.charAt(at - 1) == ',')
-					&& Character.isDigit(haystack.charAt(at - 2))) {
+					&& (at < 2 || !Character.isLetter(haystack.charAt(at - 2)))) {
 				continue;
 			}
 			if ((at == 0 || !Character.isLetterOrDigit(haystack.charAt(at - 1)))

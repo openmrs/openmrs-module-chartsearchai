@@ -108,8 +108,8 @@ import org.slf4j.LoggerFactory;
  *       No second dialect of "the answer states X" exists to drift. What it buys here:
  *       {@code "4000 mg/day"} inside {@code "14000 mg/day"} does not match, nor does
  *       {@code "5 mg/day"} inside {@code "2.5 mg/day"} — the latter would be a false REPORT, which
- *       is the one direction this check must never fail in. And any occurrence at all of the
- *       stricter ceiling, for any reason, silences the report;</li>
+ *       is the one direction this check must never fail in. And any occurrence the boundary ADMITS,
+ *       for any reason, silences the report;</li>
  *   <li>it reports the citation and the two ceilings and NO PROSE FROM EITHER SIDE. The ceilings
  *       are themselves bytes of the record — they are the whole point, the number this exists to
  *       put in front of a reader — and they are safe to log and to publish because they are the
@@ -139,8 +139,15 @@ import org.slf4j.LoggerFactory;
  *       check, and on the arrangement it was measured on no row is identifiable as the subject at
  *       all — both rows claimed the recorded name equally, which is why
  *       {@code DrugReferenceInjector.rowAttribution} correctly said nothing;</li>
- *   <li>a ceiling reaching the answer for the wrong reason — recited out of a warning, or stated
- *       for a different drug. Fail-toward-silence, and the direction this check must fail in;</li>
+ *   <li>a ceiling recited out of a WARNING on the same record, which silences a report it should
+ *       not. Fail-toward-silence, and the direction this check must fail in;</li>
+ *   <li><b>a ceiling stated for a DIFFERENT drug, which can go the other way and produce a report.</b>
+ *       The scan is the whole answer and is not scoped to the citing sentence, so where two cited
+ *       substances publish a ceiling of the same spelling — and they are machine-generated round
+ *       numbers, so that is ordinary — an answer quoting the other substance's is read as quoting
+ *       this record's. Measured through the real answer path. It is the deliberate price of the
+ *       whole-answer unit, which every sibling pays: scoping to the sentence is Decision 76's
+ *       already-refuted alternative, and its refutation transfers;</li>
  *   <li>a ceiling the record never stated. The pass that writes the record runs BEFORE the answer,
  *       so a row only the answer's own wording names was never in the list — the residue
  *       {@code DrugReferenceInjector.otherRowDosing} already records of its own bound.</li>

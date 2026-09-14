@@ -750,10 +750,9 @@ public interface ChartSearchService {
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<UnstatedFindingSeverity>(unstatedFindingSeverities));
 			// And once more (issue #276), under the same rule again: null is the absence of a
-			// measurement, empty a measurement of none. Empty is the commonest answer by far here —
-			// no bundled dataset files a substance as several rows CARRYING AGE BANDS — so a
-			// reader treating it as a certificate of faithfulness would be wrong about almost every
-			// response; DosingCeilingFidelityCheck's javadoc is canonical for what it cannot see.
+			// measurement, empty a measurement of none. Why empty is the commonest answer by far
+			// here, and why it is not a certificate, is the accessor's javadoc — the three comments
+			// above defer to theirs for the same reason.
 			this.unstatedDosingCeilings = unstatedDosingCeilings == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<UnstatedDosingCeiling>(unstatedDosingCeilings));

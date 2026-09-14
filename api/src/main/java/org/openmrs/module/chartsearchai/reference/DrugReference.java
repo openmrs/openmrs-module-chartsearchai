@@ -2684,12 +2684,16 @@ public class DrugReference {
 	 * since issue #260 needs the POSITION rather than the answer. Every one of those routes takes its
 	 * allowance from the same constant as the rule it is, which is what keeps them one rule apiece.
 	 * <b>"The one scan" is scoped to those sharers and not to the module.</b> Since issue #337
-	 * {@code ChartSearchAiUtils.statesWord} answers a boundary question of its own, over the closed
-	 * rating vocabulary rather than over drug names. At {@code PROSE_TRAILING_LETTERS} the two
-	 * conditions are the same one, measured; what separates them is that this family folds
-	 * diacritics and that one deliberately does not, and that {@link #containsWord} is
-	 * package-private here. It is deliberately not a fourth route into this scan and must not become
-	 * one, but a change to the boundary definition here does not reach it, so consider both.
+	 * {@code ChartSearchAiUtils} answers boundary questions of its own, over the closed rating
+	 * vocabulary and — since issue #276 — over a numeric measurement, rather than over drug names.
+	 * At {@code PROSE_TRAILING_LETTERS} this family's condition and {@code statesWord}'s are the
+	 * same one, measured; what separates them is that this family folds diacritics and that one
+	 * deliberately does not, and that {@link #containsWord} is package-private here. <b>That
+	 * equality does NOT extend to {@code statesMeasurement}</b>, which refuses a leading {@code '.'}
+	 * or {@code ','} because its needle begins with a number — {@link #containsWord} reads
+	 * {@code "2.5 mg/day"} as stating {@code "5 mg/day"} and that method does not. Neither is a
+	 * route into this scan and neither must become one, but a change to the boundary definition here
+	 * does not reach either, so consider all of them.
 	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at
 	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
 	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the

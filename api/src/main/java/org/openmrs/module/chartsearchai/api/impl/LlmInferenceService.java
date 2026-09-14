@@ -227,7 +227,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// And the sixth (issue #276): the cited reference records whose answer quoted one of the
 			// dosing ceilings they publish and left a stricter one from the same record unstated.
 			// LAST, after the extent, so the comment above keeps counting the four checks that judge
-			// a cited FINDING — this one judges a cited reference record and is not among them.
+			// a cited FINDING. This one judges no finding, so it is not among those four — which is
+			// a claim about findings and not about reference records, two of the four reading those
+			// as well.
 			// Carried rather than re-derived for the reason its neighbours are: the ceilings travel
 			// on the chart, and the chart is gone by REST time.
 			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =

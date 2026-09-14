@@ -1152,17 +1152,32 @@ public class ChartSearchAiUtils {
 	 * <em>"her dose is 2.5 mg/day"</em> as stating {@code "5 mg/day"} — measured, and reproduced
 	 * through the real answer path by
 	 * {@code DosingCeilingFidelityTest.aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}. So
-	 * this one additionally refuses a match whose preceding character is {@code '.'} or {@code ','},
-	 * either of which makes the needle a fragment of a longer number — a decimal tail, or a group
-	 * after a thousands separator ({@code "1,500 mg/day"} does not state {@code "500 mg/day"}).
+	 * this one additionally refuses a match whose preceding character is a {@code '.'} or {@code ','}
+	 * BETWEEN TWO DIGITS, which is what makes the needle the tail of a longer number rather than a
+	 * statement of its own — a decimal tail, or a group after a thousands separator
+	 * ({@code "1,500 mg/day"} does not state {@code "500 mg/day"}).
+	 *
+	 * <p><b>Between two digits, and not merely preceded by one of those characters.</b> A comma
+	 * punctuating a list and a full stop ending the sentence before the number are neither, and
+	 * refusing there would deny that the text states a ceiling it prints —
+	 * {@code DosingCeilingFidelityCheck} would then accuse an answer of dropping a number it gave,
+	 * which is the one direction that check must never fail in. Both sides are pinned:
+	 * {@code DosingCeilingFidelityTest.aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}
+	 * and {@code .aSeparatorThatIsNotBETWEENDigitsLeavesAStatedCeilingStated}.
 	 *
 	 * <p><b>A second entry point rather than a widened {@link #statesWord}, and rather than a test at
-	 * the call site.</b> Widening the shared one would break its own callers: a rating is a WORD, and
-	 * {@code "Major."} at the end of a sentence must keep matching {@code "Major"} — the trailing
-	 * side of this rule would refuse it, and the leading side is meaningless for a needle that starts
-	 * with a letter. Two questions, two named entry points, one scan underneath, which is the shape
-	 * {@code CLAUDE.md} prescribes for {@code SENTENCE_TERMINATORS}; what it forbids is a third
+	 * the call site.</b> Two questions, two named entry points, one scan underneath, which is the
+	 * shape {@code CLAUDE.md} prescribes for {@code SENTENCE_TERMINATORS}; what it forbids is a third
 	 * dialect spelled at a call site, and the whole point of this method is that there is not one.
+	 *
+	 * <p><b>The split does NOT rest on a measured breakage, said so the argument does not look better
+	 * defended than it is.</b> Give {@link #statesWord} this rule instead — delegate at {@code true}
+	 * — and the whole build stays green: the rule is leading-edge only and a rating needle begins
+	 * with a letter, so it is inert on every input either of that method's callers can produce. What
+	 * it would do is widen a SAFETY scan for a needle that is not its own: the rating question would
+	 * start refusing {@code ",Major"} and {@code ".Major"} for a reason belonging to numbers, with
+	 * nothing to catch it. That is the instruction's own reason for one entry point per operand
+	 * shape, and it is the reason here — not a test that reddens.
 	 *
 	 * <p>It is asymmetric deliberately: only the LEADING edge takes the extra refusal. Every needle
 	 * that reaches it ends in a unit ({@code DrugReferenceInjector.dailyCeiling} composes
@@ -1194,8 +1209,15 @@ public class ChartSearchAiUtils {
 		String needle = word.toLowerCase(Locale.ROOT);
 		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
 			int after = at + needle.length();
-			if (at > 0 && refuseNumericFragment
-					&& (haystack.charAt(at - 1) == '.' || haystack.charAt(at - 1) == ',')) {
+			// BETWEEN two digits, which is the whole of the rule: a separator with a digit on each
+			// side is part of a number, so the needle is its tail rather than a statement of its own.
+			// A comma punctuating a list and a full stop ending a sentence are neither, and refusing
+			// there would deny that the text states a ceiling it prints — the direction
+			// DosingCeilingFidelityCheck must never fail in. At index 1 there is no left digit to
+			// find, so nothing is refused and the needle stands.
+			if (at > 1 && refuseNumericFragment
+					&& (haystack.charAt(at - 1) == '.' || haystack.charAt(at - 1) == ',')
+					&& Character.isDigit(haystack.charAt(at - 2))) {
 				continue;
 			}
 			if ((at == 0 || !Character.isLetterOrDigit(haystack.charAt(at - 1)))

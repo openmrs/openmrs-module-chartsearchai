@@ -319,6 +319,55 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
+	public void aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith() throws IOException {
+		// The decimal case's sibling, and the reason the rule names two separators rather than one: a
+		// grouped total is as ordinary in clinical prose as a decimal dose, and "1,500 mg/day" ends
+		// with the spelling of this record's STRICTER ceiling. Read as stating it, the walk returns at
+		// the first test and the answer's quotation of the laxer 2000 goes unreported — a MISS rather
+		// than a false accusation, which is the gentler failure but still the defect #276 is about.
+		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
+		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the stricter ceiling's spelling is a SUFFIX of a grouped number");
+		TestableService service = newService(grouped);
+		service.setLlmProvider(answering("The maximum is 2000 mg/day [" + mapping.getIndex()
+				+ "]; her cumulative course total is 1,500 mg/day."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of tinidazole?");
+			assertEquals(Collections.singletonList(
+					new UnstatedDosingCeiling(mapping.getIndex(), "2000 mg/day", "500 mg/day")),
+					answer.getUnstatedDosingCeilings(),
+					"\"1,500 mg/day\" states no ceiling of this record, so the answer's quotation of "
+							+ "the laxer 2000 is still reported. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aSeparatorThatIsNotBETWEENDigitsLeavesAStatedCeilingStated() throws IOException {
+		// The other side of the rule, and the one that decides how far it may reach. The refusal is
+		// about a separator sitting BETWEEN two digits — that is what makes the needle a fragment of
+		// a longer number. A comma merely punctuating a list, or a full stop ending the sentence
+		// before it, leaves the ceiling stated; refusing there would accuse an answer of dropping a
+		// number it printed, which is the one direction this check must never fail in.
+		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
+		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		TestableService service = newService(grouped);
+		service.setLlmProvider(answering("This substance publishes two ceilings: 2000 mg/day,"
+				+ "500 mg/day [" + mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of tinidazole?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the answer states BOTH ceilings — the comma punctuates the list, it does not make "
+							+ "\"500 mg/day\" a fragment of a number. Captured: " + capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(), "and nothing is published");
+		}
+	}
+
+	@Test
 	public void aBlankAnswerIsSilentAndPublishesAMeasurementOfNone() throws IOException {
 		// Reachable rather than defensive: extractCitedReferences resolves the structured citations
 		// array for a blank answer deliberately, so the walk can be reached with citations and no

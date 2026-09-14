@@ -725,9 +725,10 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>It reads the file itself rather than going through {@link #scanForPattern}, which reports
 	 * per-line matches across the whole tree: this rule needs a COUNT, one file, and a positive
-	 * assertion, none of which that helper expresses. It borrows the helper's comment skip, so a
-	 * maintainer may record the rejected alternative in this class's own javadoc — which ADR
-	 * Decision 59 spells character for character — without breaking the build.
+	 * assertion, none of which that helper expresses. It strips comments through {@link #codeLines}
+	 * rather than borrowing that helper's whole-line skip, so a maintainer may record the rejected
+	 * alternative in this class's own javadoc — which ADR Decision 59 spells character for
+	 * character — without breaking the build.
 	 */
 	@Test
 	public void classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep() throws IOException {
@@ -775,10 +776,11 @@ public class ArchitectureGuardTest {
 	 * apart — a renamed decode step or a third dialect spelling fixed in one copy and not the other
 	 * would leave the second blind, and both rules report success by finding nothing.
 	 *
-	 * <p>Every needle is put to {@link #codeOn} of the line and never to the line itself, so a
-	 * trailing {@code //} note neither satisfies the required call nor trips a dialect negative; that
-	 * method carries what the earlier whole-line form was measured to let through, and the residue
-	 * that survives the strip.
+	 * <p>Every needle is put to {@link #codeLines}' reading of the line and never to the line itself,
+	 * so a note in either of Java's comment forms neither satisfies the required call nor trips a
+	 * dialect negative; that method carries what each earlier form was measured to let through, and
+	 * the residue that survives the strip. The line NUMBER a violation reports is still the raw
+	 * file's, which is why the loop indexes both lists.
 	 *
 	 * @param fileName the source file, as {@code getSourceCache()} keys it
 	 * @param expectedCompiles how many patterns the class is allowed to compile — every one of them
@@ -796,8 +798,9 @@ public class ArchitectureGuardTest {
 		int compiles = 0;
 		boolean callsDecodeStep = false;
 		List<String> ownDialect = new ArrayList<>();
+		List<String> stripped = codeLines(lines);
 		for (int i = 0; i < lines.size(); i++) {
-			String code = codeOn(lines.get(i));
+			String code = stripped.get(i);
 			if (code.trim().isEmpty()) {
 				continue;
 			}
@@ -825,8 +828,8 @@ public class ArchitectureGuardTest {
 	/**
 	 * Whether {@code code} spells a citation-marker dialect of its own — a bracketed-digit regex, or
 	 * the shared pattern named directly instead of reached through its decode step. Hand it
-	 * {@link #codeOn} of a line and never the raw line: a trailing note mentioning either spelling
-	 * is not a dialect.
+	 * {@link #codeLines}' reading of a line and never the raw line: a note mentioning either
+	 * spelling, in either of Java's comment forms, is not a dialect.
 	 *
 	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
 	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
@@ -843,57 +846,105 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The CODE on {@code line}: its comments removed, its string and character literals kept.
+	 * The CODE in {@code lines}: comments removed in both of Java's forms, string and character
+	 * literals kept, and one entry per input line so a caller can still report a line NUMBER.
 	 *
-	 * <p><b>A TRAILING {@code //} comment is stripped, and that is load-bearing rather than
-	 * tidiness.</b> The earlier form skipped a line whose trimmed text BEGINS a comment and scanned
-	 * every other line whole, so a line of code carrying a trailing note was read as code to the end
-	 * of the note. Measured 2026-09-14, BEFORE this strip existed: a hand-rolled
-	 * {@code charAt}/{@code isDigit} marker scan put in place of
+	 * <p><b>The strip is load-bearing rather than tidiness.</b> A rule that reads SOURCE TEXT for a
+	 * required call has that assertion satisfied by a comment naming what was just removed, and a
+	 * maintainer's {@code was …} note is how the relocation these rules exist to catch actually gets
+	 * written. Each arrangement below was measured on 2026-09-14 by replacing
 	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} inside
-	 * {@code SafetyFindingSeverityFidelityCheck} reddened
-	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} on its own — but with a
-	 * trailing {@code // replaces SafetyFindingCitationExtentCheck.citedFindingIndexes(…)} on the very
-	 * line that replaced it, the whole build went GREEN with the shared reading absent from
-	 * production, the required-call assertion satisfied by a note naming what had just been removed.
-	 * That is the dominant commenting style in the files these rules scan. With the strip, that same
-	 * arrangement reddens that rule — re-measured after the fix. It closes the
-	 * symmetric false positive too: a trailing note merely MENTIONING {@code INLINE_CITATION} in
-	 * {@code SafetyFindingCitationExtentCheck} reddened a compliant file before the strip and is
-	 * green after it, also measured.
+	 * {@code SafetyFindingSeverityFidelityCheck} with a hand-rolled {@code charAt}/{@code isDigit}
+	 * marker scan, which reddens
+	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} on its own, and adding a
+	 * note naming the removed call:
+	 * <ul>
+	 * <li>a TRAILING {@code //} note on the replacing line took the whole build GREEN back when this
+	 * method skipped a line whose trimmed text BEGINS a comment and scanned every other line whole.
+	 * That is the dominant commenting style in the files these rules scan;</li>
+	 * <li>a MID-LINE {@code /*} note, closed on the same line, took {@code ArchitectureGuardTest}
+	 * green again once {@code //} alone was stripped — and the same trick on
+	 * {@code ChartSearchAiUtils.citedIndexes(answer)} in {@code SafetyFindingCitationExtentCheck}
+	 * silently restored a private marker dialect there, reddening
+	 * {@link #safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep} only
+	 * after the fix;</li>
+	 * <li>so did a THREE-LINE block comment whose middle line does not begin with {@code *}, which no
+	 * per-line strip can see. That is why this walks the whole file and carries the block state
+	 * across lines, and why the earlier heuristics on a line's first characters are gone: with the
+	 * opener seen, a javadoc continuation line needs no heuristic to be recognised as comment.</li>
+	 * </ul>
+	 * Each of those reddens its rule now, re-measured after the fix.
 	 *
-	 * <p><b>The residue, named rather than closed: a needle inside a STRING LITERAL still counts.</b>
-	 * A log line or an assertion message naming {@code citedFindingIndexes(} satisfies the
-	 * required-call assertion, and one spelling {@code INLINE_CITATION} trips the dialect negative.
-	 * Literals are kept deliberately — a bracketed-digit regex IS a string literal ({@code "\\["}), so
-	 * blanking them would take the dialect negatives' own evidence away, and no per-needle policy is
-	 * worth the parser. Nothing here parses Java: a block comment opened on one line and closed on
-	 * another is not tracked, and neither is a text block.
+	 * <p><b>Attacked from the other side too, because a wrong strip reddens a COMPLIANT file and that
+	 * is as bad.</b> Also measured: a string literal holding an unclosed {@code /*} ahead of a real
+	 * {@code citedIndexes(} call on the same line leaves both rules green, so the literal tracking
+	 * keeps a needle a naive strip would have eaten; a character literal holding a double quote, and
+	 * a string literal holding an escaped one, do not swallow the {@code //} that follows them on the
+	 * same line, each still reddening the finding-severity rule when the shared call is gone; and a
+	 * trailing note merely MENTIONING {@code INLINE_CITATION} in an otherwise compliant
+	 * {@code SafetyFindingCitationExtentCheck}, which reddened before any strip existed, is green.
+	 *
+	 * <p><b>The residue, named rather than claimed away: a needle inside a STRING LITERAL counts as
+	 * code.</b> Measured the same day, on the fixed strip: a {@code log.debug} line naming
+	 * {@code citedFindingIndexes(} beside the hand-rolled scan satisfies the required-call assertion
+	 * and the build stays green. Symmetrically, a literal spelling {@code INLINE_CITATION} trips a
+	 * dialect negative.
+	 * Literals are kept deliberately — a bracketed-digit regex IS a string literal ({@code "\\["}),
+	 * so blanking them would take the dialect negatives' own evidence away, and no per-needle policy
+	 * is worth the parser. Nothing here parses Java: a text block is read as an ordinary literal, and
+	 * a block comment left unclosed blanks the rest of the file, which only a file that does not
+	 * compile can do.
+	 *
+	 * <p><b>It stays APART from {@code ChartSearchAiUncorroboratedChartMatchTest.liveCode}</b>, the
+	 * omod-side stripper whose javadoc records the block form as the defect stripping {@code //}
+	 * exists to close — read that one before touching this. Two reasons, either sufficient: they are
+	 * in different Maven modules and this class is not on omod's test classpath, so sharing means
+	 * publishing an api test-jar to hold a comment stripper; and they keep different things. That one
+	 * strips one extracted method BODY and counts occurrences in it, and drops literals with the
+	 * fail-open consequence its javadoc names; this one keeps literals, because a dialect negative's
+	 * own evidence IS a string literal, and keeps one entry per line so a violation can name one.
 	 */
-	private static String codeOn(String line) {
-		String trimmed = line.trim();
-		if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
-			return "";
-		}
-		char quote = 0;
-		for (int i = 0; i < line.length(); i++) {
-			char c = line.charAt(i);
-			if (quote != 0) {
-				if (c == '\\') {
+	private static List<String> codeLines(List<String> lines) {
+		List<String> stripped = new ArrayList<>(lines.size());
+		boolean inBlock = false;
+		for (String line : lines) {
+			StringBuilder code = new StringBuilder(line.length());
+			char quote = 0;
+			for (int i = 0; i < line.length(); i++) {
+				char c = line.charAt(i);
+				if (inBlock) {
+					if (c == '*' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
+						inBlock = false;
+						i++;
+					}
+				}
+				else if (quote != 0) {
+					code.append(c);
+					if (c == '\\' && i + 1 < line.length()) {
+						code.append(line.charAt(++i));
+					}
+					else if (c == quote) {
+						quote = 0;
+					}
+				}
+				else if (c == '"' || c == '\'') {
+					quote = c;
+					code.append(c);
+				}
+				else if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
+					break;
+				}
+				else if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '*') {
+					inBlock = true;
 					i++;
 				}
-				else if (c == quote) {
-					quote = 0;
+				else {
+					code.append(c);
 				}
 			}
-			else if (c == '"' || c == '\'') {
-				quote = c;
-			}
-			else if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
-				return line.substring(0, i);
-			}
+			stripped.add(code.toString());
 		}
-		return line;
+		return stripped;
 	}
 
 	/**
@@ -910,8 +961,10 @@ public class ArchitectureGuardTest {
 	 * the reason is that helper's own javadoc: it exists in one place so its two callers' needle set
 	 * cannot drift apart, and a third caller requiring a DIFFERENT needle is that drift arriving by
 	 * parameter. Its name would also be false here — this class reaches no markers at all, which is
-	 * the point. What the two rules share is the mechanical comment skip, duplicated rather than
-	 * hoisted, because hoisting it is what would put two needle sets behind one signature.
+	 * the point. What the two rules do share is the comment strip, and that one IS hoisted —
+	 * {@link #codeLines}, so a comment form closed in one copy cannot be left open in the other. What
+	 * stays duplicated is each rule's own loop and needles, because one signature over both
+	 * polarities is what would put two needle sets behind it.
 	 *
 	 * <p><b>Stated POSITIVELY, for the reason its neighbours record:</b> forbidding spellings alone
 	 * let three of four ordinary relocations through with the build green, and what closes them is
@@ -927,11 +980,15 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>Same residue as its neighbours, named rather than papered over: it reads SOURCE TEXT, so it
 	 * asks that the call be present and not that its result be used, and a second reading written
-	 * BESIDE a retained call is out of its reach. A TRAILING comment no longer satisfies it —
-	 * {@link #codeOn} carries what that was measured to let through — but a needle inside a STRING
-	 * LITERAL does, a log line or an assertion message naming {@code citedFindingIndexes(} being
-	 * indistinguishable here from a call to it. That is the cheapest edit which satisfies this rule
-	 * and still removes the reading.
+	 * BESIDE a retained call is out of its reach. A COMMENT naming the removed call no longer
+	 * satisfies it in either of Java's forms — {@link #codeLines} carries what each form was measured
+	 * to let through — but a needle inside a STRING LITERAL does, a log line or an assertion message
+	 * naming {@code citedFindingIndexes(} being indistinguishable here from a call to it. An earlier
+	 * draft of this paragraph called that the CHEAPEST edit satisfying the rule while removing the
+	 * reading, and it was not: a {@code was …} note on the replacing line was cheaper and closer to
+	 * how the slip that motivated this rule was actually written, which is why that note is now
+	 * stripped rather than described. No superlative replaces it — what a later round should do is
+	 * write the edit it has in mind and read whether this reddens.
 	 */
 	@Test
 	public void theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck() throws IOException {
@@ -942,8 +999,9 @@ public class ArchitectureGuardTest {
 		boolean callsTheReading = false;
 		int compiles = 0;
 		List<String> ownDialect = new ArrayList<>();
+		List<String> stripped = codeLines(lines);
 		for (int i = 0; i < lines.size(); i++) {
-			String code = codeOn(lines.get(i));
+			String code = stripped.get(i);
 			if (code.trim().isEmpty()) {
 				continue;
 			}

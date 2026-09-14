@@ -42,15 +42,15 @@ import org.slf4j.LoggerFactory;
  * {@code Advil 400mg}, Moderate — reached the prose nowhere. A clinician reading the answer got six
  * reasons to withhold where the module had screened seven, with nothing saying a seventh existed.
  *
- * <p><b>Why nothing else can see it.</b> Every neighbour of it judges a record the answer DID
- * cite — {@link DosingCeilingFidelityCheck} included, which asks a question about a cited
- * REFERENCE record and so is outside the enumeration below for a second reason as well. {@link SafetyFindingSeverityFidelityCheck} asks whether a cited finding's rating reached the
- * prose, and on that answer it correctly read {@code []} — it asks of the WHOLE answer and
- * <em>Moderate</em> appeared six times, so a seventh Moderate finding dropped entirely is invisible
- * to it by construction. {@link ReferenceProseFidelityCheck} reports a SUBSTITUTION inside a
- * reproduction and that answer reproduced nothing. {@link ActiveOrderCitationFidelityCheck} judges
- * the citations a claim offered, and a finding that made no claim offered none.
- * {@link ClassCodeFidelityCheck} compares one ATC token shape. The residue was already named, in
+ * <p><b>Why nothing else can see it.</b> {@link SafetyFindingSeverityFidelityCheck} asks whether a
+ * cited finding's rating reached the prose, and on that answer it correctly read {@code []} — it
+ * asks of the WHOLE answer and <em>Moderate</em> appeared six times, so a seventh Moderate finding
+ * dropped entirely is invisible to it by construction. {@link ReferenceProseFidelityCheck} reports
+ * a SUBSTITUTION inside a reproduction and that answer reproduced nothing.
+ * {@link ActiveOrderCitationFidelityCheck} judges the citations a claim offered, and a finding that
+ * made no claim offered none. {@link ClassCodeFidelityCheck} compares one ATC token shape.
+ * {@link DosingCeilingFidelityCheck} asks a question about a cited REFERENCE record and none about
+ * a finding. The residue was already named, in
  * {@code SafetyFindingSeverityFidelityCheck}'s own javadoc quoting the prose check's <em>"a hazard
  * dropped by stopping early"</em>; this is the half of it that citation makes deterministic.
  *
@@ -105,8 +105,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>What it cannot see</b>, stated rather than left to be found:
  * <ul>
- *   <li>whether a cited finding was stated CORRECTLY, or stated at all. That is the four
- *       neighbours' question, and {@code cited == carried} is therefore not a certificate;</li>
+ *   <li>whether a cited finding was stated CORRECTLY, or stated at all — a question this count
+ *       does not ask, which is why {@code cited == carried} is not a certificate;</li>
  *   <li>a finding the answer states in prose without anchoring a marker for it, which it counts as
  *       uncited, and a finding whose marker it anchors while saying nothing about it, which it
  *       counts as cited. Both are why this publishes a base and not an accusation;</li>

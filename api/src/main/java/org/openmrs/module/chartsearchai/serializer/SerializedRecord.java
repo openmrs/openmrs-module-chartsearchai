@@ -93,10 +93,17 @@ public class SerializedRecord {
 	 * discontinuation is served rather than skipped — and that is asserted rather than remembered, by
 	 * {@code DrugOrderCurrencyMarkTest.aRealDiscontinuationLeavesThePrescriptionCarryingItsStopDate},
 	 * which drives the real service and checks both halves.
-	 * {@code DrugOrder.cloneForDiscontinuing()} on its own sets neither date, and a row saved in that
-	 * state — which {@code DrugOrderCurrencyTestData.xml}'s order 9320 is — states no date here.
-	 * Nothing here claims which flows produce that row: the field's contract is the asymmetry above,
-	 * and the measurement bounds how often it bites.
+	 * {@code DrugOrder.cloneForDiscontinuing()} on its own sets neither date, and a row in that state
+	 * states no date here — {@code DrugOrderCurrencyTestData.xml}'s order 9320 is one, written
+	 * directly. Through {@code OrderService} it is not: `saveOrder` stamps
+	 * {@code autoExpireDate = dateActivated} on every {@code DISCONTINUE} order it saves. The
+	 * API-reachable instance of this cell is the VOIDED order named above.
+	 *
+	 * <p><strong>That paragraph is the third attempt at describing this population and the first two
+	 * were measured false, so it is deliberately a measurement and a mechanism rather than a rule
+	 * about which flows produce what.</strong> This is its ONE home: {@code docs/adr.md} Decision 97,
+	 * {@code README.md} and the tests point here rather than restating it, because a claim that has
+	 * needed correcting twice is the last one that should exist in five files.
 	 *
 	 * <p>Where an order does carry no date of its own, the module does not go looking for one on
 	 * {@code getPreviousOrder()}: that would be a second implementation of core's discontinuation

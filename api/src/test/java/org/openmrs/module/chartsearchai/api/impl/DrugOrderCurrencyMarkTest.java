@@ -777,10 +777,13 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// claim. Both records of the discontinuation are covered, because the published sentence says
 		// both: the prescription through the chart below, and the DISCONTINUE record core returns
 		// through the direct assertion on it, which is where its own end instant shows up.
-		// This order exists for this one case, and that is deliberate: the call below WRITES, and four
-		// other cases here read standard order 3 expecting it in force. Discontinuing a dedicated row
-		// means no other case can be perturbed whether or not the base class rolls back — leaked test
-		// state gives wrong answers without throwing, so it is designed out rather than relied upon.
+		// The call below WRITES, and many cases in this class assert about standard order 3's currency.
+		// BaseContextSensitiveTest is @Transactional + @Rollback so the write does not escape the
+		// method; discontinuing a row added for this case rather than order 3 means the assertion
+		// being protected is not also the thing being mutated. Both together, because leaked test
+		// state gives wrong answers without throwing — and neither "which cases read order 3" nor
+		// "nothing else reads 9323" is stated as a count or a claim: both were written here once and
+		// review measured both wrong. 9323 IS read by the whole-order-list case below, harmlessly.
 		Order live = Context.getOrderService().getOrder(ORDER_TO_DISCONTINUE_ID);
 		assertTrue(live.isActive(), "precondition: this order must start in force");
 		assertNull(live.getEffectiveStopDate(), "precondition: and carry no end date of its own");
@@ -789,8 +792,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		Context.flushSession();
 
 		assertNotNull(stub.getEffectiveStopDate(),
-				"the DISCONTINUE record core creates carries an end date of its own too, which is the "
-						+ "other half of what README and ADR Decision 97 tell a client");
+				"the DISCONTINUE record core creates carries an end date of its own too");
 
 		Order discontinued = Context.getOrderService().getOrder(ORDER_TO_DISCONTINUE_ID);
 		assertFalse(discontinued.isActive(), "core now considers the prescription out of force");
@@ -805,6 +807,18 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		assertEquals(discontinued.getEffectiveStopDate(), mapping.getOrderStopDate(),
 				"and carries core's own end instant, so a discontinued prescription is served rather "
 						+ "than absent from the statement");
+
+		// The other half, through the MODULE and not just core. What README and ADR Decision 97 tell
+		// a client is that BOTH records of a discontinuation are served; asserting only that core
+		// dates the stub would leave the published half of that sentence resting on a core fact.
+		chartOf(drugOrderDoc(stub.getOrderId().intValue()));
+		PatientChart stubChart = builder.build(patient, MEDICATIONS_QUESTION);
+		RecordMapping stubMapping = mappingFor(stubChart, stub.getUuid());
+		assertEquals(Boolean.FALSE, stubMapping.getOrderActive(),
+				"the DISCONTINUE record's own chart record says it is not in force");
+		assertEquals(stub.getEffectiveStopDate(), stubMapping.getOrderStopDate(),
+				"and the module publishes its end instant too, which is the half of the client "
+						+ "contract a core-only assertion would leave unpinned");
 	}
 
 	@Test

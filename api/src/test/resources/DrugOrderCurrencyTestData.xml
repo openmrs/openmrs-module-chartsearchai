@@ -1,9 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  The drug-order arrangements the standard test dataset does not carry. The first three are issue
-  #317's; the rest are issue #315's — the one a stop-date reading must not invent a date for, the
-  live one it must not invent a date FOR EITHER, and a same-date pair that makes an ordering rule
-  discriminable.
+  The drug-order arrangements the standard test dataset does not carry: the first three are issue
+  #317's and the rest are issue #315's. Each numbered block below says what its own rows are for —
+  enumerated here once, and that list went stale the next time a row was added.
 
   1. ORDER 9317 — an order that lapsed by its DURATION: action NEW, auto_expire_date in the past,
      date_stopped NULL. querystore's DrugOrderRecordSerializer renders ". Stopped: <date>" for
@@ -84,9 +83,10 @@
 	     It is NOT what a real discontinuation produces. Measured by driving
 	     OrderService.discontinueOrder: the prescription gets a date_stopped and the DISCONTINUE
 	     record beside it gets an auto_expire_date, so both carry an end date. cloneForDiscontinuing()
-	     alone sets neither, and this row is that state — reachable, and deliberately not claimed to be
-	     the output of any particular flow. SerializedRecord.orderStopDate carries the measurement and
-	     ADR Decision 97 the reason the module derives nothing here. Order 222's own date_stopped is
+	     alone sets neither, and this row is that state, written directly. Through OrderService it is
+	     not producible at all — saveOrder stamps autoExpireDate on every DISCONTINUE order it saves.
+	     SerializedRecord.orderStopDate is the one home for that measurement, and ADR Decision 97 the
+	     reason the module derives nothing here. Order 222's own date_stopped is
 	     left NULL on purpose: core's Order.isActive() reads an order's own fields and never walks
 	     forward to a discontinuing sibling, so pointing at 222 cannot move any other case in this
 	     file, and the tests assert both halves of the shape off core rather than assuming them.
@@ -127,25 +127,25 @@
 	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2099-01-08 00:00:00.0"
 	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
 	        uuid="9321eeee-0000-4000-8000-00000000321e" care_setting="1" encounter_id="6" />
+	<orders order_id="9322" order_type_id="1" order_number="ORD-9322" urgency="ROUTINE"
+	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-07 00:00:00.0"
+	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
+	        uuid="9322ffff-0000-4000-8000-00000000322f" care_setting="1" encounter_id="6" />
 	<!--
-	  7. ORDER 9323 — a live order that exists to be DISCONTINUED by a test, and by exactly one.
-	     The case that drives the real OrderService.discontinueOrder writes to the database, and four
-	     other cases in that class read standard order 3 expecting it in force — so it discontinues
-	     this row instead of that one. Whether the test base class rolls back is then not a question
-	     anyone has to answer, which is the point: leaked test state produces wrong results without
-	     throwing, and no other case reads this order.
+	  7. ORDER 9323 — a live order that exists to be DISCONTINUED by the one case that WRITES.
+	     BaseContextSensitiveTest is @Transactional + @Rollback, so that write does not escape the
+	     method; aiming it at a row added for the purpose rather than at standard order 3 means the
+	     currency other cases assert about is not also the thing being mutated. Both together, because
+	     leaked test state produces wrong results without throwing. It is not claimed that nothing
+	     else reads this row — the whole-order-list case does, harmlessly; that claim was written here
+	     once and measured false.
 	-->
 	<orders order_id="9323" order_type_id="1" order_number="ORD-9323" urgency="ROUTINE"
 	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
 	        date_activated="2008-01-02 00:00:00.0"
 	        creator="1" date_created="2008-01-02 00:00:00.0" voided="false" patient_id="2"
 	        uuid="9323aaab-0000-4000-8000-00000000323a" care_setting="1" encounter_id="6" />
-
-	<orders order_id="9322" order_type_id="1" order_number="ORD-9322" urgency="ROUTINE"
-	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
-	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-07 00:00:00.0"
-	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
-	        uuid="9322ffff-0000-4000-8000-00000000322f" care_setting="1" encounter_id="6" />
 
 	<drug_order order_id="9317" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"

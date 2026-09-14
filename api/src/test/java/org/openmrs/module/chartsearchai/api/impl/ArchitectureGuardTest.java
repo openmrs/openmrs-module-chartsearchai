@@ -52,15 +52,17 @@ public class ArchitectureGuardTest {
 	 *  one: it is the only one whose LAST parameter is a list (issue #305). Read it as exactly that —
 	 *  NOT as "the widest", which it stopped being when issue #294 added a rung below it
 	 *  ({@link #ORDER_NAMING_TAIL}), and NOT as "the only one that takes a provenance list", which it
-	 *  also stopped being: the widest takes one too, in front of its own trailing stamp, and is
-	 *  guarded by the sibling case rather than by this one. */
+	 *  also stopped being: the widest takes one too, and is guarded by the sibling case rather than
+	 *  by this one. */
 	private static final String DERIVED_FROM_TAIL = "Ljava/util/List;)V";
 
 	/** The descriptor tail that tells RecordMapping's widest constructor — the only one taking the
 	 *  order-naming stamp of issue #294 — from every other one. TWO types, not one: the
 	 *  order-currency rung ends in the same {@code Boolean}, so a single-type tail cannot tell them
-	 *  apart, and the provenance list in front of it is what makes this pair unique. Verified against
-	 *  {@code javap -s}: the only other {@code Boolean}-tailed descriptor ends {@code ILjava/lang/Boolean;)V}. */
+	 *  apart, and a list immediately in front of it is what makes this pair unique. WHICH list is not
+	 *  part of the claim and must not become one — it was the provenance list until issue #276 put
+	 *  the dosing ceilings between them. Verified against {@code javap -s}: the only other
+	 *  {@code Boolean}-tailed descriptor ends {@code ILjava/lang/Boolean;)V}. */
 	private static final String ORDER_NAMING_TAIL = "Ljava/util/List;Ljava/lang/Boolean;)V";
 
 	/** The CAUSE a reader could build a chart-read verdict out of, instead of the stamp

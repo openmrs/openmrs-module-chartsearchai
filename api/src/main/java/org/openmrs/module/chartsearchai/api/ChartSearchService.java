@@ -489,6 +489,102 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * A cited {@code drug_reference} record whose answer quoted one of the dosing ceilings it
+	 * publishes while leaving a STRICTER one it also publishes unstated — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/276">#276</a>.
+	 *
+	 * <p><b>What it asserts.</b> Both ceilings are the cited record's own, for this patient's age,
+	 * spelled as that record spells them. {@link #getUnstatedCeiling()} is strictly stricter than
+	 * {@link #getStatedCeiling()} by construction rather than by assertion: the producer walks the
+	 * record's ceilings strictest-first and reports the first one the answer states, so anything
+	 * below it in that walk was already found unstated.
+	 *
+	 * <p><b>What it does not assert.</b> Not that the answer is WRONG. A substance filed as one row
+	 * per presentation publishes a ceiling per presentation, and the laxer one can be the right
+	 * number for the question asked; what this says is that the answer put one of them in front of
+	 * a clinician and not the other. Nor does it say which row the patient is on — that question
+	 * has no deterministic answer wherever two rows claim the recorded name equally, which is the
+	 * arrangement the issue was measured on.
+	 *
+	 * <p><b>It is a statement about PROSE, not a dosing check.</b> The overdose chip
+	 * ({@code SafetyWarning.TYPE_OVERDOSE}) compares a dose against a ceiling and is unaffected by
+	 * this; {@code DrugSafetyValidator.LIMIT_CUE} exists so that a recited ceiling is invisible to
+	 * it, deliberately. This asks the question that leaves open: which ceiling the answer recited.
+	 */
+	final class UnstatedDosingCeiling {
+
+		private final int citation;
+
+		private final String statedCeiling;
+
+		private final String unstatedCeiling;
+
+		/**
+		 * Both ceilings are required: {@link #equals} and {@link #hashCode} dereference them, the
+		 * discipline {@link UnstatedFindingSeverity} states of its own, and a caller building one by
+		 * hand owes the same. {@link #toString} does not, so a hand-built null prints rather than
+		 * throwing in the log line the producing check writes. The production path cannot pass one —
+		 * {@code DosingCeilingFidelityCheck} reports only ceilings it read out of a record.
+		 */
+		public UnstatedDosingCeiling(int citation, String statedCeiling, String unstatedCeiling) {
+			this.citation = citation;
+			this.statedCeiling = statedCeiling;
+			this.unstatedCeiling = unstatedCeiling;
+		}
+
+		/**
+		 * @return the citation index of the reference record — the number the answer printed in
+		 *         brackets, and the {@code index} of the matching entry in the response's
+		 *         {@code references} array, which is how a client joins the two
+		 */
+		public int getCitation() {
+			return citation;
+		}
+
+		/** @return the ceiling that record publishes and the answer states, as the record spells it
+		 *          (for example {@code "4000 mg/day"}). The strictest such ceiling where the answer
+		 *          states several: the producer's walk reaches it first. */
+		public String getStatedCeiling() {
+			return statedCeiling;
+		}
+
+		/** @return the strictest ceiling that record publishes for this patient's age, which the
+		 *          answer states nowhere — always strictly stricter than {@link #getStatedCeiling()},
+		 *          and spelled the same way. */
+		public String getUnstatedCeiling() {
+			return unstatedCeiling;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof UnstatedDosingCeiling)) {
+				return false;
+			}
+			UnstatedDosingCeiling that = (UnstatedDosingCeiling) other;
+			return citation == that.citation && statedCeiling.equals(that.statedCeiling)
+					&& unstatedCeiling.equals(that.unstatedCeiling);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * (31 * citation + statedCeiling.hashCode()) + unstatedCeiling.hashCode();
+		}
+
+		/**
+		 * The one spelling of the triple, taken by {@code DosingCeilingFidelityCheck}'s {@code WARN}
+		 * rather than re-built there, for the reason {@link UnstatedFindingSeverity#toString()}
+		 * gives of its own pair.
+		 */
+		@Override
+		public String toString() {
+			return "[" + citation + "] stated " + statedCeiling + ", unstated " + unstatedCeiling;
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -518,6 +614,8 @@ public interface ChartSearchService {
 		private final List<Integer> misattributedOrderCitations;
 
 		private final List<UnstatedFindingSeverity> unstatedFindingSeverities;
+
+		private final List<UnstatedDosingCeiling> unstatedDosingCeilings;
 
 		private final ActiveOrderClaims activeOrderClaims;
 
@@ -587,7 +685,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null);
+					null, null, null, null, null, null, null);
 		}
 
 		/**
@@ -617,6 +715,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
 				List<Integer> misattributedOrderCitations,
 				List<UnstatedFindingSeverity> unstatedFindingSeverities,
+				List<UnstatedDosingCeiling> unstatedDosingCeilings,
 				ActiveOrderClaims activeOrderClaims,
 				FindingCitationExtent findingCitationExtent,
 				Boolean chartReadForSafety,
@@ -650,13 +749,20 @@ public interface ChartSearchService {
 			this.unstatedFindingSeverities = unstatedFindingSeverities == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<UnstatedFindingSeverity>(unstatedFindingSeverities));
-			// A value type rather than a normalised pair of ints, under the same rule as the three
-			// lists above (issue #379): null is the absence of a measurement and a zeroed statement
+			// And once more (issue #276), under the same rule again: null is the absence of a
+			// measurement, empty a measurement of none. Why empty is the commonest answer by far
+			// here, and why it is not a certificate, is the accessor's javadoc — the three comments
+			// above defer to theirs for the same reason.
+			this.unstatedDosingCeilings = unstatedDosingCeilings == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<UnstatedDosingCeiling>(unstatedDosingCeilings));
+			// A value type rather than a normalised pair of ints, under the same rule as every list
+			// above (issue #379): null is the absence of a measurement and a zeroed statement
 			// is a measurement of none, so neither is normalised into the other. It is immutable, so
 			// it is carried rather than copied.
 			this.activeOrderClaims = activeOrderClaims;
-			// And once more (issue #395), under the rule the four above share rather than one of its
-			// own: null is the absence of a measurement and a zeroed statement is a measurement of
+			// And once more (issue #395), under the rule every statement above shares rather than one
+			// of its own: null is the absence of a measurement and a zeroed statement is a measurement of
 			// none. Immutable, so it is carried rather than copied.
 			this.findingCitationExtent = findingCitationExtent;
 			// Three-valued for the reason the value types above are (issue #247): null is the absence
@@ -983,14 +1089,14 @@ public interface ChartSearchService {
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">issue
 		 * #395</a>. {@code SafetyFindingCitationExtentCheck} states it.
 		 *
-		 * <p>It is the base the family had no member for. Its four neighbours each judge a finding
-		 * the answer DID cite — whether the rating reached the prose
+		 * <p>It is the base the family had no member for. The neighbours enumerated here each judge a
+		 * record the answer DID cite — whether the rating reached the prose
 		 * ({@link #getUnstatedFindingSeverities()}), whether the words were reproduced faithfully
 		 * ({@link #getUnfaithfullyRenderedCitations()}), whether the chart record offered can be the
 		 * order named ({@link #getMisattributedOrderCitations()}), whether a claim offered any record
 		 * at all ({@link #getActiveOrderClaims()}) — so an answer that drops a finding ENTIRELY is
-		 * outside all four, and on the reported run not one of them reported it: the three list keys
-		 * read {@code []} and the fourth was flagging something else. Not "all four read as a
+		 * outside every one of them, and on the reported run not one reported it: the three list keys
+		 * read {@code []} and the fourth was flagging something else. Not "they all read as a
 		 * faithful answer's", which is false of that response.
 		 *
 		 * <p>{@link FindingCitationExtent} is canonical for what {@code carried}, {@code cited}, a
@@ -1011,7 +1117,7 @@ public interface ChartSearchService {
 		 * round three, and
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a> for
 		 * the rating. {@code SafetyFindingSeverityFidelityCheck} reports them, and this is the same
-		 * remedy as its two siblings for the third face of one failure: a deterministic safety string
+		 * remedy as the keys beside it for the third face of one failure: a deterministic safety string
 		 * reaching the clinician weaker than the module wrote it.
 		 *
 		 * <p>The reported answer enumerated five interaction findings in one clause — <em>"…
@@ -1023,8 +1129,10 @@ public interface ChartSearchService {
 		 * that check reports a SUBSTITUTION inside a long reproduction and this answer reproduced
 		 * nothing.
 		 *
-		 * <p><b>The citation and the RATING, and never a word of either text</b>. The two siblings
-		 * publish a bare index because each has one datum to publish; this key carries two. One
+		 * <p><b>The citation and the RATING, and never a word of either text</b>. A key whose check
+		 * has one datum to publish publishes a bare index — {@link #getUnfaithfullyRenderedCitations()}
+		 * and {@link #getMisattributedOrderCitations()} do; this one carries two, and
+		 * {@link #getUnstatedDosingCeilings()} three. One
 		 * citation is one entry, and {@link UnstatedFindingSeverity} is canonical for what an entry
 		 * asserts, why the two travel together, and how its {@code rating} differs from the
 		 * {@code severity} a chip publishes — a difference its spelling is chosen to keep visible.
@@ -1055,6 +1163,50 @@ public interface ChartSearchService {
 		 */
 		public List<UnstatedFindingSeverity> getUnstatedFindingSeverities() {
 			return unstatedFindingSeverities;
+		}
+
+		/**
+		 * The cited reference records whose answer quoted one dosing ceiling and left a stricter one
+		 * from the same record unstated — issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/276">#276</a>.
+		 *
+		 * <p><b>What it is for.</b> A substance filed as one row per presentation publishes a ceiling
+		 * per presentation. Since issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/274">#274</a> the
+		 * injected record states every one of them the pass resolved, so the evidence is complete;
+		 * what the model does with it is not settled by that. Measured live, an answer about a
+		 * patient charted on a low-dose presentation led with the canonical row's ceiling, forty
+		 * times the one published for the presentation she was on, and cited the record carrying
+		 * both. Nothing on the response said so. This key does.
+		 *
+		 * <p><b>It does not say the answer is wrong</b>, and a client must not render it as an error.
+		 * The laxer ceiling can be the right number for the question asked;
+		 * {@code ChartSearchService.UnstatedDosingCeiling} is canonical for what an entry asserts.
+		 *
+		 * <p><b>Null is the absence of a measurement; empty is a measurement of none — and empty is
+		 * not a certificate.</b> {@code DosingCeilingFidelityCheck} is canonical for what it cannot
+		 * see; the two limits worth knowing before reading empty are that it asks of the WHOLE answer
+		 * (so an answer stating the stricter ceiling anywhere is silent) and that it is blind to
+		 * whether a number was quoted AS a ceiling. <b>And empty says very little on a stock
+		 * install</b>: {@code chartsearchai.drugReference.enabled} defaults to false, and no bundled
+		 * dataset files a substance as more than one row CARRYING AGE BANDS — the curated seed sets no
+		 * substance name at all, so every substance in it is one row, and the {@code ddinter} parser
+		 * sets no age band on any row, however many rows a substance has there. So on a default
+		 * deployment there is nothing here to find. The two sources are excluded for DIFFERENT
+		 * reasons and neither excludes the other's: {@code DrugSafetyValidator}'s
+		 * {@code ceilingAttribution} javadoc states the same joint condition for the dose chip's own
+		 * cross-row clause.
+		 * Null has two reachable causes: the async-grounding path's early {@code done}, built before
+		 * the check runs, and the check's own failure, which it logs — {@code
+		 * DosingCeilingFidelityTest.aCheckThatThrowsIsReportedAndTheAnswerStillReturns} drives the
+		 * second. On a cache hit the ORIGINAL request's list is replayed with the rest.
+		 *
+		 * @return one entry per offending citation, the citations distinct and in CITATION order —
+		 *         the order {@code LlmInferenceService.extractCitedReferences} resolved them. Null
+		 *         where none was stated.
+		 */
+		public List<UnstatedDosingCeiling> getUnstatedDosingCeilings() {
+			return unstatedDosingCeilings;
 		}
 
 		/**

@@ -1859,6 +1859,34 @@ public final class DrugReferenceTestSupport {
 				"obs-uuid-1", null, "BP 120/80"));
 	}
 
+	/**
+	 * A chart the REAL injector produced over a named JSON fixture, for a case in ANOTHER package
+	 * (issue #276).
+	 *
+	 * <p><b>Why it is public and why it is one method rather than four widenings.</b> The pieces it
+	 * composes — {@link #fixtureEntries}, {@link #serviceWith}, {@link #contextNaming},
+	 * {@link #injectorWithSafety}, {@link #oneRecordChart} — are package-private here because a
+	 * caller assembling them itself can get the pairing wrong in ways nothing goes red for (see
+	 * {@link #withEntriesAndGroups} for one). The three public {@code injectedFindingsOver} forms
+	 * cannot serve this: they hardcode {@link #ddinterServiceWithGroups}, whose source publishes no age bands
+	 * at all, so no dosing ceiling can reach a record built through them. Widening the five would
+	 * hand every caller the assembly; widening this hands them the arrangement.
+	 *
+	 * <p>It is the same composition {@code ReferenceRecordSubstanceCeilingsTest} drives for the same
+	 * fixture, so a case here and a case there read the same records.
+	 *
+	 * @param classpathResource the fixture, e.g. {@code chartsearchai-test/…-ceilings.json}
+	 * @param age the patient's age in years, which selects the bands every dosing sentence states
+	 * @param question the question, which is what puts substances in play
+	 * @param orderDisplays the patient's active drug orders, by display name
+	 */
+	public static PatientChart injectedReferenceChartOver(String classpathResource, Integer age,
+			String question, String... orderDisplays) throws IOException {
+		DrugReferenceService service = serviceWith(fixtureEntries(classpathResource));
+		return injectorWithSafety(service).injectRecords(oneRecordChart(),
+				contextNaming(service, age, 70.0, orderDisplays), question);
+	}
+
 	/** A chart of {@code records}, rendered as the numbered "[N] text" lines
 	 *  {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer} produces — so a
 	 *  test can place a real drug-order record in the chart, or leave it out. */

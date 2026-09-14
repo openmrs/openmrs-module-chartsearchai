@@ -1161,6 +1161,13 @@ public class ChartSearchAiUtils {
 	 *         two rules to differ, a rating the record states one way and the answer states the other
 	 *         would be reported as dropped, or a rating neither states would be asked for.
 	 *
+	 *         <p>Since issue #276 it is one of TWO questions over one scan — see
+	 *         {@link #statesMeasurement}, which the dosing-ceiling check asks instead because its
+	 *         needle begins with a number. Adding a question means adding an entry point beside
+	 *         these, never widening one of them: this one's boundary is what a WORD needs, and
+	 *         {@link #numericFragment} is what a number needs. What the second would cost the first
+	 *         is that paragraph's to say, not this one's.
+	 *
 	 *         <p><b>Deliberately not {@code DrugReference}'s bounded-token family, and not a member
 	 *         of it — but not because the rules differ.</b> At {@code PROSE_TRAILING_LETTERS}
 	 *         (zero) that family's {@code containsWord} reduces to this same condition, and a review
@@ -1191,6 +1198,135 @@ public class ChartSearchAiUtils {
 	 *         better defended than it is.
 	 */
 	public static boolean statesWord(String text, String word) {
+		return statesBounded(text, word, false);
+	}
+
+	/**
+	 * Whether {@code text} states {@code measurement} — a needle that BEGINS WITH A NUMBER, such as
+	 * {@code "4000 mg/day"} — on the same boundary {@link #statesWord} uses plus one rule that only a
+	 * numeric needle needs (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/276">#276</a>).
+	 *
+	 * <p><b>Why a numeric needle needs one.</b> {@link #statesWord}'s boundary refuses a needle a
+	 * LETTER OR DIGIT sits against, which is the whole of what a word needs: it rejects
+	 * {@code "major"} inside {@code "majority"} and {@code "4000 mg/day"} inside
+	 * {@code "14000 mg/day"}. A decimal point is neither a letter nor a digit, so that boundary reads
+	 * <em>"her dose is 2.5 mg/day"</em> as stating {@code "5 mg/day"} — measured, and reproduced
+	 * through the real answer path by
+	 * {@code DosingCeilingFidelityTest.aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}.
+	 *
+	 * <p><b>{@link #numericFragment} is the rule and the only statement of it.</b> Three wordings of
+	 * it were each measured to admit a false REPORT and each replaced; restating it here is how a
+	 * fourth would come to disagree with the code, so this paragraph deliberately does not. Read that
+	 * method for what is refused, why the two separators are asked different questions, and which
+	 * case pins each shape.
+	 *
+	 * <p><b>A second entry point rather than a widened {@link #statesWord}, and rather than a test at
+	 * the call site.</b> Two questions, two named entry points, one scan underneath, which is the
+	 * shape {@code CLAUDE.md} prescribes for {@code SENTENCE_TERMINATORS}; what it forbids is a third
+	 * dialect spelled at a call site, and the whole point of this method is that there is not one.
+	 *
+	 * <p><b>The split does NOT rest on a measured breakage, said so the argument does not look better
+	 * defended than it is.</b> Give {@link #statesWord} this rule instead — delegate at {@code true}
+	 * — and the whole build stays green: the rule is leading-edge only and a rating needle begins
+	 * with a letter, so it is inert on every input either of that method's callers can produce. What
+	 * it would do is widen a SAFETY scan for a needle that is not its own — a rating would start
+	 * being refused after some punctuation, for a reason belonging to numbers, with nothing to catch
+	 * it. Which spellings, exactly, is {@link #numericFragment}'s to say and moves when it does.
+	 * That is the instruction's own reason for one entry point per operand shape, and it is the
+	 * reason here — not a test that reddens.
+	 *
+	 * <p>It is asymmetric deliberately: only the LEADING edge takes the extra refusal. Every needle
+	 * that reaches it ends in a unit ({@code DrugReferenceInjector.dailyCeiling} composes
+	 * {@code formatNumber(v) + " mg/day"}), so the trailing character is a letter and
+	 * {@link #statesWord}'s own rule already covers that side. A needle ending in a digit would want
+	 * more, and none exists; add the rule with the needle rather than in advance.
+	 *
+	 * @param text the prose to scan, null answering false
+	 * @param measurement the needle, null or blank answering false as in {@link #statesWord}
+	 * @return whether the text states it
+	 */
+	public static boolean statesMeasurement(String text, String measurement) {
+		return statesBounded(text, measurement, true);
+	}
+
+	/**
+	 * @return whether the match at {@code at} is the tail of a longer NUMBER rather than a statement
+	 *         of its own — the extra refusal {@link #statesMeasurement} adds and {@link #statesWord}
+	 *         does not.
+	 *
+	 *         <p><b>The two separators are asked different questions, and that is the whole rule.</b>
+	 *         A thousands separator ALWAYS has a digit to its left, so a {@code ','} is a fragment
+	 *         marker only after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
+	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
+	 *         {@code "(route-unspecified),500"}). A {@code '.'} is a fragment marker after a digit
+	 *         ({@code "2.5"}) and ALSO where it BEGINS A TOKEN — preceded by a space in
+	 *         {@link #isSpace}'s sense, or by nothing at all — because that is a decimal written without its leading zero
+	 *         ({@code "is .5"}, a text opening {@code ".5"}). Attached to what precedes it, it is the
+	 *         full stop ending a sentence, whatever that sentence ended with: a word
+	 *         ({@code "see note.500"}), a bracket ({@code "(suspension).500"}), a quote, an emphasis
+	 *         mark.
+	 *
+	 *         <p><b>Four earlier wordings each admitted a false REPORT, which is the direction
+	 *         {@code DosingCeilingFidelityCheck} must never fail in, and each was found by a
+	 *         different reviewer.</b> Refusing on any {@code '.'}/{@code ','} lost the list comma;
+	 *         refusing only BETWEEN two digits lost the naked decimal; refusing unless a LETTER
+	 *         precedes lost the comma after a parenthesis; refusing unless a letter precedes the
+	 *         FULL STOP lost every other closing mark. The first three treated the two characters
+	 *         alike; the fourth kept classifying the character before, which is a list nobody can
+	 *         finish — so this asks instead whether the stop BEGINS a token, which is a property
+	 *         rather than a membership. <b>The residue that leaves</b>: a naked decimal written
+	 *         directly after an opening mark with no space ({@code "(.5 mg/day)"}) is NOT refused, so
+	 *         a laxer ceiling can be read out of it. Unpinned, and named here rather than left to be
+	 *         found. Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
+	 *         {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
+	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
+	 *         {@code .aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt},
+	 *         {@code .aSeparatorAFTERALetterLeavesAStatedCeilingStated},
+	 *         {@code .aCommaAfterAPARENTHESISLeavesAStatedCeilingStated} and
+	 *         {@code .aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated} — so a fifth
+	 *         wording that loses one of them reddens rather than ships.
+	 */
+	private static boolean numericFragment(String haystack, int at) {
+		if (at == 0) {
+			return false;
+		}
+		char separator = haystack.charAt(at - 1);
+		if (separator != '.' && separator != ',') {
+			return false;
+		}
+		// Nothing before the separator: the text opens with it, which only a decimal does.
+		if (at < 2) {
+			return separator == '.';
+		}
+		char before = haystack.charAt(at - 2);
+		return Character.isDigit(before)
+				|| (separator == '.' && isSpace(before));
+	}
+
+	/**
+	 * @return whether {@code c} separates tokens — {@link Character#isWhitespace} UNION
+	 *         {@link Character#isSpaceChar}, which is not a tautology: the first refuses the
+	 *         non-breaking spaces (U+00A0, U+2007, U+202F) and the second refuses the control-ish
+	 *         separators ({@code \t}, {@code \n}). Typeset and tabular copy holds a number together
+	 *         with exactly the three the first refuses, so asking only it read
+	 *         {@code "is\u00A0.5 mg/day"} as attaching the decimal point and produced a false report
+	 *         — {@code DosingCeilingFidelityTest.aNakedDecimalAfterANONBREAKINGSpaceIsStillANakedDecimal}.
+	 */
+	private static boolean isSpace(char c) {
+		return Character.isWhitespace(c) || Character.isSpaceChar(c);
+	}
+
+	/**
+	 * The one scan both public questions above share, so that "does this text state X" cannot come to
+	 * have two implementations — which is exactly what {@code DosingCeilingFidelityCheck} would have
+	 * needed to hand-roll otherwise, and what this module keeps having to un-say.
+	 *
+	 * @param refuseNumericFragment whether a match {@link #numericFragment} calls the tail of a
+	 *            longer number is refused, which {@link #statesMeasurement} is canonical for the
+	 *            reason of
+	 */
+	private static boolean statesBounded(String text, String word, boolean refuseNumericFragment) {
 		if (text == null || isBlank(word)) {
 			return false;
 		}
@@ -1198,6 +1334,11 @@ public class ChartSearchAiUtils {
 		String needle = word.toLowerCase(Locale.ROOT);
 		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
 			int after = at + needle.length();
+			// The two separators are asked DIFFERENT questions, because they are different things.
+			// See numericFragment.
+			if (refuseNumericFragment && numericFragment(haystack, at)) {
+				continue;
+			}
 			if ((at == 0 || !Character.isLetterOrDigit(haystack.charAt(at - 1)))
 					&& (after >= haystack.length()
 							|| !Character.isLetterOrDigit(haystack.charAt(after)))) {

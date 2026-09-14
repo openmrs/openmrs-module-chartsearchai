@@ -38,7 +38,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * the wire (issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">#395</a>).
  *
- * <p>It is the base its four neighbours needed and none of them is: each of those judges a finding
+ * <p>It is the base the FINDING keys beside it needed and none of them is: each of those judges a finding
  * the answer DID cite, so on the reported response — six findings stated of seven carried — not one
  * of them reported the dropped finding. The first case below states this key beside the two whose
  * empty lists were the misleading part, and asserts those as PRECONDITIONS rather than as results.
@@ -95,7 +95,7 @@ public class ChartSearchAiFindingCitationsTest {
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null,
 				Collections.<Integer> emptyList(), Collections.<Integer> emptyList(),
-				Collections.<ChartSearchService.UnstatedFindingSeverity> emptyList(), null, stated,
+				Collections.<ChartSearchService.UnstatedFindingSeverity> emptyList(), null, null, stated,
 				null, null);
 	}
 

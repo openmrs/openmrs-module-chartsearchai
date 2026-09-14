@@ -100,6 +100,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 92: The contraindication chip states whether the chart match behind it is corroborated](#decision-92-the-contraindication-chip-states-whether-the-chart-match-behind-it-is-corroborated)
 - [Decision 93: A record that names no drug grounds no claim](#decision-93-a-record-that-names-no-drug-grounds-no-claim)
 - [Decision 94: A screened finding counts as cited where the answer's own text anchors a marker for it, and not where only the model's citations array names it](#decision-94-a-screened-finding-counts-as-cited-where-the-answers-own-text-anchors-a-marker-for-it-and-not-where-only-the-models-citations-array-names-it)
+- [Decision 95: Which elisions the prose check sees no longer depends on the glyph the model chose](#decision-95-which-elisions-the-prose-check-sees-no-longer-depends-on-the-glyph-the-model-chose)
+- [Decision 96: An answer quoting one of a substance's ceilings says which stricter one it left unstated](#decision-96-an-answer-quoting-one-of-a-substances-ceilings-says-which-stricter-one-it-left-unstated)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -6491,7 +6493,7 @@ That residue is not cosmetic. The prose is what the answer IS; a clinician readi
 
 **The lead is never re-decided.** The continuation goes after the original answer, whose opening is what `score_directness.classify` reads — the property Decision 84 measured an arm LOSING while it gained completeness, and the one this pass must not trade.
 
-**It runs before every check and before grounding**, on both paths. Each of the five checks judges the answer the method is about to publish, so a repair after any of them would leave that key describing prose the caller never receives; `findingCitations` in particular is then measured over the repaired answer, which is what makes the gate honest.
+**It runs before every check and before grounding**, on both paths. Each of those checks judges the answer the method is about to publish, so a repair after any of them would leave that key describing prose the caller never receives; `findingCitations` in particular is then measured over the repaired answer, which is what makes the gate honest.
 
 **One walk, shared.** `SafetyFindingCitationExtentCheck.uncitedFindingIndexes` is the walk `measureFindingCitations`' WARN already did, extracted and named so the log line and the second prompt cannot come to be about different populations — the two-resolutions-that-agree shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids. `citedFindingIndexes` is likewise shared, so the count and its complement cannot disagree about what "cited" means.
 
@@ -7417,3 +7419,57 @@ The scan is single-pass — the loop steps past a whole run, and a run shorter t
 - **A source-scanning guard pinning one spelling of the ASCII marker.** Considered and declined. The rule is *three or more* dots, which no literal expresses, so such a guard would pin a spelling production does not use; and a literal `"..."` occurs in unrelated code, including two log-truncation helpers, so the guard would ship with a file-level exclude list covering the very test file a hand-rolled dialect would appear in.
 
 **It does not close #337.** Decision 78's residue — a hazard dropped by stopping early, unmarked — stands, and the ticket's own last word is that the degraded prose still reaches the clinician unchanged. The PR refs the issue rather than closing it, as the PRs behind Decisions 61, 74 and 78 each did.
+
+## Decision 96: An answer quoting one of a substance's ceilings says which stricter one it left unstated
+
+**Status: Accepted** (September 2026) — implemented, issue [#276](https://github.com/openmrs/openmrs-module-chartsearchai/issues/276). It changes no prompt, no answer text, no reference list and no chip; it adds one deterministic comparison after the answer and one response key.
+
+### Context
+
+A drug-reference dataset may file one substance as several rows, one per presentation, each publishing its own daily ceiling. The record's own shape is Decision 57's neighbourhood; what matters here is a two-step history.
+
+[#259](https://github.com/openmrs/openmrs-module-chartsearchai/issues/259) was that the injected record and the overdose chip could state two different ceilings with **only one of them citable** — a clinician reading the cited record had no route to the number the chip had used. [#274](https://github.com/openmrs/openmrs-module-chartsearchai/pull/274) closed that by giving the record the row set the chips already fold: the record now states every ceiling the pass resolved, attributed to the row that publishes it.
+
+**#276 is the layer after.** Measured live on a RefApp 3.7.1 standalone with `gemma-4-E4B-it-Q4_K_M`, deterministic across reruns, on a curated three-entry dataset filing `Acetylsalicylic acid` at 4000 mg/day and `Acetylsalicylic acid (81 mg dispersible)` at 100 mg/day as one substance: a patient charted on `Aspirin 81mg`, asked *"What is the maximum daily dose of aspirin for this patient?"*, was answered *"The maximum daily dose of Acetylsalicylic acid for ages 0-120 is 4000 mg/day [113]."* The injected record grew by 143 characters over the pre-#274 build — the other-rows section exactly, to the character — so the 100 mg/day **was** in the prompt and in the citable record. #274's gain is real and narrower than it looks: the answer stopped calling 4000 "the maximum daily dose of aspirin" and attributed it to the row and band it belongs to. The number a clinician is told is unchanged, and it is 40× the ceiling published for the presentation the patient is on.
+
+Nothing observable on that response said so, and every candidate reader was correctly silent:
+
+- `rowAttribution` said nothing, and correctly — both rows publish the alias `aspirin`, so no recorded name out-claimed the other and `chartAnchoredSubject` answered null. There is no deterministic subject row to name.
+- `ReferenceProseFidelityCheck` reports a substitution inside a reproduction; this answer reproduces nothing and substitutes nothing. Every word of it is true of the row it names.
+- `SafetyFindingSeverityFidelityCheck` asks after a rating, and a `drug_reference` record carries none.
+- The overdose chip cannot see it **by design**: `DrugSafetyValidator.LIMIT_CUE` exists so that a recited ceiling is not read as a prescribed dose. That carve-out is right, and it is what leaves this question open.
+
+### The options, and why the third
+
+The issue listed four, none measured.
+
+1. **Leave it.** The evidence is complete and the attribution correct. Defensible, and it is the right default for anything that would change what the answer *says*.
+2. **Order the other-rows section against the subject.** Cheap, but it is additive prompt prose, which this module's record says needs `eval/drift-metric` rather than an argument.
+3. **A deterministic post-answer check.**
+4. **A prompt-level instruction.** Four prior attempts at additive prompt salience here regressed drift or abstention.
+
+**Three, because it is the only one whose correctness is decidable without the gate.** Options 2 and 4 change what the model reads, so their effect on drift and abstention is an empirical question needing a live engine, and no test in this repository can pin it. Option 3 changes no prompt and no answer text, so it cannot move either by construction; and it is this module's established remedy for exactly this shape — [Decision 74](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log) states the principle, and #337 twice, #377, #395 and #409 applied it. Option 1 is not refuted by this: the answer's prose is unchanged, and what is added is the statement a client needed in order to notice.
+
+### The decision
+
+**Where the answer quotes one of a cited record's dosing ceilings and states a stricter one from that same record nowhere, that is reported at `WARN` and published as `unstatedDosingCeilings`.**
+
+- **The ceilings travel structurally.** `PatientChartSerializer.RecordMapping.getDosingCeilings()`, written once by `DrugReferenceInjector`'s `drug_reference` mapping. Reading them back out of the record's rendered text was refused, more firmly than its siblings refused the same move: that text interleaves the module's own sentences with operator-authored free text which can pair any number with any unit, so a parse would attribute ceilings the dataset never published. It is `getOrderActive()`'s rule ([#317](https://github.com/openmrs/openmrs-module-chartsearchai/issues/317)) and `getOrderDrugNamed()`'s ([#294](https://github.com/openmrs/openmrs-module-chartsearchai/issues/294)), one field along.
+- **Collected from what the record APPENDS, never from the bands behind it.** A band publishing no daily maximum contributes nothing because the text states nothing; a sibling row the section skipped is not in the record to be quoted. Deriving from the bands would have the check report an answer for not quoting a number it was never given.
+- **One expression writes the number and the needle.** `DrugReferenceInjector.dailyCeiling` is called by the sentence the model reads and by the collector the check compares against it. Written twice they could spell one dataset's ceiling two ways, and the check would then ask whether an answer states a string the record never contained — silently, and fail-open, since a needle nothing matches reports nothing.
+- **Ordered strictest first, by the NUMBER.** Decided in the writer, where the ceilings are still doubles. The check reads position 0 as the strictest and never sorts: as strings `"300"` orders before `"50"`, and a reversed list silences the check on exactly the arrangement it exists for — the laxer ceiling would sit at position 0, the answer would be found to state it, and the walk would return.
+- **Selection is the FIELD.** The walk gates on a record carrying ceilings, never on `resourceType` against `drug_reference`, which the instructions forbid outright ([#122](https://github.com/openmrs/openmrs-module-chartsearchai/issues/122)). It is also the cheapest gate: `chartsearchai.drugReference.enabled` ships `false`, so the map is empty before the answer is read.
+- **It is not a claim the answer is WRONG**, and the wire contract says so. The laxer ceiling can be the right number for the question asked; what the key states is that the answer put one of a record's ceilings in front of a clinician and not the other.
+
+### Consequences
+
+- **+** The number a clinician was not told is now on the response, deterministically, without depending on the model — which is what the issue asked of this option.
+- **+** Nothing the model reads changes, so no drift, abstention or directness measurement can move. The eval gate is not owed.
+- **+** The answer's prose is left alone. Since [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201) a reference-group citation publishes no verdict to carry an edit anyway.
+- **−** **It is deliberately cue-blind.** `LIMIT_CUE` is the module's discriminator between a recited ceiling and a stated dose; it is private and in another package, and a second copy of it is the drift this subsystem keeps having to un-say. Carrying the record's own UNIT in the needle buys most of what the cue would — `"give 4000 mg"` does not trip the report and `"Aspirin 300 mg tablets"` does not silence it — and the residue is an answer quoting the laxer ceiling in the record's spelling while stating the stricter one in another (`"300 mg per day"`, `"300mg/day"`), which is reported. Both spellings are the record's own, so the common case is an answer reciting the record.
+- **−** **It asks of the WHOLE answer.** An answer stating the stricter ceiling anywhere is silent, including where it states it about a different drug. That is the conservative choice its siblings make and it is what keeps the key from crying wolf on correct prose.
+- **−** **It cannot say which ceiling is right for this patient.** It is not a dosing check, and on the reported arrangement no row is identifiable as the subject at all.
+- **−** **A ceiling only the ANSWER's own wording brings into play is outside it.** The record is written before the answer exists, so the bound is the rows that pass resolved — the residue `DrugReferenceInjector.otherRowDosing` already records of its own.
+- **−** **`[]` says very little on a stock install.** The drug-reference layer ships off, and no bundled dataset files a substance as more than one row CARRYING AGE BANDS. The two bundled sources are excluded for different reasons, and stating only one of them was wrong here in an earlier draft: the curated seed sets no `substanceName`, so every substance in it is one row; `DdiDrugReferenceSource` sets no age band on any row, while it DOES set a substance name on every one — so the `ddinter` half turns on the bands and not on the row count, and the shipped knowledge base does file substances as several rows. `DrugSafetyValidator.ceilingAttribution`'s javadoc already stated that joint condition for the dose chip's own cross-row clause. The reachable population is curated per-presentation datasets with age bands, which is the same population #274 was measured on: the shipped-config safety probe was byte-identical across that PR's two builds, 20/20 answers, 0 flips.
+- **−** **Two ceiling strings are published, and they are bytes of the record.** That is the point — the number this exists to put in front of a reader — and they are safe because a ceiling is the dataset's own reference material rather than any recorded value of the patient's. Not "nothing about the patient", which an earlier draft of this bullet said: the ceilings published are the ones `DrugReference.bandForAge(age)` selected, so a reader holding the dataset can narrow her age band from them. No prose from the answer or from the rest of the record reaches the log or the wire.
+- **−** **The `drug_reference` mapping now builds through the widest `RecordMapping` constructor**, spelling `derivedFrom` and `orderDrugNamed` as `null` at a second site in `DrugReferenceInjector`. Neither is a second writer of those stamps — both nulls are what every shorter rung defaulted them to, and what a record about a reference entry asserts — but the placement was forced: `ArchitectureGuardTest` selects two constructors by their descriptor tails and requires the guarded one to be the widest, so the parameter had to go INTO the existing widest rung rather than after `orderDrugNamed` or into a rung of its own.

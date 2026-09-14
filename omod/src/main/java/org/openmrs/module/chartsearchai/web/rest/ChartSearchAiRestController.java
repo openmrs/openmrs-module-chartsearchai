@@ -1691,6 +1691,22 @@ public class ChartSearchAiRestController {
 	 * {@code ChartSearchAiUnstatedDosingCeilingTest.theSearchResponseNamesTheCeilingTheAnswerLeftUnstated},
 	 * which compares the raw map — so renaming an accessor cannot silently move a documented key.
 	 */
+	private List<Map<String, Object>> serializeUnstatedDosingCeilings(
+			List<UnstatedDosingCeiling> unstated) {
+		if (unstated == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (UnstatedDosingCeiling entry : unstated) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("statedCeiling", entry.getStatedCeiling());
+			map.put("unstatedCeiling", entry.getUnstatedCeiling());
+			out.add(map);
+		}
+		return out;
+	}
+
 	/**
 	 * The wire shape of {@code orderStopDates}: one object per cited chart record whose drug order is
 	 * no longer in force, {@code citation} the index the answer printed in brackets and
@@ -1723,22 +1739,6 @@ public class ChartSearchAiRestController {
 			Map<String, Object> map = new LinkedHashMap<String, Object>();
 			map.put("citation", entry.getCitation());
 			map.put("stopDate", formatDate(entry.getStopDate()));
-			out.add(map);
-		}
-		return out;
-	}
-
-	private List<Map<String, Object>> serializeUnstatedDosingCeilings(
-			List<UnstatedDosingCeiling> unstated) {
-		if (unstated == null) {
-			return null;
-		}
-		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
-		for (UnstatedDosingCeiling entry : unstated) {
-			Map<String, Object> map = new LinkedHashMap<String, Object>();
-			map.put("citation", entry.getCitation());
-			map.put("statedCeiling", entry.getStatedCeiling());
-			map.put("unstatedCeiling", entry.getUnstatedCeiling());
 			out.add(map);
 		}
 		return out;

@@ -777,9 +777,9 @@ public class ArchitectureGuardTest {
 	 * would leave the second blind, and both rules report success by finding nothing.
 	 *
 	 * <p>Every needle is put to {@link #codeLines}' reading of the line and never to the line itself,
-	 * so a note in either of Java's comment forms neither satisfies the required call nor trips a
-	 * dialect negative; that method carries what each earlier form was measured to let through, and
-	 * the residue that survives the strip. The line NUMBER a violation reports is still the raw
+	 * so a note in a comment form that method strips neither satisfies the required call nor trips a
+	 * dialect negative; it carries which forms were measured to let a note through before the strip,
+	 * and the residues that survive it. The line NUMBER a violation reports is still the raw
 	 * file's, which is why the loop indexes both lists.
 	 *
 	 * @param fileName the source file, as {@code getSourceCache()} keys it
@@ -829,7 +829,8 @@ public class ArchitectureGuardTest {
 	 * Whether {@code code} spells a citation-marker dialect of its own — a bracketed-digit regex, or
 	 * the shared pattern named directly instead of reached through its decode step. Hand it
 	 * {@link #codeLines}' reading of a line and never the raw line: a note mentioning either
-	 * spelling, in either of Java's comment forms, is not a dialect.
+	 * spelling is not a dialect wherever that method strips the note, and its javadoc says which
+	 * forms it strips and which residues survive.
 	 *
 	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
 	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
@@ -846,8 +847,9 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The CODE in {@code lines}: comments removed in both of Java's forms, string and character
-	 * literals kept, and one entry per input line so a caller can still report a line NUMBER.
+	 * The CODE in {@code lines}: comments opened by {@code //} and by {@code /*} removed, string and
+	 * character literals kept, and one entry per input line so a caller can still report a line
+	 * NUMBER.
 	 *
 	 * <p><b>The strip is load-bearing rather than tidiness.</b> A rule that reads SOURCE TEXT for a
 	 * required call has that assertion satisfied by a comment naming what was just removed, and a
@@ -891,9 +893,23 @@ public class ArchitectureGuardTest {
 	 * dialect negative.
 	 * Literals are kept deliberately — a bracketed-digit regex IS a string literal ({@code "\\["}),
 	 * so blanking them would take the dialect negatives' own evidence away, and no per-needle policy
-	 * is worth the parser. Nothing here parses Java: a text block is read as an ordinary literal, and
-	 * a block comment left unclosed blanks the rest of the file, which only a file that does not
-	 * compile can do.
+	 * is worth the parser.
+	 *
+	 * <p><b>Nothing here parses Java, and what that costs is measured rather than bounded.</b> The
+	 * quote state is declared inside the per-line loop, so it resets at every newline and a
+	 * multi-line TEXT BLOCK is not tracked: only the opening {@code """} delimiter line is
+	 * quote-scanned, and every body line is read as ordinary CODE. Measured 2026-09-14 by driving
+	 * this method from a throwaway same-package test — a {@code //} in a body line was stripped, and
+	 * a {@code /*} in one opened block state that blanked the {@code """} terminator line and every
+	 * line after it. This project sets {@code maven.compiler.source} to 11 and text blocks are Java
+	 * 15+, so nothing under the scanned tree can hold one at this source level; a source-level bump
+	 * is what makes it reachable, and everything after such a body line would then be blank to these
+	 * rules — reddening a required-call assertion on compliant code and blinding a dialect negative
+	 * over the same region, a wrong strip failing in both directions at once. Unicode escapes are
+	 * not processed either, so a needle in a comment whose opening slashes are written as unicode
+	 * escapes counts as code: measured the same way, such a line comes back byte-identical, while
+	 * javac translates unicode escapes before it lexes and reads the line as a comment. Separately,
+	 * an unclosed block comment blanks every line after the one it opens on.
 	 *
 	 * <p><b>It stays APART from {@code ChartSearchAiUncorroboratedChartMatchTest.liveCode}</b>, the
 	 * omod-side stripper whose javadoc records the block form as the defect stripping {@code //}
@@ -980,10 +996,13 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>Same residue as its neighbours, named rather than papered over: it reads SOURCE TEXT, so it
 	 * asks that the call be present and not that its result be used, and a second reading written
-	 * BESIDE a retained call is out of its reach. A COMMENT naming the removed call no longer
-	 * satisfies it in either of Java's forms — {@link #codeLines} carries what each form was measured
-	 * to let through — but a needle inside a STRING LITERAL does, a log line or an assertion message
-	 * naming {@code citedFindingIndexes(} being indistinguishable here from a call to it. An earlier
+	 * BESIDE a retained call is out of its reach. Three comment shapes naming the removed call were
+	 * each measured to satisfy it and each is now stripped — a trailing {@code //} note, a mid-line
+	 * {@code /*} one closed on the same line, and a three-line block whose middle line does not
+	 * begin with {@code *}; {@link #codeLines} carries those measurements, and the residues it does
+	 * NOT strip, which include a comment opener written with unicode escapes. A needle inside a STRING
+	 * LITERAL satisfies it too, a log line or an assertion message naming
+	 * {@code citedFindingIndexes(} being indistinguishable here from a call to it. An earlier
 	 * draft of this paragraph called that the CHEAPEST edit satisfying the rule while removing the
 	 * reading, and it was not: a {@code was …} note on the replacing line was cheaper and closer to
 	 * how the slip that motivated this rule was actually written, which is why that note is now

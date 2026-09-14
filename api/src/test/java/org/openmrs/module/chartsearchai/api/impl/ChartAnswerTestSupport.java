@@ -23,8 +23,8 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
  * and {@code DrugReferenceTestSupport}: a reader of the published answer is a statement about the
  * wire contract, and three copies of one are three places a change to that contract has to reach.
  * Extracted when a third suite in this package needed the reference-index reading (issue #409 round
- * two); the earlier two had a copy each, one returning a {@code List} and one a {@code Set}, which is
- * how the same premise came to be asserted two ways over one accessor.
+ * two): the earlier two each held their own copy of it, so leaving it per-suite would have made
+ * three readers of one wire contract.
  *
  * <p>This is a reader of production output, never a stand-in for any part of the pipeline. Nothing
  * here re-derives what a check computes — every case still drives the real

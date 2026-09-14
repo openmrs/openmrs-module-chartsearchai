@@ -90,13 +90,42 @@ public class ChartSearchAiUtils {
 	public static final String SENTENCE_TERMINATORS = ".!?";
 
 	/**
+	 * The terminator an ASCII elision is a run of. <b>A MEMBER of {@link #SENTENCE_TERMINATORS} and
+	 * not a second set</b> — nothing here adds a character this module reads as ending a sentence.
+	 * It is spelled as a character because the rule {@link #mayEndASentence} applies it in is about a
+	 * RUN of one member, which set membership cannot express; ask that method, never this field.
+	 */
+	private static final char ELISION_DOT = '.';
+
+	/**
+	 * How many consecutive {@link #ELISION_DOT}s spell a cut the writer MARKED rather than a sentence
+	 * end. Three, because three is the established ASCII spelling of the character {@code …}; two is
+	 * a slip, and reading a slip as a marked cut would spend {@link #mayEndASentence}'s caller's
+	 * precision on it. The boundary fails toward silence, which is the direction that caller needs —
+	 * {@code ReferenceProseFidelityTest.aTwoDotGapIsATerminatorAndNotACutTheAnswerMarked} is what
+	 * stops the rule being widened to any dot run without the widening being seen.
+	 *
+	 * <p><b>It is a MINIMUM, and that half needed pinning of its own.</b> A longer run is a marked
+	 * cut too, and so is one that fills its whole gap; both of those readings live in the {@code >=}
+	 * and in the absence of an end-of-gap test, and neither is expressible as a value of this
+	 * constant.
+	 * {@code ReferenceProseFidelityTest.aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith}
+	 * carries a row for each — mutate the comparison and read which row reddens.
+	 */
+	private static final int MIN_ELISION_DOTS = 3;
+
+	/**
 	 * Where one sentence of an answer or a record ends and the next begins: a {@code .}, {@code !}
 	 * or {@code ?} followed by whitespace, or a line break. The SPLITTING question over
 	 * {@link #SENTENCE_TERMINATORS}: {@code CitationGroundingVerifier} cuts a text into the units it
 	 * grades on it, and it is strict because a splitter that cut at every dot would halve a sentence
 	 * at {@code Q12H.} or at an abbreviation. {@link #mayEndASentence} is the other question over the
-	 * same set — could a sentence have ended in this GAP — and is deliberately weaker; read its
-	 * javadoc before reaching for either, because they are not interchangeable in either direction.
+	 * same set — could a sentence have ended in this GAP — and is deliberately weaker, except where
+	 * its caller asks it to read a run of three or more dots as a marked cut (issue #337's fourth
+	 * round). This pattern splits on such a run wherever whitespace follows it, so on that one gap
+	 * the two can answer OPPOSITELY rather than one merely admitting more. Read its javadoc
+	 * before reaching for either; they are
+	 * not interchangeable in either direction.
 	 *
 	 * <p>Two spellings of one terminator set is the shape issue #260 records the cost of: the two
 	 * disagreed in both directions and both silently. So a consumer takes one of these two entry
@@ -110,21 +139,41 @@ public class ChartSearchAiUtils {
 			"(?<=[" + Pattern.quote(SENTENCE_TERMINATORS) + "])\\s+|[\\r\\n]+");
 
 	/**
-	 * @return whether a sentence COULD have ended inside {@code between} — the text separating two
-	 *         adjacent words — which is a deliberately weaker question than
-	 *         {@link #SENTENCE_BOUNDARY} asks. Any terminator anywhere in the gap answers yes, and
-	 *         so does a line break; nothing has to follow the terminator.
+	 * @param between the text separating two adjacent words
+	 * @param aMarkedCutEndsIt whether a run of {@link #MIN_ELISION_DOTS} or more
+	 *            {@link #ELISION_DOT}s in that gap ends a sentence. TRUE is the reading this method
+	 *            had before issue #337's fourth round and is what a caller wants of text it did not
+	 *            write; FALSE reads such a run as a cut the WRITER marked, which is what a caller
+	 *            wants of text whose cuts it is judging. Not a default and not a preference — the
+	 *            two callers of {@code ReferenceProseFidelityCheck.wordsWithoutMarkers} pass
+	 *            opposite values for the answer and for a record, and the paragraphs below say what
+	 *            each buys.
+	 * @return whether a sentence COULD have ended inside {@code between}, which is a deliberately
+	 *         weaker question than {@link #SENTENCE_BOUNDARY} asks. Any terminator anywhere in the
+	 *         gap answers yes, and so does a line break; nothing has to follow the terminator. Under
+	 *         {@code aMarkedCutEndsIt == false} a dots run is stepped over instead.
 	 *
 	 *         <p><b>Weaker on purpose, and the weakness is the correctness.</b> Its caller
 	 *         ({@code ReferenceProseFidelityCheck}) uses the answer only to STAY SILENT, so a gap
-	 *         read as a sentence end can only suppress a report and never cause one — which is what
-	 *         makes that check's "loses recall, never precision" property true. Since issue #337's
+	 *         read as a sentence end suppresses a report rather than causing one — which is what
+	 *         makes that check's "loses recall, never precision" property true everywhere but at the
+	 *         one carve-out the next paragraph is about. Since issue #337's
 	 *         second round that suppression is client-visible as well as log-local, the check's
 	 *         answer being published: what it costs is an entry in
 	 *         {@code ChartAnswer.getUnfaithfullyRenderedCitations()}, which is why that key's client
-	 *         contract says an absent entry is not a certificate of faithfulness. The direction is
-	 *         unchanged — it still cannot manufacture one. Asking
-	 *         {@code SENTENCE_BOUNDARY} instead was measured wrong in exactly that direction: it
+	 *         contract says an absent entry is not a certificate of faithfulness.
+	 *
+	 *         <p><b>The elision carve-out is where that direction is spent.</b> An ASCII elision is a
+	 *         run of a member of this set, so where {@code aMarkedCutEndsIt} is FALSE a marked cut is
+	 *         the one gap SHAPE whose answer this rule moved — from silence to a report. It is not
+	 *         the only gap this predicate answers no for; a plain space is the ordinary case. What
+	 *         that buys, what it costs and why one operand asks for it and the other does not are
+	 *         {@code ReferenceProseFidelityCheck}'s to state, since that class passes both values:
+	 *         read its class javadoc, and ADR Decision 95, which is canonical for the measurement.
+	 *         The rule steps OVER the run rather than answering for the whole gap, so a line break or
+	 *         a second terminator beside the cut still ends the sentence. Asking
+	 *         {@code SENTENCE_BOUNDARY} instead spends that direction everywhere rather than at one
+	 *         marked cut, and was measured rather than argued: it
 	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the
 	 *         model closed — {@code ."} or {@code .)} , and this module's own reference prose is full
 	 *         of {@code (SSRIs)} and {@code (M1)} — is not a boundary, and a faithful quotation
@@ -136,12 +185,24 @@ public class ChartSearchAiUtils {
 	 *         apart for the reason issue #260 records — one rule, one terminator set, one named entry
 	 *         point per question, never a second regex at a call site.
 	 */
-	public static boolean mayEndASentence(String between) {
+	public static boolean mayEndASentence(String between, boolean aMarkedCutEndsIt) {
 		if (between == null) {
 			return false;
 		}
 		for (int at = 0; at < between.length(); at++) {
 			char c = between.charAt(at);
+			if (c == ELISION_DOT && !aMarkedCutEndsIt) {
+				int past = at;
+				while (past < between.length() && between.charAt(past) == ELISION_DOT) {
+					past++;
+				}
+				if (past - at >= MIN_ELISION_DOTS) {
+					// A cut the writer marked, not a sentence end. Stepped over rather than answered
+					// for; the javadoc above says what that buys.
+					at = past - 1;
+					continue;
+				}
+			}
 			if (SENTENCE_TERMINATORS.indexOf(c) >= 0 || c == '\r' || c == '\n') {
 				return true;
 			}

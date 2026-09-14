@@ -70,10 +70,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * finding and the drug-reference record beside it are what the real validate → injectRecords →
  * renderFinding chain produces off the bundled DDInter excerpt for a patient on tramadol asked
  * about sertraline, and their canned answers are sliced out of that record's own text at run time
- * rather than transcribed, so the arrangement cannot drift from the dataset. FOUR cases ASSEMBLE
- * their record instead — the chart-record scope case, the two pooling legs and the unreadable-record
- * case — because the shapes they need do not occur in a sixteen-entry excerpt; each says so where it
- * stands, and the check is a pure function of an answer and a record's TEXT, so an assembled operand
+ * rather than transcribed, so the arrangement cannot drift from the dataset. SOME cases ASSEMBLE
+ * their record instead — among them the chart-record scope case, the pooling legs, the
+ * unreadable-record case and the record whose own prose carries a marked cut — because the
+ * shapes they need do not occur in a sixteen-entry excerpt; each says so where it stands, and
+ * the check is a pure function of an answer and a record's TEXT, so an assembled operand
  * is the right one for them. The model is stubbed because answer prose is not reproducible on a live
  * engine; the chart builder, the injector and the validator are stubbed too, as in the sibling
  * suite, so the one variable under test is the answer.
@@ -548,9 +549,11 @@ public class ReferenceProseFidelityTest {
 		// ChartSearchAiAuditSearchModeTest's four spellings exist to avoid — every other assertion
 		// compares a constant to itself and cannot see it shrink.
 		//
-		// Deleting mayEndASentence's line-break arm reddens this case alone, and the line break is
+		// Deleting mayEndASentence's line-break arm reddens this case, and the line break is
 		// not decoration: the system prompt asks for "numbered lines or simple newlines", so a
-		// multi-item answer often carries no terminating punctuation at all.
+		// multi-item answer often carries no terminating punctuation at all. It is no longer the only
+		// case that arm reddens — aGapCarryingAnotherSentenceEndBesideTheCut… carries a line break
+		// too — so delete it and read the failures rather than expecting one.
 		assertEquals(".!?", ChartSearchAiUtils.SENTENCE_TERMINATORS,
 				"the members below are literals, so a change to the shared set has to arrive here too "
 						+ "rather than passing silently");
@@ -565,6 +568,125 @@ public class ReferenceProseFidelityTest {
 						"\"" + ending.trim() + "\" must end an answer sentence, or the answer-side exit "
 								+ "silently stops firing for it. Captured: " + capture.describeAll());
 			}
+		}
+	}
+
+	@Test
+	public void aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith() {
+		// Issue #337, round four. An ELISION is a report — the check's own class javadoc says so, and
+		// says why: the answer states no word the record does not and has still dropped content out
+		// of a sentence a clinician reads. Until this case only SOME elisions were: a cut written
+		// with ASCII dots put a terminator in the gap, which the weak gap question read as the answer
+		// ending its sentence, so both ASCII-dot spellings were silent where every other spelling
+		// reported. Which elisions the check saw was therefore decided by the glyph the model chose.
+		//
+		// The markers are LITERALS and the assertion is over every spelling together, for the reason
+		// everyWayASentenceCanEndInTheSharedRule… gives: a case that iterated the reported spellings
+		// off some constant would pass while the ASCII one stayed silent, which is the whole defect.
+		// Measured before the fix, through this same arrangement: "…" and the em dash reported, and
+		// " ... " and " [...] " did not. The bracketed spelling is here because README names it among
+		// the spellings a client is told are reported alike, and it is rescued by this change rather
+		// than by the em dash's route — its dots are a run, so before the fix its first dot silenced
+		// the case too.
+		//
+		// The last two rows pin the RUN TEST itself, which nothing else did — aTwoDotGapIsATerminator…
+		// pins it from below only, and both of the mutations below left the whole api suite green
+		// before these rows existed. Four dots pins it from ABOVE: tighten ">= MIN_ELISION_DOTS" to
+		// "== MIN_ELISION_DOTS" and the four-dot row reddens. The unspaced cut pins it POSITIONALLY:
+		// its dots are the WHOLE gap, so an end-of-gap guard added during a refactor of the loop —
+		// "&& past < between.length()" — reddens the unspaced row. Both are ordinary ways to write a
+		// cut, and each mutation restores exactly the glyph-dependent silence this case exists to
+		// remove, in a check whose only value is recall. Mutate the line and read the failures.
+		for (String marker : new String[] { " … ", " — ", " ... ", " [...] ", " .... ", "..." }) {
+			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + marker
+					+ "such as antimalarials [" + finding.getIndex() + "]."));
+			try (LogCapture capture = LogCapture.on(CHECK)) {
+				service.search(patient(), QUESTION);
+				// The marker is quoted UNTRIMMED: " ... " and "..." are different rows guarding
+				// different mutations, and trimming printed both of them the same way.
+				assertTrue(warnStating(capture, "[" + finding.getIndex() + "]"),
+						"a cut marked \"" + marker + "\" drops content out of a sentence a "
+								+ "clinician reads exactly as the other spellings do, and must be "
+								+ "reported alike. Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
+	public void aGapCarryingAnotherSentenceEndBesideTheCutStillEndsAnAnswerSentence() {
+		// The elision rule is a SKIP over the dots and not an answer of its own, which is what keeps
+		// every other way a sentence can end working inside the same gap. Two rows, because they
+		// exercise different arms: a line break beside the cut, which is the arm the system prompt's
+		// "numbered lines or simple newlines" makes load-bearing and which
+		// everyWayASentenceCanEndInTheSharedRule… pins on its own; and a full stop ahead of the cut,
+		// which is the ordinary terminator arm. The two rows guard different mutation shapes, and a
+		// maintainer should know which: the line-break row reddens under either an early "no" for
+		// any gap containing a run OR the minimal in-loop edit that returns instead of stepping on,
+		// while the full-stop row reddens only under the first — its leading stop is read before the
+		// run is reached. ADR Decision 95 carries what the in-loop form was measured to redden.
+		for (String gap : new String[] { " ...\n", ". ... " }) {
+			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + gap
+					+ "such as antimalarials [" + finding.getIndex() + "]."));
+			try (LogCapture capture = LogCapture.on(PACKAGE)) {
+				service.search(patient(), QUESTION);
+				assertFalse(capture.describeAll().isEmpty(),
+						"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+				assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+						"a gap carrying a sentence end of its own still ends the answer's sentence, "
+								+ "whatever else stands in it. Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
+	public void aMarkedCutInTheRECORDSOwnProseIsNotReadAsOneTheAnswerMade() {
+		// The carve-out is asked of the ANSWER operand and never of a record, and this is the case
+		// that costs. A dots run in the SOURCE is the knowledge base's own prose, not a cut the
+		// answer made, so reading it as one takes the record-sentence exit away exactly where the
+		// module appends its strength clause: endSentence leaves a detail that already ends in a
+		// terminator alone, so a detail ending in an ellipsis is followed straight by the clause.
+		//
+		// Flip the record operand's argument in reportUnfaithfulReferenceProse to false and both rows
+		// redden. ADR Decision 95 carries the measurement that made this the fix rather than a
+		// residue, and the control it was measured against.
+		//
+		// Assembled rather than injected: the bundled excerpt carries no note ending in an ellipsis,
+		// which is also why this shape needs an operator dataset to arise in production.
+		String detail = "Coadministration of local anesthetics with other oxidizing agents that can "
+				+ "also induce methemoglobinemia such as antimalarials...";
+		assertTrue(detail.endsWith("..."), "the premise: the record's own prose ends in a marked cut, "
+				+ "which is what endSentence leaves alone — so the clause below follows the cut "
+				+ "directly and the seam IS the gap this case is about");
+		for (String tail : new String[] { " and monitoring is advised", " Monitor closely" }) {
+			TestableService probe = newService(referenceRecordStating(
+					detail + DrugReferenceInjector.STRENGTH_WITHHOLD));
+			probe.setLlmProvider(answering(detail + tail + " [1]."));
+			try (LogCapture capture = LogCapture.on(PACKAGE)) {
+				probe.search(patient(), QUESTION);
+				assertFalse(capture.describeAll().isEmpty(),
+						"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+				assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+						"an answer that reproduced the record's own marked cut stated nothing the "
+								+ "record does not. Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
+	public void aTwoDotGapIsATerminatorAndNotACutTheAnswerMarked() {
+		// The run length from below. Three dots is the established spelling of an elision; two is a
+		// typo, and reading it as a marked cut would spend the check's precision on a slip. Silence
+		// is the safe direction, so the boundary sits where the spelling is unambiguous — and this
+		// case is what stops it being widened to "any dot run" without the widening being seen.
+		service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may"))
+				+ " .. such as antimalarials [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"two dots is a terminator, not a cut the answer marked. Captured: "
+							+ capture.describeAll());
 		}
 	}
 

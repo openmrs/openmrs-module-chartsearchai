@@ -31,7 +31,6 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -543,10 +542,10 @@ public class SafetyFindingSeverityFidelityTest {
 			// was handed both findings and chose one — and the response itself carries the
 			// divergence this case is about. `references[]` stays the union (Decision 94 refuses to
 			// narrow it), so the array-only finding IS published as a reference.
-			assertTrue(referenceIndexes(answer).contains(arrayOnly),
+			assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(arrayOnly),
 					"the premise: the array-only finding resolved into references[], which is the "
 							+ "union and is deliberately not narrowed. References were: "
-							+ referenceIndexes(answer));
+							+ ChartAnswerTestSupport.referenceIndexes(answer));
 			assertEquals(1, answer.getFindingCitationExtent().getCited(),
 					"and findingCitations counts ONE cited finding — the marker the prose anchored. "
 							+ "That is the reading this key must share, or one response states both "
@@ -581,25 +580,14 @@ public class SafetyFindingSeverityFidelityTest {
 				Arrays.asList(anchored, arrayOnly)));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { });
-			assertTrue(referenceIndexes(answer).contains(arrayOnly),
+			assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(arrayOnly),
 					"the premise, on this path too: the array-only finding resolved into "
-							+ "references[]. References were: " + referenceIndexes(answer));
+							+ "references[]. References were: " + ChartAnswerTestSupport.referenceIndexes(answer));
 			assertEquals(statementsFor(Collections.singletonList(anchored)),
 					answer.getUnstatedFindingSeverities(),
 					"the streaming path reads the answer's own markers as well. Captured: "
 							+ capture.describeAll());
 		}
-	}
-
-	/** @return the citation indexes of {@code answer}'s reference list, for the cases whose premise
-	 *          is that a citation resolved — read off the published answer rather than off the
-	 *          arrangement, so the premise is a statement about what production produced. */
-	private static Set<Integer> referenceIndexes(ChartAnswer answer) {
-		Set<Integer> indexes = new LinkedHashSet<Integer>();
-		for (RecordReference reference : answer.getReferences()) {
-			indexes.add(Integer.valueOf(reference.getIndex()));
-		}
-		return indexes;
 	}
 
 	/** An answer that names each cited record in one flat clause with no rating anywhere — the

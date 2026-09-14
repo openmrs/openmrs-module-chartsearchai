@@ -216,9 +216,18 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
-			// And the fifth (issue #395): the base the four above had none for. Each of them judges a
-			// finding the answer DID cite, so an answer that drops one entirely is outside all four
+			// And the fifth (issue #395): the base the four above had none for. Each of them starts
+			// from a citation that RESOLVED and judges how the answer RENDERED it, so a finding the
+			// answer cited in neither its prose nor its structured array is outside every one of them
 			// — this counts the findings the prompt carried against the ones the answer cited.
+			//
+			// What "the answer cited it" means is NOT one reading across those four: some take the
+			// markers the prose anchors, some the resolution's union. ADR Decision 97 records it per
+			// key and publishes no mapping over the family, every attempt at one so far having been
+			// falsified. So do not narrow a sibling key on the strength of this grouping — for
+			// ClassCodeFidelityCheck, whose #142 leg POOLS the cited records' codes as support,
+			// narrowing would ADD accusations rather than remove them. Mutate a check's selection and
+			// read the failures.
 			// Carried rather than re-derived for the reason its neighbours are: the chart, which is
 			// the carrier of the population, is gone by REST time.
 			FindingCitationExtent findingCitationExtent =
@@ -226,9 +235,9 @@ public class LlmInferenceService implements ChartSearchService {
 							response.getAnswer(), cited, chart.getMappings());
 			// And the sixth (issue #276): the cited reference records whose answer quoted one of the
 			// dosing ceilings they publish and left a stricter one from the same record unstated.
-			// LAST, after the extent, so the comment above keeps counting the four checks that judge
-			// a cited FINDING. This one judges no finding, so it is not among those four — which is
-			// a claim about findings and not about reference records, two of the four reading those
+			// LAST, after the extent, so the "four above" the comment above points at stays those
+			// four. This one judges no finding at all, which is what puts it outside that grouping —
+			// a claim about findings and not about reference records, which some of those four read
 			// as well.
 			// Carried rather than re-derived for the reason its neighbours are: the ceilings travel
 			// on the chart, and the chart is gone by REST time.
@@ -691,8 +700,8 @@ public class LlmInferenceService implements ChartSearchService {
 							response.getAnswer(), cited, chart.getMappings());
 			// The sixth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #276): the check runs here, after the user-visible handoff. LAST for the
-			// reason it is last in `search` — the comment above counts the four finding checks, and
-			// this one judges a cited reference record instead.
+			// reason it is last in `search`, which that method's own comment carries: this one judges
+			// a cited reference record and no finding.
 			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
 					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
 							response.getAnswer(), cited, chart.getMappings());

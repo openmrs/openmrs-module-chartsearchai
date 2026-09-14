@@ -775,6 +775,11 @@ public class ArchitectureGuardTest {
 	 * apart — a renamed decode step or a third dialect spelling fixed in one copy and not the other
 	 * would leave the second blind, and both rules report success by finding nothing.
 	 *
+	 * <p>Every needle is put to {@link #codeOn} of the line and never to the line itself, so a
+	 * trailing {@code //} note neither satisfies the required call nor trips a dialect negative; that
+	 * method carries what the earlier whole-line form was measured to let through, and the residue
+	 * that survives the strip.
+	 *
 	 * @param fileName the source file, as {@code getSourceCache()} keys it
 	 * @param expectedCompiles how many patterns the class is allowed to compile — every one of them
 	 *            for a shape of its own, never for a marker
@@ -792,21 +797,20 @@ public class ArchitectureGuardTest {
 		boolean callsDecodeStep = false;
 		List<String> ownDialect = new ArrayList<>();
 		for (int i = 0; i < lines.size(); i++) {
-			String line = lines.get(i);
-			String trimmed = line.trim();
-			if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+			String code = codeOn(lines.get(i));
+			if (code.trim().isEmpty()) {
 				continue;
 			}
-			if (line.contains("ChartSearchAiUtils.citedIndexes(")) {
+			if (code.contains("ChartSearchAiUtils.citedIndexes(")) {
 				callsDecodeStep = true;
 			}
-			if (line.contains("Pattern.compile(")) {
+			if (code.contains("Pattern.compile(")) {
 				compiles++;
 			}
 			// A bracketed-digit regex of its own, and the shared pattern read directly instead of
 			// through its decode step. Both are marker dialects; neither is caught by the count.
-			if (namesAMarkerDialect(line)) {
-				ownDialect.add("line " + (i + 1) + ": " + trimmed);
+			if (namesAMarkerDialect(code)) {
+				ownDialect.add("line " + (i + 1) + ": " + lines.get(i).trim());
 			}
 		}
 		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep, fileName
@@ -819,8 +823,10 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * Whether {@code line} spells a citation-marker dialect of its own — a bracketed-digit regex, or
-	 * the shared pattern named directly instead of reached through its decode step.
+	 * Whether {@code code} spells a citation-marker dialect of its own — a bracketed-digit regex, or
+	 * the shared pattern named directly instead of reached through its decode step. Hand it
+	 * {@link #codeOn} of a line and never the raw line: a trailing note mentioning either spelling
+	 * is not a dialect.
 	 *
 	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
 	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
@@ -832,8 +838,62 @@ public class ArchitectureGuardTest {
 	 * and the finding-severity rule FORBIDS it, so one signature over both polarities is what that
 	 * javadoc rightly refuses.
 	 */
-	private static boolean namesAMarkerDialect(String line) {
-		return line.contains("\\[") || line.contains("INLINE_CITATION");
+	private static boolean namesAMarkerDialect(String code) {
+		return code.contains("\\[") || code.contains("INLINE_CITATION");
+	}
+
+	/**
+	 * The CODE on {@code line}: its comments removed, its string and character literals kept.
+	 *
+	 * <p><b>A TRAILING {@code //} comment is stripped, and that is load-bearing rather than
+	 * tidiness.</b> The earlier form skipped a line whose trimmed text BEGINS a comment and scanned
+	 * every other line whole, so a line of code carrying a trailing note was read as code to the end
+	 * of the note. Measured 2026-09-14, BEFORE this strip existed: a hand-rolled
+	 * {@code charAt}/{@code isDigit} marker scan put in place of
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} inside
+	 * {@code SafetyFindingSeverityFidelityCheck} reddened
+	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} on its own — but with a
+	 * trailing {@code // replaces SafetyFindingCitationExtentCheck.citedFindingIndexes(…)} on the very
+	 * line that replaced it, the whole build went GREEN with the shared reading absent from
+	 * production, the required-call assertion satisfied by a note naming what had just been removed.
+	 * That is the dominant commenting style in the files these rules scan. With the strip, that same
+	 * arrangement reddens that rule — re-measured after the fix. It closes the
+	 * symmetric false positive too: a trailing note merely MENTIONING {@code INLINE_CITATION} in
+	 * {@code SafetyFindingCitationExtentCheck} reddened a compliant file before the strip and is
+	 * green after it, also measured.
+	 *
+	 * <p><b>The residue, named rather than closed: a needle inside a STRING LITERAL still counts.</b>
+	 * A log line or an assertion message naming {@code citedFindingIndexes(} satisfies the
+	 * required-call assertion, and one spelling {@code INLINE_CITATION} trips the dialect negative.
+	 * Literals are kept deliberately — a bracketed-digit regex IS a string literal ({@code "\\["}), so
+	 * blanking them would take the dialect negatives' own evidence away, and no per-needle policy is
+	 * worth the parser. Nothing here parses Java: a block comment opened on one line and closed on
+	 * another is not tracked, and neither is a text block.
+	 */
+	private static String codeOn(String line) {
+		String trimmed = line.trim();
+		if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+			return "";
+		}
+		char quote = 0;
+		for (int i = 0; i < line.length(); i++) {
+			char c = line.charAt(i);
+			if (quote != 0) {
+				if (c == '\\') {
+					i++;
+				}
+				else if (c == quote) {
+					quote = 0;
+				}
+			}
+			else if (c == '"' || c == '\'') {
+				quote = c;
+			}
+			else if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
+				return line.substring(0, i);
+			}
+		}
+		return line;
 	}
 
 	/**
@@ -867,7 +927,11 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>Same residue as its neighbours, named rather than papered over: it reads SOURCE TEXT, so it
 	 * asks that the call be present and not that its result be used, and a second reading written
-	 * BESIDE a retained call is out of its reach.
+	 * BESIDE a retained call is out of its reach. A TRAILING comment no longer satisfies it —
+	 * {@link #codeOn} carries what that was measured to let through — but a needle inside a STRING
+	 * LITERAL does, a log line or an assertion message naming {@code citedFindingIndexes(} being
+	 * indistinguishable here from a call to it. That is the cheapest edit which satisfies this rule
+	 * and still removes the reading.
 	 */
 	@Test
 	public void theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck() throws IOException {
@@ -879,19 +943,18 @@ public class ArchitectureGuardTest {
 		int compiles = 0;
 		List<String> ownDialect = new ArrayList<>();
 		for (int i = 0; i < lines.size(); i++) {
-			String line = lines.get(i);
-			String trimmed = line.trim();
-			if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+			String code = codeOn(lines.get(i));
+			if (code.trim().isEmpty()) {
 				continue;
 			}
-			if (line.contains("SafetyFindingCitationExtentCheck.citedFindingIndexes(")) {
+			if (code.contains("SafetyFindingCitationExtentCheck.citedFindingIndexes(")) {
 				callsTheReading = true;
 			}
-			if (line.contains("Pattern.compile(")) {
+			if (code.contains("Pattern.compile(")) {
 				compiles++;
 			}
-			if (namesAMarkerDialect(line) || line.contains("ChartSearchAiUtils.citedIndexes(")) {
-				ownDialect.add("line " + (i + 1) + ": " + trimmed);
+			if (namesAMarkerDialect(code) || code.contains("ChartSearchAiUtils.citedIndexes(")) {
+				ownDialect.add("line " + (i + 1) + ": " + lines.get(i).trim());
 			}
 		}
 		org.junit.jupiter.api.Assertions.assertTrue(callsTheReading, fileName

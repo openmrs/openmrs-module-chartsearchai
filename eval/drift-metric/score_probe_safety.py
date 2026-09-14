@@ -855,6 +855,14 @@ def unstated_ratings(cell):
     instruction stated all seven findings and left every one of their ratings unstated, and the
     completeness column alone scored that as a clean win. Returns None where the capture stated no
     measurement, on the same rule as `finding_extent`; a list (possibly empty) otherwise.
+
+    **This key ALSO changed its reading, one day after the completeness cell's did**: on 2026-09-14
+    `unstatedFindingSeverities` took the same marker-anchored `cited`, so it no longer names a
+    finding the completeness cell counted as uncited (ADR Decision 97). Figures scored off this
+    column before that date were taken under the union, and a pair of cells straddling the two dates
+    is not a comparison of one variable. `eval/drift-metric/README.md` is the ledger of which
+    recorded arms that reaches — pointed at rather than re-listed, the same way
+    `findings_incompletely_stated` points at Decision 94 for its own.
     """
     us = cell["unstated_finding_severities"]
     return us if isinstance(us, list) else None

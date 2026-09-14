@@ -1089,15 +1089,24 @@ public interface ChartSearchService {
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">issue
 		 * #395</a>. {@code SafetyFindingCitationExtentCheck} states it.
 		 *
-		 * <p>It is the base the family had no member for. The neighbours enumerated here each judge a
-		 * record the answer DID cite — whether the rating reached the prose
+		 * <p>It is the base the family had no member for. A finding the answer cited in neither its
+		 * prose nor its structured {@code citations} array resolves to no citation at all, so it is
+		 * outside every neighbour enumerated here: whether the rating reached the prose
 		 * ({@link #getUnstatedFindingSeverities()}), whether the words were reproduced faithfully
 		 * ({@link #getUnfaithfullyRenderedCitations()}), whether the chart record offered can be the
-		 * order named ({@link #getMisattributedOrderCitations()}), whether a claim offered any record
-		 * at all ({@link #getActiveOrderClaims()}) — so an answer that drops a finding ENTIRELY is
-		 * outside every one of them, and on the reported run not one reported it: the three list keys
-		 * read {@code []} and the fourth was flagging something else. Not "they all read as a
-		 * faithful answer's", which is false of that response.
+		 * order named ({@link #getMisattributedOrderCitations()}) and whether a claim offered any
+		 * record at all ({@link #getActiveOrderClaims()}) are each a question about something the
+		 * answer DID state. On the reported run not one of them reported it: the three list keys read
+		 * {@code []} and the fourth was flagging something else. Not "they all read as a faithful
+		 * answer's", which is false of that response.
+		 *
+		 * <p><b>What "the answer cited it" means is not one reading across those keys, so do not take
+		 * the shared word for a shared population.</b> Since issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a> round
+		 * two {@link #getUnstatedFindingSeverities()} asks it the way this key does — the markers the
+		 * prose anchors — while a key selecting off the resolution's union instead can judge a
+		 * citation {@code answer} never anchored. ADR Decision 97 records the reading per key and
+		 * publishes no rule over the family; mutate a check's selection and read the failures.
 		 *
 		 * <p>{@link FindingCitationExtent} is canonical for what {@code carried}, {@code cited}, a
 		 * zero and this accessor's null each do and do not assert, for why it is a count rather than

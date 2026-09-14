@@ -490,8 +490,9 @@ public class DosingCeilingFidelityTest {
 		RecordMapping mapping = soleRecordCarryingCeilings(three);
 		assertEquals(Arrays.asList("60 mg/day", "200 mg/day", "600 mg/day"),
 				mapping.getDosingCeilings(),
-				"the premise: THREE ceilings, strictest first — and their spellings sort 200, 600, 60, "
-						+ "so a spelling sort would put a middle one at position 0");
+				"the premise: THREE ceilings, strictest first — and their spellings sort 200, 60, 600 "
+						+ "(the space in \"60 mg/day\" ordering below the '0' of \"600\"), so a spelling "
+						+ "sort would put a MIDDLE ceiling at position 0");
 		TestableService service = newService(three);
 		service.setLlmProvider(answering("The adult ceiling is 600 mg/day and the paediatric one is "
 				+ "200 mg/day [" + mapping.getIndex() + "]."));

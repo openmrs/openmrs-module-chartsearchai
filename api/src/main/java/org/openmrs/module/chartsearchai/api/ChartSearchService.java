@@ -1195,8 +1195,10 @@ public interface ChartSearchService {
 		 * reasons and neither excludes the other's: {@code DrugSafetyValidator}'s
 		 * {@code ceilingAttribution} javadoc states the same joint condition for the dose chip's own
 		 * cross-row clause.
-		 * Null's reachable cause is the async-grounding path's early {@code done}, built before the
-		 * check runs; on a cache hit the ORIGINAL request's list is replayed with the rest.
+		 * Null has two reachable causes: the async-grounding path's early {@code done}, built before
+		 * the check runs, and the check's own failure, which it logs — {@code
+		 * DosingCeilingFidelityTest.aCheckThatThrowsIsReportedAndTheAnswerStillReturns} drives the
+		 * second. On a cache hit the ORIGINAL request's list is replayed with the rest.
 		 *
 		 * @return one entry per offending citation, the citations distinct and in CITATION order —
 		 *         the order {@code LlmInferenceService.extractCitedReferences} resolved them. Null

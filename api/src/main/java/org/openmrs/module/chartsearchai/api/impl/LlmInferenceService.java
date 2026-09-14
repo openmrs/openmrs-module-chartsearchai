@@ -637,7 +637,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// that cannot be one, and, since #337's third round, a cited finding whose RATING the
 			// answer states nowhere, how many findings the prompt carried against how many the
 			// answer cited, and, last, a cited reference record whose answer quoted one of its
-			// dosing ceilings and left a stricter one from it unstated (issue #276). None blocks: the class-code check reports only to the log and
+			// dosing ceilings and left a stricter one from it unstated (issue #276).
+			// None blocks: the class-code check reports only to the log and
 			// the rest carry their answers onto the ChartAnswer this method RETURNS, so no consumer
 			// above waits on any of them. Microseconds for the first and the third — measured by
 			// calling their own entry points from a throwaway same-package case, the active-order

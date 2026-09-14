@@ -101,17 +101,23 @@ import org.slf4j.LoggerFactory;
  *       chart has no record for is not a citation here either — {@code CLAUDE.md}'s
  *       inline-citation rule states it, and taking that accessor's output rather than re-deriving
  *       "which records were cited" is what keeps that one answer;</li>
- *   <li>the ceiling is matched on a word boundary and case-insensitively through
- *       {@link ChartSearchAiUtils#statesWord}, the scan this check shares with its sibling and with
- *       the injector, so no second dialect of "the answer states X" exists to drift. The boundary
- *       fails toward silence in the direction that matters: {@code "4000 mg/day"} inside
- *       {@code "14000 mg/day"} does not match, and any occurrence at all of the stricter ceiling,
- *       for any reason, silences the report;</li>
+ *   <li>the ceiling is matched case-insensitively through
+ *       {@link ChartSearchAiUtils#statesMeasurement}, which is {@link ChartSearchAiUtils#statesWord}'s
+ *       boundary over the same scan plus the one rule a NUMERIC needle needs — that method is
+ *       canonical for what the rule is and why it is a second entry point rather than a widening.
+ *       No second dialect of "the answer states X" exists to drift. What it buys here:
+ *       {@code "4000 mg/day"} inside {@code "14000 mg/day"} does not match, nor does
+ *       {@code "5 mg/day"} inside {@code "2.5 mg/day"} — the latter would be a false REPORT, which
+ *       is the one direction this check must never fail in. And any occurrence at all of the
+ *       stricter ceiling, for any reason, silences the report;</li>
  *   <li>it reports the citation and the two ceilings and NO PROSE FROM EITHER SIDE. The ceilings
  *       are themselves bytes of the record — they are the whole point, the number this exists to
  *       put in front of a reader — and they are safe to log and to publish because they are the
- *       dataset's own reference material, saying nothing about this patient. The answer is never
- *       quoted and neither is any other part of the record;</li>
+ *       dataset's own reference material rather than any recorded value of this patient's. Not
+ *       "nothing about this patient": the ceilings are the ones
+ *       {@code DrugReference.bandForAge(age)} selected, so a reader holding the dataset can narrow
+ *       her age band from them. The answer is never quoted and neither is any other part of the
+ *       record;</li>
  *   <li>it never rewrites the answer. Editing a clinician-facing sentence is a larger decision than
  *       this check is licensed to make, and since issue #201 a reference-group citation publishes
  *       no verdict to carry one.</li>
@@ -171,6 +177,15 @@ final class DosingCeilingFidelityCheck {
 	 *         {@code cited}'s own order, taken rather than re-derived so that "which records were
 	 *         cited, and in what order" has one answer. Empty when the check ran and found none, and
 	 *         null only when the check itself failed.
+	 *
+	 *         <p>The set the walk de-duplicates on is belt and braces rather than load-bearing, the
+	 *         same state {@code SafetyFindingSeverityFidelityCheck}'s own {@code @return} records of
+	 *         its: {@code LlmInferenceService.extractCitedReferences} already collects indexes into a
+	 *         {@code LinkedHashSet} and emits one reference per index, so {@code cited} cannot carry
+	 *         a repeat today. Said so the guard does not look better defended than it is — swap the
+	 *         set for a list that always adds and nothing reddens. What it still decides is that one
+	 *         citation yields at most one entry, which is what lets a consumer treat
+	 *         {@code citation} as a key.
 	 */
 	static List<UnstatedDosingCeiling> reportUnstatedDosingCeilings(Patient patient, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
@@ -272,7 +287,7 @@ final class DosingCeilingFidelityCheck {
 	private static boolean answerStates(String answer, String ceiling, Map<String, Boolean> memo) {
 		Boolean known = memo.get(ceiling);
 		if (known == null) {
-			known = Boolean.valueOf(ChartSearchAiUtils.statesWord(answer, ceiling));
+			known = Boolean.valueOf(ChartSearchAiUtils.statesMeasurement(answer, ceiling));
 			memo.put(ceiling, known);
 		}
 		return known.booleanValue();

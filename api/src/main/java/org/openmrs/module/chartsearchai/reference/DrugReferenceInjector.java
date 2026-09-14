@@ -3489,8 +3489,8 @@ public class DrugReferenceInjector {
 		/** The daily ceilings {@link #text} states for this patient's age, strictest first and
 		 *  distinct — {@code PatientChartSerializer.RecordMapping.getDosingCeilings()}'s carrier, and
 		 *  EMPTY wherever the text states no ceiling, which is every record of a dataset publishing no
-		 *  age bands at all — the shipped {@code ddinter} source, for one (issue #276). Rides on the rendering for the
-		 *  reason {@link #source} and {@link #withheldInteractions} do: everything in {@link #text}
+		 *  age bands at all — the shipped {@code ddinter} source, for one (issue #276). Rides on
+		 *  the rendering for the reason {@link #source} and {@link #withheldInteractions} do: everything in {@link #text}
 		 *  is quotable, and a model told to cite records has recited this class's own bookkeeping
 		 *  into a clinician-facing answer (issue #117). Unlike those two it is also IN the text —
 		 *  it is a copy of what the text says rather than something about it, which is what lets a
@@ -3756,12 +3756,13 @@ public class DrugReferenceInjector {
 		if (band != null) {
 			sb.append(" Dosing for ages ").append(band.getMinYears()).append("-").append(band.getMaxYears())
 					.append(": ").append(dosingNumbers(band));
-			if (band.getMaxDailyDoseMg() <= 0) {
+			if (dailyCeiling(band) == null) {
 				sb.append(" (no pediatric daily maximum published for this age — consult a dosing reference)");
 			}
 			sb.append(".");
-			// Inside the branch that appended the sentence, and dailyCeiling declines the very case
-			// the advice above covers, so the two cannot disagree about whether a ceiling was stated.
+			// Inside the branch that appended the sentence, and asked through the same predicate the
+			// advice above is asked through, so "was a ceiling stated" has one answer here rather than
+			// two spellings that happen to agree (issue #276).
 			collectCeiling(ceilings, band);
 		}
 
@@ -4216,6 +4217,13 @@ public class DrugReferenceInjector {
 	 *          they could come to spell one dataset's ceiling two ways, and the check would then ask
 	 *          whether an answer states a string the record never contained — silently, and
 	 *          fail-open, since a needle nothing matches reports nothing.
+	 *
+	 *          <p><b>The spelling is MACHINE-generated, and a consumer relies on that.</b> It is
+	 *          {@code formatNumber} of a double, never a string the dataset supplied, so equal
+	 *          ceilings give byte-identical needles and {@code DosingCeilingFidelityCheck} can
+	 *          memoise on the raw phrase without folding its case — unlike its sibling, whose needle
+	 *          is an operator-authored rating and which folds for that reason. Take a spelling from
+	 *          the dataset here and that memo silently degrades.
 	 *
 	 *          <p>The cue is deliberately NOT part of it. The needle has to survive being quoted out
 	 *          of the record's own sentence and into the model's, where the words in front of the

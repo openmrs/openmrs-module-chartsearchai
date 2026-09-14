@@ -1100,6 +1100,12 @@ public class ChartSearchAiUtils {
 	 *         two rules to differ, a rating the record states one way and the answer states the other
 	 *         would be reported as dropped, or a rating neither states would be asked for.
 	 *
+	 *         <p>Since issue #276 it is one of TWO questions over one scan — see
+	 *         {@link #statesMeasurement}, which the dosing-ceiling check asks instead because its
+	 *         needle begins with a number. Adding a question means adding an entry point beside
+	 *         these, never widening one of them: this one's boundary is what a WORD needs, and
+	 *         widening it to what a number needs would refuse {@code "Major"} in {@code "Major."}.
+	 *
 	 *         <p><b>Deliberately not {@code DrugReference}'s bounded-token family, and not a member
 	 *         of it — but not because the rules differ.</b> At {@code PROSE_TRAILING_LETTERS}
 	 *         (zero) that family's {@code containsWord} reduces to this same condition, and a review
@@ -1130,6 +1136,57 @@ public class ChartSearchAiUtils {
 	 *         better defended than it is.
 	 */
 	public static boolean statesWord(String text, String word) {
+		return statesBounded(text, word, false);
+	}
+
+	/**
+	 * Whether {@code text} states {@code measurement} — a needle that BEGINS WITH A NUMBER, such as
+	 * {@code "4000 mg/day"} — on the same boundary {@link #statesWord} uses plus one rule that only a
+	 * numeric needle needs (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/276">#276</a>).
+	 *
+	 * <p><b>The extra rule, and the measurement behind it.</b> {@link #statesWord}'s boundary refuses
+	 * a needle a LETTER OR DIGIT sits against, which is the whole of what a word needs: it rejects
+	 * {@code "major"} inside {@code "majority"} and {@code "4000 mg/day"} inside
+	 * {@code "14000 mg/day"}. A decimal point is neither a letter nor a digit, so that boundary reads
+	 * <em>"her dose is 2.5 mg/day"</em> as stating {@code "5 mg/day"} — measured, and reproduced
+	 * through the real answer path by
+	 * {@code DosingCeilingFidelityTest.aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}. So
+	 * this one additionally refuses a match whose preceding character is {@code '.'} or {@code ','},
+	 * either of which makes the needle a fragment of a longer number — a decimal tail, or a group
+	 * after a thousands separator ({@code "1,500 mg/day"} does not state {@code "500 mg/day"}).
+	 *
+	 * <p><b>A second entry point rather than a widened {@link #statesWord}, and rather than a test at
+	 * the call site.</b> Widening the shared one would break its own callers: a rating is a WORD, and
+	 * {@code "Major."} at the end of a sentence must keep matching {@code "Major"} — the trailing
+	 * side of this rule would refuse it, and the leading side is meaningless for a needle that starts
+	 * with a letter. Two questions, two named entry points, one scan underneath, which is the shape
+	 * {@code CLAUDE.md} prescribes for {@code SENTENCE_TERMINATORS}; what it forbids is a third
+	 * dialect spelled at a call site, and the whole point of this method is that there is not one.
+	 *
+	 * <p>It is asymmetric deliberately: only the LEADING edge takes the extra refusal. Every needle
+	 * that reaches it ends in a unit ({@code DrugReferenceInjector.dailyCeiling} composes
+	 * {@code formatNumber(v) + " mg/day"}), so the trailing character is a letter and
+	 * {@link #statesWord}'s own rule already covers that side. A needle ending in a digit would want
+	 * more, and none exists; add the rule with the needle rather than in advance.
+	 *
+	 * @param text the prose to scan, null answering false
+	 * @param measurement the needle, null or blank answering false as in {@link #statesWord}
+	 * @return whether the text states it
+	 */
+	public static boolean statesMeasurement(String text, String measurement) {
+		return statesBounded(text, measurement, true);
+	}
+
+	/**
+	 * The one scan both public questions above share, so that "does this text state X" cannot come to
+	 * have two implementations — which is exactly what {@code DosingCeilingFidelityCheck} would have
+	 * needed to hand-roll otherwise, and what this module keeps having to un-say.
+	 *
+	 * @param refuseNumericFragment whether a match preceded by {@code '.'} or {@code ','} is refused,
+	 *            which {@link #statesMeasurement} is canonical for the reason of
+	 */
+	private static boolean statesBounded(String text, String word, boolean refuseNumericFragment) {
 		if (text == null || isBlank(word)) {
 			return false;
 		}
@@ -1137,6 +1194,10 @@ public class ChartSearchAiUtils {
 		String needle = word.toLowerCase(Locale.ROOT);
 		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
 			int after = at + needle.length();
+			if (at > 0 && refuseNumericFragment
+					&& (haystack.charAt(at - 1) == '.' || haystack.charAt(at - 1) == ',')) {
+				continue;
+			}
 			if ((at == 0 || !Character.isLetterOrDigit(haystack.charAt(at - 1)))
 					&& (after >= haystack.length()
 							|| !Character.isLetterOrDigit(haystack.charAt(after)))) {

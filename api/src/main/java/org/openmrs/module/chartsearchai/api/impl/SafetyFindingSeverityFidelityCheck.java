@@ -83,7 +83,8 @@ import org.slf4j.LoggerFactory;
  *   <li>a BLANK or absent answer is silent. That arm is reachable rather than defensive —
  *       {@code LlmInferenceService.extractCitedReferences} resolves the structured citations array
  *       for a blank answer deliberately — and a degenerate output is not a fidelity defect. Every
- *       sibling is silent there too, by an empty class-code set, a word floor or a phrase gate;</li>
+ *       sibling is silent there too, each by whatever gate it resolves first — mutate this guard and
+ *       read which of them still speak;</li>
  *   <li>it considers only the citations the answer's own resolution admitted
  *       ({@code LlmInferenceService.extractCitedReferences}), so a bracketed clinical value the
  *       chart has no record for is not a citation here either — CLAUDE.md's inline-citation rule

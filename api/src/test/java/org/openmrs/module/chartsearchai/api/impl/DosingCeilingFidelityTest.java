@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedDosingCeiling;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -71,10 +72,13 @@ public class DosingCeilingFidelityTest {
 	private static final String CEILINGS =
 			"chartsearchai-test/drug-reference-substance-dosing-ceilings.json";
 
-	/** The fixture whose two ceilings disagree under numeric and lexicographic order — see its own
-	 *  description, and {@link #theCeilingsAreOrderedByNUMBERAndNotByTheirSpelling}. */
-	private static final String ORDERING =
-			"chartsearchai-test/drug-reference-dosing-ceiling-order.json";
+	/** The fixture for the two ways a ceiling COMPARISON can go wrong that the ticket's own dataset
+	 *  cannot reach — an order that differs between numbers and spellings, and a non-integral ceiling
+	 *  whose spelling is a suffix of a decimal. See its own description, and
+	 *  {@link #theCeilingsAreOrderedByNUMBERAndNotByTheirSpelling} /
+	 *  {@link #aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}. */
+	private static final String EDGES =
+			"chartsearchai-test/drug-reference-dosing-ceiling-edges.json";
 
 	/** The presentation the patient is charted on — the low-dose row, as in the ticket. */
 	private static final String CHARTED = "Acetylsalicylic acid (enteric-coated)";
@@ -262,7 +266,7 @@ public class DosingCeilingFidelityTest {
 		// position 0, the check finds the answer states it, and the walk returns silent on exactly
 		// the defect issue #276 reports. Sort the ceilings as strings in production and this is what
 		// goes red.
-		PatientChart ordered = DrugReferenceTestSupport.injectedReferenceChartOver(ORDERING, 30,
+		PatientChart ordered = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(ordered);
 		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
@@ -278,6 +282,39 @@ public class DosingCeilingFidelityTest {
 					answer.getUnstatedDosingCeilings(),
 					"and the answer quoting 2000 must be told the 500 it left out, not the reverse. "
 							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith() throws IOException {
+		// The ceilings are the first NUMERIC needles this module scans an answer for, and a number has
+		// a boundary its words do not: `ChartSearchAiUtils.statesWord` bounds on letters and digits
+		// alone, so "2.5 mg/day" reads as stating "5 mg/day" — a decimal point is neither. That is a
+		// false POSITIVE on a published key, which is the one direction this check must never fail
+		// in: every other residue it carries silences a report, and this one INVENTS one, accusing an
+		// answer of leaving out a ceiling it never quoted anything of.
+		//
+		// Reachable exactly where the feature is: an operator dataset with a non-integral ceiling on a
+		// multi-row age-banded substance. Nothing bundled has one, and nor did any fixture until this
+		// pair.
+		PatientChart decimals = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of levothyroxine?", "Levothyroxine (paediatric)");
+		RecordMapping mapping = soleRecordCarryingCeilings(decimals);
+		assertEquals(Arrays.asList("0.5 mg/day", "5 mg/day"), mapping.getDosingCeilings(),
+				"the premise: this substance's ceilings are non-integral, so the laxer one's spelling "
+						+ "is a SUFFIX of a decimal an answer can contain");
+		TestableService service = newService(decimals);
+		service.setLlmProvider(answering("Her recorded dose is 2.5 mg/day ["
+				+ mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of levothyroxine?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"\"2.5 mg/day\" states no ceiling of this record — it merely ENDS with the "
+							+ "spelling of one. Captured: " + capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(),
+					"and nothing is published, or a client renders an accusation about a number the "
+							+ "answer never quoted");
 		}
 	}
 
@@ -395,12 +432,11 @@ public class DosingCeilingFidelityTest {
 		};
 	}
 
-	private static Consumer<List<org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference>> noCitations() {
-		return new Consumer<List<org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference>>() {
+	private static Consumer<List<RecordReference>> noCitations() {
+		return new Consumer<List<RecordReference>>() {
 
 			@Override
-			public void accept(
-					List<org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference> cited) {
+			public void accept(List<RecordReference> cited) {
 			}
 		};
 	}

@@ -111,7 +111,10 @@ import org.springframework.stereotype.Service;
  * for a recitation the model diverged from inside the sentence it was copying (issue #337), whose
  * answer is published as {@code unfaithfullyRenderedCitations}; and
  * {@link SafetyFindingSeverityFidelityCheck} for a cited safety finding whose RATING the answer
- * states nowhere (the same issue, round three), published as {@code unstatedFindingSeverities}.
+ * states nowhere (the same issue, round three), published as {@code unstatedFindingSeverities}; and
+ * {@link DosingCeilingFidelityCheck} for an answer that quoted one of a cited record's dosing
+ * ceilings while leaving a STRICTER one from that same record unstated (issue #276), published as
+ * {@code unstatedDosingCeilings}.
  * None of those is published as a verdict on these citations, which stay withheld.
  * {@link ActiveOrderCitationFidelityCheck} runs after every answer too and is NOT one of them: it
  * reads no reference content, asking instead which CHART record a sentence cited, published as

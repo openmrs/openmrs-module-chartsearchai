@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
  * {@code Advil 400mg}, Moderate — reached the prose nowhere. A clinician reading the answer got six
  * reasons to withhold where the module had screened seven, with nothing saying a seventh existed.
  *
- * <p><b>Why nothing else can see it.</b> Its four neighbours all judge a finding the answer DID
+ * <p><b>Why nothing else can see it.</b> Every neighbour of it judges a record the answer DID
  * cite. {@link SafetyFindingSeverityFidelityCheck} asks whether a cited finding's rating reached the
  * prose, and on that answer it correctly read {@code []} — it asks of the WHOLE answer and
  * <em>Moderate</em> appeared six times, so a seventh Moderate finding dropped entirely is invisible

@@ -1255,7 +1255,7 @@ public class ChartSearchAiUtils {
 	 *         of its own — the extra refusal {@link #statesMeasurement} adds and {@link #statesWord}
 	 *         does not.
 	 *
-	 *         <p><b>The two separators are asked different questions, and that is the whole rule.</b>
+	 *         <p><b>The two separators are asked different questions.</b>
 	 *         A thousands separator ALWAYS has a digit to its left, so a {@code ','} is a
 	 *         fragment marker after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
 	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
@@ -1267,9 +1267,10 @@ public class ChartSearchAiUtils {
 	 *         precedes it, whatever that was: a word ({@code "see note.500"}), a bracket
 	 *         ({@code "(suspension).500"}), a quote, an emphasis mark, or the run of three or more
 	 *         dots issue #422 calls a marked cut rather than a full stop ({@code "see note...500"}).
-	 *         Only the leading character is classified either way, so that run needs no rule of its
-	 *         own and the two questions share no code — {@link #mayEndASentence} is
-	 *         where a cut is stepped over, and this method never asks whether a sentence ended.
+	 *         A run of dots needs no rule of its own: the character before the stop is then another
+	 *         dot, neither a digit nor a space, so the run is admitted exactly as an attached full
+	 *         stop is. The two questions share no code — {@link #mayEndASentence} is where a cut is
+	 *         stepped over, and this method never asks whether a sentence ended.
 	 *
 	 *         <p><b>The exception: a comma a digit precedes is NOT a fragment marker where the run of
 	 *         digits before it is four or longer and exactly three digits follow it</b>
@@ -1282,11 +1283,12 @@ public class ChartSearchAiUtils {
 	 *         <p><b>The two halves are asked for different reasons and only the first is
 	 *         structural.</b> A conventionally grouped number's head group is one to three digits and
 	 *         every group after it exactly three, so a run of four before a comma belongs to no such
-	 *         grouping — that is what makes this window safe to open at all. The three-digit tail is
+	 *         grouping — which takes the thousands-separator reading out of this window and leaves
+	 *         the list and the comma decimal. The three-digit tail is
 	 *         a BOUND on how much of the window the exception takes, and NOT a second grouping fact:
 	 *         a group of a grouped number IS exactly three digits, so that test tells no list from a
-	 *         separator. What it does is confine the admission to the shape #425 measured, leaving
-	 *         the commoner comma-decimal spellings ({@code "1000,5"}, {@code "1000,50"}) refused.
+	 *         separator. What it does is confine the admission to the shape #425 measured, leaving a
+	 *         comma decimal of one or two places ({@code "1000,5"}, {@code "1000,50"}) refused.
 	 *         <b>Both halves are load-bearing; mutate either and read the failure</b> — dropping the
 	 *         run-length test reddens {@code DosingCeilingFidelityTest}
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}, dropping
@@ -1298,8 +1300,8 @@ public class ChartSearchAiUtils {
 	 *         clause's own case.
 	 *
 	 *         <p><b>Every earlier wording of this admitted a false REPORT, which is the direction
-	 *         {@code DosingCeilingFidelityCheck} must never fail in, and each was found by a
-	 *         different reviewer.</b> Refusing on any {@code '.'}/{@code ','} lost the list comma;
+	 *         {@code DosingCeilingFidelityCheck} must never fail in.</b> Refusing on any
+	 *         {@code '.'}/{@code ','} lost the list comma;
 	 *         refusing only BETWEEN two digits lost the naked decimal; refusing unless a LETTER
 	 *         precedes lost the comma after a parenthesis; refusing unless a letter precedes the
 	 *         FULL STOP lost every other closing mark; refusing on ANY comma a digit precedes lost
@@ -1313,13 +1315,15 @@ public class ChartSearchAiUtils {
 	 *         with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be read
 	 *         out of it. The exception ADMITS a comma decimal whose fraction is three digits long
 	 *         behind four or more ({@code "1000,300 mg/day"}). And it does NOT REACH a list written
-	 *         any other way — three digits or fewer before the comma ({@code "600,60 mg/day"}), or a
-	 *         ceiling of other than three digits after it ({@code "4000,2000 mg/day"}) — so #425's
-	 *         own false report still stands for those. Those last two are ONE trade rather than two
-	 *         defects: {@code "1000,300 mg/day"} and {@code "4000,300 mg/day"} are the same shape to
-	 *         a rule reading only the text, so admitting either admits both. What would tell them
-	 *         apart is whether the number before the comma is another of the cited record's own
-	 *         ceilings, and this method is handed a text and a needle, so it cannot ask.
+	 *         any other way — each half refusing one on its own, three digits before the comma
+	 *         ({@code "600,500 mg/day"}) or four after it ({@code "4000,2000 mg/day"}) — so #425's
+	 *         own false report still stands for those. Those last two are two faces of ONE choice
+	 *         rather than two defects, and the choice is where the tail bound sits:
+	 *         {@code "1000,300 mg/day"} (a decimal) and {@code "4000,300 mg/day"} (the list #425
+	 *         filed) are the same shape to a rule reading only the text, so no bound admits one
+	 *         without the other, and a wider one would reach further into both. What could narrow
+	 *         them is whether the number before the comma is another of the cited record's own
+	 *         ceilings — evidence this method cannot see, being handed a text and a needle.
 	 *         Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
 	 *         {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
@@ -1372,8 +1376,8 @@ public class ChartSearchAiUtils {
 			return false;
 		}
 		// And the tail is bounded at exactly three digits. That is NOT a grouping fact — a group of a
-		// grouped number IS exactly three — it is the bound that keeps the commoner comma-decimal
-		// spellings refused. The javadoc says what it confines the exception to, and what it leaves
+		// grouped number IS exactly three — it is the bound that keeps a comma decimal of one or two
+		// places refused. The javadoc says what it confines the exception to, and what it leaves
 		// out.
 		int digits = 0;
 		while (comma + 1 + digits < haystack.length()

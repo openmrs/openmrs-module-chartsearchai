@@ -555,8 +555,8 @@ public class DosingCeilingFidelityTest {
 		// What keeps this one refused is the exception's TAIL BOUND: it admits only three digits
 		// after the comma, and this text has one. That bound is not a grouping fact — a group of a
 		// grouped number IS exactly three digits, so it tells no list from a separator — it is what
-		// confines the exception to the shape #425 measured, leaving the commoner comma-decimal
-		// spellings refused. Drop it and this case goes red while the one above still passes.
+		// confines the exception to the shape #425 measured, leaving a comma decimal of one or two
+		// places refused. Drop it and this case goes red while the one above still passes.
 		PatientChart decimals = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of levothyroxine?", "Levothyroxine (paediatric)");
 		RecordMapping mapping = soleRecordCarryingCeilings(decimals);

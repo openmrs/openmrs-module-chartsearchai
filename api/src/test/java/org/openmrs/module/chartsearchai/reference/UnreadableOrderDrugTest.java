@@ -14,7 +14,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.sql.Connection;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +31,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.openmrs.Drug;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.LogCapture;
@@ -52,7 +61,17 @@ import org.openmrs.util.PrivilegeConstants;
  * a real database can be in: the order pointing at a {@code drug} row that is not there, which
  * Hibernate's default {@code not-found="exception"} answers with an
  * {@code org.hibernate.ObjectNotFoundException}. Both are {@code RuntimeException}s raised by
- * initialising this one association, through the same three call sites, which is the defect.
+ * initialising this one association, which is what the three call sites above each did.
+ *
+ * <p><b>Since issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/421">#421</a> the loop
+ * holds no {@code Drug} at all</b>, which is what this class's structural case pins. Issue #413 had
+ * already left exactly ONE dereference of the association, inside the accessor, and the first
+ * assertion below has pinned that count since then; what #421 removed is the three reads the loop
+ * made on the entity that accessor RETURNED. {@code PatientClinicalContextBuilder.drug} makes them
+ * itself now, inside its own {@code try}, and hands back the VALUES. The behavioural cases below are
+ * unchanged by that and still drive the real builder; what changed is that the guard beneath them
+ * asks a question the compiler can answer rather than one a text scan has to spell.
  *
  * <p><b>The fixture COMMITS, and that is why it restores by hand.</b> The repointing is raw SQL —
  * the technique {@code NonCodedDrugOrderNameTest} already arranges order 111 with — around core's
@@ -137,6 +156,10 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	/** The remedy the standing line offers where a read is gated on a core privilege. */
 	private static final String PRIVILEGE_REMEDY = "Check that the querying role holds";
 
+	/** What that same line APPENDS where an order was also left off the list — the second cause, which
+	 *  the privilege remedy above cannot reach (issue #421). */
+	private static final String COMBINED_CAUSE = "An active order was also left off the list";
+
 	/** A drug the curated seed carries, used only to make the enrichment copy happen. */
 	private static final String ENRICHING_DRUG = "ibuprofen";
 
@@ -156,14 +179,6 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 *  — a {@code LazyInitializationException} from a detached proxy — cannot be staged in a test
 	 *  that holds an open session. */
 	private static final String BROAD_CATCH = "catch (RuntimeException";
-
-	/** Any read made on the materialised {@code Drug} the accessor hands back. */
-	private static final String RETURNED_DRUG_READ = "drug.get";
-
-	/** The three the loop makes, which are served from the loaded target and cannot throw. A fourth
-	 *  needs its own try inside the accessor, which is what the loop above refuses. */
-	private static final String[] READS_ON_THE_RETURNED_DRUG =
-			{ "drug.getName()", "drug.getConcept()", "drug.getDosageForm()" };
 
 	/** The one method that may reach the association. */
 	private static final String GUARDED_ACCESSOR =
@@ -711,29 +726,48 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * is, which is why the offset is placed inside the accessor's own body: a single dereference that
 	 * had migrated back out to a call site would satisfy a count and reinstate the defect.
 	 *
+	 * <p><b>The third assertion stopped being text, and that is issue #421.</b> It used to permit a
+	 * short allow-list of reads on the {@code Drug} the accessor handed back and refuse everything
+	 * else. No text rule in that family answered the question: measured on {@code 01337385}, a chain written
+	 * {@code drug.getConcept()} + newline + {@code .getName();} in {@code addDrugName} left the whole
+	 * api suite green, and so did a receiver wrapped as {@code drug} + newline + {@code .getConcept();}
+	 * — the second for a different reason, the needle {@code drug.get} matching no offset at all, so
+	 * the allow-list never ran. Sharpening the pattern would have closed the first and not the second.
+	 * So the production side stopped handing back an entity instead: {@code CodedDrug} carries the
+	 * three VALUES the loop needs, every one read inside the accessor's own {@code try}, and a
+	 * dereference at a call site is now a compile error rather than a spelling for a scan to
+	 * recognise. What this assertion pins is that property — the accessor hands back no {@code Drug}
+	 * — asked of the compiled class rather than of the source text.
+	 *
 	 * <p><b>What these three assertions are for, and what they are not.</b> They catch the ordinary
-	 * edit — a fourth read added beside the three that were wrong, a permitted read dereferenced
-	 * further, a catch narrowed to the exception this suite happens to stage. They are text over one
-	 * file, so an edit that sets out to evade
-	 * them can: a decoy {@code catch (RuntimeException …)} placed inside the accessor while the real
-	 * handler is narrowed; a read made through a second local of the same type, or with the receiver
-	 * wrapped onto its own line, or sharing a line with a permitted read. Each was measured green,
-	 * and adding a rule per spelling is the loop this class declines to enter — a reviewer, not a
-	 * regex, is what catches an edit written to get past them. The other residues: it reads ONE file,
-	 * so a dereference of some other {@code DrugOrder}'s drug in another class is outside it — there
-	 * is none today, and nothing here would notice one arriving; and the {@code getDrug()} needle
-	 * carries no receiver, so a call wrapped across lines IS caught while one spelled
-	 * {@code getDrug ()} is not. It is about that spelling alone, so it
-	 * says nothing about a read on the {@code Drug} the accessor RETURNS that is spelled some other
-	 * way — through a differently named local, or wrapped so that {@code drug.get} falls across two
-	 * lines, which is the residue the allow-list keeps after it stopped matching over the whole line:
-	 * a chain WRITTEN across two lines is admitted where one written on a single line is not. The
-	 * ordinary spelling of that read IS caught, by the allow-list below: measured,
-	 * {@code drug.getDisplayName()}, {@code drug.getFullName(…)}, {@code drug.getDrugId()} and
-	 * {@code drug.getConcept().getName()} at a call site each redden this case. None of those
-	 * residues is worth a cleverer pattern: what
-	 * this guard is for is the ordinary edit, and the behavioural cases above redden for any of those
-	 * that this fixture's orders reach.
+	 * edit — a {@code Drug} put back on {@code CodedDrug} so the loop can reach it again, a second
+	 * naming of the association, a catch narrowed to the exception this suite happens to stage. Two
+	 * of the three are still text over one file, so an edit that sets out to evade them can: a decoy
+	 * {@code catch (RuntimeException …)} placed inside the accessor while the real handler is
+	 * narrowed. That was measured green, and adding a rule per spelling is the loop this class
+	 * declines to enter — a reviewer, not a regex, is what catches an edit written to get past them.
+	 * The residues that remain: the text pair reads ONE file, so {@code drugOrder.getDrug()} called
+	 * from another class is outside them — there is none today, and nothing here would notice one
+	 * arriving; and the {@code getDrug()} needle carries no receiver, so a call wrapped across lines
+	 * IS caught while one spelled {@code getDrug ()} is not.
+	 *
+	 * <p><b>And the third assertion is about the {@code Drug} alone, deliberately.</b> It walks the
+	 * builder and every class nested in it, so a SECOND carrier holding the entity is caught as well
+	 * as {@code CodedDrug} ({@link #collectEntityCarriers} carries the measurement for that), and it
+	 * asks of a member's DECLARED type rather than its raw one — {@link #handsOutTheEntity} states
+	 * the two questions it puts and what it admits, and is the only place either belongs. What it
+	 * admits on purpose is the two {@code Concept} proxies the carrier holds, the
+	 * drug's own concept and its dose form: {@code Drug.hbm.xml} maps both default-lazy, so a read of
+	 * one at a call site compiles and can throw just as a read of the entity could. Measured, with the
+	 * spelling stated because the other one answers differently: a null-guarded
+	 * {@code if (coded.dosageForm != null) coded.dosageForm.getUuid();} at a call site leaves this
+	 * class green, while the UNGUARDED read reddens the behavioural cases wholesale — on the null dose
+	 * form every order without one has, not on the lazy read this paragraph is about. That is not
+	 * this guard's subject and must not become it — the loop NEEDS those two, and what keeps them safe
+	 * is that every helper reading a concept opens its own {@code try}, which
+	 * {@code PatientClinicalContextBuilder.conceptUuid}'s javadoc is the one home for. None of these
+	 * residues is worth a cleverer pattern: what this guard is for is the ordinary edit, and the
+	 * behavioural cases above redden for any of them that this fixture's orders reach.
 	 */
 	@Test
 	public void nothingReachesTheDrugAssociationExceptTheGuardedAccessor() throws IOException {
@@ -767,31 +801,123 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 						+ " which is the whole reason this assertion is structural rather than"
 						+ " behavioural.");
 
-		for (Integer at : scan.literalOffsets(RETURNED_DRUG_READ)) {
-			if (scan.body(GUARDED_ACCESSOR).contains(at)) {
-				// A read inside the accessor is already inside its try, which is what this assertion
-				// tells a maintainer to do. Forbidding it there would forbid its own remedy.
-				continue;
+		List<String> handingBackAnEntity = new ArrayList<String>();
+		collectEntityCarriers(PatientClinicalContextBuilder.class, handingBackAnEntity);
+		assertTrue(handingBackAnEntity.isEmpty(),
+				"nothing in " + PatientClinicalContextBuilder.class.getSimpleName() + " may hand the"
+						+ " build loop a Drug — the accessor reads what the loop needs inside its own try"
+						+ " and carries the VALUES — and the declared type of " + handingBackAnEntity
+						+ " admits one. A Drug reachable at a call site is a lazy association dereferenced outside"
+						+ " that try, and the catch it would land in is outside the active-order loop, so"
+						+ " it costs that order and every order after it (issue #413). Materialising the"
+						+ " entity does not materialise its lazy collections, and"
+						+ " getFullName/getDisplayName reach its own lazy concept, so a further read can"
+						+ " throw where the three the accessor makes cannot. Read it in the accessor and"
+						+ " carry the value (issue #421).");
+	}
+
+	/**
+	 * Every field and every return type declared by {@code type} and, recursively, by the classes
+	 * nested inside it — the walk rather than a lookup keyed on one carrier's name, because the
+	 * question is whether ANY of them hands a {@code Drug} out.
+	 *
+	 * <p>Measured: a SECOND private nested carrier holding the entity, handed out on {@code CodedDrug}
+	 * and dereferenced in the build loop, is issue #413's defect exactly and left a name-keyed version
+	 * of this assertion green. {@code DrugReferenceSourceValidityChannelTest.collectSources} walks
+	 * nested types for the same reason, its javadoc recording the same SHAPE of hole — a nested
+	 * declaration escaping a name-keyed scan — for a scan keyed on file names rather than on one
+	 * carrier's name.
+	 *
+	 * <p>Reflection does not report anonymous or local classes, so one declared inside a method body
+	 * is outside this walk; and it asks about fields and RETURN types, so a parameter of that type is
+	 * too. Neither is reachable from the loop today — there is nothing there holding a {@code Drug} to
+	 * pass — and nothing here would notice one arriving.
+	 */
+	private static void collectEntityCarriers(Class<?> type, List<String> found) {
+		for (Field field : type.getDeclaredFields()) {
+			if (handsOutTheEntity(field.getGenericType())) {
+				found.add(type.getSimpleName() + " field " + field.getName());
 			}
-			String statement = scan.statementAt(at);
-			boolean allowed = false;
-			for (String read : READS_ON_THE_RETURNED_DRUG) {
-				// Matched AT this offset, and refused where the permitted read is itself dereferenced.
-				// Asking whether the LINE contains a permitted spelling admits anything chained off one:
-				// drug.getConcept().getName() reaches the drug's own lazy concept — the very hazard the
-				// message below names — outside the accessor's try, and was measured green here.
-				allowed = allowed || (scan.literalOffsets(read).contains(at)
-						&& !scan.literalOffsets(read + ".").contains(at));
-			}
-			assertTrue(allowed, "line " + scan.lineOf(at) + " reads something other than "
-					+ java.util.Arrays.toString(READS_ON_THE_RETURNED_DRUG) + " on the Drug the accessor"
-					+ " returned, or dereferences one of them further: \"" + statement + "\"."
-					+ " Materialising the entity does not materialise"
-					+ " its lazy collections, and getFullName/getDisplayName reach its own lazy concept,"
-					+ " as does a getName() chained onto the getConcept() below,"
-					+ " so such a read can throw where the three above cannot — outside the accessor's"
-					+ " try, which is issue #413's defect again. Give it its own try in the accessor.");
 		}
+		for (Method method : type.getDeclaredMethods()) {
+			if (handsOutTheEntity(method.getGenericReturnType())) {
+				found.add(type.getSimpleName() + " method " + method.getName() + "()");
+			}
+		}
+		for (Class<?> nested : type.getDeclaredClasses()) {
+			collectEntityCarriers(nested, found);
+		}
+	}
+
+	/**
+	 * Whether {@code type} could put a {@code Drug} in a caller's hands. ONE question, asked of the
+	 * declared type and again at every position the walk decomposes it into — an array component, a
+	 * type argument, a raw type, a wildcard bound either way, a type-variable bound: could a
+	 * {@code Drug} sit there, which is assignability to or from {@code Drug} with {@code Object}
+	 * excepted. It does NOT ask whether the type names {@code Drug}, and it does not ask whether one
+	 * could be read back out: {@code List<? super Drug>} is reported though a read of it yields
+	 * {@code Object}, and {@code List<Serializable>} is reported though it names nothing.
+	 *
+	 * <p><b>Do not enumerate here which type shapes it catches — put the member on {@code CodedDrug}
+	 * in a scratch edit and read the failure.</b> Nine successive attempts at that enumeration were
+	 * written and refuted on this branch, each correction buying the next.
+	 *
+	 * <p><b>Three answers it reports only as SILENCE, so the reason is written here.</b> A mutation
+	 * shows you these are not reported; what it cannot show you is why. {@code Object} is excluded
+	 * from the assignability test deliberately: every reference type is assignable to it, so including
+	 * it would report every {@code Object}-typed member and discriminate nothing — the cost being
+	 * that a {@code Drug} widened to plain {@code Object} is handed out under this check, which
+	 * reflection cannot tell from any other member. Erasure leaves a RAW collection no type argument
+	 * to walk. And {@link #collectEntityCarriers} reads DECLARED members, so what a carrier inherits
+	 * from a class OUTSIDE the builder is outside the walk — inherited from a NESTED superclass it is
+	 * reported, that class being walked in its own right. A reviewer is what catches all three, the
+	 * same answer this class gives for the evasions its text assertions decline to chase.
+	 *
+	 * <p>So a member is reported whenever ANY position of its declared type admits a {@code Drug} —
+	 * measured, {@code Serializable}, {@code OpenmrsObject} and {@code List<Serializable>} all are.
+	 * That is the question working as asked, each of those positions being able to hold a
+	 * {@code Drug}; but none of them need actually carry one, so check what the member is for before
+	 * treating the report as the defect.
+	 */
+	private static boolean handsOutTheEntity(Type type) {
+		return handsOutTheEntity(type, new java.util.HashSet<Type>());
+	}
+
+	/**
+	 * @param seen the types already on this walk. Bounds are the ONLY cyclic edge in Java's
+	 *            reflective type graph — {@code <T extends Foo<T>>} closes a loop through {@code T} —
+	 *            and this walk follows them, so without this it would not terminate on one.
+	 */
+	private static boolean handsOutTheEntity(Type type, java.util.Set<Type> seen) {
+		if (type == null || !seen.add(type)) {
+			return false;
+		}
+		if (type instanceof WildcardType) {
+			return anyHandsOutTheEntity(((WildcardType) type).getUpperBounds(), seen)
+					|| anyHandsOutTheEntity(((WildcardType) type).getLowerBounds(), seen);
+		}
+		if (type instanceof TypeVariable) {
+			return anyHandsOutTheEntity(((TypeVariable<?>) type).getBounds(), seen);
+		}
+		if (type instanceof ParameterizedType) {
+			ParameterizedType parameterized = (ParameterizedType) type;
+			// The RAW type as well as the arguments: a generic SUBCLASS of Drug is the entity itself.
+			// The javadoc above is the home for why each widening is here.
+			return handsOutTheEntity(parameterized.getRawType(), seen)
+					|| anyHandsOutTheEntity(parameterized.getActualTypeArguments(), seen);
+		}
+		if (type instanceof GenericArrayType) {
+			return handsOutTheEntity(((GenericArrayType) type).getGenericComponentType(), seen);
+		}
+		if (!(type instanceof Class)) {
+			return false;
+		}
+		Class<?> erased = (Class<?>) type;
+		if (erased.isArray()) {
+			return handsOutTheEntity(erased.getComponentType(), seen);
+		}
+		return !Object.class.equals(erased)
+				&& (Drug.class.isAssignableFrom(erased) || erased.isAssignableFrom(Drug.class));
 	}
 
 	/**
@@ -853,6 +979,56 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 				assertTrue(capture.hasMessageAt(Level.WARN, PRIVILEGE_REMEDY, "Get Orders"),
 						"a read core gates on a privilege must still send an operator to grant it; was: "
 								+ capture.describeAll());
+				assertFalse(capture.hasMessageAt(Level.WARN, COMBINED_CAUSE),
+						"and it must not also report an order left off the list, which nothing here did:"
+								+ " refusing Get Orders makes core's @Authorized check throw at the"
+								+ " getActiveOrders CALL, so this pass records no drop. Without this the"
+								+ " suffix could be appended unconditionally and every case stay green"
+								+ " (issue #421); was: " + capture.describeAll());
+			}
+			return null;
+		});
+	}
+
+	/**
+	 * The third state of that message, and not a variant of either neighbour above: a read that FAILED
+	 * and, in the same pass, an order left off the list. The two causes are independent, so the line
+	 * has to state both — the privilege remedy for the one a grant fixes, and the appended sentence
+	 * for the one no grant reaches.
+	 *
+	 * <p>Before this case neither arm of that suffix was observed anywhere (issue #421). Replacing the
+	 * whole conditional with the empty string left the api suite green, and so did appending the
+	 * suffix unconditionally — the first is what this case reddens for, the second what the assertion
+	 * added to {@link #theStandingSurfaceStillNamesThePrivilegeForAReadCoreGatesOnOne} reddens for.
+	 *
+	 * <p><b>Failure mode it pins.</b> Told only to grant {@code Get Allergies} and {@code Get
+	 * Conditions}, an operator grants them, sees {@code screened} stay false because the dropped order
+	 * is still unaccounted for, and reads the same line on the next poll. That round trip is what the
+	 * two-branch form of this message was written for issue #247 to remove, and the second cause has
+	 * no privilege to grant, so nothing else in the line would lead them to it.
+	 *
+	 * <p>The arm is reached here by refusing {@code Get Allergies} while the order read COMPLETES and
+	 * drops an order. That is one route to it and the case does not claim to be the only one: a throw
+	 * partway through the order loop reaches the same arm with {@code unread} naming active orders
+	 * instead, since the drop is recorded inside the loop the catch wraps.
+	 */
+	@Test
+	public void theStandingSurfaceNamesBothCausesWhereOnePassHitsBoth() throws Exception {
+		DrugReferenceTestSupport.nameTheConcept(ORDERED_CONCEPT, "");
+		pointTheOrderAtADrugRowThatIsGone(ORDER);
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		DrugReferenceTestSupport.refusingPrivilege(PrivilegeConstants.GET_ALLERGIES, () -> {
+			try (LogCapture capture = LogCapture.on(VALIDATOR_LOGGER)) {
+				assertFalse(validator.standingChartAlerts(patient).isScreened(),
+						"precondition: a failed record read and a dropped order must leave the chart"
+								+ " unscreened, or the line under test is never reached");
+				assertTrue(capture.hasMessageAt(Level.WARN, PRIVILEGE_REMEDY, COMBINED_CAUSE),
+						"one line must carry BOTH causes — the privileges to grant for the read that"
+								+ " failed, and the order left off the list although its read completed,"
+								+ " which no privilege fixes. An operator told only the first grants it and"
+								+ " reads the same line again (issue #421); was: " + capture.describeAll());
 			}
 			return null;
 		});
@@ -898,4 +1074,12 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 				"and the one reader that asks for both stamps must still refuse to certify the screen");
 	}
 
+	private static boolean anyHandsOutTheEntity(Type[] types, java.util.Set<Type> seen) {
+		for (Type type : types) {
+			if (handsOutTheEntity(type, seen)) {
+				return true;
+			}
+		}
+		return false;
+	}
 }

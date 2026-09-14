@@ -19,6 +19,8 @@ import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -751,13 +753,16 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * <p><b>And the third assertion is about the {@code Drug} alone, deliberately.</b> It walks the
 	 * builder and every class nested in it, so a SECOND carrier holding the entity is caught as well
 	 * as {@code CodedDrug} ({@link #collectEntityCarriers} carries the measurement for that) — and it
-	 * reads DECLARED types, so an entity arrayed or inside a PARAMETERIZED
-	 * collection is caught too; {@link #handsOutTheEntity} carries what it still admits, which is not
-	 * nothing. What it admits on
+	 * reads DECLARED types, so an entity arrayed, inside a generic collection or behind a wildcard or
+	 * type variable is caught too; {@link #handsOutTheEntity} carries the shapes it walks and the ones
+	 * it still admits, which are not none. What it admits on
 	 * purpose is the two {@code Concept} proxies the carrier holds, the
 	 * drug's own concept and its dose form: {@code Drug.hbm.xml} maps both default-lazy, so a read of
-	 * one at a call site compiles and can throw just as a read of the entity could, and measured, a
-	 * {@code coded.dosageForm.getUuid()} added at a call site leaves this class green. That is not
+	 * one at a call site compiles and can throw just as a read of the entity could. Measured, with the
+	 * spelling stated because the other one answers differently: a null-guarded
+	 * {@code if (coded.dosageForm != null) coded.dosageForm.getUuid();} at a call site leaves this
+	 * class green, while the UNGUARDED read reddens ten of its cases — on the null dose form every
+	 * order without one has, not on the lazy read this paragraph is about. That is not
 	 * this guard's subject and must not become it — the loop NEEDS those two, and what keeps them safe
 	 * is that every helper reading a concept opens its own {@code try}, which
 	 * {@code PatientClinicalContextBuilder.conceptUuid}'s javadoc is the one home for. None of these
@@ -844,47 +849,71 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 
 	/**
 	 * Whether {@code type} would put a {@code Drug} in a caller's hands — asked of the DECLARED type,
-	 * so an entity wrapped in an array or a parameterized collection is caught rather than erased past.
+	 * so an entity wrapped in an array, a generic collection, a wildcard or a type variable is caught
+	 * rather than erased past. Assignability is asked BOTH ways, so a subtype of {@code Drug} is
+	 * caught and so is a member declared as a supertype it satisfies.
 	 *
-	 * <p>Measured, against an exact {@code Drug.class.equals} version of this: {@code Drug[]} and
-	 * {@code List<Drug>} each escaped it and left the whole class green, which is why arrays and type
-	 * ARGUMENTS are walked. Assignability is asked BOTH ways, so a subtype of {@code Drug} is caught
-	 * and so is a field declared as a supertype it satisfies — {@code OpenmrsObject}, say.
+	 * <p><b>Every shape it walks was added because a reviewer measured it escaping.</b> Against an
+	 * exact {@code Drug.class.equals} version: {@code Drug[]} and {@code List<Drug>} escaped. Against
+	 * the version that walked type arguments only: a generic SUBCLASS of {@code Drug} escaped, the raw
+	 * type going unread. Against the version before bounds were followed:
+	 * {@code List<? extends Drug>}, {@code List<? super Drug>} and {@code <T extends Drug> T get()}
+	 * escaped. Each is now caught, and each is an ordinary Java spelling rather than an evasion.
 	 *
 	 * <p><b>What it still admits, without claiming the list is closed</b> — a reviewer found the
 	 * generic-subclass case after two of these were written down as the residues. {@code Object} is
 	 * deliberately excluded: every reference type is assignable to it, so including it would flag every
 	 * {@code Object}-typed member in the file and discriminate nothing — which means a {@code Drug}
 	 * widened to plain {@code Object} is handed out under this check, and reflection cannot tell that
-	 * member from any other. And a RAW collection carries no type argument to walk, so a
-	 * {@code private final List drugs} escapes where {@code List<Drug>} does not. Both measured. A
-	 * reviewer is what catches them, which is the same answer this class gives for the evasions its
-	 * text assertions decline to chase.
+	 * member from any other. A RAW collection carries no type argument to walk, so a
+	 * {@code private final List drugs} escapes where {@code List<Drug>} does not. And
+	 * {@link #collectEntityCarriers} reads {@code getDeclaredFields}, so a carrier inheriting a
+	 * {@code Drug} field from a class declared OUTSIDE the builder escapes — measured; inheriting one
+	 * from a NESTED superclass does not, that class being walked in its own right. All three
+	 * measured, the last in both arrangements because they answer differently. A reviewer is what catches them, which
+	 * is the same answer this class gives for the evasions its text assertions decline to chase.
+	 *
+	 * <p>Because assignability is asked both ways, an unrelated member typed {@code Serializable} or
+	 * {@code Comparable} is reported too. That is the predicate working as intended — such a member
+	 * CAN hold a {@code Drug} — but the failure message will read as though one is already there, so
+	 * check what the member is for before treating the report as the defect.
 	 */
 	private static boolean handsOutTheEntity(Type type) {
+		return handsOutTheEntity(type, new java.util.HashSet<Type>());
+	}
+
+	/**
+	 * @param seen the types already on this walk. Bounds are the ONLY cyclic edge in Java's
+	 *            reflective type graph — {@code <T extends Foo<T>>} closes a loop through {@code T} —
+	 *            and this walk follows them, so without this it would not terminate on one.
+	 */
+	private static boolean handsOutTheEntity(Type type, java.util.Set<Type> seen) {
+		if (type == null || !seen.add(type)) {
+			return false;
+		}
+		if (type instanceof WildcardType) {
+			return anyHandsOutTheEntity(((WildcardType) type).getUpperBounds(), seen)
+					|| anyHandsOutTheEntity(((WildcardType) type).getLowerBounds(), seen);
+		}
+		if (type instanceof TypeVariable) {
+			return anyHandsOutTheEntity(((TypeVariable<?>) type).getBounds(), seen);
+		}
 		if (type instanceof ParameterizedType) {
 			ParameterizedType parameterized = (ParameterizedType) type;
 			// The RAW type as well as the arguments: a generic SUBCLASS of Drug is the entity itself,
 			// and checking only the arguments answered false for it — measured.
-			if (handsOutTheEntity(parameterized.getRawType())) {
-				return true;
-			}
-			for (Type argument : parameterized.getActualTypeArguments()) {
-				if (handsOutTheEntity(argument)) {
-					return true;
-				}
-			}
-			return false;
+			return handsOutTheEntity(parameterized.getRawType(), seen)
+					|| anyHandsOutTheEntity(parameterized.getActualTypeArguments(), seen);
 		}
 		if (type instanceof GenericArrayType) {
-			return handsOutTheEntity(((GenericArrayType) type).getGenericComponentType());
+			return handsOutTheEntity(((GenericArrayType) type).getGenericComponentType(), seen);
 		}
 		if (!(type instanceof Class)) {
 			return false;
 		}
 		Class<?> erased = (Class<?>) type;
 		if (erased.isArray()) {
-			return handsOutTheEntity(erased.getComponentType());
+			return handsOutTheEntity(erased.getComponentType(), seen);
 		}
 		return !Object.class.equals(erased)
 				&& (Drug.class.isAssignableFrom(erased) || erased.isAssignableFrom(Drug.class));
@@ -1044,4 +1073,12 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 				"and the one reader that asks for both stamps must still refuse to certify the screen");
 	}
 
+	private static boolean anyHandsOutTheEntity(Type[] types, java.util.Set<Type> seen) {
+		for (Type type : types) {
+			if (handsOutTheEntity(type, seen)) {
+				return true;
+			}
+		}
+		return false;
+	}
 }

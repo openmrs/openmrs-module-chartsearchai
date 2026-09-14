@@ -1191,4 +1191,67 @@ public class ArchitectureGuardTest {
 		}
 	}
 
+	/** The CAUSE a reader could build a chart-read verdict out of, instead of the stamp
+	 *  {@code PatientClinicalContext.activeDrugOrdersRead()} derives from it (issue #421). */
+	private static final String ORDER_READ_CAUSE = "activeDrugOrderReadCompleted";
+
+	/** The class files that may name {@link #ORDER_READ_CAUSE}: the one that DECLARES it, the builder
+	 *  — which names it only as a local variable and invokes it nowhere — and the one legitimate
+	 *  reader, the operator MESSAGE that has to say which read failed. */
+	private static final List<String> MAY_NAME_THE_ORDER_READ_CAUSE = java.util.Arrays.asList(
+			"PatientClinicalContext.class", "PatientClinicalContextBuilder.class",
+			"DrugSafetyValidator.class");
+
+	/**
+	 * {@code PatientClinicalContext.activeDrugOrderReadCompleted()} is a CAUSE, and no second reader
+	 * may build a verdict out of it — {@code chartReadForSafety()} is the conjunction of the two
+	 * STAMPS and reaches this one through {@code activeDrugOrdersRead()}, which subtracts the order
+	 * that was dropped.
+	 *
+	 * <p><b>Asked of the class files, because the realistic second reader is in another class.</b>
+	 * Measured: changing {@code context.activeDrugOrdersRead()} to
+	 * {@code context.activeDrugOrderReadCompleted()} at the one place {@code DrugReferenceInjector}
+	 * gates its interaction-screen silence note left the whole build green. That note then states
+	 * that the reference data relates none of the patient's medications — a negative claim, in
+	 * prompt-facing citable evidence, about a list a dropped order is missing from, which is the
+	 * "never render silence as denial" rule of the reference package's own instructions reached
+	 * fail-open. A source scan cannot express this: its exclusions are keyed on FILE NAME, so
+	 * admitting the legitimate reader means excusing all of {@code DrugSafetyValidator}.
+	 *
+	 * <p><b>What it does not reach.</b> The question is class-granular, so a SECOND reader inside
+	 * {@code DrugSafetyValidator} is invisible to it, and so is one inside
+	 * {@code PatientClinicalContextBuilder} — which is on the list because the compiler records the
+	 * accessor's name in its {@code LocalVariableTable}, not because it calls it. Both are named
+	 * rather than guarded; an instruction walk is out of this class's scope for the reason its
+	 * neighbours record.
+	 */
+	@Test
+	public void noSecondClassNamesTheOrderReadCause() throws IOException {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		assertTrue(Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+
+		List<String> naming = new ArrayList<>();
+		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
+			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
+					.collect(java.util.stream.Collectors.toList())) {
+				if (constantPoolStrings(file).contains(ORDER_READ_CAUSE)) {
+					naming.add(file.getFileName().toString());
+				}
+			}
+		}
+		assertTrue(naming.contains("DrugSafetyValidator.class"),
+				"the standing surface's operator message is the one legitimate reader of "
+						+ ORDER_READ_CAUSE + " and no class file names it, so this guard is comparing "
+						+ "nothing against nothing. Found: " + naming);
+
+		List<String> unexpected = new ArrayList<>(naming);
+		unexpected.removeAll(MAY_NAME_THE_ORDER_READ_CAUSE);
+		assertEquals(new ArrayList<String>(), unexpected,
+				unexpected + " names " + ORDER_READ_CAUSE + ", which is a CAUSE and not a stamp. A "
+						+ "verdict built from it reads TRUE on a pass that completed the order read and "
+						+ "then dropped an order from the list, so it certifies a medication list a "
+						+ "prescription is missing from. Ask " + "activeDrugOrdersRead() instead, which "
+						+ "subtracts that case (issue #421).");
+	}
 }

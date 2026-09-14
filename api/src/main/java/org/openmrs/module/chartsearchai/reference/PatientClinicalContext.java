@@ -277,17 +277,19 @@ public class PatientClinicalContext {
 	 *         #247 introduced the stamp to prevent. That the flag moves the verdict is pinned by
 	 *         {@code StandingChartAlertsTest.bothChartReadStampsSurviveTheEnrichmentThePassApplies}.
 	 *
-	 *         <p><b>The imperative above is held by review and by nothing else, which is stated rather
-	 *         than left to be assumed.</b> A second reader is what it forbids, and no guard here
-	 *         expresses that: a whole-tree source scan cannot admit the one legitimate reader without
-	 *         excusing the entire file it sits in — {@code DrugSafetyValidator}, which is exactly
-	 *         where a verdict-building reader would be written — and the source-text form of "exactly
-	 *         one caller" is recorded in {@code ArchitectureGuardTest} as having been defeated by
-	 *         review twice and replaced by a constant-pool question, which is class-granular and so
-	 *         blind in the same file. A guard reddening on a harmless re-spelling while missing the
-	 *         harmful reader would be one more guard that does not discriminate what it claims. What
-	 *         narrows the exposure instead is the compiler: this accessor is package-private, so the
-	 *         population of possible readers is this package.
+	 *         <p><b>A second reader is what the imperative forbids, and
+	 *         {@code ArchitectureGuardTest.noSecondClassNamesTheOrderReadCause} is what forbids it.</b>
+	 *         Asked of the class files rather than the source, because the realistic second reader is
+	 *         in another class: measured, gating {@code DrugReferenceInjector}'s interaction-screen
+	 *         silence note on this accessor instead of {@link #activeDrugOrdersRead()} left the whole
+	 *         build green, and that note then denies any interaction across a medication list a
+	 *         dropped order is missing from. An earlier wording of this paragraph said no guard could
+	 *         express the rule, reasoning that admitting the one legitimate reader meant excusing all
+	 *         of {@code DrugSafetyValidator}; that is true of a source scan, whose exclusions are
+	 *         keyed on file name, and the class-granular question does not need it. What the guard
+	 *         does not reach is a second reader inside {@code DrugSafetyValidator} itself, which its
+	 *         own javadoc names. The compiler narrows the rest: this accessor is package-private, so
+	 *         the population of possible readers is this package.
 	 */
 	boolean activeDrugOrderReadCompleted() {
 		return activeDrugOrderReadCompleted;

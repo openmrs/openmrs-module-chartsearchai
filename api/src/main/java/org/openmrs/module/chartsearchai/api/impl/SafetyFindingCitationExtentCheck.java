@@ -261,8 +261,9 @@ final class SafetyFindingCitationExtentCheck {
 	 * ones a marker in {@code answer} anchors. A citation the module attached is not one the answer
 	 * made (issue #305); the set de-duplicates, so one finding cited in two sentences is one cited
 	 * finding. Shared by every reader of that question so they cannot disagree about what "cited"
-	 * means — the extent, {@link #uncitedFindingIndexes}' complement, and, since issue #409 round
-	 * two, {@link SafetyFindingSeverityFidelityCheck}'s per-citation accusation.
+	 * means — a count, a complement, a repair's keep-gate and, since issue #409 round two, a
+	 * per-citation accusation. No list of them is kept here: two attempts at one were each short by a
+	 * reader, so grep {@code citedFindingIndexes(} over {@code api/src/main} for the current set.
 	 *
 	 * <p><b>What each of the three tests contributes, stated rather than implied</b> — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.

@@ -782,24 +782,6 @@ public class ArchitectureGuardTest {
 	 *            which differs between them and is the half of the message worth writing twice
 	 * @param compileMessage what the class's own patterns are for
 	 */
-	/**
-	 * Whether {@code line} spells a citation-marker dialect of its own — a bracketed-digit regex, or
-	 * the shared pattern named directly instead of reached through its decode step.
-	 *
-	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
-	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
-	 * so a third dialect added to one copy and not the other would leave the other blind while both
-	 * reported success by finding nothing — the drift
-	 * {@link #assertMarkersReachedOnlyThroughTheSharedDecodeStep}'s own javadoc exists to prevent,
-	 * arriving through the duplicate rather than through a parameter. What is deliberately NOT hoisted
-	 * is each rule's required call: the marker rules REQUIRE {@code ChartSearchAiUtils.citedIndexes(}
-	 * and the finding-severity rule FORBIDS it, so one signature over both polarities is what that
-	 * javadoc rightly refuses.
-	 */
-	private static boolean namesAMarkerDialect(String line) {
-		return line.contains("\\[") || line.contains("INLINE_CITATION");
-	}
-
 	private void assertMarkersReachedOnlyThroughTheSharedDecodeStep(String fileName,
 			int expectedCompiles, String decodeStepConsequence, String compileMessage)
 			throws IOException {
@@ -834,6 +816,24 @@ public class ArchitectureGuardTest {
 		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(), fileName
 				+ " must not spell a bracketed regex of its own nor name INLINE_CITATION; markers are "
 				+ "decoded by ChartSearchAiUtils.citedIndexes. Found: " + ownDialect);
+	}
+
+	/**
+	 * Whether {@code line} spells a citation-marker dialect of its own — a bracketed-digit regex, or
+	 * the shared pattern named directly instead of reached through its decode step.
+	 *
+	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
+	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
+	 * so a third dialect added to one copy and not the other would leave the other blind while both
+	 * reported success by finding nothing — the drift
+	 * {@link #assertMarkersReachedOnlyThroughTheSharedDecodeStep}'s own javadoc exists to prevent,
+	 * arriving through the duplicate rather than through a parameter. What is deliberately NOT hoisted
+	 * is each rule's required call: the marker rules REQUIRE {@code ChartSearchAiUtils.citedIndexes(}
+	 * and the finding-severity rule FORBIDS it, so one signature over both polarities is what that
+	 * javadoc rightly refuses.
+	 */
+	private static boolean namesAMarkerDialect(String line) {
+		return line.contains("\\[") || line.contains("INLINE_CITATION");
 	}
 
 	/**

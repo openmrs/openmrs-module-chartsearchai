@@ -243,11 +243,14 @@ final class SafetyFindingSeverityFidelityCheck {
 			// chart's mappings on a stock install, where no record carries a rating: hoisted above
 			// the gate the reading still returns at its own carried.isEmpty() and never reads the
 			// answer, so the saving is the walk and not a decode. Measured by a review pass: hoisting
-			// this line leaves the whole api suite green, this check's own throw case included,
-			// because the reading touches only getResourceType() and getIndex() — both read by
-			// earlier steps on the answer path — so it cannot displace getFindingSeverity() as the
-			// first read here that nothing earlier makes. An earlier draft of this comment named that
-			// throw case as what forbids the hoist; no test does.
+			// this line leaves the whole api suite green, this check's own throw case included — that
+			// case overrides getFindingSeverity() on a RecordMapping, and nothing the reading touches
+			// is that accessor. Two earlier drafts of this comment got the reason wrong in opposite
+			// directions: the first named that throw case as what FORBIDS the hoist, and no test does;
+			// the second said the reading touches only getResourceType() and getIndex(), and it also
+			// reads RecordReference.isAttachedByTheModule(), which on an ordinary answer path nothing
+			// earlier reads. So do not read "unpinned" as "nothing here is ordered" — a hoist would
+			// make that accessor the first read this check makes that nothing earlier makes.
 			//
 			// The blank-answer arm of that reading is unreachable from here — the guard above returns
 			// on isBlank(answer) first, which is why a degenerate output is silent rather than

@@ -716,9 +716,16 @@ Since [#395](https://github.com/openmrs/openmrs-module-chartsearchai/issues/395)
 response states `findingCitations` — how many injected safety findings the prompt carried against how
 many the answer anchored a citation marker for (that reading, rather than the model's structured
 `citations` array, since [#409](https://github.com/openmrs/openmrs-module-chartsearchai/issues/409);
-ADR Decision 94 is the one ledger of which recorded figures that invalidates). `score_probe_safety.py` now reads it as a **completeness cell**, beside a
+ADR Decision 94 is the ledger of which recorded figures that invalidates). `score_probe_safety.py` now reads it as a **completeness cell**, beside a
 **rating cell** over `unstatedFindingSeverities`. Two keys because they trade: an arm can state every
 finding by dropping every rating, and the completeness cell alone scores that a clean win.
+
+**Both cells' keys changed their reading on consecutive days, and each has its own ledger — read them
+together rather than assuming one covers both.** The completeness cell is Decision 94's, above. The
+rating cell is ADR Decision 97's: `unstatedFindingSeverities` took the same marker-anchored reading a
+day later, so it no longer names a finding the completeness cell counted as uncited, and any rating
+figure recorded here before 2026-09-14 was measured while it could. A pair of cells taken across both
+dates is not a comparison of one variable.
 
 **The corpus.** One patient, `dc8560c9-6d2b-45bf-861c-8fcf562ec9b1`, eight active drug orders, on the
 3.7.1 standalone with the drug-reference layer enabled (`sourceFormat=ddinter`, 2283 entries),

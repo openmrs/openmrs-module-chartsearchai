@@ -91,10 +91,13 @@ import org.slf4j.LoggerFactory;
  *       has none to judge, while this one counts citations and a blank answer's really do
  *       resolve — {@link #citedFindingIndexes} carries why. Counting what did resolve is a fact;
  *       reporting it as a dropped hazard would not be;</li>
- *   <li>it narrows nothing but its own count. The reference list a client receives stays
+ *   <li>it narrows no list a client receives. The reference list stays
  *       {@code extractCitedReferences}' union, so an answer whose array named a finding its prose
  *       did not publishes that finding as a reference beside a {@code cited} that excludes it —
- *       divergence by design, and ADR Decision 94 carries why the union is not narrowed with it;</li>
+ *       divergence by design, and ADR Decision 94 carries why the union is not narrowed with it.
+ *       What its READING narrows is no longer this count alone: {@link SafetyFindingSeverityFidelityCheck}
+ *       takes {@link #citedFindingIndexes} as well, so an accusation there cannot name a finding
+ *       this count called uncited (ADR Decision 97);</li>
  *   <li>it never rewrites the answer, and it names no word of the answer or of any record — both
  *       carry patient data, the discipline {@link ClassCodeFidelityCheck} states. A citation index
  *       is the module's own bookkeeping.</li>
@@ -218,11 +221,15 @@ final class SafetyFindingCitationExtentCheck {
 	 * for a caller holding an answer and a chart rather than the walk. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.
 	 *
-	 * <p>Its one production caller is {@code LlmInferenceService.withRepairedFindingEnumeration},
-	 * which asks it of a CONTINUATION: whether that second answer anchors any of the findings the
-	 * first left out. That question and the extent's must have one answer or the repair keeps a
-	 * continuation the published count cannot see, which is the seam #409 opened between them — so
-	 * the reading lives here, in the private helper both reach, and is never spelled at the caller.
+	 * <p>Its production callers ask two different questions of one reading.
+	 * {@code LlmInferenceService.withRepairedFindingEnumeration} asks it of a CONTINUATION:
+	 * whether that second answer anchors any of the findings the first left out. That question and
+	 * the extent's must have one answer or the repair keeps a continuation the published count
+	 * cannot see, which is the seam #409 opened between them. {@link SafetyFindingSeverityFidelityCheck}
+	 * asks it of the ANSWER, to decide which citations it may accuse of dropping a rating — round two
+	 * of the same issue, where selecting off {@code extractCitedReferences}' union instead let that
+	 * key accuse a finding this check had just counted as uncited. Either way the reading lives here,
+	 * in the private helper they all reach, and is never spelled at a caller.
 	 *
 	 * <p>It reaches the carried population through {@link #carriedFindingIndexes}, the composed
 	 * projection, rather than taking {@link #uncitedFindingIndexes}' walk: its caller holds a chart

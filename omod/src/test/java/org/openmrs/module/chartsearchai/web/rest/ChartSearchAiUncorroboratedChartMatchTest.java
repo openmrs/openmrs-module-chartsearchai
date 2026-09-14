@@ -112,10 +112,6 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * byte-identical in {@code type}, {@code drug}, {@code detail}, {@code severity} and
 	 * {@code chartOrderBridges}, so no function of any other published field can agree with the
 	 * accessor on both, and the re-derivation reddens on BEHAVIOUR rather than on a source scan.
-	 *
-	 * <p>That is a statement about a function of the other fields ALONE, and it is the whole of what
-	 * this pair bounds. {@link #theSerializerPublishesTheChipsOwnProvenanceAnswer} states what it does
-	 * not bound (issue #412); do not read this paragraph as the wider claim.
 	 */
 	private static List<SafetyWarning> chips() {
 		return Arrays.asList(
@@ -219,14 +215,16 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * chips 0 and 2 — disagree with the accessor on behaviour. <b>It does not reach a value that READS
 	 * the accessor and then narrows it</b> (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>): every chip
-	 * but chip 0 answers false, so such a narrowing reddens here only where its predicate fails on
-	 * CHIP 0 — and one scoped to the CONDITION sentence, which is the sentence chip 0 carries, leaves
-	 * this class green. What holds the narrowing axis is
+	 * but chip 0 answers false, so on VALUES such a narrowing reddens here where its predicate fails on
+	 * CHIP 0, and a predicate scoped to the CONDITION sentence — the sentence chip 0 carries — leaves
+	 * this class green. (The source pin below is a separate reader and catches a narrowing that spells
+	 * a second accessor read, whatever its predicate.) What holds the narrowing axis on values is
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire},
 	 * whose fixture since #412 answers true off a self-named ALLERGY RULE's sentence. <b>Not the
-	 * ALLERGEN arm</b>, whose identity chip takes the public constructor and answers false, as
-	 * {@link #chips()} says of chips 1 and 2 — {@code DrugSafetyValidator.selfNamedAllergyRule} is the
-	 * population meant.
+	 * ALLERGEN arm</b>, whose three sentences go through
+	 * {@code SafetyWarning.recordedAllergenContraindication}, which hardcodes the flag false rather
+	 * than taking it (issue #348) — {@code DrugSafetyValidator.selfNamedAllergyRule} is the population
+	 * meant.
 	 *
 	 * <p>This case adds the thing no value comparison can see: that the published value came from the
 	 * accessor rather than from something that happens to agree with it on this fixture — the

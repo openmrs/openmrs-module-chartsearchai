@@ -108,8 +108,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * until #412 the true-answering chip of either omod fixture carried the CONDITION sentence. So a
 	 * serializer narrowing the published value to the condition population agreed with the accessor on
 	 * every chip either fixture held. Measured on this change's own branch, by AND-ing the serializer's
-	 * put with {@code warning.getDetail().contains("active condition")} — which leaves the source pin
-	 * below satisfied, one key write and one accessor read — and running {@code mvn -o clean install}
+	 * put with {@code warning.getDetail().contains("active condition")} — which leaves
+	 * {@code ChartSearchAiUncorroboratedChartMatchTest.theSerializerPublishesTheChipsOwnProvenanceAnswer}
+	 * satisfied, one key write and one accessor read — and running {@code mvn -o clean install}
 	 * from the root: the whole build was green before this sentence moved, and
 	 * {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} red after it.
 	 * Re-apply that mutation and read the failure. The CONDITION half stays held by

@@ -70,10 +70,10 @@ import org.slf4j.LoggerFactory;
  *   <li>it reports a SUBSTITUTION and never an UNMARKED truncation. Where the answer stops
  *       reproducing and ends its sentence, it has stated nothing the record does not, and reporting
  *       it would fire on every answer that quotes one clause of a 150-word mechanism — which is most
- *       of them. The exception is a cut the answer MARKED and then carried on PAST — always so for
- *       three spellings of the marker, and since this issue's fourth round for the fourth too, which
- *       is the elision paragraph below. A marked cut the answer STOPS at is silent for every
- *       spelling alike: the answer ran out, and that leg is read before any boundary bit is.
+ *       of them. The exception is a cut the answer MARKED and then carried on PAST, which the
+ *       elision paragraph below is about. A marked cut the answer STOPS at is silent whatever marked
+ *       it: the answer ran out, which is a disjunct of the same silencing condition and holds
+ *       whatever that gap's boundary bit says.
  *       That under-reports the ticket's weaker cousin, a hazard dropped by stopping early, and it
  *       is the safe direction for a check whose failure mode is being ignored. Half of that cousin
  *       is covered since the same issue's third round, by {@link SafetyFindingSeverityFidelityCheck}:
@@ -160,15 +160,18 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Until #337's fourth round it depended on the glyph.</b> An ASCII elision is a run of a member
  * of the terminator set, so the weak gap question read its first dot as a sentence end and
- * {@code ...} was silent where {@code …}, an em dash and {@code […]} were reported. That is closed in
+ * an ASCII-dot marker was silent where {@code …}, an em dash and {@code […]} were reported. That is closed in
  * {@link ChartSearchAiUtils#mayEndASentence}, which steps over a run of three or more dots — and in
  * that method rather than here, because the gap is all this check hands it and a rule about the
  * terminator set belongs to the set's own entry point. The earlier reading of this residue said no
  * arrangement of the two rules could close it without making a closed quotation a false report again;
  * that is refuted by the shape of the fix — {@code ."} carries a run of ONE and is untouched — and by
- * measurement, since the shapes it was written to protect were already reported under every other
- * spelling of a cut. {@code ReferenceProseFidelityTest.aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith}
- * holds the three spellings together; the residues are ADR Decision 95's.
+ * measurement, since the shapes it was written to protect were already reported wherever the marker
+ * left no terminator in the gap. Which spellings those were is the point: {@code …}, an em dash and
+ * {@code […]} were reported, while BOTH ASCII-dot spellings — {@code ...} and {@code [...]} — were
+ * silent, so this change rescues two rather than one.
+ * {@code ReferenceProseFidelityTest.aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith}
+ * holds four spellings together; the residues are ADR Decision 95's.
  *
  * <p><b>It is asked of the ANSWER and never of a record</b>, which is the {@code boolean}
  * {@link #wordsWithoutMarkers} takes: a dots run in a record is the knowledge base's own prose rather

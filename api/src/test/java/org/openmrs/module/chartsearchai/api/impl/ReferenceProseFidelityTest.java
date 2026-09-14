@@ -70,10 +70,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * finding and the drug-reference record beside it are what the real validate → injectRecords →
  * renderFinding chain produces off the bundled DDInter excerpt for a patient on tramadol asked
  * about sertraline, and their canned answers are sliced out of that record's own text at run time
- * rather than transcribed, so the arrangement cannot drift from the dataset. FOUR cases ASSEMBLE
+ * rather than transcribed, so the arrangement cannot drift from the dataset. SOME cases ASSEMBLE
  * their record instead — among them the chart-record scope case, the pooling legs, the
- * unreadable-record case and the record whose own prose carries a marked cut — because the shapes
- * they need do not occur in a sixteen-entry excerpt; each says so where it stands, and the check is a pure function of an answer and a record's TEXT, so an assembled operand
+ * unreadable-record case and the record whose own prose carries a marked cut — because the
+ * shapes they need do not occur in a sixteen-entry excerpt; each says so where it stands, and
+ * the check is a pure function of an answer and a record's TEXT, so an assembled operand
  * is the right one for them. The model is stubbed because answer prose is not reproducible on a live
  * engine; the chart builder, the injector and the validator are stubbed too, as in the sibling
  * suite, so the one variable under test is the answer.
@@ -607,9 +608,8 @@ public class ReferenceProseFidelityTest {
 		// "numbered lines or simple newlines" makes load-bearing and which
 		// everyWayASentenceCanEndInTheSharedRule… pins on its own; and a full stop ahead of the cut,
 		// which is the ordinary terminator arm. Implemented as an early "no" for a gap containing a
-		// dots run, both rows flip to a report — and run as a mutation over the whole api suite that
-		// form reddens this case and no other, because no case predating the rule puts a dots run in
-		// a gap for it to be seen in.
+		// dots run, both rows flip to a report; mutate it and read the failures. ADR Decision 95
+		// carries what that mutation was measured to redden.
 		for (String gap : new String[] { " ...\n", ". ... " }) {
 			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + gap
 					+ "such as antimalarials [" + finding.getIndex() + "]."));
@@ -632,11 +632,9 @@ public class ReferenceProseFidelityTest {
 		// module appends its strength clause: endSentence leaves a detail that already ends in a
 		// terminator alone, so a detail ending in an ellipsis is followed straight by the clause.
 		//
-		// Measured with the carve-out applied to both operands: BOTH rows below reported, while the
-		// control — the same record and answer with a full stop where the ellipsis is — stayed
-		// silent. That is a false report on an answer that reproduced the record faithfully, which
-		// is the crying-wolf failure this check must not have. Flip the record operand's argument in
-		// reportUnfaithfulReferenceProse to false and both rows redden again.
+		// Flip the record operand's argument in reportUnfaithfulReferenceProse to false and both rows
+		// redden. ADR Decision 95 carries the measurement that made this the fix rather than a
+		// residue, and the control it was measured against.
 		//
 		// Assembled rather than injected: the bundled excerpt carries no note ending in an ellipsis,
 		// which is also why this shape needs an operator dataset to arise in production.

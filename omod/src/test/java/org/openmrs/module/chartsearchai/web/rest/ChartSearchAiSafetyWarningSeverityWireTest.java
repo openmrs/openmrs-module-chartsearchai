@@ -100,8 +100,8 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	/**
 	 * Chips 8 and 9 share this sentence and differ only in their provenance answer.
 	 *
-	 * <p><b>It is the ALLERGY arm's sentence, and that is the fact under test rather than a detail of
-	 * the fixture</b> (issue <a
+	 * <p><b>It is a self-named ALLERGY RULE's sentence, and that is the fact under test rather than a
+	 * detail of the fixture</b> (issue <a
 	 * href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>). The key is
 	 * published for both populations the accessor answers for — ADR Decision 92's own trade-off records
 	 * that a self-named ALLERGY rule the corroborating union does not redeem answers true too — and
@@ -164,7 +164,8 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       that is not enough: a value re-derived from another published field also agrees with every
 	 *       chip, until two chips share every other field. Built by the curated-rule arm's own
 	 *       package-private factory through {@code SafetyWarningFixtures}, and by the public
-	 *       constructor, respectively. <b>Their sentence is the ALLERGY arm's since issue #412</b> —
+	 *       constructor, respectively. <b>Their sentence is a self-named ALLERGY RULE's since issue
+	 *       #412</b> —
 	 *       {@link #UNCORROBORATED_CONTRAINDICATION} carries why, and what it buys is the one axis the
 	 *       chip 8/9 pair cannot reach by itself.</li>
 	 * </ul>

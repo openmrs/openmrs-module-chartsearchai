@@ -51,7 +51,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * accessor's own reading against the key it names, over a fixture that since #374 carries a chip
  * answering true — and since issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a> carries it off
- * the ALLERGY arm's sentence rather than this class's CONDITION one, which is what generalises the
+ * a self-named ALLERGY RULE's sentence rather than this class's CONDITION one, which is what generalises the
  * comparison past this class's own chips AND past its one population. Mutate the serializer's put and
  * read all three.
  *
@@ -112,6 +112,10 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * byte-identical in {@code type}, {@code drug}, {@code detail}, {@code severity} and
 	 * {@code chartOrderBridges}, so no function of any other published field can agree with the
 	 * accessor on both, and the re-derivation reddens on BEHAVIOUR rather than on a source scan.
+	 *
+	 * <p>That is a statement about a function of the other fields ALONE, and it is the whole of what
+	 * this pair bounds. {@link #theSerializerPublishesTheChipsOwnProvenanceAnswer} states what it does
+	 * not bound (issue #412); do not read this paragraph as the wider claim.
 	 */
 	private static List<SafetyWarning> chips() {
 		return Arrays.asList(
@@ -182,8 +186,9 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 		// verbatim and answers false, so nothing but this key separates them. A value computed from the
 		// other published fields ALONE reddens HERE, which is what stops the source pin below from
 		// being the only thing standing between a maintainer and a detail-sniff. A value that READS the
-		// accessor and then narrows it does not, unless its predicate fails on chip 0's own sentence —
-		// issue #412, and the severity-wire fixture's allergy-shaped true chip is what holds that axis.
+		// accessor and then narrows it does not, unless its predicate fails on CHIP 0 — the only chip
+		// here answering true. Issue #412; one scoped to chip 0's CONDITION sentence leaves this class
+		// green, and the severity-wire fixture's allergy-rule true chip is what holds that axis.
 		JsonNode twin = chips.get(2);
 		assertEquals(uncorroborated.get("detail").asText(), twin.get("detail").asText(),
 			"precondition: chip 2 carries chip 0's sentence verbatim");
@@ -214,11 +219,15 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * makes a value computed from the other published fields ALONE — one that has to DIFFER between
 	 * chips 0 and 2 — disagree with the accessor on behaviour. <b>It does not reach a value that READS
 	 * the accessor and then narrows it</b> (issue
-	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>): such a
-	 * narrowing reddens here only where its predicate fails on chip 0's own sentence, and one scoped to
-	 * that sentence leaves this class green. What holds the narrowing axis is
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>): every chip
+	 * but chip 0 answers false, so such a narrowing reddens here only where its predicate fails on
+	 * CHIP 0 — and one scoped to the CONDITION sentence, which is the sentence chip 0 carries, leaves
+	 * this class green. What holds the narrowing axis is
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire},
-	 * whose fixture since #412 answers true off the ALLERGY arm's sentence.
+	 * whose fixture since #412 answers true off a self-named ALLERGY RULE's sentence. <b>Not the
+	 * ALLERGEN arm</b>, whose identity chip takes the public constructor and answers false, as
+	 * {@link #chips()} says of chips 1 and 2 — {@code DrugSafetyValidator.selfNamedAllergyRule} is the
+	 * population meant.
 	 * This case adds the thing no value comparison can see: that the published value came from the
 	 * accessor rather than from something that happens to agree with it on this fixture — the
 	 * two-resolutions-that-agree shape issue #151 records.
@@ -260,10 +269,10 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *         while two statements write the key and the surviving one re-derives the value. What
 	 *         bounds that is not this method: it is the identical-detail chip pair in
 	 *         {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, which such a re-derivation would
-	 *         still have to satisfy on VALUES — and that pair bounds a value computed from the other
-	 *         published fields ALONE, never one that reads the accessor and narrows it, which is issue
-	 *         #412 and is held in the severity-wire fixture instead. This method guards spelling, and
-	 *         only spelling.
+	 *         still have to satisfy on VALUES — within the bound that pair actually has, which issue
+	 *         #412 narrowed and which
+	 *         {@link #theSerializerPublishesTheChipsOwnProvenanceAnswer} states rather than this
+	 *         paragraph. This method guards spelling, and only spelling.
 	 */
 	private static String liveCode(String source) {
 		StringBuilder out = new StringBuilder(source.length());

@@ -70,9 +70,10 @@ import org.slf4j.LoggerFactory;
  *   <li>it reports a SUBSTITUTION and never an UNMARKED truncation. Where the answer stops
  *       reproducing and ends its sentence, it has stated nothing the record does not, and reporting
  *       it would fire on every answer that quotes one clause of a 150-word mechanism — which is most
- *       of them. A cut the answer MARKED is the exception and always was for three spellings of the
- *       marker; since this issue's fourth round it is the exception for the fourth too, which is the
- *       elision paragraph below.
+ *       of them. The exception is a cut the answer MARKED and then carried on PAST — always so for
+ *       three spellings of the marker, and since this issue's fourth round for the fourth too, which
+ *       is the elision paragraph below. A marked cut the answer STOPS at is silent for every
+ *       spelling alike: the answer ran out, and that leg is read before any boundary bit is.
  *       That under-reports the ticket's weaker cousin, a hazard dropped by stopping early, and it
  *       is the safe direction for a check whose failure mode is being ignored. Half of that cousin
  *       is covered since the same issue's third round, by {@link SafetyFindingSeverityFidelityCheck}:

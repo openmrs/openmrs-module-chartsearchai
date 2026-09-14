@@ -7369,6 +7369,8 @@ The first four rows are what makes this a glyph dependence rather than a policy:
 
 This was found in Phase 1 of hardening, by re-reading the unchanged neighbours the change had not touched — `endSentence`'s comment states that the record-sentence exit depends on the character it appends being one `mayEndASentence` recognises, and the first version of this change falsified that sentence silently.
 
+What still rests on a comment rather than on a test is that dependence itself: nothing pins that `endSentence` leaves a detail already ending in a dots run alone. The case above asserts the weaker premise it can reach — that the record it assembles ends in one — because `endSentence` and `renderFinding` are both package-private in the `reference` package, and a test calling either directly with a hand-made string is the shape this repository's instructions forbid. Recorded rather than closed.
+
 **A step OVER the run, not an answer for the gap.** Implemented as an early *no*, a gap carrying a cut AND a line break would stop ending a sentence, and the line-break arm is load-bearing — the system prompt asks for *"numbered lines or simple newlines"*. `ReferenceProseFidelityTest.aGapCarryingAnotherSentenceEndBesideTheCutStillEndsAnAnswerSentence` pins both that arm and a full stop standing ahead of the cut. Run as a mutation over the whole `api` suite, the early-*no* form reddens that case and no other — no case predating this rule puts a dots run in a gap at all, so none of them can see it.
 
 **Three dots and not two.** Three is the established ASCII spelling of `…`; two is a slip, and reading a slip as a marked cut would spend precision on it. `aTwoDotGapIsATerminatorAndNotACutTheAnswerMarked` is what stops the rule widening to any dot run unseen.
@@ -7379,9 +7381,22 @@ This was found in Phase 1 of hardening, by re-reading the unchanged neighbours t
 
 What a reader should not take from that table: it says what this arrangement does, not how often live answers mark a cut this way. Nothing here measures that rate, and no rate is claimed.
 
+### What it costs on the request path
+
+Nothing measurable. [Decision 61](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully) publishes three figures for this check and a Phase 2 lens re-measured all three against this change, A/B across the two production files, on the same arrangement Decision 61 used — the real `reportUnfaithfulReferenceProse` over the records `DrugReferenceTestSupport.injectedSafetyFindingChart` produces, 40 warm-up calls then the min of 7 reps of 40 timed calls:
+
+| arrangement | before | after |
+|---|---|---|
+| realistic chart, 300-word diverging answer | 549.6 µs | 550.5 µs |
+| realistic chart, 300-word faithful answer | 519.0 µs | 517.2 µs |
+| synthetic 20 records / 3000-word answer | 45.1 ms | 44.5 ms |
+
+The A/A control on the same rig spanned 549.6-604.4 µs, so every delta is well inside the noise and Decision 61's figures stand as written. The scan is single-pass — the loop steps past a whole run, and a run shorter than the floor falls through to a `return` — so a pathological gap of N dots stays linear, measured at 8.63 ns/char before and 9.71 ns/char after, on top of a `substring` of the gap the base already paid for. Nothing is allocated per word or per gap that was not allocated before. The one arrangement that moves is the one the change is for: an answer with a marked cut goes 520.8 µs silent to 557.3 µs reporting, which is the WARN and the returned list rather than the loop.
+
 ### What it does not reach
 
 - **A cut marked with nothing at all.** It leaves no terminator in the gap, so it was reported before this change and is untouched by it. **This includes #337's own second capture** — *"neuromuscular blockers, aminoglycoside antibiotics,"* excised from a botulinum toxin warning — and Decision 61's residue bullet said otherwise, which is corrected there. This change makes no capture in the issue visible that was not visible before; what it removes is a dependence on a glyph.
+- **A cut the answer marks and then STOPS at.** Silent, for every spelling alike — the answer ran out, and Decision 61's "the answer ran out" exit is read before any boundary bit is. So no glyph dependence remains there either; it is the marked cut the answer CARRIES ON past that this decision is about, and the README states the same distinction to a client.
 - **A cut marked with dots that the answer follows with a second terminator or a line break.** Silent by design, per the step-over rule above.
 - **A marked cut in a RECORD's own prose.** Read as a sentence end, exactly as before this change, per the operand rule above. Where such a cut falls inside a note rather than at its end this keeps a pre-existing miss — the answer gets the record-sentence exit at a point the record's sentence did not really end — and closing that means telling the check where a finding's own prose ends, which is `renderFinding`'s knowledge and the accessor Decision 61 deleted.
 - **`. . .`, spaced.** Not a run, so it stays a terminator. Recorded rather than closed: a rule counting dots across whitespace would also read an abbreviation pair such as `e.g. i.e.` as a cut.

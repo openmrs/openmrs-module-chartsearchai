@@ -115,8 +115,8 @@ public class ChartSearchAiUtils {
 	 * at {@code Q12H.} or at an abbreviation. {@link #mayEndASentence} is the other question over the
 	 * same set — could a sentence have ended in this GAP — and is deliberately weaker, except where
 	 * its caller asks it to read a run of three or more dots as a marked cut (issue #337's fourth
-	 * round). This pattern splits on such a run, so on that one gap the two can answer OPPOSITELY
-	 * rather than one merely admitting more. Read its javadoc before reaching for either; they are
+	 * round). This pattern splits on such a run wherever whitespace follows it, so on that one gap
+	 * the two can answer OPPOSITELY rather than one merely admitting more. Read its javadoc before reaching for either; they are
 	 * not interchangeable in either direction.
 	 *
 	 * <p>Two spellings of one terminator set is the shape issue #260 records the cost of: the two
@@ -155,26 +155,15 @@ public class ChartSearchAiUtils {
 	 *         {@code ChartAnswer.getUnfaithfullyRenderedCitations()}, which is why that key's client
 	 *         contract says an absent entry is not a certificate of faithfulness.
 	 *
-	 *         <p><b>The elision carve-out is where that direction is spent, and it is spent
-	 *         deliberately.</b> An ASCII elision is a run of a member of this set, so before #337's
-	 *         fourth round a cut the answer marked {@code ...} silenced the caller while the same cut
-	 *         marked {@code …}, an em dash or {@code […]} was reported — which elisions that check saw
-	 *         was decided by the glyph the model chose. Reading the run as a marked cut moves one gap
-	 *         shape from silence to a report, and that is the ONE way this predicate can cause one.
-	 *         It is not a new KIND of report: measured through the real {@code LlmInferenceService}
-	 *         before the change, every other spelling of a cut already reported both a resumption and
-	 *         a fresh sentence after it. The rule steps OVER the run rather than answering for the
-	 *         whole gap, so a line break or a second terminator beside the cut still ends the
-	 *         sentence.
-	 *
-	 *         <p><b>And it is spent on ONE operand, which is why the reading is a parameter.</b>
-	 *         Applied to a record as well, a dots run in the SOURCE reads as a cut the answer never
-	 *         made — and {@code DrugSafetyValidator.endSentence} leaves a detail that already ends in
-	 *         a terminator alone, so a note ending in an ellipsis is followed straight by the module's
-	 *         strength clause with no record sentence break at the seam. Measured: an answer
-	 *         reproducing such a note faithfully and carrying on was reported, where the same pair
-	 *         with a full stop in place of the ellipsis was silent. Appending a terminator cannot
-	 *         repair that, a fourth dot being a run too. Asking
+	 *         <p><b>The elision carve-out is where that direction is spent.</b> An ASCII elision is a
+	 *         run of a member of this set, so under {@code aMarkedCutEndsIt} a marked cut is the one
+	 *         gap SHAPE whose answer this rule moved — from silence to a report. It is not the only
+	 *         gap this predicate answers no for; a plain space is the ordinary case. What that buys,
+	 *         what it costs and why one operand asks for it and the other does not are
+	 *         {@code ReferenceProseFidelityCheck}'s to state, since that class passes both values:
+	 *         read its class javadoc, and ADR Decision 95, which is canonical for the measurement.
+	 *         The rule steps OVER the run rather than answering for the whole gap, so a line break or
+	 *         a second terminator beside the cut still ends the sentence. Asking
 	 *         {@code SENTENCE_BOUNDARY} instead spends that direction everywhere rather than at one
 	 *         marked cut, and was measured rather than argued: it
 	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the

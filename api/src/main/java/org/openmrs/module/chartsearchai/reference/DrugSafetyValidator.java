@@ -6525,10 +6525,9 @@ public class DrugSafetyValidator {
 		// The shared terminator set, not a literal of this method's own: since issue #337
 		// ReferenceProseFidelityCheck's record-sentence exit depends on the character appended here
 		// being one that ChartSearchAiUtils.mayEndASentence recognises, and two spellings of one set
-		// is what lets them come apart silently. That dependence is why the marked-cut carve-out
-		// #337's fourth round added is asked of the ANSWER operand only: a detail already ending in
-		// a dots run would otherwise open no new record sentence here, and appending a terminator
-		// could not repair it, a fourth dot being a run too.
+		// is what lets them come apart silently. That dependence is also why the marked-cut carve-out
+		// #337's fourth round added is asked of the ANSWER operand only and never of a record — ADR
+		// Decision 95 carries what a record-side carve-out was measured to do at this seam.
 		char last = trimmed.charAt(trimmed.length() - 1);
 		return ChartSearchAiUtils.SENTENCE_TERMINATORS.indexOf(last) >= 0 ? trimmed : trimmed + ".";
 	}

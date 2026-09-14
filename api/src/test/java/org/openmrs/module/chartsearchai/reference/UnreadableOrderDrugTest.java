@@ -805,8 +805,8 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 		assertTrue(handingBackAnEntity.isEmpty(),
 				"nothing in " + PatientClinicalContextBuilder.class.getSimpleName() + " may hand the"
 						+ " build loop a Drug — the accessor reads what the loop needs inside its own try"
-						+ " and carries the VALUES — and one is handed back through " + handingBackAnEntity
-						+ ". A Drug reachable at a call site is a lazy association dereferenced outside"
+						+ " and carries the VALUES — and the declared type of " + handingBackAnEntity
+						+ " admits one. A Drug reachable at a call site is a lazy association dereferenced outside"
 						+ " that try, and the catch it would land in is outside the active-order loop, so"
 						+ " it costs that order and every order after it (issue #413). Materialising the"
 						+ " entity does not materialise its lazy collections, and"
@@ -849,10 +849,13 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * Whether {@code type} would put a {@code Drug} in a caller's hands. TWO questions over the
-	 * DECLARED type, and the code below is the statement of them: does the type MENTION {@code Drug}
-	 * anywhere a value of it could be read out — through an array, a type argument, a raw type or a
-	 * bound — and, failing that, is the erased type assignable to or from {@code Drug}?
+	 * Whether {@code type} could put a {@code Drug} in a caller's hands. ONE question, asked of the
+	 * declared type and again at every position the walk decomposes it into — an array component, a
+	 * type argument, a raw type, a wildcard bound either way, a type-variable bound: could a
+	 * {@code Drug} sit there, which is assignability to or from {@code Drug} with {@code Object}
+	 * excepted. It does NOT ask whether the type names {@code Drug}, and it does not ask whether one
+	 * could be read back out: {@code List<? super Drug>} is reported though a read of it yields
+	 * {@code Object}, and {@code List<Serializable>} is reported though it names nothing.
 	 *
 	 * <p><b>Do not enumerate here what it catches. Add the member and read the failure.</b> Nine
 	 * successive statements of that enumeration were written and refuted, each correction buying the
@@ -862,19 +865,21 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * are, and a member of any shape can be put on {@code CodedDrug} in a scratch edit to see which
 	 * answer it gets.
 	 *
-	 * <p><b>Two things a mutation cannot tell you, so they are stated.</b> {@code Object} is excluded
-	 * from the assignability arm deliberately: every reference type is assignable to it, so including
+	 * <p><b>Three answers it reports only as SILENCE, so the reason is written here.</b> A mutation
+	 * shows you these are not reported; what it cannot show you is why. {@code Object} is excluded
+	 * from the assignability test deliberately: every reference type is assignable to it, so including
 	 * it would report every {@code Object}-typed member and discriminate nothing — the cost being
 	 * that a {@code Drug} widened to plain {@code Object} is handed out under this check, which
-	 * reflection cannot tell from any other member. And {@link #collectEntityCarriers} reads
-	 * DECLARED members, so what a carrier inherits from a class outside the builder is outside the
-	 * walk. A reviewer is what catches those, the same answer this class gives for the evasions its
-	 * text assertions decline to chase.
+	 * reflection cannot tell from any other member. Erasure leaves a RAW collection no type argument
+	 * to walk. And {@link #collectEntityCarriers} reads DECLARED members, so what a carrier inherits
+	 * from a class OUTSIDE the builder is outside the walk — inherited from a NESTED superclass it is
+	 * reported, that class being walked in its own right. A reviewer is what catches all three, the
+	 * same answer this class gives for the evasions its text assertions decline to chase.
 	 *
-	 * <p>The assignability arm reports a member merely declared as a supertype {@code Drug}
-	 * satisfies, which is intended — such a member can hold one — but the failure message reads as
-	 * though a {@code Drug} is already there, so check what the member is for before treating the
-	 * report as the defect.
+	 * <p>So a member is reported whenever ANY position of its declared type admits a {@code Drug} —
+	 * measured, {@code Serializable}, {@code OpenmrsObject} and {@code List<Serializable>} all are,
+	 * none of which holds one today. That is the question working as asked, those positions being
+	 * able to hold one; but check what the member is for before treating the report as the defect.
 	 */
 	private static boolean handsOutTheEntity(Type type) {
 		return handsOutTheEntity(type, new java.util.HashSet<Type>());

@@ -87,15 +87,16 @@ public class SerializedRecord {
 	 *
 	 * <p><strong>Which real orders that reaches is a question two successive attempts to characterise
 	 * got wrong, so what is recorded here is the measurement and not a rule about the population.</strong>
-	 * Driving {@code OrderService.discontinueOrder} on the standard test dataset (September 2026,
-	 * platform 2.9.0-SNAPSHOT) leaves BOTH records of the discontinuation carrying an effective stop
-	 * date: the prescription through {@code dateStopped}, and the {@code DISCONTINUE} record core
-	 * creates beside it through {@code autoExpireDate}, both set to the discontinuation instant. So an
-	 * ordinary discontinuation is served rather than skipped. {@code DrugOrder.cloneForDiscontinuing()}
-	 * on its own sets neither date, and a row saved in that state — which
-	 * {@code DrugOrderCurrencyTestData.xml}'s order 9320 is — states no date here. Nothing in this
-	 * javadoc claims which flows produce that row; the field's contract is the asymmetry above, and
-	 * the measurement is what is known about how often it bites.
+	 * Driving {@code OrderService.discontinueOrder} leaves BOTH records of the discontinuation
+	 * carrying an effective stop date: the prescription through {@code dateStopped}, and the
+	 * {@code DISCONTINUE} record core creates beside it through {@code autoExpireDate}. So an ordinary
+	 * discontinuation is served rather than skipped — and that is asserted rather than remembered, by
+	 * {@code DrugOrderCurrencyMarkTest.aRealDiscontinuationLeavesThePrescriptionCarryingItsStopDate},
+	 * which drives the real service and checks both halves.
+	 * {@code DrugOrder.cloneForDiscontinuing()} on its own sets neither date, and a row saved in that
+	 * state — which {@code DrugOrderCurrencyTestData.xml}'s order 9320 is — states no date here.
+	 * Nothing here claims which flows produce that row: the field's contract is the asymmetry above,
+	 * and the measurement bounds how often it bites.
 	 *
 	 * <p>Where an order does carry no date of its own, the module does not go looking for one on
 	 * {@code getPreviousOrder()}: that would be a second implementation of core's discontinuation

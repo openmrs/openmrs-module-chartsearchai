@@ -171,7 +171,8 @@ import org.slf4j.LoggerFactory;
  * {@code […]} were reported, while BOTH ASCII-dot spellings — {@code ...} and {@code [...]} — were
  * silent, so this change rescues two rather than one.
  * {@code ReferenceProseFidelityTest.aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith}
- * holds four spellings together; the residues are ADR Decision 95's.
+ * holds the rescued spellings beside the ones that never needed it; the residues are ADR
+ * Decision 95's.
  *
  * <p><b>It is asked of the ANSWER and never of a record</b>, which is the {@code boolean}
  * {@link #wordsWithoutMarkers} takes: a dots run in a record is the knowledge base's own prose rather

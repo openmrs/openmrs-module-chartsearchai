@@ -576,8 +576,8 @@ public class ReferenceProseFidelityTest {
 		// Issue #337, round four. An ELISION is a report — the check's own class javadoc says so, and
 		// says why: the answer states no word the record does not and has still dropped content out
 		// of a sentence a clinician reads. Until this case only SOME elisions were: a cut written
-		// with three ASCII dots put a terminator in the gap, which the weak gap question read as the
-		// answer ending its sentence, so the ASCII spelling was silent where every other spelling
+		// with ASCII dots put a terminator in the gap, which the weak gap question read as the answer
+		// ending its sentence, so both ASCII-dot spellings were silent where every other spelling
 		// reported. Which elisions the check saw was therefore decided by the glyph the model chose.
 		//
 		// The markers are LITERALS and the assertion is over every spelling together, for the reason

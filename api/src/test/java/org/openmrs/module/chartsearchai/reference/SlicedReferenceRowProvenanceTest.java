@@ -65,8 +65,9 @@ public class SlicedReferenceRowProvenanceTest {
 	 *  would fail here correctly. The list is the coverage: a new slice is added to it rather than
 	 *  given a guard of its own, and an existing fixture is added only after someone has read its own
 	 *  note for a declared deviation. */
-	private static final List<String> SLICES = Collections.singletonList(
-			"chartsearchai-test/ddi-issue338-allergy-cross-reactivity.json");
+	private static final List<String> SLICES = java.util.Arrays.asList(
+			"chartsearchai-test/ddi-issue338-allergy-cross-reactivity.json",
+			"chartsearchai-test/ddi-brand-name-aliases.json");
 
 	@Test
 	public void everySliceOnTheListIsFieldForFieldTheShippedDatasets() throws Exception {

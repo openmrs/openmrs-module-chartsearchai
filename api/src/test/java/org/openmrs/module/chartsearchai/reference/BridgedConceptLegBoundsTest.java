@@ -195,7 +195,14 @@ public class BridgedConceptLegBoundsTest {
 		assertEquals(4251, bridged.size(), "distinct bridged concepts in the shipped knowledge base");
 		assertEquals(16, rankingNarrows,
 			"concepts where the ranking drops an entry the bridge files there");
-		assertEquals(243, intersectionNarrows,
+		// 243 on the schema 1.0 knowledge base; 244 since the schema 1.3 refresh added brand names as
+		// aliases. Measured by diffing this walk over the two files: the one concept that joined is CIEL
+		// 74185 "Cytotect" (a CMV immunoglobulin), whose recorded name now also reaches Misoprostol, because
+		// misoprostol's brand list carries "Cytotec" and the order-name rule's two-letter inflection
+		// allowance reads "cytotect" as an inflection of it. A near-identical BRAND is a collision shape
+		// generic names rarely produce, and it is exactly the shape this bound exists to catch: the
+		// intersection with the concepts the bridge FILES keeps Misoprostol out of the answer.
+		assertEquals(244, intersectionNarrows,
 			"concepts where the ranked resolution of the bridge's name reaches an entry it does not file"
 					+ " there");
 		assertEquals(1, resolvesNothing, "concepts the two bounds together leave resolving nothing");

@@ -2335,6 +2335,8 @@ The path default is the **upstream release's own filename**, so refreshing the k
 
 Measured through the production `DdiDrugReferenceSource.parse` over the shipped file: **0.6 s** to parse cold (~0.4 s warm), **~30 MB** retained for the module's lifetime, **2.1 MB** of packed jar. The parse is lazy and once per module lifetime, so the cost lands on the first drug question after a restart. The interning the parser already does for mechanism notes and severities is what keeps 590,312 partner links inside 30 MB.
 
+**That packed-jar figure is the schema 1.0 file's, and it moved with the schema 1.3 refresh (pull request #392).** The bundled resource now packs to **4,031,048 bytes** — 3.8 MB, read off the built api jar's own entry for it with `unzip -v` after `mvn package -pl api` (2026-09-14; entry `chartsearchai/ddi-knowledge-base.json`, 34,882,241 bytes uncompressed). All but about 40 KB of the increase is `disease_notes`, `disease_interactions` and `derived_interactions`, three tables nothing reads yet (issue #391), so the retained-heap figure above does not move with it; the parse timings above were re-measured on the refreshed file in that review and hold. The consequences list below is stated with the new figure — a decision that argues a whole-KB default has to quote the cost that default actually carries, and until the review that found it this one was quoting 2.1 MB for a resource that packs to 3.8 MB, understating the packed cost it authorizes by about 1.8x of that 2.1 MB.
+
 The excerpt survives as a **test fixture** (`DrugReferenceTestSupport.DDI_EXCERPT`), because a case asserting "this record renders exactly these partners", "this entry has one partner" or "13 were withheld" needs a dataset whose partner lists it can state — lisinopril alone has 730 in the full KB, and pointing those cases at the shipped default would test the prompt budget's truncation instead of the behaviour each one is about.
 
 ### What the default gives up: dosing
@@ -2385,7 +2387,7 @@ Bundled byte-identical to the upstream release, so it can be verified rather tha
 - **−** The dose-excess arm is dormant by default; an install that needs dose ceilings must select `sourceFormat=json` or supply a dosing dataset.
 - **−** The module becomes a redistributor of a third-party academic dataset, with the attribution, NC licence terms and governance caveat that carries.
 - **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff.
-- **−** +2.1 MB of packed jar, ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover ~2.1 MB and is untouched here.)
+- **−** +3.8 MB of packed jar (4,031,048 bytes for the entry, schema 1.3 — see the measurement above), ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover the same 3.8 MB and is untouched here.)
 
 ## Decision 55: Each operand of the name scan is folded once where it is produced
 
@@ -4950,11 +4952,43 @@ name CIEL publishes for a bridged code"), whether done upstream in the data or a
 dictionary. **Measured unsafe in this module**, and the two measurements are kept apart because only one of them
 can be produced without re-expressing a production predicate.
 
-Of the shipped knowledge base's alias vocabulary: every alias of five characters or fewer is itself a
-substance name — `clove`, `hemin`, `iron`, `kava`, `opium`, `urea`, `yeast`, and nothing else. That is
-produced by `DrugReference.getAliases()` over the real `DdiDrugReferenceSource.load()` and is asserted,
-as the list rather than as a count, by
-`ShippedAliasVocabularyTest.everyShortAliasTheShippedVocabularyCarriesIsItselfASubstance`.
+Of the shipped knowledge base's alias vocabulary, as it stood when this decision was written (schema 1.0,
+2026-09-02): every alias of five characters or fewer is itself a substance name — `clove`, `hemin`,
+`iron`, `kava`, `opium`, `urea`, `yeast`, and nothing else. That is produced by
+`DrugReference.getAliases()` over the real `DdiDrugReferenceSource.load()`.
+
+**Restated with the schema 1.3 refresh (2026-09-09), which added RxNorm brand names as aliases**
+(openmrs-ddi-knowledge-base issue #5: `panadol` resolved to nothing, so the asked-about drug was never
+evaluated). Brand names are short in bulk — `advil`, `aleve`, `cipro`, `coreg`, `lasix`, `xanax`,
+`zocor` — so the five-or-fewer set is now 200 aliases: the seven substance names and 193 brands. The
+property the argument rests on is therefore narrower than "every short alias is a substance name" and
+is stated as two halves. Every short alias that is NOT a brand the shipped file itself declares is one
+of the seven substance names, so the CIEL-synonym harvest this decision refuses still has no member in
+the vocabulary. And every brand alias is a name someone asks a drug BY rather than a word ordinary
+clinical prose carries in another sense — which is a property of the knowledge base's own exclusion
+rule, not of this module: `fetch_brand_names.py` drops a brand of three characters or fewer, one whose
+every word is a lower-case dictionary word (`Align`, `Today`, `Sleep Aid`) and one that is a first
+name, and commits the dropped list with reasons. That rule is a dictionary and dictionaries have
+lacunae: `Stye` (a mineral-oil eye ointment) and `Propel` (mometasone) survived it because
+`/usr/share/dict/words` carries `sty` and `propeller` but neither word, and measured through the real
+`findImpliedByQuery` over the refreshed file, "The patient has a stye on the right upper eyelid"
+resolved Mineral oil, and through the real `injectRecords` raised a laxative interaction finding with
+a withholding clause against a levofloxacin order — the alert failure this decision declines to
+accept, on the default dataset, with nothing thrown. Both are now excluded by name upstream
+(`src/curation.json` `brand_exclusions`), and the residue was enumerated rather than left: of the
+3,028 single-word brands kept, 16 are words a 370k-entry English list knows and the system dictionary
+does not, and read one by one the ordinary words among them are those two (the rest are trademarks
+that larger list lowercases — Actos, Valium, Prolia — which is why it cannot replace the rule). So the
+next lacuna is found the way this one was, by reading, and the test gives that reading a diff to
+happen in. **The short tail was the wrong unit for it and was replaced in review**: the hazard is a brand
+that is also an ordinary word, `matchesText` has no length floor, and `Propel` is six characters —
+restoring it to the shipped file left the whole api suite green while the case asserted the 193 short
+brand aliases. So `ShippedAliasVocabularyTest.theShippedVocabularyCarriesExactlyTheBrandNamesPinnedBesideIt`
+pins every brand the shipped file declares (3,861 of them, produced by `DrugReference.getAliases()` over the
+real load and intersected with the raw `brand_names`) as a sorted test resource, and fails naming exactly the
+brands that joined and left — `[propel]` under that mutation. Its neighbour keeps the two statements a
+whole-set pin does not make: the non-brand short aliases are the list of seven, and no brand alias is three
+characters or fewer.
 
 Of the dictionary those names would be harvested from (the 3.7.1 reference-application demo dictionary,
 2026-09-02, raw `SELECT`s over `concept` and `concept_name`): the 171 bridged CIEL concepts it carries

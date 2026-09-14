@@ -116,14 +116,12 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * {@code ChartSearchAiUncorroboratedChartMatchTest}, whose true-answering chip is issue #309's own
 	 * reproduction.
 	 *
-	 * <p>The arm's real sentence and not an invented one: {@code DrugSafetyValidator}'s single
-	 * {@code SafetyWarning.contraindication} call site writes {@code displayLabel} + {@code " is
-	 * contraindicated by an "} + {@code recorded} + {@code ": "} + the rule's note or token, with
-	 * {@code recorded} from {@code recordedContraindicationKind}, and the shipped seed's own
-	 * self-named {@code ibuprofen} allergy rule produces exactly this string —
+	 * <p>The rule arm's real sentence and not an invented one:
 	 * {@code SubjectMatterScopedContraindicationTest.theDrugSideStillFiresWhenTheAnswerCitesTheOrderRecord}
-	 * asserts it off a real {@code validate} run over {@code DrugReferenceTestSupport.curatedService()},
-	 * the module's own bundled seed.
+	 * asserts this exact string off a real {@code DrugSafetyValidator.validate} run over
+	 * {@code DrugReferenceTestSupport.curatedService()}, the module's own bundled seed. Cited rather
+	 * than re-derived from the composition {@code DrugSafetyValidator} writes it with: a copy of that
+	 * expression here would go stale silently, while the cited assertion reddens.
 	 */
 	private static final String UNCORROBORATED_CONTRAINDICATION =
 			"Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy";

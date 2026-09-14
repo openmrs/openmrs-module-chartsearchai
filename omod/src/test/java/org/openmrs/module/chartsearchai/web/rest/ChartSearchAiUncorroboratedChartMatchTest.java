@@ -185,10 +185,9 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 		// The pair that makes the two assertions above discriminate: chip 2 is chip 0's sentence
 		// verbatim and answers false, so nothing but this key separates them. A value computed from the
 		// other published fields ALONE reddens HERE, which is what stops the source pin below from
-		// being the only thing standing between a maintainer and a detail-sniff. A value that READS the
-		// accessor and then narrows it does not, unless its predicate fails on CHIP 0 — the only chip
-		// here answering true. Issue #412; one scoped to chip 0's CONDITION sentence leaves this class
-		// green, and the severity-wire fixture's allergy-rule true chip is what holds that axis.
+		// being the only thing standing between a maintainer and a detail-sniff. What that bound does
+		// NOT reach is issue #412, stated once in theSerializerPublishesTheChipsOwnProvenanceAnswer's
+		// javadoc rather than restated here.
 		JsonNode twin = chips.get(2);
 		assertEquals(uncorroborated.get("detail").asText(), twin.get("detail").asText(),
 			"precondition: chip 2 carries chip 0's sentence verbatim");
@@ -228,7 +227,8 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * ALLERGEN arm</b>, whose identity chip takes the public constructor and answers false, as
 	 * {@link #chips()} says of chips 1 and 2 — {@code DrugSafetyValidator.selfNamedAllergyRule} is the
 	 * population meant.
-	 * This case adds the thing no value comparison can see: that the published value came from the
+	 *
+	 * <p>This case adds the thing no value comparison can see: that the published value came from the
 	 * accessor rather than from something that happens to agree with it on this fixture — the
 	 * two-resolutions-that-agree shape issue #151 records.
 	 */

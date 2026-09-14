@@ -542,12 +542,15 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// THROWS on it while the SQL simply answers, which is the one divergence that exists by
 		// construction and is why readingOf evaluates each order on its own.
 		//
-		// It discriminates, and on a row nothing else in this file charts: mutating readingOf to
-		// admit a DISCONTINUE order (order.isActive() || Action.DISCONTINUE.equals(getAction()))
-		// reddens this case, on standard-dataset order 22, and nothing else in the api
-		// suite. Every other case here pins one named order; this is the only one that walks the
-		// patient's whole list, which is what makes it the guard for a change in CORE rather than
-		// in this module.
+		// It discriminates: mutating readingOf to admit a DISCONTINUE order (order.isActive() ||
+		// Action.DISCONTINUE.equals(getAction())) reddens this case, on standard-dataset order 22.
+		// Mutate it and read the rest rather than trusting a claim about them — this comment carried
+		// an exclusivity claim ("and nothing else in the api suite"), which was true when it was
+		// written and which issue #315's own new cases falsified: four of them redden it too.
+		//
+		// What still earns the case its place is not exclusivity but shape. Every other case here
+		// pins one named order; this is the only one that walks the patient's whole list, which is
+		// what makes it the guard for a change in CORE rather than in this module.
 		List<Integer> drugOrderIds = new ArrayList<Integer>();
 		List<QueryDocument> docs = new ArrayList<QueryDocument>();
 		for (Order order : Context.getOrderService().getAllOrdersByPatient(patient)) {

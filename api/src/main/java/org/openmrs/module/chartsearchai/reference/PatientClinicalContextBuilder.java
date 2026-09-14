@@ -135,9 +135,9 @@ final class PatientClinicalContextBuilder {
 				// entity. One unreadable drug is therefore one degradation and one log line, and the
 				// three values cannot disagree about whether this order has a drug. What that does NOT
 				// mean is that this loop holds no lazy association: two of the three are Concept
-				// proxies, and reading one still throws where the concept cannot be loaded — which is
-				// conceptUuid's subject, and why addAtcCodes, addConceptNames and conceptUuid each open
-				// a try of their own. What #421 removed is the DRUG half of that hazard.
+				// proxies, and reading one still throws where the concept cannot be loaded. That is
+				// conceptUuid's subject and its javadoc enumerates the readers that each open a try of
+				// their own; do not restate the list here. What #421 removed is the DRUG half.
 				CodedDrug coded = drug(drugOrder);
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
@@ -746,11 +746,11 @@ final class PatientClinicalContextBuilder {
 	 * <p><b>Two of the three are {@code Concept} proxies, and that hazard is untouched.</b>
 	 * {@code Drug.hbm.xml} maps {@code concept} and {@code dosageForm} as default-lazy
 	 * {@code many-to-one}s, so this hands them out uninitialised and a read of one at a call site
-	 * compiles and can throw — {@link #conceptUuid} is the one home for what that costs and why the
-	 * three helpers that read a concept ({@link #addAtcCodes}, {@link #addConceptNames} and that
-	 * method) each open a {@code try} of their own. Nothing about issue #421 changes it: a fourth read
-	 * of {@code coded.concept} or {@code coded.dosageForm} needs the same treatment its neighbours
-	 * already have, and no guard here would catch one written without it.
+	 * compiles and can throw — {@link #conceptUuid} is the one home for what that costs and for which
+	 * readers each open a {@code try} of their own, and it is not restated here. Nothing about issue
+	 * #421 changes any of it: a further read of {@code coded.concept} or {@code coded.dosageForm}
+	 * needs the same treatment its neighbours already have, and no guard here would catch one written
+	 * without it.
 	 */
 	private static final class CodedDrug {
 

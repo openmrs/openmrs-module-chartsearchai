@@ -750,8 +750,8 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 *
 	 * <p><b>And the third assertion is about the {@code Drug} alone, deliberately.</b> It walks the
 	 * builder and every class nested in it, so a SECOND carrier holding the entity is caught as well
-	 * as {@code CodedDrug} — measured, a name-keyed version of this assertion was green on exactly
-	 * that edit — and it reads DECLARED types, so an entity arrayed or inside a PARAMETERIZED
+	 * as {@code CodedDrug} ({@link #collectEntityCarriers} carries the measurement for that) — and it
+	 * reads DECLARED types, so an entity arrayed or inside a PARAMETERIZED
 	 * collection is caught too; {@link #handsOutTheEntity} carries what it still admits, which is not
 	 * nothing. What it admits on
 	 * purpose is the two {@code Concept} proxies the carrier holds, the

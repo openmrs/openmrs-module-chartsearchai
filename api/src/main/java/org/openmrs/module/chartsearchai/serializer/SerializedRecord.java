@@ -79,20 +79,27 @@ public class SerializedRecord {
 	 * end is in no rendered text to read.
 	 *
 	 * <p><strong>Non-null implies {@link #orderActive} is {@code FALSE}. {@code FALSE} does NOT
-	 * imply non-null, and that asymmetry is the contract rather than a gap.</strong> An order is not
-	 * in force the moment it is voided or its action is {@code DISCONTINUE}, which
-	 * {@code Order.isActive()} answers before consulting any date — and
-	 * {@code DrugOrder.cloneForDiscontinuing()} sets neither end date on the {@code DISCONTINUE}
-	 * record core creates, so THAT record carries none.
+	 * imply non-null, and that asymmetry is the contract rather than a gap.</strong>
+	 * {@code Order.isActive()} answers false for a voided order and for one whose action is
+	 * {@code DISCONTINUE} before it consults any date, so a record can be marked not-in-force while
+	 * this field states nothing. {@code null} here therefore never means "still in force" —
+	 * {@link #orderActive} is the only thing that answers that question.
 	 *
-	 * <p><strong>Read that precisely: it is the discontinuation RECORD and not the prescription.</strong>
-	 * {@code OrderServiceImpl.stopOrder} stamps {@code dateStopped} on the prescription being
-	 * discontinued, so the prescription does carry a date here — and it is the record a clinician is
-	 * reading about. The stub's own end instant lives on {@code getPreviousOrder()}, and the module
-	 * deliberately does not reach for it: that would be a second implementation of core's
-	 * discontinuation semantics, which is the re-derivation {@link #orderActive} exists to avoid. So
-	 * {@code null} here never means "still in force" — {@link #orderActive} is the only thing that
-	 * answers that question.
+	 * <p><strong>Which real orders that reaches is a question two successive attempts to characterise
+	 * got wrong, so what is recorded here is the measurement and not a rule about the population.</strong>
+	 * Driving {@code OrderService.discontinueOrder} on the standard test dataset (September 2026,
+	 * platform 2.9.0-SNAPSHOT) leaves BOTH records of the discontinuation carrying an effective stop
+	 * date: the prescription through {@code dateStopped}, and the {@code DISCONTINUE} record core
+	 * creates beside it through {@code autoExpireDate}, both set to the discontinuation instant. So an
+	 * ordinary discontinuation is served rather than skipped. {@code DrugOrder.cloneForDiscontinuing()}
+	 * on its own sets neither date, and a row saved in that state — which
+	 * {@code DrugOrderCurrencyTestData.xml}'s order 9320 is — states no date here. Nothing in this
+	 * javadoc claims which flows produce that row; the field's contract is the asymmetry above, and
+	 * the measurement is what is known about how often it bites.
+	 *
+	 * <p>Where an order does carry no date of its own, the module does not go looking for one on
+	 * {@code getPreviousOrder()}: that would be a second implementation of core's discontinuation
+	 * semantics, which is the re-derivation {@link #orderActive} exists to avoid.
 	 *
 	 * <p>Set only by {@code QueryStoreChartBuilder.toSerializedRecords}, beside
 	 * {@link #orderActive} and off the same one authoritative order read.

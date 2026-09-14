@@ -107,9 +107,9 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 
 	/** This file's dataset: a DISCONTINUE drug order carrying NEITHER {@code date_stopped} nor
 	 *  {@code auto_expire_date} — what {@code DrugOrder.cloneForDiscontinuing()} produces. Not in
-	 *  force AND no effective stop date, which is the pair issue #315's statement turns on. It is the
-	 *  discontinuation RECORD; the prescription core discontinues is stamped with a
-	 *  {@code date_stopped} and does carry a date. */
+	 *  force AND no effective stop date, which is the pair issue #315's statement turns on. Not what a
+	 *  real {@code discontinueOrder} produces — that leaves both of its records dated; see
+	 *  {@code SerializedRecord.orderStopDate} for the measurement. */
 	private static final int DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID = 9320;
 
 	/** Standard test dataset order 22: DISCONTINUE, {@code date_stopped} NULL,
@@ -718,11 +718,15 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 			throws Exception {
 		// The cell the whole contract turns on, and the one no wording of "the order ended on" may be
 		// published for. Order.isActive() answers false from the action alone, before any date is
-		// read, and cloneForDiscontinuing writes neither end date on the DISCONTINUE record — so
-		// "not in force" and "we know when" come apart here. That is the RECORD and not the
-		// prescription: core stamps date_stopped on the prescription it discontinues, so that one
-		// does carry a date. This stub's own instant lives on getPreviousOrder() and the module
-		// deliberately does not go and get it.
+		// read, and this row carries neither end date — so "not in force" and "we know when" come
+		// apart here, which is the pair the contract turns on.
+		//
+		// What this row is NOT is the output of a real discontinuation. Measured by driving
+		// OrderService.discontinueOrder: the prescription gets a date_stopped and the DISCONTINUE
+		// record core creates gets an auto_expire_date, so both carry an end date and both are
+		// served. cloneForDiscontinuing() alone sets neither, and this row is that state — reachable,
+		// and deliberately not claimed to be what any particular flow produces, two such claims
+		// having been measured false. SerializedRecord.orderStopDate carries the measurement.
 		Order order = Context.getOrderService().getOrder(DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID);
 		assertFalse(order.isActive(),
 				"precondition: core must consider this discontinuation not in force");

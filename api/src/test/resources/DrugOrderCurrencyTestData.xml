@@ -81,10 +81,12 @@
 	     DISCONTINUE drug orders, 22 and 44, each carry an auto_expire_date equal to their own
 	     date_activated, so getEffectiveStopDate() answers a date there.
 
-	     This is the discontinuation RECORD and not a discontinued prescription: core stamps
-	     date_stopped on the prescription it discontinues, so that one does carry a date. This row is
-	     the stub beside it, whose own instant lives on getPreviousOrder() — which the module
-	     deliberately does not derive; see ADR Decision 97. Order 222's own date_stopped is
+	     It is NOT what a real discontinuation produces. Measured by driving
+	     OrderService.discontinueOrder: the prescription gets a date_stopped and the DISCONTINUE
+	     record beside it gets an auto_expire_date, so both carry an end date. cloneForDiscontinuing()
+	     alone sets neither, and this row is that state — reachable, and deliberately not claimed to be
+	     the output of any particular flow. SerializedRecord.orderStopDate carries the measurement and
+	     ADR Decision 97 the reason the module derives nothing here. Order 222's own date_stopped is
 	     left NULL on purpose: core's Order.isActive() reads an order's own fields and never walks
 	     forward to a discontinuing sibling, so pointing at 222 cannot move any other case in this
 	     file, and the tests assert both halves of the shape off core rather than assuming them.

@@ -756,8 +756,8 @@ public interface ChartSearchService {
 			this.unstatedDosingCeilings = unstatedDosingCeilings == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<UnstatedDosingCeiling>(unstatedDosingCeilings));
-			// A value type rather than a normalised pair of ints, under the same rule as the three
-			// lists above (issue #379): null is the absence of a measurement and a zeroed statement
+			// A value type rather than a normalised pair of ints, under the same rule as every list
+			// above (issue #379): null is the absence of a measurement and a zeroed statement
 			// is a measurement of none, so neither is normalised into the other. It is immutable, so
 			// it is carried rather than copied.
 			this.activeOrderClaims = activeOrderClaims;
@@ -1117,7 +1117,7 @@ public interface ChartSearchService {
 		 * round three, and
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a> for
 		 * the rating. {@code SafetyFindingSeverityFidelityCheck} reports them, and this is the same
-		 * remedy as its two siblings for the third face of one failure: a deterministic safety string
+		 * remedy as the keys beside it for the third face of one failure: a deterministic safety string
 		 * reaching the clinician weaker than the module wrote it.
 		 *
 		 * <p>The reported answer enumerated five interaction findings in one clause — <em>"…
@@ -1129,8 +1129,10 @@ public interface ChartSearchService {
 		 * that check reports a SUBSTITUTION inside a long reproduction and this answer reproduced
 		 * nothing.
 		 *
-		 * <p><b>The citation and the RATING, and never a word of either text</b>. The two siblings
-		 * publish a bare index because each has one datum to publish; this key carries two. One
+		 * <p><b>The citation and the RATING, and never a word of either text</b>. A key whose check
+		 * has one datum to publish publishes a bare index — {@link #getUnfaithfullyRenderedCitations()}
+		 * and {@link #getMisattributedOrderCitations()} do; this one carries two, and
+		 * {@link #getUnstatedDosingCeilings()} three. One
 		 * citation is one entry, and {@link UnstatedFindingSeverity} is canonical for what an entry
 		 * asserts, why the two travel together, and how its {@code rating} differs from the
 		 * {@code severity} a chip publishes — a difference its spelling is chosen to keep visible.

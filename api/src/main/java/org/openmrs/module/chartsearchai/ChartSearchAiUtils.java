@@ -1312,21 +1312,27 @@ public class ChartSearchAiUtils {
 	 *         membership, and the comma is asked about the digit before it and then about the LENGTHS
 	 *         of the digit runs around it. <b>The residues that leaves, named here rather than left
 	 *         to be found, and each unpinned</b>: a naked decimal written directly after an opening
-	 *         mark
-	 *         with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be read
-	 *         out of it. The exception ADMITS two things that are not elided-unit lists: a comma
+	 *         mark with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be
+	 *         read out of it. The exception ADMITS two things that are no elided-unit list: a comma
 	 *         decimal whose fraction is three digits long behind four or more
 	 *         ({@code "1000,300 mg/day"}), and a PARTIALLY grouped number, one whose last group
 	 *         alone is marked ({@code "20000,500 mg/day"} for 20,000,500). And it does NOT REACH a
-	 *         list written any other way — each half refusing one on its own, three digits before the comma
-	 *         ({@code "600,500 mg/day"}) or four after it ({@code "4000,2000 mg/day"}) — so #425's
-	 *         own false report still stands for those. Those last two are two faces of ONE choice
-	 *         rather than two defects, and the choice is where the tail bound sits:
-	 *         {@code "1000,300 mg/day"} (a decimal) and {@code "4000,300 mg/day"} (the list #425
-	 *         filed) are the same shape to a rule reading only the text, so no bound admits one
-	 *         without the other, and a wider one would reach further into both. What could narrow
-	 *         them is whether the number before the comma is another of the cited record's own
-	 *         ceilings — evidence this method cannot see, being handed a text and a needle.
+	 *         list written any other way, so #425's own false report still stands for those — each
+	 *         half leaving its own shapes behind. The run-length half leaves a first number of three
+	 *         digits or fewer ({@code "600,500 mg/day"}). The tail test is an EQUALITY and not an
+	 *         upper bound, so it leaves every ceiling whose number is not exactly three digits long —
+	 *         {@code "4000,2000 mg/day"} and, the reachable direction, the one- and two-digit
+	 *         ceilings this module's own fixtures are full of ({@code "2000,60 mg/day"}, measured
+	 *         refused).
+	 *
+	 *         <p>The tail bound's two residues — the comma decimal it admits and the short-ceiling
+	 *         list it does not reach — are two faces of ONE choice rather than two defects, and the
+	 *         choice is where that bound sits: {@code "1000,300 mg/day"} (a decimal) and
+	 *         {@code "4000,300 mg/day"} (the list #425 filed) are the same shape to a rule reading
+	 *         only the text, so no bound admits one without the other, and a wider one would reach
+	 *         further into both. What could narrow them is whether the number before the comma is
+	 *         another of the cited record's own ceilings — evidence this method cannot see, being
+	 *         handed a text and a needle.
 	 *         Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
 	 *         {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},

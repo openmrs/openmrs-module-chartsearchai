@@ -585,6 +585,100 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * A cited chart record whose drug order is no longer in force, and the date it stopped being in
+	 * force — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/315">#315</a>.
+	 *
+	 * <p><b>It is a statement, not an accusation.</b> It says nothing about what the answer's prose
+	 * did or did not say, and it is not a claim that the answer is wrong. Since issue #321 the prompt
+	 * already requires an answer naming a drug from such a record to say the order is no longer in
+	 * force, and the measurements behind that rule are in ADR Decision 47; what no wording of it
+	 * delivers is the DATE, which is what this carries. A client renders it beside the citation the
+	 * answer printed.
+	 *
+	 * <p><b>Why the module states it rather than the answer.</b> Nothing a {@code /search} consumer
+	 * reads carries a record's text or its order status, so before this the stop date reached a
+	 * clinician only if the model chose to print it — and it is measured not to. Asking the prompt
+	 * for the date instead was measured and refused: worded positively it replaces two live drug
+	 * names with a lab measurement on a chart carrying a lapsed order beside two live ones. ADR
+	 * Decision 47's residue 1 is canonical for that and is not restated here.
+	 *
+	 * <p><b>What the date is, and why an order out of force can be absent from this list, are
+	 * enumerated in ONE place — {@code SerializedRecord.orderStopDate} — which this points at rather
+	 * than restating.</b> Two consequences a reader of THIS type needs, and no more: the date is
+	 * carried from the one authoritative order read at chart assembly rather than read out of any
+	 * text, and <b>absence from this list is never a claim that a cited order is still in force</b>,
+	 * so an empty list is not a certificate of anything.
+	 */
+	final class OrderStopDate {
+
+		private final int citation;
+
+		private final Date stopDate;
+
+		/**
+		 * Both arguments are required: {@link #equals} and {@link #hashCode} dereference the date,
+		 * the discipline {@link UnstatedDosingCeiling} states of its own pair, and a caller building
+		 * one by hand owes the same. The production path cannot pass a null — the projection reports
+		 * only records that carry a date.
+		 */
+		public OrderStopDate(int citation, Date stopDate) {
+			this.citation = citation;
+			// Copied in AND out, unlike the module's other published dates, and the reason is the TYPE
+			// rather than mutability. What arrives here is whatever Hibernate loaded onto the order —
+			// in practice a java.sql.Timestamp, a Date subclass whose equals is asymmetric with its
+			// supertype's: Timestamp.equals(Date) is false while Date.equals(Timestamp) is true. So
+			// without normalising to a plain Date, this type's own equals would inherit that asymmetry
+			// and two OrderStopDates a client could not tell apart would compare unequal one way
+			// round. Mutability is the lesser reason and would not on its own earn the copy: the
+			// chart's own record dates are published uncopied. An earlier version of this comment gave
+			// only the mutability reason, and review measured that removing both copies reddens
+			// nothing — which is true and is not the argument.
+			this.stopDate = new Date(stopDate.getTime());
+		}
+
+		/**
+		 * @return the citation index of the chart record — the number the answer printed in brackets,
+		 *         and the {@code index} of the matching entry in the response's {@code references}
+		 *         array, which is how a client joins the two
+		 */
+		public int getCitation() {
+			return citation;
+		}
+
+		/**
+		 * @return when that record's order stopped being in force. Never null. It is the ORDER's own
+		 *         end instant and not the record's clinical date, which {@code references} already
+		 *         carries separately for the same citation.
+		 */
+		public Date getStopDate() {
+			return new Date(stopDate.getTime());
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof OrderStopDate)) {
+				return false;
+			}
+			OrderStopDate that = (OrderStopDate) other;
+			return citation == that.citation && stopDate.equals(that.stopDate);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * citation + stopDate.hashCode();
+		}
+
+		@Override
+		public String toString() {
+			return "[" + citation + "] order stopped " + stopDate;
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -624,6 +718,8 @@ public interface ChartSearchService {
 		private final Boolean chartReadForSafety;
 
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
+
+		private final List<OrderStopDate> orderStopDates;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
@@ -685,7 +781,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null);
+					null, null, null, null, null, null, null, null);
 		}
 
 		/**
@@ -719,7 +815,8 @@ public interface ChartSearchService {
 				ActiveOrderClaims activeOrderClaims,
 				FindingCitationExtent findingCitationExtent,
 				Boolean chartReadForSafety,
-				DrugReferenceLoad.Coverage conditionRuleCoverage) {
+				DrugReferenceLoad.Coverage conditionRuleCoverage,
+				List<OrderStopDate> orderStopDates) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -771,6 +868,16 @@ public interface ChartSearchService {
 			// separates "nobody looked" from "the reads completed".
 			this.chartReadForSafety = chartReadForSafety;
 			this.conditionRuleCoverage = conditionRuleCoverage;
+			// And once more (issue #315), under the rule every list above shares rather than one of
+			// its own: null is the absence of a measurement, empty a measurement of none. Appended
+			// after the coverage rather than placed beside the statements it belongs with, because
+			// ArchitectureGuardTest identifies this constructor as the widest by its CONTAINING the
+			// coverage type; inserting ahead of that is safe for the guard but would silently rebind
+			// nothing only because every neighbouring type differs. Mutate the placement and read the
+			// failures.
+			this.orderStopDates = orderStopDates == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<OrderStopDate>(orderStopDates));
 		}
 
 		/**
@@ -1390,6 +1497,39 @@ public interface ChartSearchService {
 		 */
 		public DrugReferenceLoad.Coverage getConditionRuleCoverage() {
 			return conditionRuleCoverage;
+		}
+
+		/**
+		 * The cited chart records whose drug order is no longer in force, each with the date it
+		 * stopped being in force — issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/315">#315</a>.
+		 * {@link OrderStopDate} is canonical for what an entry does and does not assert, and for why
+		 * an order out of force can be absent from this list; neither is restated here.
+		 *
+		 * <p>{@code null} is the absence of a measurement — no producer stated one — and an empty
+		 * list is a measurement of none. <b>Neither is a certificate.</b> An empty list says this
+		 * answer cited no chart record whose order both is out of force and publishes a stop date; it
+		 * does not say the patient has no ended prescription, and it does not say the answer's prose
+		 * reported one correctly.
+		 *
+		 * <p><b>Unlike every check-derived statement beside it, {@code null} is not a state this
+		 * module's own answers reach.</b> The projection has no failure mode and always states a
+		 * measurement, and all three answers {@code LlmInferenceService} builds pass it — so a client
+		 * reading an answer from this module sees a list. The field stays nullable because the type is
+		 * what a different {@code ChartSearchService} implementation could return, and because the
+		 * serializer must then emit {@code null} rather than an empty list, which would assert a
+		 * measurement nobody made. Do not read that nullability as a live signal to branch on.
+		 *
+		 * <p>Resolved ONCE per {@code LlmInferenceService} method, off the chart the answer was
+		 * produced from, and carried rather than re-derived: the chart is gone by REST time, so a
+		 * consumer could not re-ask this if it wanted to, and a second walk over one mapping list for
+		 * one question is the two-resolutions-that-agree shape issue #151 forbids.
+		 *
+		 * @return the stop dates of the cited records whose orders have ended, an empty list where it
+		 *         found none, or {@code null} where no measurement was stated
+		 */
+		public List<OrderStopDate> getOrderStopDates() {
+			return orderStopDates;
 		}
 	}
 

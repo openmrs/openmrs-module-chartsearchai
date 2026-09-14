@@ -240,6 +240,13 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
 					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// And the statement none of the six above is (issue #315): the cited chart records whose
+			// drug order has ended, each with the date it ended. A projection rather than a check —
+			// it judges no prose and reports no discrepancy — so it lives in ChartSearchAiUtils beside
+			// the chart's other statements. Carried rather than re-derived for the reason its
+			// neighbours are: the stop date travels on the chart, and the chart is gone by REST time.
+			List<ChartSearchService.OrderStopDate> orderStopDates =
+					ChartSearchAiUtils.orderStopDates(response.getAnswer(), cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
@@ -256,7 +263,7 @@ public class LlmInferenceService implements ChartSearchService {
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
-					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates);
 			outcome = "ok";
 			return answer;
 		}
@@ -626,6 +633,17 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			citationsConsumer.accept(cited);
 
+			// Resolved ONCE for this method and handed to BOTH answers it produces, the ungrounded one
+			// below included (issue #315). It is a projection over the answer's own markers and its
+			// resolution, both already in hand here, so unlike the six checks further down it owes
+			// nothing to the grounding pass and does not wait for it — the same argument
+			// unresolvedDrugClass, chartReadForSafety and conditionRuleCoverage are stated on the early
+			// `done` for, that being what a streaming user reads. Withholding it until the `grounded`
+			// event would leave exactly this ticket's clinician reading an answer about an ended
+			// prescription with no end date beside it.
+			List<ChartSearchService.OrderStopDate> orderStopDates =
+					ChartSearchAiUtils.orderStopDates(response.getAnswer(), cited, chart.getMappings());
+
 			// The answer is complete: hand the whole (not yet grounding-verified) result to the
 			// caller before the grounding pass, so the REST layer can finish the user-visible
 			// response (emit "done", persist the audit row) without waiting out the Tier-2 tail.
@@ -634,7 +652,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
-					chartRead.stated(), conditionRuleCoverage));
+					chartRead.stated(), conditionRuleCoverage, orderStopDates));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -720,7 +738,7 @@ public class LlmInferenceService implements ChartSearchService {
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
-					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates);
 			outcome = "ok";
 			return answer;
 		}

@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -103,6 +104,28 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	 *  order uuid that is not one of patient 2's, which is how the unattributable case is reached
 	 *  with real data rather than a hand-edited uuid. */
 	private static final int OTHER_PATIENTS_ORDER_ID = 1;
+
+	/** This file's dataset: a DISCONTINUE drug order carrying NEITHER {@code date_stopped} nor
+	 *  {@code auto_expire_date} — what {@code DrugOrder.cloneForDiscontinuing()} produces. Not in
+	 *  force AND no effective stop date, which is the pair issue #315's statement turns on. Not what a
+	 *  real {@code discontinueOrder} produces — that leaves both of its records dated; see
+	 *  {@code SerializedRecord.orderStopDate} for the measurement. */
+	private static final int DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID = 9320;
+
+	/** Standard test dataset order 22: DISCONTINUE, {@code date_stopped} NULL,
+	 *  {@code auto_expire_date} 2007-12-10 — a discontinuation that DOES publish an effective stop
+	 *  date, so it is the other half of the pair above rather than a second copy of it. */
+	private static final int DISCONTINUED_ORDER_WITH_A_STOP_DATE_ID = 22;
+
+	/** This file's dataset: a LIVE duration-based prescription — {@code auto_expire_date} in the
+	 *  FUTURE, so {@code Order.isActive()} is TRUE while {@code getEffectiveStopDate()} still answers
+	 *  a date. The pair that witnesses {@code SerializedRecord.orderStopDate}'s contract. */
+	private static final int LIVE_WITH_FUTURE_EXPIRY_ORDER_ID = 9321;
+
+	/** This file's dataset: a live order existing to be discontinued by the one case that writes, so
+	 *  the currency other cases assert about is not also the thing being mutated. That case's own
+	 *  comment carries the rest of the reason. */
+	private static final int ORDER_TO_DISCONTINUE_ID = 9323;
 
 	private static final String MEDICATIONS_QUESTION = "what medications is the patient taking?";
 
@@ -519,12 +542,15 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// THROWS on it while the SQL simply answers, which is the one divergence that exists by
 		// construction and is why readingOf evaluates each order on its own.
 		//
-		// It discriminates, and on a row nothing else in this file charts: mutating readingOf to
-		// admit a DISCONTINUE order (order.isActive() || Action.DISCONTINUE.equals(getAction()))
-		// reddens this case, on standard-dataset order 22, and nothing else in the 1464-test api
-		// suite. Every other case here pins one named order; this is the only one that walks the
-		// patient's whole list, which is what makes it the guard for a change in CORE rather than
-		// in this module.
+		// It discriminates: mutating readingOf to admit a DISCONTINUE order (order.isActive() ||
+		// Action.DISCONTINUE.equals(getAction())) reddens this case, on standard-dataset order 22.
+		// Mutate it and read the rest rather than trusting a claim about them — this comment carried
+		// an exclusivity claim ("and nothing else in the api suite"), which was true when it was
+		// written and which issue #315's own new cases falsified: four of them redden it too.
+		//
+		// What still earns the case its place is not exclusivity but shape. Every other case here
+		// pins one named order; this is the only one that walks the patient's whole list, which is
+		// what makes it the guard for a change in CORE rather than in this module.
 		List<Integer> drugOrderIds = new ArrayList<Integer>();
 		List<QueryDocument> docs = new ArrayList<QueryDocument>();
 		for (Order order : Context.getOrderService().getAllOrdersByPatient(patient)) {
@@ -650,7 +676,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// logged, no mark changes for any order that IS readable, and a chart whose orders could not
 		// be read renders as a chart with no orders — the "empty set is an answer" state, which is
 		// exactly the fail-open the catch above refuses. Measured both ways over the api suite: that
-		// mutation was green on all 1464 tests before these assertions existed, and with them it
+		// mutation was green on the whole api suite before these assertions existed, and with them it
 		// reddens this case and only this case.
 		int seamAt = text.indexOf("protected List<Order> resolveAllOrders(Patient patient) {");
 		assertTrue(seamAt > 0, "cannot find the order-read seam in " + source);
@@ -660,6 +686,272 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 						+ seam);
 		assertEquals(0, occurrencesOf("catch (", seam),
 				"and must catch nothing of its own: " + seam);
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Issue #315: the record also carries WHEN the order stopped being in force, so a client can
+	// state the stop date the answer's prose is measured not to carry. Same one order read as the
+	// mark above, same funnel, and asserted through the same production path.
+	// ---------------------------------------------------------------------------------------------
+
+	@Test
+	public void aLapsedOrderCarriesItsStopDateEvenThoughItsRenderedTextHasNone() throws Exception {
+		// The decisive case, and the reason the date cannot come from the record's prose: querystore
+		// renders no auto-expire date, so for this order the end instant exists nowhere in any text
+		// the model or a client reads. The module has had it all along and discarded it.
+		chartOf(drugOrderDoc(LAPSED_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		String line = lineFor(chart, uuidOf(LAPSED_ORDER_ID));
+		assertFalse(line.toLowerCase().contains(". stopped:"),
+				"precondition: this order's rendered text must carry no stop date, or the case proves "
+						+ "nothing about reading the date structurally: " + line);
+		assertEquals(TestDatasetHelper.on("2008-01-08"), mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderStopDate(),
+				"the lapsed order's auto-expire date must reach the mapping as its stop date");
+	}
+
+	@Test
+	public void aStoppedOrderCarriesTheDateItWasStopped() throws Exception {
+		chartOf(drugOrderDoc(STOPPED_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		assertEquals(TestDatasetHelper.on("2007-12-10"), mappingFor(chart, uuidOf(STOPPED_ORDER_ID)).getOrderStopDate(),
+				"a stopped order's own date_stopped must reach the mapping");
+	}
+
+	@Test
+	public void aDiscontinuedOrderCarryingNoEndDateStatesNoStopDateAndIsStillMarkedNotInForce()
+			throws Exception {
+		// The cell the whole contract turns on, and the one no wording of "the order ended on" may be
+		// published for. Order.isActive() answers false from the action alone, before any date is
+		// read, and this row carries neither end date — so "not in force" and "we know when" come
+		// apart here, which is the pair the contract turns on.
+		//
+		// What this row is NOT is the output of a real discontinuation. Measured by driving
+		// OrderService.discontinueOrder: the prescription gets a date_stopped and the DISCONTINUE
+		// record core creates gets an auto_expire_date, so both carry an end date and both are
+		// served. cloneForDiscontinuing() alone sets neither, and this row is that state, written
+		// directly — through OrderService it is not producible at all. SerializedRecord.orderStopDate
+		// is the one home for that measurement; an earlier form of this comment called the row
+		// "reachable", which is the sense that javadoc retracted.
+		Order order = Context.getOrderService().getOrder(DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID);
+		assertFalse(order.isActive(),
+				"precondition: core must consider this discontinuation not in force");
+		assertNull(order.getEffectiveStopDate(),
+				"precondition: core must publish NO effective stop date for it, or this case is the "
+						+ "same as the one above");
+		chartOf(drugOrderDoc(DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		RecordMapping mapping = mappingFor(chart, order.getUuid());
+		assertEquals(Boolean.FALSE, mapping.getOrderActive(),
+				"the order is not in force and the mark must say so");
+		assertNull(mapping.getOrderStopDate(),
+				"and the module must state no stop date rather than invent one from another field");
+	}
+
+	@Test
+	public void aDiscontinuedOrderThatDoesPublishAStopDateCarriesIt() throws Exception {
+		// The other DISCONTINUE shape, so the case above is read as "no date published" rather than
+		// as "discontinuations never carry one".
+		chartOf(drugOrderDoc(DISCONTINUED_ORDER_WITH_A_STOP_DATE_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		String uuid = uuidOf(DISCONTINUED_ORDER_WITH_A_STOP_DATE_ID);
+		assertEquals(Boolean.FALSE, mappingFor(chart, uuid).getOrderActive(),
+				"precondition: this discontinuation is not in force either");
+		assertEquals(TestDatasetHelper.on("2007-12-10"), mappingFor(chart, uuid).getOrderStopDate(),
+				"and its auto-expire date is published as its stop date");
+	}
+
+	@Test
+	public void aRealDiscontinuationLeavesThePrescriptionCarryingItsStopDate() {
+		// The claim the published contract rests on, driven rather than reasoned. README and ADR
+		// Decision 98 both tell a client that an ordinary discontinuation is SERVED by this key rather
+		// than skipped, and that sentence exists because two earlier attempts to characterise the
+		// population from core's source were each measured false. So it is pinned here, through the
+		// real OrderService.discontinueOrder on a real live order: the prescription comes back out of
+		// force AND carrying the instant it was stopped, which is what reaches a clinician.
+		//
+		// Deliberately not asserting a fixed date — the discontinuation instant is "now" — so what is
+		// asserted is the relationship between core's answer and the chart record's, which is the
+		// claim. Both records of the discontinuation are covered, because the published sentence says
+		// both: the prescription through the chart below, and the DISCONTINUE record core returns
+		// through the direct assertion on it, which is where its own end instant shows up.
+		// The call below WRITES, and many cases in this class assert about standard order 3's currency.
+		// BaseContextSensitiveTest is @Transactional + @Rollback so the write does not escape the
+		// method; discontinuing a row added for this case rather than order 3 means the assertion
+		// being protected is not also the thing being mutated. Both together, because leaked test
+		// state gives wrong answers without throwing — and neither "which cases read order 3" nor
+		// "nothing else reads 9323" is stated as a count or a claim: both were written here once and
+		// review measured both wrong. 9323 IS read by
+		// theTwoPredicatesTheModuleAsksAgreeOnEveryOrderEitherCanEvaluate, harmlessly — named rather
+		// than located, a positional reference being a claim about layout any insertion breaks.
+		Order live = Context.getOrderService().getOrder(ORDER_TO_DISCONTINUE_ID);
+		assertTrue(live.isActive(), "precondition: this order must start in force");
+		assertNull(live.getEffectiveStopDate(), "precondition: and carry no end date of its own");
+		Order stub = Context.getOrderService().discontinueOrder(live, "harden probe, made permanent",
+				new Date(), live.getOrderer(), live.getEncounter());
+		Context.flushSession();
+
+		assertNotNull(stub.getEffectiveStopDate(),
+				"the DISCONTINUE record core creates carries an end date of its own too");
+
+		Order discontinued = Context.getOrderService().getOrder(ORDER_TO_DISCONTINUE_ID);
+		assertFalse(discontinued.isActive(), "core now considers the prescription out of force");
+		assertNotNull(discontinued.getEffectiveStopDate(),
+				"and publishes an end for it — the fact the client contract rests on");
+		chartOf(drugOrderDoc(ORDER_TO_DISCONTINUE_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		RecordMapping mapping = mappingFor(chart, discontinued.getUuid());
+		assertEquals(Boolean.FALSE, mapping.getOrderActive(), "the record says the order has ended");
+		assertEquals(discontinued.getEffectiveStopDate(), mapping.getOrderStopDate(),
+				"and carries core's own end instant, so a discontinued prescription is served rather "
+						+ "than absent from the statement");
+
+		// The other half, through the MODULE and not just core. What README and ADR Decision 98 tell
+		// a client is that BOTH records of a discontinuation are served; asserting only that core
+		// dates the stub would leave the published half of that sentence resting on a core fact.
+		chartOf(drugOrderDoc(stub.getOrderId().intValue()));
+		PatientChart stubChart = builder.build(patient, MEDICATIONS_QUESTION);
+		RecordMapping stubMapping = mappingFor(stubChart, stub.getUuid());
+		assertEquals(Boolean.FALSE, stubMapping.getOrderActive(),
+				"the DISCONTINUE record's own chart record says it is not in force");
+		assertEquals(stub.getEffectiveStopDate(), stubMapping.getOrderStopDate(),
+				"and the module publishes its end instant too, which is the half of the client "
+						+ "contract a core-only assertion would leave unpinned");
+	}
+
+	@Test
+	public void aLiveOrderStatesNoStopDate() {
+		chartOf(drugOrderDoc(LIVE_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		RecordMapping mapping = mappingFor(chart, uuidOf(LIVE_ORDER_ID));
+		assertEquals(Boolean.TRUE, mapping.getOrderActive(), "precondition: order 3 is in force");
+		assertNull(mapping.getOrderStopDate(),
+				"an order still in force has not stopped, so there is no date to state");
+	}
+
+	@Test
+	public void aLiveDurationBasedPrescriptionStatesNoStopDateEvenThoughCorePublishesOne() {
+		// THE case for the contract in SerializedRecord.orderStopDate — non-null implies the mark is
+		// FALSE — and the one the case above cannot make. Order 3 carries NEITHER end date, so
+		// getEffectiveStopDate() is null for it and no arrangement of the two guards could have
+		// produced a date; asserting "no stop date" there asserts nothing.
+		//
+		// This order is live AND core publishes an end for it: auto_expire_date in the future, which
+		// getEffectiveStopDate() returns because that accessor is dateStopped-else-autoExpireDate and
+		// says nothing about whether the date has passed. It is the commonest live shape there is,
+		// core setting auto_expire_date from an order's duration.
+		//
+		// Measured: with the forRecord gate reduced to a type test AND the else-narrowing removed, the
+		// whole suite was green before this case existed; with it, that mutation publishes
+		// 2099-01-08 as the stop date of a prescription the same record calls in force.
+		Order order = Context.getOrderService().getOrder(LIVE_WITH_FUTURE_EXPIRY_ORDER_ID);
+		assertTrue(order.isActive(), "precondition: core must consider this prescription in force");
+		assertNotNull(order.getEffectiveStopDate(),
+				"precondition: and must publish an effective stop date for it anyway, or this case is "
+						+ "the same as the one above");
+		chartOf(drugOrderDoc(LIVE_WITH_FUTURE_EXPIRY_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		RecordMapping mapping = mappingFor(chart, order.getUuid());
+		assertEquals(Boolean.TRUE, mapping.getOrderActive(), "the record says the order is in force");
+		assertNull(mapping.getOrderStopDate(),
+				"so it must state NO stop date, whatever core's accessor answers — a date beside an "
+						+ "in-force mark is the contradiction the contract exists to make impossible");
+	}
+
+	@Test
+	public void anOrderTheModuleCannotEvaluateStatesNoStopDate() {
+		// Silence for what cannot be evaluated, on BOTH halves of the read. Order.isActive() throws on
+		// this row, so its uuid reaches neither set — and that is what refuses the date here:
+		// forRecord answers null rather than FALSE, and stopDateForRecord's gate turns that away. It
+		// is NOT the try scope; an earlier version of this comment said it was, and review measured
+		// that moving the read out of the try — or adding the map write to the catch — leaves this
+		// case green.
+		chartOf(drugOrderDoc(UNEVALUABLE_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		RecordMapping mapping = mappingFor(chart, uuidOf(UNEVALUABLE_ORDER_ID));
+		assertNull(mapping.getOrderActive(), "precondition: the module can say nothing about this order");
+		assertNull(mapping.getOrderStopDate(), "so it must state no stop date either");
+	}
+
+	@Test
+	public void noStopDateIsStatedWhenTheOrderReadFails() {
+		// The fail-closed guard, the other half of neitherMarkIsRenderedWhenTheActiveOrderReadFails:
+		// a chart the module could not read is not a chart of prescriptions that stopped on a date.
+		chartOf(drugOrderDoc(LAPSED_ORDER_ID), drugOrderDoc(LIVE_ORDER_ID));
+		builder.failOrderRead = true;
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		assertNull(mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderStopDate(),
+				"a failed order read states no stop date for the lapsed order");
+		assertNull(mappingFor(chart, uuidOf(LIVE_ORDER_ID)).getOrderStopDate(),
+				"nor for any other record of that chart");
+	}
+
+	@Test
+	public void aNonOrderRecordStatesNoStopDate() throws Exception {
+		// The stamp is scoped to drug orders, like the mark beside it. A TEST order is this patient's
+		// own order and still not a prescription, which is the boundary a type-blind reading crosses.
+		//
+		// The chart must carry a DRUG order too, and that is what makes this case reach the gate at
+		// all: readOrderCurrency skips the whole read for a chart with no prescription in it, so a
+		// test-order-only chart is answered by the unread reading and would pass with no type test
+		// anywhere. Measured — with the chart below reduced to the test order alone, removing the
+		// type gate from stopDateForRecord reddens nothing. Standard-dataset order 6 is a test order
+		// of this same patient whose auto-expire date is in the past, so its uuid IS one the read
+		// resolves a stop date for.
+		chartOf(drugOrderDoc(LAPSED_ORDER_ID), testOrderDoc(TEST_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		assertFalse(Context.getOrderService().getOrder(TEST_ORDER_ID).isActive(),
+				"precondition: this test order must itself be out of force, or the gate it is here to "
+						+ "exercise is never asked about it");
+		assertNotNull(Context.getOrderService().getOrder(TEST_ORDER_ID).getEffectiveStopDate(),
+				"precondition: and core must publish an end for it, or there is no date for a "
+						+ "type-blind reading to leak");
+		assertNull(mappingFor(chart, uuidOf(TEST_ORDER_ID)).getOrderStopDate(),
+				"a test order is not a drug order, so no stop date is stated for it");
+		assertEquals(TestDatasetHelper.on("2008-01-08"), mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderStopDate(),
+				"while the prescription beside it still carries its own");
+	}
+
+	@Test
+	public void theStopDateReachesEveryChartAssemblyMode() throws Exception {
+		// toSerializedRecords is the funnel all three build paths share, which is the whole reason
+		// the stamp is written there. Asserted per mode rather than assumed from build() alone.
+		chartOf(drugOrderDoc(LAPSED_ORDER_ID));
+		// buildFocused retrieves its own slice rather than the whole chart, so it reads the hits stub
+		// — the same way this file's own buildFocused case drives it.
+		queryStore.stubHits = new ArrayList<QueryDocument>(queryStore.stubChart);
+
+		assertEquals(TestDatasetHelper.on("2008-01-08"),
+				mappingFor(builder.build(patient, MEDICATIONS_QUESTION), uuidOf(LAPSED_ORDER_ID))
+						.getOrderStopDate(),
+				"build() carries the stop date");
+		assertEquals(TestDatasetHelper.on("2008-01-08"),
+				mappingFor(builder.buildScoped(patient, MEDICATIONS_QUESTION), uuidOf(LAPSED_ORDER_ID))
+						.getOrderStopDate(),
+				"buildScoped() carries it too");
+		assertEquals(TestDatasetHelper.on("2008-01-08"),
+				mappingFor(builder.buildFocused(patient, MEDICATIONS_QUESTION), uuidOf(LAPSED_ORDER_ID))
+						.getOrderStopDate(),
+				"and so does buildFocused()");
 	}
 
 	/** Non-overlapping occurrences of {@code needle} in {@code haystack}. */

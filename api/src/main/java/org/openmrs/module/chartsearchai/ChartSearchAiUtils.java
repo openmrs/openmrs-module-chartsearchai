@@ -19,15 +19,20 @@ import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_T
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 import org.openmrs.Concept;
 import org.openmrs.ConceptSet;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -573,6 +578,95 @@ public class ChartSearchAiUtils {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The cited chart records whose drug order is no longer in force, each with the date it stopped
+	 * being in force — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/315">#315</a>, and the
+	 * single producer of {@code ChartAnswer.getOrderStopDates()}.
+	 *
+	 * <p>{@code ChartSearchService.OrderStopDate} is canonical for what an entry asserts, why the
+	 * module states the date rather than the prompt, and why an order out of force can be absent.
+	 * None of that is restated here.
+	 *
+	 * <p><b>A projection and not a check.</b> It makes no judgement about the answer's prose, so it
+	 * has no failure mode and logs nothing: an answer whose chart carried no ended cited order is not
+	 * a defect, it is the common case. That is why it lives here beside the other statements a chart
+	 * yields — {@link #unresolvedDrugClass}, {@link #referenceSlice} — rather than among the
+	 * {@code …FidelityCheck} classes, every one of which reports a discrepancy at {@code WARN}.
+	 *
+	 * <p><b>The population is the markers the ANSWER printed, intersected with what the answer's own
+	 * resolution admitted.</b> {@link #citedIndexes} decodes the markers, and the {@code cited} list
+	 * is the resolution: an index is not a citation until that resolution admits it. Both halves are
+	 * load-bearing and neither is sufficient. Taking {@code cited} alone would take in a citation the
+	 * MODULE attached rather than the model printed
+	 * ({@code RecordReference.isAttachedByTheModule()}, issue #305), and then the published
+	 * {@code citation} — documented as the number the answer printed in brackets — would name a
+	 * number that appears nowhere in the answer. Taking the markers alone would admit an index the
+	 * resolution refused.
+	 *
+	 * <p><b>A BLANK answer states nothing here, which is the OPPOSITE of the convention its
+	 * neighbour follows</b> — {@code SafetyFindingCitationExtentCheck} counts a blank answer by the
+	 * citations that resolved, "the absence of an answer is not an answer that dropped a finding"
+	 * (issue #409). Deliberate: that check measures whether a finding reached the prose, so a blank
+	 * answer must not read as a drop; this one publishes a {@code citation} documented as a number
+	 * the answer PRINTED, and a blank answer printed none. A blank answer beside a non-empty
+	 * structured {@code citations} array is reachable and yields an empty list.
+	 *
+	 * <p><b>Gated on the STAMP and never on a resource type.</b> A record states a stop date only
+	 * where {@code RecordMapping.getOrderStopDate()} carries one, which the chart builder writes only
+	 * for a drug-order record of this patient's that it read as out of force — so the type scoping
+	 * lives once, at the write, and asking for the type again here would be a second expression of
+	 * it. That is {@code DosingCeilingFidelityCheck}'s rule over its own stamp, for the same reason.
+	 *
+	 * <p><b>Ordered by ascending citation index, which is NOT the rule its sibling states.</b>
+	 * {@code DosingCeilingFidelityCheck} returns entries in {@code cited}'s own order, and {@code
+	 * cited} is sorted by record DATE — so the two keys on one response are ordered by different
+	 * rules while both join to {@code references} by {@code index}. Deliberate here: a client
+	 * rendering this list should not have its order depend on how the resolution happened to sort its
+	 * references. What pins it is a pair of cited records carrying the SAME date, in
+	 * {@code OrderStopDateStatementTest.twoCitedEndedPrescriptionsAreStatedInCitationOrder} — with
+	 * distinct dates the date sort leaves the resolution's own order ascending anyway, so such a pair
+	 * cannot tell this rule from insertion order, which review measured.
+	 *
+	 * @param answer the answer text whose bracketed markers decide the population, may be null
+	 * @param cited the references the answer's own resolution produced, may be null
+	 * @param mappings the assembled chart's mappings, may be null
+	 * @return one entry per qualifying citation, in ascending citation order; an empty list where none
+	 *         qualified. Never null — a caller that states no measurement passes {@code null} on to
+	 *         the answer itself rather than asking this for one
+	 */
+	public static List<ChartSearchService.OrderStopDate> orderStopDates(String answer,
+			List<ChartSearchService.RecordReference> cited, List<RecordMapping> mappings) {
+		List<ChartSearchService.OrderStopDate> out =
+				new ArrayList<ChartSearchService.OrderStopDate>();
+		if (cited == null || mappings == null) {
+			return out;
+		}
+		Set<Integer> printed = citedIndexes(answer);
+		// A plain HashMap: this is only ever asked containsKey/get, never iterated, and the output
+		// order comes from the sorted set below — so an insertion-ordered map would tell the next
+		// reader that insertion order matters here, and it does not.
+		Map<Integer, Date> stopDates = new HashMap<Integer, Date>();
+		for (RecordMapping mapping : mappings) {
+			if (mapping != null && mapping.getOrderStopDate() != null) {
+				stopDates.put(Integer.valueOf(mapping.getIndex()), mapping.getOrderStopDate());
+			}
+		}
+		// Walked in citation order rather than in the order `cited` happens to arrive in, so the list
+		// a client renders does not depend on how the resolution ordered its references.
+		Set<Integer> qualifying = new TreeSet<Integer>();
+		for (ChartSearchService.RecordReference ref : cited) {
+			if (ref != null && printed.contains(Integer.valueOf(ref.getIndex()))
+					&& stopDates.containsKey(Integer.valueOf(ref.getIndex()))) {
+				qualifying.add(Integer.valueOf(ref.getIndex()));
+			}
+		}
+		for (Integer index : qualifying) {
+			out.add(new ChartSearchService.OrderStopDate(index.intValue(), stopDates.get(index)));
+		}
+		return out;
 	}
 
 	/**

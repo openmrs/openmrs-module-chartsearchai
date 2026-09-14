@@ -123,7 +123,7 @@ public class PatientChartSerializer {
 	 * below reddens on it — but what that case shows is a changed MARK, not a changed prompt rule, and
 	 * nothing can show the latter: both sides of {@code prompt.contains(INACTIVE_ORDER_LABEL)} are the
 	 * same inlined constant and move together. So the red is the signal to re-run BOTH A/Bs; the one
-	 * below and Decision 47's are separate ledgers and neither transfers to the other.
+	 * in this javadoc and Decision 47's are separate ledgers and neither transfers to the other.
 	 *
 	 * <p>A change to either string is a change to what every chart says to the model, and needs its
 	 * own interleaved A/B before it ships; the measurement above is what one looks like, and issue
@@ -308,7 +308,8 @@ public class PatientChartSerializer {
 			// per-record view must still contain it. Grounding behaviour is therefore unchanged.
 			String renderedText = dateLabelPrefix(dateLabel) + bodyBase + groupLabel;
 			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(),
-					record.getDate(), renderedText, null, 0, record.getOrderActive()));
+					record.getDate(), renderedText, null, 0, record.getOrderActive(),
+					record.getOrderStopDate()));
 
 			// Chart line: show the date only on the first record of a same-date run (an undated record
 			// resets the run, so the next dated record shows its date again); otherwise drop it. With
@@ -665,6 +666,19 @@ public class PatientChartSerializer {
 		private final Boolean orderActive;
 
 		/**
+		 * When the {@code Order} this record was serialized from stopped being in force, or
+		 * {@code null} where the module states no such date — the structural form a consumer reads
+		 * rather than looking for a date in {@link #getText()} (issue #315).
+		 *
+		 * <p>Written in exactly ONE place, {@code QueryStoreChartBuilder.toSerializedRecords}, beside
+		 * {@link #orderActive} and off the same one authoritative order read, and pinned there by
+		 * {@code ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace}.
+		 * {@code SerializedRecord.orderStopDate} is canonical for what it is and for the asymmetry that
+		 * is its contract; pointed at rather than restated, so this javadoc cannot go stale against it.
+		 */
+		private final Date orderStopDate;
+
+		/**
 		 * The rating an injected {@code safety_finding} states, where an answer stating that finding
 		 * ought to state the rating too — {@code null} on every other record, and on a finding whose
 		 * rating has no word worth requiring (issue #337). Written in exactly ONE place,
@@ -753,12 +767,14 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null} ("the module
 		 * cannot say") and, since issues #337, #305 and #294, {@link #findingSeverity},
-		 * {@link #derivedFrom} and {@link #orderDrugNamed} as well. The WIDEST is four rungs below
-		 * rather than one, and the distinction is worth the name because a caller reaching for "the
-		 * full constructor" through this javadoc would silently drop a drug-order record's currency
-		 * answer, a finding's rating, an injected record's provenance or whether it names its drug. Do
-		 * not name the next rung as the full one: this sentence did, and the ladder has now grown under
-		 * it three times.
+		 * {@link #derivedFrom} and {@link #orderDrugNamed} as well. <b>The widest is the rung that takes
+		 * {@link #orderDrugNamed}, several below this one</b>, and the distinction is worth the name
+		 * because a caller reaching for "the full constructor" through this javadoc would silently drop
+		 * a drug-order record's currency answer, when that order stopped, a finding's rating, an
+		 * injected record's provenance or whether it names its drug. <b>Neither name the next rung as
+		 * the full one nor count the rungs between</b>: this sentence did both, and each went stale.
+		 * The ladder has grown under such a sentence repeatedly, most recently for issue #315 — which
+		 * is the reason for the rule and not a tally to keep current.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {
@@ -772,15 +788,35 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor since issue #337: it defaults {@link #findingSeverity} to
 		 * {@code null}, which is right for every record that is not an injected safety finding, since
-		 * issue #305 {@link #derivedFrom} to empty with it, and since issue #294
-		 * {@link #orderDrugNamed} to {@code null} as well. The rung below is not the full one either —
-		 * the WIDEST is three below — so reaching through this javadoc for "the full constructor" means
-		 * reading down to the one that takes every field.
+		 * issue #305 {@link #derivedFrom} to empty with it, since issue #294
+		 * {@link #orderDrugNamed} to {@code null} as well, and since issue #315
+		 * {@link #orderStopDate} — which is the rung immediately below. The rung below is not the full
+		 * one either, so reaching through this javadoc for "the full constructor" means reading down to
+		 * the one that takes every field rather than counting rungs from here.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
-					orderActive, null);
+					orderActive, (Date) null);
+		}
+
+		/**
+		 * The stop-date rung, carrying the other half of the one order read — see
+		 * {@link #orderStopDate}. Every shorter constructor defaults it to {@code null}, "the module
+		 * states no stop date", which is right for every record that is not a drug order and for
+		 * every caller that has not read the patient's orders.
+		 *
+		 * <p>It sits immediately BELOW the order-currency rung rather than at the bottom of the ladder,
+		 * and the two halves sit adjacent in every rung below it, because {@code ArchitectureGuardTest}
+		 * tells two constructors from the rest by their descriptor TAILS. The widest constructor's own
+		 * javadoc is canonical for that constraint and for what mutating a placement reddens; it is not
+		 * restated here. Not the full constructor — the widest is the one taking
+		 * {@link #orderDrugNamed}.
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
+					orderActive, orderStopDate, null);
 		}
 
 		/**
@@ -790,14 +826,16 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor since issue #305: it defaults {@link #derivedFrom} to empty, which
 		 * is right for every record that was not derived from a chart record of this patient's, and
-		 * since issue #294 {@link #orderDrugNamed} to {@code null} with it. The WIDEST is two below —
-		 * the rungs above this one each said "the full one is below" and were each overtaken by the
-		 * next issue, this one included, which is why every rung now names a rung rather than the end.
+		 * since issue #294 {@link #orderDrugNamed} to {@code null} with it. The rungs above this one
+		 * each said "the full one is below" and were each overtaken by the next issue, this one
+		 * included, which is why every rung names the widest by the parameter only it takes rather than
+		 * by a count that the next insertion falsifies.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
-				String source, int withheldInteractions, Boolean orderActive, String findingSeverity) {
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
+				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					findingSeverity, null);
+					orderStopDate, findingSeverity, null);
 		}
 
 		/**
@@ -808,14 +846,15 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor since issue #294: it defaults {@link #orderDrugNamed} to {@code
 		 * null}, "the module cannot say", which is right for every record but one this module injected
-		 * for an active order. The one below is the widest — and the ladder has now grown under a
-		 * "the full one is below" sentence three times, so this one names the rung rather than the end.
+		 * for an active order. The widest is the rung that takes {@link #orderDrugNamed} — named and
+		 * not located, because the ladder has repeatedly grown under a "the one below is the full one"
+		 * sentence, which is what this javadoc used to say.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
-				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
-				List<Integer> derivedFrom) {
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
+				String findingSeverity, List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					findingSeverity, derivedFrom, null, null);
+					orderStopDate, findingSeverity, derivedFrom, null, null);
 		}
 
 		/**
@@ -831,13 +870,20 @@ public class PatientChartSerializer {
 		 * ending in a list followed by a {@code Boolean}. Every other placement breaks one of those
 		 * two tails — a second list changes which descriptors end how. Appended after
 		 * {@code orderDrugNamed}, added as a rung below, or inserted here while KEEPING the old
-		 * eleven-argument rung: each was run and each reddens. Which case, and how many, differs
+		 * rung that preceded it: each was run and each reddens. Which case, and how many, differs
 		 * between them, so mutate the placement and read the failures rather than trusting a list
 		 * here. That is why the rung gained the parameter instead of being joined by a sibling.
+		 *
+		 * <p><b>Issue #315 met the same constraint and answered it the same way</b>, inserting
+		 * {@link #orderStopDate} beside {@link #orderActive} in this rung and in every rung below the
+		 * order-currency one. Appending it here, or giving it a rung beneath this one, breaks a tail
+		 * and reddens that guard — so read the constraint as binding any future parameter, not as
+		 * #276's own.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
-				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
-				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
+				String findingSeverity, List<Integer> derivedFrom, List<String> dosingCeilings,
+				Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -846,6 +892,7 @@ public class PatientChartSerializer {
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
 			this.orderActive = orderActive;
+			this.orderStopDate = orderStopDate;
 			this.findingSeverity = findingSeverity;
 			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
 			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
@@ -944,6 +991,17 @@ public class PatientChartSerializer {
 		 */
 		public Boolean getOrderActive() {
 			return orderActive;
+		}
+
+		/**
+		 * @return when this record's order stopped being in force, or {@code null} where the module
+		 *         states no such date. {@code SerializedRecord.orderStopDate} is canonical for why
+		 *         {@code null} is not a claim that the order is still in force — {@link
+		 *         #getOrderActive()} is the only thing that answers that — and for why the module
+		 *         does not derive a date core did not give it.
+		 */
+		public Date getOrderStopDate() {
+			return orderStopDate;
 		}
 
 		/**

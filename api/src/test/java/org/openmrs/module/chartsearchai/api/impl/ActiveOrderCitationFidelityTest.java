@@ -469,6 +469,12 @@ public class ActiveOrderCitationFidelityTest {
 		}
 	}
 
+	/** The end instant the stopped record's order carries — a fixed value rather than a parse of the
+	 *  record's own prose, since reading it out of the text is the thing issue #317's rule forbids. */
+	private static final java.util.Date STOPPED_ORDER_END =
+			java.util.Date.from(java.time.LocalDate.parse("2026-01-04")
+					.atStartOfDay(java.time.ZoneOffset.UTC).toInstant());
+
 	@Test
 	public void anOrderTheChartMarksAsNoLongerInForceIsReported() {
 		// The second rule. The sentence claims an ACTIVE order, so a record that IS one of her drug
@@ -477,9 +483,14 @@ public class ActiveOrderCitationFidelityTest {
 		// cannot say" and stays silent, which is what the record below's live sibling asserts by
 		// being silent in every other case in this file.
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>();
+		// Built through the rung that carries BOTH halves of the order read, so the premise below can
+		// assert both survive the real injector (issue #315). The date is the one the rendered text
+		// happens to name, which makes the two consistent for a reader; nothing here reads it out of
+		// that text.
 		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
 				"order-uuid-stopped", "Simvastatin 20mg tablet, stopped 2026-01-04", null,
-				Collections.<String> emptyList(), null, null, Boolean.FALSE));
+				Collections.<String> emptyList(), null, null, Boolean.FALSE,
+				STOPPED_ORDER_END));
 		PatientChart stopped = DrugReferenceTestSupport.injectedFindingsOver(
 				new PatientChartSerializer().serialize(null, records,
 						Collections.<String> emptySet()),
@@ -497,6 +508,14 @@ public class ActiveOrderCitationFidelityTest {
 		}
 		assertEquals(Boolean.FALSE, stopped.getMappings().get(order - 1).getOrderActive(),
 				"the premise: the real serializer carried the order-currency mark through");
+		// And its sibling stamp, through the REAL injector rather than the serializer alone (issue
+		// #315). injectRecords copies the existing mappings by reference, so both stamps survive —
+		// but that is a property of one line of it, and the measurement that made this assertion
+		// necessary is that rebuilding those mappings and dropping only the DATE left the whole suite
+		// green while doing the same to the mark reddens the case above. Silent and fail-open, which
+		// is the hazard CLAUDE.md's chart-assembly bullet names.
+		assertEquals(STOPPED_ORDER_END, stopped.getMappings().get(order - 1).getOrderStopDate(),
+				"and the stop date beside it, which the published orderStopDates key is read from");
 		onStopped.setLlmProvider(answering(sentenceFragment("Simvastatin", order, finding) + "."));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = onStopped.search(patient(), QUESTION);

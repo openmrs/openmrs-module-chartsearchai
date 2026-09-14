@@ -782,6 +782,24 @@ final class TestDatasetHelper {
 	}
 
 	/**
+	 * A calendar date, for asserting against a dataset's own {@code yyyy-MM-dd} value.
+	 *
+	 * <p>Here rather than in each test because two of this package's order tests needed the same
+	 * parser at once and this is the package's helper home. It parses in the DEFAULT zone, which is
+	 * what {@code Order}'s own date fields are loaded in, so a value parsed here compares equal to
+	 * one dbunit inserted from the same literal — do not reach for it to assert a date the wire
+	 * published, which {@code ChartSearchAiRestController.formatDate} renders in UTC.
+	 */
+	static java.util.Date on(String yyyyMmDd) {
+		try {
+			return new java.text.SimpleDateFormat("yyyy-MM-dd").parse(yyyyMmDd);
+		}
+		catch (java.text.ParseException e) {
+			throw new IllegalArgumentException("not a yyyy-MM-dd date: " + yyyyMmDd, e);
+		}
+	}
+
+	/**
 	 * Strips the dataset-format prefix and optional date to recover the raw
 	 * serializer output (the record's {@code text} as produced by the
 	 * {@code *TextSerializer}s).

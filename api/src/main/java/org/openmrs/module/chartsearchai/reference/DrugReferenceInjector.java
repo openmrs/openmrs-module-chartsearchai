@@ -643,7 +643,7 @@ public class DrugReferenceInjector {
 			// citation's own, and the verdict published was #201's defect one group over. Stamped
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
-					order.getUuid(), null, rendered, null, 0, null, null, null, null,
+					order.getUuid(), null, rendered, null, 0, null, null, null, null, null,
 					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -665,14 +665,15 @@ public class DrugReferenceInjector {
 			// withheld count and the ceilings are spelled null here. None of them is this site
 			// WRITING a stamp — each null is exactly what every shorter rung would have defaulted it
 			// to, and exactly what a record about a reference entry asserts: no date, `orderActive`
-			// "the module cannot say" (issue #317), no finding rating (issue #337), and `derivedFrom`
+			// "the module cannot say" (issue #317), no `orderStopDate` (issue #315), no finding rating
+			// (issue #337), and `derivedFrom`
 			// empty, "derived from no chart record of this patient's" (issue #305). `orderDrugNamed`
 			// null is #294's "cannot say", and THAT stamp is written in the mapping above this one;
 			// the others are written elsewhere again, which is why this comment names what each null
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -715,7 +716,7 @@ public class DrugReferenceInjector {
 			// of one type about one drug, so five records of this loop can share a single key.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
-					null, 0, null, ratingThisRecordStates(finding, rendered),
+					null, 0, null, null, ratingThisRecordStates(finding, rendered),
 					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;

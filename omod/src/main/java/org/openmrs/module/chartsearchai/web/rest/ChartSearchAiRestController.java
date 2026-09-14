@@ -47,6 +47,7 @@ import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.OrderStopDate;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedDosingCeiling;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
@@ -1605,6 +1606,7 @@ public class ChartSearchAiRestController {
 			serializeUnstatedFindingSeverities(answer.getUnstatedFindingSeverities()));
 		target.put("unstatedDosingCeilings",
 			serializeUnstatedDosingCeilings(answer.getUnstatedDosingCeilings()));
+		target.put("orderStopDates", serializeOrderStopDates(answer.getOrderStopDates()));
 		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
 		target.put("findingCitations",
 				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
@@ -1700,6 +1702,43 @@ public class ChartSearchAiRestController {
 			map.put("citation", entry.getCitation());
 			map.put("statedCeiling", entry.getStatedCeiling());
 			map.put("unstatedCeiling", entry.getUnstatedCeiling());
+			out.add(map);
+		}
+		return out;
+	}
+
+	/**
+	 * The wire shape of {@code orderStopDates}: one object per cited chart record whose drug order is
+	 * no longer in force, {@code citation} the index the answer printed in brackets and
+	 * {@code stopDate} when that order stopped being in force — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/315">#315</a>.
+	 * {@code null} for an answer whose producer stated no measurement and an empty list for one that
+	 * ran and named none, the distinction {@link #putModuleStatements} preserves for every key in
+	 * this family. {@code ChartSearchService.OrderStopDate} is canonical for what each entry does and
+	 * does not assert — in particular that an order out of force need not publish a stop date, so
+	 * absence from this list is never a claim that a cited order is still in force.
+	 *
+	 * <p>The date goes through {@link #formatDate} rather than being handed to the mapper, so it is
+	 * spelled exactly as a citation's own {@code date} is on the same response — a client parses one
+	 * format, not two. It is the ORDER's end instant and not the record's clinical date, which
+	 * {@code references} already carries for the same citation; that is the value type's own
+	 * distinction and is not restated here.
+	 *
+	 * <p><b>Spelled out as a map rather than handed to the mapper</b>, for the reason
+	 * {@link #serializeUnstatedFindingSeverities} states of its own key: the KEYS are the contract
+	 * README states, so they are written as literals and pinned as literals by
+	 * {@code ChartSearchAiOrderStopDateTest.theSearchResponseNamesTheDateACitedOrderStopped}, which
+	 * compares the raw map — so renaming an accessor cannot silently move a documented key.
+	 */
+	private List<Map<String, Object>> serializeOrderStopDates(List<OrderStopDate> stopDates) {
+		if (stopDates == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (OrderStopDate entry : stopDates) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("stopDate", formatDate(entry.getStopDate()));
 			out.add(map);
 		}
 		return out;

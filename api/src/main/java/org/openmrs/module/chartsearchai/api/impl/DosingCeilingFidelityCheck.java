@@ -213,6 +213,13 @@ final class DosingCeilingFidelityCheck {
 			// unstated, so it is dropped here rather than re-tested per citation. On the shipped
 			// default `chartsearchai.drugReference.enabled` is false, the injector never runs, and
 			// this map is empty before the answer is read at all.
+			//
+			// `> 1` and the `at = 1` below are FILTERS and not guards, said rather than left to look
+			// tested: both were mutated (`> 0`, `at = 0`) and neither reddens anything, because
+			// neither can change an answer. A one-ceiling record admitted here runs an inner loop
+			// with no iterations, and index 0 is the ceiling the walk has just found unstated, so
+			// starting there merely asks the memo for it twice. What they buy is work, not
+			// correctness; the correctness is the ORDER, and mutating that reddens four named cases.
 			Map<Integer, List<String>> ceilings = new HashMap<Integer, List<String>>();
 			for (RecordMapping mapping : mappings) {
 				List<String> stated = mapping.getDosingCeilings();

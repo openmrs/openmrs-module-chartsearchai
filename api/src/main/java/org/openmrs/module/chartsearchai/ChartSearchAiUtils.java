@@ -20,7 +20,7 @@ import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_T
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -615,7 +615,16 @@ public class ChartSearchAiUtils {
 	 * @param answer the answer text whose bracketed markers decide the population, may be null
 	 * @param cited the references the answer's own resolution produced, may be null
 	 * @param mappings the assembled chart's mappings, may be null
-	 * @return one entry per qualifying citation, in citation order; an empty list where none
+	 * <p><b>Ordered by citation index, which is NOT the rule its sibling states.</b>
+	 * {@code DosingCeilingFidelityCheck} returns entries in {@code cited}'s own order, and {@code
+	 * cited} is sorted by record DATE — so the two keys on one response are ordered by different
+	 * rules while both join to {@code references} by {@code index}. Deliberate here: a client
+	 * rendering this list should not have its order depend on how the resolution happened to sort its
+	 * references. Pinned by
+	 * {@code OrderStopDateStatementTest.twoCitedEndedPrescriptionsAreStatedInCitationOrder}, which
+	 * cites the two records in the opposite order to the one they must be stated in.
+	 *
+	 * @return one entry per qualifying citation, in ascending citation order; an empty list where none
 	 *         qualified. Never null — a caller that states no measurement passes {@code null} on to
 	 *         the answer itself rather than asking this for one
 	 */
@@ -627,7 +636,10 @@ public class ChartSearchAiUtils {
 			return out;
 		}
 		Set<Integer> printed = citedIndexes(answer);
-		Map<Integer, Date> stopDates = new LinkedHashMap<Integer, Date>();
+		// A plain HashMap: this is only ever asked containsKey/get, never iterated, and the output
+		// order comes from the sorted set below — so an insertion-ordered map would tell the next
+		// reader that insertion order matters here, and it does not.
+		Map<Integer, Date> stopDates = new HashMap<Integer, Date>();
 		for (RecordMapping mapping : mappings) {
 			if (mapping != null && mapping.getOrderStopDate() != null) {
 				stopDates.put(Integer.valueOf(mapping.getIndex()), mapping.getOrderStopDate());

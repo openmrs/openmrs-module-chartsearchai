@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -680,12 +679,6 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	// mark above, same funnel, and asserted through the same production path.
 	// ---------------------------------------------------------------------------------------------
 
-	/** The dataset's own dates, parsed rather than compared against the accessor the production code
-	 *  reads — asserting against {@code Order.getEffectiveStopDate()} would only restate production. */
-	private static Date on(String yyyyMmDd) throws Exception {
-		return new SimpleDateFormat("yyyy-MM-dd").parse(yyyyMmDd);
-	}
-
 	@Test
 	public void aLapsedOrderCarriesItsStopDateEvenThoughItsRenderedTextHasNone() throws Exception {
 		// The decisive case, and the reason the date cannot come from the record's prose: querystore
@@ -699,7 +692,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		assertFalse(line.toLowerCase().contains(". stopped:"),
 				"precondition: this order's rendered text must carry no stop date, or the case proves "
 						+ "nothing about reading the date structurally: " + line);
-		assertEquals(on("2008-01-08"), mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderStopDate(),
+		assertEquals(TestDatasetHelper.on("2008-01-08"), mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderStopDate(),
 				"the lapsed order's auto-expire date must reach the mapping as its stop date");
 	}
 
@@ -709,7 +702,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 
 		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
 
-		assertEquals(on("2007-12-10"), mappingFor(chart, uuidOf(STOPPED_ORDER_ID)).getOrderStopDate(),
+		assertEquals(TestDatasetHelper.on("2007-12-10"), mappingFor(chart, uuidOf(STOPPED_ORDER_ID)).getOrderStopDate(),
 				"a stopped order's own date_stopped must reach the mapping");
 	}
 
@@ -749,7 +742,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		String uuid = uuidOf(DISCONTINUED_ORDER_WITH_A_STOP_DATE_ID);
 		assertEquals(Boolean.FALSE, mappingFor(chart, uuid).getOrderActive(),
 				"precondition: this discontinuation is not in force either");
-		assertEquals(on("2007-12-10"), mappingFor(chart, uuid).getOrderStopDate(),
+		assertEquals(TestDatasetHelper.on("2007-12-10"), mappingFor(chart, uuid).getOrderStopDate(),
 				"and its auto-expire date is published as its stop date");
 	}
 
@@ -818,7 +811,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 						+ "type-blind reading to leak");
 		assertNull(mappingFor(chart, uuidOf(TEST_ORDER_ID)).getOrderStopDate(),
 				"a test order is not a drug order, so no stop date is stated for it");
-		assertEquals(on("2008-01-08"), mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderStopDate(),
+		assertEquals(TestDatasetHelper.on("2008-01-08"), mappingFor(chart, uuidOf(LAPSED_ORDER_ID)).getOrderStopDate(),
 				"while the prescription beside it still carries its own");
 	}
 
@@ -831,15 +824,15 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// — the same way this file's own buildFocused case drives it.
 		queryStore.stubHits = new ArrayList<QueryDocument>(queryStore.stubChart);
 
-		assertEquals(on("2008-01-08"),
+		assertEquals(TestDatasetHelper.on("2008-01-08"),
 				mappingFor(builder.build(patient, MEDICATIONS_QUESTION), uuidOf(LAPSED_ORDER_ID))
 						.getOrderStopDate(),
 				"build() carries the stop date");
-		assertEquals(on("2008-01-08"),
+		assertEquals(TestDatasetHelper.on("2008-01-08"),
 				mappingFor(builder.buildScoped(patient, MEDICATIONS_QUESTION), uuidOf(LAPSED_ORDER_ID))
 						.getOrderStopDate(),
 				"buildScoped() carries it too");
-		assertEquals(on("2008-01-08"),
+		assertEquals(TestDatasetHelper.on("2008-01-08"),
 				mappingFor(builder.buildFocused(patient, MEDICATIONS_QUESTION), uuidOf(LAPSED_ORDER_ID))
 						.getOrderStopDate(),
 				"and so does buildFocused()");

@@ -77,6 +77,21 @@ public class ArchitectureGuardTest {
 			"org/openmrs/module/chartsearchai/reference/PatientClinicalContextBuilder.class",
 			"org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.class");
 
+	/** The class file every {@code RecordMapping} constructor case walks. */
+	private static final String RECORD_MAPPING_CLASS_FILE =
+			"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer$RecordMapping.class";
+
+	/** The one class that may write the two {@code RecordMapping} stamps this file guards. */
+	private static final String INJECTOR_CLASS_FILE =
+			"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class";
+
+	/** The class file the issue #315 case walks, and the one class that may write its stamp. */
+	private static final String SERIALIZED_RECORD_CLASS_FILE =
+			"org/openmrs/module/chartsearchai/serializer/SerializedRecord.class";
+
+	private static final String CHART_BUILDER_CLASS_FILE =
+			"org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.class";
+
 	/** The descriptor tail that tells {@code SerializedRecord}'s widest constructor — the only one
 	 *  taking the order stop date of issue #315 — from every other one. TWO types, not one: the
 	 *  four-argument rung {@code (String,String,String,Date)} ends in the same {@code Date}, so a
@@ -209,17 +224,36 @@ public class ArchitectureGuardTest {
 	 */
 	private static void assertSoleInjectorCallerOfMappingConstructor(String tail, String what,
 			boolean widest, String consequence) throws IOException {
+		assertSoleCallerOfStampCarryingConstructor(RECORD_MAPPING_CLASS_FILE, "RecordMapping",
+				"DrugReferenceInjector", INJECTOR_CLASS_FILE, tail, what, widest, consequence);
+	}
+
+	/**
+	 * The shared body of all three constructor cases in this file: exactly one constructor of
+	 * {@code targetClassFile} matches {@code tail}, and only {@code expectedCallerClassFile} invokes
+	 * it.
+	 *
+	 * <p><b>Parameterized rather than copied, and the file's own history is the argument.</b> The
+	 * javadoc of {@link #assertSoleInjectorCallerOfMappingConstructor} records that copying this body
+	 * once already lost the several-arities canary within a single commit. Issue #315 needed the same
+	 * walk over a DIFFERENT type — {@code SerializedRecord} rather than {@code RecordMapping}, and a
+	 * different sole caller — and copied it a second time; that copy drifted too, in the other
+	 * direction, adding a path-separator normalisation the original lacked so the two disagreed about
+	 * Windows paths. Three differences were already parameters here; these three are the rest.
+	 */
+	private static void assertSoleCallerOfStampCarryingConstructor(String targetClassFile,
+			String typeName, String expectedCallerName, String expectedCallerClassFile, String tail,
+			String what, boolean widest, String consequence) throws IOException {
 		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
 		assertTrue(Files.isDirectory(classes),
 				"no " + classes + "; a guard that discovers nothing forbids nothing");
-		Path mapping = classes.resolve(
-				"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer$RecordMapping.class");
+		Path mapping = classes.resolve(targetClassFile);
 		assertTrue(Files.exists(mapping),
-				"no RecordMapping class file at " + mapping + ", so this guard would forbid nothing");
+				"no " + typeName + " class file at " + mapping + ", so this guard would forbid nothing");
 
 		List<String> constructors = constructorDescriptors(mapping);
 		assertTrue(constructors.size() > 1,
-				"expected RecordMapping to publish several constructor arities and found "
+				"expected " + typeName + " to publish several constructor arities and found "
 						+ constructors.size() + "; with one there is no narrower one for a caller that "
 						+ "carries none of this to use, and this guard is vacuous");
 		List<String> carrying = new ArrayList<>();
@@ -229,8 +263,8 @@ public class ArchitectureGuardTest {
 			}
 		}
 		assertEquals(1, carrying.size(),
-				"exactly one RecordMapping constructor may END in " + what + ", which is how this case "
-						+ "tells it from the others. Found " + carrying.size() + ": " + carrying);
+				"exactly one " + typeName + " constructor may END in " + what + ", which is how this "
+						+ "case tells it from the others. Found " + carrying.size() + ": " + carrying);
 		// A tail selects by the LAST parameter, so a rung added BELOW the widest keeps its own tail,
 		// matches NEITHER selector, and is guarded by nothing — both cases stay green while a second
 		// class writes through the new widest. Measured, on a mutation adding a 12th parameter plus a
@@ -259,14 +293,16 @@ public class ArchitectureGuardTest {
 			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
 					.filter(f -> !f.equals(mapping)).collect(java.util.stream.Collectors.toList())) {
 				if (constantPoolStrings(file).contains(carrying.get(0))) {
-					callers.add(classes.relativize(file).toString());
+					// Spelled with forward slashes whatever the platform separator is, because the
+					// expectation below is spelled that way. The copy this method replaced normalised
+					// on one of its two call paths and not the other.
+					callers.add(classes.relativize(file).toString().replace(java.io.File.separatorChar, '/'));
 				}
 			}
 		}
-		assertEquals(java.util.Collections.singletonList(
-				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
-				"the constructor that carries " + what + " may be invoked from DrugReferenceInjector and "
-						+ "nowhere else in the API module's classes, which is what this walk reads. "
+		assertEquals(java.util.Collections.singletonList(expectedCallerClassFile), callers,
+				"the constructor that carries " + what + " may be invoked from " + expectedCallerName
+						+ " and nowhere else in the API module's classes, which is what this walk reads. "
 						+ consequence + " Callers found: " + callers);
 	}
 
@@ -346,54 +382,11 @@ public class ArchitectureGuardTest {
 	 */
 	@Test
 	public void theOrderStopDateStampIsWrittenInOnePlace() throws IOException {
-		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
-		assertTrue(Files.isDirectory(classes),
-				"no " + classes + "; a guard that discovers nothing forbids nothing");
-		Path record = classes.resolve(
-				"org/openmrs/module/chartsearchai/serializer/SerializedRecord.class");
-		assertTrue(Files.exists(record),
-				"no SerializedRecord class file at " + record + ", so this guard would forbid nothing");
-
-		List<String> constructors = constructorDescriptors(record);
-		assertTrue(constructors.size() > 1,
-				"expected SerializedRecord to publish several constructor arities and found "
-						+ constructors.size() + "; with one there is no narrower one for a caller that "
-						+ "carries no order read to use, and this guard is vacuous");
-		List<String> carrying = new ArrayList<>();
-		for (String descriptor : constructors) {
-			if (descriptor.endsWith(STOP_DATE_TAIL)) {
-				carrying.add(descriptor);
-			}
-		}
-		assertEquals(1, carrying.size(),
-				"exactly one SerializedRecord constructor may END in the order stop date of issue "
-						+ "#315, which is how this case tells it from the others. Found "
-						+ carrying.size() + ": " + carrying);
-		String guarded = parameters(carrying.get(0));
-		for (String descriptor : constructors) {
-			assertTrue(guarded.startsWith(parameters(descriptor)),
-					"the constructor this case guards must still be the WIDEST and every other rung a "
-							+ "prefix of it, or a rung has been added that this selector does not reach "
-							+ "and nothing forbids a second writer of. Guarded: " + carrying.get(0)
-							+ "; not a prefix of it: " + descriptor);
-		}
-
-		List<String> callers = new ArrayList<>();
-		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
-			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
-					.filter(f -> !f.equals(record)).collect(java.util.stream.Collectors.toList())) {
-				if (constantPoolStrings(file).contains(carrying.get(0))) {
-					callers.add(classes.relativize(file).toString().replace('\\', '/'));
-				}
-			}
-		}
-		assertEquals(java.util.Collections.singletonList(
-				"org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.class"), callers,
-				"the constructor that carries the order stop date may be invoked from "
-						+ "QueryStoreChartBuilder and nowhere else in the API module's classes, which "
-						+ "is what this walk reads. A second writer would be a second answer to when a "
-						+ "prescription ended, published to a clinician with nothing reconciling them "
-						+ "— see this test's javadoc. Callers found: " + callers);
+		assertSoleCallerOfStampCarryingConstructor(SERIALIZED_RECORD_CLASS_FILE, "SerializedRecord",
+				"QueryStoreChartBuilder", CHART_BUILDER_CLASS_FILE, STOP_DATE_TAIL,
+				"the order stop date of issue #315", true,
+				"A second writer would be a second answer to when a prescription ended, published to a "
+						+ "clinician with nothing reconciling them — see this test's javadoc.");
 	}
 
 	/** The parameter section of a method descriptor — everything between the parentheses — so two

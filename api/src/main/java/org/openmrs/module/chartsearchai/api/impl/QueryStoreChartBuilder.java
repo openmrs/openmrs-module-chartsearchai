@@ -696,16 +696,11 @@ class QueryStoreChartBuilder {
 		 * When each of this patient's orders stopped being in force, for the orders that publish such
 		 * a date — {@code Order.getEffectiveStopDate()}, keyed by order uuid (issue #315).
 		 *
-		 * <p><strong>Deliberately sparser than {@link #allOrderUuids}, and the gap is not a gap.</strong>
-		 * An order is out of force the moment it is voided or its action is {@code DISCONTINUE}, which
-		 * {@code Order.isActive()} answers before reading any date, and
-		 * {@code DrugOrder.cloneForDiscontinuing()} writes neither {@code dateStopped} nor
-		 * {@code autoExpireDate} — so an ordinary discontinuation is in {@code allOrderUuids}, absent
-		 * from {@code activeOrderUuids}, and absent from here. The instant it took effect lives on
-		 * {@code getPreviousOrder()} and is deliberately not fetched: that would re-implement core's
-		 * discontinuation semantics in this module, which is the second implementation
-		 * {@link #forRecord} exists to avoid. A record can therefore be marked not-in-force and state
-		 * no stop date, which is the contract rather than an omission.
+		 * <p><strong>Deliberately sparser than {@link #allOrderUuids}, and the gap is not a gap:</strong>
+		 * an order out of force need not publish an end date at all, so a uuid can be in
+		 * {@code allOrderUuids}, absent from {@code activeOrderUuids}, and absent from here. Which
+		 * orders those are, and why the module does not go and derive a date for them, is enumerated
+		 * in {@code SerializedRecord.orderStopDate} and is not restated here.
 		 */
 		private final Map<String, Date> stopDatesByOrderUuid;
 

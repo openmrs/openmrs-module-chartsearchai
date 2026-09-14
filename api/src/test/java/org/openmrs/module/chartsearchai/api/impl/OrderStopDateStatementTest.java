@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -127,10 +126,6 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 		return ChartSearchAiUtils.orderStopDates(answer, cited, chart.getMappings());
 	}
 
-	private static Date on(String yyyyMmDd) throws Exception {
-		return new SimpleDateFormat("yyyy-MM-dd").parse(yyyyMmDd);
-	}
-
 	private int indexOf(PatientChart chart, int orderId) {
 		String uuid = Context.getOrderService().getOrder(orderId).getUuid();
 		for (RecordMapping mapping : chart.getMappings()) {
@@ -156,7 +151,7 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, stated.size(), "exactly one cited ended order: " + stated);
 		assertEquals(index, stated.get(0).getCitation(),
 				"the statement names the citation the answer printed");
-		assertEquals(on("2008-01-08"), stated.get(0).getStopDate(),
+		assertEquals(TestDatasetHelper.on("2008-01-08"), stated.get(0).getStopDate(),
 				"and the date core publishes for that order");
 	}
 
@@ -171,9 +166,9 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 		List<OrderStopDate> stated = statementFor("It was stopped [" + index + "].", chart);
 
 		assertEquals(1, stated.size(), "one cited ended order: " + stated);
-		assertEquals(on("2007-12-10"), stated.get(0).getStopDate(), "the order's own stop date");
+		assertEquals(TestDatasetHelper.on("2007-12-10"), stated.get(0).getStopDate(), "the order's own stop date");
 		RecordMapping mapping = chart.getMappings().get(index - 1);
-		assertFalse(on("2007-12-10").equals(mapping.getDate()),
+		assertFalse(TestDatasetHelper.on("2007-12-10").equals(mapping.getDate()),
 				"precondition: the record's own date must differ from the order's end, or this case "
 						+ "cannot tell the two apart. Record date: " + mapping.getDate());
 	}
@@ -332,7 +327,7 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 				"search() must resolve the statement, not leave the answer stating no measurement");
 		assertEquals(1, produced.getOrderStopDates().size(),
 				"and it must carry the cited ended order: " + produced.getOrderStopDates());
-		assertEquals(on("2008-01-08"), produced.getOrderStopDates().get(0).getStopDate(),
+		assertEquals(TestDatasetHelper.on("2008-01-08"), produced.getOrderStopDates().get(0).getStopDate(),
 				"with the date the chart record carried");
 	}
 
@@ -353,7 +348,7 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, ungrounded.size(), "precondition: the ungrounded answer must have been handed over");
 		assertNotNull(ungrounded.get(0).getOrderStopDates(),
 				"the answer a streaming user reads first must already carry the statement");
-		assertEquals(on("2008-01-08"), ungrounded.get(0).getOrderStopDates().get(0).getStopDate(),
+		assertEquals(TestDatasetHelper.on("2008-01-08"), ungrounded.get(0).getOrderStopDates().get(0).getStopDate(),
 				"with the date, not merely an empty list");
 		assertNotNull(produced.getOrderStopDates(), "and the final answer carries it too");
 		assertEquals(ungrounded.get(0).getOrderStopDates(), produced.getOrderStopDates(),

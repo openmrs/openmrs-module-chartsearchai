@@ -603,23 +603,12 @@ public interface ChartSearchService {
 	 * names with a lab measurement on a chart carrying a lapsed order beside two live ones. ADR
 	 * Decision 47's residue 1 is canonical for that and is not restated here.
 	 *
-	 * <p><b>What the date is.</b> Core's own {@code Order.getEffectiveStopDate()} — the order's
-	 * {@code dateStopped} where it has one, else its {@code autoExpireDate} — carried from the one
-	 * authoritative order read at chart assembly and never read out of the record's rendered text.
-	 * That matters twice over: it is {@code SerializedRecord.getOrderActive()}'s rule (issue #317),
-	 * and querystore renders no {@code auto_expire_date} at all, so for a prescription that lapsed by
-	 * its duration the date is in no text anyone could have parsed.
-	 *
-	 * <p><b>An order out of force need not publish a stop date, and one that does not is simply
-	 * absent from this list.</b> {@code Order.isActive()} answers false for a voided order and for
-	 * one whose action is {@code DISCONTINUE} before it consults any date, and
-	 * {@code DrugOrder.cloneForDiscontinuing()} writes neither end date — so an ordinary
-	 * discontinuation is out of force with no date to state. The instant it took effect lives on
-	 * {@code getPreviousOrder()}, and the module deliberately does not go after it: that would be a
-	 * second implementation of core's discontinuation semantics.
-	 * <b>So absence from this list is never a claim that a cited order is still in force</b>, and an
-	 * empty list is not a certificate of anything; {@code SerializedRecord.orderStopDate} carries the
-	 * asymmetry that makes both true.
+	 * <p><b>What the date is, and why an order out of force can be absent from this list, are
+	 * enumerated in ONE place — {@code SerializedRecord.orderStopDate} — which this points at rather
+	 * than restating.</b> Two consequences a reader of THIS type needs, and no more: the date is
+	 * carried from the one authoritative order read at chart assembly rather than read out of any
+	 * text, and <b>absence from this list is never a claim that a cited order is still in force</b>,
+	 * so an empty list is not a certificate of anything.
 	 */
 	final class OrderStopDate {
 

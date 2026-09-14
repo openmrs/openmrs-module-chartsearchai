@@ -607,9 +607,11 @@ public class ReferenceProseFidelityTest {
 		// exercise different arms: a line break beside the cut, which is the arm the system prompt's
 		// "numbered lines or simple newlines" makes load-bearing and which
 		// everyWayASentenceCanEndInTheSharedRule… pins on its own; and a full stop ahead of the cut,
-		// which is the ordinary terminator arm. Implemented as an early "no" for a gap containing a
-		// dots run, both rows flip to a report; mutate it and read the failures. ADR Decision 95
-		// carries what that mutation was measured to redden.
+		// which is the ordinary terminator arm. The two rows guard different mutation shapes, and a
+		// maintainer should know which: the line-break row reddens under either an early "no" for
+		// any gap containing a run OR the minimal in-loop edit that returns instead of stepping on,
+		// while the full-stop row reddens only under the first — its leading stop is read before the
+		// run is reached. ADR Decision 95 carries what the in-loop form was measured to redden.
 		for (String gap : new String[] { " ...\n", ". ... " }) {
 			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + gap
 					+ "such as antimalarials [" + finding.getIndex() + "]."));

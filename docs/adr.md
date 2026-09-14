@@ -7391,7 +7391,9 @@ Nothing measurable, and this section claims that and nothing more. A Phase 2 len
 | realistic chart, 300-word faithful answer | 519.0 µs | 517.2 µs |
 | synthetic 20 records / 3000-word answer | 45.1 ms | 44.5 ms |
 
-**What that establishes is that the change costs nothing, not that Decision 61's absolute figures reproduce.** Two of that decision's three cells were re-measured, the faithful-answer row is a new variant rather than one of them, and its 6-record / 5178-char cell was not run at all. On this rig the realistic cell comes out at 549.6 µs where Decision 61 published 705 µs, and the synthetic at 45.1 ms against its 54–79 ms — a different machine years apart, which is why only the A/B is read here. A/A controls on the same rig spanned 509.6–604.4 µs, so every delta in the table, and every other delta this section could quote, is inside that band.
+**What that establishes is that the change costs nothing, and nothing further.** It is not a re-measurement of Decision 61's figures: those were taken on another machine and do not reproduce here, its 6-record / 5178-char cell was not run at all, and which of its cells the rows above correspond to is not asserted, the published wording not settling it. What the A/B supports is the comparison alone — **repeating one arrangement unchanged moved it further than the change did**, which is the reading each row is for.
+
+No absolute band is quoted for that, deliberately, and the reason is worth recording: a figure for it was published here twice and refuted twice — once as a number no run had produced, and once as an A/A spread that a third rig then measured far outside. An A/A spread is a fact about a machine, so it is not a figure this decision can carry. Re-run the A/B if you need the comparison; do not re-use these numbers.
 
 The scan is single-pass — the loop steps past a whole run, and a run shorter than the floor falls through to a `return` — so a pathological gap of N dots stays linear, measured at 8.63 ns/char before and 9.71 ns/char after, on top of a `substring` of the gap the base already paid for. Nothing is allocated per word or per gap that was not allocated before.
 

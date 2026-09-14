@@ -1215,9 +1215,9 @@ public class ChartSearchAiUtils {
 	 * through the real answer path by
 	 * {@code DosingCeilingFidelityTest.aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}.
 	 *
-	 * <p><b>{@link #numericFragment} is the rule and the only statement of it.</b> Three wordings of
-	 * it were each measured to admit a false REPORT and each replaced; restating it here is how a
-	 * fourth would come to disagree with the code, so this paragraph deliberately does not. Read that
+	 * <p><b>{@link #numericFragment} is the rule and the only statement of it.</b> Every wording of
+	 * it so far has been measured to admit a false REPORT and been replaced; restating it here is how
+	 * the next would come to disagree with the code, so this paragraph deliberately does not. Read that
 	 * method for what is refused, why the two separators are asked different questions, and which
 	 * case pins each shape.
 	 *
@@ -1287,15 +1287,18 @@ public class ChartSearchAiUtils {
 	 *         of a three-item list ({@code "300,4000,500 mg/day"}) is not refused for standing where
 	 *         a group would.
 	 *
-	 *         <p><b>Four earlier wordings each admitted a false REPORT, which is the direction
+	 *         <p><b>Every earlier wording of this admitted a false REPORT, which is the direction
 	 *         {@code DosingCeilingFidelityCheck} must never fail in, and each was found by a
 	 *         different reviewer.</b> Refusing on any {@code '.'}/{@code ','} lost the list comma;
 	 *         refusing only BETWEEN two digits lost the naked decimal; refusing unless a LETTER
 	 *         precedes lost the comma after a parenthesis; refusing unless a letter precedes the
-	 *         FULL STOP lost every other closing mark. The first three treated the two characters
-	 *         alike; the fourth kept classifying the character before, which is a list nobody can
-	 *         finish — so this asks instead whether the stop BEGINS a token, which is a property
-	 *         rather than a membership. <b>The residues that leaves, named here rather than left to be
+	 *         FULL STOP lost every other closing mark; refusing on ANY comma a digit precedes lost
+	 *         the elided-unit list, which is #425 and the exception above. The ones that treated the
+	 *         two characters alike could not tell a separator from punctuation at all; the one that
+	 *         kept classifying the character before the FULL STOP was a list nobody can finish — so
+	 *         the stop is asked instead whether it BEGINS a token, which is a property rather than a
+	 *         membership, and the comma is asked about the LENGTHS of the digit runs around it rather
+	 *         than about any character. <b>The residues that leaves, named here rather than left to be
 	 *         found, and both unpinned</b>: a naked decimal written directly after an opening mark
 	 *         with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be read
 	 *         out of it; and the exception above admits the one comma decimal that wears a list's

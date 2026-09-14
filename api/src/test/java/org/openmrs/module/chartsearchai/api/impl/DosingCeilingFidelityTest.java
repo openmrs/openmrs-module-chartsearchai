@@ -516,6 +516,31 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
+	public void theMIDDLENumberOfACommaJoinedListIsNoFragmentEither() throws IOException {
+		// The clause the case above does NOT reach, and the one place this rule declines to ask a
+		// question it easily could. A separator inside a number has a group before it as well as
+		// after, so "is the run before this comma itself preceded by a comma?" looks like a free
+		// tightening — and it would refuse the MIDDLE number of a comma-joined list, which stands in
+		// exactly that position. So the run's LENGTH is all that is asked. Add the tightening and
+		// this case goes red while the two-item one still passes.
+		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
+		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		TestableService service = newService(grouped);
+		service.setLlmProvider(answering("Doses recorded: 300,4000,500 mg/day for the suspension; "
+				+ "the tablet ceiling is 2000 mg/day [" + mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of tinidazole?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the strictest ceiling is stated, third in a comma-joined list — the run of four "
+							+ "digits before it belongs to no grouping whether a comma precedes that "
+							+ "run or not. Captured: " + capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(), "and nothing is published");
+		}
+	}
+
+	@Test
 	public void aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs() throws IOException {
 		// The other half of the case above, and the half that decides how far its exception may
 		// reach. A comma is a decimal point in most of the world, so "1000,5 mg/day" is a dose of

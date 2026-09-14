@@ -851,8 +851,9 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * ARGUMENTS are walked. Assignability is asked BOTH ways, so a subtype of {@code Drug} is caught
 	 * and so is a field declared as a supertype it satisfies — {@code OpenmrsObject}, say.
 	 *
-	 * <p><b>Two residues, and neither is worth a cleverer predicate.</b> {@code Object} is deliberately
-	 * excluded: every reference type is assignable to it, so including it would flag every
+	 * <p><b>What it still admits, without claiming the list is closed</b> — a reviewer found the
+	 * generic-subclass case after two of these were written down as the residues. {@code Object} is
+	 * deliberately excluded: every reference type is assignable to it, so including it would flag every
 	 * {@code Object}-typed member in the file and discriminate nothing — which means a {@code Drug}
 	 * widened to plain {@code Object} is handed out under this check, and reflection cannot tell that
 	 * member from any other. And a RAW collection carries no type argument to walk, so a
@@ -862,7 +863,13 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 */
 	private static boolean handsOutTheEntity(Type type) {
 		if (type instanceof ParameterizedType) {
-			for (Type argument : ((ParameterizedType) type).getActualTypeArguments()) {
+			ParameterizedType parameterized = (ParameterizedType) type;
+			// The RAW type as well as the arguments: a generic SUBCLASS of Drug is the entity itself,
+			// and checking only the arguments answered false for it — measured.
+			if (handsOutTheEntity(parameterized.getRawType())) {
+				return true;
+			}
+			for (Type argument : parameterized.getActualTypeArguments()) {
 				if (handsOutTheEntity(argument)) {
 					return true;
 				}

@@ -178,6 +178,35 @@ public class DrugSafetyValidator {
 	 */
 	public static final String ACTIVE_ORDER_INTERACTION_PHRASE = " interacts with active order ";
 
+	/**
+	 * The NOUN half of that phrase — the words naming the RECORD rather than the relationship, and the
+	 * half a model's paraphrase keeps where it drops the verb.
+	 *
+	 * <p><b>Why a recogniser needs it.</b> Measured live on the 3.7.1 standalone (2026-09-15): after
+	 * ADR Decision 99 collapsed the chips, the model wrote <em>"it has a Major interaction with active
+	 * order Ibuprofen"</em> where it had written <em>"it interacts with active order Ibuprofen"</em>.
+	 * The full phrase matched nothing, so {@code activeOrderClaims} reported {@code stated:0} of an
+	 * answer making four such claims and {@code ActiveOrderCitationFidelityCheck} examined none of them
+	 * — two published diagnostics went silent without either side's code changing. A zero meaning "did
+	 * not look" is indistinguishable from one meaning "nothing wrong", which is the failure this
+	 * constant removes.
+	 *
+	 * <p><b>DERIVED and never spelled again.</b> Taking the phrase's last two words keeps one spelling
+	 * of the noun, leaves the phrase itself written exactly once — which is what
+	 * {@code ActiveOrderInteractionPhraseTest} scans the SOURCE for — and makes a future edit to the
+	 * phrase carry the recogniser with it rather than silently past it.
+	 * {@code ActiveOrderInteractionPhraseTest.theNounIsTheTailOfThePhrase} pins the relationship, so a
+	 * phrase reworded to end in something else reddens rather than quietly widening the scan.
+	 */
+	public static final String ACTIVE_ORDER_NOUN = lastTwoWordsOf(ACTIVE_ORDER_INTERACTION_PHRASE);
+
+	/** @return the final two whitespace-delimited words of {@code phrase}, untrimmed of nothing else */
+	private static String lastTwoWordsOf(String phrase) {
+		String[] words = phrase.trim().split("\\s+");
+		return words.length < 2 ? phrase.trim()
+				: words[words.length - 2] + " " + words[words.length - 1];
+	}
+
 	private static final Pattern DOSE_MG = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*mg\\b");
 
 	private static final Pattern EVERY_N_HOURS = Pattern.compile("(?:every\\s+(\\d+)\\s*(?:hours|hrs|hr|h)\\b|q(\\d+)h\\b|(\\d+)\\s*hourly\\b)");
@@ -995,7 +1024,8 @@ public class DrugSafetyValidator {
 				attribution = attributionTexts(answer, mappings);
 			}
 			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
-					recordedAllergens, SubjectMatter.of(scope, question, answer, attribution.cited),
+					recordedAllergens, SubjectMatter.of(scope, question, answer,
+							attribution.citedChartRecords, attribution.referenceMaterial),
 					allergicSubstanceSupplier);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
@@ -1481,15 +1511,31 @@ public class DrugSafetyValidator {
 	 */
 	private static final class AttributionTexts {
 
-		/** Cited records only. Never mutated after construction, and never handed to the echo test. */
-		private final List<String> cited;
+		/**
+		 * Cited CHART records only — the patient's own data the answer pointed at. An injected record
+		 * names the patient's own prescriptions, so a corpus shared with the echo test made her
+		 * prescription subject matter on a question about her cancer (#360). Never mutated after
+		 * construction, never handed to the echo test, and deliberately NOT every cited record: a cited
+		 * reference record is this module's own injected prose, and letting it establish subject matter
+		 * is the defect {@link SubjectMatter}'s class javadoc records.
+		 */
+		private final List<String> citedChartRecords;
 
 		/** Cited records UNION every recitable reference record. Never handed to {@link SubjectMatter}. */
 		private final List<String> attributable;
 
-		private AttributionTexts(List<String> cited, List<String> attributable) {
-			this.cited = cited;
+		/**
+		 * Every recitable reference record, cited or not — this module's OWN injected prose. Handed to
+		 * {@link SubjectMatter} as a VETO and never as a subject: a name the answer carries only
+		 * because it was recited out of one of these is not something the clinician asked about.
+		 */
+		private final List<String> referenceMaterial;
+
+		private AttributionTexts(List<String> citedChartRecords, List<String> attributable,
+				List<String> referenceMaterial) {
+			this.citedChartRecords = citedChartRecords;
 			this.attributable = attributable;
+			this.referenceMaterial = referenceMaterial;
 		}
 	}
 
@@ -1525,27 +1571,31 @@ public class DrugSafetyValidator {
 	 * @param mappings the assembled chart's mappings, may be null or empty
 	 */
 	private static AttributionTexts attributionTexts(String answer, List<RecordMapping> mappings) {
-		List<String> cited = new ArrayList<String>();
+		List<String> citedChartRecords = new ArrayList<String>();
 		List<String> attributable = new ArrayList<String>();
+		List<String> referenceMaterial = new ArrayList<String>();
 		if (mappings == null || mappings.isEmpty()) {
-			return new AttributionTexts(cited, attributable);
+			return new AttributionTexts(citedChartRecords, attributable, referenceMaterial);
 		}
 		Set<Integer> citedIndexes = ChartSearchAiUtils.citedIndexes(answer);
 		for (RecordMapping mapping : mappings) {
 			if (mapping.getText() == null) {
 				continue;
 			}
+			boolean isReferenceMaterial = isRecitableReferenceMaterial(mapping.getResourceType());
 			boolean isCited = citedIndexes.contains(Integer.valueOf(mapping.getIndex()));
-			if (!isCited && !isRecitableReferenceMaterial(mapping.getResourceType())) {
+			if (!isCited && !isReferenceMaterial) {
 				continue;
 			}
 			String lower = mapping.getText().toLowerCase(Locale.ROOT);
-			if (isCited) {
-				cited.add(lower);
+			if (isReferenceMaterial) {
+				referenceMaterial.add(lower);
+			} else if (isCited) {
+				citedChartRecords.add(lower);
 			}
 			attributable.add(lower);
 		}
-		return new AttributionTexts(cited, attributable);
+		return new AttributionTexts(citedChartRecords, attributable, referenceMaterial);
 	}
 
 	/**
@@ -1702,7 +1752,33 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * What THIS response is about: the question, the answer, and the records the answer cited.
+	 * What THIS response is about: the question, and the patient's own CHART records the answer cited.
+	 *
+	 * <p><b>Not the answer's own prose, and not a cited reference record — issue #143's second half.</b>
+	 * Measured live on the 3.7.1 standalone (patient Sarah Taylor, 2026-09-14), "Is aspirin safe for
+	 * her?" raised ten contraindication chips about her five corticosteroid orders and her steroid
+	 * allergies. No widening opened them: {@link QueryScopeRouter#asksAboutMedications} is false for
+	 * that question. The ANSWER opened them — aspirin interacts with every one of her nine active
+	 * orders, so the answer named every one as an interaction PARTNER, and naming them was read here as
+	 * the response being ABOUT them. The same question about a drug interacting with nothing she was on
+	 * raised none, so the off-question noise scaled with how well the interaction screen worked, which
+	 * is the "stop reading the box" direction this class exists to prevent.
+	 *
+	 * <p><b>The allergen leg reads the cited chart records alone, and that is the same defect once
+	 * more.</b> "Is hydrocortisone safe for her?" names a drug that is also one of her allergens, so
+	 * reading the QUESTION on the allergen side made that allergy subject matter and every order
+	 * cross-reacting with it chipped — four chips about prednisone, budesonide, dexamethasone and
+	 * methylprednisolone beside the two about the drug actually asked about (measured on the same
+	 * chart, same day). A question naming a DRUG is a question about that drug;
+	 * {@link QueryScopeRouter#asksAboutAllergies} is what says a question is about her ALLERGIES, and it
+	 * still widens here. What a clinician's own citation of her allergy record opens is unchanged.
+	 *
+	 * <p>The call site already guarded the half of this it could see — it withholds the WIDER record
+	 * corpus so that "the module's own injected reference prose" cannot decide the subject. The answer
+	 * is generated FROM that prose and a cited {@code safety_finding} IS that prose, so both were the
+	 * same hole one step removed. What survives is what the CLINICIAN did: the question they asked, and
+	 * the records of her own chart the answer pointed at. A drug named in the response only because
+	 * this module made it a partner of the asked-about drug is not what they asked about.
 	 *
 	 * <p><b>Why the active-order contraindication arm needs one.</b> chartsearchai answers questions;
 	 * it is not an alerting system, and this class's own contract is a check that runs after the
@@ -1743,8 +1819,30 @@ public class DrugSafetyValidator {
 	 */
 	private static final class SubjectMatter {
 
-		/** Question, answer and cited-record texts, lowercased — every one of them prose. */
-		private final List<String> texts;
+		/**
+		 * What the CLINICIAN put in play: the question, and the patient's own chart records the answer
+		 * cited. Lowercased prose, and subject matter on its own.
+		 */
+		private final List<String> askedAbout;
+
+		/**
+		 * The patient's own chart records the answer cited, alone. The allergen leg reads THIS and not
+		 * {@link #askedAbout}: a question naming a DRUG must not widen the allergen side just because
+		 * the drug shares a name with one of her allergens — see this class's javadoc.
+		 */
+		private final List<String> citedChartRecords;
+
+		/**
+		 * The answer, lowercased — subject matter too, but only for a name it did not merely recite out
+		 * of {@link #referenceMaterial}. Zero or one element.
+		 */
+		private final List<String> answerTexts;
+
+		/**
+		 * This module's own injected reference prose. A VETO over {@link #answerTexts} and never a
+		 * subject of its own — see this class's javadoc for the run it was measured on.
+		 */
+		private final List<String> referenceMaterial;
 
 		private final boolean coversActiveOrders;
 
@@ -1783,21 +1881,25 @@ public class DrugSafetyValidator {
 		 *         and left that guard green.
 		 */
 		private static SubjectMatter of(SubjectMatterScope scope, String question, String answer,
-				List<String> citedTextsLower) {
-			return new SubjectMatter(scope, question, answer, citedTextsLower);
+				List<String> citedChartTextsLower, List<String> referenceMaterialLower) {
+			return new SubjectMatter(scope, question, answer, citedChartTextsLower, referenceMaterialLower);
 		}
 
 		private SubjectMatter(SubjectMatterScope scope, String question, String answer,
-				List<String> citedTextsLower) {
+				List<String> citedChartTextsLower, List<String> referenceMaterialLower) {
 			List<String> collected = new ArrayList<String>();
 			if (question != null && !question.trim().isEmpty()) {
 				collected.add(question.toLowerCase(Locale.ROOT));
 			}
+			collected.addAll(citedChartTextsLower);
+			this.askedAbout = collected;
+			this.citedChartRecords = citedChartTextsLower;
+			List<String> fromAnswer = new ArrayList<String>();
 			if (answer != null && !answer.trim().isEmpty()) {
-				collected.add(answer.toLowerCase(Locale.ROOT));
+				fromAnswer.add(answer.toLowerCase(Locale.ROOT));
 			}
-			collected.addAll(citedTextsLower);
-			this.texts = collected;
+			this.answerTexts = fromAnswer;
+			this.referenceMaterial = referenceMaterialLower;
 			this.unbounded = scope == SubjectMatterScope.UNBOUNDED;
 			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question);
 			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
@@ -1806,7 +1908,13 @@ public class DrugSafetyValidator {
 
 		/** Whether an active order is what this response is about. */
 		private boolean names(DrugReference ref) {
-			return unbounded || coversActiveOrders || namesAnyOf(texts, ref);
+			if (unbounded || coversActiveOrders) {
+				return true;
+			}
+			if (namesAnyOf(askedAbout, ref)) {
+				return true;
+			}
+			return namesAnyOf(answerTexts, ref) && !namesAnyOf(referenceMaterial, ref);
 		}
 
 		/**
@@ -1832,7 +1940,11 @@ public class DrugSafetyValidator {
 			if (coversRecordedConditions && isConditionRule(c)) {
 				return true;
 			}
-			return PatientClinicalContext.containsToken(texts, c.getToken());
+			if (PatientClinicalContext.containsToken(askedAbout, c.getToken())) {
+				return true;
+			}
+			return PatientClinicalContext.containsToken(answerTexts, c.getToken())
+					&& !PatientClinicalContext.containsToken(referenceMaterial, c.getToken());
 		}
 
 		/** Whether a recorded allergen — the entries one charted allergy resolved to — is subject matter. */
@@ -1841,7 +1953,7 @@ public class DrugSafetyValidator {
 				return true;
 			}
 			for (DrugReference entry : allergen) {
-				if (namesAnyOf(texts, entry)) {
+				if (namesAnyOf(citedChartRecords, entry)) {
 					return true;
 				}
 			}
@@ -3467,6 +3579,11 @@ public class DrugSafetyValidator {
 		// collection stays in dataset order so the collapse and the pair ledger see exactly what they
 		// saw before; only the appending is ordered.
 		List<SafetyWarning> ruleChips = new ArrayList<SafetyWarning>();
+		// What each emitted chip STATES, kept beside it so the collapse below can ask which chips say
+		// the same thing about different orders. The chip alone cannot answer that: its detail has the
+		// partner's name spliced into the mechanism sentence, so two chips of one mechanism differ as
+		// strings while carrying one payload.
+		List<MechanismStatement> statements = new ArrayList<MechanismStatement>();
 		for (SubjectRule rule : rules) {
 			FoldedClassSentence fold = folded.get(rule);
 			// Through the narrow overload where nothing reconciled, rather than passing partnerLabel and
@@ -3511,6 +3628,7 @@ public class DrugSafetyValidator {
 			// byte the same sentence. See StatedInteractionChips.
 			if (statedChips.isFirstStatementOf(chip)) {
 				ruleChips.add(chip);
+				statements.add(new MechanismStatement(chip, rule.rule, partnerName, fold != null, bridges));
 			}
 			// Recorded as the pair it is, not as the string it renders, so the screening arm can recognise
 			// it whatever either arm calls the substance — see InteractionPairs. OUTSIDE the collapse
@@ -3521,8 +3639,14 @@ public class DrugSafetyValidator {
 		// Strongest first — see FINDING_STRENGTH_DESCENDING for why the key is the FINDING and not its
 		// rating, and Collections.sort is stable, so partners this ordering cannot separate keep the
 		// dataset's own order exactly as they arrived.
-		Collections.sort(ruleChips, FINDING_STRENGTH_DESCENDING);
-		warnings.addAll(ruleChips);
+		// The PAIR count is taken before the collapse and is what this method returns. PairChipExtent
+		// counts above-floor rule PAIRS and never chips — see its javadoc, and note that collapsing is
+		// exactly the case where the two diverge, so reading the merged list's size here would move a
+		// published completeness figure without a single pair having moved.
+		int relatedPairs = ruleChips.size();
+		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements);
+		Collections.sort(stated, FINDING_STRENGTH_DESCENDING);
+		warnings.addAll(stated);
 		for (String detail : classOnly) {
 			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
 			// relationship the reference data states without severity, which is why these chips are never
@@ -3535,7 +3659,154 @@ public class DrugSafetyValidator {
 			// refused a standard two-NRTI regimen — see SafetyWarning.restsOnSharedClassificationAlone.
 			warnings.add(SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail));
 		}
-		return ruleChips.size();
+		return relatedPairs;
+	}
+
+	/**
+	 * What one emitted rule chip states, carried beside the chip so {@link #collapseSharedMechanisms}
+	 * can group by the MECHANISM rather than by the rendered sentence.
+	 */
+	private static final class MechanismStatement {
+
+		private final SafetyWarning chip;
+
+		/** The rule this chip states, kept whole so a merged chip is built by the ONE render site
+		 *  rather than by a second copy of its concatenation. Its note is interned by the loader per
+		 *  {@code severity + mechanism group}, so equal note text IS mechanism identity for a DDInter
+		 *  row; a source that authors no note never collapses. */
+		private final DrugReference.Interaction rule;
+
+		private final String partnerName;
+
+		/** A chip the class arm folded a second sentence onto carries a claim about THIS partner that
+		 *  no other partner shares, so it never collapses (issue #88's fold). */
+		private final boolean folded;
+
+		private final List<SafetyWarning.ChartOrderBridge> bridges;
+
+		private MechanismStatement(SafetyWarning chip, DrugReference.Interaction rule, String partnerName,
+				boolean folded, List<SafetyWarning.ChartOrderBridge> bridges) {
+			this.chip = chip;
+			this.rule = rule;
+			this.partnerName = partnerName;
+			this.folded = folded;
+			this.bridges = bridges;
+		}
+
+		/** Null where this chip may not be collapsed at all, which keeps the decision in one place.
+		 *  The severity is IN the key, so only rows already rated alike are ever merged and no
+		 *  collapse can move a rating. */
+		private String collapseKey() {
+			String note = rule.getNote();
+			if (folded || note == null || note.isEmpty()) {
+				return null;
+			}
+			return (rule.getSeverity() == null ? "" : rule.getSeverity()) + "\u0000" + note;
+		}
+	}
+
+	/**
+	 * One mechanism, one chip, naming every active order it covers.
+	 *
+	 * <p><b>Why.</b> A mechanism sentence does not vary between the partners filed under it, so a chip
+	 * apiece re-sends it. Measured on the shipped KB for one clinician-facing response (2026-09-14):
+	 * nine chips, 5,717 characters of detail, four distinct mechanism texts — the corticosteroid one
+	 * repeated five times byte for byte, the NSAID one twice, 58% of the payload re-sent copies. The
+	 * only thing varying across those five was the partner's name.
+	 *
+	 * <p><b>It is not {@link StatedInteractionChips}</b>, which drops a chip whose whole SENTENCE was
+	 * already said — one prescription, two rules. Here the sentences differ because the partners do;
+	 * what repeats is what they share. Both run, and neither subsumes the other.
+	 *
+	 * <p><b>What a collapsed chip gives up.</b> The per-partner note name reconciled for it (issue
+	 * #297) and the {@code Interaction} it travelled on: a chip covering several partners has no single
+	 * answer for either, so it states neither and the injected note falls back to {@link #partnerLabel}
+	 * — the documented pre-#297 behaviour rather than a new one. Severity cannot move: it is part of
+	 * the key, so only chips already rated alike are ever merged.
+	 *
+	 * @return the chips to state, in the order they were collected; a group of one is its own original
+	 *         chip object, so a response with nothing to collapse is unchanged
+	 */
+	private static List<SafetyWarning> collapseSharedMechanisms(DrugReference ref,
+			List<MechanismStatement> statements) {
+		Map<String, List<MechanismStatement>> groups = new LinkedHashMap<String, List<MechanismStatement>>();
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
+		for (MechanismStatement statement : statements) {
+			String key = statement.collapseKey();
+			if (key == null) {
+				continue;
+			}
+			List<MechanismStatement> group = groups.get(key);
+			if (group == null) {
+				group = new ArrayList<MechanismStatement>();
+				groups.put(key, group);
+			}
+			group.add(statement);
+		}
+		// Emitted in the order the statements arrived, each group taking the position of its FIRST
+		// member — never grouped-after-ungrouped, which reorders a response that collapses nothing.
+		// WHICH of two chips a truncated answer keeps is decided by this order (issue #346), and the
+		// sort below is stable, so a partner this ordering cannot separate must keep the dataset's own
+		// position exactly as it had it before the collapse existed.
+		for (MechanismStatement statement : statements) {
+			String key = statement.collapseKey();
+			if (key == null) {
+				out.add(statement.chip);
+				continue;
+			}
+			List<MechanismStatement> group = groups.get(key);
+			if (group.get(0) != statement) {
+				continue;
+			}
+			if (group.size() == 1) {
+				out.add(group.get(0).chip);
+				continue;
+			}
+			List<String> partners = new ArrayList<String>();
+			List<SafetyWarning.ChartOrderBridge> bridges =
+					new ArrayList<SafetyWarning.ChartOrderBridge>();
+			Set<String> seenBridges = new HashSet<String>();
+			for (MechanismStatement member : group) {
+				if (!partners.contains(member.partnerName)) {
+					partners.add(member.partnerName);
+				}
+				if (member.bridges != null) {
+					for (SafetyWarning.ChartOrderBridge bridge : member.bridges) {
+						if (seenBridges.add(bridge.toString())) {
+							bridges.add(bridge);
+						}
+					}
+				}
+			}
+			// Through the ONE render site, handing it the partner LIST where it takes a partner name:
+			// the merged chip is the same sentence with more names in it, so it must not be assembled
+			// by a second concatenation of ACTIVE_ORDER_INTERACTION_PHRASE — that constant is shared
+			// with the check recognising this claim in an ANSWER (issue #377), and a second spelling
+			// would unpick the pairing. ActiveOrderInteractionPhraseTest counts the render sites.
+			//
+			// No note name and no rule travel with it: a chip covering several partners has no single
+			// answer for either, so the injected note falls back to partnerLabel, the documented
+			// pre-#297 behaviour rather than a new one.
+			// The one render site, told BOTH what to print and which orders it is naming — so the list
+			// travels structurally and nothing downstream recovers it by parsing the string this just
+			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
+			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null,
+				bridges, false, partners));
+		}
+		return out;
+	}
+
+	/** {@code a}, {@code a and b}, {@code a, b and c} — the list form a collapsed chip names its
+	 *  partners in. */
+	private static String joinPartners(List<String> partners) {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < partners.size(); i++) {
+			if (i > 0) {
+				sb.append(i == partners.size() - 1 ? " and " : ", ");
+			}
+			sb.append(partners.get(i));
+		}
+		return sb.toString();
 	}
 
 	/**
@@ -5895,6 +6166,19 @@ public class DrugSafetyValidator {
 			String partnerName, String partnerNoteName, String alsoSameClass,
 			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
 			boolean aboutACurrentMedication) {
+		return interactionWarning(ref, i, partnerName, partnerNoteName, alsoSameClass, chartOrderBridges,
+			aboutACurrentMedication, null);
+	}
+
+	/**
+	 * @param namedPartners the active orders this chip names, where it names several
+	 *        ({@link #collapseSharedMechanisms}); null leaves it the one {@code partnerName}, which is
+	 *        what every ordinary chip states
+	 */
+	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
+			String partnerName, String partnerNoteName, String alsoSameClass,
+			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
+			boolean aboutACurrentMedication, List<String> namedPartners) {
 		// partnerName is partnerLabel(i) only where reconciledPartnerName did not answer — it is the
 		// label bestRulePerPartner GROUPS on where the dataset identifies no partner entry, and there
 		// #121's grouping is only correct while the key IS the label the chip says. Every other chip
@@ -5924,7 +6208,8 @@ public class DrugSafetyValidator {
 		// rather than a chip no class sentence folded onto.
 		return SafetyWarning.interaction(ref.displayLabel(), detail, i.getSeverity(),
 				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName,
-				chartOrderBridges, aboutACurrentMedication);
+				chartOrderBridges, aboutACurrentMedication,
+				namedPartners == null ? Collections.singletonList(partnerName) : namedPartners);
 	}
 
 	/**
@@ -6517,7 +6802,7 @@ public class DrugSafetyValidator {
 	 *         A second copy of the rule would leave the gap inside one renderer's sentence and
 	 *         between the two in the other's, for one string the chip and the record share.
 	 */
-	static String endSentence(String detail) {
+	public static String endSentence(String detail) {
 		String trimmed = detail.trim();
 		if (trimmed.isEmpty()) {
 			return trimmed;

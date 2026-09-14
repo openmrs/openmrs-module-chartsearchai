@@ -291,6 +291,31 @@ public class SubjectMatterScopedContraindicationTest {
 	}
 
 	@Test
+	public void aQuestionNamingAnAllergenDoesNotChipAboutTheOrdersThatAllergyCrossReactsWith() {
+		// The finding side's half of the same defect, measured on the same chart and the same day as
+		// anAnswerRecitingThisModulesOwnFindingDoesNotChipAboutThePartnerItNames: "Is hydrocortisone
+		// safe for her?" raised SIX contraindication chips, and only two were about hydrocortisone. The
+		// other four were about her prednisone, budesonide, dexamethasone and methylprednisolone orders,
+		// because the question named a drug that is ALSO one of her allergens, that reading made the
+		// allergy subject matter, and every order cross-reacting with it then chipped.
+		//
+		// Same shape here in the fixture the cross-reactivity cases already use: aspirin is her ALLERGEN
+		// and ibuprofen is her order, related by the shipped curated NSAID group. A question naming a
+		// DRUG is a question about that drug. What says a question is about her ALLERGIES is
+		// QueryScopeRouter.asksAboutAllergies, which still widens, and a clinician's own citation of the
+		// allergy record still opens it — anAllergyTheResponseCitesReachesADrugItCrossReactsWith above
+		// is that case and must stay green beside this one.
+		List<SafetyWarning> warnings = nsaidValidator().validate(
+				"No \u2014 the patient has a recorded allergy to aspirin.", "Is aspirin safe for her?",
+				ctx(DrugReferenceTestSupport.set("aspirin"), null),
+				chart(TUMOUR_RECORD, ORDER_RECORD, ASPIRIN_ALLERGY_RECORD).getMappings());
+
+		assertFalse(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "cross-reactivity group"),
+				"her ibuprofen order is not what an aspirin question asked about, was: " + warnings);
+	}
+
+	@Test
 	public void theSameAllergyStaysSilentWhereTheResponseDoesNotCiteIt() {
 		// The control that makes the case above about the citation rather than about the chart: same
 		// patient, same order, same allergy, same chart — only the record the answer cites differs.
@@ -423,6 +448,42 @@ public class SubjectMatterScopedContraindicationTest {
 
 		assertEquals(1, contraindications(warnings).size(),
 				"the question's own drug, and nothing about the other prescription, was: " + warnings);
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Amoxicillin", "penicillin-class"),
+				"and it is the amoxicillin one, was: " + warnings);
+	}
+
+	@Test
+	public void anAnswerRecitingThisModulesOwnFindingDoesNotChipAboutThePartnerItNames() {
+		// The case above passes an EMPTY answer, so the only thing that could have opened the arm is the
+		// question, and it is correctly scoped to it. With an answer the picture changes, and the shape
+		// below is the one measured live on the 3.7.1 standalone (patient Sarah Taylor
+		// dc8560c9-6d2b-45bf-861c-8fcf562ec9b1, 2026-09-14): "Is aspirin safe for her?" raised TEN
+		// contraindication chips about her five corticosteroid orders and her steroid allergies, none of
+		// which the clinician asked about.
+		//
+		// No widening opened them — QueryScopeRouter.asksAboutMedications is false for that question,
+		// driven against the built jar. The ANSWER opened them: aspirin interacts with every one of her
+		// nine active orders, so the answer named every one as an interaction PARTNER, and that naming was
+		// read as the response being ABOUT those drugs. The same question about a drug interacting with
+		// nothing she was on ("Is amoxicillin safe for her?") raised none, so the off-question noise
+		// scaled with how well the interaction screen worked.
+		//
+		// The partner is named in an injected safety_finding, which is why the record below is one: a name
+		// the answer carries only because this module put it there is not what the clinician asked about.
+		// Both sides have to be vetoed, not just the drug side — the arm reads the drug OR the finding, and
+		// "Gentamicin" in the answer reaches the allergen leg as readily as the order leg.
+		RecordMapping finding = new RecordMapping(1,
+				ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING, "finding-uuid-1", null,
+				"Amoxicillin interacts with active order Gentamicin \u2014 Moderate.");
+
+		List<SafetyWarning> warnings = validator().validate(
+				"Amoxicillin interacts with active order Gentamicin [1].",
+				"Is amoxicillin safe for this patient?", twoPrescriptionsCtx(),
+				chart(finding).getMappings());
+
+		assertEquals(1, contraindications(warnings).size(),
+				"the question's own drug, and nothing about the partner the answer named, was: " + warnings);
 		assertTrue(DrugReferenceTestSupport.detailContains(warnings,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Amoxicillin", "penicillin-class"),
 				"and it is the amoxicillin one, was: " + warnings);

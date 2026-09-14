@@ -96,6 +96,21 @@ public class ActiveOrderInteractionPhraseTest {
 	 * the identifier appears in that class's own javadoc too.
 	 */
 	@Test
+	public void theNounIsTheTailOfThePhrase() {
+		// ACTIVE_ORDER_NOUN is derived from the phrase so that the renderer keeps exactly one spelling
+		// (the scan above) while the recogniser anchors on the half a paraphrase keeps. The derivation
+		// is only sound while the phrase ENDS in the noun — reword it to end in something else and the
+		// recogniser would silently widen to whatever the last two words became, so that relationship
+		// is pinned here rather than left to the derivation's own arithmetic.
+		assertEquals("active order", DrugSafetyValidator.ACTIVE_ORDER_NOUN,
+				"the noun the module names a record with");
+		assertTrue(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE.trim()
+				.endsWith(DrugSafetyValidator.ACTIVE_ORDER_NOUN),
+				"and the phrase must end in it, or the derivation names something else: "
+						+ DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE);
+	}
+
+	@Test
 	public void theChipDetailIsBuiltByReadingTheConstant() throws IOException {
 		Path validator = ModuleSourceRoot.repoRoot().resolve("api/src/main/java/org/openmrs/module/"
 				+ "chartsearchai/reference/DrugSafetyValidator.java");

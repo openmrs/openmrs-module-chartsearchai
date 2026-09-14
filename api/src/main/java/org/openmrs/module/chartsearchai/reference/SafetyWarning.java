@@ -87,6 +87,9 @@ public class SafetyWarning {
 	 *  here too, deliberately, so that a refusal and an absent answer are one answer to the record. */
 	private final DrugReference.Interaction reconciledRule;
 
+	/** @see #namedPartners() */
+	private final List<String> namedPartners;
+
 	private final String reconciledNoteName;
 
 	/** @see #chartOrderBridges() */
@@ -260,6 +263,22 @@ public class SafetyWarning {
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone) {
+		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
+				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, null);
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
+			List<String> namedPartners) {
+		// Copied and wrapped for the reason chartOrderBridges is. Never null, so no reader branches on
+		// absence; namedPartners()'s javadoc is the one place that says what empty covers.
+		this.namedPartners = namedPartners == null || namedPartners.isEmpty()
+				? Collections.<String> emptyList()
+				: Collections.unmodifiableList(new ArrayList<String>(namedPartners));
 		this.restsOnSharedClassificationAlone = restsOnSharedClassificationAlone;
 		// Copied and wrapped for the reason chartOrderBridges is, one field along. Never null, so no
 		// reader branches on absence — chartRecords()'s javadoc is the one place that says what empty
@@ -336,8 +355,42 @@ public class SafetyWarning {
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
 			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges,
 			boolean aboutACurrentMedication) {
+		return interaction(drug, detail, severity, unratedRelationship, reconciledRule,
+			reconciledNoteName, chartOrderBridges, aboutACurrentMedication, null);
+	}
+
+	/**
+	 * As above, additionally carrying the active orders this chip NAMES — one for an ordinary chip,
+	 * several for {@code collapseSharedMechanisms}' merged statement. Every interaction chip states
+	 * them, so a reader never has to tell "this chip carries no list" from "this chip is the merged
+	 * kind": see {@link #namedPartners()}.
+	 */
+	static SafetyWarning interaction(String drug, String detail, String severity,
+			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
+			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges,
+			boolean aboutACurrentMedication, List<String> namedPartners) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, severity, unratedRelationship, false,
-				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication);
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, null,
+				false, namedPartners);
+	}
+
+	/**
+	 * The active orders this ONE chip names, where it names several — the population a reader asks
+	 * "did the answer state all of them?" of.
+	 *
+	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
+	 * one — so a reader never has to tell a chip that carries no list from a chip that covers no
+	 * order. It is the structural answer to "which of her orders is this chip about", and the reason
+	 * nothing downstream recovers that by matching a phrase in prose.
+	 *
+	 * <p><b>Empty is the chip types that name no active order</b>: a contraindication, an overdose,
+	 * and the class-only interaction chip, whose partner is a class rather than an order. So empty is
+	 * "outside this population", never "covers no order" — and it must not be summed across a response
+	 * expecting a partner total, which is {@code interactionPairs}' question over a different
+	 * population.
+	 */
+	public List<String> namedPartners() {
+		return namedPartners;
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */

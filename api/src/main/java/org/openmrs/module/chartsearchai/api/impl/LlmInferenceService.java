@@ -257,13 +257,22 @@ public class LlmInferenceService implements ChartSearchService {
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
 					patient, chart.getMappings(), pairExtent);
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
+			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
+			// COMPLETED below, so what a client is handed names every order its findings cover. Two
+			// different answers to two different questions — see FindingPartnerCoverage.
+			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
+					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), safetyWarnings);
+			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
+					response.getAnswer(),
+					FindingPartnerCoverageCheck.unstatedPartners(response.getAnswer(), safetyWarnings));
+			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
-					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
+					findingPartnerCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -652,7 +661,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
-					chartRead.stated(), conditionRuleCoverage, orderStopDates));
+					chartRead.stated(), conditionRuleCoverage, orderStopDates, null));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -732,13 +741,22 @@ public class LlmInferenceService implements ChartSearchService {
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
 					patient, chart.getMappings(), pairExtent);
-			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
+			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
+			// COMPLETED below, so what a client is handed names every order its findings cover. Two
+			// different answers to two different questions — see FindingPartnerCoverage.
+			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
+					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), safetyWarnings);
+			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
+					response.getAnswer(),
+					FindingPartnerCoverageCheck.unstatedPartners(response.getAnswer(), safetyWarnings));
+			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
-					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
+					findingPartnerCoverage);
 			outcome = "ok";
 			return answer;
 		}

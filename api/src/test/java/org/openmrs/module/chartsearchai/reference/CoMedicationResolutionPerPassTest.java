@@ -146,8 +146,10 @@ public class CoMedicationResolutionPerPassTest {
 			"interaction | Major | Clarithromycin interacts with active order Amiodarone",
 			"interaction | Moderate | Clarithromycin interacts with active order Metformin",
 			"interaction | Moderate | Clarithromycin interacts with active order Sertraline",
-			"interaction | Moderate | Clarithromycin interacts with active order Tramadol",
-			"interaction | Moderate | Clarithromycin interacts with active order Ciprofloxacin",
+			// Tramadol and Ciprofloxacin end on ONE mechanism at one rating, so they are one statement
+			// naming both rather than two that re-send the same sentence. Every other lead here is
+			// unchanged, which is what keeps this case about issue #256's invariance.
+			"interaction | Moderate | Clarithromycin interacts with active order Tramadol and Ciprofloxacin",
 			"interaction | Major | Simvastatin interacts with Clarithromycin, also named in the question");
 
 	/** A question naming nothing the excerpt classifies, so no arm asks for a co-medication. */

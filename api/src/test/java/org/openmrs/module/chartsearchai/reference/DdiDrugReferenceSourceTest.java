@@ -431,25 +431,27 @@ public class DdiDrugReferenceSourceTest {
 	}
 
 	@Test
-	public void differentPartnersKeepTheirOwnChipEvenWhenTheirNotesAreIdentical() throws Exception {
-		// The collapse must apply ONLY to rows that would render the same subject. Voxelotor's
-		// Phenytoin row shares the systemic Dexamethasone row's mechanism group, so the two notes
-		// are the same string at the same severity — a dedup keyed on the note text, or on the drug
-		// alone, would silently drop one of two genuinely different warnings.
+	public void partnersWhoseNotesAreIdenticalAreOneChipThatNamesEachOfThem() throws Exception {
+		// Voxelotor's Phenytoin row shares the systemic Dexamethasone row's mechanism group, so the two
+		// notes are the same string at the same severity. This used to assert a chip apiece, on the
+		// reasoning that a note-keyed dedup "would silently drop one of two genuinely different
+		// warnings" — and that hazard is real and still guarded: what the collapse may NEVER do is lose
+		// a partner. It does not. It states the shared sentence once and names both orders in it, which
+		// is what the assertions below pin.
 		List<SafetyWarning> warnings = routeVariantValidator().validate(
 				"Voxelotor could be started.", "Is it safe to give voxelotor?",
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Dexamethasone 4mg", "Phenytoin 100mg"),
 						null, null, null));
 
-		assertEquals(2, warnings.size(),
-				"two distinct interaction partners must raise two chips, was: " + warnings);
-		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
-				"Voxelotor", "active order dexamethasone"),
-				"the dexamethasone chip must survive, was: " + warnings);
-		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
-				"Voxelotor", "active order phenytoin"),
-				"the phenytoin chip must survive, was: " + warnings);
+		assertEquals(1, warnings.size(),
+				"one mechanism, one chip — the sentence does not vary between them, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertTrue(detail.contains("dexamethasone"),
+				"dexamethasone must still be named, was: " + detail);
+		assertTrue(detail.contains("phenytoin"),
+				"and phenytoin must still be named — neither warning may be silently dropped, was: "
+						+ detail);
 	}
 
 	@Test
@@ -560,17 +562,22 @@ public class DdiDrugReferenceSourceTest {
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport
 						.set("Lapatinib 250mg", "Phenytoin 100mg", "Voxelotor 500mg"), null, null, null));
 
-		assertEquals(3, warnings.size(),
-			"three active partners must raise three chips, was: " + warnings);
+		// TWO chips and not three: lapatinib and voxelotor end on one mechanism and collapse into one
+		// statement, phenytoin keeps its own. The ORDERING property this case exists for survives that
+		// intact and is still observable — lapatinib's group is still ahead of phenytoin's.
+		assertEquals(2, warnings.size(),
+			"lapatinib and voxelotor share a mechanism and state it once; phenytoin states its own,"
+					+ " was: " + warnings);
 		for (SafetyWarning warning : warnings) {
 			assertEquals("Major", warning.getSeverity(),
 				"all three partners end Major, so nothing about severity may separate them, was: "
 						+ warnings);
 		}
 		assertTrue(warnings.get(0).getDetail()
-				.startsWith("Sirolimus interacts with active order lapatinib — Major. "),
+				.startsWith("Sirolimus interacts with active order lapatinib and voxelotor — Major. "),
 			"lapatinib's group is opened before phenytoin's, so replacing its winner afterwards must"
-					+ " not move it behind phenytoin, was: " + warnings.get(0).getDetail());
+					+ " not move it behind phenytoin — and voxelotor, which shares its mechanism, is"
+					+ " named by that same chip, was: " + warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail()
 				.startsWith("Sirolimus interacts with active order phenytoin — Major. "),
 			"phenytoin's chip must stay second, was: " + warnings.get(1).getDetail());

@@ -679,6 +679,57 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * How many active orders a response's safety findings name, and how many of those the answer's own
+	 * prose stated. This type is CANONICAL for what its two numbers do and do not assert.
+	 *
+	 * <p><b>Why {@code findingCitations} could not answer it.</b> That counts FINDINGS, and ADR Decision
+	 * 99 made one finding cover several orders — so a cited finding whose prose drops one of five names
+	 * reads {@code carried:4, cited:4}, which is true and is not the question. Measured live on the
+	 * 3.7.1 standalone (2026-09-15, two consecutive runs) with every other published key clean.
+	 *
+	 * <p><b>What {@code named} counts</b> is {@code SafetyWarning.namedPartners()} summed over the
+	 * response's chips. Empty for the chip types naming no active order, so this is not a partner total
+	 * and must not be read against {@code interactionPairs}, which counts PAIRS over a different
+	 * population.
+	 *
+	 * <p><b>What {@code stated} counts</b> is those the MODEL's prose names, by containment, and it is
+	 * measured BEFORE the module names the rest itself (ADR Decision 100) — so prose naming every order
+	 * beside {@code stated < named} says the module supplied the difference. A name the model spells
+	 * differently reads as unstated, so the residue runs toward reporting a shortfall, which is the safe
+	 * direction for a diagnostic and the opposite of {@code findingCitations}'s.
+	 *
+	 * <p><b>Absence is not zero.</b> Null says no finding named an order, or the producer stated no
+	 * measurement. {@code stated == named} is not a certificate that the prose is complete, only that
+	 * every name the check could look for appeared.
+	 */
+	final class FindingPartnerCoverage {
+
+		private final int named;
+
+		private final int stated;
+
+		public FindingPartnerCoverage(int named, int stated) {
+			this.named = named;
+			this.stated = stated;
+		}
+
+		/** @return how many active orders the response's findings name */
+		public int getNamed() {
+			return named;
+		}
+
+		/** @return how many of those the model's own prose states */
+		public int getStated() {
+			return stated;
+		}
+
+		@Override
+		public String toString() {
+			return "FindingPartnerCoverage{named=" + named + ", stated=" + stated + "}";
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -720,6 +771,9 @@ public interface ChartSearchService {
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
 
 		private final List<OrderStopDate> orderStopDates;
+
+		/** @see #getFindingPartnerCoverage() */
+		private final FindingPartnerCoverage findingPartnerCoverage;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
@@ -781,7 +835,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null);
+					null, null, null, null, null, null, null, null, null);
 		}
 
 		/**
@@ -816,7 +870,9 @@ public interface ChartSearchService {
 				FindingCitationExtent findingCitationExtent,
 				Boolean chartReadForSafety,
 				DrugReferenceLoad.Coverage conditionRuleCoverage,
-				List<OrderStopDate> orderStopDates) {
+				List<OrderStopDate> orderStopDates,
+				FindingPartnerCoverage findingPartnerCoverage) {
+			this.findingPartnerCoverage = findingPartnerCoverage;
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -1222,6 +1278,20 @@ public interface ChartSearchService {
 		 *
 		 * @return the statement, or null where the producer made no measurement
 		 */
+		/**
+		 * How many active orders this response's safety findings name, and how many of those the MODEL's
+		 * prose stated — the shortfall ADR Decision 99 moved out of {@link #getFindingCitationExtent()}'s
+		 * reach by putting several orders under one finding.
+		 *
+		 * <p>{@link FindingPartnerCoverage} is canonical for what each number asserts, for why a null is
+		 * not a zero, and for why {@code stated == named} certifies nothing.
+		 *
+		 * @return the statement, or null where no finding named an order or no measurement was made
+		 */
+		public FindingPartnerCoverage getFindingPartnerCoverage() {
+			return findingPartnerCoverage;
+		}
+
 		public FindingCitationExtent getFindingCitationExtent() {
 			return findingCitationExtent;
 		}

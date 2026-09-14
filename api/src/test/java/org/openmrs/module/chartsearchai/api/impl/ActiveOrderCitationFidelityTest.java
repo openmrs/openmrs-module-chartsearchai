@@ -596,10 +596,14 @@ public class ActiveOrderCitationFidelityTest {
 				"the premise: with no chart citation offered for any claim there is nothing to "
 						+ "misattribute, so the older key reads as it does on a clean answer");
 		ActiveOrderClaims claims = answer.getActiveOrderClaims();
-		assertEquals(4, claims.getStated(),
-				"four occurrences of the module's own phrase, not the five orders the answer names "
-						+ "— the compound attribution in the last sentence is ONE claim");
-		assertEquals(4, claims.getUncited(),
+		assertEquals(5, claims.getStated(),
+				"the FIVE orders the answer attributes an interaction to. The unit was occurrences of the "
+						+ "verb phrase until a model paraphrased the verb and the recogniser reported "
+						+ "stated:0 of an answer making four claims; it is now the NOUN, so the compound "
+						+ "attribution in the last sentence states two claims about two orders rather "
+						+ "than one about both. The key measures unevidenced claims, so the order is the "
+						+ "faithful base");
+		assertEquals(5, claims.getUncited(),
 				"and not one of them offered a chart record, which is what the empty list above "
 						+ "could not say. Answer was: " + answer.getAnswer());
 	}

@@ -7627,3 +7627,93 @@ Read these rather than trusting a list; each was run against `OrderStopDateState
 - **−** **The published date is a UTC calendar date, and on a server east of UTC that can be a day before the local one.** `ChartSearchAiRestController.formatDate` converts through `ZoneId.of("UTC")` before taking the calendar day, so an order stopped at 01:00 local on a UTC+3 host publishes the previous date. Measured by running that conversion: `2026-08-25T01:00` local in `Africa/Nairobi` renders `2026-08-24`, while `12:00` the same day renders `2026-08-25`. It is not new — every date on the response goes through that one method, and #315's own second comment recorded the same shift in querystore's serializer as something found in passing — but it is newly consequential, because this is the first time an order's END is published rather than inferred, and a stop date read a day early is a clinical fact misreported. Deliberately not fixed here: changing the conversion would move every date this module publishes, which is its own decision with its own compatibility question. What this change owes is that the key is spelled like its neighbours, and it is.
 - **−** **One more date on the wire, and it is about the patient.** Unlike a dosing ceiling it is not reference material: it says when this patient's prescription stopped. It is published only for a record the answer itself cited, and it is the same fact the cited record's own text already states wherever querystore renders one.
 - **−** **The order read is unchanged in cost but now carries more.** It was already made once per chart assembly for Decision 46's mark; this adds a map entry per ended order and no new service call. Decision 46's own accounting of how often "once per chart assembly" is stands unchanged.
+
+## Decision 99: One mechanism is stated once, naming every active order it covers
+
+**Context.** Measured on the 3.7.1 standalone (patient Sarah Taylor
+`dc8560c9-6d2b-45bf-861c-8fcf562ec9b1`, 2026-09-14), "Is aspirin safe for her?" returned nine
+interaction chips carrying 5,717 characters of detail. Four distinct mechanism texts accounted for
+all of it: the corticosteroid+salicylate paragraph appeared five times byte for byte, the
+NSAID+aspirin one twice. 3,324 characters — 58% — were re-sent copies, and the only thing varying
+across the five was the partner's name. Severity carried two distinct values across all nine.
+
+**Decision.** `DrugSafetyValidator.collapseSharedMechanisms` states a mechanism once and names every
+active order it covers. The key is the rule's `severity` + `note`: the ddinter loader interns a note
+per severity+mechanism group, so equal note text is mechanism identity, and putting severity in the
+key means only rows already rated alike can merge — a collapse cannot move a rating. A chip the
+class arm folded a second sentence onto never collapses, because that sentence is about one partner.
+
+**What it may never do is lose a partner.** The merged chip names each of them. This was the stated
+reason the previous spec kept a chip per partner — "a dedup keyed on the note text, or on the drug
+alone, would silently drop one of two genuinely different warnings" — and that hazard is real; what
+changed is that naming them all in one statement avoids it without re-sending the sentence.
+
+**Three things that fail silently, each pinned.** The arm returns the PAIR count and never the merged
+chip count, since `interactionPairs` counts above-floor rule pairs and collapsing is exactly where
+the two diverge. The merged chip is built by the one render site (`interactionWarning`) rather than a
+second concatenation of `ACTIVE_ORDER_INTERACTION_PHRASE`, which is shared with the check that
+recognises the claim in an answer (#377). And each group takes the position of its FIRST member:
+appending merged groups after unmerged ones reorders a response that collapses nothing, which
+decides which chip a truncated answer keeps (#346).
+
+**Spec changed deliberately, by the product owner.** Three cases asserted a chip per partner —
+`DdiDrugReferenceSourceTest.differentPartnersKeepTheirOwnChipEvenWhenTheirNotesAreIdentical`,
+`.replacingAGroupsWinnerLeavesATiedPartnerBehindIt` and
+`InteractionRouteVariantTest.differentPartnersOfOneSubstanceKeepTheirOwnChips` — and were rewritten
+to assert one chip per mechanism naming every partner. Each kept the property it was written for:
+the ordering guard still observes lapatinib's group ahead of phenytoin's, and the naming convention
+case still reads every name as the dataset's rather than the knowledge base's match token.
+
+**Residues.** A merged chip states no `reconciledPartnerNoteName` and no rule, so its injected note
+falls back to `partnerLabel` — the documented pre-#297 behaviour, not a new one. And
+`findingCitations` does not gate the collapse: it counts FINDINGS, so an answer naming four of a
+merged chip's five orders still reads `carried:4, cited:4`. Measured live 2026-09-15 on the run that
+verified this change — the answer dropped Dexamethasone from a five-order list while the chip named
+all five and every key read clean. That is the same family as ADR Decision 84's shortfall, moved
+from "a finding goes uncited" to "a name goes unstated inside a cited finding", and nothing published
+reports it.
+
+**Result, on the measured question.** Nine chips to four, 5,717 characters of detail to 2,794, each
+mechanism sent once, `interactionPairs` unchanged at `{found:9, reported:9}`.
+
+## Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again
+
+**Context.** ADR Decision 99 put several active orders under one finding, and the model's prose then
+dropped one of them: measured on the 3.7.1 standalone (patient Sarah Taylor, 2026-09-15, reproduced
+on consecutive runs) the chip named Methylprednisolone, Prednisone, Budesonide, Dexamethasone and
+Hydrocortisone while the answer named four, omitting Dexamethasone. Every published key read clean —
+`findingCitations {carried:4, cited:4}` is true, because it counts FINDINGS and the finding was
+cited. A clinician reading the answer alone would not learn that aspirin interacts with her
+dexamethasone.
+
+**The obvious fix was the wrong one.** Issue #398's repair asks the model again for what it left
+out. It works (6 of 12 corpus cells to 12 of 12) but costs a second inference, and it is a change in
+the PROMPT position ADR Decision 84 measured added instruction to regress in — so it ships OFF and
+cannot be turned on without re-running that corpus. It is also suppressed while
+`findingsRenderedByClient` is on, for a reason that is right about the case it was written for and
+wrong about this one: summarising licenses not LISTING findings, it does not license stating a
+finding while dropping one of the orders it covers.
+
+**Decision.** The module names them itself. It composed the chip, so it holds the orders
+structurally (`SafetyWarning.namedPartners()`, every interaction chip, Decision 99 round two), and
+completing the sentence needs no model at all. `FindingPartnerCoverageCheck.withUnstatedPartnersNamed`
+appends one sentence naming the orders the prose left out.
+
+**What that buys over the repair.** No second inference, no prompt change, and therefore nothing for
+Decision 84's corpus to regress in — the verdict lead is the model's own words, untouched, because
+the sentence is APPENDED and the answer is returned byte for byte where nothing was omitted. It
+carries no citation marker, because it offers no new evidence: the finding is already cited in the
+sentence the model wrote, and a marker here would claim a record this text did not read.
+
+**Measured and published are deliberately different answers.** `findingPartners` is measured on the
+MODEL's prose and the completion is applied after, so a response reading `{named:9, stated:8}` beside
+prose naming all nine says exactly that: the model stated eight and the module supplied the ninth.
+Measuring after the append would make the key report a completeness the model did not achieve, and
+the checks that judge the model's prose all run before it for the same reason.
+
+**Live result on the measured question.** The published answer ends *"Also covered by those findings
+and not named above: active order Dexamethasone."*, no order the findings name is missing from it,
+and `findingPartners` still reports `{named:9, stated:8}`.
+
+→ `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` and
+`.anAnswerNamingEveryOrderIsReturnedByteForByte`.

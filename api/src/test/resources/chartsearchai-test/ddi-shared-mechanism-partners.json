@@ -1,0 +1,503 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice: ONE subject (Acetylsalicylic acid) whose partners include TWO the data gives the SAME mechanism group (2346, Prednisone and Methylprednisolone) and one it gives a different group (5408, Heparin). Rows are field-for-field their shipped-KB rows. The point of the fixture is that 2346's sentence does not vary between its members, so rendering it once per partner re-sends it; measured on the shipped KB that paragraph reached one clinician-facing response five times. The Unknown/-1 rows among the PARTNERS are carried verbatim and are below the shipped severity floor, so they raise nothing."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "2346": {
+   "text": "Coadministration with corticosteroids may decrease the serum concentrations and therapeutic effects of salicylates. Likewise, serum salicylate levels may increase following withdrawal of corticosteroid therapy, potentially resulting in salicylate toxicity. Pharmacologically, the potential for increased gastrointestinal (GI) toxicity, including inflammation, bleeding, ulceration and perforation, should be considered due to additive ulcerogenic effects of these agents (especially aspirin) on the GI mucosa.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "5408": {
+   "text": "Theoretically, the coadministration of nonsteroidal anti-inflammatory drugs (NSAIDs) and heparin or low molecular weight heparin (LMWH) may potentiate the risk of bleeding. NSAIDs interfere with platelet adhesion and aggregation and may prolong bleeding time in healthy individuals. In addition, NSAIDs are known to cause dose-related gastrointestinal bleeding, which may be complicated by anticoagulant therapy.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter20",
+   "name": "Acetylsalicylic acid",
+   "rxcui": "1191",
+   "rxnorm_name": "aspirin",
+   "drugbank_id": "DB00945",
+   "atc": [
+    "A01AD05",
+    "B01AC06",
+    "N02BA01"
+   ],
+   "ciel": [
+    {
+     "code": "103170",
+     "uuid": "103170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / caffeine / magnesium hydroxide"
+    },
+    {
+     "code": "103171",
+     "uuid": "103171AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / salicylamide"
+    },
+    {
+     "code": "103172",
+     "uuid": "103172AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin"
+    },
+    {
+     "code": "103173",
+     "uuid": "103173AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine"
+    },
+    {
+     "code": "103174",
+     "uuid": "103174AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / calcium gluconate"
+    },
+    {
+     "code": "103175",
+     "uuid": "103175AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / codeine / salicylamide"
+    },
+    {
+     "code": "103176",
+     "uuid": "103176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103177",
+     "uuid": "103177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103178",
+     "uuid": "103178AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / codeine"
+    },
+    {
+     "code": "103179",
+     "uuid": "103179AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103304",
+     "uuid": "103304AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetanilide / aspirin / caffeine / ephedrine"
+    },
+    {
+     "code": "103520",
+     "uuid": "103520AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / calcium carbonate / magnesium hydroxide"
+    },
+    {
+     "code": "103521",
+     "uuid": "103521AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / codeine / magnesium hydroxide"
+    },
+    {
+     "code": "103522",
+     "uuid": "103522AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / magnesium hydroxide"
+    },
+    {
+     "code": "103680",
+     "uuid": "103680AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / brompheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103681",
+     "uuid": "103681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital"
+    },
+    {
+     "code": "103683",
+     "uuid": "103683AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / codeine"
+    },
+    {
+     "code": "103684",
+     "uuid": "103684AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / phenacetin"
+    },
+    {
+     "code": "103685",
+     "uuid": "103685AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine"
+    },
+    {
+     "code": "103686",
+     "uuid": "103686AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / chlorpheniramine"
+    },
+    {
+     "code": "103687",
+     "uuid": "103687AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / cinnamedrine"
+    },
+    {
+     "code": "103688",
+     "uuid": "103688AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / codeine"
+    },
+    {
+     "code": "103689",
+     "uuid": "103689AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine"
+    },
+    {
+     "code": "103690",
+     "uuid": "103690AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine / promethazine"
+    },
+    {
+     "code": "103691",
+     "uuid": "103691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103692",
+     "uuid": "103692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / ipecac / opium"
+    },
+    {
+     "code": "103693",
+     "uuid": "103693AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / magnesium salicylate"
+    },
+    {
+     "code": "103694",
+     "uuid": "103694AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / orphenadrine"
+    },
+    {
+     "code": "103695",
+     "uuid": "103695AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / propoxyphene"
+    },
+    {
+     "code": "103696",
+     "uuid": "103696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103697",
+     "uuid": "103697AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / calcium carbonate"
+    },
+    {
+     "code": "103699",
+     "uuid": "103699AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol"
+    },
+    {
+     "code": "103700",
+     "uuid": "103700AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol / codeine"
+    },
+    {
+     "code": "103701",
+     "uuid": "103701AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine"
+    },
+    {
+     "code": "103702",
+     "uuid": "103702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan"
+    },
+    {
+     "code": "103703",
+     "uuid": "103703AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103704",
+     "uuid": "103704AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103705",
+     "uuid": "103705AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103706",
+     "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "103707",
+     "uuid": "103707AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / codeine"
+    },
+    {
+     "code": "103709",
+     "uuid": "103709AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine"
+    },
+    {
+     "code": "103710",
+     "uuid": "103710AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine / phenylpropanolamine"
+    },
+    {
+     "code": "103711",
+     "uuid": "103711AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / dipyridamole"
+    },
+    {
+     "code": "103712",
+     "uuid": "103712AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / ethoheptazine / meprobamate"
+    },
+    {
+     "code": "103713",
+     "uuid": "103713AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / glycine"
+    },
+    {
+     "code": "103714",
+     "uuid": "103714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / hydrocodone"
+    },
+    {
+     "code": "103715",
+     "uuid": "103715AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / isosorbide"
+    },
+    {
+     "code": "103716",
+     "uuid": "103716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / meprobamate"
+    },
+    {
+     "code": "103717",
+     "uuid": "103717AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / methocarbamol"
+    },
+    {
+     "code": "103718",
+     "uuid": "103718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / oxycodone"
+    },
+    {
+     "code": "103720",
+     "uuid": "103720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pentazocine"
+    },
+    {
+     "code": "103721",
+     "uuid": "103721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenobarbital"
+    },
+    {
+     "code": "103722",
+     "uuid": "103722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylephrine"
+    },
+    {
+     "code": "103723",
+     "uuid": "103723AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103724",
+     "uuid": "103724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenyltoloxamine"
+    },
+    {
+     "code": "103725",
+     "uuid": "103725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pravastatin"
+    },
+    {
+     "code": "103726",
+     "uuid": "103726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / promethazine / pseudoephedrine"
+    },
+    {
+     "code": "103727",
+     "uuid": "103727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / propoxyphene"
+    },
+    {
+     "code": "103728",
+     "uuid": "103728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pseudoephedrine"
+    },
+    {
+     "code": "169229",
+     "uuid": "1304b943-339f-403f-aca9-c47b7779c9c7",
+     "name": "Aspirin / clopidogrel"
+    },
+    {
+     "code": "71617",
+     "uuid": "71617AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin"
+    },
+    {
+     "code": "72488",
+     "uuid": "72488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Buffered aspirin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1191",
+   "name": "Methylprednisolone",
+   "rxcui": "6902",
+   "rxnorm_name": "methylprednisolone",
+   "drugbank_id": "DB00959",
+   "atc": [
+    "D07AA01",
+    "D10AA02",
+    "H02AB04"
+   ],
+   "ciel": [
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "105069",
+     "uuid": "105069AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone / neomycin"
+    },
+    {
+     "code": "70035",
+     "uuid": "70035AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "6 alpha-methylprednisolone sodium hemisuccinate"
+    },
+    {
+     "code": "79743",
+     "uuid": "79743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone"
+    },
+    {
+     "code": "79744",
+     "uuid": "79744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone aceponate"
+    },
+    {
+     "code": "79745",
+     "uuid": "79745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone acetate"
+    },
+    {
+     "code": "79746",
+     "uuid": "79746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone sodium phosphate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1515",
+   "name": "Prednisone",
+   "rxcui": "8640",
+   "rxnorm_name": "prednisone",
+   "drugbank_id": "DB00635",
+   "atc": [
+    "A07EA03",
+    "H02AB07"
+   ],
+   "ciel": [
+    {
+     "code": "82453",
+     "uuid": "82453AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisone"
+    }
+   ]
+  },
+  {
+   "id": "DDInter856",
+   "name": "Heparin",
+   "rxcui": "5224",
+   "rxnorm_name": "heparin",
+   "drugbank_id": "DB01109",
+   "atc": [
+    "B01AB01",
+    "C05BA03",
+    "S01XA14"
+   ],
+   "ciel": [
+    {
+     "code": "72681",
+     "uuid": "72681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Calcium heparin"
+    },
+    {
+     "code": "77413",
+     "uuid": "77413AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin"
+    },
+    {
+     "code": "77414",
+     "uuid": "77414AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium"
+    },
+    {
+     "code": "77415",
+     "uuid": "77415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium (beef)"
+    },
+    {
+     "code": "77416",
+     "uuid": "77416AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin sodium (pork)"
+    },
+    {
+     "code": "77417",
+     "uuid": "77417AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin, beef"
+    },
+    {
+     "code": "77418",
+     "uuid": "77418AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Heparin, pork"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1191",
+   "DDInter1515",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1191",
+   "DDInter20",
+   "Moderate",
+   "2346"
+  ],
+  [
+   "DDInter1191",
+   "DDInter856",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1515",
+   "DDInter20",
+   "Moderate",
+   "2346"
+  ],
+  [
+   "DDInter1515",
+   "DDInter856",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter856",
+   "Moderate",
+   "5408"
+  ]
+ ]
+}

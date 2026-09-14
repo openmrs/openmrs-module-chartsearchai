@@ -314,12 +314,16 @@ public class OneOrderNameAcrossOneResponseTest {
 			chart(service, "Celecoxib", "Diclofenac", "Ibuprofen", "Dexamethasone", "Prednisone",
 				"Budesonide", "Methylprednisolone"));
 
-		assertEquals(java.util.Arrays.asList("Celecoxib", "Diclofenac", "Ibuprofen", "Dexamethasone",
+		// The ticket's seven prescriptions, in five statements: the three NSAIDs end on one mechanism at
+		// one rating, so they are stated once and named together. What this case pins is unchanged by
+		// that — every name here is the DATASET's, capitalised, and not one is the knowledge base's own
+		// lower-case match token, which is the convention split issue #339 closed.
+		assertEquals(java.util.Arrays.asList("Celecoxib, Diclofenac and Ibuprofen", "Dexamethasone",
 			"Prednisone", "Budesonide", "Methylprednisolone"), orderNames(warnings),
-			"the ticket's own seven chips must name their seven prescriptions by one convention — the"
-					+ " rule arm's three were the knowledge base's own match tokens and the class arm's"
-					+ " four the dataset's names, in one response, with nothing in the text explaining"
-					+ " why (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
+			"the ticket's own seven prescriptions must be named by one convention — the rule arm's were"
+					+ " the knowledge base's own match tokens and the class arm's the dataset's names,"
+					+ " in one response, with nothing in the text explaining why (issue #339), was: "
+					+ DrugReferenceTestSupport.details(warnings));
 	}
 
 	/**

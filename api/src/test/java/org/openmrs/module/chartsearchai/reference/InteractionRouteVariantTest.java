@@ -302,21 +302,23 @@ public class InteractionRouteVariantTest {
 	}
 
 	@Test
-	public void differentPartnersOfOneSubstanceKeepTheirOwnChips() throws IOException {
-		// The collapse is per (substance, partner) and never per substance: two orders that interact with
-		// hydrocortisone through different rows are two clinical facts. Ketorolac's rule sits on the
-		// route-unspecified row and diclofenac's on it too, so this also pins that grouping the subject
-		// does not merge its partners.
+	public void differentPartnersSharingOneMechanismAreOneChipNamingBoth() throws IOException {
+		// Ketorolac's rule and diclofenac's both sit on the route-unspecified row and the data files them
+		// under ONE mechanism, so the sentence does not vary between them: two orders, one clinical fact.
+		// This used to assert a chip apiece, which re-sent that sentence — the spec is now that a shared
+		// mechanism is stated once and NAMES every order it covers, so what is pinned here is that
+		// neither partner is lost to the collapse.
 		List<SafetyWarning> warnings = validator().validate("", "Is it safe to give hydrocortisone?",
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Diclofenac 50mg", "Ketorolac 10mg"), null, null,
 						null));
 
-		assertEquals(2, warnings.size(), "one chip per partner, was: " + warnings);
-		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
-				"Hydrocortisone", "active order diclofenac"), "was: " + warnings);
-		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
-				"Hydrocortisone", "active order ketorolac"), "was: " + warnings);
+		assertEquals(1, warnings.size(), "one chip per MECHANISM, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertTrue(detail.contains("diclofenac"),
+				"diclofenac must still be named by the chip that covers it, was: " + detail);
+		assertTrue(detail.contains("ketorolac"),
+				"and so must ketorolac — collapsing may not drop a partner, was: " + detail);
 	}
 
 	@Test

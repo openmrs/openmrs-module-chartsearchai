@@ -249,7 +249,7 @@ final class ActiveOrderCitationFidelityCheck {
 			patientId = patient == null ? null : patient.getPatientId();
 			List<Integer> offending = new ArrayList<Integer>();
 			if (answer == null
-					|| !answer.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE)) {
+					|| !answer.contains(DrugSafetyValidator.ACTIVE_ORDER_NOUN)) {
 				// A short-circuit and NOT the rule — deleting it was measured byte-identical over the
 				// same 66,429 arrangements, because examine's own per-sentence indexOf is what
 				// scopes the check to an active-order claim. What it buys is that the overwhelmingly
@@ -323,7 +323,11 @@ final class ActiveOrderCitationFidelityCheck {
 	 */
 	private static void examine(String sentence, Map<Integer, RecordMapping> byIndex,
 			Set<Integer> citedIndexes, Set<Integer> seen, List<String> reasons, Tally tally) {
-		String phrase = DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE;
+		// The NOUN and not the whole phrase: a model that paraphrases the verb ("has a Major
+		// interaction with active order X") still names the record the same way, and anchoring on the
+		// verb made this check examine nothing while reporting a clean zero. See ACTIVE_ORDER_NOUN,
+		// which is derived from the phrase so the renderer still has exactly one spelling.
+		String phrase = DrugSafetyValidator.ACTIVE_ORDER_NOUN;
 		int at = sentence.indexOf(phrase);
 		while (at >= 0) {
 			// One occurrence of the phrase is one CLAIM, counted before anything is read about what

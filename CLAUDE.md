@@ -96,6 +96,9 @@ These methods are the ONLY correct entry points for their respective operations.
   - **The date is core's `Order.getEffectiveStopDate()`**, never a field choice made here, and its asymmetry with this mark is enumerated in ONE place — the `SerializedRecord.orderStopDate` javadoc — which every other site points at rather than restating. A missing date is never "in force". PUBLISHED as `orderStopDates` by `ChartSearchAiUtils.orderStopDates`, over the answer's markers INTERSECTED with its resolution, gated on the STAMP and never a type name; `null` no measurement, `[]` not a certificate. → ADR Decision 98; `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace`. 
   - **`describesEndedOrder` is now AND-ed with this, never ranked against it**, and each can only exclude more. Do not "simplify" it into a precedence rule. Scoped to `drug_order` deliberately. Mutate the guards and read the failures. → ADR Decisions 46, 47.
 
+- **One mechanism, one chip, and the orders it names**: `DrugSafetyValidator.collapseSharedMechanisms` states a mechanism ONCE, naming every active order it covers, each chip carrying them as `SafetyWarning.namedPartners()`. **It may not drop a partner or move a rating, and returns the PAIR count, not the chip count.** → ADR Decision 99; `SharedMechanismChipCollapseTest`.
+  - **An order the prose leaves unnamed is named by the MODULE, not a second inference**: `FindingPartnerCoverageCheck.withUnstatedPartnersNamed` APPENDS, and runs after `measure`, so `findingPartners.stated` is the MODEL's. → ADR Decision 100.
+
 ## Tests and eval
 
 - **Test datasets**: Use `TestDatasetHelper.FULL_PATIENT_DATASET`, `TestDatasetHelper.SECOND_PATIENT_DATASET`, `TestDatasetHelper.toSerializedRecords()`, `TestDatasetHelper.inferResourceType()`, `TestDatasetHelper.stripDatasetPrefixAndDate()`. Never duplicate these helpers in individual test files.

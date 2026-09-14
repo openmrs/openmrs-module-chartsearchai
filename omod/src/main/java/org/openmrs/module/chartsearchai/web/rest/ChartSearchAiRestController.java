@@ -1430,6 +1430,10 @@ public class ChartSearchAiRestController {
 			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.
 			map.put("chartOrderBridges",
 				new ArrayList<SafetyWarning.ChartOrderBridge>(warning.chartOrderBridges()));
+			// The active orders this chip is about (ADR Decision 99), copied out of the unmodifiable
+			// list for the same XML-marshalling reason as the line above. Empty for the chip types that
+			// name no active order — see SafetyWarning.namedPartners(), canonical for what empty means.
+			map.put("namedPartners", new ArrayList<String>(warning.namedPartners()));
 			// Issue #374. Needs no copy: the value is an immutable autoboxed Boolean, so there is
 			// nothing for a caller to mutate, and XStream has a converter for it (verified by
 			// marshalling a payload carrying it). "It is a JDK type" is NOT the criterion and was
@@ -1610,6 +1614,8 @@ public class ChartSearchAiRestController {
 		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
 		target.put("findingCitations",
 				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
+		target.put("findingPartners",
+				serializeFindingPartnerCoverage(answer.getFindingPartnerCoverage()));
 		target.put("chartReadForSafety", answer.getChartReadForSafety());
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
 	}
@@ -1761,6 +1767,29 @@ public class ChartSearchAiRestController {
 	 * reported, the other CLAIMS an answer made and left unevidenced, this one FINDINGS a prompt
 	 * carried and an answer cited. A shared serializer would make one rename move three keys.
 	 */
+	/**
+	 * The wire shape of {@code findingPartners}: {@code named} active orders this response's safety
+	 * findings name, {@code stated} of them the MODEL's prose stated — the shortfall ADR Decision 99
+	 * moved out of {@code findingCitations}'s reach, which counts FINDINGS and so reads clean when one
+	 * finding covering five orders is cited and its prose names four.
+	 *
+	 * <p>{@code null} where no finding named an order or the check made no measurement; never a zeroed
+	 * object, because absence of the population is not a measurement of none. Read it BESIDE the answer
+	 * rather than as a description of it: since ADR Decision 100 the module names the orders the prose
+	 * left out, so {@code stated < named} beside prose naming them all says the module supplied the
+	 * difference. See {@code ChartSearchService.FindingPartnerCoverage}, canonical for both.
+	 */
+	private Map<String, Object> serializeFindingPartnerCoverage(
+			ChartSearchService.FindingPartnerCoverage coverage) {
+		if (coverage == null) {
+			return null;
+		}
+		Map<String, Object> map = new LinkedHashMap<String, Object>();
+		map.put("named", coverage.getNamed());
+		map.put("stated", coverage.getStated());
+		return map;
+	}
+
 	private Map<String, Object> serializeFindingCitationExtent(FindingCitationExtent extent) {
 		if (extent == null) {
 			return null;

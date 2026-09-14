@@ -122,8 +122,9 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	 *  a date. The pair that witnesses {@code SerializedRecord.orderStopDate}'s contract. */
 	private static final int LIVE_WITH_FUTURE_EXPIRY_ORDER_ID = 9321;
 
-	/** This file's dataset: a live order existing only to be discontinued by the one case that
-	 *  writes, so no other case in this class can be perturbed by that write. */
+	/** This file's dataset: a live order existing to be discontinued by the one case that writes, so
+	 *  the currency other cases assert about is not also the thing being mutated. That case's own
+	 *  comment carries the rest of the reason. */
 	private static final int ORDER_TO_DISCONTINUE_ID = 9323;
 
 	private static final String MEDICATIONS_QUESTION = "what medications is the patient taking?";
@@ -728,9 +729,10 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// What this row is NOT is the output of a real discontinuation. Measured by driving
 		// OrderService.discontinueOrder: the prescription gets a date_stopped and the DISCONTINUE
 		// record core creates gets an auto_expire_date, so both carry an end date and both are
-		// served. cloneForDiscontinuing() alone sets neither, and this row is that state — reachable,
-		// and deliberately not claimed to be what any particular flow produces, two such claims
-		// having been measured false. SerializedRecord.orderStopDate carries the measurement.
+		// served. cloneForDiscontinuing() alone sets neither, and this row is that state, written
+		// directly — through OrderService it is not producible at all. SerializedRecord.orderStopDate
+		// is the one home for that measurement; an earlier form of this comment called the row
+		// "reachable", which is the sense that javadoc retracted.
 		Order order = Context.getOrderService().getOrder(DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID);
 		assertFalse(order.isActive(),
 				"precondition: core must consider this discontinuation not in force");
@@ -783,7 +785,9 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// being protected is not also the thing being mutated. Both together, because leaked test
 		// state gives wrong answers without throwing — and neither "which cases read order 3" nor
 		// "nothing else reads 9323" is stated as a count or a claim: both were written here once and
-		// review measured both wrong. 9323 IS read by the whole-order-list case below, harmlessly.
+		// review measured both wrong. 9323 IS read by
+		// theTwoPredicatesTheModuleAsksAgreeOnEveryOrderEitherCanEvaluate, harmlessly — named rather
+		// than located, a positional reference being a claim about layout any insertion breaks.
 		Order live = Context.getOrderService().getOrder(ORDER_TO_DISCONTINUE_ID);
 		assertTrue(live.isActive(), "precondition: this order must start in force");
 		assertNull(live.getEffectiveStopDate(), "precondition: and carry no end date of its own");

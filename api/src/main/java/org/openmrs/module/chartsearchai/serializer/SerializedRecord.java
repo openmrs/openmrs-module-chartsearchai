@@ -95,7 +95,7 @@ public class SerializedRecord {
 	 * which drives the real service and checks both halves.
 	 * {@code DrugOrder.cloneForDiscontinuing()} on its own sets neither date, and a row in that state
 	 * states no date here — {@code DrugOrderCurrencyTestData.xml}'s order 9320 is one, written
-	 * directly. Through {@code OrderService} it is not: `saveOrder` stamps
+	 * directly. Through {@code OrderService} it is not: {@code saveOrder} stamps
 	 * {@code autoExpireDate = dateActivated} on every {@code DISCONTINUE} order it saves. The
 	 * API-reachable instance of this cell is the VOIDED order named above.
 	 *

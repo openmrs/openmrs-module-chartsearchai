@@ -875,8 +875,9 @@ class QueryStoreChartBuilder {
 				// here: getEffectiveStopDate() IS dateStopped where there is one, else autoExpireDate
 				// (verified against `javap -c`), so spelling that out would be a second implementation
 				// of a predicate core owns — the re-derivation this whole read exists to avoid.
-				// Swapping it for getDateStopped() alone reddens both the lapsed-order cases, which
-				// is the half querystore's rendered text cannot carry.
+				// Swapping it for getDateStopped() alone drops the auto-expire half, which is the one
+				// querystore's rendered text cannot carry: mutate it and read the failures rather than
+				// trusting a number here — this comment carried one and review measured it wrong.
 				//
 				// The narrowing below — inside the try, and only for an order that is NOT active —
 				// keeps this map holding exactly what stopDateForRecord may publish, so a second
@@ -886,8 +887,9 @@ class QueryStoreChartBuilder {
 				// earlier version of it named two cases for the gate and review measured one. Removing
 				// this narrowing ALONE reddens nothing, so it is the unpinned half and is kept
 				// deliberately; removing BOTH publishes a stop date for a live prescription, which is
-				// what DrugOrderCurrencyMarkTest.aLiveDurationBasedPrescriptionStatesNoStopDate-
-				// EvenThoughCorePublishesOne exists for.
+				// what DrugOrderCurrencyMarkTest's live-duration-based-prescription case exists for
+				// (aLiveDurationBasedPrescriptionStatesNoStopDateEvenThoughCorePublishesOne, kept on
+				// one line so a grep for it lands).
 				Date stopDate = order.getEffectiveStopDate();
 				known.add(order.getUuid());
 				if (isActive) {

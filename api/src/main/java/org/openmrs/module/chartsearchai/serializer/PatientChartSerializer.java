@@ -123,7 +123,7 @@ public class PatientChartSerializer {
 	 * below reddens on it — but what that case shows is a changed MARK, not a changed prompt rule, and
 	 * nothing can show the latter: both sides of {@code prompt.contains(INACTIVE_ORDER_LABEL)} are the
 	 * same inlined constant and move together. So the red is the signal to re-run BOTH A/Bs; the one
-	 * below and Decision 47's are separate ledgers and neither transfers to the other.
+	 * in this javadoc and Decision 47's are separate ledgers and neither transfers to the other.
 	 *
 	 * <p>A change to either string is a change to what every chart says to the model, and needs its
 	 * own interleaved A/B before it ships; the measurement above is what one looks like, and issue
@@ -846,8 +846,9 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor since issue #294: it defaults {@link #orderDrugNamed} to {@code
 		 * null}, "the module cannot say", which is right for every record but one this module injected
-		 * for an active order. The one below is the widest — and the ladder has repeatedly grown under
-		 * a "the full one is below" sentence, so this one names the rung rather than the end.
+		 * for an active order. The widest is the rung that takes {@link #orderDrugNamed} — named and
+		 * not located, because the ladder has repeatedly grown under a "the one below is the full one"
+		 * sentence, which is what this javadoc used to say.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,

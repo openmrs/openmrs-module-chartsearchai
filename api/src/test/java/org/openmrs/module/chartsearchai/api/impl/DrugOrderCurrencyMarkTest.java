@@ -544,7 +544,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		//
 		// It discriminates, and on a row nothing else in this file charts: mutating readingOf to
 		// admit a DISCONTINUE order (order.isActive() || Action.DISCONTINUE.equals(getAction()))
-		// reddens this case, on standard-dataset order 22, and nothing else in the 1464-test api
+		// reddens this case, on standard-dataset order 22, and nothing else in the api
 		// suite. Every other case here pins one named order; this is the only one that walks the
 		// patient's whole list, which is what makes it the guard for a change in CORE rather than
 		// in this module.
@@ -673,7 +673,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// logged, no mark changes for any order that IS readable, and a chart whose orders could not
 		// be read renders as a chart with no orders — the "empty set is an answer" state, which is
 		// exactly the fail-open the catch above refuses. Measured both ways over the api suite: that
-		// mutation was green on all 1464 tests before these assertions existed, and with them it
+		// mutation was green on the whole api suite before these assertions existed, and with them it
 		// reddens this case and only this case.
 		int seamAt = text.indexOf("protected List<Order> resolveAllOrders(Patient patient) {");
 		assertTrue(seamAt > 0, "cannot find the order-read seam in " + source);

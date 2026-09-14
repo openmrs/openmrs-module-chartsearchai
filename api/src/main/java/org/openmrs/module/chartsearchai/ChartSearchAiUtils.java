@@ -1226,19 +1226,6 @@ public class ChartSearchAiUtils {
 	 *         {@code .aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated} — so a fifth
 	 *         wording that loses one of them reddens rather than ships.
 	 */
-	/**
-	 * @return whether {@code c} separates tokens — {@link Character#isWhitespace} UNION
-	 *         {@link Character#isSpaceChar}, which is not a tautology: the first refuses the
-	 *         non-breaking spaces (U+00A0, U+2007, U+202F) and the second refuses the control-ish
-	 *         separators ({@code \t}, {@code \n}). Typeset and tabular copy holds a number together
-	 *         with exactly the three the first refuses, so asking only it read
-	 *         {@code "is\u00A0.5 mg/day"} as attaching the decimal point and produced a false report
-	 *         — {@code DosingCeilingFidelityTest.aNakedDecimalAfterANONBREAKINGSpaceIsStillANakedDecimal}.
-	 */
-	private static boolean isSpace(char c) {
-		return Character.isWhitespace(c) || Character.isSpaceChar(c);
-	}
-
 	private static boolean numericFragment(String haystack, int at) {
 		if (at == 0) {
 			return false;
@@ -1254,6 +1241,19 @@ public class ChartSearchAiUtils {
 		char before = haystack.charAt(at - 2);
 		return Character.isDigit(before)
 				|| (separator == '.' && isSpace(before));
+	}
+
+	/**
+	 * @return whether {@code c} separates tokens — {@link Character#isWhitespace} UNION
+	 *         {@link Character#isSpaceChar}, which is not a tautology: the first refuses the
+	 *         non-breaking spaces (U+00A0, U+2007, U+202F) and the second refuses the control-ish
+	 *         separators ({@code \t}, {@code \n}). Typeset and tabular copy holds a number together
+	 *         with exactly the three the first refuses, so asking only it read
+	 *         {@code "is\u00A0.5 mg/day"} as attaching the decimal point and produced a false report
+	 *         — {@code DosingCeilingFidelityTest.aNakedDecimalAfterANONBREAKINGSpaceIsStillANakedDecimal}.
+	 */
+	private static boolean isSpace(char c) {
+		return Character.isWhitespace(c) || Character.isSpaceChar(c);
 	}
 
 	/**

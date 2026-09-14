@@ -60,11 +60,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * themselves, and that it marshals for an XML client — the one shape a list-valued key is already
  * known to break (issue #347).
  *
- * <p><b>One thing here differs from every sibling and is deliberate:</b> the early {@code done} of
- * the async path CARRIES this measurement rather than stating null. It is a projection over the
- * answer's own markers and its resolution, both in hand before the grounding handoff, so unlike the
- * six checks it does not run after that event — the same reason {@code unresolvedDrugClass},
- * {@code chartReadForSafety} and {@code conditionRuleCoverage} are already final there.
+ * <p><b>One thing here differs from the CHECK-derived keys and is deliberate:</b> the early
+ * {@code done} of the async path CARRIES this measurement rather than stating null. It is a
+ * projection over the answer's own markers and its resolution, both in hand before the grounding
+ * handoff, so unlike those checks it does not run after that event — the same reason
+ * {@code unresolvedDrugClass}, {@code chartReadForSafety} and {@code conditionRuleCoverage} are
+ * already final there, though none of those reads the answer at all. The case below draws the
+ * contrast against one named check rather than against "every sibling".
  */
 public class ChartSearchAiOrderStopDateTest {
 

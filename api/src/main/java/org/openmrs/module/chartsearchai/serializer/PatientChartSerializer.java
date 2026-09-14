@@ -769,12 +769,13 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null} ("the module
 		 * cannot say") and, since issues #337, #305 and #294, {@link #findingSeverity},
-		 * {@link #derivedFrom} and {@link #orderDrugNamed} as well. The WIDEST is four rungs below
-		 * rather than one, and the distinction is worth the name because a caller reaching for "the
-		 * full constructor" through this javadoc would silently drop a drug-order record's currency
-		 * answer, a finding's rating, an injected record's provenance or whether it names its drug. Do
-		 * not name the next rung as the full one: this sentence did, and the ladder has now grown under
-		 * it three times.
+		 * {@link #derivedFrom} and {@link #orderDrugNamed} as well. <b>The widest is the rung that takes
+		 * {@link #orderDrugNamed}, several below this one</b>, and the distinction is worth the name
+		 * because a caller reaching for "the full constructor" through this javadoc would silently drop
+		 * a drug-order record's currency answer, when that order stopped, a finding's rating, an
+		 * injected record's provenance or whether it names its drug. <b>Neither name the next rung as
+		 * the full one nor count the rungs between</b>: this sentence did both, and each went stale —
+		 * the ladder has now grown under it four times, most recently for issue #315.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {
@@ -788,10 +789,11 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor since issue #337: it defaults {@link #findingSeverity} to
 		 * {@code null}, which is right for every record that is not an injected safety finding, since
-		 * issue #305 {@link #derivedFrom} to empty with it, and since issue #294
-		 * {@link #orderDrugNamed} to {@code null} as well. The rung below is not the full one either —
-		 * the WIDEST is three below — so reaching through this javadoc for "the full constructor" means
-		 * reading down to the one that takes every field.
+		 * issue #305 {@link #derivedFrom} to empty with it, since issue #294
+		 * {@link #orderDrugNamed} to {@code null} as well, and since issue #315
+		 * {@link #orderStopDate} — which is the rung immediately below. The rung below is not the full
+		 * one either, so reaching through this javadoc for "the full constructor" means reading down to
+		 * the one that takes every field rather than counting rungs from here.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
@@ -805,13 +807,12 @@ public class PatientChartSerializer {
 		 * states no stop date", which is right for every record that is not a drug order and for
 		 * every caller that has not read the patient's orders.
 		 *
-		 * <p>It sits immediately BELOW the order-currency rung rather than at the bottom of the
-		 * ladder, and the two halves sit adjacent in every rung below it, because
-		 * {@code ArchitectureGuardTest} tells two constructors from the rest by their descriptor
-		 * TAILS. Appending this parameter to the widest, or giving it a rung beneath the widest,
-		 * breaks one of those tails and reddens that guard — which is what issue #276 met and
-		 * answered the same way. Mutate the placement and read the failures rather than trusting this
-		 * paragraph. Not the full constructor: three rungs below still take more.
+		 * <p>It sits immediately BELOW the order-currency rung rather than at the bottom of the ladder,
+		 * and the two halves sit adjacent in every rung below it, because {@code ArchitectureGuardTest}
+		 * tells two constructors from the rest by their descriptor TAILS. The widest constructor's own
+		 * javadoc is canonical for that constraint and for what mutating a placement reddens; it is not
+		 * restated here. Not the full constructor — the widest is the one taking
+		 * {@link #orderDrugNamed}.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate) {
@@ -826,9 +827,10 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor since issue #305: it defaults {@link #derivedFrom} to empty, which
 		 * is right for every record that was not derived from a chart record of this patient's, and
-		 * since issue #294 {@link #orderDrugNamed} to {@code null} with it. The WIDEST is two below —
-		 * the rungs above this one each said "the full one is below" and were each overtaken by the
-		 * next issue, this one included, which is why every rung now names a rung rather than the end.
+		 * since issue #294 {@link #orderDrugNamed} to {@code null} with it. The rungs above this one
+		 * each said "the full one is below" and were each overtaken by the next issue, this one
+		 * included, which is why every rung names the widest by the parameter only it takes rather than
+		 * by a count that the next insertion falsifies.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
@@ -871,6 +873,12 @@ public class PatientChartSerializer {
 		 * eleven-argument rung: each was run and each reddens. Which case, and how many, differs
 		 * between them, so mutate the placement and read the failures rather than trusting a list
 		 * here. That is why the rung gained the parameter instead of being joined by a sibling.
+		 *
+		 * <p><b>Issue #315 met the same constraint and answered it the same way</b>, inserting
+		 * {@link #orderStopDate} beside {@link #orderActive} in this rung and in every rung below the
+		 * order-currency one. Appending it here, or giving it a rung beneath this one, breaks a tail
+		 * and reddens that guard — so read the constraint as binding any future parameter, not as
+		 * #276's own.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,

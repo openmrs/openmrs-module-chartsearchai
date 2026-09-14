@@ -1257,9 +1257,9 @@ public class ChartSearchAiUtils {
 	 *
 	 *         <p><b>The two separators are asked different questions.</b> A thousands separator
 	 *         ALWAYS has a digit to its left, so a {@code ','} is a fragment marker after a digit
-	 *         ({@code "1,500"}) — a comma anywhere else is punctuation,
-	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
-	 *         {@code "(route-unspecified),500"}) — with ONE exception, below. A {@code '.'} is a
+	 *         ({@code "1,500"}) — with ONE exception, below — and a comma anywhere else is
+	 *         punctuation, between list items and after whatever precedes THEM
+	 *         ({@code "2000 mg/day,500"}, {@code "(route-unspecified),500"}). A {@code '.'} is a
 	 *         fragment marker after a digit ({@code "2.5"}) and ALSO where it BEGINS A TOKEN —
 	 *         preceded by a space in {@link #isSpace}'s sense, or by nothing at all — because that is
 	 *         a decimal written without its leading zero ({@code "is .5"}, a text opening

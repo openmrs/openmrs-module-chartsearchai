@@ -475,6 +475,39 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
+	public void theSTRICTESTCeilingTheAnswerStatesIsTheOneReported() throws IOException {
+		// The walk's central rule, and degenerate on every other case in this file: they all run on a
+		// TWO-ceiling record, where the one ceiling that can be reported is the only candidate. A
+		// mutation reporting the LAST stated ceiling rather than the first passes all of them.
+		//
+		// With three, the rule has something to decide. An answer stating 200 and 600 while leaving
+		// 60 unstated must be told (200, 60) and not (600, 60): the smallest true gap, which is what
+		// makes UnstatedDosingCeiling's "strictly stricter" the useful statement rather than merely a
+		// true one — a clinician reading (600, 60) would be shown a tenfold gap the answer did not
+		// open.
+		PatientChart three = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of phenobarbital?", "Phenobarbital (neonatal)");
+		RecordMapping mapping = soleRecordCarryingCeilings(three);
+		assertEquals(Arrays.asList("60 mg/day", "200 mg/day", "600 mg/day"),
+				mapping.getDosingCeilings(),
+				"the premise: THREE ceilings, strictest first — and their spellings sort 200, 600, 60, "
+						+ "so a spelling sort would put a middle one at position 0");
+		TestableService service = newService(three);
+		service.setLlmProvider(answering("The adult ceiling is 600 mg/day and the paediatric one is "
+				+ "200 mg/day [" + mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of phenobarbital?");
+			assertEquals(Collections.singletonList(
+					new UnstatedDosingCeiling(mapping.getIndex(), "200 mg/day", "60 mg/day")),
+					answer.getUnstatedDosingCeilings(),
+					"the STRICTEST stated ceiling is reported against the strictest published one, and "
+							+ "exactly one entry however many of a record's ceilings the answer states. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
 	public void aBlankAnswerIsSilentAndPublishesAMeasurementOfNone() throws IOException {
 		// Reachable rather than defensive: extractCitedReferences resolves the structured citations
 		// array for a blank answer deliberately, so the walk can be reached with citations and no

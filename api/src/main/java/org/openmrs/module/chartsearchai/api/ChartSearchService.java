@@ -1157,9 +1157,18 @@ public interface ChartSearchService {
 		 *
 		 * @return one entry per offending citation, the citations distinct and in CITATION order —
 		 *         the order {@code LlmInferenceService.extractCitedReferences} resolved them, which
-		 *         is the order the answer states them in wherever the model anchored them inline and
-		 *         did not also supply a structured array in some other order. Null where none was
-		 *         stated.
+		 *         is the order the answer states them in unless the model's structured array named
+		 *         them in some other order. Null where none was stated.
+		 *
+		 *         <p><b>Every {@code citation} here is a number the answer's own text anchors a
+		 *         marker for</b> — since issue
+		 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>
+		 *         this key takes that question from the same reading {@link #getFindingCitationExtent()}
+		 *         publishes, so a finding the model named in its structured {@code citations} array
+		 *         and in no sentence is not accused here. It is therefore consistent with
+		 *         {@code findingCitations} by construction: an entry cannot name a finding that key
+		 *         did not count as cited. It is NOT the same population as {@code references[]},
+		 *         which stays the resolution's union.
 		 */
 		public List<UnstatedFindingSeverity> getUnstatedFindingSeverities() {
 			return unstatedFindingSeverities;

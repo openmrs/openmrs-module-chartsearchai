@@ -817,6 +817,80 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * {@code SafetyFindingSeverityFidelityCheck} decides which findings the answer cited by asking
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes}, and never by a reading of its
+	 * own — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>, round
+	 * two. Both keys answer one question, and before this the accusation key answered it off
+	 * {@code extractCitedReferences}' union while the count answered it off the markers, so one
+	 * response could state that the answer never cited a finding AND that it cited that finding and
+	 * dropped its rating.
+	 *
+	 * <p><b>It does NOT reuse {@link #assertMarkersReachedOnlyThroughTheSharedDecodeStep}</b>, and
+	 * the reason is that helper's own javadoc: it exists in one place so its two callers' needle set
+	 * cannot drift apart, and a third caller requiring a DIFFERENT needle is that drift arriving by
+	 * parameter. Its name would also be false here — this class reaches no markers at all, which is
+	 * the point. What the two rules share is the mechanical comment skip, duplicated rather than
+	 * hoisted, because hoisting it is what would put two needle sets behind one signature.
+	 *
+	 * <p><b>Stated POSITIVELY, for the reason its neighbours record:</b> forbidding spellings alone
+	 * let three of four ordinary relocations through with the build green, and what closes them is
+	 * that the entry point must be CALLED. The two dialect negatives are defence in depth — a
+	 * maintainer who re-derives the reading here would most likely reach for markers to do it.
+	 *
+	 * <p>Nothing behavioural can pin the relocation itself: a local marker scan, or a
+	 * {@code citedIndexes} call spelled here, answers identically on every case in
+	 * {@code SafetyFindingSeverityFidelityTest}, so the suite stays green on exactly the regression
+	 * this rule exists to prevent. What the behavioural cases DO pin is the answer — drop the skip
+	 * and {@code aFindingOnlyTheStructuredArrayNamesIsNotAccusedOfDroppingItsRating} reddens; this
+	 * rule is about where the answer comes from.
+	 *
+	 * <p>Same residue as its neighbours, named rather than papered over: it reads SOURCE TEXT, so it
+	 * asks that the call be present and not that its result be used, and a second reading written
+	 * BESIDE a retained call is out of its reach.
+	 */
+	@Test
+	public void theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck() throws IOException {
+		String fileName = "SafetyFindingSeverityFidelityCheck.java";
+		List<String> lines = getSourceCache().get(fileName);
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: " + fileName
+				+ " was not found by the source scan, so this rule would pass vacuously");
+		boolean callsTheReading = false;
+		int compiles = 0;
+		List<String> ownDialect = new ArrayList<>();
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			String trimmed = line.trim();
+			if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+				continue;
+			}
+			if (line.contains("SafetyFindingCitationExtentCheck.citedFindingIndexes(")) {
+				callsTheReading = true;
+			}
+			if (line.contains("Pattern.compile(")) {
+				compiles++;
+			}
+			if (line.contains("\\[") || line.contains("INLINE_CITATION")
+					|| line.contains("ChartSearchAiUtils.citedIndexes(")) {
+				ownDialect.add("line " + (i + 1) + ": " + trimmed);
+			}
+		}
+		org.junit.jupiter.api.Assertions.assertTrue(callsTheReading, fileName
+				+ " must take \"which findings did the answer cite\" from "
+				+ "SafetyFindingCitationExtentCheck.citedFindingIndexes. If that call is gone, this "
+				+ "key has its own reading again and can accuse a finding the answer never cited — "
+				+ "the issue #409 defect, which no behavioural case in this package can see.");
+		org.junit.jupiter.api.Assertions.assertEquals(0, compiles, fileName
+				+ " must compile no pattern of its own: it recognises no shape, and a first "
+				+ "Pattern.compile here is a citation-marker dialect.");
+		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(), fileName
+				+ " must not read the answer's markers itself — not a bracketed regex, not "
+				+ "INLINE_CITATION, and not the shared decode step directly. The reading it needs "
+				+ "already applies the issue #305 filter and the blank-answer arm; reaching for "
+				+ "markers here re-derives half of it. Found: " + ownDialect);
+	}
+
+	/**
 	 * Every answer this module builds carries the condition-rule coverage (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>) — asked
 	 * of the CLASS FILES rather than of the source.

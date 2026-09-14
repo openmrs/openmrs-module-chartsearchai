@@ -31,6 +31,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -514,6 +515,91 @@ public class SafetyFindingSeverityFidelityTest {
 						published, "nor is one differing only in its CITATION");
 			}
 		}
+	}
+
+	@Test
+	public void aFindingOnlyTheStructuredArrayNamesIsNotAccusedOfDroppingItsRating() {
+		// Issue #409's own shape, and the residue ADR Decision 94 left owed. The model anchors ONE
+		// finding's marker in the prose and names a SECOND finding in its structured citations array
+		// alone. `extractCitedReferences` unions the two deliberately, so both resolve; but only the
+		// first is a finding this answer cited, and an accusation about the second says the answer
+		// dropped the rating of a finding it never cited at all.
+		//
+		// The prose states no rating word anywhere, so BOTH findings would be accused under the old
+		// reading — which is what makes this a discriminator and not a shape check. Their ratings
+		// differ (setUp asserts the spread), so the surviving entry identifies WHICH finding it is
+		// about rather than merely how many there are.
+		Integer anchored = indexesRated("Major").get(0);
+		Integer arrayOnly = indexesRated("Moderate").get(0);
+		assertNotEquals(anchored, arrayOnly, "the premise: two findings with different ratings, or "
+				+ "the surviving entry cannot be attributed to one of them");
+		service.setLlmProvider(new StubProvider(
+				enumerationCiting(Collections.singletonList(anchored)),
+				Arrays.asList(anchored, arrayOnly)));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+
+			// The premise, asserted rather than assumed: the array really did resolve, so the check
+			// was handed both findings and chose one — and the response itself carries the
+			// divergence this case is about. `references[]` stays the union (Decision 94 refuses to
+			// narrow it), so the array-only finding IS published as a reference.
+			assertTrue(referenceIndexes(answer).contains(arrayOnly),
+					"the premise: the array-only finding resolved into references[], which is the "
+							+ "union and is deliberately not narrowed. References were: "
+							+ referenceIndexes(answer));
+			assertEquals(1, answer.getFindingCitationExtent().getCited(),
+					"and findingCitations counts ONE cited finding — the marker the prose anchored. "
+							+ "That is the reading this key must share, or one response states both "
+							+ "that the answer did not cite a finding and that it cited it and "
+							+ "dropped its rating");
+
+			assertEquals(statementsFor(Collections.singletonList(anchored)),
+					answer.getUnstatedFindingSeverities(),
+					"only the finding the PROSE anchored may be accused. The array-only one is not a "
+							+ "finding this answer cited, so it cannot have dropped its rating. "
+							+ "Ratings were: " + ratedFindings + "; captured: " + capture.describeAll());
+			assertTrue(warnStating(capture, "[" + anchored + "]"),
+					"the maintainer's channel reports the accusation it does make. Captured: "
+							+ capture.describeAll());
+			assertFalse(warnStating(capture, "[" + arrayOnly + "]"),
+					"and it must not name the array-only finding either — the log and the wire are "
+							+ "one list, so a citation missing from one and present in the other is "
+							+ "the drift #398 closed. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void searchStreaming_isNotAccusedOnTheStreamingPathEither() {
+		// /search/stream is the path users hit. The reading is resolved inside the check, so both
+		// paths get it from one place — but a check wired into search() alone was the shape issue
+		// #337 had to fix once already, and nothing structural stops the two paths passing different
+		// arguments.
+		Integer anchored = indexesRated("Major").get(0);
+		Integer arrayOnly = indexesRated("Moderate").get(0);
+		service.setLlmProvider(new StubProvider(
+				enumerationCiting(Collections.singletonList(anchored)),
+				Arrays.asList(anchored, arrayOnly)));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { });
+			assertTrue(referenceIndexes(answer).contains(arrayOnly),
+					"the premise, on this path too: the array-only finding resolved into "
+							+ "references[]. References were: " + referenceIndexes(answer));
+			assertEquals(statementsFor(Collections.singletonList(anchored)),
+					answer.getUnstatedFindingSeverities(),
+					"the streaming path reads the answer's own markers as well. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/** @return the citation indexes of {@code answer}'s reference list, for the cases whose premise
+	 *          is that a citation resolved — read off the published answer rather than off the
+	 *          arrangement, so the premise is a statement about what production produced. */
+	private static Set<Integer> referenceIndexes(ChartAnswer answer) {
+		Set<Integer> indexes = new LinkedHashSet<Integer>();
+		for (RecordReference reference : answer.getReferences()) {
+			indexes.add(Integer.valueOf(reference.getIndex()));
+		}
+		return indexes;
 	}
 
 	/** An answer that names each cited record in one flat clause with no rating anywhere — the

@@ -135,7 +135,8 @@ import org.slf4j.LoggerFactory;
  *       spelling while stating the stricter one in ANOTHER: that is reported. The respellings worth
  *       naming are <em>"300 mg per day"</em>, <em>"300mg/day"</em>, and — the one this check's own
  *       needle rule makes ordinary — a decimal written without its leading zero, since
- *       {@code DrugReference.formatNumber} always writes {@code "0.5 mg/day"} while a clinician
+ *       the record always spells it {@code "0.5 mg/day"} ({@code DrugReferenceInjector.dailyCeiling} of
+ *       {@code formatNumber}'s {@code "0.5"}) while a clinician
  *       writes <em>".5 mg/day"</em>. An answer stating the stricter ceiling ONLY in that form is
  *       silent (the laxer's needle is refused inside it); one stating it that way AND the laxer in
  *       full is reported. Measured. The record spells both of its ceilings the same way, so an

@@ -426,6 +426,31 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
+	public void aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated() throws IOException {
+		// The fourth and last shape of this rule, and the one that decides its KIND. The three before
+		// it each classified the CHARACTER before the separator, and each lost a character nobody had
+		// thought of — a closing parenthesis here, a quote or an emphasis mark just as easily. The
+		// question that ends that is not another character: it is whether the full stop BEGINS a
+		// token. A decimal point does — it follows a space, or nothing. A sentence's full stop is
+		// attached to the word, or bracket, or quote it ends.
+		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
+		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		TestableService service = newService(grouped);
+		service.setLlmProvider(answering("The ceiling is 2000 mg/day (route-unspecified).500 mg/day "
+				+ "applies to the suspension [" + mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of tinidazole?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the answer states BOTH ceilings; a full stop attached to a closing bracket ends "
+							+ "a sentence, it does not begin a decimal. Captured: "
+							+ capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(), "and nothing is published");
+		}
+	}
+
+	@Test
 	public void aBlankAnswerIsSilentAndPublishesAMeasurementOfNone() throws IOException {
 		// Reachable rather than defensive: extractCitedReferences resolves the structured citations
 		// array for a blank answer deliberately, so the walk can be reached with citations and no

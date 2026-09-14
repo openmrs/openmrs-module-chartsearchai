@@ -1171,8 +1171,9 @@ public class ChartSearchAiUtils {
 	 * with a letter, so it is inert on every input either of that method's callers can produce. What
 	 * it would do is widen a SAFETY scan for a needle that is not its own — a rating would start
 	 * being refused after some punctuation, for a reason belonging to numbers, with nothing to catch
-	 * it. Which spellings, exactly, is {@link #numericFragment}'s to say and moves when it does. That is the instruction's own reason for one entry point per operand
-	 * shape, and it is the reason here — not a test that reddens.
+	 * it. Which spellings, exactly, is {@link #numericFragment}'s to say and moves when it does.
+	 * That is the instruction's own reason for one entry point per operand shape, and it is the
+	 * reason here — not a test that reddens.
 	 *
 	 * <p>It is asymmetric deliberately: only the LEADING edge takes the extra refusal. Every needle
 	 * that reaches it ends in a unit ({@code DrugReferenceInjector.dailyCeiling} composes
@@ -1189,14 +1190,6 @@ public class ChartSearchAiUtils {
 	}
 
 	/**
-	 * The one scan both public questions above share, so that "does this text state X" cannot come to
-	 * have two implementations — which is exactly what {@code DosingCeilingFidelityCheck} would have
-	 * needed to hand-roll otherwise, and what this module keeps having to un-say.
-	 *
-	 * @param refuseNumericFragment whether a match preceded by {@code '.'} or {@code ','} is refused,
-	 *            which {@link #statesMeasurement} is canonical for the reason of
-	 */
-	/**
 	 * @return whether the match at {@code at} is the tail of a longer NUMBER rather than a statement
 	 *         of its own — the extra refusal {@link #statesMeasurement} adds and {@link #statesWord}
 	 *         does not.
@@ -1206,22 +1199,32 @@ public class ChartSearchAiUtils {
 	 *         marker only after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
 	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
 	 *         {@code "(route-unspecified),500"}). A {@code '.'} is a fragment marker after a digit
-	 *         ({@code "2.5"}) and ALSO where no letter precedes it, because that is a decimal written
-	 *         without its leading zero ({@code ".5"}, {@code "is .5"}); after a letter it is a full
-	 *         stop ending the previous sentence ({@code "see note.500"}).
+	 *         ({@code "2.5"}) and ALSO where it BEGINS A TOKEN — preceded by whitespace, or by
+	 *         nothing at all — because that is a decimal written without its leading zero
+	 *         ({@code "is .5"}, a text opening {@code ".5"}). Attached to what precedes it, it is the
+	 *         full stop ending a sentence, whatever that sentence ended with: a word
+	 *         ({@code "see note.500"}), a bracket ({@code "(suspension).500"}), a quote, an emphasis
+	 *         mark.
 	 *
-	 *         <p><b>Three earlier wordings each admitted a false REPORT, which is the direction
+	 *         <p><b>Four earlier wordings each admitted a false REPORT, which is the direction
 	 *         {@code DosingCeilingFidelityCheck} must never fail in, and each was found by a
 	 *         different reviewer.</b> Refusing on any {@code '.'}/{@code ','} lost the list comma;
 	 *         refusing only BETWEEN two digits lost the naked decimal; refusing unless a LETTER
-	 *         precedes lost the comma after a parenthesis. What they share is treating the two
-	 *         characters alike. Each shape is now a case in {@code DosingCeilingFidelityTest} —
+	 *         precedes lost the comma after a parenthesis; refusing unless a letter precedes the
+	 *         FULL STOP lost every other closing mark. The first three treated the two characters
+	 *         alike; the fourth kept classifying the character before, which is a list nobody can
+	 *         finish — so this asks instead whether the stop BEGINS a token, which is a property
+	 *         rather than a membership. <b>The residue that leaves</b>: a naked decimal written
+	 *         directly after an opening mark with no space ({@code "(.5 mg/day)"}) is NOT refused, so
+	 *         a laxer ceiling can be read out of it. Unpinned, and named here rather than left to be
+	 *         found. Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
 	 *         {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt},
-	 *         {@code .aSeparatorAFTERALetterLeavesAStatedCeilingStated} and
-	 *         {@code .aCommaAfterAPARENTHESISLeavesAStatedCeilingStated} — so a fourth wording that
-	 *         loses one of them reddens rather than ships.
+	 *         {@code .aSeparatorAFTERALetterLeavesAStatedCeilingStated},
+	 *         {@code .aCommaAfterAPARENTHESISLeavesAStatedCeilingStated} and
+	 *         {@code .aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated} — so a fifth
+	 *         wording that loses one of them reddens rather than ships.
 	 */
 	private static boolean numericFragment(String haystack, int at) {
 		if (at == 0) {
@@ -1236,9 +1239,19 @@ public class ChartSearchAiUtils {
 			return separator == '.';
 		}
 		char before = haystack.charAt(at - 2);
-		return Character.isDigit(before) || (separator == '.' && !Character.isLetter(before));
+		return Character.isDigit(before)
+				|| (separator == '.' && Character.isWhitespace(before));
 	}
 
+	/**
+	 * The one scan both public questions above share, so that "does this text state X" cannot come to
+	 * have two implementations — which is exactly what {@code DosingCeilingFidelityCheck} would have
+	 * needed to hand-roll otherwise, and what this module keeps having to un-say.
+	 *
+	 * @param refuseNumericFragment whether a match {@link #numericFragment} calls the tail of a
+	 *            longer number is refused, which {@link #statesMeasurement} is canonical for the
+	 *            reason of
+	 */
 	private static boolean statesBounded(String text, String word, boolean refuseNumericFragment) {
 		if (text == null || isBlank(word)) {
 			return false;

@@ -661,12 +661,15 @@ public class DrugReferenceInjector {
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
-			// Through the WIDEST constructor since issue #276, which is why two of its arguments are
-			// spelled null here. Neither is this site writing a stamp: `derivedFrom` empty is "derived
-			// from no chart record of this patient's" (issue #305) and `orderDrugNamed` null is "the
-			// module cannot say" (issue #294) — both exactly what a record about a reference entry
-			// asserts, and both what every shorter rung would have defaulted them to. The stamps are
-			// still written in one place each, the mapping above this one.
+			// Through the WIDEST constructor since issue #276, which is why the arguments between the
+			// withheld count and the ceilings are spelled null here. None of them is this site
+			// WRITING a stamp — each null is exactly what every shorter rung would have defaulted it
+			// to, and exactly what a record about a reference entry asserts: no date, `orderActive`
+			// "the module cannot say" (issue #317), no finding rating (issue #337), and `derivedFrom`
+			// empty, "derived from no chart record of this patient's" (issue #305). `orderDrugNamed`
+			// null is #294's "cannot say", and THAT stamp is written in the mapping above this one;
+			// the others are written elsewhere again, which is why this comment names what each null
+			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
 					null, null, null, rendered.dosingCeilings, null));
@@ -3490,7 +3493,8 @@ public class DrugReferenceInjector {
 		 *  distinct — {@code PatientChartSerializer.RecordMapping.getDosingCeilings()}'s carrier, and
 		 *  EMPTY wherever the text states no ceiling, which is every record of a dataset publishing no
 		 *  age bands at all — the shipped {@code ddinter} source, for one (issue #276). Rides on
-		 *  the rendering for the reason {@link #source} and {@link #withheldInteractions} do: everything in {@link #text}
+		 *  the rendering for the reason {@link #source} and {@link #withheldInteractions} do:
+		 *  everything in {@link #text}
 		 *  is quotable, and a model told to cite records has recited this class's own bookkeeping
 		 *  into a clinician-facing answer (issue #117). Unlike those two it is also IN the text —
 		 *  it is a copy of what the text says rather than something about it, which is what lets a

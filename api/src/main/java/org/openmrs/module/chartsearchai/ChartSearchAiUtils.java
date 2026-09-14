@@ -1312,9 +1312,11 @@ public class ChartSearchAiUtils {
 	 *         to be found, and each unpinned</b>: a naked decimal written directly after an opening
 	 *         mark
 	 *         with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be read
-	 *         out of it. The exception ADMITS a comma decimal whose fraction is three digits long
-	 *         behind four or more ({@code "1000,300 mg/day"}). And it does NOT REACH a list written
-	 *         any other way — each half refusing one on its own, three digits before the comma
+	 *         out of it. The exception ADMITS two things that are not elided-unit lists: a comma
+	 *         decimal whose fraction is three digits long behind four or more
+	 *         ({@code "1000,300 mg/day"}), and a PARTIALLY grouped number, one whose last group
+	 *         alone is marked ({@code "20000,500 mg/day"} for 20,000,500). And it does NOT REACH a
+	 *         list written any other way — each half refusing one on its own, three digits before the comma
 	 *         ({@code "600,500 mg/day"}) or four after it ({@code "4000,2000 mg/day"}) — so #425's
 	 *         own false report still stands for those. Those last two are two faces of ONE choice
 	 *         rather than two defects, and the choice is where the tail bound sits:
@@ -1356,11 +1358,11 @@ public class ChartSearchAiUtils {
 	/**
 	 * @return whether the {@code ','} at {@code comma} joins two whole numbers rather than grouping
 	 *         the digits of one — the exception {@link #numericFragment}'s javadoc states and is
-	 *         canonical for, asked as two digit-run lengths — one a conventionally grouped number
-	 *         cannot have, one bounding the exception to the shape issue #425 measured.
+	 *         canonical for, asked as two digit-run lengths — the left one a conventionally grouped
+	 *         number cannot have, the right one the exception's own bound.
 	 *
-	 *         <p>It answers a SHAPE and not a reading: the window it admits also holds one comma
-	 *         decimal, which that javadoc names as the residue. Kept beside the rule rather than
+	 *         <p>It answers a SHAPE and not a reading: the window it admits holds spellings that are
+	 *         no list, which that javadoc names among its residues. Kept beside the rule rather than
 	 *         inlined because the rule reads as one sentence at the call site and this is two walks.
 	 */
 	private static boolean mayJoinTwoNumbers(String haystack, int comma) {

@@ -183,10 +183,11 @@ final class DosingCeilingFidelityCheck {
 	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences}. A citation the MODULE attached
-	 *            (issue #305) needs no filter here for the reason the sibling states: the
-	 *            {@code ceilings} map below holds only records carrying a {@code dosingCeilings}
-	 *            list, which on the production path {@code DrugReferenceInjector}'s reference loop
-	 *            alone writes
+	 *            (issue #305) needs no filter here, and the reason is stated rather than deferred to
+	 *            a sibling — the one that used to carry it, {@code SafetyFindingSeverityFidelityCheck},
+	 *            now delegates the question instead (issue #409 round two): the {@code ceilings} map
+	 *            below holds only records carrying a {@code dosingCeilings} list, which on the
+	 *            production path {@code DrugReferenceInjector}'s reference loop alone writes
 	 * @param mappings the chart's records, cited or not — the carrier of each cited record's
 	 *            ceilings
 	 * @return one {@link UnstatedDosingCeiling} per offending citation, in CITATION order —

@@ -42,15 +42,15 @@ import org.slf4j.LoggerFactory;
  * {@code Advil 400mg}, Moderate — reached the prose nowhere. A clinician reading the answer got six
  * reasons to withhold where the module had screened seven, with nothing saying a seventh existed.
  *
- * <p><b>Why nothing else can see it.</b> Every neighbour of it judges a record the answer DID
- * cite — {@link DosingCeilingFidelityCheck} included, which asks a question about a cited
- * REFERENCE record and so is outside the enumeration below for a second reason as well. {@link SafetyFindingSeverityFidelityCheck} asks whether a cited finding's rating reached the
- * prose, and on that answer it correctly read {@code []} — it asks of the WHOLE answer and
- * <em>Moderate</em> appeared six times, so a seventh Moderate finding dropped entirely is invisible
- * to it by construction. {@link ReferenceProseFidelityCheck} reports a SUBSTITUTION inside a
- * reproduction and that answer reproduced nothing. {@link ActiveOrderCitationFidelityCheck} judges
- * the citations a claim offered, and a finding that made no claim offered none.
- * {@link ClassCodeFidelityCheck} compares one ATC token shape. The residue was already named, in
+ * <p><b>Why nothing else can see it.</b> {@link SafetyFindingSeverityFidelityCheck} asks whether a
+ * cited finding's rating reached the prose, and on that answer it correctly read {@code []} — it
+ * asks of the WHOLE answer and <em>Moderate</em> appeared six times, so a seventh Moderate finding
+ * dropped entirely is invisible to it by construction. {@link ReferenceProseFidelityCheck} reports
+ * a SUBSTITUTION inside a reproduction and that answer reproduced nothing.
+ * {@link ActiveOrderCitationFidelityCheck} judges the citations a claim offered, and a finding that
+ * made no claim offered none. {@link ClassCodeFidelityCheck} compares one ATC token shape.
+ * {@link DosingCeilingFidelityCheck} asks a question about a cited REFERENCE record and none about
+ * a finding. The residue was already named, in
  * {@code SafetyFindingSeverityFidelityCheck}'s own javadoc quoting the prose check's <em>"a hazard
  * dropped by stopping early"</em>; this is the half of it that citation makes deterministic.
  *
@@ -91,10 +91,13 @@ import org.slf4j.LoggerFactory;
  *       has none to judge, while this one counts citations and a blank answer's really do
  *       resolve — {@link #citedFindingIndexes} carries why. Counting what did resolve is a fact;
  *       reporting it as a dropped hazard would not be;</li>
- *   <li>it narrows nothing but its own count. The reference list a client receives stays
+ *   <li>it narrows no list a client receives. The reference list stays
  *       {@code extractCitedReferences}' union, so an answer whose array named a finding its prose
  *       did not publishes that finding as a reference beside a {@code cited} that excludes it —
- *       divergence by design, and ADR Decision 94 carries why the union is not narrowed with it;</li>
+ *       divergence by design, and ADR Decision 94 carries why the union is not narrowed with it.
+ *       What its READING narrows is no longer this count alone: {@link SafetyFindingSeverityFidelityCheck}
+ *       takes {@link #citedFindingIndexes} as well, so an accusation there cannot name a finding
+ *       this count called uncited (ADR Decision 97);</li>
  *   <li>it never rewrites the answer, and it names no word of the answer or of any record — both
  *       carry patient data, the discipline {@link ClassCodeFidelityCheck} states. A citation index
  *       is the module's own bookkeeping.</li>
@@ -102,8 +105,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>What it cannot see</b>, stated rather than left to be found:
  * <ul>
- *   <li>whether a cited finding was stated CORRECTLY, or stated at all. That is the four
- *       neighbours' question, and {@code cited == carried} is therefore not a certificate;</li>
+ *   <li>whether a cited finding was stated CORRECTLY, or stated at all — a question this count
+ *       does not ask, which is why {@code cited == carried} is not a certificate;</li>
  *   <li>a finding the answer states in prose without anchoring a marker for it, which it counts as
  *       uncited, and a finding whose marker it anchors while saying nothing about it, which it
  *       counts as cited. Both are why this publishes a base and not an accusation;</li>
@@ -218,11 +221,15 @@ final class SafetyFindingCitationExtentCheck {
 	 * for a caller holding an answer and a chart rather than the walk. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.
 	 *
-	 * <p>Its one production caller is {@code LlmInferenceService.withRepairedFindingEnumeration},
-	 * which asks it of a CONTINUATION: whether that second answer anchors any of the findings the
-	 * first left out. That question and the extent's must have one answer or the repair keeps a
-	 * continuation the published count cannot see, which is the seam #409 opened between them — so
-	 * the reading lives here, in the private helper both reach, and is never spelled at the caller.
+	 * <p>Its production callers ask two different questions of one reading.
+	 * {@code LlmInferenceService.withRepairedFindingEnumeration} asks it of a CONTINUATION:
+	 * whether that second answer anchors any of the findings the first left out. That question and
+	 * the extent's must have one answer or the repair keeps a continuation the published count
+	 * cannot see, which is the seam #409 opened between them. {@link SafetyFindingSeverityFidelityCheck}
+	 * asks it of the ANSWER, to decide which citations it may accuse of dropping a rating — round two
+	 * of the same issue, where selecting off {@code extractCitedReferences}' union instead let that
+	 * key accuse a finding this check had just counted as uncited. Either way the reading lives here,
+	 * in the private helper they all reach, and is never spelled at a caller.
 	 *
 	 * <p>It reaches the carried population through {@link #carriedFindingIndexes}, the composed
 	 * projection, rather than taking {@link #uncitedFindingIndexes}' walk: its caller holds a chart
@@ -253,8 +260,9 @@ final class SafetyFindingCitationExtentCheck {
 	 * Which of {@code carried} the ANSWER cited: the resolution's own admissions, narrowed to the
 	 * ones a marker in {@code answer} anchors. A citation the module attached is not one the answer
 	 * made (issue #305); the set de-duplicates, so one finding cited in two sentences is one cited
-	 * finding. Shared by the extent and by {@link #uncitedFindingIndexes} so the count and the
-	 * complement cannot disagree about what "cited" means.
+	 * finding. Shared by every reader of that question so they cannot disagree about what "cited"
+	 * means. No list of them is kept here: two attempts at one were each short by a reader, so grep
+	 * {@code citedFindingIndexes(} over {@code api/src/main} for the current set.
 	 *
 	 * <p><b>What each of the three tests contributes, stated rather than implied</b> — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.
@@ -270,10 +278,13 @@ final class SafetyFindingCitationExtentCheck {
 	 * rather than assumed.</b> An index a marker anchors is in {@code seen} by construction, maps to
 	 * a record whenever it is in {@code carried}, and is therefore never
 	 * {@code attachedByTheModule}; replacing this branch with {@code anchored} against
-	 * {@code carried} alone leaves the whole api suite green. It stays because the two readers share
-	 * this helper and the blank branch is not inert, and because dropping the #305 filter here would
-	 * make this the one counter in the family that does not apply it. Do not read the intersection
-	 * as two live gates.
+	 * {@code carried} alone leaves the whole api suite green. It stays because the readers share this
+	 * helper and the blank branch is not inert, and because dropping the #305 filter here would make
+	 * this the one counter in the family that does not apply it. Do not read the intersection as two
+	 * live gates — but do not read "inert" as "free to drop" either: since #409 round two
+	 * {@link SafetyFindingSeverityFidelityCheck} takes this reading for a per-citation ACCUSATION, so
+	 * the filter that is inert for a count here is what keeps an attached citation out of an
+	 * accusation there. Inert over today's data, load-bearing over the contract.
 	 *
 	 * <p><b>A blank or null answer keeps the resolution alone.</b> There is no prose to anchor
 	 * anything, {@code extractCitedReferences} resolves the array there on purpose, and counting

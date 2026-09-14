@@ -1089,15 +1089,24 @@ public interface ChartSearchService {
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">issue
 		 * #395</a>. {@code SafetyFindingCitationExtentCheck} states it.
 		 *
-		 * <p>It is the base the family had no member for. The neighbours enumerated here each judge a
-		 * record the answer DID cite — whether the rating reached the prose
+		 * <p>It is the base the family had no member for. A finding the answer cited in neither its
+		 * prose nor its structured {@code citations} array resolves to no citation at all, so it is
+		 * outside every neighbour enumerated here: whether the rating reached the prose
 		 * ({@link #getUnstatedFindingSeverities()}), whether the words were reproduced faithfully
 		 * ({@link #getUnfaithfullyRenderedCitations()}), whether the chart record offered can be the
-		 * order named ({@link #getMisattributedOrderCitations()}), whether a claim offered any record
-		 * at all ({@link #getActiveOrderClaims()}) — so an answer that drops a finding ENTIRELY is
-		 * outside every one of them, and on the reported run not one reported it: the three list keys
-		 * read {@code []} and the fourth was flagging something else. Not "they all read as a
-		 * faithful answer's", which is false of that response.
+		 * order named ({@link #getMisattributedOrderCitations()}) and whether a claim offered any
+		 * record at all ({@link #getActiveOrderClaims()}) are each a question about something the
+		 * answer DID state. On the reported run not one of them reported it: the three list keys read
+		 * {@code []} and the fourth was flagging something else. Not "they all read as a faithful
+		 * answer's", which is false of that response.
+		 *
+		 * <p><b>What "the answer cited it" means is not one reading across those keys, so do not take
+		 * the shared word for a shared population.</b> Since issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a> round
+		 * two {@link #getUnstatedFindingSeverities()} asks it the way this key does — the markers the
+		 * prose anchors — while a key selecting off the resolution's union instead can judge a
+		 * citation {@code answer} never anchored. ADR Decision 97 records the reading per key and
+		 * publishes no rule over the family; mutate a check's selection and read the failures.
 		 *
 		 * <p>{@link FindingCitationExtent} is canonical for what {@code carried}, {@code cited}, a
 		 * zero and this accessor's null each do and do not assert, for why it is a count rather than
@@ -1157,9 +1166,18 @@ public interface ChartSearchService {
 		 *
 		 * @return one entry per offending citation, the citations distinct and in CITATION order —
 		 *         the order {@code LlmInferenceService.extractCitedReferences} resolved them, which
-		 *         is the order the answer states them in wherever the model anchored them inline and
-		 *         did not also supply a structured array in some other order. Null where none was
-		 *         stated.
+		 *         is the order the answer states them in unless the model's structured array named
+		 *         them in some other order. Null where none was stated.
+		 *
+		 *         <p><b>Every {@code citation} here is a number the answer's own text anchors a
+		 *         marker for</b> — since issue
+		 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>
+		 *         this key takes that question from the same reading {@link #getFindingCitationExtent()}
+		 *         publishes, so a finding the model named in its structured {@code citations} array
+		 *         and in no sentence is not accused here. It is therefore consistent with
+		 *         {@code findingCitations} by construction: an entry cannot name a finding that key
+		 *         did not count as cited. It is NOT the same population as {@code references[]},
+		 *         which stays the resolution's union.
 		 */
 		public List<UnstatedFindingSeverity> getUnstatedFindingSeverities() {
 			return unstatedFindingSeverities;

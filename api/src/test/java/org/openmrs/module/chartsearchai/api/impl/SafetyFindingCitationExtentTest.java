@@ -31,7 +31,6 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -272,11 +271,11 @@ public class SafetyFindingCitationExtentTest {
 			assertTrue(warnStating(capture, "[" + dropped + "]", "patient=1"),
 					"the finding no marker in the prose names must be reported in one line, carrying "
 							+ "the patient. Captured: " + capture.describeAll());
-			assertTrue(referenceIndexes(answer).contains(dropped),
+			assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(dropped),
 					"and the reference list is NOT narrowed with it: extractCitedReferences keeps an "
 							+ "array entry with no inline anchor, which is its own pinned decision, so "
 							+ "the two populations diverge here deliberately. References: "
-							+ referenceIndexes(answer));
+							+ ChartAnswerTestSupport.referenceIndexes(answer));
 		}
 	}
 
@@ -351,17 +350,6 @@ public class SafetyFindingCitationExtentTest {
 			separator = ", ";
 		}
 		return prose.append(".").toString();
-	}
-
-	/** The indexes the answer's reference list carries, so a case can assert on the population
-	 *  {@code extractCitedReferences} resolved as well as on the one this check counts — the two
-	 *  are not the same since issue #409 and a case that read only the count could not show it. */
-	private static List<Integer> referenceIndexes(ChartAnswer answer) {
-		List<Integer> indexes = new ArrayList<Integer>();
-		for (RecordReference reference : answer.getReferences()) {
-			indexes.add(Integer.valueOf(reference.getIndex()));
-		}
-		return indexes;
 	}
 
 	private int indexOfType(String resourceType) {

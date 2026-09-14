@@ -85,11 +85,16 @@ import org.slf4j.LoggerFactory;
  *       for a blank answer deliberately — and a degenerate output is not a fidelity defect. Every
  *       sibling is silent there too, each by whatever gate it resolves first — mutate this guard and
  *       read which of them still speak;</li>
- *   <li>it considers only the citations the answer's own resolution admitted
- *       ({@code LlmInferenceService.extractCitedReferences}), so a bracketed clinical value the
- *       chart has no record for is not a citation here either — CLAUDE.md's inline-citation rule
- *       states it, and taking that accessor's output rather than re-deriving "which records were
- *       cited" is what keeps that one answer;</li>
+ *   <li>it considers only the findings the answer's own PROSE anchored a marker for, through
+ *       {@link SafetyFindingCitationExtentCheck#citedFindingIndexes} — the ONE reading this module
+ *       has of that question, shared with the count {@code findingCitations} publishes (issue
+ *       <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>,
+ *       round two). It took {@code LlmInferenceService.extractCitedReferences}' union until then,
+ *       so a finding the model named in its structured array and anchored in no sentence was
+ *       accused of dropping a rating on an answer that never cited it — while the same response's
+ *       {@code findingCitations} said the answer had not cited it. A bracketed clinical value is
+ *       still not a citation here, the carried-population membership inside that reading being what
+ *       excludes it;</li>
  *   <li>the rating is matched on a WORD boundary and case-insensitively, so <em>"Major"</em>,
  *       <em>"major"</em>, <em>"**Major**"</em>, <em>"(Major)"</em> and <em>"Major-rated"</em> all
  *       satisfy it while <em>"majority"</em> does not. The boundary fails toward silence in the one
@@ -123,6 +128,12 @@ import org.slf4j.LoggerFactory;
  *       and a synonym is the model's judgement substituted for the source's rating;</li>
  *   <li>whether the rating is attached to the RIGHT finding. It asks whether the word is in the
  *       answer, never where.</li>
+ *   <li>a finding the answer states in PROSE while anchoring no marker for it, and whose rating it
+ *       drops. That rendering did lose the rating, and this check went silent on it at issue #409 —
+ *       the cost of taking the shared reading, which counts what the answer ANCHORED and not what
+ *       it discussed. It is the direction this check must fail in, and
+ *       {@link SafetyFindingCitationExtentCheck#uncitedFindingIndexes} carries the same residue for
+ *       the count.</li>
  * </ul>
  *
  * <p><b>It reports and it publishes, and both carry the same pair.</b> The WARN is the maintainer's
@@ -156,12 +167,12 @@ final class SafetyFindingSeverityFidelityCheck {
 	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
 	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
-	 *            {@link LlmInferenceService#extractCitedReferences}. Since issue #305 that list can
-	 *            carry a citation the MODULE attached; this check needs no filter for it, because the
-	 *            {@code ratings} map below holds only records carrying a {@code findingSeverity},
-	 *            which on the production path {@code DrugReferenceInjector}'s findings loop alone
-	 *            writes — and an attached index names a record that was already in the mapping list
-	 *            when that loop ran, so the walk's own {@code rating == null} arm skips it. The
+	 *            {@link LlmInferenceService#extractCitedReferences} — the union, narrowed here by
+	 *            {@link SafetyFindingCitationExtentCheck#citedFindingIndexes} to the findings the
+	 *            prose anchored. Since issue #305 that list can carry a citation the MODULE
+	 *            attached, and since issue #409 this check states no argument of its own for
+	 *            ignoring one: the shared reading applies that filter, as it does for the
+	 *            published count, so the two cannot come to disagree about it either. The
 	 *            residue is a CALLER handing this method mappings of its own making, since nothing
 	 *            here re-derives a rating; the write site is pinned by
 	 *            {@code ArchitectureGuardTest.theProvenanceCarryingMappingConstructorHasOneCaller}
@@ -219,6 +230,33 @@ final class SafetyFindingSeverityFidelityCheck {
 			if (ratings.isEmpty()) {
 				return offending;
 			}
+			// ONE reading of "did the answer cite this finding", shared with the count this module
+			// publishes for the same question — SafetyFindingCitationExtentCheck.citedFindingIndexes
+			// (issue #409). Resolved through that class rather than spelled as a marker scan here: it
+			// owns the decode step and the issue #305 filter, and a second expression of one question
+			// is the two-resolutions-that-agree shape issue #151 forbids. Before this, one response
+			// could state both that the answer did not cite a finding (`findingCitations`) and that it
+			// cited that finding and dropped its rating (this key).
+			//
+			// AFTER the ratings gate, and the placement is BEHAVIOURALLY UNPINNED — said plainly so
+			// the line does not look better defended than it is. What it buys is one walk of the
+			// chart's mappings on a stock install, where no record carries a rating: hoisted above
+			// the gate the reading still returns at its own carried.isEmpty() and never reads the
+			// answer, so the saving is the walk and not a decode. Measured by a review pass: hoisting
+			// this line leaves the whole api suite green, this check's own throw case included — that
+			// case overrides getFindingSeverity() on a RecordMapping, and nothing the reading touches
+			// is that accessor. Two earlier drafts of this comment got the reason wrong in opposite
+			// directions: the first named that throw case as what FORBIDS the hoist, and no test does;
+			// the second said the reading touches only getResourceType() and getIndex(), and it also
+			// reads RecordReference.isAttachedByTheModule(), which on an ordinary answer path nothing
+			// earlier reads. So do not read "unpinned" as "nothing here is ordered" — a hoist would
+			// make that accessor the first read this check makes that nothing earlier makes.
+			//
+			// The blank-answer arm of that reading is unreachable from here — the guard above returns
+			// on isBlank(answer) first, which is why a degenerate output is silent rather than
+			// counted. Said rather than relied on.
+			Set<Integer> citedFindings =
+					SafetyFindingCitationExtentCheck.citedFindingIndexes(answer, cited, mappings);
 			// Memoised per distinct rating, in a per-call local and never a field (#172 binds this
 			// module's memos, and a static utility on a Spring-managed path is no exception). The
 			// walks are bounded by the SIZE OF THE VOCABULARY `statableRating` admits rather than by
@@ -241,6 +279,14 @@ final class SafetyFindingSeverityFidelityCheck {
 					// Either the cited record is not a finding, or it is one carrying no rating worth
 					// requiring — `ratingThisRecordStates` is canonical for which those are, and this
 					// check deliberately cannot tell those cases apart.
+					continue;
+				}
+				if (!citedFindings.contains(Integer.valueOf(citation.getIndex()))) {
+					// The model named this finding in its structured citations array and anchored no
+					// marker for it in the prose (issue #409). The resolution admits it, because the
+					// union is the reference list's specification and is deliberately not narrowed —
+					// but an accusation that the answer dropped this finding's rating asserts that
+					// the answer cited the finding, and it did not.
 					continue;
 				}
 				String key = rating.toLowerCase(Locale.ROOT);

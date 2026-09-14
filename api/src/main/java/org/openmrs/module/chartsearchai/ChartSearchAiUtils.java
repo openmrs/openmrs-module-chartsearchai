@@ -1256,16 +1256,36 @@ public class ChartSearchAiUtils {
 	 *         does not.
 	 *
 	 *         <p><b>The two separators are asked different questions, and that is the whole rule.</b>
-	 *         A thousands separator ALWAYS has a digit to its left, so a {@code ','} is a fragment
-	 *         marker only after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
+	 *         A separator inside a number ALWAYS has a digit to its left, so a {@code ','} is a
+	 *         fragment marker after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
 	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
-	 *         {@code "(route-unspecified),500"}). A {@code '.'} is a fragment marker after a digit
-	 *         ({@code "2.5"}) and ALSO where it BEGINS A TOKEN — preceded by a space in
-	 *         {@link #isSpace}'s sense, or by nothing at all — because that is a decimal written without its leading zero
-	 *         ({@code "is .5"}, a text opening {@code ".5"}). Attached to what precedes it, it is the
-	 *         full stop ending a sentence, whatever that sentence ended with: a word
-	 *         ({@code "see note.500"}), a bracket ({@code "(suspension).500"}), a quote, an emphasis
-	 *         mark.
+	 *         {@code "(route-unspecified),500"}) — with ONE exception, below. A {@code '.'} is a
+	 *         fragment marker after a digit ({@code "2.5"}) and ALSO where it BEGINS A TOKEN —
+	 *         preceded by a space in {@link #isSpace}'s sense, or by nothing at all — because that is
+	 *         a decimal written without its leading zero ({@code "is .5"}, a text opening
+	 *         {@code ".5"}). Attached to what precedes it, it is instead the punctuation CLOSING what
+	 *         precedes it, whatever that was: a word ({@code "see note.500"}), a bracket
+	 *         ({@code "(suspension).500"}), a quote, an emphasis mark, or the run of three or more
+	 *         dots issue #422 calls a marked cut rather than a full stop ({@code "see note...500"}).
+	 *         Only the leading character is classified either way, so that run needs no rule of its
+	 *         own and the two questions share no code — {@link #mayEndASentence} is
+	 *         where a cut is stepped over, and this method never asks whether a sentence ended.
+	 *
+	 *         <p><b>The exception: a comma a digit precedes is NOT a fragment marker where the run of
+	 *         digits before it is four or longer and exactly three digits follow it</b>
+	 *         ({@code "2000,500 mg/day"}, issue
+	 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/425">#425</a>).
+	 *         That is a list with the unit elided on the first number, which a model writes as
+	 *         readily as it repeats the unit, and refusing it accused an answer of leaving out a
+	 *         ceiling it had printed. No grouped number can be spelled that way: a thousands
+	 *         separator's head group is one to three digits and every group after it exactly three,
+	 *         so a run of four before a comma belongs to no grouping. BOTH halves are load-bearing
+	 *         and each was measured to admit a false REPORT alone — the group length alone reads
+	 *         {@code "0,5 mg/day"} as a list, and the run length alone reads {@code "1000,5 mg/day"}
+	 *         as one; the conjunction reads both as the single comma decimal they are. Whether the
+	 *         run is itself preceded by a comma is deliberately NOT asked, so that the middle number
+	 *         of a three-item list ({@code "300,4000,500 mg/day"}) is not refused for standing where
+	 *         a group would.
 	 *
 	 *         <p><b>Four earlier wordings each admitted a false REPORT, which is the direction
 	 *         {@code DosingCeilingFidelityCheck} must never fail in, and each was found by a
@@ -1275,17 +1295,25 @@ public class ChartSearchAiUtils {
 	 *         FULL STOP lost every other closing mark. The first three treated the two characters
 	 *         alike; the fourth kept classifying the character before, which is a list nobody can
 	 *         finish — so this asks instead whether the stop BEGINS a token, which is a property
-	 *         rather than a membership. <b>The residue that leaves</b>: a naked decimal written
-	 *         directly after an opening mark with no space ({@code "(.5 mg/day)"}) is NOT refused, so
-	 *         a laxer ceiling can be read out of it. Unpinned, and named here rather than left to be
-	 *         found. Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
+	 *         rather than a membership. <b>The residues that leaves, named here rather than left to be
+	 *         found, and both unpinned</b>: a naked decimal written directly after an opening mark
+	 *         with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be read
+	 *         out of it; and the exception above admits the one comma decimal that wears a list's
+	 *         shape — four or more integer digits and exactly three after the comma
+	 *         ({@code "1000,300 mg/day"}), measured admitted where {@code "1000,5 mg/day"} and
+	 *         {@code "0,5 mg/day"} are refused. That residue is the price of the exception and not a
+	 *         defect in its wording: within that window a grouped number is impossible, so the only
+	 *         two readings left are the elided-unit list and that decimal, and no test over the text
+	 *         alone separates them. Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
 	 *         {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt},
 	 *         {@code .aSeparatorAFTERALetterLeavesAStatedCeilingStated},
-	 *         {@code .aCommaAfterAPARENTHESISLeavesAStatedCeilingStated} and
-	 *         {@code .aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated} — so a fifth
-	 *         wording that loses one of them reddens rather than ships.
+	 *         {@code .aCommaAfterAPARENTHESISLeavesAStatedCeilingStated},
+	 *         {@code .aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated},
+	 *         {@code .aCommaJOININGTwoWholeNumbersLeavesTheSecondOneStated} and
+	 *         {@code .aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs} — so a wording that loses one
+	 *         of them reddens rather than ships.
 	 */
 	private static boolean numericFragment(String haystack, int at) {
 		if (at == 0) {
@@ -1300,8 +1328,40 @@ public class ChartSearchAiUtils {
 			return separator == '.';
 		}
 		char before = haystack.charAt(at - 2);
-		return Character.isDigit(before)
-				|| (separator == '.' && isSpace(before));
+		if (separator == '.') {
+			return Character.isDigit(before) || isSpace(before);
+		}
+		return Character.isDigit(before) && !mayJoinTwoNumbers(haystack, at - 1);
+	}
+
+	/**
+	 * @return whether the {@code ','} at {@code comma} joins two whole numbers rather than grouping
+	 *         the digits of one — the exception {@link #numericFragment}'s javadoc states and is
+	 *         canonical for, asked as the only two lengths a grouped number cannot have.
+	 *
+	 *         <p>It answers a SHAPE and not a reading: the window it admits also holds one comma
+	 *         decimal, which that javadoc names as the residue. Kept beside the rule rather than
+	 *         inlined because the rule reads as one sentence at the call site and this is two walks.
+	 */
+	private static boolean mayJoinTwoNumbers(String haystack, int comma) {
+		// A thousands separator's head group is one to three digits, so a run of four or more before
+		// one belongs to no grouping. Whether that run is itself preceded by a comma is not asked —
+		// see the javadoc: the middle number of a three-item list stands exactly there.
+		int start = comma;
+		while (start > 0 && Character.isDigit(haystack.charAt(start - 1))) {
+			start--;
+		}
+		if (comma - start < 4) {
+			return false;
+		}
+		// And every group after the head is exactly three digits, so any other length says the digits
+		// after the comma are a number of their own rather than a group of this one.
+		int digits = 0;
+		while (comma + 1 + digits < haystack.length()
+				&& Character.isDigit(haystack.charAt(comma + 1 + digits))) {
+			digits++;
+		}
+		return digits == 3;
 	}
 
 	/**

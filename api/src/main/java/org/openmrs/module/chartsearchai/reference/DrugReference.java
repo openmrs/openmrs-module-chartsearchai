@@ -2690,8 +2690,10 @@ public class DrugReference {
 	 * same one, measured; what separates them is that this family folds diacritics and that one
 	 * deliberately does not, and that {@link #containsWord} is package-private here. <b>That
 	 * equality does NOT extend to {@code statesMeasurement}</b>, which refuses a leading {@code '.'}
-	 * or {@code ','} because its needle begins with a number — {@link #containsWord} reads
-	 * {@code "2.5 mg/day"} as stating {@code "5 mg/day"} and that method does not. Neither is a
+	 * or {@code ','} that marks the tail of a longer NUMBER, because its needle begins with one —
+	 * {@link #containsWord} reads {@code "2.5 mg/day"} as stating {@code "5 mg/day"} and that method
+	 * does not. WHICH spellings is {@code ChartSearchAiUtils.numericFragment}'s to say and moves when
+	 * it does, so it is not restated here (#425 moved it once already). Neither is a
 	 * route into this scan and neither must become one, but a change to the boundary definition here
 	 * does not reach either, so consider all of them.
 	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at

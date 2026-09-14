@@ -390,8 +390,8 @@ public class DosingCeilingFidelityTest {
 		// LETTER precedes is punctuation — a comma between list items after a unit, a full stop
 		// ending the sentence before the number — and leaves the ceiling stated. Refusing there
 		// would accuse an answer of dropping a number it printed, which is the one direction this
-		// check must never fail in. It is the complement of the three refusal cases above, and
-		// between them they are why the rule is worded off the letter rather than off a digit.
+		// check must never fail in. It is the complement of the refusal cases above, and between them
+		// they are why neither separator is decided by naming the characters that may precede it.
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
@@ -410,9 +410,12 @@ public class DosingCeilingFidelityTest {
 
 	@Test
 	public void aCommaAfterAPARENTHESISLeavesAStatedCeilingStated() throws IOException {
-		// The third false-report shape found in this rule, and the one that settles its wording. A
+		// A false-report shape found in this rule, and the one that decided the comma's left edge. A
 		// thousands separator ALWAYS has a digit to its left; a comma that does not is punctuation,
-		// whatever punctuation precedes IT. Keying the refusal on "no letter precedes" got that
+		// whatever punctuation precedes IT. That is necessary and not sufficient, and #425 is the
+		// rest of it — how LONG the digit runs on either side are, which
+		// aCommaJOININGTwoWholeNumbersLeavesTheSecondOneStated is about and this case is not.
+		// Keying the refusal on "no letter precedes" got that
 		// wrong for every non-letter that is not a digit — a closing parenthesis, most obviously,
 		// which is how an answer written by a model that annotates its rows reads.
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
@@ -433,8 +436,8 @@ public class DosingCeilingFidelityTest {
 
 	@Test
 	public void aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated() throws IOException {
-		// The fourth and last shape of this rule, and the one that decides its KIND. The three before
-		// it each classified the CHARACTER before the separator, and each lost a character nobody had
+		// The shape that decides the full stop's KIND. The wordings before it each classified the
+		// CHARACTER before the separator, and each lost a character nobody had
 		// thought of — a closing parenthesis here, a quote or an emphasis mark just as easily. The
 		// question that ends that is not another character: it is whether the full stop BEGINS a
 		// token. A decimal point does — it follows a space, or nothing. A sentence's full stop is

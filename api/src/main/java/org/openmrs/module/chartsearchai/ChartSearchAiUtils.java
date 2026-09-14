@@ -1324,14 +1324,11 @@ public class ChartSearchAiUtils {
 	 *         in both directions: {@code "4000,2000 mg/day"} and {@code "2000,60 mg/day"}, both
 	 *         measured refused, and this module's fixtures publish ceilings of each width.
 	 *
-	 *         <p>The tail bound's two residues — the comma decimal it admits and the short-ceiling
-	 *         list it does not reach — are two faces of ONE choice rather than two defects, and the
-	 *         choice is where that bound sits: {@code "1000,300 mg/day"} (a decimal) and
-	 *         {@code "4000,300 mg/day"} (the list #425 filed) are the same shape to a rule reading
-	 *         only the text, so no bound admits one without the other, and a wider one would reach
-	 *         further into both. What could narrow them is whether the number before the comma is
-	 *         another of the cited record's own ceilings — evidence this method cannot see, being
-	 *         handed a text and a needle.
+	 *         <p>Moving the tail bound reaches further into what it admits AND into what it refuses:
+	 *         {@code "1000,300 mg/day"} (a decimal) and {@code "4000,300 mg/day"} (the list #425
+	 *         filed) are the same shape to a rule reading only the text. What could tell those two
+	 *         apart is whether the number before the comma is another of the cited record's own
+	 *         ceilings — evidence this method cannot see, being handed a text and a needle.
 	 *         Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
 	 *         {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},

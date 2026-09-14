@@ -857,13 +857,9 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * could be read back out: {@code List<? super Drug>} is reported though a read of it yields
 	 * {@code Object}, and {@code List<Serializable>} is reported though it names nothing.
 	 *
-	 * <p><b>Do not enumerate here what it catches. Add the member and read the failure.</b> Nine
-	 * successive statements of that enumeration were written and refuted, each correction buying the
-	 * next: arrays, type arguments, raw types, wildcards, type variables, {@code Object}, raw
-	 * collections, inherited fields, and an interface {@code Drug} turned out not to implement. The
-	 * shapes are not the point and the list of them was never finishable; the two questions above
-	 * are, and a member of any shape can be put on {@code CodedDrug} in a scratch edit to see which
-	 * answer it gets.
+	 * <p><b>Do not enumerate here which type shapes it catches — put the member on {@code CodedDrug}
+	 * in a scratch edit and read the failure.</b> Nine successive attempts at that enumeration were
+	 * written and refuted on this branch, each correction buying the next.
 	 *
 	 * <p><b>Three answers it reports only as SILENCE, so the reason is written here.</b> A mutation
 	 * shows you these are not reported; what it cannot show you is why. {@code Object} is excluded
@@ -877,9 +873,10 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * same answer this class gives for the evasions its text assertions decline to chase.
 	 *
 	 * <p>So a member is reported whenever ANY position of its declared type admits a {@code Drug} —
-	 * measured, {@code Serializable}, {@code OpenmrsObject} and {@code List<Serializable>} all are,
-	 * none of which holds one today. That is the question working as asked, those positions being
-	 * able to hold one; but check what the member is for before treating the report as the defect.
+	 * measured, {@code Serializable}, {@code OpenmrsObject} and {@code List<Serializable>} all are.
+	 * That is the question working as asked, each of those positions being able to hold a
+	 * {@code Drug}; but none of them need actually carry one, so check what the member is for before
+	 * treating the report as the defect.
 	 */
 	private static boolean handsOutTheEntity(Type type) {
 		return handsOutTheEntity(type, new java.util.HashSet<Type>());

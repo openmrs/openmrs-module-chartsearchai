@@ -673,10 +673,8 @@ public class PatientChartSerializer {
 		 * <p>Written in exactly ONE place, {@code QueryStoreChartBuilder.toSerializedRecords}, beside
 		 * {@link #orderActive} and off the same one authoritative order read, and pinned there by
 		 * {@code ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace}.
-		 * {@code SerializedRecord.orderStopDate} is canonical for what it is and for the asymmetry
-		 * that is its contract — non-null implies {@link #orderActive} is {@code FALSE}, while
-		 * {@code FALSE} does NOT imply non-null — and that is not restated here so this javadoc
-		 * cannot go stale against it.
+		 * {@code SerializedRecord.orderStopDate} is canonical for what it is and for the asymmetry that
+		 * is its contract; pointed at rather than restated, so this javadoc cannot go stale against it.
 		 */
 		private final Date orderStopDate;
 
@@ -774,8 +772,9 @@ public class PatientChartSerializer {
 		 * because a caller reaching for "the full constructor" through this javadoc would silently drop
 		 * a drug-order record's currency answer, when that order stopped, a finding's rating, an
 		 * injected record's provenance or whether it names its drug. <b>Neither name the next rung as
-		 * the full one nor count the rungs between</b>: this sentence did both, and each went stale —
-		 * the ladder has now grown under it four times, most recently for issue #315.
+		 * the full one nor count the rungs between</b>: this sentence did both, and each went stale.
+		 * The ladder has grown under such a sentence repeatedly, most recently for issue #315 — which
+		 * is the reason for the rule and not a tally to keep current.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {
@@ -847,8 +846,8 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Not the full constructor since issue #294: it defaults {@link #orderDrugNamed} to {@code
 		 * null}, "the module cannot say", which is right for every record but one this module injected
-		 * for an active order. The one below is the widest — and the ladder has now grown under a
-		 * "the full one is below" sentence three times, so this one names the rung rather than the end.
+		 * for an active order. The one below is the widest — and the ladder has repeatedly grown under
+		 * a "the full one is below" sentence, so this one names the rung rather than the end.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,

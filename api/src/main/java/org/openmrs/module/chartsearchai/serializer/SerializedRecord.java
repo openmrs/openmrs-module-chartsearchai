@@ -74,19 +74,25 @@ public class SerializedRecord {
 	 * <p>It is core's own {@code Order.getEffectiveStopDate()} and nothing derived beyond it — the
 	 * order's {@code dateStopped} where it has one, else its {@code autoExpireDate}. Never read off
 	 * {@link #getText()}: that is {@link #orderActive}'s rule (issue #317) and it binds here for the
-	 * same reason, sharpened by the fact that querystore renders no {@code auto_expire_date} at all,
-	 * so a duration-lapsed prescription's end is in no rendered text to read.
+	 * same reason, sharpened by the fact that querystore renders no {@code auto_expire_date} into a
+	 * record's TEXT — it carries it in the document's metadata — so a duration-lapsed prescription's
+	 * end is in no rendered text to read.
 	 *
 	 * <p><strong>Non-null implies {@link #orderActive} is {@code FALSE}. {@code FALSE} does NOT
 	 * imply non-null, and that asymmetry is the contract rather than a gap.</strong> An order is not
 	 * in force the moment it is voided or its action is {@code DISCONTINUE}, which
 	 * {@code Order.isActive()} answers before consulting any date — and
-	 * {@code DrugOrder.cloneForDiscontinuing()} sets neither end date, so an ordinary
-	 * discontinuation carries none. The instant such a discontinuation took effect lives on
-	 * {@code getPreviousOrder()}, and the module deliberately does not reach for it: that would be a
-	 * second implementation of core's discontinuation semantics, which is the re-derivation
-	 * {@link #orderActive} exists to avoid. So {@code null} here never means "still in force" —
-	 * {@link #orderActive} is the only thing that answers that question.
+	 * {@code DrugOrder.cloneForDiscontinuing()} sets neither end date on the {@code DISCONTINUE}
+	 * record core creates, so THAT record carries none.
+	 *
+	 * <p><strong>Read that precisely: it is the discontinuation RECORD and not the prescription.</strong>
+	 * {@code OrderServiceImpl.stopOrder} stamps {@code dateStopped} on the prescription being
+	 * discontinued, so the prescription does carry a date here — and it is the record a clinician is
+	 * reading about. The stub's own end instant lives on {@code getPreviousOrder()}, and the module
+	 * deliberately does not reach for it: that would be a second implementation of core's
+	 * discontinuation semantics, which is the re-derivation {@link #orderActive} exists to avoid. So
+	 * {@code null} here never means "still in force" — {@link #orderActive} is the only thing that
+	 * answers that question.
 	 *
 	 * <p>Set only by {@code QueryStoreChartBuilder.toSerializedRecords}, beside
 	 * {@link #orderActive} and off the same one authoritative order read.

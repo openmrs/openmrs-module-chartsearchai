@@ -141,10 +141,13 @@ public class ProjectInstructionsGuardTest {
 	 * state the paragraph above predicted, one ticket later.</b> Issue #315's remedy adds one rule
 	 * spanning four packages, so it has no nested file to sit in, and the root file was 8 bytes under
 	 * the cap. Trimming came first and recovered 401 bytes: the rationale for the {@code isEmpty()}
-	 * directive and the WHY of the {@code describesEndedOrder} AND-ing (Decisions 46/47 carry both,
-	 * and the order-currency bullet already cites them), what {@code injectRecords} does to the chart
-	 * on the search-mode bullet, and two sub-bullets of the order-currency group folded into the ones
-	 * above them, which framed one thing twice — the #280 move. The residue is 400 bytes and it is a
+	 * directive (which {@code QueryStoreChartBuilder.OrderCurrency}'s class javadoc carries — an
+	 * earlier form of this sentence credited Decisions 46/47 for it, and review measured that neither
+	 * decision says anything about the active-order set being empty), the WHY of the
+	 * {@code describesEndedOrder} AND-ing (Decision 46, which the order-currency bullet already
+	 * cites), what {@code injectRecords} does to the chart on the search-mode bullet, and two
+	 * sub-bullets of the order-currency group folded into the ones above them, which framed one thing
+	 * twice — the #280 move. The residue is 400 bytes and it is a
 	 * directive: which accessor supplies the date, that its asymmetry with the currency mark is
 	 * enumerated in one named javadoc rather than here, the published key and its producer, and that
 	 * {@code []} is not a certificate.

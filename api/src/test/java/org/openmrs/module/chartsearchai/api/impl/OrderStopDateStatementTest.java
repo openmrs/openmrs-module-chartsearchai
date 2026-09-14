@@ -84,7 +84,9 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 	/** Standard test dataset order 3: live, never stopped. */
 	private static final int LIVE_ORDER_ID = 3;
 
-	/** A DISCONTINUE order carrying neither end date — out of force, and core publishes no date. */
+	/** A DISCONTINUE order carrying neither end date — out of force, and core publishes no date. The
+	 *  discontinuation RECORD, not a discontinued prescription: core stamps the prescription it
+	 *  discontinues with a {@code date_stopped}, so that one does carry a date. */
 	private static final int DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID = 9320;
 
 	/** A second ended order sharing {@link #LAPSED_ORDER_ID}'s {@code date_activated}, so the two

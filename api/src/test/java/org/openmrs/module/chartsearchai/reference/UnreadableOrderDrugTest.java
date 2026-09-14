@@ -761,8 +761,8 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * one at a call site compiles and can throw just as a read of the entity could. Measured, with the
 	 * spelling stated because the other one answers differently: a null-guarded
 	 * {@code if (coded.dosageForm != null) coded.dosageForm.getUuid();} at a call site leaves this
-	 * class green, while the UNGUARDED read reddens ten of its cases — on the null dose form every
-	 * order without one has, not on the lazy read this paragraph is about. That is not
+	 * class green, while the UNGUARDED read reddens the behavioural cases wholesale — on the null dose
+	 * form every order without one has, not on the lazy read this paragraph is about. That is not
 	 * this guard's subject and must not become it — the loop NEEDS those two, and what keeps them safe
 	 * is that every helper reading a concept opens its own {@code try}, which
 	 * {@code PatientClinicalContextBuilder.conceptUuid}'s javadoc is the one home for. None of these
@@ -853,7 +853,7 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 * rather than erased past. Assignability is asked BOTH ways, so a subtype of {@code Drug} is
 	 * caught and so is a member declared as a supertype it satisfies.
 	 *
-	 * <p><b>Every shape it walks was added because a reviewer measured it escaping.</b> Against an
+	 * <p><b>Each widening below followed a reviewer measuring that shape escape.</b> Against an
 	 * exact {@code Drug.class.equals} version: {@code Drug[]} and {@code List<Drug>} escaped. Against
 	 * the version that walked type arguments only: a generic SUBCLASS of {@code Drug} escaped, the raw
 	 * type going unread. Against the version before bounds were followed:

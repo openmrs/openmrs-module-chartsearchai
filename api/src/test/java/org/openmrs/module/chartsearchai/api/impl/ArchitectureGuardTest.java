@@ -1215,8 +1215,9 @@ public class ArchitectureGuardTest {
 	 * that the reference data relates none of the patient's medications — a negative claim, in
 	 * prompt-facing citable evidence, about a list a dropped order is missing from, which is the
 	 * "never render silence as denial" rule of the reference package's own instructions reached
-	 * fail-open. A source scan cannot express this: its exclusions are keyed on FILE NAME, so
-	 * admitting the legitimate reader means excusing all of {@code DrugSafetyValidator}.
+	 * fail-open. {@link #scanForPattern}, this class's whole-tree SOURCE rule, cannot express it: its
+	 * exclusions are keyed on FILE NAME, so admitting the legitimate reader means excusing all of
+	 * {@code DrugSafetyValidator}, which is a bigger hole than the one being closed.
 	 *
 	 * <p><b>What it does not reach.</b> The question is class-granular, so a SECOND reader inside
 	 * {@code DrugSafetyValidator} is invisible to it, and so is one inside

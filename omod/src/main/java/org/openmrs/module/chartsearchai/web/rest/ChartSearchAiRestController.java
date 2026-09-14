@@ -1708,8 +1708,8 @@ public class ChartSearchAiRestController {
 	/**
 	 * The wire shape of {@code findingCitations}: {@code carried} injected safety findings the prompt
 	 * held, {@code cited} of them the answer's own text anchored a marker for (issue #409) — issue
-	 * #395, and the base its four neighbours
-	 * each needed and none of them is. {@code null} for an answer whose check stated no measurement,
+	 * #395, and the base the FINDING keys beside it
+	 * each needed and none of them is — each of those judges a finding the answer did cite. {@code null} for an answer whose check stated no measurement,
 	 * never an empty object and never a zeroed one, because zero is itself a measurement here (a
 	 * prompt that carried no finding, which is the shipped default's ordinary state). See
 	 * {@code ChartSearchService.FindingCitationExtent}, which is canonical for what each value does

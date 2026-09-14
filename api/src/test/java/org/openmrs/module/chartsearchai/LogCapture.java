@@ -174,7 +174,7 @@ public final class LogCapture implements AutoCloseable {
 	 * opposite of both.
 	 *
 	 * <p><b>It became varargs when the predicted fifth check arrived</b> (issue #395). The paragraph
-	 * above forecast one more collision and got the arity wrong: two of the five checks now report
+	 * above forecast one more collision and got the arity wrong: two of the checks in that package now report
 	 * different properties of one canned answer, so a case whose subject is a third has two loggers
 	 * to name and not one. Widening the arity is what keeps each such negative the assertion it was
 	 * — reach over every OTHER logger in the package, given up only for the ones the caller says are

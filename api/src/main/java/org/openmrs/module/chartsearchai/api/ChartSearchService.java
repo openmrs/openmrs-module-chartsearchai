@@ -761,8 +761,8 @@ public interface ChartSearchService {
 			// is a measurement of none, so neither is normalised into the other. It is immutable, so
 			// it is carried rather than copied.
 			this.activeOrderClaims = activeOrderClaims;
-			// And once more (issue #395), under the rule the four above share rather than one of its
-			// own: null is the absence of a measurement and a zeroed statement is a measurement of
+			// And once more (issue #395), under the rule every statement above shares rather than one
+			// of its own: null is the absence of a measurement and a zeroed statement is a measurement of
 			// none. Immutable, so it is carried rather than copied.
 			this.findingCitationExtent = findingCitationExtent;
 			// Three-valued for the reason the value types above are (issue #247): null is the absence
@@ -1089,14 +1089,14 @@ public interface ChartSearchService {
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">issue
 		 * #395</a>. {@code SafetyFindingCitationExtentCheck} states it.
 		 *
-		 * <p>It is the base the family had no member for. Its four neighbours each judge a finding
-		 * the answer DID cite — whether the rating reached the prose
+		 * <p>It is the base the family had no member for. The neighbours enumerated here each judge a
+		 * record the answer DID cite — whether the rating reached the prose
 		 * ({@link #getUnstatedFindingSeverities()}), whether the words were reproduced faithfully
 		 * ({@link #getUnfaithfullyRenderedCitations()}), whether the chart record offered can be the
 		 * order named ({@link #getMisattributedOrderCitations()}), whether a claim offered any record
 		 * at all ({@link #getActiveOrderClaims()}) — so an answer that drops a finding ENTIRELY is
-		 * outside all four, and on the reported run not one of them reported it: the three list keys
-		 * read {@code []} and the fourth was flagging something else. Not "all four read as a
+		 * outside every one of them, and on the reported run not one reported it: the three list keys
+		 * read {@code []} and the fourth was flagging something else. Not "they all read as a
 		 * faithful answer's", which is false of that response.
 		 *
 		 * <p>{@link FindingCitationExtent} is canonical for what {@code carried}, {@code cited}, a

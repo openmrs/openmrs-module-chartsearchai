@@ -43,7 +43,8 @@ import org.slf4j.LoggerFactory;
  * reasons to withhold where the module had screened seven, with nothing saying a seventh existed.
  *
  * <p><b>Why nothing else can see it.</b> Every neighbour of it judges a record the answer DID
- * cite. {@link SafetyFindingSeverityFidelityCheck} asks whether a cited finding's rating reached the
+ * cite — {@link DosingCeilingFidelityCheck} included, which asks a question about a cited
+ * REFERENCE record and so is outside the enumeration below for a second reason as well. {@link SafetyFindingSeverityFidelityCheck} asks whether a cited finding's rating reached the
  * prose, and on that answer it correctly read {@code []} — it asks of the WHOLE answer and
  * <em>Moderate</em> appeared six times, so a seventh Moderate finding dropped entirely is invisible
  * to it by construction. {@link ReferenceProseFidelityCheck} reports a SUBSTITUTION inside a

@@ -1868,7 +1868,7 @@ public final class DrugReferenceTestSupport {
 	 * {@link #injectorWithSafety}, {@link #oneRecordChart} — are package-private here because a
 	 * caller assembling them itself can get the pairing wrong in ways nothing goes red for (see
 	 * {@link #withEntriesAndGroups} for one). The three public {@code injectedFindingsOver} forms
-	 * cannot serve this: they hardcode {@link #ddinterService}, whose source publishes no age bands
+	 * cannot serve this: they hardcode {@link #ddinterServiceWithGroups}, whose source publishes no age bands
 	 * at all, so no dosing ceiling can reach a record built through them. Widening the five would
 	 * hand every caller the assembly; widening this hands them the arrangement.
 	 *

@@ -345,16 +345,19 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
-	public void aDecimalWrittenWithoutItsLeadingZeroStillSTATESTheCeiling() throws IOException {
-		// The third separator shape, and the one that decides how the rule must be worded. A clinician
-		// — and a model copying one — writes a sub-unit dose as ".5 mg/day" as readily as "0.5 mg/day",
-		// and the record's own spelling is always the latter (`formatNumber` of a double). So an
-		// answer stating the STRICTEST ceiling in the naked form must still count as stating it: read
-		// otherwise, the walk finds the strictest unstated, finds "5 mg/day" inside that very ".5",
-		// and accuses the answer of dropping the number it just gave.
+	public void aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt() throws IOException {
+		// A clinician — and a model copying one — writes a sub-unit dose as ".5 mg/day" as readily as
+		// "0.5 mg/day", and the record's own spelling is always the latter (`formatNumber` of a
+		// double). What this pins is the half the check can secure: the LAXER ceiling must not be
+		// read out of that ".5". Silence here, and it is silence rather than a match — the strictest
+		// needle "0.5 mg/day" is not in this text either, so the walk quotes nothing and reports
+		// nothing.
 		//
-		// It is why the rule is "the separator is not preceded by a LETTER" and not "the separator
-		// sits between two digits": before that ".5" had no digit to its left, so nothing refused it.
+		// What it does NOT pin, said so the name is not read as more than it is: an answer writing
+		// the strictest naked AND the laxer in full IS reported, because the record's spelling of the
+		// strictest is absent. That is the respelling residue DosingCeilingFidelityCheck enumerates,
+		// and it is why the earlier "between two digits" wording had to go — under it the laxer WAS
+		// read out of the ".5", which turned the same answer into an accusation with no ".5" needed.
 		PatientChart decimals = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of levothyroxine?", "Levothyroxine (paediatric)");
 		RecordMapping mapping = soleRecordCarryingCeilings(decimals);
@@ -395,6 +398,29 @@ public class DosingCeilingFidelityTest {
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"the answer states BOTH ceilings — the comma punctuates the list, it does not make "
 							+ "\"500 mg/day\" a fragment of a number. Captured: " + capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(), "and nothing is published");
+		}
+	}
+
+	@Test
+	public void aCommaAfterAPARENTHESISLeavesAStatedCeilingStated() throws IOException {
+		// The third false-report shape found in this rule, and the one that settles its wording. A
+		// thousands separator ALWAYS has a digit to its left; a comma that does not is punctuation,
+		// whatever punctuation precedes IT. Keying the refusal on "no letter precedes" got that
+		// wrong for every non-letter that is not a digit — a closing parenthesis, most obviously,
+		// which is how an answer written by a model that annotates its rows reads.
+		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
+		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		TestableService service = newService(grouped);
+		service.setLlmProvider(answering("Ceilings: 2000 mg/day (route-unspecified),500 mg/day "
+				+ "(suspension) [" + mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of tinidazole?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the answer states BOTH ceilings; a comma with no digit before it is not a "
+							+ "thousands separator. Captured: " + capture.describeAll());
 			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(), "and nothing is published");
 		}
 	}

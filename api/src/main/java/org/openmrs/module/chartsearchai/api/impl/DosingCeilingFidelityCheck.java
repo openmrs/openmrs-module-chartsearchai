@@ -225,7 +225,7 @@ final class DosingCeilingFidelityCheck {
 			// neither can change an answer. A one-ceiling record admitted here runs an inner loop
 			// with no iterations, and index 0 is the ceiling the walk has just found unstated, so
 			// starting there merely asks the memo for it twice. What they buy is work, not
-			// correctness; the correctness is the ORDER, and mutating that reddens four named cases.
+			// correctness. The correctness is the ORDER — mutate it and read the failures.
 			Map<Integer, List<String>> ceilings = new HashMap<Integer, List<String>>();
 			for (RecordMapping mapping : mappings) {
 				List<String> stated = mapping.getDosingCeilings();

@@ -49,11 +49,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * rather than recomputed beside it, which no value comparison can see. And
  * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s reflective guard compares every public
  * accessor's own reading against the key it names, over a fixture that since #374 carries a chip
- * answering true — and since issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a> carries it off
- * a self-named ALLERGY RULE's sentence rather than this class's CONDITION one, which is what generalises the
- * comparison past this class's own chips AND past its one population. Mutate the serializer's put and
- * read all three.
+ * answering true — which is what generalises the comparison past this class's own chips.
+ * {@link #theSerializerPublishesTheChipsOwnProvenanceAnswer} carries what that fixture generalises
+ * past SINCE issue #412, which is this class's one population. Mutate the serializer's put and read
+ * all three.
  *
  * <p>Two things are deliberately NOT asserted here, each because something else already holds them.
  * That the key reaches {@code GET /chartsearchai/chartalerts} is
@@ -100,15 +99,17 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	/**
 	 * Three contraindication chips whose sentences are equally categorical and whose provenance
 	 * answers differ — the arrangement the key exists for. Chip 0 is built by the curated-rule arm's
-	 * own factory; chips 1 and 2 by the public constructor, which answers false the way the allergen
-	 * arm's sentences do.
+	 * own factory; chips 1 and 2 by the public constructor, which answers false BY CONSTRUCTION, as the
+	 * allergen arm's sentences do by a factory of their own.
 	 *
 	 * <p><b>Chip 2 carries chip 0's sentence verbatim, and that is what makes the value assertions
 	 * below discriminate anything.</b> Without it every published field except this key separates the
 	 * two answers — chip 0's detail is the only one naming an active condition — so a serializer
 	 * re-deriving the value from {@code detail} agrees with the accessor on every chip and passes.
-	 * Measured on this change's own polish round: with the pinned put commented out and a
-	 * {@code detail}-sniff written beside it, the whole omod suite stayed green. Chips 0 and 2 are now
+	 * Measured on #374's own polish round: with the pinned put commented out and a
+	 * {@code detail}-sniff written beside it, the whole omod suite stayed green then. Since #412 the
+	 * severity-wire fixture's own true chip catches a condition-sniff, so re-running that measurement
+	 * today reddens THERE; what it says about THIS class's chips is unchanged. Chips 0 and 2 are now
 	 * byte-identical in {@code type}, {@code drug}, {@code detail}, {@code severity} and
 	 * {@code chartOrderBridges}, so no function of any other published field can agree with the
 	 * accessor on both, and the re-derivation reddens on BEHAVIOUR rather than on a source scan.
@@ -217,14 +218,13 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>): every chip
 	 * but chip 0 answers false, so on VALUES such a narrowing reddens here where its predicate fails on
 	 * CHIP 0, and a predicate scoped to the CONDITION sentence — the sentence chip 0 carries — leaves
-	 * this class green. (The source pin below is a separate reader and catches a narrowing that spells
-	 * a second accessor read, whatever its predicate.) What holds the narrowing axis on values is
+	 * this class green. (The assertions below are a separate reader and catch a narrowing that spells a
+	 * second accessor read, whatever its predicate.) What holds the narrowing axis on values is
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire},
 	 * whose fixture since #412 answers true off a self-named ALLERGY RULE's sentence. <b>Not the
-	 * ALLERGEN arm</b>, whose three sentences go through
-	 * {@code SafetyWarning.recordedAllergenContraindication}, which hardcodes the flag false rather
-	 * than taking it (issue #348) — {@code DrugSafetyValidator.selfNamedAllergyRule} is the population
-	 * meant.
+	 * ALLERGEN arm</b> — {@code DrugSafetyValidator.selfNamedAllergyRule} is the population meant, and
+	 * {@code SafetyWarning.contraindication}'s own javadoc carries why that arm answers false by
+	 * construction rather than by remembering to.
 	 *
 	 * <p>This case adds the thing no value comparison can see: that the published value came from the
 	 * accessor rather than from something that happens to agree with it on this fixture — the
@@ -267,10 +267,10 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *         while two statements write the key and the surviving one re-derives the value. What
 	 *         bounds that is not this method: it is the identical-detail chip pair in
 	 *         {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, which such a re-derivation would
-	 *         still have to satisfy on VALUES — within the bound that pair actually has, which issue
-	 *         #412 narrowed and which
+	 *         still have to satisfy on VALUES — within the bound that pair actually has, which
 	 *         {@link #theSerializerPublishesTheChipsOwnProvenanceAnswer} states rather than this
-	 *         paragraph. This method guards spelling, and only spelling.
+	 *         paragraph (issue #412 corrected the STATEMENT of that bound; the pair itself is
+	 *         unchanged). This method guards spelling, and only spelling.
 	 */
 	private static String liveCode(String source) {
 		StringBuilder out = new StringBuilder(source.length());

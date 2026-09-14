@@ -102,27 +102,25 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *
 	 * <p><b>It is a self-named ALLERGY RULE's sentence, and that is the fact under test rather than a
 	 * detail of the fixture</b> (issue <a
-	 * href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>). The key is
-	 * published for both populations the accessor answers for — ADR Decision 92's own trade-off records
-	 * that a self-named ALLERGY rule the corroborating union does not redeem answers true too — and
-	 * until #412 the true-answering chip of either omod fixture carried the CONDITION sentence. So a
-	 * serializer narrowing the published value to the condition population agreed with the accessor on
-	 * every chip either fixture held. Measured on this change's own branch, by AND-ing the serializer's
-	 * put with {@code warning.getDetail().contains("active condition")} — which leaves
+	 * href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/412">#412</a>). ADR Decision
+	 * 92 carries why — the population this key is published for, and what it cost to leave half of it
+	 * unexercised — and is the home of that argument rather than this javadoc.
+	 *
+	 * <p>What belongs here is the instrument: AND the serializer's put with
+	 * {@code warning.getDetail().contains("active condition")}, which leaves
 	 * {@code ChartSearchAiUncorroboratedChartMatchTest.theSerializerPublishesTheChipsOwnProvenanceAnswer}
-	 * satisfied, one key write and one accessor read — and running {@code mvn -o clean install}
-	 * from the root: the whole build was green before this sentence moved, and
-	 * {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} red after it.
-	 * Re-apply that mutation and read the failure. The CONDITION half stays held by
-	 * {@code ChartSearchAiUncorroboratedChartMatchTest}, whose true-answering chip is issue #309's own
-	 * reproduction.
+	 * satisfied — one key write and one accessor read — and build from the root. On this change's own
+	 * branch that was green before this sentence moved, and
+	 * {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} red after it. Re-apply it and
+	 * read the failure.
 	 *
 	 * <p>The rule arm's real sentence and not an invented one:
-	 * {@code SubjectMatterScopedContraindicationTest.theDrugSideStillFiresWhenTheAnswerCitesTheOrderRecord}
+	 * {@code SelfNamedAllergyRuleFoldTest.anAllergyToTheDrugItselfIsOneChipAndKeepsTheCuratedNote}
 	 * asserts this exact string off a real {@code DrugSafetyValidator.validate} run over
-	 * {@code DrugReferenceTestSupport.curatedService()}, the module's own bundled seed. Cited rather
-	 * than re-derived from the composition {@code DrugSafetyValidator} writes it with: a copy of that
-	 * expression here would go stale silently, while the cited assertion reddens.
+	 * {@code DrugReferenceTestSupport.curatedService()}, the module's own bundled seed — and its class
+	 * names the population, so the one pointer carries both halves. Cited rather than re-derived from
+	 * the composition {@code DrugSafetyValidator} writes it with: a copy of that expression here would
+	 * go stale silently, while the cited assertion reddens.
 	 */
 	private static final String UNCORROBORATED_CONTRAINDICATION =
 			"Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy";
@@ -225,7 +223,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				// separates the two answers, so a value re-derived from `detail` agrees with the
 				// accessor on every chip in the list and the comparison below passes — measured on
 				// this change's polish round, with the real put commented out and a sniff beside it.
-				// Delete this chip, re-apply that mutation and read the green build.
+				// Delete this chip, re-apply that mutation and read THIS CLASS go green. Not the build:
+				// since #412 the two fixtures' true chips carry different sentences, so the sibling
+				// class reddens on a detail-sniff this one no longer sees.
 				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
 						UNCORROBORATED_CONTRAINDICATION));
 	}

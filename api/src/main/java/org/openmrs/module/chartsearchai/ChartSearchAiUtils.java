@@ -1255,9 +1255,9 @@ public class ChartSearchAiUtils {
 	 *         of its own — the extra refusal {@link #statesMeasurement} adds and {@link #statesWord}
 	 *         does not.
 	 *
-	 *         <p><b>The two separators are asked different questions.</b>
-	 *         A thousands separator ALWAYS has a digit to its left, so a {@code ','} is a
-	 *         fragment marker after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
+	 *         <p><b>The two separators are asked different questions.</b> A thousands separator
+	 *         ALWAYS has a digit to its left, so a {@code ','} is a fragment marker after a digit
+	 *         ({@code "1,500"}) — a comma anywhere else is punctuation,
 	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
 	 *         {@code "(route-unspecified),500"}) — with ONE exception, below. A {@code '.'} is a
 	 *         fragment marker after a digit ({@code "2.5"}) and ALSO where it BEGINS A TOKEN —
@@ -1282,8 +1282,9 @@ public class ChartSearchAiUtils {
 	 *
 	 *         <p><b>The run length is a fact about grouping; the three-digit tail is not.</b> A
 	 *         conventionally grouped number's head group is one to three digits and every group after
-	 *         it exactly three, so a run of four before a comma belongs to no such grouping. The tail test cannot be read the same way: a group of a grouped
-	 *         number IS exactly three digits, so that test tells no list from a separator, and a
+	 *         it exactly three, so a run of four before a comma belongs to no such grouping. The tail
+	 *         test cannot be read the same way: a group of a grouped number IS exactly three digits,
+	 *         so that test tells no list from a separator, and a
 	 *         comment here once justified {@code digits != 3} beside code admitting on
 	 *         {@code digits == 3}. <b>Both halves are load-bearing; mutate either and read the
 	 *         failure</b> — dropping the run-length test reddens {@code DosingCeilingFidelityTest}
@@ -1298,17 +1299,18 @@ public class ChartSearchAiUtils {
 	 *
 	 *         <p><b>Every earlier wording of this admitted a false REPORT, which is the direction
 	 *         {@code DosingCeilingFidelityCheck} must never fail in.</b> Refusing on any
-	 *         {@code '.'}/{@code ','} lost the list comma;
-	 *         refusing only BETWEEN two digits lost the naked decimal; refusing unless a LETTER
+	 *         {@code '.'}/{@code ','} lost the list comma; refusing only BETWEEN two digits lost the
+	 *         naked decimal; refusing unless a LETTER
 	 *         precedes lost the comma after a parenthesis; refusing unless a letter precedes the
 	 *         FULL STOP lost every other closing mark; refusing on ANY comma a digit precedes lost
 	 *         the elided-unit list, which is #425 and the exception above. The ones that treated the
 	 *         two characters alike could not tell a separator from punctuation at all; the one that
 	 *         kept classifying the character before the FULL STOP was a list nobody can finish — so
 	 *         the stop is asked instead whether it BEGINS a token, which is a property rather than a
-	 *         membership, and the comma is asked about the LENGTHS of the digit runs around it rather
-	 *         than about any character. <b>The residues that leaves, named here rather than left to be
-	 *         found, and each unpinned</b>: a naked decimal written directly after an opening mark
+	 *         membership, and the comma is asked about the digit before it and then about the LENGTHS
+	 *         of the digit runs around it. <b>The residues that leaves, named here rather than left
+	 *         to be found, and each unpinned</b>: a naked decimal written directly after an opening
+	 *         mark
 	 *         with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be read
 	 *         out of it. The exception ADMITS a comma decimal whose fraction is three digits long
 	 *         behind four or more ({@code "1000,300 mg/day"}). And it does NOT REACH a list written

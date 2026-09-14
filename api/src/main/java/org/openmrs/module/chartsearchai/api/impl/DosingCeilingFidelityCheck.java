@@ -109,10 +109,9 @@ import org.slf4j.LoggerFactory;
  *       {@code "4000 mg/day"} inside {@code "14000 mg/day"} does not match, nor does
  *       {@code "5 mg/day"} inside {@code "2.5 mg/day"} — the latter would be a false REPORT, which
  *       is the one direction this check must never fail in. What an ADMITTED occurrence does depends
- *       on WHICH ceiling it is, and the walk below is why: the strictest silences the report, while a
- *       laxer one the strictest does not accompany is what the report is MADE of. So a boundary that
- *       admits too much does not simply fall quiet, and {@code numericFragment} names its residues
- *       rather than resting on a direction;</li>
+ *       on WHICH ceiling it is — the strictest-first paragraph above is why, and it is not restated
+ *       here — so a boundary that admits too much does not simply fall quiet, and
+ *       {@code numericFragment} names its residues rather than resting on a direction;</li>
  *   <li>it reports the citation and the two ceilings and NO PROSE FROM EITHER SIDE. The ceilings
  *       are themselves bytes of the record — they are the whole point, the number this exists to
  *       put in front of a reader — and they are safe to log and to publish because they are the

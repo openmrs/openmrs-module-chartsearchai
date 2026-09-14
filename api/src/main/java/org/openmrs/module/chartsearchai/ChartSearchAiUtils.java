@@ -1215,8 +1215,8 @@ public class ChartSearchAiUtils {
 	 * through the real answer path by
 	 * {@code DosingCeilingFidelityTest.aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}.
 	 *
-	 * <p><b>{@link #numericFragment} is the rule and the only statement of it.</b> Every wording of
-	 * it so far has been measured to admit a false REPORT and been replaced; restating it here is how
+	 * <p><b>{@link #numericFragment} is the rule and the only statement of it.</b> Every EARLIER
+	 * wording of it was measured to admit a false REPORT and was replaced; restating it here is how
 	 * the next would come to disagree with the code, so this paragraph deliberately does not. Read that
 	 * method for what is refused, why the two separators are asked different questions, and which
 	 * case pins each shape.
@@ -1256,7 +1256,7 @@ public class ChartSearchAiUtils {
 	 *         does not.
 	 *
 	 *         <p><b>The two separators are asked different questions, and that is the whole rule.</b>
-	 *         A separator inside a number ALWAYS has a digit to its left, so a {@code ','} is a
+	 *         A thousands separator ALWAYS has a digit to its left, so a {@code ','} is a
 	 *         fragment marker after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
 	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
 	 *         {@code "(route-unspecified),500"}) — with ONE exception, below. A {@code '.'} is a
@@ -1277,15 +1277,25 @@ public class ChartSearchAiUtils {
 	 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/425">#425</a>).
 	 *         That is a list with the unit elided on the first number, which a model writes as
 	 *         readily as it repeats the unit, and refusing it accused an answer of leaving out a
-	 *         ceiling it had printed. No grouped number can be spelled that way: a thousands
-	 *         separator's head group is one to three digits and every group after it exactly three,
-	 *         so a run of four before a comma belongs to no grouping. BOTH halves are load-bearing
-	 *         and each was measured to admit a false REPORT alone — the group length alone reads
-	 *         {@code "0,5 mg/day"} as a list, and the run length alone reads {@code "1000,5 mg/day"}
-	 *         as one; the conjunction reads both as the single comma decimal they are. Whether the
-	 *         run is itself preceded by a comma is deliberately NOT asked, so that the middle number
-	 *         of a three-item list ({@code "300,4000,500 mg/day"}) is not refused for standing where
-	 *         a group would.
+	 *         ceiling it had printed.
+	 *
+	 *         <p><b>The two halves are asked for different reasons and only the first is
+	 *         structural.</b> A conventionally grouped number's head group is one to three digits and
+	 *         every group after it exactly three, so a run of four before a comma belongs to no such
+	 *         grouping — that is what makes this window safe to open at all. The three-digit tail is
+	 *         a BOUND on how much of the window the exception takes, and NOT a second grouping fact:
+	 *         a group of a grouped number IS exactly three digits, so that test tells no list from a
+	 *         separator. What it does is confine the admission to the shape #425 measured, leaving
+	 *         the commoner comma-decimal spellings ({@code "1000,5"}, {@code "1000,50"}) refused.
+	 *         <b>Both halves are load-bearing; mutate either and read the failure</b> — dropping the
+	 *         run-length test reddens {@code DosingCeilingFidelityTest}
+	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}, dropping
+	 *         the three-digit test reddens
+	 *         {@code .aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs}. Whether the run is itself
+	 *         preceded by a comma is deliberately NOT asked, so that the middle number of a
+	 *         three-item list ({@code "300,4000,500 mg/day"}) is not refused for standing where a
+	 *         group would; {@code .theMIDDLENumberOfACommaJoinedListIsNoFragmentEither} is that
+	 *         clause's own case.
 	 *
 	 *         <p><b>Every earlier wording of this admitted a false REPORT, which is the direction
 	 *         {@code DosingCeilingFidelityCheck} must never fail in, and each was found by a
@@ -1299,15 +1309,18 @@ public class ChartSearchAiUtils {
 	 *         the stop is asked instead whether it BEGINS a token, which is a property rather than a
 	 *         membership, and the comma is asked about the LENGTHS of the digit runs around it rather
 	 *         than about any character. <b>The residues that leaves, named here rather than left to be
-	 *         found, and both unpinned</b>: a naked decimal written directly after an opening mark
+	 *         found, and each unpinned</b>: a naked decimal written directly after an opening mark
 	 *         with no space ({@code "(.5 mg/day)"}) is NOT refused, so a laxer ceiling can be read
-	 *         out of it; and the exception above admits the one comma decimal that wears a list's
-	 *         shape — four or more integer digits and exactly three after the comma
-	 *         ({@code "1000,300 mg/day"}), measured admitted where {@code "1000,5 mg/day"} and
-	 *         {@code "0,5 mg/day"} are refused. That residue is the price of the exception and not a
-	 *         defect in its wording: within that window a grouped number is impossible, so the only
-	 *         two readings left are the elided-unit list and that decimal, and no test over the text
-	 *         alone separates them. Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
+	 *         out of it. The exception ADMITS a comma decimal whose fraction is three digits long
+	 *         behind four or more ({@code "1000,300 mg/day"}). And it does NOT REACH a list written
+	 *         any other way — three digits or fewer before the comma ({@code "600,60 mg/day"}), or a
+	 *         ceiling of other than three digits after it ({@code "4000,2000 mg/day"}) — so #425's
+	 *         own false report still stands for those. Those last two are ONE trade rather than two
+	 *         defects: {@code "1000,300 mg/day"} and {@code "4000,300 mg/day"} are the same shape to
+	 *         a rule reading only the text, so admitting either admits both. What would tell them
+	 *         apart is whether the number before the comma is another of the cited record's own
+	 *         ceilings, and this method is handed a text and a needle, so it cannot ask.
+	 *         Each fixed shape is a case in {@code DosingCeilingFidelityTest} —
 	 *         {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 *         {@code .aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt},
@@ -1340,7 +1353,8 @@ public class ChartSearchAiUtils {
 	/**
 	 * @return whether the {@code ','} at {@code comma} joins two whole numbers rather than grouping
 	 *         the digits of one — the exception {@link #numericFragment}'s javadoc states and is
-	 *         canonical for, asked as the only two lengths a grouped number cannot have.
+	 *         canonical for, asked as two digit-run lengths — one a conventionally grouped number
+	 *         cannot have, one bounding the exception to the shape issue #425 measured.
 	 *
 	 *         <p>It answers a SHAPE and not a reading: the window it admits also holds one comma
 	 *         decimal, which that javadoc names as the residue. Kept beside the rule rather than
@@ -1357,8 +1371,10 @@ public class ChartSearchAiUtils {
 		if (comma - start < 4) {
 			return false;
 		}
-		// And every group after the head is exactly three digits, so any other length says the digits
-		// after the comma are a number of their own rather than a group of this one.
+		// And the tail is bounded at exactly three digits. That is NOT a grouping fact — a group of a
+		// grouped number IS exactly three — it is the bound that keeps the commoner comma-decimal
+		// spellings refused. The javadoc says what it confines the exception to, and what it leaves
+		// out.
 		int digits = 0;
 		while (comma + 1 + digits < haystack.length()
 				&& Character.isDigit(haystack.charAt(comma + 1 + digits))) {

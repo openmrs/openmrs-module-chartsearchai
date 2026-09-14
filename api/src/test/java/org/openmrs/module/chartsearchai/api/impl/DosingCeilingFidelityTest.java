@@ -552,16 +552,17 @@ public class DosingCeilingFidelityTest {
 		// other separator. Admitting it here would accuse an answer of leaving out 0.5 mg/day when
 		// the number it printed IS 0.5 mg/day, in the notation half the world writes it in.
 		//
-		// What keeps the two apart is the GROUP: a separator inside a number is followed by exactly
-		// three digits, so "2000,500" can be a list of two numbers and "1000,5" cannot be anything
-		// but one number. Drop that condition and this case goes red while the one above still
-		// passes.
+		// What keeps this one refused is the exception's TAIL BOUND: it admits only three digits
+		// after the comma, and this text has one. That bound is not a grouping fact — a group of a
+		// grouped number IS exactly three digits, so it tells no list from a separator — it is what
+		// confines the exception to the shape #425 measured, leaving the commoner comma-decimal
+		// spellings refused. Drop it and this case goes red while the one above still passes.
 		PatientChart decimals = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of levothyroxine?", "Levothyroxine (paediatric)");
 		RecordMapping mapping = soleRecordCarryingCeilings(decimals);
 		assertEquals(Arrays.asList("0.5 mg/day", "5 mg/day"), mapping.getDosingCeilings(),
-				"the premise: the laxer ceiling's spelling is a SUFFIX of this comma decimal's "
-						+ "fraction, and the record's own spelling of the stricter one is absent");
+				"the premise: the laxer ceiling's spelling is a SUFFIX of this text, and the record's "
+						+ "own spelling of the stricter one is absent");
 		TestableService service = newService(decimals);
 		service.setLlmProvider(answering("Her recorded dose is 1000,5 mg/day ["
 				+ mapping.getIndex() + "]."));

@@ -900,8 +900,8 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 		}
 		if (type instanceof ParameterizedType) {
 			ParameterizedType parameterized = (ParameterizedType) type;
-			// The RAW type as well as the arguments: a generic SUBCLASS of Drug is the entity itself,
-			// and checking only the arguments answered false for it — measured.
+			// The RAW type as well as the arguments: a generic SUBCLASS of Drug is the entity itself.
+			// The javadoc above is the home for why each widening is here.
 			return handsOutTheEntity(parameterized.getRawType(), seen)
 					|| anyHandsOutTheEntity(parameterized.getActualTypeArguments(), seen);
 		}

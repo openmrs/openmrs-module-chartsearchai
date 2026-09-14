@@ -1199,8 +1199,9 @@ public class ArchitectureGuardTest {
 	 *  — which names it only as a local variable and invokes it nowhere — and the one legitimate
 	 *  reader, the operator MESSAGE that has to say which read failed. */
 	private static final List<String> MAY_NAME_THE_ORDER_READ_CAUSE = java.util.Arrays.asList(
-			"PatientClinicalContext.class", "PatientClinicalContextBuilder.class",
-			"DrugSafetyValidator.class");
+			"org/openmrs/module/chartsearchai/reference/PatientClinicalContext.class",
+			"org/openmrs/module/chartsearchai/reference/PatientClinicalContextBuilder.class",
+			"org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.class");
 
 	/**
 	 * {@code PatientClinicalContext.activeDrugOrderReadCompleted()} is a CAUSE, and no second reader
@@ -1211,18 +1212,24 @@ public class ArchitectureGuardTest {
 	 * <p><b>Asked of the class files, because the realistic second reader is in another class.</b>
 	 * Measured: changing {@code context.activeDrugOrdersRead()} to
 	 * {@code context.activeDrugOrderReadCompleted()} at the one place {@code DrugReferenceInjector}
-	 * gates its interaction-screen silence note left the whole build green. That note then states
+	 * gates its interaction-screen silence note left the whole build green; this case is what reddens
+	 * on it now. That note then states
 	 * that the reference data relates none of the patient's medications — a negative claim, in
 	 * prompt-facing citable evidence, about a list a dropped order is missing from, which is the
 	 * "never render silence as denial" rule of the reference package's own instructions reached
-	 * fail-open. {@link #scanForPattern}, this class's whole-tree SOURCE rule, cannot express it: its
-	 * exclusions are keyed on FILE NAME, so admitting the legitimate reader means excusing all of
-	 * {@code DrugSafetyValidator}, which is a bigger hole than the one being closed.
+	 * fail-open. To reproduce it, note that the gate also requires
+	 * {@code screenedSubstances.size() >= 2}, so the chart needs two orders that resolve BESIDE the
+	 * dropped one; on a one-order chart the mutation is silent and this case would look vacuous. {@link #scanForPattern}, this class's whole-tree SOURCE rule, cannot express the
+	 * question: its exclusions are keyed on file name and would excuse all of
+	 * {@code DrugSafetyValidator}, where the allow-list below keys on the class file's PATH, so every
+	 * class nested inside that one stays guarded.
 	 *
-	 * <p><b>What it does not reach.</b> The question is class-granular, so a SECOND reader inside
-	 * {@code DrugSafetyValidator} is invisible to it, and so is one inside
+	 * <p><b>What it does not reach.</b> The question is per class FILE, so a SECOND reader inside
+	 * {@code DrugSafetyValidator} itself is invisible to it, and so is one inside
 	 * {@code PatientClinicalContextBuilder} — which is on the list because the compiler records the
-	 * accessor's name in its {@code LocalVariableTable}, not because it calls it. Both are named
+	 * accessor's name in its {@code LocalVariableTable}, not because it calls it, and which therefore
+	 * drops off the list entirely under {@code -g:none} (the list being permissive, that is safe).
+	 * Test classes are outside the walk, which reads {@code target/classes} only. All are named
 	 * rather than guarded; an instruction walk is out of this class's scope for the reason its
 	 * neighbours record.
 	 */
@@ -1237,11 +1244,14 @@ public class ArchitectureGuardTest {
 			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
 					.collect(java.util.stream.Collectors.toList())) {
 				if (constantPoolStrings(file).contains(ORDER_READ_CAUSE)) {
-					naming.add(file.getFileName().toString());
+					// The relative PATH, as both sibling walks in this class collect it: a bare simple
+					// name would excuse a class of that name in any package.
+					naming.add(classes.relativize(file).toString());
 				}
 			}
 		}
-		assertTrue(naming.contains("DrugSafetyValidator.class"),
+		assertTrue(naming.contains(
+				"org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.class"),
 				"the standing surface's operator message is the one legitimate reader of "
 						+ ORDER_READ_CAUSE + " and no class file names it, so this guard is comparing "
 						+ "nothing against nothing. Found: " + naming);
@@ -1249,10 +1259,13 @@ public class ArchitectureGuardTest {
 		List<String> unexpected = new ArrayList<>(naming);
 		unexpected.removeAll(MAY_NAME_THE_ORDER_READ_CAUSE);
 		assertEquals(new ArrayList<String>(), unexpected,
-				unexpected + " names " + ORDER_READ_CAUSE + ", which is a CAUSE and not a stamp. A "
-						+ "verdict built from it reads TRUE on a pass that completed the order read and "
-						+ "then dropped an order from the list, so it certifies a medication list a "
-						+ "prescription is missing from. Ask " + "activeDrugOrdersRead() instead, which "
-						+ "subtracts that case (issue #421).");
+				unexpected + " names " + ORDER_READ_CAUSE + ", which is a CAUSE and not a stamp. Which "
+						+ "of two things to do depends on what you are writing. Building a VERDICT out "
+						+ "of it reads TRUE on a pass that completed the order read and then dropped an "
+						+ "order from the list, so it certifies a medication list a prescription is "
+						+ "missing from — ask activeDrugOrdersRead() instead, which subtracts that "
+						+ "case. Writing an operator MESSAGE that has to say WHICH read failed is the "
+						+ "legitimate reason to name it, and the stamp cannot answer that, so add the "
+						+ "class file to MAY_NAME_THE_ORDER_READ_CAUSE and say here why (issue #421).");
 	}
 }

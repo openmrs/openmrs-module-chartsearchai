@@ -771,7 +771,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void aRealDiscontinuationLeavesThePrescriptionCarryingItsStopDate() {
 		// The claim the published contract rests on, driven rather than reasoned. README and ADR
-		// Decision 97 both tell a client that an ordinary discontinuation is SERVED by this key rather
+		// Decision 98 both tell a client that an ordinary discontinuation is SERVED by this key rather
 		// than skipped, and that sentence exists because two earlier attempts to characterise the
 		// population from core's source were each measured false. So it is pinned here, through the
 		// real OrderService.discontinueOrder on a real live order: the prescription comes back out of
@@ -815,7 +815,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 				"and carries core's own end instant, so a discontinued prescription is served rather "
 						+ "than absent from the statement");
 
-		// The other half, through the MODULE and not just core. What README and ADR Decision 97 tell
+		// The other half, through the MODULE and not just core. What README and ADR Decision 98 tell
 		// a client is that BOTH records of a discontinuation are served; asserting only that core
 		// dates the stub would leave the published half of that sentence resting on a core fact.
 		chartOf(drugOrderDoc(stub.getOrderId().intValue()));

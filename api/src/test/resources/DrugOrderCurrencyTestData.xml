@@ -85,7 +85,7 @@
 	     record beside it gets an auto_expire_date, so both carry an end date. cloneForDiscontinuing()
 	     alone sets neither, and this row is that state, written directly. Through OrderService it is
 	     not producible at all — saveOrder stamps autoExpireDate on every DISCONTINUE order it saves.
-	     SerializedRecord.orderStopDate is the one home for that measurement, and ADR Decision 97 the
+	     SerializedRecord.orderStopDate is the one home for that measurement, and ADR Decision 98 the
 	     reason the module derives nothing here. Order 222's own date_stopped is
 	     left NULL on purpose: core's Order.isActive() reads an order's own fields and never walks
 	     forward to a discontinuing sibling, so pointing at 222 cannot move any other case in this

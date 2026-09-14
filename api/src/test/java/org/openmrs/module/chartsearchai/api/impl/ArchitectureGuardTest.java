@@ -166,11 +166,13 @@ public class ArchitectureGuardTest {
 	 * publish an {@code unfaithfullyRenderedCitations} index for, a reference record the answer never
 	 * cited, and {@code restsOnReferenceMaterial} would find a demote-only member in EVERY claim's
 	 * rests-on set, withholding issue #284's negative for every chart citation in the answer.
-	 * {@code SafetyFindingSeverityFidelityCheck}'s note of its own exemption argues from the last
-	 * clause of that property rather than from the group — an attached index is never a
-	 * {@code safety_finding} record, so it carries no rating for that check to require — and a rated
-	 * mapping built with a derivation would have it publish an {@code unstatedFindingSeverities}
-	 * entry against a citation the model never made.
+	 * {@code SafetyFindingSeverityFidelityCheck} used to argue its own exemption from the last clause
+	 * of that property — an attached index is never a {@code safety_finding} record, so it carries no
+	 * rating for that check to require. Since issue #409 round two it takes the question from
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} instead, which applies the #305
+	 * filter itself, so a rated mapping built with a derivation no longer reaches that key's
+	 * accusation walk. The hazard named here is the GROUP one above; that check is no longer a second
+	 * one resting on this property.
 	 *
 	 * <p><b>Asked of the BYTECODE, and the earlier source-text form is gone rather than patched.</b>
 	 * That form matched the literal {@code "new RecordMapping("} and counted commas, and review
@@ -810,9 +812,10 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>It reads the file itself rather than going through {@link #scanForPattern}, which reports
 	 * per-line matches across the whole tree: this rule needs a COUNT, one file, and a positive
-	 * assertion, none of which that helper expresses. It borrows the helper's comment skip, so a
-	 * maintainer may record the rejected alternative in this class's own javadoc — which ADR
-	 * Decision 59 spells character for character — without breaking the build.
+	 * assertion, none of which that helper expresses. It strips comments through {@link #codeLines}
+	 * rather than borrowing that helper's whole-line skip, so a maintainer may record the rejected
+	 * alternative in this class's own javadoc — which ADR Decision 59 spells character for
+	 * character — without breaking the build.
 	 */
 	@Test
 	public void classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep() throws IOException {
@@ -860,6 +863,12 @@ public class ArchitectureGuardTest {
 	 * apart — a renamed decode step or a third dialect spelling fixed in one copy and not the other
 	 * would leave the second blind, and both rules report success by finding nothing.
 	 *
+	 * <p>Every needle is put to {@link #codeLines}' reading of the line and never to the line itself,
+	 * so a note in a comment form that method strips neither satisfies the required call nor trips a
+	 * dialect negative; it carries which forms were measured to let a note through before the strip,
+	 * and the residues that survive it. The line NUMBER a violation reports is still the raw
+	 * file's, which is why the loop indexes both lists.
+	 *
 	 * @param fileName the source file, as {@code getSourceCache()} keys it
 	 * @param expectedCompiles how many patterns the class is allowed to compile — every one of them
 	 *            for a shape of its own, never for a marker
@@ -876,22 +885,22 @@ public class ArchitectureGuardTest {
 		int compiles = 0;
 		boolean callsDecodeStep = false;
 		List<String> ownDialect = new ArrayList<>();
+		List<String> stripped = codeLines(lines);
 		for (int i = 0; i < lines.size(); i++) {
-			String line = lines.get(i);
-			String trimmed = line.trim();
-			if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+			String code = stripped.get(i);
+			if (code.trim().isEmpty()) {
 				continue;
 			}
-			if (line.contains("ChartSearchAiUtils.citedIndexes(")) {
+			if (code.contains("ChartSearchAiUtils.citedIndexes(")) {
 				callsDecodeStep = true;
 			}
-			if (line.contains("Pattern.compile(")) {
+			if (code.contains("Pattern.compile(")) {
 				compiles++;
 			}
 			// A bracketed-digit regex of its own, and the shared pattern read directly instead of
 			// through its decode step. Both are marker dialects; neither is caught by the count.
-			if (line.contains("\\[") || line.contains("INLINE_CITATION")) {
-				ownDialect.add("line " + (i + 1) + ": " + trimmed);
+			if (namesAMarkerDialect(code)) {
+				ownDialect.add("line " + (i + 1) + ": " + lines.get(i).trim());
 			}
 		}
 		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep, fileName
@@ -901,6 +910,230 @@ public class ArchitectureGuardTest {
 		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(), fileName
 				+ " must not spell a bracketed regex of its own nor name INLINE_CITATION; markers are "
 				+ "decoded by ChartSearchAiUtils.citedIndexes. Found: " + ownDialect);
+	}
+
+	/**
+	 * Whether {@code code} spells a citation-marker dialect of its own — a bracketed-digit regex, or
+	 * the shared pattern named directly instead of reached through its decode step. Hand it
+	 * {@link #codeLines}' reading of a line and never the raw line: a note mentioning either
+	 * spelling is not a dialect wherever that method strips the note, and its javadoc says which
+	 * forms it strips and which residues survive.
+	 *
+	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
+	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
+	 * so a third dialect added to one copy and not the other would leave the other blind while both
+	 * reported success by finding nothing — the drift
+	 * {@link #assertMarkersReachedOnlyThroughTheSharedDecodeStep}'s own javadoc exists to prevent,
+	 * arriving through the duplicate rather than through a parameter. What is deliberately NOT hoisted
+	 * is each rule's required call: the marker rules REQUIRE {@code ChartSearchAiUtils.citedIndexes(}
+	 * and the finding-severity rule FORBIDS it, so one signature over both polarities is what that
+	 * javadoc rightly refuses.
+	 */
+	private static boolean namesAMarkerDialect(String code) {
+		return code.contains("\\[") || code.contains("INLINE_CITATION");
+	}
+
+	/**
+	 * The CODE in {@code lines}: comments opened by {@code //} and by {@code /*} removed, string and
+	 * character literals kept, and one entry per input line so a caller can still report a line
+	 * NUMBER.
+	 *
+	 * <p><b>The strip is load-bearing rather than tidiness.</b> A rule that reads SOURCE TEXT for a
+	 * required call has that assertion satisfied by a comment naming what was just removed, and a
+	 * maintainer's {@code was …} note is how the relocation these rules exist to catch actually gets
+	 * written. Each arrangement below was measured on 2026-09-14 by replacing
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} inside
+	 * {@code SafetyFindingSeverityFidelityCheck} with a hand-rolled {@code charAt}/{@code isDigit}
+	 * marker scan, which reddens
+	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} on its own, and adding a
+	 * note naming the removed call:
+	 * <ul>
+	 * <li>a TRAILING {@code //} note on the replacing line took the whole build GREEN back when this
+	 * method skipped a line whose trimmed text BEGINS a comment and scanned every other line whole.
+	 * That is the dominant commenting style in the files these rules scan;</li>
+	 * <li>a MID-LINE {@code /*} note, closed on the same line, took {@code ArchitectureGuardTest}
+	 * green again once {@code //} alone was stripped — and the same trick on
+	 * {@code ChartSearchAiUtils.citedIndexes(answer)} in {@code SafetyFindingCitationExtentCheck}
+	 * silently restored a private marker dialect there, reddening
+	 * {@link #safetyFindingCitationExtentCheckReachesMarkersOnlyThroughTheSharedDecodeStep} only
+	 * after the fix;</li>
+	 * <li>so did a THREE-LINE block comment whose middle line does not begin with {@code *}, which no
+	 * per-line strip can see. That is why this walks the whole file and carries the block state
+	 * across lines, and why the earlier heuristics on a line's first characters are gone: with the
+	 * opener seen, a javadoc continuation line needs no heuristic to be recognised as comment.</li>
+	 * </ul>
+	 * Each of those reddens its rule now, re-measured after the fix.
+	 *
+	 * <p><b>Attacked from the other side too, because a wrong strip reddens a COMPLIANT file and that
+	 * is as bad.</b> Also measured: a string literal holding an unclosed {@code /*} ahead of a real
+	 * {@code citedIndexes(} call on the same line leaves both rules green, so the literal tracking
+	 * keeps a needle a naive strip would have eaten; a character literal holding a double quote, and
+	 * a string literal holding an escaped one, do not swallow the {@code //} that follows them on the
+	 * same line, each still reddening the finding-severity rule when the shared call is gone; and a
+	 * trailing note merely MENTIONING {@code INLINE_CITATION} in an otherwise compliant
+	 * {@code SafetyFindingCitationExtentCheck}, which reddened before any strip existed, is green.
+	 *
+	 * <p><b>The residue, named rather than claimed away: a needle inside a STRING LITERAL counts as
+	 * code.</b> Measured the same day, on the fixed strip: a {@code log.debug} line naming
+	 * {@code citedFindingIndexes(} beside the hand-rolled scan satisfies the required-call assertion
+	 * and the build stays green. Symmetrically, a literal spelling {@code INLINE_CITATION} trips a
+	 * dialect negative.
+	 * Literals are kept deliberately — a bracketed-digit regex IS a string literal ({@code "\\["}),
+	 * so blanking them would take the dialect negatives' own evidence away, and no per-needle policy
+	 * is worth the parser.
+	 *
+	 * <p><b>Nothing here parses Java, and what that costs is measured rather than bounded.</b> The
+	 * quote state is declared inside the per-line loop, so it resets at every newline and a
+	 * multi-line TEXT BLOCK is not tracked: only the opening {@code """} delimiter line is
+	 * quote-scanned, and every body line is read as ordinary CODE. Measured 2026-09-14 by driving
+	 * this method from a throwaway same-package test — a {@code //} in a body line was stripped, and
+	 * a {@code /*} in one opened block state that blanked the {@code """} terminator line and every
+	 * line after it. This project sets {@code maven.compiler.source} to 11 and text blocks are Java
+	 * 15+, so nothing under the scanned tree can hold one at this source level; a source-level bump
+	 * is what makes it reachable, and everything after such a body line would then be blank to these
+	 * rules — reddening a required-call assertion on compliant code and blinding a dialect negative
+	 * over the same region, a wrong strip failing in both directions at once. Unicode escapes are
+	 * not processed either, so a needle in a comment whose opening slashes are written as unicode
+	 * escapes counts as code: measured the same way, such a line comes back byte-identical, while
+	 * javac translates unicode escapes before it lexes and reads the line as a comment. Separately,
+	 * an unclosed block comment blanks every line after the one it opens on.
+	 *
+	 * <p><b>It stays APART from {@code ChartSearchAiUncorroboratedChartMatchTest.liveCode}</b>, the
+	 * omod-side stripper whose javadoc records the block form as the defect stripping {@code //}
+	 * exists to close — read that one before touching this. Two reasons, either sufficient: they are
+	 * in different Maven modules and this class is not on omod's test classpath, so sharing means
+	 * publishing an api test-jar to hold a comment stripper; and they keep different things. That one
+	 * strips one extracted method BODY and counts occurrences in it, and drops literals with the
+	 * fail-open consequence its javadoc names; this one keeps literals, because a dialect negative's
+	 * own evidence IS a string literal, and keeps one entry per line so a violation can name one.
+	 */
+	private static List<String> codeLines(List<String> lines) {
+		List<String> stripped = new ArrayList<>(lines.size());
+		boolean inBlock = false;
+		for (String line : lines) {
+			StringBuilder code = new StringBuilder(line.length());
+			char quote = 0;
+			for (int i = 0; i < line.length(); i++) {
+				char c = line.charAt(i);
+				if (inBlock) {
+					if (c == '*' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
+						inBlock = false;
+						i++;
+					}
+				}
+				else if (quote != 0) {
+					code.append(c);
+					if (c == '\\' && i + 1 < line.length()) {
+						code.append(line.charAt(++i));
+					}
+					else if (c == quote) {
+						quote = 0;
+					}
+				}
+				else if (c == '"' || c == '\'') {
+					quote = c;
+					code.append(c);
+				}
+				else if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') {
+					break;
+				}
+				else if (c == '/' && i + 1 < line.length() && line.charAt(i + 1) == '*') {
+					inBlock = true;
+					i++;
+				}
+				else {
+					code.append(c);
+				}
+			}
+			stripped.add(code.toString());
+		}
+		return stripped;
+	}
+
+	/**
+	 * {@code SafetyFindingSeverityFidelityCheck} decides which findings the answer cited by asking
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes}, and never by a reading of its
+	 * own — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>, round
+	 * two. Both keys answer one question, and before this the accusation key answered it off
+	 * {@code extractCitedReferences}' union while the count answered it off the markers, so one
+	 * response could state that the answer never cited a finding AND that it cited that finding and
+	 * dropped its rating.
+	 *
+	 * <p><b>It does NOT reuse {@link #assertMarkersReachedOnlyThroughTheSharedDecodeStep}</b>, and
+	 * the reason is that helper's own javadoc: it exists in one place so its two callers' needle set
+	 * cannot drift apart, and a third caller requiring a DIFFERENT needle is that drift arriving by
+	 * parameter. Its name would also be false here — this class reaches no markers at all, which is
+	 * the point. What the two rules do share is the comment strip, and that one IS hoisted —
+	 * {@link #codeLines}, so a comment form closed in one copy cannot be left open in the other. What
+	 * stays duplicated is each rule's own loop and needles, because one signature over both
+	 * polarities is what would put two needle sets behind it.
+	 *
+	 * <p><b>Stated POSITIVELY, for the reason its neighbours record:</b> forbidding spellings alone
+	 * let three of four ordinary relocations through with the build green, and what closes them is
+	 * that the entry point must be CALLED. The two dialect negatives are defence in depth — a
+	 * maintainer who re-derives the reading here would most likely reach for markers to do it.
+	 *
+	 * <p>Nothing behavioural can pin the relocation itself: a local marker scan, or a
+	 * {@code citedIndexes} call spelled here, answers identically on every case in
+	 * {@code SafetyFindingSeverityFidelityTest}, so the suite stays green on exactly the regression
+	 * this rule exists to prevent. What the behavioural cases DO pin is the answer — drop the skip
+	 * and {@code aFindingOnlyTheStructuredArrayNamesIsNotAccusedOfDroppingItsRating} reddens; this
+	 * rule is about where the answer comes from.
+	 *
+	 * <p>Same residue as its neighbours, named rather than papered over: it reads SOURCE TEXT, so it
+	 * asks that the call be present and not that its result be used, and a second reading written
+	 * BESIDE a retained call is out of its reach. Three comment shapes naming the removed call were
+	 * each measured to satisfy it and each is now stripped — a trailing {@code //} note, a mid-line
+	 * {@code /*} one closed on the same line, and a three-line block whose middle line does not
+	 * begin with {@code *}; {@link #codeLines} carries those measurements, and the residues it does
+	 * NOT strip, which include a comment opener written with unicode escapes. A needle inside a STRING
+	 * LITERAL satisfies it too, a log line or an assertion message naming
+	 * {@code citedFindingIndexes(} being indistinguishable here from a call to it. An earlier
+	 * draft of this paragraph called that the CHEAPEST edit satisfying the rule while removing the
+	 * reading, and it was not: a {@code was …} note on the replacing line was cheaper and closer to
+	 * how the slip that motivated this rule was actually written, which is why that note is now
+	 * stripped rather than described. No superlative replaces it — what a later round should do is
+	 * write the edit it has in mind and read whether this reddens.
+	 */
+	@Test
+	public void theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck() throws IOException {
+		String fileName = "SafetyFindingSeverityFidelityCheck.java";
+		List<String> lines = getSourceCache().get(fileName);
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: " + fileName
+				+ " was not found by the source scan, so this rule would pass vacuously");
+		boolean callsTheReading = false;
+		int compiles = 0;
+		List<String> ownDialect = new ArrayList<>();
+		List<String> stripped = codeLines(lines);
+		for (int i = 0; i < lines.size(); i++) {
+			String code = stripped.get(i);
+			if (code.trim().isEmpty()) {
+				continue;
+			}
+			if (code.contains("SafetyFindingCitationExtentCheck.citedFindingIndexes(")) {
+				callsTheReading = true;
+			}
+			if (code.contains("Pattern.compile(")) {
+				compiles++;
+			}
+			if (namesAMarkerDialect(code) || code.contains("ChartSearchAiUtils.citedIndexes(")) {
+				ownDialect.add("line " + (i + 1) + ": " + lines.get(i).trim());
+			}
+		}
+		org.junit.jupiter.api.Assertions.assertTrue(callsTheReading, fileName
+				+ " must take \"which findings did the answer cite\" from "
+				+ "SafetyFindingCitationExtentCheck.citedFindingIndexes. If that call is gone, this "
+				+ "key has its own reading again and can accuse a finding the answer never cited — "
+				+ "the issue #409 defect, which no behavioural case in this package can see.");
+		org.junit.jupiter.api.Assertions.assertEquals(0, compiles, fileName
+				+ " must compile no pattern of its own: it recognises no shape, and a first "
+				+ "Pattern.compile here is a citation-marker dialect.");
+		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(), fileName
+				+ " must not read the answer's markers itself — not a bracketed regex, not "
+				+ "INLINE_CITATION, and not the shared decode step directly. The reading it needs "
+				+ "already applies the issue #305 filter and the blank-answer arm; reaching for "
+				+ "markers here re-derives half of it. Found: " + ownDialect);
 	}
 
 	/**

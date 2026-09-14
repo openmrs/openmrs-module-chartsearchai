@@ -38,10 +38,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * the wire (issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">#395</a>).
  *
- * <p>It is the base the FINDING keys beside it needed and none of them is: each of those judges a finding
- * the answer DID cite, so on the reported response — six findings stated of seven carried — not one
- * of them reported the dropped finding. The first case below states this key beside the two whose
- * empty lists were the misleading part, and asserts those as PRECONDITIONS rather than as results.
+ * <p>On the reported response — six findings stated of seven carried — the two list keys the first
+ * case below states beside this one read {@code []}, which was the misleading part. What "the
+ * answer cited it" means is not one reading across the keys beside this one
+ * ({@code ChartSearchService.FindingCitationExtent} is canonical, and ADR Decision 97 records it
+ * key by key and publishes no rule over them), and nothing here rests on their sharing one — mutate
+ * a check's selection and read the failures. That first case asserts those two as PRECONDITIONS
+ * rather than as results.
  *
  * <p>What the two numbers MEAN is canonical at {@code ChartSearchService.FindingCitationExtent} and
  * pinned one layer down by {@code SafetyFindingCitationExtentTest}, which drives the real

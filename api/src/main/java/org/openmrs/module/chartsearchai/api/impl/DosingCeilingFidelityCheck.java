@@ -108,8 +108,10 @@ import org.slf4j.LoggerFactory;
  *       No second dialect of "the answer states X" exists to drift. What it buys here:
  *       {@code "4000 mg/day"} inside {@code "14000 mg/day"} does not match, nor does
  *       {@code "5 mg/day"} inside {@code "2.5 mg/day"} — the latter would be a false REPORT, which
- *       is the one direction this check must never fail in. And any occurrence the boundary ADMITS,
- *       for any reason, silences the report;</li>
+ *       is the one direction this check must never fail in. What an ADMITTED occurrence does depends
+ *       on WHICH ceiling it is — the strictest-first paragraph above is why, and it is not restated
+ *       here — so a boundary that admits too much does not simply fall quiet, and
+ *       {@code numericFragment} names its residues rather than resting on a direction;</li>
  *   <li>it reports the citation and the two ceilings and NO PROSE FROM EITHER SIDE. The ceilings
  *       are themselves bytes of the record — they are the whole point, the number this exists to
  *       put in front of a reader — and they are safe to log and to publish because they are the
@@ -181,10 +183,11 @@ final class DosingCeilingFidelityCheck {
 	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences}. A citation the MODULE attached
-	 *            (issue #305) needs no filter here for the reason the sibling states: the
-	 *            {@code ceilings} map below holds only records carrying a {@code dosingCeilings}
-	 *            list, which on the production path {@code DrugReferenceInjector}'s reference loop
-	 *            alone writes
+	 *            (issue #305) needs no filter here, and the reason is stated rather than deferred to
+	 *            a sibling — the one that used to carry it, {@code SafetyFindingSeverityFidelityCheck},
+	 *            now delegates the question instead (issue #409 round two): the {@code ceilings} map
+	 *            below holds only records carrying a {@code dosingCeilings} list, which on the
+	 *            production path {@code DrugReferenceInjector}'s reference loop alone writes
 	 * @param mappings the chart's records, cited or not — the carrier of each cited record's
 	 *            ceilings
 	 * @return one {@link UnstatedDosingCeiling} per offending citation, in CITATION order —

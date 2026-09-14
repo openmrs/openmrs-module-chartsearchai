@@ -100,14 +100,6 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		return service;
 	}
 
-	private static List<Integer> indexes(ChartAnswer answer) {
-		List<Integer> out = new ArrayList<Integer>();
-		for (RecordReference reference : answer.getReferences()) {
-			out.add(Integer.valueOf(reference.getIndex()));
-		}
-		return out;
-	}
-
 	private static RecordReference referenceAt(ChartAnswer answer, int index) {
 		for (RecordReference reference : answer.getReferences()) {
 			if (reference.getIndex() == index) {
@@ -125,11 +117,12 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 	public void aCitedFindingBringsTheChartRecordItFiredOnIntoTheReferences() {
 		ChartAnswer answer = serviceUnderTest(new CitesTheFindingAlone()).search(patient, QUESTION);
 
-		assertTrue(indexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
+		assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
 				"the answer asserts the patient's recorded allergy and cites only the module's own "
 						+ "finding, so the module must publish the record that allergy IS — otherwise "
 						+ "the click-through is decided by the wording of the question (issue #305). "
-						+ "References were: " + indexes(answer) + " for answer: " + answer.getAnswer());
+						+ "References were: " + ChartAnswerTestSupport.referenceIndexes(answer)
+						+ " for answer: " + answer.getAnswer());
 		RecordReference attached = referenceAt(answer, ALLERGY_RECORD);
 		assertEquals(ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY, attached.getResourceType());
 		assertEquals(allergyUuid, attached.getResourceUuid(),
@@ -166,7 +159,7 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		ChartAnswer answer = serviceUnderTest(new CitesTheFindingAndTheRecord()).search(patient,
 				QUESTION);
 
-		List<Integer> indexes = indexes(answer);
+		List<Integer> indexes = ChartAnswerTestSupport.referenceIndexes(answer);
 		assertEquals(1, Collections.frequency(indexes, Integer.valueOf(ALLERGY_RECORD)),
 				"the record must appear exactly once, was: " + indexes);
 		assertFalse(referenceAt(answer, ALLERGY_RECORD).isAttachedByTheModule(),
@@ -194,7 +187,7 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 				}
 				earlyCitations.add(seen);
 			},
-			early -> earlyDone.add(indexes(early)));
+			early -> earlyDone.add(ChartAnswerTestSupport.referenceIndexes(early)));
 
 		assertEquals(1, earlyCitations.size(), "the citations consumer must have fired");
 		assertTrue(earlyCitations.get(0).contains(Integer.valueOf(ALLERGY_RECORD)),
@@ -204,8 +197,8 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		assertTrue(earlyDone.get(0).contains(Integer.valueOf(ALLERGY_RECORD)),
 				"and on the early done, which under chartsearchai.grounding.async is the terminal "
 						+ "event a user sees. Was: " + earlyDone.get(0));
-		assertTrue(indexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
-				"and on the answer this method returns. Was: " + indexes(answer));
+		assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
+				"and on the answer this method returns. Was: " + ChartAnswerTestSupport.referenceIndexes(answer));
 	}
 
 	/**
@@ -229,7 +222,8 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 
 		assertTrue(answer.getReferences().isEmpty(),
 				"an answer anchoring nothing inline surfaces no references at all, so there is no "
-						+ "cited finding to bring a record with it. Was: " + indexes(answer));
+						+ "cited finding to bring a record with it. Was: "
+						+ ChartAnswerTestSupport.referenceIndexes(answer));
 	}
 
 	/**
@@ -253,10 +247,11 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 	public void aFindingTheModelDidNotCiteBringsNoChartRecordIntoTheReferences() {
 		ChartAnswer answer = serviceUnderTest(new CitesTheObsAlone()).search(patient, QUESTION);
 
-		assertFalse(indexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
+		assertFalse(ChartAnswerTestSupport.referenceIndexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
 				"the answer cited the obs and nothing else, so the module has no citation of the "
 						+ "model's to surface a derivation off and must attach nothing. References "
-						+ "were: " + indexes(answer) + " for answer: " + answer.getAnswer());
+						+ "were: " + ChartAnswerTestSupport.referenceIndexes(answer)
+						+ " for answer: " + answer.getAnswer());
 		for (RecordReference reference : answer.getReferences()) {
 			assertFalse(reference.isAttachedByTheModule(), reference.getResourceType() + " ["
 					+ reference.getIndex() + "] was cited by the model, so nothing here is the "
@@ -268,7 +263,7 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		assertTrue(attached != null && attached.isAttachedByTheModule(),
 				"and the arrangement really does carry the derivation: cite the finding over the same "
 						+ "chart and the allergy record is attached. References were: "
-						+ indexes(whenCited));
+						+ ChartAnswerTestSupport.referenceIndexes(whenCited));
 	}
 
 	/**

@@ -101,7 +101,7 @@ public class SerializedRecord {
 	 *
 	 * <p><strong>That paragraph is the third attempt at describing this population and the first two
 	 * were measured false, so it is deliberately a measurement and a mechanism rather than a rule
-	 * about which flows produce what.</strong> This is its ONE home: {@code docs/adr.md} Decision 97,
+	 * about which flows produce what.</strong> This is its ONE home: {@code docs/adr.md} Decision 98,
 	 * {@code README.md} and the tests point here rather than restating it, because a claim that has
 	 * needed correcting twice is the last one that should exist in five files.
 	 *

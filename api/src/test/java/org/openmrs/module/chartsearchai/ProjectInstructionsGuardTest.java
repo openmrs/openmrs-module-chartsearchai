@@ -139,8 +139,10 @@ public class ProjectInstructionsGuardTest {
 	 *
 	 * <p><b>The ROOT budget was raised again, from 24,000 to 25,000, on 2026-09-14 — and it is the
 	 * state the paragraph above predicted, one ticket later.</b> Issue #315's remedy adds one rule
-	 * spanning four packages, so it has no nested file to sit in, and the root file was 8 bytes under
-	 * the cap. Trimming came first and recovered 401 bytes: the rationale for the {@code isEmpty()}
+	 * spanning four packages, so it has no nested file to sit in, and the root file was 23,992 bytes
+	 * against the 24,000-byte cap when that was measured, at base {@code 53498c02} — named because the
+	 * figure tracks a file two branches append to, and a merge from {@code main} moved it by 20 bytes
+	 * while this branch was in review. Trimming came first and recovered 401 bytes: the rationale for the {@code isEmpty()}
 	 * directive (which {@code QueryStoreChartBuilder.OrderCurrency}'s class javadoc carries — an
 	 * earlier form of this sentence credited Decisions 46/47 for it, and review measured that neither
 	 * decision says anything about the active-order set being empty), the WHY of the

@@ -1199,8 +1199,8 @@ public class ChartSearchAiUtils {
 	 *         marker only after a digit ({@code "1,500"}) — a comma anywhere else is punctuation,
 	 *         between list items and after whatever precedes THEM ({@code "2000 mg/day,500"},
 	 *         {@code "(route-unspecified),500"}). A {@code '.'} is a fragment marker after a digit
-	 *         ({@code "2.5"}) and ALSO where it BEGINS A TOKEN — preceded by whitespace, or by
-	 *         nothing at all — because that is a decimal written without its leading zero
+	 *         ({@code "2.5"}) and ALSO where it BEGINS A TOKEN — preceded by a space in
+	 *         {@link #isSpace}'s sense, or by nothing at all — because that is a decimal written without its leading zero
 	 *         ({@code "is .5"}, a text opening {@code ".5"}). Attached to what precedes it, it is the
 	 *         full stop ending a sentence, whatever that sentence ended with: a word
 	 *         ({@code "see note.500"}), a bracket ({@code "(suspension).500"}), a quote, an emphasis
@@ -1226,6 +1226,19 @@ public class ChartSearchAiUtils {
 	 *         {@code .aFullStopATTACHEDToWhatPrecedesItLeavesAStatedCeilingStated} — so a fifth
 	 *         wording that loses one of them reddens rather than ships.
 	 */
+	/**
+	 * @return whether {@code c} separates tokens — {@link Character#isWhitespace} UNION
+	 *         {@link Character#isSpaceChar}, which is not a tautology: the first refuses the
+	 *         non-breaking spaces (U+00A0, U+2007, U+202F) and the second refuses the control-ish
+	 *         separators ({@code \t}, {@code \n}). Typeset and tabular copy holds a number together
+	 *         with exactly the three the first refuses, so asking only it read
+	 *         {@code "is\u00A0.5 mg/day"} as attaching the decimal point and produced a false report
+	 *         — {@code DosingCeilingFidelityTest.aNakedDecimalAfterANONBREAKINGSpaceIsStillANakedDecimal}.
+	 */
+	private static boolean isSpace(char c) {
+		return Character.isWhitespace(c) || Character.isSpaceChar(c);
+	}
+
 	private static boolean numericFragment(String haystack, int at) {
 		if (at == 0) {
 			return false;
@@ -1240,7 +1253,7 @@ public class ChartSearchAiUtils {
 		}
 		char before = haystack.charAt(at - 2);
 		return Character.isDigit(before)
-				|| (separator == '.' && Character.isWhitespace(before));
+				|| (separator == '.' && isSpace(before));
 	}
 
 	/**

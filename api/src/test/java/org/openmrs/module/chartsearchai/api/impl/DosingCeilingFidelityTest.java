@@ -451,6 +451,30 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
+	public void aNakedDecimalAfterANONBREAKINGSpaceIsStillANakedDecimal() throws IOException {
+		// "Begins a token" is asked as `Character.isWhitespace`, and that method answers FALSE for the
+		// three spaces typeset copy actually uses to hold a number together — U+00A0, U+2007 and
+		// U+202F. So the decimal point read as attached, the laxer ceiling was read out of the naked
+		// decimal, and the answer was accused of dropping the number it led with. Narrow input, and
+		// the severe direction, which is why it is fixed rather than documented: `isSpaceChar` admits
+		// exactly those three and nothing else.
+		PatientChart decimals = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of levothyroxine?", "Levothyroxine (paediatric)");
+		RecordMapping mapping = soleRecordCarryingCeilings(decimals);
+		TestableService service = newService(decimals);
+		service.setLlmProvider(answering("The maximum for this presentation is\u00A0.5 mg/day ["
+				+ mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of levothyroxine?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a non-breaking space before a naked decimal leaves it a naked decimal. Captured: "
+							+ capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(), "and nothing is published");
+		}
+	}
+
+	@Test
 	public void aBlankAnswerIsSilentAndPublishesAMeasurementOfNone() throws IOException {
 		// Reachable rather than defensive: extractCitedReferences resolves the structured citations
 		// array for a blank answer deliberately, so the walk can be reached with citations and no

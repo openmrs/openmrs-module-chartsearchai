@@ -628,9 +628,10 @@ public class PatientChartSerializer {
 	 *
 	 * <p>{@link #getDosingCeilings()} (issue #276) is the exception to "about the record rather than
 	 * part of it": it is a COPY of numbers {@link #getText()} itself states, carried so that a
-	 * post-answer check can compare the answer against them without parsing that text — which is
-	 * what makes it the one field here whose correctness is a claim about the text rather than
-	 * beside it. It is never rendered from, the text being written first and this collected from
+	 * post-answer check can compare the answer against them without parsing that text — the one
+	 * field here that DUPLICATES part of the text rather than describing it or standing beside it.
+	 * {@link #getOrderDrugNamed()} below is the one that describes it, and the two claims are about
+	 * different things. It is never rendered FROM: the text is written first and this collected from
 	 * what was written.
 	 *
 	 * <p>{@link #getOrderDrugNamed()} (issue #294) is a fourth of the kind the module reads back to

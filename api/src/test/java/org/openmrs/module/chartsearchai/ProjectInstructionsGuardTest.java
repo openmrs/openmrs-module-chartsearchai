@@ -137,6 +137,27 @@ public class ProjectInstructionsGuardTest {
 	 * stays trimming, because the direction for the root file — the only one every session pays for —
 	 * is still down.
 	 *
+	 * <p><b>The ROOT budget was raised again, from 24,000 to 25,000, on 2026-09-14 — and it is the
+	 * state the paragraph above predicted, one ticket later.</b> Issue #315's remedy adds one rule
+	 * spanning four packages, so it has no nested file to sit in, and the root file was 8 bytes under
+	 * the cap. Trimming came first and recovered 401 bytes: the rationale for the {@code isEmpty()}
+	 * directive and the WHY of the {@code describesEndedOrder} AND-ing (Decisions 46/47 carry both,
+	 * and the order-currency bullet already cites them), what {@code injectRecords} does to the chart
+	 * on the search-mode bullet, and two sub-bullets of the order-currency group folded into the ones
+	 * above them, which framed one thing twice — the #280 move. The residue is 400 bytes and it is a
+	 * directive: which accessor supplies the date, that its asymmetry with the currency mark is
+	 * enumerated in one named javadoc rather than here, the published key and its producer, and that
+	 * {@code []} is not a certificate.
+	 *
+	 * <p><b>Four raises now, three of them in eight days, and the pattern is worth naming rather
+	 * than repeated.</b> Every one followed real trimming and every one was spent by the next
+	 * ordinary ticket. That is not a number problem: the root file is the union of every rule that
+	 * binds more than one package, and this module adds such rules faster than it retires them. The
+	 * next reader to trip this should consider whether the chart-assembly rules have become a
+	 * package's worth of their own — {@code serializer/} is where both order stamps and the mapping
+	 * ladder live — before trimming a fifth time, because a split is the move that made the
+	 * drug-safety budget tractable and no amount of trimming has made this one so.
+	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once
 	 * {@link #noBulletCarriesMoreProseThanItsBudget} had been satisfied — room for a few rules, not
@@ -151,7 +172,7 @@ public class ProjectInstructionsGuardTest {
 
 	private static Map<Path, Integer> budgets() {
 		Map<Path, Integer> m = new LinkedHashMap<>();
-		m.put(ROOT_INSTRUCTIONS, 24_000);
+		m.put(ROOT_INSTRUCTIONS, 25_000);
 		m.put(REFERENCE_INSTRUCTIONS, 76_000);
 		return m;
 	}

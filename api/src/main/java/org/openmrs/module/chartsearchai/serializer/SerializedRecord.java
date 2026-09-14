@@ -67,6 +67,32 @@ public class SerializedRecord {
 	 */
 	private final Boolean orderActive;
 
+	/**
+	 * When the {@code Order} this record was serialized from stopped being in force, or {@code null}
+	 * where the module states no such date (issue #315).
+	 *
+	 * <p>It is core's own {@code Order.getEffectiveStopDate()} and nothing derived beyond it — the
+	 * order's {@code dateStopped} where it has one, else its {@code autoExpireDate}. Never read off
+	 * {@link #getText()}: that is {@link #orderActive}'s rule (issue #317) and it binds here for the
+	 * same reason, sharpened by the fact that querystore renders no {@code auto_expire_date} at all,
+	 * so a duration-lapsed prescription's end is in no rendered text to read.
+	 *
+	 * <p><strong>Non-null implies {@link #orderActive} is {@code FALSE}. {@code FALSE} does NOT
+	 * imply non-null, and that asymmetry is the contract rather than a gap.</strong> An order is not
+	 * in force the moment it is voided or its action is {@code DISCONTINUE}, which
+	 * {@code Order.isActive()} answers before consulting any date — and
+	 * {@code DrugOrder.cloneForDiscontinuing()} sets neither end date, so an ordinary
+	 * discontinuation carries none. The instant such a discontinuation took effect lives on
+	 * {@code getPreviousOrder()}, and the module deliberately does not reach for it: that would be a
+	 * second implementation of core's discontinuation semantics, which is the re-derivation
+	 * {@link #orderActive} exists to avoid. So {@code null} here never means "still in force" —
+	 * {@link #orderActive} is the only thing that answers that question.
+	 *
+	 * <p>Set only by {@code QueryStoreChartBuilder.toSerializedRecords}, beside
+	 * {@link #orderActive} and off the same one authoritative order read.
+	 */
+	private final Date orderStopDate;
+
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date) {
 		this(resourceType, resourceUuid, text, date, Collections.<String>emptyList());
 	}
@@ -82,13 +108,26 @@ public class SerializedRecord {
 	}
 
 	/**
-	 * Full constructor, including the order-currency answer. The shorter constructors default it to
-	 * {@code null} — "the module cannot say" — which is the right default for every record that is
-	 * not a drug order and for every caller that has not read the patient's orders.
+	 * The order-currency rung. Defaults {@link #orderStopDate} to {@code null} — the module states no
+	 * stop date — which is the right default for every record that is not a drug order and for every
+	 * caller that has not read the patient's orders.
 	 */
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
 			List<String> categoryHints, String obsGroupUuid, String obsGroupConceptName,
 			Boolean orderActive) {
+		this(resourceType, resourceUuid, text, date, categoryHints, obsGroupUuid, obsGroupConceptName,
+				orderActive, null);
+	}
+
+	/**
+	 * Full constructor, including both halves of the order read. The shorter constructors default
+	 * them to {@code null} — "the module cannot say" and "the module states no stop date" — which is
+	 * the right default for every record that is not a drug order and for every caller that has not
+	 * read the patient's orders.
+	 */
+	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
+			List<String> categoryHints, String obsGroupUuid, String obsGroupConceptName,
+			Boolean orderActive, Date orderStopDate) {
 		this.resourceType = resourceType;
 		this.resourceUuid = resourceUuid;
 		this.text = text;
@@ -98,6 +137,7 @@ public class SerializedRecord {
 		this.obsGroupUuid = obsGroupUuid;
 		this.obsGroupConceptName = obsGroupConceptName;
 		this.orderActive = orderActive;
+		this.orderStopDate = orderStopDate;
 	}
 
 	public String getResourceType() {
@@ -148,5 +188,15 @@ public class SerializedRecord {
 	 */
 	public Boolean getOrderActive() {
 		return orderActive;
+	}
+
+	/**
+	 * @return when this record's order stopped being in force, or {@code null} where the module
+	 *         states no such date. See {@link #orderStopDate} for why {@code null} is not a claim
+	 *         that the order is still in force, and why the module does not derive a date it was not
+	 *         given.
+	 */
+	public Date getOrderStopDate() {
+		return orderStopDate;
 	}
 }

@@ -308,7 +308,8 @@ public class PatientChartSerializer {
 			// per-record view must still contain it. Grounding behaviour is therefore unchanged.
 			String renderedText = dateLabelPrefix(dateLabel) + bodyBase + groupLabel;
 			mappings.add(new RecordMapping(index, record.getResourceType(), record.getResourceUuid(),
-					record.getDate(), renderedText, null, 0, record.getOrderActive()));
+					record.getDate(), renderedText, null, 0, record.getOrderActive(),
+					record.getOrderStopDate()));
 
 			// Chart line: show the date only on the first record of a same-date run (an undated record
 			// resets the run, so the next dated record shows its date again); otherwise drop it. With
@@ -665,6 +666,21 @@ public class PatientChartSerializer {
 		private final Boolean orderActive;
 
 		/**
+		 * When the {@code Order} this record was serialized from stopped being in force, or
+		 * {@code null} where the module states no such date — the structural form a consumer reads
+		 * rather than looking for a date in {@link #getText()} (issue #315).
+		 *
+		 * <p>Written in exactly ONE place, {@code QueryStoreChartBuilder.toSerializedRecords}, beside
+		 * {@link #orderActive} and off the same one authoritative order read, and pinned there by
+		 * {@code ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace}.
+		 * {@code SerializedRecord.orderStopDate} is canonical for what it is and for the asymmetry
+		 * that is its contract — non-null implies {@link #orderActive} is {@code FALSE}, while
+		 * {@code FALSE} does NOT imply non-null — and that is not restated here so this javadoc
+		 * cannot go stale against it.
+		 */
+		private final Date orderStopDate;
+
+		/**
 		 * The rating an injected {@code safety_finding} states, where an answer stating that finding
 		 * ought to state the rating too — {@code null} on every other record, and on a finding whose
 		 * rating has no word worth requiring (issue #337). Written in exactly ONE place,
@@ -780,7 +796,27 @@ public class PatientChartSerializer {
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
-					orderActive, null);
+					orderActive, (Date) null);
+		}
+
+		/**
+		 * The stop-date rung, carrying the other half of the one order read — see
+		 * {@link #orderStopDate}. Every shorter constructor defaults it to {@code null}, "the module
+		 * states no stop date", which is right for every record that is not a drug order and for
+		 * every caller that has not read the patient's orders.
+		 *
+		 * <p>It sits immediately BELOW the order-currency rung rather than at the bottom of the
+		 * ladder, and the two halves sit adjacent in every rung below it, because
+		 * {@code ArchitectureGuardTest} tells two constructors from the rest by their descriptor
+		 * TAILS. Appending this parameter to the widest, or giving it a rung beneath the widest,
+		 * breaks one of those tails and reddens that guard — which is what issue #276 met and
+		 * answered the same way. Mutate the placement and read the failures rather than trusting this
+		 * paragraph. Not the full constructor: three rungs below still take more.
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
+					orderActive, orderStopDate, null);
 		}
 
 		/**
@@ -795,9 +831,10 @@ public class PatientChartSerializer {
 		 * next issue, this one included, which is why every rung now names a rung rather than the end.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
-				String source, int withheldInteractions, Boolean orderActive, String findingSeverity) {
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
+				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					findingSeverity, null);
+					orderStopDate, findingSeverity, null);
 		}
 
 		/**
@@ -812,10 +849,10 @@ public class PatientChartSerializer {
 		 * "the full one is below" sentence three times, so this one names the rung rather than the end.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
-				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
-				List<Integer> derivedFrom) {
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
+				String findingSeverity, List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					findingSeverity, derivedFrom, null, null);
+					orderStopDate, findingSeverity, derivedFrom, null, null);
 		}
 
 		/**
@@ -836,8 +873,9 @@ public class PatientChartSerializer {
 		 * here. That is why the rung gained the parameter instead of being joined by a sibling.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
-				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
-				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
+				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
+				String findingSeverity, List<Integer> derivedFrom, List<String> dosingCeilings,
+				Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -846,6 +884,7 @@ public class PatientChartSerializer {
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
 			this.orderActive = orderActive;
+			this.orderStopDate = orderStopDate;
 			this.findingSeverity = findingSeverity;
 			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
 			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
@@ -944,6 +983,17 @@ public class PatientChartSerializer {
 		 */
 		public Boolean getOrderActive() {
 			return orderActive;
+		}
+
+		/**
+		 * @return when this record's order stopped being in force, or {@code null} where the module
+		 *         states no such date. {@code SerializedRecord.orderStopDate} is canonical for why
+		 *         {@code null} is not a claim that the order is still in force — {@link
+		 *         #getOrderActive()} is the only thing that answers that — and for why the module
+		 *         does not derive a date core did not give it.
+		 */
+		public Date getOrderStopDate() {
+			return orderStopDate;
 		}
 
 		/**

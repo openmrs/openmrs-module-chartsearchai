@@ -77,6 +77,13 @@ public class ArchitectureGuardTest {
 			"org/openmrs/module/chartsearchai/reference/PatientClinicalContextBuilder.class",
 			"org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.class");
 
+	/** The descriptor tail that tells {@code SerializedRecord}'s widest constructor — the only one
+	 *  taking the order stop date of issue #315 — from every other one. TWO types, not one: the
+	 *  four-argument rung {@code (String,String,String,Date)} ends in the same {@code Date}, so a
+	 *  single-type tail cannot tell them apart, and the {@code Boolean} immediately in front of it is
+	 *  what makes this pair unique. Verified against {@code javap -s}. */
+	private static final String STOP_DATE_TAIL = "Ljava/lang/Boolean;Ljava/util/Date;)V";
+
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
 	private static final String COVERAGE_TYPE =
 			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
@@ -300,6 +307,86 @@ public class ArchitectureGuardTest {
 				"the order-naming stamp of issue #294", true,
 				"A second writer would withhold grounding verdicts for chart citations silently — "
 						+ "see this test's javadoc.");
+	}
+
+	/**
+	 * The stop date of a chart record's drug order is written in exactly ONE place (issue #315): only
+	 * {@code QueryStoreChartBuilder} may invoke the {@code SerializedRecord} constructor that takes
+	 * it.
+	 *
+	 * <p><b>Why a guard and not a comment.</b> The date reaches a clinician as a deterministic
+	 * statement about a prescription — it is published on the wire as {@code orderStopDates} — and a
+	 * second writer would be a second answer to "when did this order end" with nothing reconciling
+	 * them. The whole point of the stamp is that the question is asked once, of {@code OrderService},
+	 * against the same read that decides whether the order is in force at all; a writer somewhere
+	 * else could supply a date for a record that reading calls current, or for one it could not
+	 * evaluate. Nothing behavioural sees a second writer, because a second writer adds an
+	 * arrangement rather than changing one — which is the same argument
+	 * {@link #theOrderNamingStampIsWrittenInOnePlace} makes for its own stamp.
+	 *
+	 * <p>It is the sibling of that case and of
+	 * {@link #theProvenanceCarryingMappingConstructorHasOneCaller}, and differs from both in its
+	 * SUBJECT: those two guard a {@code RecordMapping} constructor against every caller but the
+	 * injector, and this one guards a {@code SerializedRecord} constructor against every caller but
+	 * the chart builder. So it does not share their helper, which names the injector.
+	 *
+	 * <p>What it cannot answer, and the limits are the same two its siblings state. The constant pool
+	 * says which CLASS invokes that constructor, not WHAT it passes — the builder could pass a date
+	 * it read anywhere and this stays green; what covers that is
+	 * {@code DrugOrderCurrencyMarkTest}, whose cases assert the date against the dataset's own
+	 * values rather than against the accessor production reads. And its reach is the API module's
+	 * classes, so an omod-side or test-side caller is invisible to it.
+	 */
+	@Test
+	public void theOrderStopDateStampIsWrittenInOnePlace() throws IOException {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		assertTrue(Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path record = classes.resolve(
+				"org/openmrs/module/chartsearchai/serializer/SerializedRecord.class");
+		assertTrue(Files.exists(record),
+				"no SerializedRecord class file at " + record + ", so this guard would forbid nothing");
+
+		List<String> constructors = constructorDescriptors(record);
+		assertTrue(constructors.size() > 1,
+				"expected SerializedRecord to publish several constructor arities and found "
+						+ constructors.size() + "; with one there is no narrower one for a caller that "
+						+ "carries no order read to use, and this guard is vacuous");
+		List<String> carrying = new ArrayList<>();
+		for (String descriptor : constructors) {
+			if (descriptor.endsWith(STOP_DATE_TAIL)) {
+				carrying.add(descriptor);
+			}
+		}
+		assertEquals(1, carrying.size(),
+				"exactly one SerializedRecord constructor may END in the order stop date of issue "
+						+ "#315, which is how this case tells it from the others. Found "
+						+ carrying.size() + ": " + carrying);
+		String guarded = parameters(carrying.get(0));
+		for (String descriptor : constructors) {
+			assertTrue(guarded.startsWith(parameters(descriptor)),
+					"the constructor this case guards must still be the WIDEST and every other rung a "
+							+ "prefix of it, or a rung has been added that this selector does not reach "
+							+ "and nothing forbids a second writer of. Guarded: " + carrying.get(0)
+							+ "; not a prefix of it: " + descriptor);
+		}
+
+		List<String> callers = new ArrayList<>();
+		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
+			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
+					.filter(f -> !f.equals(record)).collect(java.util.stream.Collectors.toList())) {
+				if (constantPoolStrings(file).contains(carrying.get(0))) {
+					callers.add(classes.relativize(file).toString().replace('\\', '/'));
+				}
+			}
+		}
+		assertEquals(java.util.Collections.singletonList(
+				"org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.class"), callers,
+				"the constructor that carries the order stop date may be invoked from "
+						+ "QueryStoreChartBuilder and nowhere else in the API module's classes, which "
+						+ "is what this walk reads. A second writer would be a second answer to when a "
+						+ "prescription ended, published to a clinician with nothing reconciling them "
+						+ "— see this test's javadoc. Callers found: " + callers);
 	}
 
 	/** The parameter section of a method descriptor — everything between the parentheses — so two

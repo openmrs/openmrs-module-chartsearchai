@@ -13,8 +13,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.Order;
@@ -652,7 +654,8 @@ class QueryStoreChartBuilder {
 					text, recordDate, Collections.<String>emptyList(),
 					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID),
 					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME),
-					orderCurrency.forRecord(doc.getResourceType(), doc.getResourceUuid())));
+					orderCurrency.forRecord(doc.getResourceType(), doc.getResourceUuid()),
+					orderCurrency.stopDateForRecord(doc.getResourceType(), doc.getResourceUuid())));
 		}
 		return out;
 	}
@@ -682,23 +685,44 @@ class QueryStoreChartBuilder {
 	private static final class OrderCurrency {
 
 		/** The reading that answers nothing about anything, and the only one a failed read produces. */
-		private static final OrderCurrency UNREAD = new OrderCurrency(null, null);
+		private static final OrderCurrency UNREAD = new OrderCurrency(null, null,
+				Collections.<String, Date>emptyMap());
 
 		private final Set<String> activeOrderUuids;
 
 		private final Set<String> allOrderUuids;
 
-		private OrderCurrency(Set<String> activeOrderUuids, Set<String> allOrderUuids) {
+		/**
+		 * When each of this patient's orders stopped being in force, for the orders that publish such
+		 * a date — {@code Order.getEffectiveStopDate()}, keyed by order uuid (issue #315).
+		 *
+		 * <p><strong>Deliberately sparser than {@link #allOrderUuids}, and the gap is not a gap.</strong>
+		 * An order is out of force the moment it is voided or its action is {@code DISCONTINUE}, which
+		 * {@code Order.isActive()} answers before reading any date, and
+		 * {@code DrugOrder.cloneForDiscontinuing()} writes neither {@code dateStopped} nor
+		 * {@code autoExpireDate} — so an ordinary discontinuation is in {@code allOrderUuids}, absent
+		 * from {@code activeOrderUuids}, and absent from here. The instant it took effect lives on
+		 * {@code getPreviousOrder()} and is deliberately not fetched: that would re-implement core's
+		 * discontinuation semantics in this module, which is the second implementation
+		 * {@link #forRecord} exists to avoid. A record can therefore be marked not-in-force and state
+		 * no stop date, which is the contract rather than an omission.
+		 */
+		private final Map<String, Date> stopDatesByOrderUuid;
+
+		private OrderCurrency(Set<String> activeOrderUuids, Set<String> allOrderUuids,
+				Map<String, Date> stopDatesByOrderUuid) {
 			this.activeOrderUuids = activeOrderUuids;
 			this.allOrderUuids = allOrderUuids;
+			this.stopDatesByOrderUuid = stopDatesByOrderUuid;
 		}
 
 		static OrderCurrency unread() {
 			return UNREAD;
 		}
 
-		static OrderCurrency of(Set<String> activeOrderUuids, Set<String> allOrderUuids) {
-			return new OrderCurrency(activeOrderUuids, allOrderUuids);
+		static OrderCurrency of(Set<String> activeOrderUuids, Set<String> allOrderUuids,
+				Map<String, Date> stopDatesByOrderUuid) {
+			return new OrderCurrency(activeOrderUuids, allOrderUuids, stopDatesByOrderUuid);
 		}
 
 		/**
@@ -715,6 +739,26 @@ class QueryStoreChartBuilder {
 				return Boolean.TRUE;
 			}
 			return allOrderUuids.contains(resourceUuid) ? Boolean.FALSE : null;
+		}
+
+		/**
+		 * When the order behind one chart record stopped being in force, or {@code null} where this
+		 * reading states no such date (issue #315).
+		 *
+		 * <p><strong>Gated on {@link #forRecord} answering {@code FALSE} rather than on the map
+		 * alone</strong>, so the two halves of one read cannot disagree about one record: a date is
+		 * published only for a record the module is simultaneously willing to call not-in-force.
+		 * Without the gate a future order — one whose {@code dateStopped} is set but not yet reached,
+		 * which {@code Order.isActive()} still calls in force — would carry a stop date beside a mark
+		 * saying it is current, and a client would read the pair as a contradiction. Asking
+		 * {@code forRecord} rather than re-testing the type and the sets here is also what keeps the
+		 * type scoping and the attribution rule in one place.
+		 */
+		Date stopDateForRecord(String resourceType, String resourceUuid) {
+			if (!Boolean.FALSE.equals(forRecord(resourceType, resourceUuid))) {
+				return null;
+			}
+			return stopDatesByOrderUuid.get(resourceUuid);
 		}
 	}
 
@@ -818,6 +862,7 @@ class QueryStoreChartBuilder {
 	private static OrderCurrency readingOf(List<Order> allOrders) {
 		Set<String> active = new HashSet<String>();
 		Set<String> known = new HashSet<String>();
+		Map<String, Date> stopDates = new HashMap<String, Date>();
 		List<String> unevaluable = new ArrayList<String>();
 		for (Order order : allOrders == null ? Collections.<Order>emptyList() : allOrders) {
 			if (order == null || order.getUuid() == null) {
@@ -825,9 +870,27 @@ class QueryStoreChartBuilder {
 			}
 			try {
 				boolean isActive = order.isActive();
+				// Read through core's own accessor rather than choosing between the two date fields
+				// here: getEffectiveStopDate() IS dateStopped where there is one, else autoExpireDate
+				// (verified against `javap -c`), so spelling that out would be a second implementation
+				// of a predicate core owns — the re-derivation this whole read exists to avoid.
+				// Swapping it for getDateStopped() alone reddens both the lapsed-order cases, which
+				// is the half querystore's rendered text cannot carry.
+				//
+				// The narrowing below — inside the try, and only for an order that is NOT active —
+				// keeps this map holding exactly what stopDateForRecord may publish, so a second
+				// reader added later cannot find an active or unevaluable order's date in it. It is
+				// defence and not the decision: OrderCurrency.stopDateForRecord's own gate is what
+				// decides, and removing that gate reddens the test-order and unevaluable cases while
+				// removing this narrowing alone reddens nothing. Mutate each and read the failures;
+				// this narrowing is the unpinned half and is kept deliberately.
+				Date stopDate = order.getEffectiveStopDate();
 				known.add(order.getUuid());
 				if (isActive) {
 					active.add(order.getUuid());
+				}
+				else if (stopDate != null) {
+					stopDates.put(order.getUuid(), stopDate);
 				}
 			}
 			catch (RuntimeException e) {
@@ -851,7 +914,7 @@ class QueryStoreChartBuilder {
 					+ "core neither validates nor refuses to save. Orders: {}",
 					unevaluable.size(), unevaluable);
 		}
-		return OrderCurrency.of(active, known);
+		return OrderCurrency.of(active, known, stopDates);
 	}
 
 	/** Reads a metadata value as a trimmed String, or {@code null} when absent or blank.

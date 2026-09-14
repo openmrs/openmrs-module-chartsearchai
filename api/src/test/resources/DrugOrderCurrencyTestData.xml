@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  The three drug-order arrangements the standard test dataset does not carry, each of which issue
-  #317 turns on.
+  The drug-order arrangements the standard test dataset does not carry. The first three are issue
+  #317's; the fourth is issue #315's, and is the one a stop-date reading must not invent a date for.
 
   1. ORDER 9317 — an order that lapsed by its DURATION: action NEW, auto_expire_date in the past,
      date_stopped NULL. querystore's DrugOrderRecordSerializer renders ". Stopped: <date>" for
@@ -26,8 +26,8 @@
 
   Row order matters: dbunit inserts tables in the order they first appear, so the encounter must
   precede the orders that reference it, and rows of one table are kept contiguous. Orders 9317 and
-  9318 carry the same attribute set for the same reason; 9319 deliberately adds date_stopped, which
-  is the whole point of that row.
+  9318 carry the same attribute set for the same reason; 9319 deliberately adds date_stopped and
+  9320 deliberately omits both end dates, each of which is the whole point of that row.
 
   A separate file rather than rows added to ChartSearchAiTestData.xml: that file carries no order
   rows at all and is loaded by HibernateChartSearchAiDAOTest, whose dataset must not change
@@ -69,6 +69,27 @@
 	        date_stopped="2008-01-10 00:00:00.0"
 	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
 	        uuid="9319cccc-0000-4000-8000-00000000319c" care_setting="1" encounter_id="6" />
+	<!--
+	  4. ORDER 9320 — a DISCONTINUE order carrying NEITHER date_stopped NOR auto_expire_date, which
+	     is what DrugOrder.cloneForDiscontinuing() produces: it sets the action, care setting,
+	     concept, drug, free-text drug, order type, patient and previous order, and neither end date.
+	     Order.isActive() answers false on it from the action alone, before any date is consulted, so
+	     the order is not in force AND core publishes no effective stop date for it. That pair is the
+	     cell issue #315's statement turns on, and the standard dataset cannot reach it: its only
+	     DISCONTINUE drug orders, 22 and 44, each carry an auto_expire_date equal to their own
+	     date_activated, so getEffectiveStopDate() answers a date there.
+
+	     The instant this discontinuation took effect lives on getPreviousOrder(), not here, and the
+	     module deliberately does not derive it — see ADR Decision 97. Order 222's own date_stopped is
+	     left NULL on purpose: core's Order.isActive() reads an order's own fields and never walks
+	     forward to a discontinuing sibling, so pointing at 222 cannot move any other case in this
+	     file, and the tests assert both halves of the shape off core rather than assuming them.
+	-->
+	<orders order_id="9320" order_type_id="1" order_number="ORD-9320" urgency="ROUTINE"
+	        order_action="DISCONTINUE" concept_id="792" orderer="1" previous_order_id="222"
+	        date_activated="2008-01-11 00:00:00.0"
+	        creator="1" date_created="2008-01-11 00:00:00.0" voided="false" patient_id="2"
+	        uuid="9320dddd-0000-4000-8000-00000000320d" care_setting="1" encounter_id="6" />
 
 	<drug_order order_id="9317" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
@@ -79,4 +100,5 @@
 	<drug_order order_id="9319" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
 	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<drug_order order_id="9320" drug_inventory_id="2" as_needed="0" dispense_as_written="0" />
 </dataset>

@@ -390,8 +390,8 @@ public class DosingCeilingFidelityTest {
 		// LETTER precedes is punctuation — a comma between list items after a unit, a full stop
 		// ending the sentence before the number — and leaves the ceiling stated. Refusing there
 		// would accuse an answer of dropping a number it printed, which is the one direction this
-		// check must never fail in. It is the complement of the refusal cases above, and between them
-		// they are why neither separator is decided by naming the characters that may precede it.
+		// check must never fail in. It is the complement of the refusal cases, and between them they
+		// are why neither separator is decided by LISTING the characters that may precede it.
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
@@ -485,13 +485,14 @@ public class DosingCeilingFidelityTest {
 
 	@Test
 	public void aCommaJOININGTwoWholeNumbersLeavesTheSecondOneStated() throws IOException {
-		// Issue #425 item 1, and the shape none of the four cases above reaches: every one of them
-		// puts a NON-digit before the separator, so the arm that asks after a digit was only ever
-		// exercised by a genuine grouped number. A model listing a record's two ceilings elides the
+		// Issue #425 item 1, and the shape no earlier case reaches: each of the admit-cases puts a
+		// NON-digit before the separator, so the arm that asks after a digit was only ever exercised
+		// by a genuine grouped number. A model listing a record's two ceilings elides the
 		// unit on the first of them as readily as it repeats it — the case above is the repeated
 		// form, "2000 mg/day,500 mg/day" — and with the unit elided the second ceiling sits behind a
-		// digit and a comma. No grouped number can be spelled that way: a thousands separator's head
-		// group is one to three digits, so a run of four before it belongs to no grouping at all.
+		// digit and a comma. No CONVENTIONALLY grouped number can be spelled that way: its head group
+		// is one to three digits, so a run of four before the comma belongs to no such grouping. A
+		// partially grouped spelling can ("20000,500"), and is admitted; the javadoc names it.
 		//
 		// Refusing it accuses the answer of leaving out the number it printed, which is the one
 		// direction this check must never fail in, and it is the SEVERE direction rather than the
@@ -510,7 +511,8 @@ public class DosingCeilingFidelityTest {
 					"What is the maximum daily dose of tinidazole?");
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"the answer states BOTH ceilings — a run of four digits before the comma belongs "
-							+ "to no grouped number, so \"500 mg/day\" is not a fragment of one. "
+							+ "to no conventionally grouped number, so \"500 mg/day\" is not a "
+							+ "fragment of one. "
 							+ "Captured: " + capture.describeAll());
 			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(),
 					"and nothing is published, or the answer is accused of dropping the very number "
@@ -536,9 +538,9 @@ public class DosingCeilingFidelityTest {
 			ChartAnswer answer = service.search(patient(),
 					"What is the maximum daily dose of tinidazole?");
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
-					"the strictest ceiling is stated, third in a comma-joined list — the run of four "
-							+ "digits before it belongs to no grouping whether a comma precedes that "
-							+ "run or not. Captured: " + capture.describeAll());
+					"the strictest ceiling is stated, third in a comma-joined list — a run of four "
+							+ "digits is too long for a conventional group whether a comma precedes "
+							+ "it or not. Captured: " + capture.describeAll());
 			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(), "and nothing is published");
 		}
 	}
@@ -546,11 +548,11 @@ public class DosingCeilingFidelityTest {
 	@Test
 	public void aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs() throws IOException {
 		// The other half of the case above, and the half that decides how far its exception may
-		// reach. A comma is a decimal point in most of the world, so "1000,5 mg/day" is a dose of
+		// reach. A comma is the decimal separator in many locales, so "1000,5 mg/day" is a dose of
 		// 1000.5 — and the laxer ceiling must not be read out of its FRACTION, which is the naked
 		// decimal's defect (`aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt`) written with the
 		// other separator. Admitting it here would accuse an answer of leaving out 0.5 mg/day when
-		// the number it printed IS 0.5 mg/day, in the notation half the world writes it in.
+		// the number it printed IS 0.5 mg/day, in a notation a clinician may well write it in.
 		//
 		// What keeps this one refused is the exception's TAIL BOUND: it admits only three digits
 		// after the comma, and this text has one. That bound is not a grouping fact — a group of a

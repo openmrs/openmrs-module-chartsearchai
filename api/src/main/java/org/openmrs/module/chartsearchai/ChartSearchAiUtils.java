@@ -1364,8 +1364,9 @@ public class ChartSearchAiUtils {
 	 *         inlined because the rule reads as one sentence at the call site and this is two walks.
 	 */
 	private static boolean mayJoinTwoNumbers(String haystack, int comma) {
-		// A thousands separator's head group is one to three digits, so a run of four or more before
-		// one belongs to no grouping. Whether that run is itself preceded by a comma is not asked —
+		// A conventional thousands separator's head group is one to three digits, so a run of four or
+		// more before one belongs to no such grouping. Whether that run is itself preceded by a comma
+		// is not asked —
 		// see the javadoc: the middle number of a three-item list stands exactly there.
 		int start = comma;
 		while (start > 0 && Character.isDigit(haystack.charAt(start - 1))) {

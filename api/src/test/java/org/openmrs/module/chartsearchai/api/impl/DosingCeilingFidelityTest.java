@@ -376,12 +376,13 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
-	public void aSeparatorThatIsNotBETWEENDigitsLeavesAStatedCeilingStated() throws IOException {
-		// The other side of the rule, and the one that decides how far it may reach. The refusal is
-		// about a separator sitting BETWEEN two digits — that is what makes the needle a fragment of
-		// a longer number. A comma merely punctuating a list, or a full stop ending the sentence
-		// before it, leaves the ceiling stated; refusing there would accuse an answer of dropping a
-		// number it printed, which is the one direction this check must never fail in.
+	public void aSeparatorAFTERALetterLeavesAStatedCeilingStated() throws IOException {
+		// The other side of the rule, and the one that decides how far it may reach. A separator a
+		// LETTER precedes is punctuation — a comma between list items after a unit, a full stop
+		// ending the sentence before the number — and leaves the ceiling stated. Refusing there
+		// would accuse an answer of dropping a number it printed, which is the one direction this
+		// check must never fail in. It is the complement of the three refusal cases above, and
+		// between them they are why the rule is worded off the letter rather than off a digit.
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);

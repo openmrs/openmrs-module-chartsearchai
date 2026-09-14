@@ -1170,7 +1170,7 @@ public class ChartSearchAiUtils {
 	 * {@code DosingCeilingFidelityTest}: {@code .aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 * {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith},
 	 * {@code .aDecimalWrittenWithoutItsLeadingZeroStillSTATESTheCeiling} and
-	 * {@code .aSeparatorThatIsNotBETWEENDigitsLeavesAStatedCeilingStated}.
+	 * {@code .aSeparatorAFTERALetterLeavesAStatedCeilingStated}.
 	 *
 	 * <p><b>A second entry point rather than a widened {@link #statesWord}, and rather than a test at
 	 * the call site.</b> Two questions, two named entry points, one scan underneath, which is the

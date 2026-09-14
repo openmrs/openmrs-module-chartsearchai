@@ -409,6 +409,10 @@ public class StandingChartAlertsTest {
 	private static final String RELATIVE_SOURCE =
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
+	/** The package-private seam beneath the public entry — where the operator message lives. */
+	private static final String STANDING_SEAM =
+			"StandingChartAlerts standingChartAlerts(PatientClinicalContext context) {";
+
 	/**
 	 * The gate above the seam every other case here drives, pinned STRUCTURALLY because no behavioural
 	 * case in this suite can reach it.
@@ -487,8 +491,7 @@ public class StandingChartAlertsTest {
 						+ "standing surface asks for it, and where SubjectMatter translates it — and was "
 						+ "named at lines " + scan.linesOf(namings) + ". A third naming is a second "
 						+ "unbounded pass, which is issue #143's over-reach (issue #280).");
-		SourceScan.Region decider = scan.body(
-				"StandingChartAlerts standingChartAlerts(PatientClinicalContext context) {");
+		SourceScan.Region decider = scan.body(STANDING_SEAM);
 		SourceScan.Region translator = scan.body(
 				"private SubjectMatter(SubjectMatterScope scope, String question, String answer,");
 		assertTrue(decider.contains(namings.get(0)),
@@ -588,5 +591,44 @@ public class StandingChartAlertsTest {
 						+ "second site asking for the unbounded scope is a second unbounded pass, and the "
 						+ "count in the case above sees neither: the seam is package-private, and that "
 						+ "count reads DrugSafetyValidator.java alone (issue #280)");
+	}
+
+	/**
+	 * The residue {@code ArchitectureGuardTest.noSecondClassNamesTheOrderReadCause} discloses and
+	 * cannot reach, closed here (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/421">#421</a>).
+	 *
+	 * <p>{@code PatientClinicalContext.activeDrugOrderReadCompleted()} is a CAUSE and not a stamp: a
+	 * verdict built from it reads {@code true} on a pass that completed the order read and then
+	 * dropped an order, so it certifies a medication list a prescription is missing from. That guard
+	 * asks the CLASS FILES which of them name it, which is what catches a second reader in another
+	 * class — and it has to allow this whole file, since the one legitimate reader lives in it. So the
+	 * likeliest second reader of all, a second one HERE beside the first, is the one it cannot see.
+	 *
+	 * <p>This is the per-FILE half, over the file the guard has to excuse. The one naming is the
+	 * operator message in {@code standingChartAlerts}, which has to say WHICH read failed — a
+	 * question the stamp cannot answer, which is why that reader is legitimate and why a count rather
+	 * than a prohibition is the right shape here. A second naming is either a verdict, which must ask
+	 * {@code activeDrugOrdersRead()} instead, or another such message, which belongs on the guard's
+	 * allow-list with a reason.
+	 */
+	@Test
+	public void theOrderReadCauseIsNamedOnceInTheFileItsOneLegitimateReaderLivesIn() throws IOException {
+		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
+
+		List<Integer> namings = scan.literalOffsets("activeDrugOrderReadCompleted()");
+
+		assertEquals(1, namings.size(),
+				"activeDrugOrderReadCompleted() is a CAUSE, not a stamp, and may be named exactly once "
+						+ "in DrugSafetyValidator — by the operator message that has to say which read "
+						+ "failed — and was named at lines " + scan.linesOf(namings) + ". A second naming "
+						+ "that builds a VERDICT certifies a medication list a dropped order is missing "
+						+ "from; ask activeDrugOrdersRead() instead, which subtracts that case. A second "
+						+ "operator message is legitimate and belongs on "
+						+ "ArchitectureGuardTest.MAY_NAME_THE_ORDER_READ_CAUSE with its reason "
+						+ "(issue #421).");
+		assertTrue(scan.body(STANDING_SEAM).contains(namings.get(0)),
+				"and that naming must sit inside the standing surface's own seam, which is where the "
+						+ "message is; it was at line " + scan.lineOf(namings.get(0)));
 	}
 }

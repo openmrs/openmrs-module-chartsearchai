@@ -336,6 +336,13 @@ public class ArchitectureGuardTest {
 	 * {@code DrugOrderCurrencyMarkTest}, whose cases assert the date against the dataset's own
 	 * values rather than against the accessor production reads. And its reach is the API module's
 	 * classes, so an omod-side or test-side caller is invisible to it.
+	 *
+	 * <p><b>A third residue is this guard's own and is not one its siblings have.</b> The tail selects
+	 * the rung that takes the stop date, so a second writer of the CURRENCY mark alone — through the
+	 * eight-argument rung, which takes {@code orderActive} and defaults the date — invokes a different
+	 * descriptor and stays green here. That rung is invoked by no production class today and by test
+	 * helpers only, and nothing pins that; the sibling stamp has no single-writer guard of its own,
+	 * which is why this sentence names the hole rather than claiming the pair is covered.
 	 */
 	@Test
 	public void theOrderStopDateStampIsWrittenInOnePlace() throws IOException {

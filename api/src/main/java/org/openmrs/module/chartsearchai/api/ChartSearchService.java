@@ -1499,6 +1499,14 @@ public interface ChartSearchService {
 		 * does not say the patient has no ended prescription, and it does not say the answer's prose
 		 * reported one correctly.
 		 *
+		 * <p><b>Unlike every check-derived statement beside it, {@code null} is not a state this
+		 * module's own answers reach.</b> The projection has no failure mode and always states a
+		 * measurement, and all three answers {@code LlmInferenceService} builds pass it — so a client
+		 * reading an answer from this module sees a list. The field stays nullable because the type is
+		 * what a different {@code ChartSearchService} implementation could return, and because the
+		 * serializer must then emit {@code null} rather than an empty list, which would assert a
+		 * measurement nobody made. Do not read that nullability as a live signal to branch on.
+		 *
 		 * <p>Resolved ONCE per {@code LlmInferenceService} method, off the chart the answer was
 		 * produced from, and carried rather than re-derived: the chart is gone by REST time, so a
 		 * consumer could not re-ask this if it wanted to, and a second walk over one mapping list for

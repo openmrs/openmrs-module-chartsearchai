@@ -11,14 +11,17 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,8 +31,15 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.OrderStopDate;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
+import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -274,6 +284,82 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 						+ "for it, and `citation` is documented as a number the answer printed");
 	}
 
+	// ---------------------------------------------------------------------------------------------
+	// The WIRING, which the cases above do not reach. They call the two production methods in
+	// production's own order; nothing in them executes LlmInferenceService's own resolution of the
+	// statement or its handing to the answer. Measured: nulling all three of those call sites left
+	// the whole suite green, so this is the path that was unverified rather than merely untested.
+	// These drive the composed production methods — search() and searchStreaming() — over a chart
+	// the real builder assembled from real orders.
+	// ---------------------------------------------------------------------------------------------
+
+	/** The seam the sibling fidelity tests use, defined here for the reason they each define their
+	 *  own: these are private harnesses, not a shared one. The chart is the REAL one built above;
+	 *  only the model, the injector and the safety validator are stood in for. */
+	private TestableService serviceAnswering(PatientChart served, String answer) {
+		TestableService created = new TestableService();
+		created.setChartBuildingStrategy(new StubStrategy(served));
+		created.setLlmProvider(new StubProvider(answer));
+		created.setDrugReferenceInjector(new DrugReferenceInjector() {
+
+			@Override
+			public PatientChart inject(PatientChart chart, Patient patient, String question,
+					ChartReadStatus readStatus) {
+				return chart;
+			}
+		});
+		created.setDrugSafetyValidator(new DrugSafetyValidator() {
+
+			// The overload production actually calls. Stubbing a shorter one leaves this inert.
+			@Override
+			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
+				return Collections.emptyList();
+			}
+		});
+		return created;
+	}
+
+	@Test
+	public void theAnswerProductionBuildsCarriesTheStatement() throws Exception {
+		PatientChart chart = chartOf(LAPSED_ORDER_ID);
+		int index = indexOf(chart, LAPSED_ORDER_ID);
+		String answer = "Triomune-30 is no longer in force [" + index + "].";
+
+		ChartAnswer produced = serviceAnswering(chart, answer).search(patient, QUESTION);
+
+		assertNotNull(produced.getOrderStopDates(),
+				"search() must resolve the statement, not leave the answer stating no measurement");
+		assertEquals(1, produced.getOrderStopDates().size(),
+				"and it must carry the cited ended order: " + produced.getOrderStopDates());
+		assertEquals(on("2008-01-08"), produced.getOrderStopDates().get(0).getStopDate(),
+				"with the date the chart record carried");
+	}
+
+	@Test
+	public void theStreamingPathCarriesItOnBothAnswersItProduces() throws Exception {
+		// Both, and the ungrounded one is the point: it is handed to the caller BEFORE the grounding
+		// pass, and it is what a streaming user reads. Every check-derived statement is null there
+		// because those checks run after the handoff; this one is resolved before it, and that
+		// decision lives in production rather than in the controller.
+		PatientChart chart = chartOf(LAPSED_ORDER_ID);
+		int index = indexOf(chart, LAPSED_ORDER_ID);
+		String answer = "Triomune-30 is no longer in force [" + index + "].";
+		final List<ChartAnswer> ungrounded = new ArrayList<ChartAnswer>();
+
+		ChartAnswer produced = serviceAnswering(chart, answer).searchStreaming(patient, QUESTION,
+				token -> { }, reasoning -> { }, citations -> { }, a -> ungrounded.add(a));
+
+		assertEquals(1, ungrounded.size(), "precondition: the ungrounded answer must have been handed over");
+		assertNotNull(ungrounded.get(0).getOrderStopDates(),
+				"the answer a streaming user reads first must already carry the statement");
+		assertEquals(on("2008-01-08"), ungrounded.get(0).getOrderStopDates().get(0).getStopDate(),
+				"with the date, not merely an empty list");
+		assertNotNull(produced.getOrderStopDates(), "and the final answer carries it too");
+		assertEquals(ungrounded.get(0).getOrderStopDates(), produced.getOrderStopDates(),
+				"the same statement on both, resolved once rather than twice");
+	}
+
 	@Test
 	public void aNullChartOrResolutionStatesAnEmptyListRatherThanThrowing() {
 		// The producer never states the absence of a measurement — a caller that has none passes
@@ -281,6 +367,62 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 		// one and not an exception.
 		assertTrue(ChartSearchAiUtils.orderStopDates("It ended [1].", null, null).isEmpty(),
 				"no resolution and no mappings states nothing");
+	}
+
+	/** Subclass that no-ops the Context-backed resolvers so no OpenMRS LLM runtime is needed. */
+	private static final class TestableService extends LlmInferenceService {
+
+		@Override
+		protected boolean resolveWarmupEnabled() {
+			return false;
+		}
+
+		@Override
+		protected boolean resolveGroundingEnabled() {
+			return false;
+		}
+	}
+
+	private static final class StubStrategy extends ChartBuildingStrategy {
+
+		private final PatientChart chart;
+
+		private StubStrategy(PatientChart chart) {
+			this.chart = chart;
+		}
+
+		@Override
+		PatientChart buildChart(Patient patient, String question) {
+			return chart;
+		}
+
+		@Override
+		boolean usePreFilter() {
+			return false;
+		}
+	}
+
+	/** The one thing no deterministic test can produce: the model's own output. */
+	private static final class StubProvider extends LlmProvider {
+
+		private final String answer;
+
+		private StubProvider(String answer) {
+			this.answer = answer;
+		}
+
+		@Override
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
+				boolean enumerateFindings) {
+			return new LlmResponse(answer, Collections.<Integer> emptyList());
+		}
+
+		@Override
+		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				String cacheScope, boolean enumerateFindings) {
+			return new LlmResponse(answer, Collections.<Integer> emptyList());
+		}
 	}
 
 	/**

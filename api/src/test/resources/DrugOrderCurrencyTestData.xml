@@ -1,7 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
   The drug-order arrangements the standard test dataset does not carry. The first three are issue
-  #317's; the fourth is issue #315's, and is the one a stop-date reading must not invent a date for.
+  #317's; the rest are issue #315's — the one a stop-date reading must not invent a date for, the
+  live one it must not invent a date FOR EITHER, and a same-date pair that makes an ordering rule
+  discriminable.
 
   1. ORDER 9317 — an order that lapsed by its DURATION: action NEW, auto_expire_date in the past,
      date_stopped NULL. querystore's DrugOrderRecordSerializer renders ". Stopped: <date>" for
@@ -91,6 +93,42 @@
 	        creator="1" date_created="2008-01-11 00:00:00.0" voided="false" patient_id="2"
 	        uuid="9320dddd-0000-4000-8000-00000000320d" care_setting="1" encounter_id="6" />
 
+	<!--
+	  5. ORDER 9321 — a LIVE duration-based prescription: action NEW, date_activated past,
+	     auto_expire_date in the FUTURE, date_stopped NULL. Order.isActive() is TRUE for it, and
+	     getEffectiveStopDate() still answers that future date, because that accessor is
+	     dateStopped-else-autoExpireDate and knows nothing about whether the date has passed.
+
+	     That pair is what witnesses the contract in SerializedRecord.orderStopDate — non-null implies
+	     the currency mark is FALSE. Without it, the two guards that enforce it (the forRecord gate in
+	     stopDateForRecord and the else-narrowing in readingOf) can BOTH be removed with the suite
+	     green, and the module then publishes a stop date for a live prescription. Found by review.
+
+	     Deliberately the commonest live shape rather than an exotic one: core sets auto_expire_date
+	     from an order's duration, so this is what most running prescriptions look like. Standard
+	     order 3, which the live cases used before, carries NEITHER end date — so no arrangement of
+	     either guard could have produced a date for it, and asserting "no stop date" there asserted
+	     nothing.
+
+	  6. ORDER 9322 — a second ENDED order sharing order 9317's date_activated, so the two chart
+	     records carry the SAME date. extractCitedReferences sorts the citations by record date, and
+	     on a chart assembled most-recent-first that sort leaves them in index order whatever the
+	     answer printed — so a pair with distinct dates cannot tell "ordered by citation index" from
+	     "ordered as the resolution handed them over". With the dates equal the sort is a no-op and
+	     the resolution's order follows the answer's markers, which is what makes the ordering rule
+	     in ChartSearchAiUtils.orderStopDates discriminable. Also found by review.
+	-->
+	<orders order_id="9321" order_type_id="1" order_number="ORD-9321" urgency="ROUTINE"
+	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2099-01-08 00:00:00.0"
+	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
+	        uuid="9321eeee-0000-4000-8000-00000000321e" care_setting="1" encounter_id="6" />
+	<orders order_id="9322" order_type_id="1" order_number="ORD-9322" urgency="ROUTINE"
+	        order_action="NEW" concept_id="792" orderer="1" instructions="1x daily"
+	        date_activated="2008-01-01 00:00:00.0" auto_expire_date="2008-01-07 00:00:00.0"
+	        creator="1" date_created="2008-01-01 00:00:00.0" voided="false" patient_id="2"
+	        uuid="9322ffff-0000-4000-8000-00000000322f" care_setting="1" encounter_id="6" />
+
 	<drug_order order_id="9317" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
 	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
@@ -101,4 +139,10 @@
 	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
 	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
 	<drug_order order_id="9320" drug_inventory_id="2" as_needed="0" dispense_as_written="0" />
+	<drug_order order_id="9321" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<drug_order order_id="9322" drug_inventory_id="2" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
 </dataset>

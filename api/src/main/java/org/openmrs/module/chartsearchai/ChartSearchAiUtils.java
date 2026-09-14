@@ -606,24 +606,33 @@ public class ChartSearchAiUtils {
 	 * number that appears nowhere in the answer. Taking the markers alone would admit an index the
 	 * resolution refused.
 	 *
+	 * <p><b>A BLANK answer states nothing here, which is the OPPOSITE of the convention its
+	 * neighbour follows</b> — {@code SafetyFindingCitationExtentCheck} counts a blank answer by the
+	 * citations that resolved, "the absence of an answer is not an answer that dropped a finding"
+	 * (issue #409). Deliberate: that check measures whether a finding reached the prose, so a blank
+	 * answer must not read as a drop; this one publishes a {@code citation} documented as a number
+	 * the answer PRINTED, and a blank answer printed none. A blank answer beside a non-empty
+	 * structured {@code citations} array is reachable and yields an empty list.
+	 *
 	 * <p><b>Gated on the STAMP and never on a resource type.</b> A record states a stop date only
 	 * where {@code RecordMapping.getOrderStopDate()} carries one, which the chart builder writes only
 	 * for a drug-order record of this patient's that it read as out of force — so the type scoping
 	 * lives once, at the write, and asking for the type again here would be a second expression of
 	 * it. That is {@code DosingCeilingFidelityCheck}'s rule over its own stamp, for the same reason.
 	 *
-	 * @param answer the answer text whose bracketed markers decide the population, may be null
-	 * @param cited the references the answer's own resolution produced, may be null
-	 * @param mappings the assembled chart's mappings, may be null
-	 * <p><b>Ordered by citation index, which is NOT the rule its sibling states.</b>
+	 * <p><b>Ordered by ascending citation index, which is NOT the rule its sibling states.</b>
 	 * {@code DosingCeilingFidelityCheck} returns entries in {@code cited}'s own order, and {@code
 	 * cited} is sorted by record DATE — so the two keys on one response are ordered by different
 	 * rules while both join to {@code references} by {@code index}. Deliberate here: a client
 	 * rendering this list should not have its order depend on how the resolution happened to sort its
-	 * references. Pinned by
-	 * {@code OrderStopDateStatementTest.twoCitedEndedPrescriptionsAreStatedInCitationOrder}, which
-	 * cites the two records in the opposite order to the one they must be stated in.
+	 * references. What pins it is a pair of cited records carrying the SAME date, in
+	 * {@code OrderStopDateStatementTest.twoCitedEndedPrescriptionsAreStatedInCitationOrder} — with
+	 * distinct dates the date sort leaves the resolution's own order ascending anyway, so such a pair
+	 * cannot tell this rule from insertion order, which review measured.
 	 *
+	 * @param answer the answer text whose bracketed markers decide the population, may be null
+	 * @param cited the references the answer's own resolution produced, may be null
+	 * @param mappings the assembled chart's mappings, may be null
 	 * @return one entry per qualifying citation, in ascending citation order; an empty list where none
 	 *         qualified. Never null — a caller that states no measurement passes {@code null} on to
 	 *         the answer itself rather than asking this for one

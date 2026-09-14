@@ -870,7 +870,7 @@ public class PatientChartSerializer {
 		 * ending in a list followed by a {@code Boolean}. Every other placement breaks one of those
 		 * two tails — a second list changes which descriptors end how. Appended after
 		 * {@code orderDrugNamed}, added as a rung below, or inserted here while KEEPING the old
-		 * eleven-argument rung: each was run and each reddens. Which case, and how many, differs
+		 * rung that preceded it: each was run and each reddens. Which case, and how many, differs
 		 * between them, so mutate the placement and read the failures rather than trusting a list
 		 * here. That is why the rung gained the parameter instead of being joined by a sibling.
 		 *

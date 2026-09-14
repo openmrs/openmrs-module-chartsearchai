@@ -87,6 +87,11 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 	/** A DISCONTINUE order carrying neither end date — out of force, and core publishes no date. */
 	private static final int DISCONTINUED_ORDER_WITH_NO_STOP_DATE_ID = 9320;
 
+	/** A second ended order sharing {@link #LAPSED_ORDER_ID}'s {@code date_activated}, so the two
+	 *  chart records carry the same date and the citation sort has nothing to do — which is what
+	 *  makes the writer's own ordering rule discriminable. */
+	private static final int SAME_DATE_LAPSED_ORDER_ID = 9322;
+
 	private static final String QUESTION = "what medications is the patient taking?";
 
 	private CountingQueryStoreStub queryStore;
@@ -215,19 +220,30 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void twoCitedEndedPrescriptionsAreStatedInCitationOrder() throws Exception {
-		PatientChart chart = chartOf(LAPSED_ORDER_ID, STOPPED_ORDER_ID);
-		int lapsed = indexOf(chart, LAPSED_ORDER_ID);
-		int stopped = indexOf(chart, STOPPED_ORDER_ID);
-		// Cited in the opposite order to the one they must be stated in, so the ordering is the
-		// writer's and not an echo of the answer's or the resolution's.
-		String answer = "Two orders have ended [" + Math.max(lapsed, stopped) + "] ["
-				+ Math.min(lapsed, stopped) + "].";
+		// The pair's record dates are EQUAL, and that is what makes this case discriminate anything.
+		// extractCitedReferences sorts the citations by record date, and on a chart assembled
+		// most-recent-first that sort leaves them in index order however the answer printed them — so
+		// with distinct dates the resolution hands them over already ascending, and replacing the
+		// writer's own sort with insertion order stays green. Measured: with a distinct-date pair this
+		// case passed under that substitution, which is review's finding, not a hypothesis.
+		PatientChart chart = chartOf(SAME_DATE_LAPSED_ORDER_ID, LAPSED_ORDER_ID);
+		int first = indexOf(chart, SAME_DATE_LAPSED_ORDER_ID);
+		int second = indexOf(chart, LAPSED_ORDER_ID);
+		assertEquals(chart.getMappings().get(first - 1).getDate(),
+				chart.getMappings().get(second - 1).getDate(),
+				"precondition: the two records must carry the SAME date, or the resolution's own sort "
+						+ "orders them and this case cannot see the writer's rule");
+		// Cited in descending order, so ascending output is the writer's sort and not an echo of the
+		// answer's markers or of the order the resolution handed them over in.
+		String answer = "Two orders have ended [" + Math.max(first, second) + "] ["
+				+ Math.min(first, second) + "].";
 
 		List<OrderStopDate> stated = statementFor(answer, chart);
 
 		assertEquals(2, stated.size(), "both cited ended orders are stated: " + stated);
 		assertTrue(stated.get(0).getCitation() < stated.get(1).getCitation(),
-				"strictest-first by citation, whatever order the answer printed them in: " + stated);
+				"ascending by citation, whatever order the answer printed them in and whatever order "
+						+ "the resolution produced: " + stated);
 	}
 
 	@Test

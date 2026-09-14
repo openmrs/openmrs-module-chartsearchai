@@ -742,12 +742,18 @@ class QueryStoreChartBuilder {
 		 *
 		 * <p><strong>Gated on {@link #forRecord} answering {@code FALSE} rather than on the map
 		 * alone</strong>, so the two halves of one read cannot disagree about one record: a date is
-		 * published only for a record the module is simultaneously willing to call not-in-force.
-		 * Without the gate a future order — one whose {@code dateStopped} is set but not yet reached,
-		 * which {@code Order.isActive()} still calls in force — would carry a stop date beside a mark
-		 * saying it is current, and a client would read the pair as a contradiction. Asking
-		 * {@code forRecord} rather than re-testing the type and the sets here is also what keeps the
-		 * type scoping and the attribution rule in one place.
+		 * published only for a record the module is simultaneously willing to call not-in-force. A
+		 * LIVE duration-based prescription is what makes that load-bearing — its
+		 * {@code autoExpireDate} has not been reached, so {@code Order.isActive()} is {@code TRUE}
+		 * while {@code getEffectiveStopDate()} still answers that future date — and it is the
+		 * commonest live shape there is. Asking {@code forRecord} rather than re-testing the type and
+		 * the sets here is also what keeps the type scoping and the attribution rule in one place.
+		 *
+		 * <p>An order the module could not evaluate is refused by this gate too, and by the part of it
+		 * that is easy to mis-attribute: such an order never reaches {@code allOrderUuids}, so
+		 * {@code forRecord} answers {@code null} rather than {@code FALSE}. It is not the {@code try}
+		 * scope in {@link #readingOf} that refuses it — moving that read out of the try, or even
+		 * adding the map write to the catch, leaves every case green.
 		 */
 		Date stopDateForRecord(String resourceType, String resourceUuid) {
 			if (!Boolean.FALSE.equals(forRecord(resourceType, resourceUuid))) {
@@ -876,9 +882,12 @@ class QueryStoreChartBuilder {
 				// keeps this map holding exactly what stopDateForRecord may publish, so a second
 				// reader added later cannot find an active or unevaluable order's date in it. It is
 				// defence and not the decision: OrderCurrency.stopDateForRecord's own gate is what
-				// decides, and removing that gate reddens the test-order and unevaluable cases while
-				// removing this narrowing alone reddens nothing. Mutate each and read the failures;
-				// this narrowing is the unpinned half and is kept deliberately.
+				// decides. Mutate each and read the failures rather than trusting this comment — an
+				// earlier version of it named two cases for the gate and review measured one. Removing
+				// this narrowing ALONE reddens nothing, so it is the unpinned half and is kept
+				// deliberately; removing BOTH publishes a stop date for a live prescription, which is
+				// what DrugOrderCurrencyMarkTest.aLiveDurationBasedPrescriptionStatesNoStopDate-
+				// EvenThoughCorePublishesOne exists for.
 				Date stopDate = order.getEffectiveStopDate();
 				known.add(order.getUuid());
 				if (isActive) {

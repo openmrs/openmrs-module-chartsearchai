@@ -624,10 +624,16 @@ public interface ChartSearchService {
 		 */
 		public OrderStopDate(int citation, Date stopDate) {
 			this.citation = citation;
-			// Copied in AND out, unlike the module's other published dates, because this type defines
-			// equals/hashCode: a caller mutating the Date it handed over would move this object
-			// inside a hash container it is already in. The chart's own record dates are published
-			// uncopied and are not keys of anything.
+			// Copied in AND out, unlike the module's other published dates, and the reason is the TYPE
+			// rather than mutability. What arrives here is whatever Hibernate loaded onto the order —
+			// in practice a java.sql.Timestamp, a Date subclass whose equals is asymmetric with its
+			// supertype's: Timestamp.equals(Date) is false while Date.equals(Timestamp) is true. So
+			// without normalising to a plain Date, this type's own equals would inherit that asymmetry
+			// and two OrderStopDates a client could not tell apart would compare unequal one way
+			// round. Mutability is the lesser reason and would not on its own earn the copy: the
+			// chart's own record dates are published uncopied. An earlier version of this comment gave
+			// only the mutability reason, and review measured that removing both copies reddens
+			// nothing — which is true and is not the argument.
 			this.stopDate = new Date(stopDate.getTime());
 		}
 

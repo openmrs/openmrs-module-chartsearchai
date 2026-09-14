@@ -115,6 +115,11 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	 *  date, so it is the other half of the pair above rather than a second copy of it. */
 	private static final int DISCONTINUED_ORDER_WITH_A_STOP_DATE_ID = 22;
 
+	/** This file's dataset: a LIVE duration-based prescription — {@code auto_expire_date} in the
+	 *  FUTURE, so {@code Order.isActive()} is TRUE while {@code getEffectiveStopDate()} still answers
+	 *  a date. The pair that witnesses {@code SerializedRecord.orderStopDate}'s contract. */
+	private static final int LIVE_WITH_FUTURE_EXPIRY_ORDER_ID = 9321;
+
 	private static final String MEDICATIONS_QUESTION = "what medications is the patient taking?";
 
 	private CountingQueryStoreStub queryStore;
@@ -759,10 +764,44 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aLiveDurationBasedPrescriptionStatesNoStopDateEvenThoughCorePublishesOne() {
+		// THE case for the contract in SerializedRecord.orderStopDate — non-null implies the mark is
+		// FALSE — and the one the case above cannot make. Order 3 carries NEITHER end date, so
+		// getEffectiveStopDate() is null for it and no arrangement of the two guards could have
+		// produced a date; asserting "no stop date" there asserts nothing.
+		//
+		// This order is live AND core publishes an end for it: auto_expire_date in the future, which
+		// getEffectiveStopDate() returns because that accessor is dateStopped-else-autoExpireDate and
+		// says nothing about whether the date has passed. It is the commonest live shape there is,
+		// core setting auto_expire_date from an order's duration.
+		//
+		// Measured: with the forRecord gate reduced to a type test AND the else-narrowing removed, the
+		// whole suite was green before this case existed; with it, that mutation publishes
+		// 2099-01-08 as the stop date of a prescription the same record calls in force.
+		Order order = Context.getOrderService().getOrder(LIVE_WITH_FUTURE_EXPIRY_ORDER_ID);
+		assertTrue(order.isActive(), "precondition: core must consider this prescription in force");
+		assertNotNull(order.getEffectiveStopDate(),
+				"precondition: and must publish an effective stop date for it anyway, or this case is "
+						+ "the same as the one above");
+		chartOf(drugOrderDoc(LIVE_WITH_FUTURE_EXPIRY_ORDER_ID));
+
+		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);
+
+		RecordMapping mapping = mappingFor(chart, order.getUuid());
+		assertEquals(Boolean.TRUE, mapping.getOrderActive(), "the record says the order is in force");
+		assertNull(mapping.getOrderStopDate(),
+				"so it must state NO stop date, whatever core's accessor answers — a date beside an "
+						+ "in-force mark is the contradiction the contract exists to make impossible");
+	}
+
+	@Test
 	public void anOrderTheModuleCannotEvaluateStatesNoStopDate() {
-		// Silence for what cannot be evaluated, on BOTH halves of the read. Order.isActive() throws
-		// on this row, and a stop date read outside the same per-order try would survive the throw
-		// and publish an end for a prescription the module could not evaluate at all.
+		// Silence for what cannot be evaluated, on BOTH halves of the read. Order.isActive() throws on
+		// this row, so its uuid reaches neither set — and that is what refuses the date here:
+		// forRecord answers null rather than FALSE, and stopDateForRecord's gate turns that away. It
+		// is NOT the try scope; an earlier version of this comment said it was, and review measured
+		// that moving the read out of the try — or adding the map write to the catch — leaves this
+		// case green.
 		chartOf(drugOrderDoc(UNEVALUABLE_ORDER_ID));
 
 		PatientChart chart = builder.build(patient, MEDICATIONS_QUESTION);

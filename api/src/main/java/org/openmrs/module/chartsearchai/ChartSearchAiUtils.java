@@ -1280,24 +1280,23 @@ public class ChartSearchAiUtils {
 	 *         readily as it repeats the unit, and refusing it accused an answer of leaving out a
 	 *         ceiling it had printed.
 	 *
-	 *         <p><b>The two halves are asked for different reasons and only the first is
-	 *         structural.</b> A conventionally grouped number's head group is one to three digits and
-	 *         every group after it exactly three, so a run of four before a comma belongs to no such
-	 *         grouping — which takes the thousands-separator reading out of this window and leaves
-	 *         the list and the comma decimal. The three-digit tail is
-	 *         a BOUND on how much of the window the exception takes, and NOT a second grouping fact:
-	 *         a group of a grouped number IS exactly three digits, so that test tells no list from a
-	 *         separator. What it does is confine the admission to the shape #425 measured, leaving a
-	 *         comma decimal of one or two places ({@code "1000,5"}, {@code "1000,50"}) refused.
-	 *         <b>Both halves are load-bearing; mutate either and read the failure</b> — dropping the
-	 *         run-length test reddens {@code DosingCeilingFidelityTest}
+	 *         <p><b>The run length is a fact about grouping; the three-digit tail is not, and four
+	 *         attempts to say what it IS were each refuted — so this paragraph states what was
+	 *         measured and stops.</b> A conventionally grouped number's head group is one to three
+	 *         digits and every group after it exactly three, so a run of four before a comma belongs
+	 *         to no such grouping. The tail test cannot be read the same way: a group of a grouped
+	 *         number IS exactly three digits, so that test tells no list from a separator, and a
+	 *         comment here once justified {@code digits != 3} beside code admitting on
+	 *         {@code digits == 3}. <b>Both halves are load-bearing; mutate either and read the
+	 *         failure</b> — dropping the run-length test reddens {@code DosingCeilingFidelityTest}
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}, dropping
 	 *         the three-digit test reddens
 	 *         {@code .aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs}. Whether the run is itself
 	 *         preceded by a comma is deliberately NOT asked, so that the middle number of a
 	 *         three-item list ({@code "300,4000,500 mg/day"}) is not refused for standing where a
 	 *         group would; {@code .theMIDDLENumberOfACommaJoinedListIsNoFragmentEither} is that
-	 *         clause's own case.
+	 *         clause's own case. What each shape actually does is the residue list below, by
+	 *         measurement.
 	 *
 	 *         <p><b>Every earlier wording of this admitted a false REPORT, which is the direction
 	 *         {@code DosingCeilingFidelityCheck} must never fail in.</b> Refusing on any

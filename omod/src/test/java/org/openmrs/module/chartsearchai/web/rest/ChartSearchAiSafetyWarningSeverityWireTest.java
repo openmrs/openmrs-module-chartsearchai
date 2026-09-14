@@ -121,6 +121,11 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * names the population, so the one pointer carries both halves. Cited rather than re-derived from
 	 * the composition {@code DrugSafetyValidator} writes it with: a copy of that expression here would
 	 * go stale silently, while the cited assertion reddens.
+	 *
+	 * <p>That case records the allergen {@code ibuprofen}, which corroborates the rule, so its chip
+	 * answers FALSE — it pins the SENTENCE and not the pairing this fixture is for. The pairing is ADR
+	 * Decision 92's own reachability measurement: on this same seed a recorded allergen
+	 * {@code Dexibuprofen} raises this sentence answering TRUE.
 	 */
 	private static final String UNCORROBORATED_CONTRAINDICATION =
 			"Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy";

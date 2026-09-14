@@ -1291,10 +1291,17 @@ public class ChartSearchAiUtils {
 	 *         failure</b> — dropping the run-length test reddens {@code DosingCeilingFidelityTest}
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}, dropping
 	 *         the three-digit test reddens
-	 *         {@code .aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs}. Whether the run is itself
-	 *         preceded by a comma is deliberately NOT asked, so that the LAST item of a three-item
-	 *         list ({@code "300,4000,500 mg/day"}) is not refused for sitting behind a run that is
-	 *         itself where a group would be;
+	 *         {@code .aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs}. <b>Each bound's VALUE is
+	 *         pinned as well as its presence</b>, because neither of those two cases can see a bound
+	 *         MOVE: the first is refused at the run-length test on a head group of ONE digit, before
+	 *         the tail is looked at, and the second on a tail of ONE. Widening the run length to three
+	 *         or to two ({@code comma - start < 3}, which the grouping sentence above invites) reddens
+	 *         {@code .aGroupedNumberWithATHREEDigitHeadGroupSTATESNoCeilingOfTheRecord}; loosening the
+	 *         tail equality to a minimum ({@code digits >= 3}) reddens
+	 *         {@code .aCommaWithFOURDigitsAfterItSTATESNoCeilingOfTheRecordEither}. Whether the run is
+	 *         itself preceded by a comma is deliberately NOT asked, so that the LAST item of a
+	 *         three-item list ({@code "300,4000,500 mg/day"}) is not refused for sitting behind a run
+	 *         that is itself where a group would be;
 	 *         {@code .theLASTNumberOfAThreeItemCommaJoinedListIsNoFragmentEither} is that clause's
 	 *         own case. What each shape actually does is the residue list below, by
 	 *         measurement.

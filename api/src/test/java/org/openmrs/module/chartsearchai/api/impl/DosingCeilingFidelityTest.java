@@ -589,6 +589,87 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
+	public void aGroupedNumberWithATHREEDigitHeadGroupSTATESNoCeilingOfTheRecord() throws IOException {
+		// The run-length bound's VALUE rather than its presence, which is what
+		// aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith cannot reach: its
+		// "1,500 mg/day" has a head group of ONE digit, refused under a bound of two, three or four
+		// alike, so it tells nothing about where the bound sits. Three digits is the boundary — the
+		// longest head group a conventionally grouped number has — and "300,500 mg/day" has only the
+		// grouped reading: three hundred thousand five hundred, a cumulative total written with its
+		// separator. "1,234,500 mg/day" is the same number fully grouped, which is how a model writes
+		// a total that large; the run before the comma it is judged at is a group rather than a first
+		// number, and the rule reads that run's LENGTH alone. So neither states "500 mg/day", the
+		// answer states only the laxer 2000, and that is the report.
+		//
+		// Widen the bound by one — `comma - start < 4` to the `< 3` the grouping sentence invites —
+		// and the exception swallows every conventionally grouped number with a three-digit group
+		// before the comma: the stricter ceiling reads as stated, the walk returns at its first test,
+		// and this report is lost.
+		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
+		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the stricter ceiling's spelling is a SUFFIX of a grouped number whose "
+						+ "group before the comma is three digits long");
+		TestableService service = newService(grouped);
+		service.setLlmProvider(answering("The maximum is 2000 mg/day [" + mapping.getIndex()
+				+ "]; her cumulative course total is 300,500 mg/day, or 1,234,500 mg/day across the "
+				+ "whole record."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of tinidazole?");
+			assertEquals(Collections.singletonList(
+					new UnstatedDosingCeiling(mapping.getIndex(), "2000 mg/day", "500 mg/day")),
+					answer.getUnstatedDosingCeilings(),
+					"a three-digit group before the comma is a grouped number and not two numbers, so "
+							+ "neither total states this record's stricter ceiling and the answer's "
+							+ "quotation of the laxer 2000 is still reported. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aCommaWithFOURDigitsAfterItSTATESNoCeilingOfTheRecordEither() throws IOException {
+		// The tail bound's upper side, and the reason `numericFragment`'s exception tests the tail for
+		// an EQUALITY rather than a minimum. aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs holds
+		// the lower side with one digit after the comma; nothing held this one, and `digits == 3`
+		// loosened to `digits >= 3` is the loosening the word "three-digit" invites.
+		//
+		// "4000,2000 mg/day" is not the shape #425 measured: four digits after a comma are no group of
+		// a grouped number, and the rule cannot tell the text from a comma decimal of four places
+		// (4000.2000), which is the reading under which this answer quotes no ceiling of the record at
+		// all. So it stays refused and the check says nothing — the silent direction. Loosen the bound
+		// and the "2000 mg/day" inside that number is read as stated, and an answer that named neither
+		// ceiling is published as having left out the stricter 500 mg/day: the direction this check
+		// must never fail in.
+		//
+		// What this does NOT claim is that such a text is never an elided-unit list. It can be, and
+		// then the refusal is a MISS; `numericFragment`'s javadoc is canonical for the shapes the
+		// exception leaves behind and this case makes no claim about them. What is pinned is that the
+		// bound does not move on its own.
+		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
+				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
+		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the laxer ceiling's spelling is four digits long, so a comma before it "
+						+ "leaves a tail the exception's equality does not admit");
+		TestableService service = newService(grouped);
+		service.setLlmProvider(answering("Her cumulative course total is 4000,2000 mg/day; no ceiling "
+				+ "for the suspension is recited here [" + mapping.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(),
+					"What is the maximum daily dose of tinidazole?");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a four-digit tail is outside the exception, so \"4000,2000 mg/day\" states no "
+							+ "ceiling of this record and there is nothing to report. Captured: "
+							+ capture.describeAll());
+			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(),
+					"and nothing is published, or an answer that quoted neither ceiling is accused of "
+							+ "dropping the stricter one");
+		}
+	}
+
+	@Test
 	public void theSTRICTESTCeilingTheAnswerStatesIsTheOneReported() throws IOException {
 		// The walk's central rule, and degenerate on every other case in this file: they all run on a
 		// TWO-ceiling record, where the one ceiling that can be reported is the only candidate. A

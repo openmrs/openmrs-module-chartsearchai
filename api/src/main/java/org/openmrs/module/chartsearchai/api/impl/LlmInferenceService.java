@@ -646,8 +646,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// calling their own entry points from a throwaway same-package case, the active-order
 			// check costs 0.93 us on an answer stating no active-order claim, which is the ordinary
 			// one, and 171 us on a five-claim answer over a 400-record chart. The finding-severity
-			// check is in the same band, 6.2 us on a stock install and 87 us on the reported shape
-			// (ADR Decision 78). The prose check is the outlier and is why this comment stopped
+			// check is in the same band on a stock install, where its rated-record gate returns before
+			// it reads anything; ADR Decision 78 carries the measured table and the date it was taken,
+			// and its rated rows predate issue #409 round two, which added a chart walk and a marker
+			// decode to exactly those arrangements. No re-measured figure is quoted here because none
+			// has been taken. The prose check is the outlier and is why this comment stopped
 			// saying microseconds of all of them: it is a word-level dynamic program, ~0.7 ms on a
 			// realistic chart and ~1.2 ms at the largest injected record set anyone has swept (ADR
 			// Decision 61).

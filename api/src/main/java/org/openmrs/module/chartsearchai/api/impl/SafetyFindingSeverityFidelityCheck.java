@@ -238,11 +238,16 @@ final class SafetyFindingSeverityFidelityCheck {
 			// could state both that the answer did not cite a finding (`findingCitations`) and that it
 			// cited that finding and dropped its rating (this key).
 			//
-			// AFTER the ratings gate, for two reasons that are not one reason. On the shipped default
-			// no record carries a rating, so this must not be resolved merely to learn there was
-			// nothing to do. And getFindingSeverity() has to stay the first read this check makes
-			// that nothing earlier on the answer path makes, or the guard's own case loses the only
-			// arrangement that reaches it.
+			// AFTER the ratings gate, and the placement is BEHAVIOURALLY UNPINNED — said plainly so
+			// the line does not look better defended than it is. What it buys is one walk of the
+			// chart's mappings on a stock install, where no record carries a rating: hoisted above
+			// the gate the reading still returns at its own carried.isEmpty() and never reads the
+			// answer, so the saving is the walk and not a decode. Measured by a review pass: hoisting
+			// this line leaves the whole api suite green, this check's own throw case included,
+			// because the reading touches only getResourceType() and getIndex() — both read by
+			// earlier steps on the answer path — so it cannot displace getFindingSeverity() as the
+			// first read here that nothing earlier makes. An earlier draft of this comment named that
+			// throw case as what forbids the hoist; no test does.
 			//
 			// The blank-answer arm of that reading is unreachable from here — the guard above returns
 			// on isBlank(answer) first, which is why a degenerate output is silent rather than

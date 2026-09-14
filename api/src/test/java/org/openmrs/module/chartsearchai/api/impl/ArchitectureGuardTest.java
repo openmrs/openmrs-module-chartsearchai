@@ -144,11 +144,13 @@ public class ArchitectureGuardTest {
 	 * publish an {@code unfaithfullyRenderedCitations} index for, a reference record the answer never
 	 * cited, and {@code restsOnReferenceMaterial} would find a demote-only member in EVERY claim's
 	 * rests-on set, withholding issue #284's negative for every chart citation in the answer.
-	 * {@code SafetyFindingSeverityFidelityCheck}'s note of its own exemption argues from the last
-	 * clause of that property rather than from the group — an attached index is never a
-	 * {@code safety_finding} record, so it carries no rating for that check to require — and a rated
-	 * mapping built with a derivation would have it publish an {@code unstatedFindingSeverities}
-	 * entry against a citation the model never made.
+	 * {@code SafetyFindingSeverityFidelityCheck} used to argue its own exemption from the last clause
+	 * of that property — an attached index is never a {@code safety_finding} record, so it carries no
+	 * rating for that check to require. Since issue #409 round two it takes the question from
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} instead, which applies the #305
+	 * filter itself, so a rated mapping built with a derivation no longer reaches that key's
+	 * accusation walk. The hazard named here is the GROUP one above; that check is no longer a second
+	 * one resting on this property.
 	 *
 	 * <p><b>Asked of the BYTECODE, and the earlier source-text form is gone rather than patched.</b>
 	 * That form matched the literal {@code "new RecordMapping("} and counted commas, and review
@@ -780,6 +782,24 @@ public class ArchitectureGuardTest {
 	 *            which differs between them and is the half of the message worth writing twice
 	 * @param compileMessage what the class's own patterns are for
 	 */
+	/**
+	 * Whether {@code line} spells a citation-marker dialect of its own — a bracketed-digit regex, or
+	 * the shared pattern named directly instead of reached through its decode step.
+	 *
+	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
+	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
+	 * so a third dialect added to one copy and not the other would leave the other blind while both
+	 * reported success by finding nothing — the drift
+	 * {@link #assertMarkersReachedOnlyThroughTheSharedDecodeStep}'s own javadoc exists to prevent,
+	 * arriving through the duplicate rather than through a parameter. What is deliberately NOT hoisted
+	 * is each rule's required call: the marker rules REQUIRE {@code ChartSearchAiUtils.citedIndexes(}
+	 * and the finding-severity rule FORBIDS it, so one signature over both polarities is what that
+	 * javadoc rightly refuses.
+	 */
+	private static boolean namesAMarkerDialect(String line) {
+		return line.contains("\\[") || line.contains("INLINE_CITATION");
+	}
+
 	private void assertMarkersReachedOnlyThroughTheSharedDecodeStep(String fileName,
 			int expectedCompiles, String decodeStepConsequence, String compileMessage)
 			throws IOException {
@@ -803,7 +823,7 @@ public class ArchitectureGuardTest {
 			}
 			// A bracketed-digit regex of its own, and the shared pattern read directly instead of
 			// through its decode step. Both are marker dialects; neither is caught by the count.
-			if (line.contains("\\[") || line.contains("INLINE_CITATION")) {
+			if (namesAMarkerDialect(line)) {
 				ownDialect.add("line " + (i + 1) + ": " + trimmed);
 			}
 		}
@@ -870,8 +890,7 @@ public class ArchitectureGuardTest {
 			if (line.contains("Pattern.compile(")) {
 				compiles++;
 			}
-			if (line.contains("\\[") || line.contains("INLINE_CITATION")
-					|| line.contains("ChartSearchAiUtils.citedIndexes(")) {
+			if (namesAMarkerDialect(line) || line.contains("ChartSearchAiUtils.citedIndexes(")) {
 				ownDialect.add("line " + (i + 1) + ": " + trimmed);
 			}
 		}

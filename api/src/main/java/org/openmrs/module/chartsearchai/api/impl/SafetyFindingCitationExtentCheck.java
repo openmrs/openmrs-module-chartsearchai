@@ -260,8 +260,9 @@ final class SafetyFindingCitationExtentCheck {
 	 * Which of {@code carried} the ANSWER cited: the resolution's own admissions, narrowed to the
 	 * ones a marker in {@code answer} anchors. A citation the module attached is not one the answer
 	 * made (issue #305); the set de-duplicates, so one finding cited in two sentences is one cited
-	 * finding. Shared by the extent and by {@link #uncitedFindingIndexes} so the count and the
-	 * complement cannot disagree about what "cited" means.
+	 * finding. Shared by every reader of that question so they cannot disagree about what "cited"
+	 * means — the extent, {@link #uncitedFindingIndexes}' complement, and, since issue #409 round
+	 * two, {@link SafetyFindingSeverityFidelityCheck}'s per-citation accusation.
 	 *
 	 * <p><b>What each of the three tests contributes, stated rather than implied</b> — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.
@@ -277,10 +278,13 @@ final class SafetyFindingCitationExtentCheck {
 	 * rather than assumed.</b> An index a marker anchors is in {@code seen} by construction, maps to
 	 * a record whenever it is in {@code carried}, and is therefore never
 	 * {@code attachedByTheModule}; replacing this branch with {@code anchored} against
-	 * {@code carried} alone leaves the whole api suite green. It stays because the two readers share
-	 * this helper and the blank branch is not inert, and because dropping the #305 filter here would
-	 * make this the one counter in the family that does not apply it. Do not read the intersection
-	 * as two live gates.
+	 * {@code carried} alone leaves the whole api suite green. It stays because the readers share this
+	 * helper and the blank branch is not inert, and because dropping the #305 filter here would make
+	 * this the one counter in the family that does not apply it. Do not read the intersection as two
+	 * live gates — but do not read "inert" as "free to drop" either: since #409 round two
+	 * {@link SafetyFindingSeverityFidelityCheck} takes this reading for a per-citation ACCUSATION, so
+	 * the filter that is inert for a count here is what keeps an attached citation out of an
+	 * accusation there. Inert over today's data, load-bearing over the contract.
 	 *
 	 * <p><b>A blank or null answer keeps the resolution alone.</b> There is no prose to anchor
 	 * anything, {@code extractCitedReferences} resolves the array there on purpose, and counting

@@ -72,11 +72,14 @@ public class DosingCeilingFidelityTest {
 	private static final String CEILINGS =
 			"chartsearchai-test/drug-reference-substance-dosing-ceilings.json";
 
-	/** The fixture for the two ways a ceiling COMPARISON can go wrong that the ticket's own dataset
-	 *  cannot reach — an order that differs between numbers and spellings, and a non-integral ceiling
-	 *  whose spelling is a suffix of a decimal. See its own description, and
-	 *  {@link #theCeilingsAreOrderedByNUMBERAndNotByTheirSpelling} /
-	 *  {@link #aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}. */
+	/** The fixture for the ways a ceiling COMPARISON can go wrong that the ticket's own dataset
+	 *  cannot reach — an order that differs between numbers and spellings
+	 *  ({@link #theCeilingsAreOrderedByNUMBERAndNotByTheirSpelling}), a non-integral ceiling whose
+	 *  spelling is a suffix of a decimal
+	 *  ({@link #aDecimalInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}), and a substance of THREE
+	 *  rows, without which the walk's own rule decides nothing
+	 *  ({@link #theSTRICTESTCeilingTheAnswerStatesIsTheOneReported}). Its own description is
+	 *  canonical for what each arrangement is for; this list is a pointer and not a count. */
 	private static final String EDGES =
 			"chartsearchai-test/drug-reference-dosing-ceiling-edges.json";
 

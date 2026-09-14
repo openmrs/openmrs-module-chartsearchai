@@ -104,6 +104,13 @@ public class ChartSearchAiUtils {
 	 * precision on it. The boundary fails toward silence, which is the direction that caller needs —
 	 * {@code ReferenceProseFidelityTest.aTwoDotGapIsATerminatorAndNotACutTheAnswerMarked} is what
 	 * stops the rule being widened to any dot run without the widening being seen.
+	 *
+	 * <p><b>It is a MINIMUM, and that half needed pinning of its own.</b> A longer run is a marked
+	 * cut too, and so is one that fills its whole gap; both of those readings live in the {@code >=}
+	 * and in the absence of an end-of-gap test, and neither is expressible as a value of this
+	 * constant.
+	 * {@code ReferenceProseFidelityTest.aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith}
+	 * carries a row for each — mutate the comparison and read which row reddens.
 	 */
 	private static final int MIN_ELISION_DOTS = 3;
 

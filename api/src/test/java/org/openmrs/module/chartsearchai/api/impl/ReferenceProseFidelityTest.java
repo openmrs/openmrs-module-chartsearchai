@@ -583,17 +583,29 @@ public class ReferenceProseFidelityTest {
 		// The markers are LITERALS and the assertion is over every spelling together, for the reason
 		// everyWayASentenceCanEndInTheSharedRule… gives: a case that iterated the reported spellings
 		// off some constant would pass while the ASCII one stayed silent, which is the whole defect.
-		// Measured before the fix, through this same arrangement: the first two reported and the last
-		// two did not. The bracketed spelling is here because README names it among the four a client
-		// is told are reported alike, and it is rescued by this change rather than by the em dash's
-		// route — its dots are a run, so before the fix its first dot silenced the case too.
-		for (String marker : new String[] { " … ", " — ", " ... ", " [...] " }) {
+		// Measured before the fix, through this same arrangement: "…" and the em dash reported, and
+		// " ... " and " [...] " did not. The bracketed spelling is here because README names it among
+		// the spellings a client is told are reported alike, and it is rescued by this change rather
+		// than by the em dash's route — its dots are a run, so before the fix its first dot silenced
+		// the case too.
+		//
+		// The last two rows pin the RUN TEST itself, which nothing else did — aTwoDotGapIsATerminator…
+		// pins it from below only, and both of the mutations below left the whole api suite green
+		// before these rows existed. Four dots pins it from ABOVE: tighten ">= MIN_ELISION_DOTS" to
+		// "== MIN_ELISION_DOTS" and the four-dot row reddens. The unspaced cut pins it POSITIONALLY:
+		// its dots are the WHOLE gap, so an end-of-gap guard added during a refactor of the loop —
+		// "&& past < between.length()" — reddens the unspaced row. Both are ordinary ways to write a
+		// cut, and each mutation restores exactly the glyph-dependent silence this case exists to
+		// remove, in a check whose only value is recall. Mutate the line and read the failures.
+		for (String marker : new String[] { " … ", " — ", " ... ", " [...] ", " .... ", "..." }) {
 			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + marker
 					+ "such as antimalarials [" + finding.getIndex() + "]."));
 			try (LogCapture capture = LogCapture.on(CHECK)) {
 				service.search(patient(), QUESTION);
+				// The marker is quoted UNTRIMMED: " ... " and "..." are different rows guarding
+				// different mutations, and trimming printed both of them the same way.
 				assertTrue(warnStating(capture, "[" + finding.getIndex() + "]"),
-						"a cut marked \"" + marker.trim() + "\" drops content out of a sentence a "
+						"a cut marked \"" + marker + "\" drops content out of a sentence a "
 								+ "clinician reads exactly as the other spellings do, and must be "
 								+ "reported alike. Captured: " + capture.describeAll());
 			}

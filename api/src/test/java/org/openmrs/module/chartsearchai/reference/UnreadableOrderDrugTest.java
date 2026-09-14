@@ -752,11 +752,10 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	 *
 	 * <p><b>And the third assertion is about the {@code Drug} alone, deliberately.</b> It walks the
 	 * builder and every class nested in it, so a SECOND carrier holding the entity is caught as well
-	 * as {@code CodedDrug} ({@link #collectEntityCarriers} carries the measurement for that) — and it
-	 * reads DECLARED types, so an entity arrayed, inside a generic collection or behind a wildcard or
-	 * type variable is caught too; {@link #handsOutTheEntity} carries the shapes it walks and the ones
-	 * it still admits, which are not none. What it admits on
-	 * purpose is the two {@code Concept} proxies the carrier holds, the
+	 * as {@code CodedDrug} ({@link #collectEntityCarriers} carries the measurement for that), and it
+	 * asks of a member's DECLARED type rather than its raw one — {@link #handsOutTheEntity} states
+	 * the two questions it puts and what it admits, and is the only place either belongs. What it
+	 * admits on purpose is the two {@code Concept} proxies the carrier holds, the
 	 * drug's own concept and its dose form: {@code Drug.hbm.xml} maps both default-lazy, so a read of
 	 * one at a call site compiles and can throw just as a read of the entity could. Measured, with the
 	 * spelling stated because the other one answers differently: a null-guarded
@@ -848,38 +847,32 @@ public class UnreadableOrderDrugTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
-	 * Whether {@code type} would put a {@code Drug} in a caller's hands — asked of the DECLARED type,
-	 * so an entity wrapped in an array, a generic collection, a wildcard or a type variable is caught
-	 * rather than erased past. Assignability is asked BOTH ways, so a subtype of {@code Drug} is
-	 * caught and so is a member declared as a supertype it satisfies.
+	 * Whether {@code type} would put a {@code Drug} in a caller's hands. TWO questions over the
+	 * DECLARED type, and the code below is the statement of them: does the type MENTION {@code Drug}
+	 * anywhere a value of it could be read out — through an array, a type argument, a raw type or a
+	 * bound — and, failing that, is the erased type assignable to or from {@code Drug}?
 	 *
-	 * <p><b>Each widening below followed a reviewer measuring that shape escape.</b> Against an
-	 * exact {@code Drug.class.equals} version: {@code Drug[]} and {@code List<Drug>} escaped. Against
-	 * the version that walked type arguments only: a generic SUBCLASS of {@code Drug} escaped, the raw
-	 * type going unread. Against the version before bounds were followed:
-	 * {@code List<? extends Drug>}, {@code List<? super Drug>} and {@code <T extends Drug> T get()}
-	 * escaped. Each is now caught, and each is an ordinary Java spelling rather than an evasion.
+	 * <p><b>Do not enumerate here what it catches. Add the member and read the failure.</b> Nine
+	 * successive statements of that enumeration were written and refuted, each correction buying the
+	 * next: arrays, type arguments, raw types, wildcards, type variables, {@code Object}, raw
+	 * collections, inherited fields, and an interface {@code Drug} turned out not to implement. The
+	 * shapes are not the point and the list of them was never finishable; the two questions above
+	 * are, and a member of any shape can be put on {@code CodedDrug} in a scratch edit to see which
+	 * answer it gets.
 	 *
-	 * <p><b>What it still admits, without claiming the list is closed</b> — a reviewer found the
-	 * generic-subclass case after two of these were written down as the residues. {@code Object} is
-	 * deliberately excluded: every reference type is assignable to it, so including it would flag every
-	 * {@code Object}-typed member in the file and discriminate nothing — which means a {@code Drug}
-	 * widened to plain {@code Object} is handed out under this check, and reflection cannot tell that
-	 * member from any other. A RAW collection carries no type argument to walk, so a
-	 * {@code private final List drugs} escapes where {@code List<Drug>} does not. And
-	 * {@link #collectEntityCarriers} reads {@code getDeclaredFields}, so a carrier inheriting a
-	 * {@code Drug} field from a class declared OUTSIDE the builder escapes — measured; inheriting one
-	 * from a NESTED superclass does not, that class being walked in its own right. All three
-	 * measured, the last in both arrangements because they answer differently. A reviewer is what catches them, which
-	 * is the same answer this class gives for the evasions its text assertions decline to chase.
+	 * <p><b>Two things a mutation cannot tell you, so they are stated.</b> {@code Object} is excluded
+	 * from the assignability arm deliberately: every reference type is assignable to it, so including
+	 * it would report every {@code Object}-typed member and discriminate nothing — the cost being
+	 * that a {@code Drug} widened to plain {@code Object} is handed out under this check, which
+	 * reflection cannot tell from any other member. And {@link #collectEntityCarriers} reads
+	 * DECLARED members, so what a carrier inherits from a class outside the builder is outside the
+	 * walk. A reviewer is what catches those, the same answer this class gives for the evasions its
+	 * text assertions decline to chase.
 	 *
-	 * <p>Because assignability is asked both ways, an unrelated member typed as a supertype
-	 * {@code Drug} satisfies is reported too — measured, {@code Serializable} and
-	 * {@code OpenmrsObject} both are. That is the predicate working as intended, such a member being
-	 * able to hold one; but the failure message will read as though a {@code Drug} is already there,
-	 * so check what the member is for before treating the report as the defect. An unrelated
-	 * interface {@code Drug} does NOT implement is not reported — measured of {@code Comparable},
-	 * which an earlier wording of this paragraph named as though it were.
+	 * <p>The assignability arm reports a member merely declared as a supertype {@code Drug}
+	 * satisfies, which is intended — such a member can hold one — but the failure message reads as
+	 * though a {@code Drug} is already there, so check what the member is for before treating the
+	 * report as the defect.
 	 */
 	private static boolean handsOutTheEntity(Type type) {
 		return handsOutTheEntity(type, new java.util.HashSet<Type>());

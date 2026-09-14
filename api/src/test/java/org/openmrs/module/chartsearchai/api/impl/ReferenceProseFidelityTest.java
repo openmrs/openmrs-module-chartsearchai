@@ -580,7 +580,7 @@ public class ReferenceProseFidelityTest {
 		// answer ending its sentence, so the ASCII spelling was silent where every other spelling
 		// reported. Which elisions the check saw was therefore decided by the glyph the model chose.
 		//
-		// The markers are LITERALS and the assertion is over all three together, for the reason
+		// The markers are LITERALS and the assertion is over every spelling together, for the reason
 		// everyWayASentenceCanEndInTheSharedRule… gives: a case that iterated the reported spellings
 		// off some constant would pass while the ASCII one stayed silent, which is the whole defect.
 		// Measured before the fix, through this same arrangement: the first two reported and the last

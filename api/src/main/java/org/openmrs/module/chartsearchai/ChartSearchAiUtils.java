@@ -1320,10 +1320,9 @@ public class ChartSearchAiUtils {
 	 *         list written any other way, so #425's own false report still stands for those — each
 	 *         half leaving its own shapes behind. The run-length half leaves a first number of three
 	 *         digits or fewer ({@code "600,500 mg/day"}). The tail test is an EQUALITY and not an
-	 *         upper bound, so it leaves every ceiling whose number is not exactly three digits long —
-	 *         {@code "4000,2000 mg/day"} and, the reachable direction, the one- and two-digit
-	 *         ceilings this module's own fixtures are full of ({@code "2000,60 mg/day"}, measured
-	 *         refused).
+	 *         upper bound, so it leaves every ceiling whose number is not exactly three digits long,
+	 *         in both directions: {@code "4000,2000 mg/day"} and {@code "2000,60 mg/day"}, both
+	 *         measured refused, and this module's fixtures publish ceilings of each width.
 	 *
 	 *         <p>The tail bound's two residues — the comma decimal it admits and the short-ceiling
 	 *         list it does not reach — are two faces of ONE choice rather than two defects, and the

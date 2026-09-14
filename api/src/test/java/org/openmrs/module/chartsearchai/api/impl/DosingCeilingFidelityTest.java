@@ -294,10 +294,10 @@ public class DosingCeilingFidelityTest {
 		// a boundary its words do not: `ChartSearchAiUtils.statesWord` bounds on letters and digits
 		// alone, so "2.5 mg/day" reads as stating "5 mg/day" — a decimal point is neither. That is a
 		// false POSITIVE on a published key, which is the one direction this check must never fail
-		// in: it INVENTS a report, accusing an answer of leaving out a ceiling it never quoted
-		// anything of. Not the only residue that does — `numericFragment` names the comma shapes it
-		// refuses and #425 left three of those standing — so do not read this as the sole inventing
-		// one, which is what it said before that issue.
+		// in: it would accuse an answer of leaving out a ceiling it never quoted anything of.
+		// `statesMeasurement` is what prevents it, so nothing here is a residue — for the shapes
+		// that ARE, in either direction, `numericFragment`'s javadoc is canonical and this case
+		// makes no claim about them.
 		//
 		// Reachable exactly where the feature is: an operator dataset with a non-integral ceiling on a
 		// multi-row age-banded substance. Nothing bundled has one, and nor did any fixture until this

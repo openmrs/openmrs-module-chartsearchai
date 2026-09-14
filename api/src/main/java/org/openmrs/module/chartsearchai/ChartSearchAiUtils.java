@@ -1266,7 +1266,8 @@ public class ChartSearchAiUtils {
 	 *         {@code ".5"}). Attached to what precedes it, it is instead the punctuation CLOSING what
 	 *         precedes it, whatever that was: a word ({@code "see note.500"}), a bracket
 	 *         ({@code "(suspension).500"}), a quote, an emphasis mark, or the run of three or more
-	 *         dots issue #422 calls a marked cut rather than a full stop ({@code "see note...500"}).
+	 *         dots issue #337's fourth round calls a marked cut rather than a full stop
+	 *         ({@code "see note...500"}).
 	 *         A run of dots needs no rule of its own: the character before the stop is then another
 	 *         dot, neither a digit nor a space, so the run is admitted exactly as an attached full
 	 *         stop is. The two questions share no code — {@link #mayEndASentence} is where a cut is
@@ -1291,10 +1292,11 @@ public class ChartSearchAiUtils {
 	 *         {@code .aThousandsSeparatorInTheAnswerDoesNotSTATEACeilingItMerelyENDSWith}, dropping
 	 *         the three-digit test reddens
 	 *         {@code .aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs}. Whether the run is itself
-	 *         preceded by a comma is deliberately NOT asked, so that the middle number of a
-	 *         three-item list ({@code "300,4000,500 mg/day"}) is not refused for standing where a
-	 *         group would; {@code .theMIDDLENumberOfACommaJoinedListIsNoFragmentEither} is that
-	 *         clause's own case. What each shape actually does is the residue list below, by
+	 *         preceded by a comma is deliberately NOT asked, so that the LAST item of a three-item
+	 *         list ({@code "300,4000,500 mg/day"}) is not refused for sitting behind a run that is
+	 *         itself where a group would be;
+	 *         {@code .theLASTNumberOfAThreeItemCommaJoinedListIsNoFragmentEither} is that clause's
+	 *         own case. What each shape actually does is the residue list below, by
 	 *         measurement.
 	 *
 	 *         <p><b>Every earlier wording of this admitted a false REPORT, which is the direction
@@ -1369,7 +1371,7 @@ public class ChartSearchAiUtils {
 		// A conventional thousands separator's head group is one to three digits, so a run of four or
 		// more before one belongs to no such grouping. Whether that run is itself preceded by a comma
 		// is not asked —
-		// see the javadoc: the middle number of a three-item list stands exactly there.
+		// see the javadoc: in a three-item list the middle number sits exactly there.
 		int start = comma;
 		while (start > 0 && Character.isDigit(haystack.charAt(start - 1))) {
 			start--;

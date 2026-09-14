@@ -488,8 +488,9 @@ public class DosingCeilingFidelityTest {
 		// Issue #425 item 1, and the shape no earlier case reaches: each of the admit-cases puts a
 		// NON-digit before the separator, so the arm that asks after a digit was only ever exercised
 		// by a genuine grouped number. A model listing a record's two ceilings elides the
-		// unit on the first of them as readily as it repeats it — the case above is the repeated
-		// form, "2000 mg/day,500 mg/day" — and with the unit elided the second ceiling sits behind a
+		// unit on the first of them as readily as it repeats it —
+		// aSeparatorAFTERALetterLeavesAStatedCeilingStated is the repeated form,
+		// "2000 mg/day,500 mg/day" — and with the unit elided the second ceiling sits behind a
 		// digit and a comma. No CONVENTIONALLY grouped number can be spelled that way: its head group
 		// is one to three digits, so a run of four before the comma belongs to no such grouping. A
 		// partially grouped spelling can ("20000,500"), and is admitted; the javadoc names it.
@@ -521,13 +522,15 @@ public class DosingCeilingFidelityTest {
 	}
 
 	@Test
-	public void theMIDDLENumberOfACommaJoinedListIsNoFragmentEither() throws IOException {
-		// The clause the case above does NOT reach, and the one place this rule declines to ask a
-		// question it easily could. A separator inside a number has a group before it as well as
-		// after, so "is the run before this comma itself preceded by a comma?" looks like a free
-		// tightening — and it would refuse the MIDDLE number of a comma-joined list, which stands in
-		// exactly that position. So the run's LENGTH is all that is asked. Add the tightening and
-		// this case goes red while the two-item one still passes.
+	public void theLASTNumberOfAThreeItemCommaJoinedListIsNoFragmentEither() throws IOException {
+		// The clause aCommaJOININGTwoWholeNumbersLeavesTheSecondOneStated does NOT reach, and the one
+		// place this rule declines to ask a question it easily could. A separator inside a number has
+		// a group before it as well as after, so "is the run before this comma itself preceded by a
+		// comma?" looks like a free tightening. What it would refuse is the LAST item of a three-item
+		// list: the run before ITS comma is the middle number, and that run is the one sitting where
+		// a group would. The middle number is never itself judged here — it carries no ceiling
+		// spelling, so no needle matches it. So the run's LENGTH is all that is asked. Add the
+		// tightening and this case goes red while the two-item one still passes.
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
@@ -547,12 +550,14 @@ public class DosingCeilingFidelityTest {
 
 	@Test
 	public void aCommaDECIMALIsNoListHoweverLongItsIntegerPartIs() throws IOException {
-		// The other half of the case above, and the half that decides how far its exception may
-		// reach. A comma is the decimal separator in many locales, so "1000,5 mg/day" is a dose of
-		// 1000.5 — and the laxer ceiling must not be read out of its FRACTION, which is the naked
-		// decimal's defect (`aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt`) written with the
-		// other separator. Admitting it here would accuse an answer of leaving out 0.5 mg/day when
-		// the number it printed IS 0.5 mg/day, in a notation a clinician may well write it in.
+		// The other half of the exception aCommaJOININGTwoWholeNumbersLeavesTheSecondOneStated pins,
+		// and the half that decides how far it may reach. A comma is the decimal separator in many
+		// locales, so "1000,5 mg/day" is a dose of 1000.5 — and the laxer ceiling must not be read
+		// out of its FRACTION, which is the naked decimal's defect
+		// (`aNakedDecimalDoesNotLetTheLaxerCeilingBeReadOutOfIt`) written with the other separator.
+		// Admitting it here would read the "5" of 1000.5 as a statement of "5 mg/day" and report
+		// (stated 5 mg/day, unstated 0.5 mg/day) — an accusation about a ceiling this answer quoted
+		// nothing of, which is the direction the check must never fail in.
 		//
 		// What keeps this one refused is the exception's TAIL BOUND: it admits only three digits
 		// after the comma, and this text has one. That bound is not a grouping fact — a group of a
@@ -576,8 +581,8 @@ public class DosingCeilingFidelityTest {
 							+ "comma is no group, so this is one number and not two. Captured: "
 							+ capture.describeAll());
 			assertTrue(answer.getUnstatedDosingCeilings().isEmpty(),
-					"and nothing is published, or the answer is accused of dropping the number its "
-							+ "own comma decimal states");
+					"and nothing is published, or the answer is accused of dropping a ceiling it "
+							+ "quoted nothing of, on the strength of a fraction digit");
 		}
 	}
 

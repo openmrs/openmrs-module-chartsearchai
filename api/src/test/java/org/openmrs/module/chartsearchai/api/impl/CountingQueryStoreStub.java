@@ -203,8 +203,8 @@ final class CountingQueryStoreStub {
 			return slice;
 		}
 		return new org.openmrs.module.querystore.model.ContextSlice(slice.getRecords(),
-				slice.getChartSize(), true, slice.getEffectiveTypes(), slice.isTemporalApplied(),
-				slice.getChartSnapshotId());
+				slice.getChartSize(), true, slice.isProjectionComplete(), slice.getEffectiveTypes(),
+				slice.isTemporalApplied(), slice.getChartSnapshotId());
 	}
 
 	/** Serves {@code stubChart}/{@code stubHits} to the real slice impl, keeping the outer

@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,8 +56,12 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * <p><b>Nothing is lost by taking the names out.</b> ADR Decision 100 has the module APPEND them to
  * the answer, so the reader who holds the privilege already receives every name; the counts the log
  * keeps are the two {@code findingPartners} publishes. {@link #theOrdersReachTheAnswerAClinicianIsHanded}
- * is what makes that a move rather than a deletion — remove the append and it reddens, so a fix that
- * simply stopped naming the orders anywhere cannot pass this file.
+ * and {@link #searchStreaming_theOrdersReachTheAnswerItReturns} are what make that a move rather than
+ * a deletion — remove the append and they redden, so a fix that simply stopped naming the orders
+ * anywhere cannot pass this file. They assert it of the answer each method RETURNS; the one surface
+ * that does not carry the appended sentence is the early {@code done} the REST layer emits under
+ * {@code chartsearchai.grounding.async=true}, and ADR Decision 102 states that residue rather than
+ * this file pinning it, since pinning it would forbid the fix.
  *
  * <p>Everything here runs the real {@link LlmInferenceService#search}/{@code searchStreaming}
  * orchestration over real merged chips the real {@code DrugSafetyValidator} raised from the shared
@@ -66,10 +71,20 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  */
 public class FindingPartnerLogDisclosureTest {
 
-	/** The package, so the claim is about every logger on the answer path and not only this check's
-	 *  — a name leaking from a neighbour is the same disclosure. It also makes the capture live:
-	 *  {@code LlmInferenceService}'s own [timing] INFO line arrives on every case here, so a negative
-	 *  cannot pass because nothing was ever captured ({@link LogCapture}'s javadoc). */
+	/** The package the orchestration logs from, so the claim is about every logger in it and not only
+	 *  this check's — a name leaking from a neighbour is the same disclosure. It is NOT a claim about
+	 *  the whole module: the answer path's other half logs from {@code ...chartsearchai.reference},
+	 *  which this harness stubs out (the validator and the injector are overridden below), and that
+	 *  half's own two sites are pinned where they are written —
+	 *  {@code ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName}
+	 *  and {@code PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug}.
+	 *
+	 *  <p>Widening it to the module root was tried and reverted: {@link LogCapture} raises the level of
+	 *  the NAMED logger only, so with the root named this file's captures received this pass's WARN but
+	 *  not its INFO or DEBUG once the whole suite ran, and the liveness precondition each case asserts
+	 *  failed (measured 2026-09-16, on the one case that logs no WARN of its own). Named here, the
+	 *  capture is live: {@code LlmInferenceService}'s own [timing] INFO line arrives on every case, so a
+	 *  negative cannot pass because nothing was ever captured ({@link LogCapture}'s javadoc). */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
 	/** The check's own WARN, by a phrase no neighbour writes — for the cases whose negative needs
@@ -152,6 +167,41 @@ public class FindingPartnerLogDisclosureTest {
 	}
 
 	@Test
+	public void anAnswerNamingEveryOrderReportsNoShortfallAndIsReturnedUntouched() {
+		// The guard's OTHER value. Everything above arranges a shortfall, so `stated < named` was only
+		// ever asked in the state that makes it true: mutate it to `stated <= named` and the WARN fires
+		// on every measured response, with the whole suite green. This is the case that reddens on that
+		// — an answer that names every order the findings cover, where the module has nothing to report
+		// and nothing to append.
+		//
+		// Built FROM the chips' own names rather than spelled here, so it cannot drift from what the
+		// real validator raised.
+		StringBuilder namesThemAll = new StringBuilder("Aspirin is unsafe here given her");
+		for (String partner : partners) {
+			namesThemAll.append(' ').append(partner).append(',');
+		}
+		String answerNamingAll = namesThemAll.append(" so it should not be started.").toString();
+		service.setLlmProvider(answering(answerNamingAll));
+		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
+			ChartAnswer answer = service.search(patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
+
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own lines, or the assertion below passes "
+							+ "vacuously");
+			FindingPartnerCoverage coverage = answer.getFindingPartnerCoverage();
+			assertNotNull(coverage, "the premise: the check ran and measured this response");
+			assertEquals(coverage.getNamed(), coverage.getStated(),
+					"the premise this case exists for: the arranged answer states every name the "
+							+ "findings carry, so there is no shortfall to report");
+			assertFalse(capture.hasMessageAt(Level.WARN, SHORTFALL_WARN),
+					"and then no shortfall may be reported at any level. Captured: "
+							+ capture.describeAll());
+			assertEquals(answerNamingAll, answer.getAnswer(),
+					"and the answer is returned byte for byte, with nothing appended");
+		}
+	}
+
+	@Test
 	public void theOrdersReachTheAnswerAClinicianIsHanded() {
 		// What makes the case above a MOVE and not a deletion: the names the log gives up are the ones
 		// ADR Decision 100 appends to the answer, which reaches a reader holding the privilege. Delete
@@ -164,6 +214,26 @@ public class FindingPartnerLogDisclosureTest {
 			assertTrue(completed.contains(partner.toLowerCase(Locale.ROOT)),
 					"every order the findings cover must reach the clinician, which is the channel that "
 							+ "may carry a name. Missing \"" + partner + "\" from: " + answer.getAnswer());
+		}
+	}
+
+	@Test
+	public void searchStreaming_theOrdersReachTheAnswerItReturns() {
+		// The compensating delivery on the path users hit, and the pointer ADR Decision 102 makes to
+		// this file claims both paths. What it does NOT claim, and what the decision now states as the
+		// residue: under chartsearchai.grounding.async=true the REST layer emits `done` from the
+		// UNGROUNDED answer handed to its consumer mid-pass, which is response.getAnswer() — the
+		// pre-append text — and the trailing `grounded` event carries no `answer` key. There the names
+		// reach a client on that event's safetyWarnings[].namedPartners and not in the prose.
+		service.setLlmProvider(answering(NAMES_NO_ORDER));
+		ChartAnswer answer = service.searchStreaming(patient(),
+				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION, token -> { });
+
+		String completed = answer.getAnswer().toLowerCase(Locale.ROOT);
+		for (String partner : partners) {
+			assertTrue(completed.contains(partner.toLowerCase(Locale.ROOT)),
+					"every order the findings cover must reach the clinician on this path too. Missing \""
+							+ partner + "\" from: " + answer.getAnswer());
 		}
 	}
 

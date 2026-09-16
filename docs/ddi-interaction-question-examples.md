@@ -470,10 +470,16 @@ contraindication and class chips that were never pairs. See
 [ADR Decision 60](adr.md). Raise the cap in [section 6](#6-turning-the-knobs) to see the other
 eight.
 
-The server log names them, which is a second way to check the field is telling the truth:
+The server log reports how many went and at what ratings, which is a second way to check the field
+is telling the truth. It does **not** name them: since
+[#439](https://github.com/openmrs/openmrs-module-chartsearchai/issues/439)
+([ADR Decision 102](adr.md)) a withheld pair is reported by its rating alone, because both sides of
+one are this patient's own prescriptions and the line reaches the default server log. The capture
+below is from before that change, kept because its numbers are the ones this section is about; the
+same event today ends `WITHHOLDING 8, rated, least severe last:` and a list of eight `Moderate`.
 
 ```
-WARN DrugSafetyValidator.addActiveOrderPairInteractions
+WARN DrugSafetyValidator.addActiveOrderPairInteractions   (captured before #439)
   Interaction screening across 17 active-order reference entries found 18 pair(s) above the
   severity floor; reporting the 10 most severe and WITHHOLDING 8: Celecoxib x Dexamethasone
   (Moderate); Celecoxib x Diclofenac (Moderate); Celecoxib x Hydrocortisone (Moderate);

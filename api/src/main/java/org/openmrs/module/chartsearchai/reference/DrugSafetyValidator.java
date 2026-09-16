@@ -1383,9 +1383,10 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>What the cap drops, and how it is visible.</b> A count rather than a character budget: a
 	 * chip is a whole sentence a clinician reads, and half a chip is not a smaller chip. Candidates are
-	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and every withheld
-	 * pair is NAMED in a WARN — a silent truncation would read to a clinician as "everything is
-	 * covered". <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
+	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and the number of
+	 * withheld pairs and each one's RATING are logged in a WARN — a silent truncation would read to a
+	 * clinician as "everything is covered". (It NAMED each pair until issue #439; the screening arm's
+	 * pair is two of the patient's own prescriptions, so the names were PHI. ADR Decision 102.) <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
 	 * now state how many pairs they found beside how many they reported — and since issue #356 so does
 	 * the uncapped drug-in-play arm, where neither of these stated one AND the question resolved a drug
 	 * it could screen (issue #370, ADR Decision 71) — on the answer as
@@ -1396,8 +1397,11 @@ public class DrugSafetyValidator {
 	 * RESPONSE is itself the per-question container, and a key beside {@code safetyWarnings} is a
 	 * module change. Rendering "10 of 18 shown" is still the frontend's, in
 	 * {@code openmrs-esm-chartsearchai}; having something to render is not. What the WARN still holds
-	 * alone is WHICH pairs went, and their ratings — the statement is a count, deliberately, because a
-	 * list of withheld pairs on the wire is the uncapped prompt expansion this cap exists to prevent.
+	 * alone is HOW MANY pairs went and at what ratings — the statement is a count, deliberately, because
+	 * a list of withheld pairs on the wire is the uncapped prompt expansion this cap exists to prevent.
+	 * WHICH pairs went is nowhere at all since issue #439: in the screening arm both sides of a pair are
+	 * the patient's own prescriptions, so that list was her medication list on a server-log line. An
+	 * operator who needs the pairs raises this property and re-asks. → ADR Decision 102.
 	 *
 	 * <p><b>One honest limit on "most severe first":</b> {@link #severityPriority} sorts an UNRATED rule
 	 * above Major, matching {@code DrugReferenceInjector.InteractionNote} and for the same reason —
@@ -6865,8 +6869,9 @@ public class DrugSafetyValidator {
 	 *       arm's own key, nothing is reported for a pair a drug-in-play chip already covers, whichever
 	 *       row either arm named the substance after — see {@link InteractionPairs}.</li>
 	 *   <li><b>Blast radius.</b> Candidates grow quadratically with the medication list, so they are
-	 *       ordered most-severe-first and cut at {@link #maxPairChips()}, with every withheld pair
-	 *       logged.</li>
+	 *       ordered most-severe-first and cut at {@link #maxPairChips()}, with the number of withheld
+	 *       pairs and each one's RATING logged — and since issue #439 no name of either side, both
+	 *       being the patient's own active orders (ADR Decision 102).</li>
 	 * </ul>
 	 *
 	 * @param subjects the one per-{@code validate} answer to "which row does this response call this
@@ -6994,10 +6999,11 @@ public class DrugSafetyValidator {
 					cededToDrugInPlayArm = true;
 					continue;
 				}
-				// The SUBSTANCE, not the row this iteration is on — and the same substance the log
-				// label below names, so a withheld pair is recoverable under the name the chip would
-				// have carried. Since issue #339 that holds for the PARTNER half too, by the label
-				// reading the reconciliation's answer rather than re-deriving one.
+				// The SUBSTANCE, not the row this iteration is on, so the chip names the substance and
+				// not whichever of its rows this iteration reached. Since issue #339 that holds for the
+				// PARTNER half too, by the chip's name reading the reconciliation's answer rather than
+				// re-deriving one. It no longer holds for the WITHHELD-pair WARN below, which since
+				// issue #439 names no drug at all — see there.
 				//
 				// The naming group (SubstanceSubjects.groupOf's namingGroups map) IS this arm's own
 				// fold, not merely close to it — since issue #238. This method's only call site
@@ -7014,9 +7020,8 @@ public class DrugSafetyValidator {
 				// built from inPlay, which can differ from questionDrugs wherever the ANSWER named a
 				// substance the question and the orders did not). There is no re-ordering to have and
 				// no fallback to reach: for this arm the two maps are not merely equal, they are the
-				// same construction over the same list, so the WITHHELD-pair WARN label below can
-				// never diverge from the chip's. That is a stronger guarantee than the question-pair
-				// arm gets (its own comment above, near addQuestionPairInteractions' use of
+				// same construction over the same list. That is a stronger guarantee than the
+				// question-pair arm gets (its own comment above, near addQuestionPairInteractions' use of
 				// interactionSubject): there, namingRows is substanceRows(questionDrugs) with THIS
 				// arm's own order rows appended on top, by design (issue #175) — a substance the
 				// question names can still pick up an order row in its naming group that the pair loop
@@ -7033,19 +7038,11 @@ public class DrugSafetyValidator {
 				// arms must not hold two answers to one question, which is what let them disagree
 				// before issue #236.
 				DrugReference subject = subjects.subjectOf(ref);
-				DrugReference partnerSubject = partner != null ? subjects.subjectOf(partner) : null;
 				// This arm cannot fold — classRelationships runs per in-play substance and a screening
 				// question names none — but since issue #339 that no longer decides what the order is
 				// called, or one prescription would answer to two names depending on which question
 				// reached it. The same reconciliation, the same gate.
 				ReconciledPartner reconciled = reconciledPartnerFor(matched, subjects, coMedications);
-				// The label names the partner the way the CHIP does, which since issue #339 is the
-				// reconciliation's answer wherever it gave one. It has to: this WARN is the only place
-				// a withheld pair surfaces (see maxPairChips), and an operator grepping it for the
-				// wording the clinician was shown must find it. Falling back to the subject row's
-				// display where nothing reconciled is what it has always done.
-				String loggedPartner = reconciled != null ? reconciled.chipName
-						: partnerSubject != null ? partnerSubject.displayLabel() : partnerLabel(i);
 				// Asked of the name the chip is about to print, and of the orders THIS pass used: the
 				// subject's own orders name the subject, and only the orders activeOrdersOtherThan kept
 				// may name the partner (#349 — see chartOrderBridges).
@@ -7071,11 +7068,14 @@ public class DrugSafetyValidator {
 				if (!statedChips.isFirstStatementOf(chip)) {
 					continue;
 				}
+				// The RATING and no name (issue #439). Both sides of a screened pair are this patient's
+				// own prescriptions — this arm iterates orderDrugs — so a pair label is two entries of
+				// her medication list, and the WARN below is what wrote them to the server log. The
+				// sibling pairwise arm has always logged its withheld candidates as ratings alone; one
+				// concept, one shape. → ADR Decision 102.
 				pairs.add(new ScreenedPair(chip,
 						severityPriority(i.getSeverity()),
-						subject.displayLabel() + " x " + loggedPartner
-								+ " (" + ChartSearchAiUtils.firstNonBlank(i.getSeverity(), "unrated")
-								+ ")"));
+						ChartSearchAiUtils.firstNonBlank(i.getSeverity(), "unrated")));
 			}
 		}
 		if (pairs.isEmpty()) {
@@ -7126,18 +7126,27 @@ public class DrugSafetyValidator {
 		// arbitrary (issue #131).
 		int reported = Math.min(pairs.size(), maxPairChips());
 		if (pairs.size() > reported) {
-			// Named here, counted on the response. A clinician reading the reported chips could not tell
-			// a capped screen from a complete one, which is issue #336 — and the count that closes it is
-			// the extent this method returns, not this line. What the log still holds alone is WHICH
-			// pairs went and at what ratings, an operator's diagnostic that must not go on the wire.
+			// Counted here, counted on the response. A clinician reading the reported chips could not
+			// tell a capped screen from a complete one, which is issue #336 — and the count that closes
+			// it is the extent this method returns, not this line. What the log still holds alone is how
+			// many pairs went and at what RATINGS, so a withheld Major is recoverable: an operator who
+			// needs the pairs themselves raises the cap and re-asks, which puts them on the wire as
+			// chips rather than in the log as PHI.
+			//
+			// RATINGS and no names, since issue #439: both sides of every pair here are the patient's
+			// own active orders, so the list this line used to carry was her medication list, at the
+			// level core ships org.openmrs at. That is the same rule the sibling pairwise arm's cap WARN
+			// already followed (see addQuestionPairInteractions, whose withheld list is severities) —
+			// and the reason it could follow it there without argument is that its drugs come from the
+			// QUESTION. → ADR Decision 102.
 			List<String> withheld = new ArrayList<String>();
 			for (int n = reported; n < pairs.size(); n++) {
-				withheld.add(pairs.get(n).label);
+				withheld.add(pairs.get(n).severityLabel);
 			}
 			log.warn("Interaction screening across {} active-order reference entries found {} pair(s) "
-					+ "above the severity floor; reporting the {} most severe and WITHHOLDING {}: {}",
-					orderDrugs.size(), pairs.size(), reported, withheld.size(),
-					String.join("; ", withheld));
+					+ "above the severity floor; reporting the {} most severe and WITHHOLDING {}, "
+					+ "rated, least severe last: {}",
+					orderDrugs.size(), pairs.size(), reported, withheld.size(), withheld);
 		}
 		for (int n = 0; n < reported; n++) {
 			warnings.add(pairs.get(n).warning);
@@ -7791,19 +7800,23 @@ public class DrugSafetyValidator {
 		return elected;
 	}
 
-	/** One screened active-order pair: its chip, its sort key, and a log label naming both sides. */
+	/**
+	 * One screened active-order pair: its chip, its sort key, and the RATING the cap WARN reports it
+	 * by. Not a label naming either side — both sides are the patient's own prescriptions, so a name
+	 * here is PHI on a server-log line (issue #439); see the cap WARN and ADR Decision 102.
+	 */
 	private static final class ScreenedPair {
 
 		final SafetyWarning warning;
 
 		final int severityPriority;
 
-		final String label;
+		final String severityLabel;
 
-		ScreenedPair(SafetyWarning warning, int severityPriority, String label) {
+		ScreenedPair(SafetyWarning warning, int severityPriority, String severityLabel) {
 			this.warning = warning;
 			this.severityPriority = severityPriority;
-			this.label = label;
+			this.severityLabel = severityLabel;
 		}
 	}
 

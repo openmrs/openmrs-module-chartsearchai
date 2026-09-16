@@ -10,12 +10,14 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -225,7 +227,14 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void theScreeningWarnNamesTheWithheldPairsAtTheConfiguredCap() {
+	public void theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug() {
+		// A DELIBERATE spec change, issue #439 and ADR Decision 102: this case asserted `" x "` and
+		// `"(Major)"`, i.e. that the line named every withheld pair on both sides. Both sides of a
+		// screened pair are this patient's own active orders, so that list was her medication list on a
+		// line the default log configuration keeps — the disclosure #439 reported one site of. The
+		// diagnostic the issue's own criterion asks for survives as the RATINGS, which is what the
+		// sibling question-pair arm's cap WARN above has always logged; an operator who needs the pairs
+		// themselves raises the cap and re-asks, which puts them on the wire as chips.
 		configureCap("3");
 		List<String> logged = capturedWarnings(new Runnable() {
 
@@ -238,8 +247,28 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		String line = firstContaining(logged, "Interaction screening across");
 		assertTrue(line.contains("found 15 pair(s)") && line.contains("reporting the 3 most severe"),
 				"the screening WARN must state the candidate count and the configured cap: " + line);
-		assertTrue(line.contains("WITHHOLDING 12") && line.contains(" x ") && line.contains("(Major)"),
-				"and must name every withheld pair with its rating: " + line);
+		assertTrue(line.contains("WITHHOLDING 12"),
+				"and how many pairs it withheld: " + line);
+		// The whole tail, matched as a closed vocabulary rather than by hunting for names: anything the
+		// line reports a withheld pair BY other than its rating reddens this, including a name no case
+		// here thought to look for.
+		int tail = line.indexOf("least severe last: ");
+		assertTrue(tail >= 0, "the withheld ratings must be reported: " + line);
+		String ratings = line.substring(tail + "least severe last: ".length()).trim();
+		assertTrue(ratings.matches("\\[(Major|Moderate|Minor|unrated)(, (Major|Moderate|Minor|unrated))*\\]"),
+				"the withheld pairs must be reported as ratings and nothing else, so a withheld Major "
+						+ "is recoverable without naming a drug: " + ratings);
+		assertTrue(ratings.contains("Major"),
+				"and a withheld Major must be recoverable from them: " + ratings);
+		// And the negative, over the whole line and every level: none of the six drugs this patient is
+		// prescribed. Read from the chart's own list, so it cannot drift from what was screened.
+		for (String prescribed : DrugReferenceTestSupport.SCREENED_SIX_ORDER_NAMES) {
+			for (String captured : logged) {
+				assertFalse(captured.toLowerCase(Locale.ROOT).contains(prescribed.toLowerCase(Locale.ROOT)),
+						"no captured line may name a drug this patient is prescribed — a screened pair is "
+								+ "two of her active orders. Found \"" + prescribed + "\" in: " + captured);
+			}
+		}
 	}
 
 	/** @return the first captured line containing {@code needle}; fails the test when none does. */

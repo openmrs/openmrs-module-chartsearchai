@@ -897,11 +897,16 @@ public final class DrugReferenceTestSupport {
 	 */
 	static PatientClinicalContext screenedSixOrderChart() {
 		return ctx(60, null,
-				set("Simvastatin", "Warfarin", "Ciprofloxacin", "Clarithromycin", "Fluconazole",
-						"Amiodarone"),
+				new LinkedHashSet<String>(SCREENED_SIX_ORDER_NAMES),
 				set("C10AA01", "B01AA03", "J01MA02", "J01FA09", "J02AC01", "C01BD01"),
 				null, null);
 	}
+
+	/** The drug names {@link #screenedSixOrderChart}'s active orders carry, read from here by both the
+	 *  chart and the case asserting that the screening arm's cap WARN names NONE of them (issue #439)
+	 *  — a second copy would let the log claim be about drugs the screened patient is not on. */
+	static final List<String> SCREENED_SIX_ORDER_NAMES = Collections.unmodifiableList(Arrays.asList(
+			"Simvastatin", "Warfarin", "Ciprofloxacin", "Clarithromycin", "Fluconazole", "Amiodarone"));
 
 	/**
 	 * The REAL interaction chips a shared mechanism raises over {@link #DDI_SHARED_MECHANISM_PARTNERS}:

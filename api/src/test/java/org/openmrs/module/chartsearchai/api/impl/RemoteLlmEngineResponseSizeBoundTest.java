@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -75,6 +76,17 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	private static final long SAFETY_LIMIT = 4L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
 
 	/**
+	 * What the peer may still get onto the wire after the module stops reading its ERROR body at
+	 * {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES}. Nothing like that ceiling, and the gap is the
+	 * instrument's rather than the module's: `net.inet.tcp.sendspace`/`recvspace` are 131072 each
+	 * here, but the JDK's `HttpServer` and macOS loopback auto-tuning together absorbed ~0.7 MB
+	 * before the server's write saw the broken pipe. So this budget measures what a socket can
+	 * swallow, not what the module read — the module read 8192 — and what it discriminates is a
+	 * ceiling raised to megabytes, which is the mutation that matters.
+	 */
+	private static final long ERROR_BODY_BUDGET = 2L * 1024 * 1024;
+
+	/**
 	 * What the peer may still have written after the client stopped reading: twice the ceiling.
 	 * The real slack is one socket buffer in each direction — {@code net.inet.tcp.sendspace} and
 	 * {@code recvspace} are 131072 each on this platform, so ~256 kB — and this allows sixteen
@@ -96,7 +108,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	@BeforeEach
 	public void startPeer() throws IOException {
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-		server.createContext("/flood-stream", exchange -> floodStream(exchange, 200));
+		server.createContext("/flood-stream", this::floodStream);
 		server.createContext("/flood-body", exchange -> floodBody(exchange, 200));
 		server.createContext("/flood-error", exchange -> floodBody(exchange, 500));
 		server.createContext("/ordinary-body", this::ordinaryBody);
@@ -122,7 +134,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 		assertWroteNoMoreThanTheCeiling("the streamed answer");
 		assertNotNull(raised, "a peer that never stops streaming must end the call, not the heap");
-		assertNotNull(raised.getMessage(), "the failure must say something an operator can act on");
+		assertCeilingFailureIsReportable(raised);
 	}
 
 	@Test
@@ -134,6 +146,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		assertWroteNoMoreThanTheCeiling("the non-streaming body");
 		assertNotNull(raised,
 				"a peer answering with an oversized body must end the call, not the heap");
+		assertCeilingFailureIsReportable(raised);
 	}
 
 	@Test
@@ -142,7 +155,8 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 		APIException raised = callAndCatch(() -> engine.infer("system", "user", 60));
 
-		assertWroteNoMoreThanTheCeiling("the error body");
+		assertPeerWasCutOffAt("the error body", ERROR_BODY_BUDGET,
+				RemoteLlmEngine.MAX_ERROR_BODY_BYTES);
 		assertNotNull(raised, "a 500 from the endpoint is still a failed call");
 		assertTrue(raised.getMessage() != null && raised.getMessage().contains("500"),
 				"the status code is the operator's only clue that the endpoint URL or model name "
@@ -179,8 +193,10 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 		assertEquals("one two three", result.getText());
 		assertEquals(Arrays.asList("one", " two", " three"), delivered,
-				"every chunk must still reach the consumer as it arrives — a ceiling that "
-						+ "swallowed or reordered chunks would leave the assembled text intact");
+				"the consumer must still see the answer arrive in PIECES. The assembled text "
+						+ "cannot say this: the parser appends to it and calls the consumer with "
+						+ "the same value in the same iteration, so only the deliveries can tell "
+						+ "three chunks from one lump.");
 	}
 
 	/**
@@ -215,6 +231,25 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		}
 	}
 
+	/**
+	 * The failure has to be one the module can REPORT, and neither half of that is implied by an
+	 * exception merely being raised. The message has to name the ceiling, or it is any other
+	 * transport failure. And the cause must not be an {@link IOException} — the streaming route's
+	 * terminal handler reads {@code getCause() instanceof IOException} as a client disconnect,
+	 * logs at DEBUG and sends no {@code error} event, so a ceiling failure carrying one is a
+	 * stream that stops dead with nothing said to the clinician and nothing written to the log.
+	 */
+	private static void assertCeilingFailureIsReportable(APIException raised) {
+		assertNotNull(raised.getMessage(), "the failure must say something an operator can act on");
+		assertTrue(raised.getMessage().contains(String.valueOf(RemoteLlmEngine.MAX_RESPONSE_BYTES)),
+				"the message must name the ceiling that was exceeded. Got: "
+						+ raised.getMessage());
+		assertFalse(raised.getCause() instanceof IOException,
+				"an IOException cause makes ChartSearchAiRestController.streamAnswer classify this "
+						+ "as a client disconnect: no error event reaches the client and nothing "
+						+ "is logged. Got cause: " + raised.getCause());
+	}
+
 	private void pointEngineAt(String path) {
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL,
@@ -223,12 +258,22 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	}
 
 	private void assertWroteNoMoreThanTheCeiling(String what) {
-		assertTrue(written.get() <= TOLERATED,
-				what + ": the peer wrote " + written.get() + " bytes, so the module read them. "
-						+ "A response may not grow the shared JVM's heap past "
-						+ RemoteLlmEngine.MAX_RESPONSE_BYTES + " bytes no matter how much the "
-						+ "endpoint sends; anything above " + TOLERATED + " means nothing stopped "
-						+ "the read.");
+		assertPeerWasCutOffAt(what, TOLERATED, RemoteLlmEngine.MAX_RESPONSE_BYTES);
+	}
+
+	/**
+	 * The peer stopped being listened to somewhere under {@code budget}. Stated as what the PEER
+	 * got onto the wire rather than as what the module read, because the two differ by a socket
+	 * buffer the module never sees — which is why the budget is the ceiling plus
+	 * {@link #ONE_SOCKET_BUFFER_EACH_WAY} rather than the ceiling itself.
+	 */
+	private void assertPeerWasCutOffAt(String what, long budget, long ceiling) {
+		assertTrue(written.get() <= budget,
+				what + ": the peer got " + written.get() + " bytes onto the wire, so nothing "
+						+ "stopped reading them. A response may not grow the shared JVM's heap "
+						+ "past " + ceiling + " bytes no matter how much the endpoint sends, and "
+						+ "past " + budget + " the overshoot is more than a socket buffer can "
+						+ "explain.");
 	}
 
 	/** A well-formed completion, comfortably under the ceiling. */
@@ -251,33 +296,35 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/** A well-formed completion whose body is exactly {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}. */
 	private void exactlyAtTheCeiling(HttpExchange exchange) throws IOException {
 		respondOnce(exchange, 200, "application/json",
-				(CEILING_PREFIX + repeat('z', ceilingPadding()) + CEILING_SUFFIX)
+				(CEILING_PREFIX + "z".repeat(ceilingPadding()) + CEILING_SUFFIX)
 						.getBytes(StandardCharsets.UTF_8));
 	}
 
 	/** How much filler makes {@link #CEILING_PREFIX} + filler + {@link #CEILING_SUFFIX} the ceiling. */
 	private static int ceilingPadding() {
-		return RemoteLlmEngine.MAX_RESPONSE_BYTES - CEILING_PREFIX.length() - CEILING_SUFFIX.length();
+		return (int) RemoteLlmEngine.MAX_RESPONSE_BYTES - CEILING_PREFIX.length()
+				- CEILING_SUFFIX.length();
 	}
 
 	/** An SSE stream that never reaches {@code [DONE]} — one content chunk after another. */
-	private void floodStream(HttpExchange exchange, int status) throws IOException {
+	private void floodStream(HttpExchange exchange) throws IOException {
 		byte[] chunk = ("data: {\"choices\":[{\"delta\":{\"content\":\""
-				+ repeat('x', 1024) + "\"}}]}\n\n").getBytes(StandardCharsets.UTF_8);
-		respond(exchange, status, "text/event-stream", chunk);
+				+ "x".repeat(1024) + "\"}}]}\n\n").getBytes(StandardCharsets.UTF_8);
+		respond(exchange, 200, "text/event-stream", chunk);
 	}
 
 	/** A single JSON body that never ends — a plausible completion envelope, then filler. */
 	private void floodBody(HttpExchange exchange, int status) throws IOException {
 		byte[] opening = "{\"choices\":[{\"message\":{\"content\":\""
 				.getBytes(StandardCharsets.UTF_8);
-		byte[] filler = repeat('y', 4096).getBytes(StandardCharsets.UTF_8);
+		byte[] filler = "y".repeat(4096).getBytes(StandardCharsets.UTF_8);
 		respond(exchange, status, "application/json", opening, filler);
 	}
 
 	/**
-	 * Answers with {@code status} and then writes {@code first} once and {@code repeated} until the
-	 * client stops reading or {@link #SAFETY_LIMIT} is reached, counting every byte that left.
+	 * Answers with {@code status}, then writes every element of {@code parts} but the last once
+	 * each and repeats the last until the client stops reading or {@link #SAFETY_LIMIT} is
+	 * reached, counting every byte that left.
 	 */
 	private void respond(HttpExchange exchange, int status, String contentType, byte[]... parts)
 			throws IOException {
@@ -320,13 +367,5 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 				continue;
 			}
 		}
-	}
-
-	private static String repeat(char c, int times) {
-		StringBuilder builder = new StringBuilder(times);
-		for (int i = 0; i < times; i++) {
-			builder.append(c);
-		}
-		return builder.toString();
 	}
 }

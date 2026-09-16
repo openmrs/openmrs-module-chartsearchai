@@ -458,6 +458,100 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Issue #446: the endpoint {@code chartsearchai.llm.remote.endpointUrl} names is an untrusted
+	 * network peer, so every read of its response body passes a ceiling —
+	 * {@code RemoteLlmEngine.readBoundedBody} and {@code parseStreamingResponse} for the two that
+	 * may abort, {@code readTruncatedErrorBody} for the non-2xx body that truncates instead. A
+	 * fourth reader, or a {@code BodyHandlers.ofString} that buffers the whole body before
+	 * anything can count it, is how the bound is lost — and it is lost FAIL-OPEN, with every other
+	 * test still green, which is why this is a guard rather than a comment.
+	 *
+	 * <p>{@code LocalLlmEngine} is exempt by name and deliberately: its peer is this module's own
+	 * subprocess at a hardcoded {@code 127.0.0.1} and never an address an operator supplies, so
+	 * the threat this bounds does not reach it. Naming it here is what makes that exclusion
+	 * reviewable rather than merely absent.</p>
+	 *
+	 * <p><b>Residue.</b> The scan reads one line at a time, so a call wrapped across two lines
+	 * reads as a violation — loud and wrong rather than silent and wrong, which is the safe
+	 * direction. What it cannot see is a body reached through a differently-named reference, since
+	 * it matches the spelling {@code response.body()} and not the call. Assigning that expression
+	 * to a local does NOT escape it — measured: the local form reddens this rule and nothing
+	 * else — because the spelling then has no reader in front of it, which is the violation.</p>
+	 */
+	@Test
+	public void everyRemoteResponseBodyIsReadUnderACeiling() throws IOException {
+		// Scoped to PRODUCTION sources by its own walk: getSourceCache() covers src/test too, where
+		// LlmEndpointTestSupport legitimately reads a body it asked a live endpoint for.
+		Path main = SRC_ROOT.resolve("src/main/java");
+		assertTrue(Files.exists(main),
+				"precondition: no production source tree under " + SRC_ROOT + ", so this rule "
+						+ "would scan nothing and report no violations — it fails instead");
+
+		Pattern unbounded = Pattern.compile("(?<!readBoundedBody\\()(?<!readTruncatedErrorBody\\()"
+				+ "(?<!parseStreamingResponse\\()response\\.body\\(\\)");
+		List<String> violations = new ArrayList<>();
+		List<String> scanned = new ArrayList<>();
+		int remoteBodyReads = 0;
+		Files.walkFileTree(main, new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+					throws IOException {
+				if (file.toString().endsWith(".java")) {
+					scanned.add(file.getFileName().toString());
+				}
+				return FileVisitResult.CONTINUE;
+			}
+		});
+		// The right-tree canary. Existence of the directory is NOT equivalent: the sibling omod
+		// module carries the same package path, so a root pointed there passes the check above and
+		// this rule then scans a tree with no engine in it and reports nothing.
+		assertTrue(scanned.contains("RemoteLlmEngine.java"),
+				"precondition: RemoteLlmEngine.java was not among the " + scanned.size()
+						+ " production sources walked, so this rule is looking at the wrong tree");
+
+		for (String name : scanned) {
+			if ("LocalLlmEngine.java".equals(name)) {
+				// Exempt deliberately: its peer is this module's own subprocess at a hardcoded
+				// 127.0.0.1, never an address an operator supplies, so #446's threat does not
+				// reach it. Named here so the exclusion is reviewable rather than merely absent.
+				continue;
+			}
+			List<String> lines = getSourceCache().get(name);
+			if (lines == null) {
+				continue;
+			}
+			for (int i = 0; i < lines.size(); i++) {
+				String line = lines.get(i);
+				String trimmed = line.trim();
+				if (trimmed.startsWith("//") || trimmed.startsWith("*")
+						|| trimmed.startsWith("/*")) {
+					continue;
+				}
+				if (line.contains("response.body()")) {
+					remoteBodyReads++;
+				}
+				if (unbounded.matcher(line).find()) {
+					violations.add(name + ":" + (i + 1) + " — a remote response body must be read "
+							+ "through readBoundedBody, parseStreamingResponse or "
+							+ "readTruncatedErrorBody (issue #446)\n    " + trimmed);
+				}
+				if (line.contains("BodyHandlers.ofString")) {
+					violations.add(name + ":" + (i + 1) + " — BodyHandlers.ofString buffers the "
+							+ "whole body before anything can count it; read an InputStream under "
+							+ "a ceiling instead (issue #446)\n    " + trimmed);
+				}
+			}
+		}
+
+		// A clean result over zero reads is how a source guard goes quiet, so prove the subject is
+		// still in reach before believing the violations list is empty.
+		assertTrue(remoteBodyReads > 0,
+				"no remote response-body read was found at all outside LocalLlmEngine: the scan "
+						+ "has lost its subject, so its clean result says nothing");
+		assertNoViolations(violations);
+	}
+
+	/**
 	 * The injected-finding POPULATION is selected in one method. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a> folded
 	 * two character-for-character copies of that selection into

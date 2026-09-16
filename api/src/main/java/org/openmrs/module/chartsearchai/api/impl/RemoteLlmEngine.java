@@ -47,34 +47,43 @@ public class RemoteLlmEngine implements LlmEngine {
 	/**
 	 * What one output token is allowed to cost on the wire. An ALLOWANCE and not a measurement, and
 	 * the two terms it covers are not alike. The answer itself is recorded: a completion at
-	 * {@link ChartSearchAiConstants#DEFAULT_LLM_MAX_OUTPUT_TOKENS} is "roughly 16 kB" (ADR Decision
-	 * 76's cost table, and again Decision 78's), i.e. about four bytes a token. The rest is
+	 * {@link ChartSearchAiConstants#DEFAULT_LLM_MAX_OUTPUT_TOKENS} is "roughly 16 kB" (the
+	 * <em>What it costs</em> sections of ADR Decisions 76 and 78 both state it), i.e. about four
+	 * bytes a token. The rest is
 	 * server-sent-event framing — in the worst conformant case every token arrives as its own event
 	 * carrying a whole chunk object and its {@code data: } prefix — and nothing in this repository
 	 * measures that against a real provider, so it is set far above any shape one could take. Its
 	 * only cost is a looser bound: the defect being closed is growth the peer controls, not growth
 	 * of some particular size.
 	 */
-	static final int BYTES_PER_OUTPUT_TOKEN = 1024;
+	static final int BYTE_ALLOWANCE_PER_OUTPUT_TOKEN = 1024;
 
 	/**
 	 * How many bytes one response from the remote peer may deliver before the read is abandoned —
-	 * the output ceiling the request itself carries, priced at {@link #BYTES_PER_OUTPUT_TOKEN}.
+	 * the output ceiling the request itself carries, priced at
+	 * {@link #BYTE_ALLOWANCE_PER_OUTPUT_TOKEN}.
 	 *
 	 * <p>The endpoint is an untrusted peer (issue #446) and {@code max_tokens} is advisory to it,
 	 * so this is the only thing that decides how much of the shared OpenMRS heap one answer can
-	 * occupy. It bounds BYTES and not TIME: a peer trickling less than this still holds the
-	 * clinician's thread for as long as it likes, because {@code HttpRequest.timeout()} stops
-	 * applying once the response headers arrive — see
-	 * {@link LlmEngine#inferStreaming(String, String, int, Consumer)}.</p>
+	 * occupy.</p>
+	 *
+	 * <p><b>Two things it does not bound, named rather than left to be found.</b> Not TIME: a peer
+	 * trickling less than this still holds the clinician's thread for as long as it likes, because
+	 * {@code HttpRequest.timeout()} stops applying once the response headers arrive — see
+	 * {@link LlmEngine#inferStreaming(String, String, int, Consumer)}. And not the TRANSIENT PEAK,
+	 * which is a small multiple of it: this is what the peer may DELIVER, while decoding a body of
+	 * that size holds the accumulated bytes and the decoded string at once. Measured on the
+	 * non-streaming path against a loopback peer, a body at this ceiling allocated about 16.8 MB
+	 * where the unbounded {@code ofString()} it replaced allocated about 12.9 MB — both bounded,
+	 * neither equal to the ceiling.</p>
 	 */
-	static final int MAX_RESPONSE_BYTES = ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
-			* BYTES_PER_OUTPUT_TOKEN;
+	static final long MAX_RESPONSE_BYTES = (long) ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
+			* BYTE_ALLOWANCE_PER_OUTPUT_TOKEN;
 
 	/**
 	 * How much of a non-2xx body is read. Far tighter than {@link #MAX_RESPONSE_BYTES} because an
-	 * error body is never parsed — {@code truncateForLog} cuts it down again for one log line and
-	 * nothing else reads it — and because this read TRUNCATES where the others abort. Abandoning
+	 * error body is never parsed — it reaches one log line, cut down again on the way, and nothing
+	 * else reads it — and because this read TRUNCATES where the others abort. Abandoning
 	 * an oversized error body with a size complaint would cost the status code and the
 	 * {@code chartsearchai.llm.remote.*} hint that go with it, which is the operator's only clue
 	 * that the endpoint URL or model name is wrong.
@@ -257,9 +266,12 @@ public class RemoteLlmEngine implements LlmEngine {
 	}
 
 	/**
-	 * The ONE place a remote response body is given its ceiling. Both ways bytes from the peer
-	 * become heap go through it — this seam and {@link #readBoundedBody} — so a caller cannot
-	 * acquire an unbounded one by reaching for the seam instead of the engine method above it.
+	 * The one place {@link #MAX_RESPONSE_BYTES} is applied. Both reads that may ABORT go through it
+	 * — this seam and {@link #readBoundedBody} — so a caller cannot acquire an unbounded body by
+	 * reaching for the seam instead of the engine method above it. It is not every read of a
+	 * response body: {@link #readTruncatedErrorBody} reads a non-2xx body under its own, tighter
+	 * ceiling and never through this. Which reader each {@code response.body()} reaches is pinned
+	 * by {@code RemoteLlmEngineResponseSizeBoundTest.everyRemoteResponseBodyIsReadUnderACeiling}.
 	 */
 	private static BoundedResponseStream bounded(InputStream body) {
 		return new BoundedResponseStream(body, MAX_RESPONSE_BYTES);
@@ -288,16 +300,7 @@ public class RemoteLlmEngine implements LlmEngine {
 	 */
 	private static String readTruncatedErrorBody(InputStream body) {
 		try (InputStream in = body) {
-			byte[] buffer = new byte[MAX_ERROR_BODY_BYTES];
-			int total = 0;
-			while (total < buffer.length) {
-				int read = in.read(buffer, total, buffer.length - total);
-				if (read < 0) {
-					break;
-				}
-				total += read;
-			}
-			return new String(buffer, 0, total, StandardCharsets.UTF_8);
+			return new String(in.readNBytes(MAX_ERROR_BODY_BYTES), StandardCharsets.UTF_8);
 		}
 		catch (IOException e) {
 			log.debug("Could not read the error body from the remote LLM API", e);
@@ -305,15 +308,27 @@ public class RemoteLlmEngine implements LlmEngine {
 		}
 	}
 
-	/** What an operator is told when the peer sent more than one answer can be. */
+	/**
+	 * What an operator is told when the peer sent more than one answer can be.
+	 *
+	 * <p><b>The cause is logged here and deliberately NOT attached.</b>
+	 * {@link BoundedResponseStream.ResponseTooLargeException} is an {@link IOException}, and the
+	 * streaming route's terminal handler reads {@code getCause() instanceof IOException} as "the
+	 * client hung up" — it then logs at DEBUG and sends no {@code error} event, so an
+	 * {@code APIException} carrying this cause would reach a clinician as a stream that simply
+	 * stopped, and reach the operator not at all. Attaching it was measured doing exactly that
+	 * before this comment existed. → {@code ChartSearchAiRestController.streamAnswer}.</p>
+	 */
 	private static APIException oversized(BoundedResponseStream.ResponseTooLargeException e) {
+		log.error("Remote LLM API exceeded the {}-byte response ceiling", e.getLimit(), e);
 		return new APIException("Remote LLM API sent more than " + e.getLimit()
 				+ " bytes, and the response was abandoned rather than read into memory. The "
 				+ "endpoint configured in " + ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL
-				+ " returned more data than a completion of "
+				+ " sent more than a completion of "
 				+ ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
-				+ " output tokens can be, so it is either not an OpenAI-compatible endpoint or "
-				+ "not the one intended.", e);
+				+ " output tokens is expected to need. Check that it is the endpoint intended and "
+				+ "that it speaks the OpenAI chat-completions format; the ceiling itself is fixed "
+				+ "and not configurable.");
 	}
 
 	private String getRequiredGlobalProperty(String propertyName) {

@@ -74,14 +74,40 @@ final class BoundedResponseStream extends FilterInputStream {
 
 	@Override
 	public int read(byte[] b, int off, int len) throws IOException {
+		if (delivered > limit) {
+			// Only reachable if a caller kept reading after the throw. Saying so beats the `0` the
+			// clamp below would otherwise compute, which every caller would read as end-of-stream.
+			throw new ResponseTooLargeException(limit);
+		}
 		// Ask for at most one byte beyond the ceiling: enough to notice the peer went past it, and
-		// never enough for the overshoot to be the thing that fills the heap.
+		// never enough for the overshoot to be the thing that fills the heap. Defence in depth
+		// rather than a live constraint — measured against a loopback peer, neither production
+		// caller ever asks for more than it allows ({@code readNBytes} 16384, the stream decoder
+		// 8192), so no test discriminates it and removing it changes nothing today.
 		int allowed = (int) Math.min(len, limit - delivered + 1);
 		int n = in.read(b, off, allowed);
 		if (n > 0) {
 			count(n);
 		}
 		return n;
+	}
+
+	/**
+	 * Counted, not delegated. {@link FilterInputStream#skip} would hand straight to the peer and
+	 * leave those bytes out of the total — harmless for heap, since skipping allocates nothing, but
+	 * it would let a peer put arbitrarily many bytes past the ceiling and keep the stream open. No
+	 * caller on either read path skips today; this is so the counter has no hole to find later.
+	 */
+	@Override
+	public long skip(long n) throws IOException {
+		long skipped = in.skip(Math.max(0L, Math.min(n, limit - delivered + 1)));
+		if (skipped > 0) {
+			delivered += skipped;
+			if (delivered > limit) {
+				throw new ResponseTooLargeException(limit);
+			}
+		}
+		return skipped;
 	}
 
 	/**

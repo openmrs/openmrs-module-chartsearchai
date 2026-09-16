@@ -7855,15 +7855,19 @@ of their own. That second one is the stronger attack and the event LIST is what 
 the shared assertion in that class asks both questions. Stated this way because the claim was written
 as a universal, narrowed once, and was still a universal.
 
-Measured on the unfixed writer, with both readers spec-aware: the three channel cases fail on the
-frame structure, and `everyTerminatorTheSpecificationRecognisesIsNeutralised` on the `token` event
-having been renamed to the payload's own event name.
-`aCarriageReturnInTheAnswerNeedsNoFramingBecauseJacksonEscapesIt` stays GREEN there, and should — it
-carries its CR on a composed event, which is the scope claim rather than the fix.
-`theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere` stays green too, being the known-bad
-control: the pre-fix bytes, hand-framed, asserting the decoder SEES the forgery in them, because a
-reader narrowed back to LF-only would leave the behavioural cases green on a stream carrying a forged
-frame — a green suite reporting this fixed.
+On the unfixed writer the behavioural cases in that class fail, each in the place its own javadoc
+names — the three channel cases on the frame structure,
+`everyTerminatorTheSpecificationRecognisesIsNeutralised` on the `token` event having been renamed to
+the payload's own event name, and `aRunOfTerminatorsCannotOpenAFrameOfItsOwn` on the event list, which
+is the shape the frame structure cannot see. **No tally of them is kept here**: this paragraph carried
+one, and it went stale inside a single review cycle when that last case was added. The controls stay
+green there and say so themselves —
+`aCarriageReturnInTheAnswerNeedsNoFramingBecauseJacksonEscapesIt` carries its CR on a composed event,
+`theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere` proves the decoder can still see a
+forgery, and `aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee` proves which assertion catches the
+run. A reader narrowed back to LF-only would leave the behavioural cases green on a stream carrying a
+forged frame — a green suite reporting this fixed — which is what the first of those controls exists
+to prevent.
 
 **And "one expression in the frame writer" is now a pinned claim rather than a description.** Every
 behavioural test here drives the endpoint, so a SECOND writer elsewhere in the module would redden

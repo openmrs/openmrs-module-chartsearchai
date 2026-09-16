@@ -132,6 +132,12 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * as ONE break rather than two. Both are shapes a payload opening with, or joining lines by, a
 	 * terminator produces — and the pieces between them must still be in order.</p>
 	 *
+	 * <p>The payload also ENDS in a terminator, which is what pins the framing's {@code -1} limit: at
+	 * Java's default limit the split drops trailing empty strings, so the last {@code data: } line is
+	 * never written and the clinician loses the line break the model put at the end of its text. That
+	 * mutation left every other case in this class green, this one included until the payload gained
+	 * its trailing CR.</p>
+	 *
 	 * <p>The form feed is here for the OTHER direction, because widening the set is as silent as
 	 * shrinking it. It is not an SSE terminator and nothing strips it on the response path, so it must
 	 * come back inside its data line — which is what reddens on {@code \R}, the simplification that
@@ -140,7 +146,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 	@Test
 	public void everyTerminatorTheSpecificationRecognisesIsNeutralised() throws Exception {
 		controller.setChartSearchService(new InjectingStubService(
-				"\revent: cr\ra\r\nevent: crlf\r\nb\nevent: lf\nc\fevent: ff\fd", "reasoning", null));
+				"\revent: cr\ra\r\nevent: crlf\r\nb\nevent: lf\nc\fevent: ff\fd\r", "reasoning", null));
 
 		controller.streamAnswer(out, patient(), "any allergies?", user(), false);
 
@@ -153,7 +159,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 							+ "' was dispatched in " + types);
 		}
 		SseEvents.assertEveryFrameIsWellFormed(out);
-		assertEquals("\nevent: cr\na\nevent: crlf\nb\nevent: lf\nc\fevent: ff\fd",
+		assertEquals("\nevent: cr\na\nevent: crlf\nb\nevent: lf\nc\fevent: ff\fd\n",
 				SseEvents.ofType(out, "token").data,
 				"every terminator must arrive as the line break SSE can carry and NOTHING ELSE may: "
 						+ "the text between them in order, one LF per terminator, and the form feed "

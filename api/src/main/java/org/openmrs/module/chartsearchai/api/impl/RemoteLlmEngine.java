@@ -266,9 +266,10 @@ public class RemoteLlmEngine implements LlmEngine {
 	}
 
 	/**
-	 * The one place {@link #MAX_RESPONSE_BYTES} is applied. Both reads that may ABORT go through it
-	 * — this seam and {@link #readBoundedBody} — so a caller cannot acquire an unbounded body by
-	 * reaching for the seam instead of the engine method above it. It is not every read of a
+	 * The one place {@link #MAX_RESPONSE_BYTES} is applied. Both reads that may ABORT go through
+	 * it — {@link #parseStreamingResponse} and {@link #readBoundedBody} — so a caller cannot
+	 * acquire an unbounded body by reaching for either of those instead of the engine method
+	 * above it. It is not every read of a
 	 * response body: {@link #readTruncatedErrorBody} reads a non-2xx body under its own, tighter
 	 * ceiling and never through this. Which reader each {@code response.body()} reaches is pinned
 	 * by {@code ArchitectureGuardTest.everyRemoteResponseBodyIsReadUnderACeiling}.
@@ -290,17 +291,19 @@ public class RemoteLlmEngine implements LlmEngine {
 	}
 
 	/**
-	 * At most {@link #MAX_ERROR_BODY_BYTES} of a non-2xx body, abandoning the rest unread. This one
-	 * truncates instead of raising, because the caller is about to throw an
-	 * {@link APIException} naming the status code and the misconfigured global properties, and that
-	 * message is the operator's only clue; losing it to a complaint about size would trade a
-	 * diagnosis for a symptom. The cut is at a byte and not a character boundary — the result only
-	 * ever reaches {@code truncateForLog}, so a split multi-byte character costs one replacement
-	 * character in a log line.
+	 * At most {@link #MAX_ERROR_BODY_BYTES} of a non-2xx body, abandoning the rest unread —
+	 * truncating rather than raising, for the reason that constant states. The cut is at a byte
+	 * and not a character boundary, which costs at worst one replacement character: the result
+	 * only ever reaches a log line, never a parser.
 	 */
 	private static String readTruncatedErrorBody(InputStream body) {
 		try (InputStream in = body) {
-			return new String(in.readNBytes(MAX_ERROR_BODY_BYTES), StandardCharsets.UTF_8);
+			// The three-arg form fills a buffer this method sizes. The one-arg readNBytes(int)
+			// would allocate its own and then copy out whatever the body actually was, which for
+			// a short error body — the common case — is a second allocation for nothing.
+			byte[] buffer = new byte[MAX_ERROR_BODY_BYTES];
+			return new String(buffer, 0, in.readNBytes(buffer, 0, buffer.length),
+					StandardCharsets.UTF_8);
 		}
 		catch (IOException e) {
 			log.debug("Could not read the error body from the remote LLM API", e);
@@ -318,6 +321,13 @@ public class RemoteLlmEngine implements LlmEngine {
 	 * {@code APIException} carrying this cause would reach a clinician as a stream that simply
 	 * stopped, and reach the operator not at all. Attaching it was measured doing exactly that
 	 * before this comment existed. → {@code ChartSearchAiRestController.streamAnswer}.</p>
+	 *
+	 * <p><b>That heuristic is itself wrong, and this only steps around it.</b> Every other
+	 * {@code IOException} the engines wrap is misread the same way — a peer that hangs up
+	 * mid-answer is reported as the CLIENT disconnecting — which is older than this ceiling and
+	 * wider than it. Fixing it means giving the controller's own disconnect throw a type to test
+	 * for, rather than testing for a cause any transport failure can carry; that is a change to
+	 * the streaming route and belongs to its own ticket.</p>
 	 */
 	private static APIException oversized(BoundedResponseStream.ResponseTooLargeException e) {
 		log.error("Remote LLM API exceeded the {}-byte response ceiling", e.getLimit(), e);

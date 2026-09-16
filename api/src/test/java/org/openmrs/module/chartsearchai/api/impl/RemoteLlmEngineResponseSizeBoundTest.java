@@ -78,19 +78,21 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/**
 	 * What the peer may still get onto the wire after the module stops reading its ERROR body at
 	 * {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES}. Nothing like that ceiling, and the gap is the
-	 * instrument's rather than the module's: `net.inet.tcp.sendspace`/`recvspace` are 131072 each
-	 * here, but the JDK's `HttpServer` and macOS loopback auto-tuning together absorbed ~0.7 MB
-	 * before the server's write saw the broken pipe. So this budget measures what a socket can
-	 * swallow, not what the module read — the module read 8192 — and what it discriminates is a
-	 * ceiling raised to megabytes, which is the mutation that matters.
+	 * instrument's rather than the module's: the JDK's {@code HttpServer} and macOS loopback
+	 * auto-tuning together absorbed ~0.7 MB before the server's write saw the broken pipe, far
+	 * past the socket slack {@link #TOLERATED} describes. So this measures what a socket can
+	 * swallow and not what the module read — the module read 8192 — and what it discriminates is
+	 * a ceiling raised to megabytes, which is the mutation that matters.
 	 */
 	private static final long ERROR_BODY_BUDGET = 2L * 1024 * 1024;
 
 	/**
-	 * What the peer may still have written after the client stopped reading: twice the ceiling.
-	 * The real slack is one socket buffer in each direction — {@code net.inet.tcp.sendspace} and
-	 * {@code recvspace} are 131072 each on this platform, so ~256 kB — and this allows sixteen
-	 * times that, because the assertion is "the read aborted" and not a measurement of the buffer.
+	 * What the peer may still have got onto the wire after the module stopped reading: twice the
+	 * ceiling, i.e. {@link RemoteLlmEngine#MAX_RESPONSE_BYTES} of slack above it. Far more than a
+	 * socket needs — {@code net.inet.tcp.sendspace} and {@code recvspace} are 131072 each on this
+	 * platform — and deliberately so: the assertion is "something stopped the read", not a
+	 * measurement of how much the kernel buffers. An unbounded read reaches
+	 * {@link #SAFETY_LIMIT}, twice this again.
 	 */
 	private static final long TOLERATED = 2L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
 
@@ -234,10 +236,8 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/**
 	 * The failure has to be one the module can REPORT, and neither half of that is implied by an
 	 * exception merely being raised. The message has to name the ceiling, or it is any other
-	 * transport failure. And the cause must not be an {@link IOException} — the streaming route's
-	 * terminal handler reads {@code getCause() instanceof IOException} as a client disconnect,
-	 * logs at DEBUG and sends no {@code error} event, so a ceiling failure carrying one is a
-	 * stream that stops dead with nothing said to the clinician and nothing written to the log.
+	 * transport failure. And the cause must not be an {@link IOException}, for the reason
+	 * {@code RemoteLlmEngine.oversized}'s javadoc gives and measured.
 	 */
 	private static void assertCeilingFailureIsReportable(APIException raised) {
 		assertNotNull(raised.getMessage(), "the failure must say something an operator can act on");
@@ -263,9 +263,10 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	/**
 	 * The peer stopped being listened to somewhere under {@code budget}. Stated as what the PEER
-	 * got onto the wire rather than as what the module read, because the two differ by a socket
-	 * buffer the module never sees — which is why the budget is the ceiling plus
-	 * {@link #ONE_SOCKET_BUFFER_EACH_WAY} rather than the ceiling itself.
+	 * got onto the wire rather than as what the module read, because the two differ by everything
+	 * the socket absorbed after the module stopped reading — so every caller sets {@code budget}
+	 * well above {@code ceiling}, by a margin of its own. {@link #TOLERATED} and
+	 * {@link #ERROR_BODY_BUDGET} each say what theirs is and why.
 	 */
 	private void assertPeerWasCutOffAt(String what, long budget, long ceiling) {
 		assertTrue(written.get() <= budget,

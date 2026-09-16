@@ -31,6 +31,14 @@ import java.io.InputStream;
  * <p>Closing this closes the underlying body, which is what cancels the exchange and stops the peer
  * — so the caller that reads through it must close it on the failure path too. Every caller does,
  * by reading inside a try-with-resources.</p>
+ *
+ * <p><b>Three things here are defence in depth and the suite does not discriminate them</b>, said
+ * once rather than at each: the {@code len} clamp, the two post-throw guards, and {@link #skip}.
+ * Measured against a loopback peer, production reaches this class through exactly two callers,
+ * neither of which skips, reads a byte at a time, asks for more than 16384 at once, or reads on
+ * after the throw — so removing any of the three leaves every test green. They are kept because
+ * each closes a hole a future caller could open in the count, and named here because a clause no
+ * test discriminates is one the next change can delete for free without knowing it.</p>
  */
 final class BoundedResponseStream extends FilterInputStream {
 
@@ -67,6 +75,9 @@ final class BoundedResponseStream extends FilterInputStream {
 
 	@Override
 	public int read() throws IOException {
+		if (delivered > limit) {
+			throw new ResponseTooLargeException(limit);
+		}
 		int b = in.read();
 		if (b >= 0) {
 			count(1);

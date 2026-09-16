@@ -471,12 +471,18 @@ public class ArchitectureGuardTest {
 	 * the threat this bounds does not reach it. Naming it here is what makes that exclusion
 	 * reviewable rather than merely absent.</p>
 	 *
-	 * <p><b>Residue.</b> The scan reads one line at a time, so a call wrapped across two lines
-	 * reads as a violation — loud and wrong rather than silent and wrong, which is the safe
-	 * direction. What it cannot see is a body reached through a differently-named reference, since
-	 * it matches the spelling {@code response.body()} and not the call. Assigning that expression
-	 * to a local does NOT escape it — measured: the local form reddens this rule and nothing
-	 * else — because the spelling then has no reader in front of it, which is the violation.</p>
+	 * <p><b>The two halves read the source differently, and each way was measured wrong the
+	 * other way round.</b> The {@code response.body()} half is per line, where a call wrapped
+	 * across two lines reads as a violation — loud and wrong rather than silent, the safe
+	 * direction. The {@code BodyHandlers.ofString} half is over the file's code with whitespace
+	 * removed, because per line a wrapped call passed silently; and it stays QUALIFIED, because
+	 * matching the bare method name reddened the two correct {@code BodyPublishers.ofString}
+	 * calls that build the request body.</p>
+	 *
+	 * <p><b>Residue.</b> Neither half sees a body reached through a differently-named reference,
+	 * since both match a spelling rather than a call. Assigning {@code response.body()} to a
+	 * local does NOT escape it — measured: the local form reddens this rule and nothing else —
+	 * because the spelling then has no reader in front of it, which is the violation.</p>
 	 */
 	@Test
 	public void everyRemoteResponseBodyIsReadUnderACeiling() throws IOException {
@@ -491,13 +497,19 @@ public class ArchitectureGuardTest {
 				+ "(?<!parseStreamingResponse\\()response\\.body\\(\\)");
 		List<String> violations = new ArrayList<>();
 		List<String> scanned = new ArrayList<>();
+		java.util.Map<String, List<String>> sources = new java.util.LinkedHashMap<>();
 		int remoteBodyReads = 0;
 		Files.walkFileTree(main, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
 					throws IOException {
 				if (file.toString().endsWith(".java")) {
+					// Lines read HERE rather than fetched back out of getSourceCache(), which is
+					// keyed on the simple name over src/test as well: this rule is about
+					// production, and a cache hit is not a promise about which tree it came from.
 					scanned.add(file.getFileName().toString());
+					sources.put(file.getFileName().toString(), Files.readAllLines(file,
+							StandardCharsets.UTF_8));
 				}
 				return FileVisitResult.CONTINUE;
 			}
@@ -516,10 +528,8 @@ public class ArchitectureGuardTest {
 				// reach it. Named here so the exclusion is reviewable rather than merely absent.
 				continue;
 			}
-			List<String> lines = getSourceCache().get(name);
-			if (lines == null) {
-				continue;
-			}
+			List<String> lines = sources.get(name);
+			StringBuilder code = new StringBuilder();
 			for (int i = 0; i < lines.size(); i++) {
 				String line = lines.get(i);
 				String trimmed = line.trim();
@@ -527,6 +537,7 @@ public class ArchitectureGuardTest {
 						|| trimmed.startsWith("/*")) {
 					continue;
 				}
+				code.append(trimmed);
 				if (line.contains("response.body()")) {
 					remoteBodyReads++;
 				}
@@ -535,11 +546,15 @@ public class ArchitectureGuardTest {
 							+ "through readBoundedBody, parseStreamingResponse or "
 							+ "readTruncatedErrorBody (issue #446)\n    " + trimmed);
 				}
-				if (line.contains("BodyHandlers.ofString")) {
-					violations.add(name + ":" + (i + 1) + " — BodyHandlers.ofString buffers the "
-							+ "whole body before anything can count it; read an InputStream under "
-							+ "a ceiling instead (issue #446)\n    " + trimmed);
-				}
+			}
+			// Whitespace-free rather than per line, because a wrapped `BodyHandlers\n.ofString(`
+			// passes a line scan SILENTLY — measured. Qualified rather than on the method alone,
+			// because `BodyPublishers.ofString` builds the REQUEST body and is correct: matching
+			// the bare method reddened the two request sites, also measured.
+			if (code.toString().replaceAll("\\s+", "").contains("BodyHandlers.ofString")) {
+				violations.add(name + " — BodyHandlers.ofString buffers the whole response body "
+						+ "before anything can count it; read an InputStream under a ceiling "
+						+ "instead (issue #446)");
 			}
 		}
 

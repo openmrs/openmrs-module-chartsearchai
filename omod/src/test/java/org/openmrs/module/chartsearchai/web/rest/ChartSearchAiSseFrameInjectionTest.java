@@ -279,11 +279,14 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * Exactly one {@code done} event, and it is the module's own answer rather than the payload's —
 	 * over the parsed events, and over the frame structure they were parsed out of.
 	 *
-	 * <p>The second is not the first restated. {@link SseEvents#assertEveryFrameIsWellFormed} asks
-	 * whether any line of a frame after its {@code event:} line is something other than data, which is
-	 * the injection's shape whether or not the forged field happens to name an event type this module
-	 * emits — so it also covers {@code id:} and {@code retry:}, which change stream state and dispatch
-	 * no event at all.</p>
+	 * <p><b>Neither question is the other restated, and each catches a shape the other misses.</b>
+	 * {@link SseEvents#assertEveryFrameIsWellFormed} asks whether any line of a frame after its
+	 * {@code event:} line is something other than data, which catches a forged field whatever it is
+	 * called — {@code id:} and {@code retry:} change stream state and dispatch no event at all, so the
+	 * event list alone would not see them. The event list catches what the frame shape cannot: a RUN
+	 * of terminators, which opens a well-formed frame of its own
+	 * ({@link #aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee}). Both are asserted here because
+	 * the payloads in this class reach both shapes.</p>
 	 */
 	private void assertOnlyTheModulesOwnDoneEvent() throws Exception {
 		SseEvents.assertEveryFrameIsWellFormed(out);

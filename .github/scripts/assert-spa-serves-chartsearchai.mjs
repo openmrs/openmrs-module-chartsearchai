@@ -180,7 +180,13 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   } else {
     const served = esmSha.body.trim();
     if (!/^[0-9a-f]{40}$/.test(served)) {
-      problems.push(`${ESM_SHA} is not a commit sha: ${JSON.stringify(served.slice(0, 60))}`);
+      // Not a redundant belt to the status check above: an SPA `try_files` fallback answers a
+      // MISSING file with index.html and HTTP 200, so an image built before this stamp existed
+      // shows up here rather than as a 404. Either way it means the same thing.
+      problems.push(
+        `${ESM_SHA} did not return a commit sha but ${JSON.stringify(served.slice(0, 48))}` +
+          ' — most likely an image built before the stamp existed, answered by the SPA fallback',
+      );
     } else if (EXPECTED_SHA && served !== EXPECTED_SHA) {
       problems.push(
         `serving ESM commit ${served.slice(0, 12)}, but ${EXPECTED_SHA.slice(0, 12)} is current on the ESM's main` +
@@ -204,10 +210,18 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     // Replayed against 2026-09-15's real values — entry Tue 15 Sep 10:05:20 GMT against a stamp
     // from the 21:01:32 assembly — this reports the entry as pre-dating the build. The opposite
     // skew, a whole directory consistently old, is caught by the sha comparison above instead.
-    if (entryHead && entryHead.status === 200 && entryHead.lastModified && esmSha.lastModified) {
-      const entryAt = Date.parse(entryHead.lastModified);
-      const stampAt = Date.parse(esmSha.lastModified);
-      if (Number.isFinite(entryAt) && Number.isFinite(stampAt) && entryAt < stampAt) {
+    if (entryHead && entryHead.status === 200) {
+      const entryAt = Date.parse(entryHead.lastModified ?? '');
+      const stampAt = Date.parse(esmSha.lastModified ?? '');
+      if (!Number.isFinite(entryAt) || !Number.isFinite(stampAt)) {
+        // Reported rather than skipped. Skipping would drop the provenance check while the gate
+        // still reported success — a guard silently doing nothing is the exact failure class this
+        // whole check exists to catch, so losing it has to be loud.
+        problems.push(
+          'cannot compare build provenance: Last-Modified missing or unparseable' +
+            ` (entry: ${JSON.stringify(entryHead.lastModified)}; stamp: ${JSON.stringify(esmSha.lastModified)})`,
+        );
+      } else if (entryAt < stampAt) {
         problems.push(
           `${entryHead.url} pre-dates this build's own stamp, so it is from an earlier build` +
             ` (entry: ${entryHead.lastModified}; stamp: ${esmSha.lastModified})`,

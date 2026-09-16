@@ -27,6 +27,15 @@
 //      CORRECT plain importmap while both compressed siblings were stale.
 //      Every browser asks for br and gzip; so does fetch() here.
 //
+// A second failure class, measured 2026-09-15 and the reason for the sha stamp below. A green
+// build and a green deploy left the served ESM directory holding files from TWO builds — the
+// numbered chunks from the current one, the ENTRY bundle the importmap names from a build 11
+// hours older. Chunk ids are per-build, so the old entry requested the old build's chunks and
+// the new ones were never loaded; the merged feature did not render. Everything this gate
+// checked was correct at the time, and the entry is byte-identical in size across those two
+// builds (83,245), so nothing comparing names or sizes could see it. Hence: ask the deployment
+// which commit it is serving, and whether the entry pre-dates that build.
+//
 // This reads only files nginx serves statically, so it does not wait on
 // OpenMRS's own startup, which can run to 30 minutes on a first boot.
 //
@@ -56,7 +65,8 @@ const CHALLENGE_MS = Number(process.env.GATE_CHALLENGE_MS || 60_000);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Reads the two files that decide whether the ESM is loaded at all.
+ * Reads the files that decide whether the ESM is loaded at all, and the stamp saying which
+ * commit built it.
  *
  * The Cloudflare challenge is waited out by polling for a response that is not
  * a 403, rather than by sleeping a fixed interval — a fixed sleep either
@@ -98,14 +108,26 @@ async function probe(page, paths) {
  * importmap has been parsed, so it cannot join the fixed probe above.
  */
 async function readHead(page, url) {
-  return page.evaluate(async (u) => {
-    try {
-      const r = await fetch(u, { cache: 'no-store' });
-      return { url: u, status: r.status, lastModified: r.headers.get('last-modified') };
-    } catch (e) {
-      return { url: u, status: 0, lastModified: null, error: e.message };
-    }
-  }, url);
+  return page.evaluate(
+    async ({ u, challengeMs }) => {
+      // Polls out a 403 the same way the fixed probe does. Without it a transient challenge on
+      // this one asset reads as "the importmap names a file that is not served", which is a
+      // different and much more alarming failure than the one that happened.
+      const deadline = Date.now() + challengeMs;
+      for (;;) {
+        try {
+          const r = await fetch(u, { cache: 'no-store' });
+          if (r.status !== 403 || Date.now() > deadline) {
+            return { url: u, status: r.status, lastModified: r.headers.get('last-modified') };
+          }
+        } catch (e) {
+          if (Date.now() > deadline) return { url: u, status: 0, lastModified: null, error: e.message };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    },
+    { u: url, challengeMs: CHALLENGE_MS },
+  );
 }
 
 /** The importmap entry for the ESM, resolved against the SPA base, or null. */
@@ -161,24 +183,46 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
       problems.push(`${ESM_SHA} is not a commit sha: ${JSON.stringify(served.slice(0, 60))}`);
     } else if (EXPECTED_SHA && served !== EXPECTED_SHA) {
       problems.push(
-        `serving ESM commit ${served.slice(0, 12)} but ${EXPECTED_SHA.slice(0, 12)} is current on main` +
-          ' — the frontend container is running an older image than the one just built',
+        `serving ESM commit ${served.slice(0, 12)}, but ${EXPECTED_SHA.slice(0, 12)} is current on the ESM's main` +
+          ' — either the host is running an older image than the one just built, or main moved ahead' +
+          ' mid-deploy, in which case the next deploy clears it',
       );
     }
 
-    // Same assembly, so same mtime: Dockerfile.frontend copies the stamp in beside the assembled
-    // output. A differing Last-Modified on the entry the importmap actually names means the
-    // directory holds more than one build, whichever file happens to be newer.
+    // Is the entry the importmap names from THIS build?
+    //
+    // Not an equality test on Last-Modified, which would fail every healthy deploy: the stamp is
+    // written by `git rev-parse` in the ESM stage, before `yarn build`, and `COPY --from`
+    // preserves that mtime — so it is minutes OLDER than anything `openmrs assemble` wrote. What
+    // holds for a single build is the ORDER: the stamp is the earliest artifact of its own build,
+    // so an entry older than the stamp cannot have come from it.
+    //
+    // This works through the compressed variants a browser is actually served, because
+    // precompress-spa.mjs stamps each sibling with its source's mtime (utimesSync, and
+    // Dockerfile.frontend's own guard relies on the same thing).
+    //
+    // Replayed against 2026-09-15's real values — entry Tue 15 Sep 10:05:20 GMT against a stamp
+    // from the 21:01:32 assembly — this reports the entry as pre-dating the build. The opposite
+    // skew, a whole directory consistently old, is caught by the sha comparison above instead.
     if (entryHead && entryHead.status === 200 && entryHead.lastModified && esmSha.lastModified) {
-      if (entryHead.lastModified !== esmSha.lastModified) {
+      const entryAt = Date.parse(entryHead.lastModified);
+      const stampAt = Date.parse(esmSha.lastModified);
+      if (Number.isFinite(entryAt) && Number.isFinite(stampAt) && entryAt < stampAt) {
         problems.push(
-          `${entryHead.url} is from a different build than ${ESM_SHA}` +
+          `${entryHead.url} pre-dates this build's own stamp, so it is from an earlier build` +
             ` (entry: ${entryHead.lastModified}; stamp: ${esmSha.lastModified})`,
         );
       }
-    } else if (entryHead && entryHead.status !== 200) {
-      problems.push(`${entryHead.url} returned HTTP ${entryHead.status} — the importmap names a file that is not served`);
     }
+  }
+
+  // Outside the stamp's branch on purpose: an entry the importmap names but nginx does not serve
+  // is a failure whether or not the stamp exists to date it.
+  if (entryHead && entryHead.status !== 200) {
+    problems.push(
+      `${entryHead.url} returned HTTP ${entryHead.status}${entryHead.error ? ` (${entryHead.error})` : ''}` +
+        ' — the importmap names a file that is not served',
+    );
   }
 
   return problems;

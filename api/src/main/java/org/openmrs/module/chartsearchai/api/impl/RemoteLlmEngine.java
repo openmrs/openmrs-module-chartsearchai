@@ -82,8 +82,10 @@ public class RemoteLlmEngine implements LlmEngine {
 
 	/**
 	 * How much of a non-2xx body is read. Far tighter than {@link #MAX_RESPONSE_BYTES} because an
-	 * error body is never parsed — it reaches one log line, cut down again on the way, and nothing
-	 * else reads it — and because this read TRUNCATES where the others abort. Abandoning
+	 * error body is never parsed — its one destination is {@link #logErrorBody}'s DEBUG line, cut
+	 * down again on the way — and because this read TRUNCATES where the others abort. Most of
+	 * what it reads is therefore discarded, which is slack rather than oversight: this is a bound
+	 * on a hostile peer, not a budget for a line. Abandoning
 	 * an oversized error body with a size complaint would cost the status code and the
 	 * {@code chartsearchai.llm.remote.*} hint that go with it, which is the operator's only clue
 	 * that the endpoint URL or model name is wrong.

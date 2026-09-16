@@ -15,6 +15,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,13 +27,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * drifted: one stripped the single space after {@code data:} and the other kept it, and they split
  * events differently (blank-line blocks versus scanning to the next {@code event:}). Jackson
  * tolerated the difference, so nothing failed — which is exactly why it needed removing rather
- * than fixing twice. The implementation below is the original blank-line-block decoder, moved
- * verbatim so the assertions that already relied on it cannot shift.
+ * than fixing twice.
  *
- * <p>The single space after {@code event:}/{@code data:} is part of the field delimiter the
- * controller emits ({@code writeSseEvent} writes {@code "data: "}), not payload, so it is dropped.
+ * <p><b>It decodes the way the event-stream specification says a client must, and that is the
+ * point of it rather than a detail.</b> The decoder this replaced recognised only LF as a line
+ * terminator, while the spec recognises CRLF, CR and LF alike — so a lone CR written into a frame's
+ * payload ends the {@code data:} line for every real client and turns whatever follows into further
+ * field lines of that same event, and a LF-only decoder cannot see it happen. That is the finding
+ * {@link ChartSearchAiSseFrameInjectionTest} pins, and it was invisible to this package until this
+ * class was the thing a conforming client would do. Field parsing (name up to the first colon, one
+ * optional leading space dropped from the value, {@code data:} lines joined with LF, a line opening
+ * with {@code :} skipped as a comment) follows the same specification for the same reason.
+ *
+ * <p>So when a test here asserts an event's type, it is asserting what a client PARSES, not what
+ * the controller passed to {@code writeSseEvent} — which is the only form of that assertion worth
+ * anything on a payload the model wrote.
  */
 final class SseEvents {
+
+	/**
+	 * Every line terminator the event-stream grammar recognises. CRLF is first so it is consumed as
+	 * ONE terminator rather than two, which is what the specification requires and what keeps a
+	 * frame from appearing to carry a blank dispatch line it does not have.
+	 */
+	private static final Pattern LINE_TERMINATORS = Pattern.compile("\r\n|\r|\n");
 
 	private SseEvents() {
 	}
@@ -40,21 +58,53 @@ final class SseEvents {
 	/** Every event written to {@code out} so far, in emission order. */
 	static List<SseEvent> parse(ByteArrayOutputStream out) {
 		List<SseEvent> events = new ArrayList<SseEvent>();
-		for (String block : new String(out.toByteArray(), StandardCharsets.UTF_8).split("\n\n")) {
-			String type = null;
-			StringBuilder data = new StringBuilder();
-			for (String line : block.split("\n")) {
-				if (line.startsWith("event: ")) {
-					type = line.substring(7).trim();
-				} else if (line.startsWith("data: ")) {
-					data.append(line.substring(6));
+		String type = null;
+		StringBuilder data = new StringBuilder();
+		for (String line : LINE_TERMINATORS.split(new String(out.toByteArray(), StandardCharsets.UTF_8), -1)) {
+			if (line.isEmpty()) {
+				// The dispatch line. An event with no "event:" field is untyped, which the
+				// controller never writes, so it is dropped rather than given a name here.
+				if (type != null) {
+					events.add(new SseEvent(type, dispatched(data)));
 				}
+				type = null;
+				data.setLength(0);
+				continue;
 			}
-			if (type != null) {
-				events.add(new SseEvent(type, data.toString()));
+			if (line.charAt(0) == ':') {
+				continue; // a comment — the keep-alive
+			}
+			int colon = line.indexOf(':');
+			String field = colon < 0 ? line : line.substring(0, colon);
+			String value = colon < 0 ? "" : line.substring(colon + 1);
+			if (value.startsWith(" ")) {
+				value = value.substring(1);
+			}
+			if ("event".equals(field)) {
+				type = value;
+			} else if ("data".equals(field)) {
+				data.append(value).append('\n');
 			}
 		}
+		if (type != null) {
+			events.add(new SseEvent(type, dispatched(data)));
+		}
 		return events;
+	}
+
+	/**
+	 * The data buffer as a client would hand it to the page: each {@code data:} line appended with a
+	 * trailing LF and the last LF then removed, which is what the specification's dispatch step does.
+	 *
+	 * <p>Appending the LF per line rather than joining is the difference that shows on an EMPTY first
+	 * data line — the very shape a payload opening with a line terminator produces — where joining
+	 * loses the leading break a client keeps.</p>
+	 */
+	private static String dispatched(StringBuilder data) {
+		if (data.length() > 0 && data.charAt(data.length() - 1) == '\n') {
+			return data.substring(0, data.length() - 1);
+		}
+		return data.toString();
 	}
 
 	/** The event types in emission order, for asserting event ordering. */

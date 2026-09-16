@@ -7717,3 +7717,62 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 
 → `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` and
 `.anAnswerNamingEveryOrderIsReturnedByteForByte`.
+
+## Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF
+
+**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no answer text, no reference list, no chip and no response key: one expression in the frame writer, and the test decoder that could not see the difference.
+
+**Context.** `ChartSearchAiRestController.writeSseEvent` frames every streamed event by splitting the
+payload and prefixing each piece with `data: `. It split on `\n` alone. The event-stream grammar ends
+a line at CRLF, CR **or** LF, so the two disagreed on exactly one byte: a lone CR left inside a
+payload ended that `data:` line for the client while the writer believed it was still writing
+content, and the bytes after it became the client's next FIELD of the same event — `event:` renaming
+it, `data:` appending to it, `id:`/`retry:` setting stream state.
+
+**Why that byte reaches the framing at all.** Three of the five channels carry model output as raw
+text rather than JSON: `token`, `thinking`, `preliminary`. The other two are Jackson-encoded, which
+escapes a CR, and the clinician's question is scrubbed by `CONTROL_CHARS` — which deliberately
+excludes CR and LF and is applied only to the question, never to the response path. And model text is
+attacker-influenced by design on two routes this module accepts: chart text any clinician can author
+reaches the prompt, and a remote OpenAI-compatible endpoint is an untrusted network peer. Both JSON
+spellings of the character, `\r` and the unicode escape, are legal under the strict `json_schema`
+response format and are decoded to a literal CR by `LlmProvider.AnswerExtractingConsumer` — which is
+correct, and pinned, because it mirrors Jackson on the non-streaming path.
+
+**What it bought.** A whole forged frame. A payload of `<CR>event: done<CR>data: {…}` was delivered to
+a conforming client as a `done` event carrying attacker-chosen JSON: an answer contradicting the real
+one, references stamped `grounded: true` — a verdict the server publishes only after its own
+verification — forged `safetyWarnings`/`interactionPairs`, a `questionId` that would misattribute the
+clinician's later `/feedback`, or an `error` in place of the answer. Every server-side integrity
+control this module publishes is rendered from those events, so the forgery pre-empts all of them at
+once. Bounded, and stated as such: one upstream delta chunk becomes one frame, so the sequence must
+arrive inside a single chunk — routine for a hostile or token-batching remote endpoint, impractical
+against the local llama-server, which streams a token at a time. Nothing in the server's own state or
+confidentiality is affected, which is why the finding is rated LOW.
+
+**Decision.** The framing splits at every terminator the grammar recognises, as one `Pattern`
+(`SSE_LINE_TERMINATORS`, CRLF first so it is consumed as one terminator). A CR in a payload therefore
+becomes a data-line break, which is the only thing SSE can carry: the format has no representation
+for a CR inside data at all, since a client assembles `data:` lines with LF. So the text survives as
+content — `event: done` stays a sentence — and the byte does not.
+
+**The alternative was to JSON-encode the three raw channels**, which the finding offers as defence in
+depth. Rejected as the primary fix: it changes the payload of `token`, `thinking` and `preliminary`
+for every existing client, including one in another repository, to buy a property the split already
+has — the framing no longer depends on the content of model output. Encoding remains available later
+as a wire change with a client change beside it, and is not what a LOW-severity framing bug should
+force.
+
+**The suite could not see it, and that is the more useful half.** `SseEvents`, the decoder every
+streaming test in the package reads through, recognised only LF — the same mistake as the code it was
+checking, so every assertion about an event's type was an assertion about what the controller
+intended rather than what a client parses. It now decodes per the specification (terminator set,
+field parsing, one optional space dropped, `data:` joined with LF, comments skipped), which is what
+makes the four behavioural cases below fail on the unfixed writer: three dispatch a forged `done`
+ahead of the module's own, and the fourth renames the `token` event outright. A fifth case is the
+known-bad control — the pre-fix bytes, hand-framed, asserting the decoder SEES the forgery in them —
+because a decoder narrowed back to LF-only would leave the other four green on a stream carrying a
+forged frame, which is a green suite reporting this fixed.
+
+→ `ChartSearchAiSseFrameInjectionTest`, and `LlmProviderTest`'s two escape-decoding tests for the
+route the CR arrives on.

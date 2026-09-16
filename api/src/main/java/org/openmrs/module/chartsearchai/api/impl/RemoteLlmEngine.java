@@ -271,7 +271,7 @@ public class RemoteLlmEngine implements LlmEngine {
 	 * reaching for the seam instead of the engine method above it. It is not every read of a
 	 * response body: {@link #readTruncatedErrorBody} reads a non-2xx body under its own, tighter
 	 * ceiling and never through this. Which reader each {@code response.body()} reaches is pinned
-	 * by {@code RemoteLlmEngineResponseSizeBoundTest.everyRemoteResponseBodyIsReadUnderACeiling}.
+	 * by {@code ArchitectureGuardTest.everyRemoteResponseBodyIsReadUnderACeiling}.
 	 */
 	private static BoundedResponseStream bounded(InputStream body) {
 		return new BoundedResponseStream(body, MAX_RESPONSE_BYTES);

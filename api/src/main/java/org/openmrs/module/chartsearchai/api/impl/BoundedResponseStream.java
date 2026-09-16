@@ -18,8 +18,10 @@ import java.io.InputStream;
  * raises {@link ResponseTooLargeException}.
  *
  * <p>Issue #446. The peer behind {@code chartsearchai.llm.remote.endpointUrl} is untrusted, and
- * every way {@link RemoteLlmEngine} turns its answer into heap starts by pulling bytes out of
- * one of these — so bounding the stream is what bounds all of them at once. The ceiling the
+ * both ways {@link RemoteLlmEngine} turns a SUCCESSFUL response into heap start by pulling bytes
+ * out of one of these — so bounding the stream is what bounds both at once. A non-2xx body is
+ * read by {@code RemoteLlmEngine.readTruncatedErrorBody} under its own, tighter ceiling and does
+ * not come through here. The ceiling the
  * ticket asks for "per line, per chunk and cumulative" falls out of the cumulative one rather
  * than needing three counters: {@code BufferedReader.readLine()} cannot buffer a line the
  * stream never yielded, an SSE chunk cannot exceed what the line carried, and the parser's

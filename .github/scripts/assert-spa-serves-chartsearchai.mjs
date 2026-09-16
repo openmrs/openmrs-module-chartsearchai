@@ -70,6 +70,21 @@ const EXPECTED_SHA = (process.env.ESM_EXPECTED_SHA || '').trim();
 const ATTEMPTS = Number(process.env.GATE_ATTEMPTS || 10);
 const DELAY_MS = Number(process.env.GATE_DELAY_MS || 30_000);
 const CHALLENGE_MS = Number(process.env.GATE_CHALLENGE_MS || 60_000);
+const POLL_MS = Number(process.env.GATE_POLL_MS || 2_000);
+
+// Every read gets a unique URL, and UNIQUENESS is the point rather than mere presence: a
+// constant buster is one URL an edge can cache forever, which is the failure the busting exists
+// to prevent. Date.now() alone is not enough — it is millisecond-resolution, and two reads in
+// the same millisecond produced the same value, so a counter carries it.
+//
+// The counter advances by 100 per CALL — more than any single call consumes (probe reads three
+// paths) — so seeds from different calls cannot overlap and a repeated path is never fetched at
+// the same URL twice. It only SEEDS the page-side functions below, which cannot close over
+// module scope:
+// they are serialised into the browser, so anything they use must be passed in. (Under a stub
+// that runs them in Node they would see module scope and the divergence would go unnoticed —
+// which is its own reason to pass it explicitly.)
+let reads = 0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -84,7 +99,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function probe(page, paths) {
   await page.goto(`${BASE}/openmrs/spa/login`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   return page.evaluate(
-    async ({ paths, challengeMs }) => {
+    async ({ paths, challengeMs, pollMs, bustSeed }) => {
+      let n = bustSeed;
       const read = async (path) => {
         const deadline = Date.now() + challengeMs;
         // Unique per read, for the same reason readHead does it: `cache: 'no-store'` sends no
@@ -92,7 +108,7 @@ async function probe(page, paths) {
         // Cloudflare caches — an origin `Cache-Control` or a cache-everything rule reaches the
         // stamp too, and an edge-stale stamp reads OLDER than it is, which flips the provenance
         // comparison to a false GREEN on exactly the failure this gate exists for.
-        const bust = `${path}${path.includes('?') ? '&' : '?'}cb=${Date.now()}`;
+        const bust = `${path}${path.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
         for (;;) {
           try {
             const r = await fetch(bust, { cache: 'no-store' });
@@ -111,14 +127,14 @@ async function probe(page, paths) {
           } catch (e) {
             if (Date.now() > deadline) return { status: 0, encoding: null, body: '', error: e.message };
           }
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, pollMs));
         }
       };
       const out = {};
       for (const [key, path] of Object.entries(paths)) out[key] = await read(path);
       return out;
     },
-    { paths, challengeMs: CHALLENGE_MS },
+    { paths, challengeMs: CHALLENGE_MS, pollMs: POLL_MS, bustSeed: (reads += 100) },
   );
 }
 
@@ -128,13 +144,14 @@ async function probe(page, paths) {
  */
 async function readHead(page, url) {
   return page.evaluate(
-    async ({ u, challengeMs }) => {
+    async ({ u, challengeMs, pollMs, bustSeed }) => {
+      let n = bustSeed;
       // `cache: 'no-store'` is a BROWSER-cache directive and sends no request header, so an edge
       // cache may still answer. The entry is a `.js`, which is in Cloudflare's default cacheable
       // set, while the `.sha` stamp is not — an edge-cached entry compared against an
       // origin-fresh stamp is exactly the comparison this gate must not get wrong, and the retry
       // loop cannot clear an edge cache. So the URL is made unique per read.
-      const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}`;
+      const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
       // Polls out a 403 the same way the fixed probe does. Without it a transient challenge on
       // this one asset reads as "the importmap names a file that is not served", which is a
       // different and much more alarming failure than the one that happened.
@@ -143,15 +160,26 @@ async function readHead(page, url) {
         try {
           const r = await fetch(bust, { cache: 'no-store' });
           if (r.status !== 403 || Date.now() > deadline) {
-            return { url: u, status: r.status, lastModified: r.headers.get('last-modified') };
+            return {
+              url: u,
+              status: r.status,
+              lastModified: r.headers.get('last-modified'),
+              // The entry is the MORE cacheable side of the comparison (a default-cacheable
+              // `.js`), so leaving it without cache visibility would blind the output on the
+              // likelier half.
+              cache: r.headers.get('cf-cache-status'),
+              age: r.headers.get('age'),
+            };
           }
         } catch (e) {
-          if (Date.now() > deadline) return { url: u, status: 0, lastModified: null, error: e.message };
+          if (Date.now() > deadline) {
+            return { url: u, status: 0, lastModified: null, cache: null, age: null, error: e.message.split('\n')[0] };
+          }
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
     },
-    { u: url, challengeMs: CHALLENGE_MS },
+    { u: url, challengeMs: CHALLENGE_MS, pollMs: POLL_MS, bustSeed: (reads += 100) },
   );
 }
 
@@ -292,6 +320,14 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   // 403 and 0 are told apart from a genuine 404: readHead polls a challenge out, but it gives up
   // after CHALLENGE_MS and returns the 403, and "the importmap names a file that is not served"
   // would then be both alarming and wrong.
+  // A usable specifier whose entry was never read leaves every provenance check skipped while
+  // the verdict stays green — loud-but-green, which is not what `a guard silently doing nothing
+  // has to be loud` was for. Unreachable through the current caller (readHead returns an object
+  // on both paths); asserted rather than trusted to that.
+  if (typeof entryUrlFrom(importmap.status === 200 ? importmap.body : '{}') === 'string' && !entryHead) {
+    problems.push('the entry bundle was never read, so nothing about its provenance was checked');
+  }
+
   if (entryHead && entryHead.status !== 200) {
     const unreachable = entryHead.status === 403 || entryHead.status === 0;
     problems.push(
@@ -305,15 +341,24 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   return { problems, warnings };
 }
 
-// Everything above is importable; the gate itself is below. GATE_SELFTEST makes importing this
-// file inert, which is what lets assert-spa-serves-chartsearchai.test.mjs exercise the real
-// functions rather than a copy of them — every behaviour here used to be first executed against
-// production.
+// Everything above is importable; the gate itself is below.
+//
+// The condition is ENTRY-POINT IDENTITY, deliberately, and not an environment variable. It was
+// `if (process.env.GATE_SELFTEST)` for one commit, which made any non-empty value — '1', '0',
+// 'false' — turn the gate into a no-op that printed nothing and exited 0. The name was invited
+// into workflow scope by this file's own usage line and by deploy.yml's comment, and a repo or
+// org variable of that name would have done the same: a script whose whole purpose is to stop a
+// confident green being trusted would have shipped one behind an env var. Importing this file is
+// inert; RUNNING it can never be.
+/** The gate's verdict. Named and exported so a test can pin it; see problemsWith. */
+export const isHealthy = (problems) => problems.length === 0;
+
 export { entryUrlFrom, problemsWith, probe, readHead };
 
-if (process.env.GATE_SELFTEST) {
-  // imported for its exports only
-} else {
+const { pathToFileURL } = await import('node:url');
+const invokedDirectly = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
+
+if (invokedDirectly) {
 const { chromium } = await import('playwright');
 const browser = await chromium.launch({ headless: false });
 try {
@@ -356,7 +401,7 @@ try {
     }
     if (firstProblems === null && problems.length) firstProblems = problems;
     for (const w of warnings) console.log(`note: ${w}`);
-    if (problems.length === 0) {
+    if (isHealthy(problems)) {
       // The whole premise here is that a green gate was once trusted wrongly, so say what was
       // actually established rather than only that it passed.
       console.log(`OK: ${BASE} serves ${ESM} (attempt ${attempt})`);
@@ -366,6 +411,7 @@ try {
             `${served.stampCache ? `, cf-cache-status: ${served.stampCache}` : ''})`,
         );
         console.log(`  entry bundle: ${served.entry ?? 'not read'} (${served.entryAt ?? 'no Last-Modified'})`);
+        console.log(`  ESM tip comparison: ${EXPECTED_SHA ? 'compared' : 'NOT resolved, so not compared'}`);
         console.log(
           served.provenanceCompared
             ? '  checked: the entry does not pre-date this build.'

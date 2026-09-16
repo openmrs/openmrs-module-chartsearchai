@@ -39,6 +39,14 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "expecting ESM commit $sha"
 
+      # The gate's own predicates, before production changes. It needs only checkout and node —
+      # no browser — so a failure here cannot strand a deployed instance with the gate skipped,
+      # which is the property the resolve step above was moved for. It imports the gate (inert on
+      # import) and drives the real functions over fabricated inputs, the 2026-09-15 defect's own
+      # timestamps among them. Measured at ~1s with GATE_POLL_MS set by the suite itself.
+      - name: Self-test the gate's logic
+        run: node .github/scripts/assert-spa-serves-chartsearchai.test.mjs
+
       - name: Deploy via scoped SSH
         env:
           DEPLOY_COMMAND: ${{ inputs.reset && 'deploy emr-3-ai --destroy-volumes --no-health-check' || 'deploy emr-3-ai --no-health-check' }}
@@ -76,12 +84,6 @@ jobs:
       # headless Chromium never clears Cloudflare's managed challenge (the page
       # stays on the interstitial and an in-page fetch throws), while a headed
       # one read the importmap at t+10s. The script's header records the rest.
-      # The gate's own predicates, before they are trusted against production. Runs in about a
-      # second and needs no browser: it imports the gate with GATE_SELFTEST set and drives the
-      # real functions over fabricated inputs, including the 2026-09-15 defect's own timestamps.
-      - name: Self-test the gate's logic
-        run: node .github/scripts/assert-spa-serves-chartsearchai.test.mjs
-
       - name: Assert the deployed SPA loads the Chart Search AI ESM
         env:
           ESM_EXPECTED_SHA: ${{ steps.esm.outputs.sha }}

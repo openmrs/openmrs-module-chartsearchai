@@ -41,18 +41,6 @@ RUN openmrs assemble --mode config --config spa-build-config.json
 # mtime), but do not read this as "siblings, plural".
 COPY --from=chartsearchai-esm /esm/ESM_SHA /app/dist/chartsearchai-esm.sha
 
-# Assert that ordering here, where it is cheap, instead of discovering it on a deploy. If a later
-# edit moves the COPY above after the assembly, or `openmrs assemble` ever normalises mtimes, the
-# gate's comparison inverts and fails every healthy deploy — a check that cries wolf gets muted,
-# which is worse than not having it. Nothing else in the build or the gate verifies this.
-RUN node -e 'const {statSync,readFileSync}=require("fs"); \
-  const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-chartsearchai-app"]; \
-  if(!spec){console.error("importmap does not name the ESM");process.exit(1);} \
-  const entry="/app/dist/"+spec.replace(/^\.\//,""); \
-  const stamp=statSync("/app/dist/chartsearchai-esm.sha").mtimeMs, e=statSync(entry).mtimeMs; \
-  console.log("stamp mtime",stamp,"entry mtime",e,entry); \
-  if(stamp>e){console.error("stamp is NEWER than the entry bundle: the gate provenance check would invert");process.exit(1);}'
-
 # Give the assembled SPA the pre-compressed siblings the base image's nginx
 # expects. Without them the base's own siblings answer for these files — see
 # the deletion in the next stage.
@@ -64,6 +52,28 @@ RUN node -e 'const {statSync,readFileSync}=require("fs"); \
 # emulated amd64 container.
 COPY precompress-spa.mjs /app/precompress-spa.mjs
 RUN node /app/precompress-spa.mjs /app/dist
+
+# Assert that ordering here, where it is cheap, instead of discovering it on a deploy. If a later
+# edit moves the COPY above after the assembly, or `openmrs assemble` ever normalises mtimes, the
+# gate's comparison inverts and fails every healthy deploy — a check that cries wolf gets muted,
+# which is worse than not having it. Nothing else in the build or the gate verifies this.
+#
+# It checks the COMPRESSED siblings too, because those are what a browser is served and therefore
+# what the gate's Last-Modified comparison actually reads. precompress-spa.mjs stamps each sibling
+# from its source, so the ordering should survive compression — "should" being the reason this
+# asserts it rather than a comment claiming it.
+RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
+  const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-chartsearchai-app"]; \
+  if(!spec){console.error("importmap does not name the ESM");process.exit(1);} \
+  const entry="/app/dist/"+spec.replace(/^\.\//,""); \
+  const stamp=statSync("/app/dist/chartsearchai-esm.sha").mtimeMs, e=statSync(entry).mtimeMs; \
+  console.log("stamp mtime",stamp,"entry mtime",e,entry); \
+  if(stamp>e){console.error("stamp is NEWER than the entry bundle: the gate provenance check would invert");process.exit(1);} \
+  for(const ext of [".br",".gz"]){ \
+    const a="/app/dist/chartsearchai-esm.sha"+ext, b=entry+ext; \
+    if(!existsSync(a)||!existsSync(b)) continue; \
+    if(statSync(a).mtimeMs>statSync(b).mtimeMs){console.error("compressed siblings invert the ordering: "+a+" newer than "+b);process.exit(1);} \
+  }'
 
 # Use the official O3 frontend image as the base — it has the correct
 # index.html (with SPA bootstrap), nginx config, and env var substitution.

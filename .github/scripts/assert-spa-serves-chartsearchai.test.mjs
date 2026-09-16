@@ -7,15 +7,20 @@
 // on Last-Modified that could never hold, and a hard comparison against a branch tip that nothing
 // keeps the image in step with.
 //
-// It drives the REAL functions, imported from the gate with GATE_SELFTEST set so the browser
-// block stays inert. `page` is stubbed to run the evaluated function in Node, and `fetch` is
-// stubbed per case, so `probe` and `readHead` run their own code — including the cache-busting
-// and the challenge poll — rather than a copy of it.
+// It drives the REAL functions, imported from the gate — which is inert on import because it
+// gates its run block on entry-point identity, not on an environment variable (one commit used
+// GATE_SELFTEST for that, and any value of it silenced the gate itself). `page` is stubbed to run
+// the evaluated function in Node and `fetch` is stubbed per case, so `probe` and `readHead`
+// execute their own code — the cache-busting and the challenge poll included — not a copy.
 //
-// Usage: GATE_SELFTEST=1 node .github/scripts/assert-spa-serves-chartsearchai.test.mjs
+// The page-side functions cannot close over module scope in a real browser, so anything they use
+// is passed in. Running them in Node would hide a violation of that, which is why the gate passes
+// the buster seed and the poll interval explicitly.
+//
+// Usage: node .github/scripts/assert-spa-serves-chartsearchai.test.mjs
 
-process.env.GATE_SELFTEST = '1';
 process.env.GATE_CHALLENGE_MS = '50';
+process.env.GATE_POLL_MS = '5';
 process.env.ESM_EXPECTED_SHA = 'a'.repeat(40);
 
 const gate = await import('./assert-spa-serves-chartsearchai.mjs');
@@ -158,6 +163,66 @@ const page = { goto: async () => {}, evaluate: async (fn, arg) => fn(arg) };
   };
   const head = await gate.readHead(page, '/openmrs/spa/x/app.js');
   check('a throwing fetch reports status 0', head.status === 0 && typeof head.error === 'string', JSON.stringify(head));
+}
+
+
+// ---- the verdict itself, and the predicates the ORIGINAL 2026-08-25 defect was about ---------
+check('isHealthy is false for any problem', gate.isHealthy([]) === true && gate.isHealthy(['x']) === false);
+{
+  const { problems } = gate.problemsWith(
+    { importmap: res('{"imports":{"@openmrs/esm-other-app":"./o.js"}}'), routes, esmSha: res(SHA) },
+    entryHead(),
+  );
+  check('an importmap not naming the ESM fails', has(problems, 'none of them is'), problems.join('; '));
+}
+{
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes: res('{"other":true}'), esmSha: res(SHA) },
+    entryHead(),
+  );
+  check('routes without a chartsearchai route fails', has(problems, 'names no chartsearchai route'), problems.join('; '));
+}
+{
+  // A usable specifier whose entry was never read must not be green.
+  const { problems } = gate.problemsWith({ importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA) }, null);
+  check('a specifier whose entry was never read fails', has(problems, 'never read'), problems.join('; '));
+}
+
+// ---- the provenance boundary ------------------------------------------------------------------
+{
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA, ENTRY_AT) },
+    entryHead({ lastModified: ENTRY_AT }),
+  );
+  check('identical timestamps pass (the stamp may equal the entry)', problems.length === 0, problems.join('; '));
+}
+{
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA, 'Wed, 16 Sep 2026 09:00:21 GMT') },
+    entryHead({ lastModified: 'Wed, 16 Sep 2026 09:00:20 GMT' }),
+  );
+  check('one second older than the stamp fails', has(problems, 'pre-dates'), problems.join('; '));
+}
+
+// ---- cache visibility and read uniqueness ----------------------------------------------------
+{
+  const seen = [];
+  globalThis.fetch = async (u) => {
+    seen.push(u);
+    return {
+      status: 200,
+      text: async () => SHA,
+      headers: { get: (h) => ({ 'last-modified': STAMP, 'cf-cache-status': 'HIT', age: '42' })[h] ?? null },
+    };
+  };
+  const head = await gate.readHead(page, '/openmrs/spa/x/app.js');
+  check('readHead surfaces cf-cache-status and age', head.cache === 'HIT' && head.age === '42', JSON.stringify(head));
+  const probed = await gate.probe(page, { esmSha: '/openmrs/spa/chartsearchai-esm.sha' });
+  check('probe surfaces cf-cache-status and age', probed.esmSha.cache === 'HIT' && probed.esmSha.age === '42');
+  // Uniqueness, not mere presence: a constant buster is one URL an edge caches forever.
+  await gate.readHead(page, '/openmrs/spa/x/app.js');
+  await gate.probe(page, { a: '/openmrs/spa/x/app.js' });
+  check('every read gets a DISTINCT url, including the same path twice', new Set(seen).size === seen.length, seen.join(' '));
 }
 
 console.log(failed === 0 ? '\nall gate self-tests passed' : `\n${failed} gate self-test(s) FAILED`);

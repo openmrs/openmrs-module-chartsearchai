@@ -33,8 +33,9 @@ import java.io.InputStream;
  * by reading inside a try-with-resources.</p>
  *
  * <p><b>Several clauses here are defence in depth and the suite does not discriminate them</b>,
- * said once rather than at each: the {@code len} clamp, the post-throw guard in each read, and
- * the single-byte {@link #read()} override ENTIRE — its counting included, not merely its guard.
+ * said once rather than at each: the {@code len} clamp, the post-throw guard in each read,
+ * {@link #skip}, and the single-byte {@link #read()} override ENTIRE — its counting included,
+ * not merely its guard.
  * Measured against a loopback peer, production reaches this class through exactly two callers,
  * and neither skips, reads a byte at a time, asks for more than 16384 at once, or reads on after
  * the throw; each of those clauses can be deleted with every test still green. They are kept
@@ -121,7 +122,12 @@ final class BoundedResponseStream extends FilterInputStream {
 	 */
 	@Override
 	public long skip(long n) throws IOException {
-		long skipped = in.skip(Math.max(0L, Math.min(n, limit - delivered + 1)));
+		// Same shape and same resolution as read(byte[],int,int): narrow only, and let an
+		// unusable ceiling stop clamping rather than stop the skip. Computed the other way this
+		// returned 0 forever at a limit near Long.MAX_VALUE — measured, and the mirror of the
+		// live-lock read() had.
+		long room = limit - delivered + 1;
+		long skipped = in.skip(Math.max(0L, (room > 0 && room < n) ? room : n));
 		if (skipped > 0) {
 			delivered += skipped;
 			if (delivered > limit) {

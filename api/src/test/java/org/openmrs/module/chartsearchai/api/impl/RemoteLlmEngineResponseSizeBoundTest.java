@@ -248,10 +248,16 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 					"the whole of a short error body must reach the log — an error read that "
 							+ "returned nothing would still pass every ceiling case above. "
 							+ "Captured: " + capture.describeAll());
-			assertFalse(capture.hasMessageAt(Level.ERROR, SHORT_ERROR_BODY),
-					"and it must not reach ERROR: the body is the ENDPOINT's text, which a "
-							+ "compromised one can make this patient's chart, and core ships "
-							+ "org.openmrs at WARN. Captured: " + capture.describeAll());
+			// At EVERY level and not merely at ERROR, which is why the capture is opened at
+			// DEBUG: a negative naming one level leaves the same disclosure implementable one
+			// level down, and an added log.info of the body was measured passing exactly that.
+			// The idiom is FindingPartnerLogDisclosureTest's, for the same reason (#439).
+			for (String logged : capture.describeAll()) {
+				assertTrue(!logged.contains(SHORT_ERROR_BODY) || logged.startsWith("DEBUG"),
+						"the endpoint's body may appear at DEBUG and nowhere else: it is text a "
+								+ "compromised endpoint can make this patient's chart, and core "
+								+ "ships org.openmrs at WARN. Logged: " + logged);
+			}
 		}
 	}
 

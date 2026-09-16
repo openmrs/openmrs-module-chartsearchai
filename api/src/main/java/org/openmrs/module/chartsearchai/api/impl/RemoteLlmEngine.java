@@ -72,10 +72,12 @@ public class RemoteLlmEngine implements LlmEngine {
 	 * {@code HttpRequest.timeout()} stops applying once the response headers arrive — see
 	 * {@link LlmEngine#inferStreaming(String, String, int, Consumer)}. And not the TRANSIENT PEAK,
 	 * which is a small multiple of it: this is what the peer may DELIVER, while decoding a body of
-	 * that size holds the accumulated bytes and the decoded string at once. Measured on the
-	 * non-streaming path against a loopback peer, a body at this ceiling allocated about 16.8 MB
-	 * where the unbounded {@code ofString()} it replaced allocated about 12.9 MB — both bounded,
-	 * neither equal to the ceiling.</p>
+	 * that size holds the accumulated bytes and the decoded text at once. Measured against a
+	 * loopback peer on the caller's thread, a response at this ceiling allocated about 16.8 MB
+	 * non-streaming — where the unbounded {@code ofString()} it replaced allocated about 12.9 MB
+	 * — and 21 to 29 MB streaming, depending on whether the peer sends one endless line or many
+	 * chunks. All bounded, none equal to the ceiling, and it is the MULTIPLE that is fixed here:
+	 * before this, the figure was the peer's to choose.</p>
 	 */
 	static final long MAX_RESPONSE_BYTES = (long) ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
 			* BYTE_ALLOWANCE_PER_OUTPUT_TOKEN;
@@ -313,20 +315,25 @@ public class RemoteLlmEngine implements LlmEngine {
 	/**
 	 * The status code at ERROR and the endpoint's own text at DEBUG.
 	 *
-	 * <p>Split because the two have different audiences. The status code and the
-	 * {@code chartsearchai.llm.remote.*} hint are what an operator needs, and carry nothing of the
-	 * patient's. The BODY is bytes the endpoint chose, and a compromised or merely verbose one can
-	 * echo the prompt — which is this patient's chart — straight back as an error message:
-	 * measured against a loopback peer, name, date of birth, diagnosis, allergy and three drug
-	 * names all fit inside what {@code truncateForLog} keeps. Core ships {@code org.openmrs} at
-	 * WARN, so ERROR would put that in the default server log and whatever ships it onward, with
-	 * nobody opting in. DEBUG is the opt-in boundary — the one issue #439 drew for the
-	 * safety-finding shortfall, and the position {@code ClassCodeFidelityCheck} states for record
-	 * text.</p>
+	 * <p>Split because the two have different audiences. The status code is what an operator
+	 * needs and carries nothing of the patient's. The BODY is bytes the endpoint chose, and a
+	 * compromised or merely verbose one can echo the prompt — which is this patient's chart —
+	 * straight back as an error message: measured against a loopback peer, name, date of birth,
+	 * diagnosis, allergy and three drug names all fit inside what {@code truncateForLog} keeps.
+	 * Core ships {@code org.openmrs} at WARN, so ERROR would put that in the default server log
+	 * and whatever ships it onward, with nobody opting in.</p>
+	 *
+	 * <p><b>ADR Decision 102 declined DEBUG for the safety-finding shortfall (#439), and this is
+	 * the distinction rather than a departure.</b> It declined a SECOND channel — Decision 100
+	 * already appends every unstated order to the answer, so "a channel nobody needs is not worth
+	 * the bytes of PHI it writes". Here there is no first channel: both routes replace the
+	 * exception's message with a generic failure string, so an operator diagnosing a wrong
+	 * endpoint has nothing else at all. The choice is not "answer or log" but "log at DEBUG or
+	 * lose the diagnosis", and the level is what keeps it out of the default one.</p>
 	 */
 	private static void logErrorBody(int statusCode, String body) {
-		log.error("Remote LLM API returned HTTP {}; its response body is logged at DEBUG",
-				statusCode);
+		log.error("Remote LLM API returned HTTP {}; enable DEBUG on {} to see the body it sent",
+				statusCode, RemoteLlmEngine.class.getName());
 		log.debug("Remote LLM API HTTP {} body: {}", statusCode, truncateForLog(body));
 	}
 

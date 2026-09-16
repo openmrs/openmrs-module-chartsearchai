@@ -277,18 +277,66 @@ public final class LogCapture implements AutoCloseable {
 		return false;
 	}
 
-	/** @return every captured event rendered as {@code LEVEL message [thrown]}, for assertion
-	 *          failure text. The throwable's TYPE is included because a rule about whether a trace
-	 *          is attached (issue #247) is otherwise invisible in a failure message. */
+	/**
+	 * @return every captured event rendered as {@code LEVEL message [thrown TYPE: message …]}, for
+	 *         assertion failure text — and, since issue #439's fourth review round, as the whole of
+	 *         what a disclosure negative asserting "no captured line names X" actually sees.
+	 *
+	 *         <p>The throwable's TYPE is included because a rule about whether a trace is attached
+	 *         (issue #247) is otherwise invisible in a failure message. Its MESSAGE is included
+	 *         because log4j writes that to the log as well, so text attached to a diagnostic
+	 *         exception is a channel this rendering used to hide: with the type alone, a probe
+	 *         attaching each withheld chip's detail to the screening cap WARN put six of one
+	 *         patient's medication names in the log with all three of ADR Decision 102's negatives
+	 *         green (measured 2026-09-16). Causes and suppressed throwables are rendered for the
+	 *         same reason, being that channel one frame down. Stack FRAMES are not rendered, and no
+	 *         assertion anywhere reads this for them.
+	 *
+	 *         <p>Widening what this renders can only make an existing {@code assertFalse(…contains)}
+	 *         over it stricter, which is why the fix went here rather than into a second accessor the
+	 *         three negatives would each have had to remember to call.
+	 */
 	public List<String> describeAll() {
 		List<String> out = new ArrayList<String>();
 		synchronized (events) {
 			for (LogEvent event : events) {
 				out.add(event.getLevel() + " " + event.getMessage().getFormattedMessage()
-						+ (event.getThrown() == null ? "" : " [thrown " + event.getThrown().getClass().getName() + "]"));
+						+ describeThrown(event.getThrown()));
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * @return {@code thrown} and everything reachable from it by cause and suppression, each as its
+	 *         type and its message, or the empty string where there is no throwable. Identity-checked
+	 *         against what has already been rendered, because {@code getCause()} is free to return a
+	 *         throwable already on the walk.
+	 */
+	private static String describeThrown(Throwable thrown) {
+		if (thrown == null) {
+			return "";
+		}
+		StringBuilder rendered = new StringBuilder(" [thrown");
+		List<Throwable> seen = new ArrayList<Throwable>();
+		List<Throwable> pending = new ArrayList<Throwable>();
+		pending.add(thrown);
+		while (!pending.isEmpty()) {
+			Throwable next = pending.remove(0);
+			if (next == null || seen.contains(next)) {
+				continue;
+			}
+			seen.add(next);
+			rendered.append(' ').append(next.getClass().getName());
+			if (next.getMessage() != null) {
+				rendered.append(": ").append(next.getMessage());
+			}
+			pending.add(next.getCause());
+			for (Throwable suppressed : next.getSuppressed()) {
+				pending.add(suppressed);
+			}
+		}
+		return rendered.append(']').toString();
 	}
 
 	/**

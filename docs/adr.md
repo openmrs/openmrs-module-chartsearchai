@@ -7720,7 +7720,7 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 
 ## Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF
 
-**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no answer text, no reference list, no chip and no response key: one expression in the frame writer, and the test decoder that could not see the difference.
+**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no reference list, no chip and no response key: one expression in the frame writer, and the test decoders that could not see the difference. The only text it changes is the character it exists to change — a CR the model emitted now reaches the client as the line break SSE can carry, while `done`'s `answer` is JSON and keeps the CR itself, which README states because a client diffing the streamed text against the final answer would otherwise be surprised by one byte.
 
 **Context.** `ChartSearchAiRestController.writeSseEvent` frames every streamed event by splitting the
 payload and prefixing each piece with `data: `. It split on `\n` alone. The event-stream grammar ends
@@ -7729,10 +7729,11 @@ payload ended that `data:` line for the client while the writer believed it was 
 content, and the bytes after it became the client's next FIELD of the same event — `event:` renaming
 it, `data:` appending to it, `id:`/`retry:` setting stream state.
 
-**Why that byte reaches the framing at all.** Three of the five channels carry model output as raw
-text rather than JSON: `token`, `thinking`, `preliminary`. The other two are Jackson-encoded, which
-escapes a CR, and the clinician's question is scrubbed by `CONTROL_CHARS` — which deliberately
-excludes CR and LF and is applied only to the question, never to the response path. And model text is
+**Why that byte reaches the framing at all.** Three channels carry model output as raw text rather
+than JSON: `token`, `thinking`, `preliminary`. Every other event is written from something the module
+composed — Jackson-encoded on `references`, `done` and `grounded`, which escapes a CR, and a literal
+on `error`. The clinician's own input is scrubbed by `CONTROL_CHARS` — which deliberately excludes CR
+and LF, and is applied to the question and the feedback comment, never to the response path. And model text is
 attacker-influenced by design on two routes this module accepts: chart text any clinician can author
 reaches the prompt, and a remote OpenAI-compatible endpoint is an untrusted network peer. Both JSON
 spellings of the character, `\r` and the unicode escape, are legal under the strict `json_schema`
@@ -7758,14 +7759,30 @@ exactly one `done`: the genuine one. It splits its buffer on `'\n'` alone, so th
 line there. The probe was calibrated in both directions — told to expect the forged answer it failed,
 reporting `expected 'genuine' to be 'FORGED'` — and it was thrown away rather than committed to that
 repository. So this needed no client change. What was exposed is a client that ends a line at a lone
-CR — which the specification requires, and which this module's README and ONBOARDING both instruct a
-client author to do.
+CR, as the specification requires — a shape neither this module's README nor ONBOARDING had ever asked
+a client author for, and the reference client does not have. Both docs now state the server's side of
+it instead: every line it terminates, it terminates with LF, so an LF-only split and a conforming one
+see the same frames. The asymmetry is worth keeping in view, because it runs opposite to intuition:
+against a writer that regressed here, the LF-only client is the SAFE one — it renders the stray CR —
+and the conforming client is the exposed one, and no client can tell a forged field from a real one.
+Which is why this belongs at the writer and nowhere else.
 
 **Decision.** The framing splits at every terminator the grammar recognises, as one `Pattern`
 (`SSE_LINE_TERMINATORS`, CRLF first so it is consumed as one terminator). A CR in a payload therefore
 becomes a data-line break, which is the only thing SSE can carry: the format has no representation
 for a CR inside data at all, since a client assembles `data:` lines with LF. So the text survives as
 content — `event: done` stays a sentence — and the byte does not.
+
+**The cost was measured, because a regex on a per-token path invites the question.** Driving the real
+writer over a loopback socket: `Pattern.split` runs at about 12.6 ns per character against
+`String.split`'s single-char intrinsic at 0.25, and overtakes the `write` + `flush` beside it at around
+85 characters. End to end through `streamAnswer`, a 400-token response with reasoning, references and
+an eight-reference `done` cost **+131 µs** — against the 15.1 s baseline mean over fourteen cells that
+[Decision 85](#decision-85-an-answer-short-of-the-findings-its-prompt-carried-is-repaired-by-asking-again-not-by-another-wording)
+records for a local-engine answer, about 9 parts per million. An `indexOf` walk that keeps the
+intrinsic and still consumes CRLF as one terminator exists and was not taken: this line is the whole of
+a security control and reads as the rule it enforces. (Measured 2026-09-16, JDK 25, min of 3–5 reps,
+the comparison arm restored from the base commit rather than hand-edited.)
 
 **The alternative was to JSON-encode the three raw channels**, which the finding offers as defence in
 depth. Rejected as the primary fix: it changes the payload of `token`, `thinking` and `preliminary`
@@ -7776,16 +7793,22 @@ as a wire change with a client change beside it, and is not what a LOW-severity 
 force.
 
 **The suite could not see it, and that is the more useful half.** The test package read the wire
-through two readers and BOTH split on LF — the same mistake as the code they were checking — so every
-assertion about an event's type was an assertion about what the controller intended rather than what a
-client parses. `SseEvents`, the decoder every streaming test reads through, now decodes per the
+through two frame decoders and BOTH split on LF — the same mistake as the code they were checking — so
+every assertion about an event's type was an assertion about what the controller intended rather than
+what a client parses. (A third reader there, `countKeepAlives`, still splits on LF and stays that way
+deliberately: it asks whether a line OPENS with `:`, and the writer prefixes every payload line with
+`data: `, so no payload can produce a `:`-leading line under either writer. It is not asking a question
+about line boundaries.) `SseEvents`, the decoder every streaming test reads through, now decodes per the
 specification (terminator set, field parsing, one optional space dropped, `data:` assembled through
 the dispatch step, comments skipped). The second reader was the keep-alive test's private
 frame-well-formedness assertion, which it now owns as `SseEvents.assertEveryFrameIsWellFormed` and
 states over the lines a client splits: after the `event:` line, every line of a frame must be a
-`data:` line. That one assertion covers a keep-alive spliced in from outside and a terminator left
-inside a payload, and it does not care whether the forged field names an event — so it is also what
-covers `id:` and `retry:`, which change stream state and dispatch nothing.
+`data:` line. That one assertion covers a keep-alive spliced in from outside, and a terminator left
+inside a payload whose next line is not itself a `data:` line — which is every field a forgery needs,
+`event:`, `id:` and `retry:` alike, whether or not it names an event this module emits. It does not
+catch a payload that opens a further `data:` line of its own, which only appends to the same event's
+data, something the model can do with its own text anyway. Stated that way because it was first
+written as the universal, and the universal is false.
 
 Measured on the unfixed writer, with both readers spec-aware: the three channel cases fail on the
 frame structure and the fourth on the `token` event having been renamed to the payload's own event

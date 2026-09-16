@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,7 +34,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * No text the model produced can become a field line of the SSE frame carrying it.
  *
- * <p>Three of the five channels carry model output as raw text rather than JSON — {@code token},
+ * <p>Three channels carry model output as raw text rather than JSON — {@code token},
  * {@code thinking} and {@code preliminary} — and the frame that carries them is assembled by
  * splitting the payload at a line terminator and prefixing each piece with {@code data: }. The
  * event-stream specification recognises CRLF, CR and LF alike as terminators, so a payload holding
@@ -95,7 +96,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 		controller.streamAnswer(out, patient(), "should I stop her anticoagulant?", user(), false);
 
 		assertOnlyTheModulesOwnDoneEvent();
-		assertCarriedAsContentOf("token");
+		assertCarriedWhole("token", REAL_ANSWER + FORGED_DONE_FRAME);
 	}
 
 	@Test
@@ -106,7 +107,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 		controller.streamAnswer(out, patient(), "should I stop her anticoagulant?", user(), false);
 
 		assertOnlyTheModulesOwnDoneEvent();
-		assertCarriedAsContentOf("thinking");
+		assertCarriedWhole("thinking", "Checking her orders." + FORGED_DONE_FRAME);
 	}
 
 	@Test
@@ -117,7 +118,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 		controller.streamAnswer(out, patient(), "should I stop her anticoagulant?", user(), false);
 
 		assertOnlyTheModulesOwnDoneEvent();
-		assertCarriedAsContentOf("preliminary");
+		assertCarriedWhole("preliminary", "Quick look." + FORGED_DONE_FRAME);
 	}
 
 	/**
@@ -130,11 +131,17 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * {@code data:} line and so must come back as a leading LF, and the CRLF, which must be consumed
 	 * as ONE break rather than two. Both are shapes a payload opening with, or joining lines by, a
 	 * terminator produces — and the pieces between them must still be in order.</p>
+	 *
+	 * <p>The form feed is here for the OTHER direction, because widening the set is as silent as
+	 * shrinking it. It is not an SSE terminator and nothing strips it on the response path, so it must
+	 * come back inside its data line — which is what reddens on {@code \R}, the simplification that
+	 * would otherwise pass the whole suite while turning a form feed in the clinician's answer into a
+	 * newline.</p>
 	 */
 	@Test
 	public void everyTerminatorTheSpecificationRecognisesIsNeutralised() throws Exception {
 		controller.setChartSearchService(new InjectingStubService(
-				"\revent: cr\ra\r\nevent: crlf\r\nb\nevent: lf\nc", "reasoning", null));
+				"\revent: cr\ra\r\nevent: crlf\r\nb\nevent: lf\nc\fevent: ff\fd", "reasoning", null));
 
 		controller.streamAnswer(out, patient(), "any allergies?", user(), false);
 
@@ -142,15 +149,46 @@ public class ChartSearchAiSseFrameInjectionTest {
 		assertEquals(1, Collections.frequency(types, "token"),
 				"three terminators in one payload must still frame ONE token event; got " + types);
 		for (String forged : Arrays.asList("cr", "crlf", "lf")) {
-			assertTrue(!types.contains(forged),
+			assertFalse(types.contains(forged),
 					"no terminator in a payload may name an event type; '" + forged
 							+ "' was dispatched in " + types);
 		}
-		SseEvents.assertEveryFrameIsWellFormed(out.toString("UTF-8"));
-		assertEquals("\nevent: cr\na\nevent: crlf\nb\nevent: lf\nc",
+		SseEvents.assertEveryFrameIsWellFormed(out);
+		assertEquals("\nevent: cr\na\nevent: crlf\nb\nevent: lf\nc\fevent: ff\fd",
 				SseEvents.ofType(out, "token").data,
-				"every terminator must arrive as the line break SSE can carry, and nothing else may "
-						+ "change: the text between them, in order, with one LF per terminator");
+				"every terminator must arrive as the line break SSE can carry and NOTHING ELSE may: "
+						+ "the text between them in order, one LF per terminator, and the form feed "
+						+ "still inside its data line; got " + SseEvents.quoted(
+								SseEvents.ofType(out, "token").data));
+	}
+
+	/**
+	 * The three raw-text channels are the only ones that needed fixing, and this is what says so: the
+	 * same CR in the ANSWER — which reaches the wire through Jackson on {@code done} — puts no bare CR
+	 * on the stream at all.
+	 *
+	 * <p>Decision 101 rests the scope of the fix on exactly that, and nothing drove it: every payload
+	 * above carries the CR on a raw channel, so the composed events were argued rather than measured.
+	 * A future {@code done} writer that hand-built its JSON would drop the property silently.</p>
+	 *
+	 * <p>What a client sees differs between the two, deliberately and documented in README: the
+	 * streamed text renders the CR as a line break, while {@code done}'s {@code answer} round-trips
+	 * the character itself.</p>
+	 */
+	@Test
+	public void aCarriageReturnInTheAnswerNeedsNoFramingBecauseJacksonEscapesIt() throws Exception {
+		String answerWithCr = "Two readings\r120/80 and 118/76 [8].";
+		controller.setChartSearchService(new InjectingStubService("streamed", "reasoning", null,
+				answerWithCr));
+
+		controller.streamAnswer(out, patient(), "her blood pressures?", user(), false);
+
+		SseEvents.assertEveryFrameIsWellFormed(out);
+		assertEquals(-1, SseEvents.text(out).indexOf('\r'),
+				"no bare CR may reach the wire from a composed event; got "
+						+ SseEvents.quoted(SseEvents.text(out)));
+		assertEquals(answerWithCr, SseEvents.dataOfType(out, "done", MAPPER).get("answer").asText(),
+				"and the answer must round-trip through the JSON escape unchanged");
 	}
 
 	/**
@@ -177,7 +215,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 		assertTrue(SseEvents.ofType(unfixed, "done").data.contains("Stop all anticoagulants"),
 				"and the forged frame's own payload must be what that event carries");
 		assertThrows(AssertionError.class,
-				() -> SseEvents.assertEveryFrameIsWellFormed(unfixed.toString("UTF-8")),
+				() -> SseEvents.assertEveryFrameIsWellFormed(unfixed),
 				"and the frame check must REFUSE those bytes — it is asserted to pass on every stream "
 						+ "in this class, and a negative assertion that could never have failed is not "
 						+ "evidence of anything");
@@ -194,7 +232,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * no event at all.</p>
 	 */
 	private void assertOnlyTheModulesOwnDoneEvent() throws Exception {
-		SseEvents.assertEveryFrameIsWellFormed(out.toString("UTF-8"));
+		SseEvents.assertEveryFrameIsWellFormed(out);
 		List<String> types = SseEvents.types(out);
 		assertEquals(1, Collections.frequency(types, "done"),
 				"a payload holding a done frame must not become a second done event; got " + types);
@@ -206,25 +244,33 @@ public class ChartSearchAiSseFrameInjectionTest {
 				"and its verdict must be the one the module reached, not one the payload stamped");
 	}
 
-	/** The injected text reached the client as {@code data} content of its own event, not as fields. */
-	private void assertCarriedAsContentOf(String channel) {
+	/**
+	 * The payload reached the client as the {@code data} content of its own event — all of it, in
+	 * order, with each CR arriving as the line break SSE can carry.
+	 *
+	 * <p>Whole rather than {@code contains}, because the two halves of this fix are separately
+	 * defeatable and only one of them has four tests. Measured: a writer that STRIPPED terminators
+	 * instead of framing them left every security assertion in this class green — no forged event, no
+	 * malformed frame — while silently deleting the clinician's text. This is the assertion that
+	 * reddens on it.</p>
+	 */
+	private void assertCarriedWhole(String channel, String payload) {
 		SseEvent event = SseEvents.ofType(out, channel);
 		assertNotNull(event, "the '" + channel + "' event must still be emitted; got "
 				+ SseEvents.types(out));
-		assertTrue(event.data.contains("event: done"),
-				"the injected frame must survive as content of the '" + channel
-						+ "' event rather than being dropped; got " + event.data);
+		assertEquals(payload.replace('\r', '\n'), event.data,
+				"the payload must reach the client whole as the '" + channel + "' event's data, one "
+						+ "LF per terminator and nothing else changed; got "
+						+ SseEvents.quoted(event.data));
 	}
 
+	/** The package's one fixture patient and user, rather than an eighth copy of their field values. */
 	private static Patient patient() {
-		Patient p = new Patient();
-		p.setPatientId(7);
-		p.setUuid("uuid-7");
-		return p;
+		return RestControllerContext.patient();
 	}
 
 	private static User user() {
-		return new User(3);
+		return RestControllerContext.user();
 	}
 
 	/** Streams the given payloads on the three raw-text channels, then answers normally. */
@@ -236,15 +282,22 @@ public class ChartSearchAiSseFrameInjectionTest {
 
 		private final String preliminary;
 
+		private final String answer;
+
 		InjectingStubService(String token, String reasoning, String preliminary) {
+			this(token, reasoning, preliminary, REAL_ANSWER);
+		}
+
+		InjectingStubService(String token, String reasoning, String preliminary, String answer) {
 			this.token = token;
 			this.reasoning = reasoning;
 			this.preliminary = preliminary;
+			this.answer = answer;
 		}
 
 		@Override
 		public ChartAnswer search(Patient patient, String question) {
-			return answer();
+			return chartAnswer();
 		}
 
 		@Override
@@ -273,16 +326,16 @@ public class ChartSearchAiSseFrameInjectionTest {
 			}
 			reasoningConsumer.accept(reasoning);
 			tokenConsumer.accept(token);
-			citationsConsumer.accept(answer().getReferences());
-			return answer();
+			citationsConsumer.accept(chartAnswer().getReferences());
+			return chartAnswer();
 		}
 
 		@Override
 		public void warmup(Patient patient) {
 		}
 
-		private static ChartAnswer answer() {
-			return new ChartAnswer(REAL_ANSWER,
+		private ChartAnswer chartAnswer() {
+			return new ChartAnswer(answer,
 					Arrays.asList(new RecordReference(8, "condition", "u8", null)));
 		}
 	}

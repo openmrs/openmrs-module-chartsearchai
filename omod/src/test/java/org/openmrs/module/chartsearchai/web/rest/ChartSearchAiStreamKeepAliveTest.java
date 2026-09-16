@@ -18,7 +18,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
@@ -386,7 +385,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		}
 
 		String text() {
-			return new String(sink.toByteArray(), StandardCharsets.UTF_8);
+			return SseEvents.text(sink);
 		}
 	}
 
@@ -432,7 +431,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		}
 
 		String text() {
-			return new String(sink.toByteArray(), StandardCharsets.UTF_8);
+			return SseEvents.text(sink);
 		}
 	}
 
@@ -457,7 +456,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		}
 
 		String text() {
-			return new String(sink.toByteArray(), StandardCharsets.UTF_8);
+			return SseEvents.text(sink);
 		}
 	}
 
@@ -522,7 +521,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 
 		/** @return everything written to the stream so far, decoded. */
 		final String streamText() {
-			return new String(sink.toByteArray(), StandardCharsets.UTF_8);
+			return SseEvents.text(sink);
 		}
 
 		/**

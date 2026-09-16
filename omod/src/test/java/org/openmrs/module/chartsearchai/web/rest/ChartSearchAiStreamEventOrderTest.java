@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -138,7 +139,7 @@ public class ChartSearchAiStreamEventOrderTest {
 		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
 		List<String> types = eventTypes();
-		assertEquals(1, frequency(types, "done"), "exactly one done event; got " + types);
+		assertEquals(1, Collections.frequency(types, "done"), "exactly one done event; got " + types);
 		assertFalse(types.contains("grounded"),
 				"no grounded event when the answer was final at return; got " + types);
 		JsonNode done = MAPPER.readTree(eventOfType("done").data);
@@ -152,7 +153,7 @@ public class ChartSearchAiStreamEventOrderTest {
 
 		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
-		assertEquals(1, frequency(eventTypes(), "done"),
+		assertEquals(1, Collections.frequency(eventTypes(), "done"),
 				"async mode must not double-emit done; got " + eventTypes());
 	}
 
@@ -176,19 +177,9 @@ public class ChartSearchAiStreamEventOrderTest {
 
 		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
-		assertEquals(1, frequency(eventTypes(), "done"),
+		assertEquals(1, Collections.frequency(eventTypes(), "done"),
 				"a misbehaving double-fire must not double-emit done; got " + eventTypes());
-		assertEquals(1, frequency(eventTypes(), "grounded"));
-	}
-
-	private static int frequency(List<String> list, String value) {
-		int n = 0;
-		for (String s : list) {
-			if (s.equals(value)) {
-				n++;
-			}
-		}
-		return n;
+		assertEquals(1, Collections.frequency(eventTypes(), "grounded"));
 	}
 
 	private static ChartSearchService.ChartAnswer ungroundedAnswer() {

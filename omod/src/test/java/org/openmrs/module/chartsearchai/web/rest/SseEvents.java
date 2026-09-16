@@ -17,6 +17,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,6 +45,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>So when a test here asserts an event's type, it is asserting what a client PARSES, not what
  * the controller passed to {@code writeSseEvent} — which is the only form of that assertion worth
  * anything on a payload the model wrote.
+ *
+ * <p><b>It is not a general-purpose SSE client, and two deviations are named here so nobody reads it
+ * as one.</b> A frame with no {@code event:} field is dropped, where the specification dispatches it
+ * as {@code message}; and a typed frame with no {@code data:} line is dispatched, where the
+ * specification does not. Neither is reachable from the writer under test, which always emits an
+ * {@code event:} line and at least one {@code data:} line — so closing them would add branches no test
+ * could discriminate.
  */
 final class SseEvents {
 
@@ -60,88 +68,122 @@ final class SseEvents {
 	/** Every event written to {@code out} so far, in emission order. */
 	static List<SseEvent> parse(ByteArrayOutputStream out) {
 		List<SseEvent> events = new ArrayList<SseEvent>();
-		String type = null;
-		StringBuilder data = new StringBuilder();
-		for (String line : LINE_TERMINATORS.split(new String(out.toByteArray(), StandardCharsets.UTF_8), -1)) {
-			if (line.isEmpty()) {
-				// The dispatch line. An event with no "event:" field is untyped, which the
-				// controller never writes, so it is dropped rather than given a name here.
-				if (type != null) {
-					events.add(new SseEvent(type, dispatched(data)));
+		for (List<String> frame : frames(text(out))) {
+			String type = null;
+			StringBuilder data = new StringBuilder();
+			for (String line : frame) {
+				if (line.charAt(0) == ':') {
+					continue; // a comment — the keep-alive
 				}
-				type = null;
-				data.setLength(0);
-				continue;
+				int colon = line.indexOf(':');
+				String field = colon < 0 ? line : line.substring(0, colon);
+				String value = colon < 0 ? "" : line.substring(colon + 1);
+				if (value.startsWith(" ")) {
+					value = value.substring(1);
+				}
+				if ("event".equals(field)) {
+					type = value;
+				} else if ("data".equals(field)) {
+					data.append(value).append('\n');
+				}
 			}
-			if (line.charAt(0) == ':') {
-				continue; // a comment — the keep-alive
+			if (type != null) {
+				// A frame with no "event:" field is untyped, which the controller never writes, so it
+				// is dropped rather than given a name here.
+				events.add(new SseEvent(type, dispatched(data)));
 			}
-			int colon = line.indexOf(':');
-			String field = colon < 0 ? line : line.substring(0, colon);
-			String value = colon < 0 ? "" : line.substring(colon + 1);
-			if (value.startsWith(" ")) {
-				value = value.substring(1);
-			}
-			if ("event".equals(field)) {
-				type = value;
-			} else if ("data".equals(field)) {
-				data.append(value).append('\n');
-			}
-		}
-		if (type != null) {
-			events.add(new SseEvent(type, dispatched(data)));
 		}
 		return events;
 	}
 
 	/**
-	 * Asserts the whole stream decomposes into frames that are each either a lone keep-alive comment
-	 * or a well-formed event — a comment was never written into the middle of an event, and no field
-	 * line of a frame came from the model rather than from the writer.
+	 * The stream's frames, each as its own raw lines, split where a CLIENT splits them — and the one
+	 * place this package decides where a line and a frame end.
 	 *
-	 * <p>Both of those are the same assertion, and it is worth saying why they are one. The check is
-	 * "after the {@code event:} line, every line is a {@code data:} line", over the lines as a CLIENT
-	 * splits them — at CR, LF or CRLF. A keep-alive spliced into a frame breaks it from the outside; a
-	 * terminator left inside a payload breaks it from the inside, and until the writer split on the
-	 * whole terminator set this method could not see the second case, because it split on LF like the
-	 * writer did. So a failure here reads as a line that should have been data and is not, whichever
-	 * of the two put it there.</p>
+	 * <p>Both readers here need that decision, and need it identically: {@link #parse} reads the fields
+	 * out of a frame, {@link #assertEveryFrameIsWellFormed(String)} asks what KIND each line is. They
+	 * were written as two walkers, which is the state the class javadoc above records this package
+	 * having already paid for once — and the drift on offer was that one of them could be "simplified"
+	 * to a regex over the frame separator while the other went on walking.</p>
 	 *
-	 * <p>Frames are separated by a blank LINE, walked here rather than matched as a pair of
+	 * <p>Which is why the blank LINE ending a frame is walked rather than matched as a pair of
 	 * terminators: {@code (\r\n|\r|\n){2}} matches a single CRLF — first alternative, then
 	 * backtracking to {@code \r} and {@code \n} — so a regex for "two terminators" reports a frame
 	 * boundary in the middle of one ordinary line break.</p>
 	 */
-	static void assertEveryFrameIsWellFormed(String raw) {
+	private static List<List<String>> frames(String raw) {
+		List<List<String>> frames = new ArrayList<List<String>>();
 		List<String> frame = new ArrayList<String>();
 		for (String line : LINE_TERMINATORS.split(raw, -1)) {
 			if (line.isEmpty()) {
-				assertFrameIsWellFormed(frame);
-				frame.clear();
+				if (!frame.isEmpty()) {
+					frames.add(frame);
+					frame = new ArrayList<String>();
+				}
 				continue;
 			}
 			frame.add(line);
 		}
-		assertFrameIsWellFormed(frame);
+		if (!frame.isEmpty()) {
+			frames.add(frame); // a stream that ended without its terminating blank line
+		}
+		return frames;
 	}
 
-	private static void assertFrameIsWellFormed(List<String> lines) {
-		if (lines.isEmpty()) {
-			return;
+	/** The one UTF-8 decode of a captured stream in this package. */
+	static String text(ByteArrayOutputStream out) {
+		return new String(out.toByteArray(), StandardCharsets.UTF_8);
+	}
+
+	/**
+	 * Asserts the whole stream decomposes into frames that are each either a lone keep-alive comment
+	 * or a well-formed event: after the {@code event:} line, every line is a {@code data:} line, over
+	 * the lines as a CLIENT splits them — per {@link #frames}.
+	 *
+	 * <p>One assertion, two ways to break it. A keep-alive spliced into a frame breaks it from the
+	 * outside; a line terminator left inside a payload breaks it from the inside, and until the writer
+	 * split on the whole terminator set this method could not see the second case, because it split on
+	 * LF like the writer did.</p>
+	 *
+	 * <p><b>It catches a payload terminator whose next line is not itself {@code data:}</b>, which is
+	 * every field a forgery needs — {@code event:}, {@code id:}, {@code retry:} — and not a payload
+	 * that opens a further {@code data:} line of its own, which only appends to the same event's data,
+	 * something the model can do with its own text anyway. Measured: {@code data: real<CR>data: more}
+	 * passes here, and the claim is stated this way because it was first written as the universal and
+	 * that universal is false.</p>
+	 */
+	static void assertEveryFrameIsWellFormed(ByteArrayOutputStream out) {
+		assertEveryFrameIsWellFormed(text(out));
+	}
+
+	/**
+	 * As {@link #assertEveryFrameIsWellFormed(ByteArrayOutputStream)}, for a caller holding a stream
+	 * that is already decoded.
+	 */
+	static void assertEveryFrameIsWellFormed(String raw) {
+		for (List<String> frame : frames(raw)) {
+			assertFrameIsWellFormed(frame);
 		}
-		String frame = String.join("\n", lines);
+	}
+
+	/**
+	 * One frame, which {@link #frames} guarantees is non-empty. Every message is a {@code Supplier},
+	 * because the eager form rendered and quoted the whole frame once per LINE of it.
+	 */
+	private static void assertFrameIsWellFormed(List<String> lines) {
+		Supplier<String> frame = () -> "got " + quoted(String.join("\n", lines));
 		if (lines.get(0).startsWith(":")) {
 			assertEquals(1, lines.size(),
-					"a keep-alive frame must stand alone; got " + quoted(frame));
+					() -> "a keep-alive frame must stand alone; " + frame.get());
 			return;
 		}
 		assertTrue(lines.get(0).startsWith("event: "),
-				"a frame must open with its event line; got " + quoted(frame));
+				() -> "a frame must open with its event line; " + frame.get());
 		for (int i = 1; i < lines.size(); i++) {
 			assertTrue(lines.get(i).startsWith("data: "),
-					"every later line of an event frame must be data — a keep-alive spliced into "
+					() -> "every later line of an event frame must be data — a keep-alive spliced into "
 							+ "this event, or a line terminator left inside a payload, would show up "
-							+ "here, splitting it in two for every client; got " + quoted(frame));
+							+ "here, splitting it in two for every client; " + frame.get());
 		}
 	}
 
@@ -157,10 +199,13 @@ final class SseEvents {
 	/**
 	 * The data buffer as a client would hand it to the page: each {@code data:} line appended with a
 	 * trailing LF and the last LF then removed, which is what the specification's dispatch step does.
+	 * Equivalently {@code String.join("\n", values)} — written over the buffer {@link #parse} already
+	 * accumulates into, not because the two differ.
 	 *
-	 * <p>Appending the LF per line rather than joining is the difference that shows on an EMPTY first
-	 * data line — the very shape a payload opening with a line terminator produces — where joining
-	 * loses the leading break a client keeps.</p>
+	 * <p>What DOES differ, and is the reason this is its own method, is the formulation it replaced:
+	 * appending a separator only when the buffer is already non-empty. That drops the leading break on
+	 * an EMPTY first data line — the very shape a payload opening with a line terminator produces —
+	 * and a client keeps it. Measured over both, they agree on every case except that one.</p>
 	 */
 	private static String dispatched(StringBuilder data) {
 		if (data.length() > 0 && data.charAt(data.length() - 1) == '\n') {

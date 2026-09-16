@@ -60,8 +60,10 @@ run that does not say which arrangement it used is not interpretable.
 
 **Confirm the injection from the server log, not from the citation.** An uncited record is
 not an unrejected one, and the two are indistinguishable on the wire. The reconciliation
-WARN ("Active-order reconciliation: N of M ... Unrepresented: [[ATC ...]") is the evidence
-that the record reached the prompt at all.
+WARN ("Active-order reconciliation: N of M ... Unrepresented order(s): [<order uuid>]") is
+the evidence that the record reached the prompt at all. It names the order by uuid since
+ADR Decision 102 (a drug name in that line was PHI), so the uuid to look for is the
+`ORDER_UUID` this script already takes.
 
 Usage:
     BASE=http://localhost:8082/openmrs/ws/rest/v1 OMRS_USER=admin OMRS_PASS=... \

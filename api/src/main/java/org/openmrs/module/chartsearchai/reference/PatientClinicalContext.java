@@ -1239,6 +1239,28 @@ public class PatientClinicalContext {
 			return false;
 		}
 
+		/**
+		 * The uuids of {@code orders}, in order — the identifier a LOG line may carry about a
+		 * patient's active orders, and the one a maintainer acts on.
+		 *
+		 * <p><b>Why a named method rather than the list itself.</b> {@link #toString()} renders an
+		 * order as its DISPLAY name beside the uuid — right for a debugger and for an assertion
+		 * message, wrong for the server log, where a name says what the patient is prescribed to a
+		 * reader holding no chart privilege. Passing the orders straight to {@code log.warn} is what
+		 * wrote them there (issue #439) and nothing at the call site said so, so the log-safe
+		 * rendering is spelled here, beside the one it must not use. → ADR Decision 102.
+		 */
+		public static List<String> uuidsOf(Collection<ActiveDrugOrder> orders) {
+			List<String> uuids = new ArrayList<String>();
+			if (orders == null) {
+				return uuids;
+			}
+			for (ActiveDrugOrder order : orders) {
+				uuids.add(order == null ? null : order.getUuid());
+			}
+			return uuids;
+		}
+
 		@Override
 		public String toString() {
 			return display + " [" + uuid + "]";

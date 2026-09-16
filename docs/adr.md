@@ -7717,3 +7717,72 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 
 → `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` and
 `.anAnswerNamingEveryOrderIsReturnedByteForByte`.
+
+## Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#439](https://github.com/openmrs/openmrs-module-chartsearchai/issues/439), a security-scan finding
+(CWE-532, severity LOW). It changes no prompt, no chip, no response key and no wire format: two
+`log.warn` lines, and a named rendering beside the `toString` that made one of them easy to write. Decision 101 is the streaming-frame fix and is numbered on its own branch; the gap closes when
+that lands.
+
+**Context.** Decision 100's shortfall report logged the list it had just computed:
+
+```
+Answer for patient=1 stated 0 of 3 active order(s) its safety finding(s) name; the module named the
+rest itself (ADR Decision 100): [methylprednisolone, prednisone, heparin].
+```
+
+— produced by the real pipeline in
+`FindingPartnerLogDisclosureTest.noLogLineNamesAnOrderTheFindingsCover` before the fix. The comment
+above the line justified it: the partner names are "this module's own reference vocabulary, not the
+patient's data". **The vocabulary is the module's; the SELECTION is the patient's.** An interaction
+chip is raised only for a partner this patient has an active order for, and
+`reconciledPartnerFor` may label it with that order's own display name, so the list is a subset of
+that patient's current medications on a line that carries their id.
+
+**Why the level is part of the finding.** Core ships `org.openmrs` at WARN, so this line reached the
+default server log and whatever log shipping a deployment configures with no deployment opting in to
+it — unlike the module's DEBUG diagnostics, which an administrator has to enable. A log reader — host operations staff, a
+log-aggregation system and its operators, the holder of a server-log view — is a wider audience than
+the clinicians holding *AI Query Patient Data*. The project already keeps that boundary and states it
+at each site: `ClassCodeFidelityCheck`, `ActiveOrderCitationFidelityCheck` and
+`SafetyFindingSeverityFidelityCheck` each say that the answer and the record text "carry patient
+data" and log the patient id beside indexes, counts and closed vocabulary only. This check was the
+one that did not.
+
+**Decision.** The WARN states the two counts and the patient, and no name. Nothing is lost by it,
+which is the reason this needed no second channel: Decision 100 has the module APPEND every unstated
+order to the ANSWER, so the reader who holds the privilege already receives the names, and
+`findingPartners` publishes the same two numbers the log now carries — so a maintainer triaging a
+shortfall reads the same `stated`/`named` in both places. The finding's own alternative, the names at
+DEBUG, was not taken: a channel nobody needs is not worth the bytes of PHI it writes.
+
+**A second site, and it is the one worth remembering.** Sweeping every `log.warn`/`log.info` in
+`api.impl` and `reference` for a name-shaped argument found `DrugReferenceInjector.unrepresentedActiveOrders`
+doing the same thing by accident. It logs the `ActiveDrugOrder` list itself, and that type's
+`toString()` is `display + " [" + uuid + "]"`:
+
+```
+Active-order reconciliation: 1 of 1 active drug order(s) have no drug-order record in the retrieved
+chart … Unrepresented: [Simvastatin Co 20mg [11111111-2222-3333-4444-555555555555]]
+```
+
+— produced by the real injector in
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
+before the fix. Nothing at the call site said a name was being written; the rendering decided it.
+That line now goes through `PatientClinicalContext.ActiveDrugOrder.uuidsOf`, a named method whose
+javadoc sits beside the `toString` it exists to not be — and the uuid was the better identifier for
+this line all along, since it exists to point an operator at a querystore index that is behind, and
+querystore indexes the drug-order document under exactly that uuid.
+
+**What the sweep deliberately did not change.** The sibling checks log ATC codes — the ones the
+answer states and the ones its cited records state — beside the patient id, on their own stated
+reasoning that the code with the patient is what identifies the claim being triaged. Whether a class
+code beside a patient id is a disclosure of the same kind is a question this decision does not
+settle; it is not what #439 reported, and the answer would be the same for every one of those sites
+rather than a change to one.
+
+→ `FindingPartnerLogDisclosureTest` (the counts survive, the names do not, and they reach the
+clinician instead — on both `search` and `searchStreaming`) and
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`.

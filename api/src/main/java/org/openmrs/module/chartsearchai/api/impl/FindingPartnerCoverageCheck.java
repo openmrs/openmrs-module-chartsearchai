@@ -112,7 +112,8 @@ public final class FindingPartnerCoverageCheck {
 	}
 
 	/**
-	 * @param patient whose identifier the WARN names, never the answer or the record text
+	 * @param patient whose identifier the WARN names — never the answer, the record text, or the
+	 *        name of an order the findings cover (issue #439)
 	 * @param answer the model's answer; blank states no measurement, since an answer that does not
 	 *        exist has not omitted anything
 	 * @param warnings the chips this pass raised
@@ -130,15 +131,11 @@ public final class FindingPartnerCoverageCheck {
 			String haystack = answer.toLowerCase(Locale.ROOT);
 			int named = 0;
 			int stated = 0;
-			List<String> unstated = new ArrayList<String>();
 			for (SafetyWarning warning : warnings) {
 				for (String partner : warning.namedPartners()) {
 					named++;
 					if (haystack.contains(partner.toLowerCase(Locale.ROOT))) {
 						stated++;
-					}
-					else {
-						unstated.add(partner);
 					}
 				}
 			}
@@ -147,12 +144,15 @@ public final class FindingPartnerCoverageCheck {
 				// Absence of the population and not a measurement of none — see FindingPartnerCoverage.
 				return null;
 			}
-			if (!unstated.isEmpty()) {
-				// The partner NAMES are this module's own reference vocabulary, not the patient's data,
-				// so they may be logged; the answer and the record text may not.
+			if (stated < named) {
+				// The two COUNTS and the patient, never a name — the rule its siblings state at their
+				// own WARNs, and this line broke it (issue #439). A partner is named here only because
+				// this patient is prescribed it, so a list of them is that patient's medication list on
+				// a line carrying their id, and core ships org.openmrs at WARN. The names reach the
+				// clinician instead: ADR Decision 100 appends them to the ANSWER. → ADR Decision 102.
 				log.warn("Answer for patient={} stated {} of {} active order(s) its safety finding(s) "
-							+ "name; the module named the rest itself (ADR Decision 100): {}.",
-						patientId, Integer.valueOf(stated), Integer.valueOf(named), unstated);
+							+ "name; the module named the rest itself (ADR Decision 100).",
+						patientId, Integer.valueOf(stated), Integer.valueOf(named));
 			}
 			return new FindingPartnerCoverage(named, stated);
 		}

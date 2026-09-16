@@ -820,6 +820,12 @@ public final class DrugReferenceTestSupport {
 	static final String DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE =
 			"chartsearchai-test/ddi-alias-names-another-substance.json";
 
+	/** A verbatim shipped-KB slice: ONE subject whose partners include two the data files under the
+	 *  SAME mechanism group and one it files under another — the slice ADR Decision 99's collapse and
+	 *  ADR Decision 102's log rule are both measured on; see the fixture's own note. */
+	static final String DDI_SHARED_MECHANISM_PARTNERS =
+			"chartsearchai-test/ddi-shared-mechanism-partners.json";
+
 	/** Three nitroimidazoles, curated ({@link JsonDrugReferenceSource}) rather than DDInter-shaped: the
 	 *  class arm's co-medication GROUPING slice, where one order's codes are covered only in part
 	 *  (issue #186) and the same order shapes are asked of the name rung (issue #228). */
@@ -876,6 +882,11 @@ public final class DrugReferenceTestSupport {
 			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
 			+ " — any interactions?";
 
+	/** The question {@link #sharedMechanismInteractionChips} raises its chips for. Public and shared
+	 *  because a caller driving the whole inference path over those chips has to ask the same
+	 *  question they were raised for, or the answer it arranges is about something else. */
+	public static final String SHARED_MECHANISM_QUESTION = "Is aspirin safe for her?";
+
 	/**
 	 * The six-order chart the SCREENING arm is measured on: six real excerpt drugs the data relates
 	 * <b>15</b> ways, exactly 10 of them Major, so a cap and the severity ordering are both
@@ -890,6 +901,49 @@ public final class DrugReferenceTestSupport {
 						"Amiodarone"),
 				set("C10AA01", "B01AA03", "J01MA02", "J01FA09", "J02AC01", "C01BD01"),
 				null, null);
+	}
+
+	/**
+	 * The REAL interaction chips a shared mechanism raises over {@link #DDI_SHARED_MECHANISM_PARTNERS}:
+	 * one MERGED chip naming two of this patient's three active orders (ADR Decision 99) and one
+	 * naming the third.
+	 *
+	 * <p>Shared for the reason {@link #screenedSixOrderChart} is. {@code SharedMechanismChipCollapseTest}
+	 * asks what the collapse produced; {@code FindingPartnerLogDisclosureTest} feeds the same chips
+	 * through the real {@code LlmInferenceService} to ask what reaches the log (ADR Decision 102). Two
+	 * copies of the arrangement would make the second file's claim one about an arrangement of its own.
+	 *
+	 * @param sink the pair-extent accumulator production supplies per call — a caller that does not
+	 *        read it passes a fresh one
+	 */
+	public static List<SafetyWarning> sharedMechanismInteractionChips(PairChipExtent.Sink sink)
+			throws IOException {
+		PatientClinicalContext context = ctx(60, null,
+				set("Prednisone 5mg", "Methylprednisolone 4mg", "Heparin 5000 units"), null, null, null);
+		List<SafetyWarning> warnings = validator(serviceWith(ddiFixtureEntries(DDI_SHARED_MECHANISM_PARTNERS)))
+				.validate("", SHARED_MECHANISM_QUESTION, context, null, null, sink);
+		List<SafetyWarning> interactions = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
+				interactions.add(warning);
+			}
+		}
+		return interactions;
+	}
+
+	/** Every active order {@code warnings} name, each once — {@link SafetyWarning#namedPartners()} over
+	 *  a whole response, which is the population {@code FindingPartnerCoverageCheck} measures the
+	 *  answer against. */
+	public static List<String> namedPartners(List<SafetyWarning> warnings) {
+		List<String> partners = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			for (String partner : warning.namedPartners()) {
+				if (!partners.contains(partner)) {
+					partners.add(partner);
+				}
+			}
+		}
+		return partners;
 	}
 
 	private DrugReferenceTestSupport() {

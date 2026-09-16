@@ -225,5 +225,65 @@ check('isHealthy is false for any problem', gate.isHealthy([]) === true && gate.
   check('every read gets a DISTINCT url, including the same path twice', new Set(seen).size === seen.length, seen.join(' '));
 }
 
+
+// ---- fixtures that match the real artifacts, not tidied versions of them --------------------
+{
+  // `git rev-parse HEAD >` writes a trailing newline: the artifact is 41 bytes, not 40. Every
+  // other case here passes a bare 40-char body, so dropping the .trim() would fail every healthy
+  // deploy with this suite green.
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(`${SHA}\n`) },
+    entryHead(),
+  );
+  check('the real 41-byte stamp (trailing newline) passes', problems.length === 0, problems.join('; '));
+}
+{
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(`${SHA}a`) },
+    entryHead(),
+  );
+  check('41 hex characters is not a sha', has(problems, 'did not return a commit sha'), problems.join('; '));
+}
+{
+  // The entry side of the provenance comparison, which no case covered: only the stamp's
+  // Last-Modified was ever nulled, so skipping on a headerless ENTRY stayed green.
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA) },
+    entryHead({ lastModified: null }),
+  );
+  check('an entry served without Last-Modified fails', has(problems, 'cannot compare build provenance'), problems.join('; '));
+}
+{
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA) },
+    entryHead({ status: 0, lastModified: null, error: 'net::ERR_FAILED' }),
+  );
+  check('a status-0 entry reads as unreadable', has(problems, 'could not be read at all'), problems.join('; '));
+}
+{
+  // An SPA-fallback stamp must not also fabricate a provenance verdict against index.html's mtime.
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res('<!doctype html>', 'Tue, 15 Sep 2026 21:01:32 GMT') },
+    entryHead({ lastModified: 'Tue, 15 Sep 2026 10:05:20 GMT' }),
+  );
+  check(
+    'a non-sha stamp reports only that, not a fabricated pre-dating',
+    has(problems, 'did not return a commit sha') && !has(problems, 'pre-dates'),
+    problems.join(' | '),
+  );
+}
+{
+  // Through probe specifically, reading ONE path twice — the earlier distinctness case used two
+  // different paths there, so a constant buster survived in probe while dying in readHead.
+  const seen = [];
+  globalThis.fetch = async (u) => {
+    seen.push(u);
+    return { status: 200, text: async () => SHA, headers: { get: () => null } };
+  };
+  await gate.probe(page, { a: '/openmrs/spa/same.js' });
+  await gate.probe(page, { a: '/openmrs/spa/same.js' });
+  check('probe never fetches one path at the same URL twice', new Set(seen).size === seen.length, seen.join(' '));
+}
+
 console.log(failed === 0 ? '\nall gate self-tests passed' : `\n${failed} gate self-test(s) FAILED`);
 process.exit(failed === 0 ? 0 : 1);

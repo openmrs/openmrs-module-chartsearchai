@@ -67,10 +67,24 @@ const ESM_SHA = '/openmrs/spa/chartsearchai-esm.sha';
 const EXPECTED_SHA = (process.env.ESM_EXPECTED_SHA || '').trim();
 
 // Overridable so the gate can be exercised without waiting out the full poll.
-const ATTEMPTS = Number(process.env.GATE_ATTEMPTS || 10);
-const DELAY_MS = Number(process.env.GATE_DELAY_MS || 30_000);
-const CHALLENGE_MS = Number(process.env.GATE_CHALLENGE_MS || 60_000);
-const POLL_MS = Number(process.env.GATE_POLL_MS || 2_000);
+// Validated, not merely parsed: `Number('soon')` is NaN, and a NaN deadline makes
+// `Date.now() > deadline` false forever — the read loop then spins until the job's own timeout
+// and surfaces as a CANCELLED run rather than a red gate. Four such names were added by the
+// commit that removed the GATE_SELFTEST kill switch; this is the same family.
+const positiveNumber = (name, fallback) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    console.error(`${name}=${JSON.stringify(raw)} is not a positive number; using ${fallback}`);
+    return fallback;
+  }
+  return n;
+};
+const ATTEMPTS = positiveNumber('GATE_ATTEMPTS', 10);
+const DELAY_MS = positiveNumber('GATE_DELAY_MS', 30_000);
+const CHALLENGE_MS = positiveNumber('GATE_CHALLENGE_MS', 60_000);
+const POLL_MS = positiveNumber('GATE_POLL_MS', 2_000);
 
 // Every read gets a unique URL, and UNIQUENESS is the point rather than mere presence: a
 // constant buster is one URL an edge can cache forever, which is the failure the busting exists
@@ -108,8 +122,9 @@ async function probe(page, paths) {
         // Cloudflare caches — an origin `Cache-Control` or a cache-everything rule reaches the
         // stamp too, and an edge-stale stamp reads OLDER than it is, which flips the provenance
         // comparison to a false GREEN on exactly the failure this gate exists for.
-        const bust = `${path}${path.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
         for (;;) {
+          // Per ATTEMPT, not per read: a challenged read used to re-fetch one identical URL.
+          const bust = `${path}${path.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
           try {
             const r = await fetch(bust, { cache: 'no-store' });
             if (r.status !== 403 || Date.now() > deadline) {
@@ -245,7 +260,8 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     );
   } else {
     const served = esmSha.body.trim();
-    if (!/^[0-9a-f]{40}$/.test(served)) {
+    const looksLikeSha = /^[0-9a-f]{40}$/.test(served);
+    if (!looksLikeSha) {
       // Not a redundant belt to the status check above: an SPA `try_files` fallback answers a
       // MISSING file with index.html and HTTP 200, so an image built before this stamp existed
       // shows up here rather than as a 404. Either way it means the same thing.
@@ -263,6 +279,11 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
 
     // Is the entry the importmap names from THIS build?
     //
+    // Guarded on the stamp being a real sha: without that, an SPA-fallback stamp (index.html,
+    // HTTP 200) produced BOTH "did not return a commit sha" and a fabricated "the entry
+    // pre-dates this build's stamp" computed against index.html's mtime — and the epilogue then
+    // routed the reader to the build-mixing paragraph for a failure that was not happening.
+    //
     // Not an equality test on Last-Modified, which would fail every healthy deploy: the stamp is
     // written by `git rev-parse` in the ESM stage, before `yarn build`, and `COPY --from`
     // preserves that mtime — so it is minutes OLDER than anything `openmrs assemble` wrote. What
@@ -279,7 +300,7 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     // Replayed against 2026-09-15's real values — an entry at Tue 15 Sep 10:05:20 GMT against a
     // stamp from the build that assembled at 21:01:32 (the stamp's own mtime is earlier still,
     // being the `git rev-parse` time) — this reports the entry as pre-dating the build.
-    if (entryHead && entryHead.status === 200) {
+    if (looksLikeSha && entryHead && entryHead.status === 200) {
       const entryAt = Date.parse(entryHead.lastModified ?? '');
       const stampAt = Date.parse(esmSha.lastModified ?? '');
       if (!Number.isFinite(entryAt) || !Number.isFinite(stampAt)) {
@@ -346,17 +367,41 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
 // The condition is ENTRY-POINT IDENTITY, deliberately, and not an environment variable. It was
 // `if (process.env.GATE_SELFTEST)` for one commit, which made any non-empty value — '1', '0',
 // 'false' — turn the gate into a no-op that printed nothing and exited 0. The name was invited
-// into workflow scope by this file's own usage line and by deploy.yml's comment, and a repo or
-// org variable of that name would have done the same: a script whose whole purpose is to stop a
-// confident green being trusted would have shipped one behind an env var. Importing this file is
-// inert; RUNNING it can never be.
+// into workflow scope by this file's own usage line and by deploy.yml's comment. (Not by a repo
+// or org variable, which reach a step only through `${{ vars.X }}` and are never injected into
+// the environment — the vector was a workflow- or job-level `env:`.) A script whose whole purpose
+// is to stop a confident green being trusted would have shipped one behind an env var.
 /** The gate's verdict. Named and exported so a test can pin it; see problemsWith. */
 export const isHealthy = (problems) => problems.length === 0;
 
 export { entryUrlFrom, problemsWith, probe, readHead };
 
+// realpathSync, because `import.meta.url` is realpath-resolved by the loader while `process.argv[1]`
+// is only path-resolved: any symlink appearing literally in the invocation path made these differ,
+// and the gate then exited 0 having printed nothing. Reproduced three ways — the script symlinked,
+// a symlinked PARENT directory, and `/tmp` on macOS — which is the same silent green the
+// GATE_SELFTEST guard was removed for, reintroduced by its replacement.
+//
+// And the line printed on the other branch closes the CLASS rather than this instance: whatever
+// makes this test false in future, a run that decides not to run says so.
 const { pathToFileURL } = await import('node:url');
-const invokedDirectly = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
+const { realpathSync } = await import('node:fs');
+const entryHref = (() => {
+  if (!process.argv[1]) return null;
+  try {
+    return pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return pathToFileURL(process.argv[1]).href;
+  }
+})();
+const invokedDirectly = entryHref !== null && import.meta.url === entryHref;
+
+if (!invokedDirectly) {
+  console.error(
+    `assert-spa-serves-chartsearchai: imported, NOT run (entry ${entryHref ?? 'unknown'}). ` +
+      'If you expected the gate to run, this is the bug.',
+  );
+}
 
 if (invokedDirectly) {
 const { chromium } = await import('playwright');

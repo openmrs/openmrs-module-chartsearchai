@@ -390,6 +390,67 @@ public class ChartSearchAiStreamingTest {
 	}
 
 	/**
+	 * One writer of SSE frames in this module's production code, and it is {@code writeSseEvent}.
+	 *
+	 * <p>ADR Decision 101 rests a security fix on "one expression in the frame writer": the payload is
+	 * split at every line terminator the event-stream grammar recognises, so no model-written text can
+	 * begin a field line. That property belongs to the writer, not to the endpoint —
+	 * {@code ChartSearchAiSseFrameInjectionTest} drives {@code streamAnswer} and would say nothing
+	 * about a second writer somewhere else, and neither would any client, since a conforming one cannot
+	 * tell a forged field from a real one.</p>
+	 *
+	 * <p>So this asserts the shape rather than the behaviour: the literal a data line opens with occurs
+	 * ONCE in this module's production sources. The scan FAILS on an empty discovery, because a walk
+	 * that found nothing would pass this check for the wrong reason — which is how a source guard goes
+	 * quiet.</p>
+	 *
+	 * <p><b>Residue, named rather than left to be discovered.</b> A writer that builds the prefix some
+	 * other way — {@code "data" + ": "}, a character append, a constant elsewhere — is invisible here,
+	 * and no list of those spellings would be closed. The same literal in {@code api/src/main} is
+	 * deliberately out of scope: {@code LlmResponseParser} READS it, parsing the inference endpoint's
+	 * own stream, which is the opposite direction and correct.</p>
+	 */
+	@Test
+	public void theFrameWriterIsTheOnlyPlaceAProductionDataLineIsWritten() throws Exception {
+		// Walked up to the named root rather than by a count of parents: a count is a claim about the
+		// package depth that a moved class breaks silently, and this one did while being written.
+		java.nio.file.Path wanted = java.nio.file.Paths.get("omod", "src", "main", "java");
+		java.nio.file.Path root = resolveSourceFile().toPath();
+		while (root != null && !root.endsWith(wanted)) {
+			root = root.getParent();
+		}
+		assertNotNull(root, "the scan must start at this module's production source root, and no "
+				+ "ancestor of " + resolveSourceFile() + " is " + wanted);
+
+		java.util.List<String> scanned = new java.util.ArrayList<String>();
+		java.util.List<String> writers = new java.util.ArrayList<String>();
+		try (java.util.stream.Stream<java.nio.file.Path> tree = java.nio.file.Files.walk(root)) {
+			for (java.nio.file.Path file : (Iterable<java.nio.file.Path>) tree
+					.filter(f -> f.toString().endsWith(".java"))::iterator) {
+				scanned.add(file.getFileName().toString());
+				String text = new String(java.nio.file.Files.readAllBytes(file),
+						java.nio.charset.StandardCharsets.UTF_8);
+				int occurrences = 0;
+				for (int at = text.indexOf("\"data: \""); at >= 0; at = text.indexOf("\"data: \"", at + 1)) {
+					occurrences++;
+				}
+				if (occurrences > 0) {
+					writers.add(file.getFileName() + " x" + occurrences);
+				}
+			}
+		}
+
+		assertTrue(scanned.contains("ChartSearchAiRestController.java"),
+				"the walk must have reached the controller, or this guard passed having read nothing; "
+						+ "scanned " + scanned);
+		assertEquals(java.util.Collections.singletonList("ChartSearchAiRestController.java x1"), writers,
+				"a data line may be written in exactly one place, because that is where the payload is "
+						+ "split at every terminator a client honours — ADR Decision 101. A second "
+						+ "writer, or a second occurrence in this one, reddens here and is invisible to "
+						+ "every behavioural test in the package; got " + writers);
+	}
+
+	/**
 	 * Reads the controller's production source as UTF-8.
 	 *
 	 * <p>One reader for every source-scanning test that reads this controller — the ones in this

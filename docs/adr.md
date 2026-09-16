@@ -7720,7 +7720,7 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 
 ## Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF
 
-**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no reference list, no chip and no response key: one expression in the frame writer, and the test decoders that could not see the difference. The only text it changes is the character it exists to change — a CR the model emitted now reaches the client as the line break SSE can carry, while `done`'s `answer` is JSON and keeps the CR itself, which README states because a client diffing the streamed text against the final answer would otherwise be surprised by one byte.
+**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no reference list, no chip and no response key: one expression in the frame writer, and the test decoders that could not see the difference. What it changes in the streamed text is exactly the model's own line terminators, and in two cases rather than one: a CR arrives as one LF, and a CRLF as a single LF — so the streamed text can be SHORTER than the answer the model wrote. `done`'s `answer` is JSON and keeps both verbatim, as do `/search` and the audit row, which README now states: a client diffing the streamed text against the final answer cannot normalise its way to a match. **Measured, and it is a divergence this fix introduces**: against the pre-fix writer an LF-only client — which is every client this project ships — saw a CRLF answer's streamed text match `done.answer` byte for byte, and now does not.
 
 **Context.** `ChartSearchAiRestController.writeSseEvent` frames every streamed event by splitting the
 payload and prefixing each piece with `data: `. It split on `\n` alone. The event-stream grammar ends
@@ -7739,6 +7739,11 @@ reaches the prompt, and a remote OpenAI-compatible endpoint is an untrusted netw
 spellings of the character, `\r` and the unicode escape, are legal under the strict `json_schema`
 response format and are decoded to a literal CR by `LlmProvider.AnswerExtractingConsumer` — which is
 correct, and pinned, because it mirrors Jackson on the non-streaming path.
+
+The asymmetry is worth naming: this module is an SSE CLIENT too, of the inference endpoint, and that
+side was never the LF-only shape — `LlmResponseParser.parseStreamingResponse` reads the upstream stream
+with `BufferedReader.readLine()`, which ends a line at CR, LF and CRLF alike. Only the writer disagreed
+with the grammar.
 
 **What it bought.** A whole forged frame. A payload of `<CR>event: done<CR>data: {…}` was delivered to
 a conforming client as a `done` event carrying attacker-chosen JSON: an answer contradicting the real
@@ -7816,5 +7821,14 @@ name. A fifth case is the known-bad control — the pre-fix bytes, hand-framed, 
 SEES the forgery in them — because a reader narrowed back to LF-only would leave the other four green
 on a stream carrying a forged frame, which is a green suite reporting this fixed.
 
-→ `ChartSearchAiSseFrameInjectionTest`, and `LlmProviderTest`'s two escape-decoding tests for the
-route the CR arrives on.
+**And "one expression in the frame writer" is now a pinned claim rather than a description.** Every
+behavioural test here drives the endpoint, so a SECOND writer elsewhere in the module would redden
+nothing, and no client could tell — a conforming one cannot distinguish a forged field from a real one.
+`ChartSearchAiStreamingTest.theFrameWriterIsTheOnlyPlaceAProductionDataLineIsWritten` asserts the shape
+instead: the literal a data line opens with occurs once in this module's production sources, on a walk
+that fails rather than passes when it finds nothing. Its residue is named where it lives — a prefix
+built some other way is invisible to it, and the same literal in `api/src/main` is the inbound reader,
+deliberately out of scope.
+
+→ `ChartSearchAiSseFrameInjectionTest`, that guard, and `LlmProviderTest`'s two escape-decoding tests
+for the route the CR arrives on.

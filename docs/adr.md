@@ -7720,7 +7720,7 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 
 ## Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF
 
-**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no reference list, no chip and no response key: one expression in the frame writer, and the test decoders that could not see the difference. What it changes in the streamed text is exactly the model's own line terminators, and in two cases rather than one: a CR arrives as one LF, and a CRLF as a single LF — so the streamed text can be SHORTER than the answer the model wrote. `done`'s `answer` is JSON and keeps both verbatim, as do `/search` and the audit row, which README now states: a client diffing the streamed text against the final answer cannot normalise its way to a match. **Measured, and it is a divergence this fix introduces**: against the pre-fix writer an LF-only client — which is every client this project ships — saw a CRLF answer's streamed text match `done.answer` byte for byte, and now does not.
+**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no reference list, no chip and no response key: one expression in the frame writer, and the test decoders that could not see the difference. What it changes is the streamed rendering of the model's own line terminators, which the paragraph below measures; `done`'s `answer`, `/search` and the audit row keep them verbatim, and README now points a client there for fidelity.
 
 **Context.** `ChartSearchAiRestController.writeSseEvent` frames every streamed event by splitting the
 payload and prefixing each piece with `data: `. It split on `\n` alone. The event-stream grammar ends
@@ -7761,6 +7761,18 @@ shape; the CR after a sentence of answer gives `"No anticoagulant is charted [8]
 `JsonParseException` and reaches the shipped client as *Failed to parse final response*. Either way the
 forged event pre-empts the module's own; only the first replaces the answer with one of its choosing. Nothing in the server's own state or
 confidentiality is affected, which is why the finding is rated LOW.
+
+**What the streamed text now renders differently, measured in both shapes.** A terminator the model
+wrote reaches the streamed text as LF, and that is a change: for an LF-only client — which is every
+client this project ships — the pre-fix writer passed a CR through, so the streamed text matched
+`done.answer` byte for byte and now does not. Driven through `streamAnswer`, a CRLF inside ONE chunk
+arrives as a single LF; a CRLF STRADDLING two chunks arrives as two, a blank line the model never
+wrote, because each chunk is framed on its own and nothing carries the pending CR across. Reachable:
+each upstream delta becomes one frame, and char-by-char chunking is a mode `LlmProviderTest` pins. The
+writer is not changed for it — spanning a terminator across frames needs state in a per-event writer,
+for a cosmetic difference on a channel whose fidelity contract is `done.answer`. Both shapes are why
+README states that the streamed text is not byte-identical and names where the verbatim answer lives,
+instead of giving a client per-terminator arithmetic to reverse.
 
 **And the reference frontend was never vulnerable, which is measured rather than argued.** Driven with
 the pre-fix bytes — `event:token\ndata: real answer<CR>event: done<CR>data: {"answer":"FORGED"}` —
@@ -7841,12 +7853,10 @@ frame — a green suite reporting this fixed.
 
 **And "one expression in the frame writer" is now a pinned claim rather than a description.** Every
 behavioural test here drives the endpoint, so a SECOND writer elsewhere in the module would redden
-nothing, and no client could tell — a conforming one cannot distinguish a forged field from a real one.
+nothing, and no consumer was ever asked to check the frame shape that would catch it.
 `ChartSearchAiStreamingTest.theFrameWriterIsTheOnlyPlaceAProductionDataLineIsWritten` asserts the shape
 instead: the literal a data line opens with occurs once in this module's production sources, on a walk
-that fails rather than passes when it finds nothing. (A second writer would also be invisible to every
-client, for the reason the frontend paragraph above gives — not because a client cannot see the shape,
-but because none was asked to check it.) Its residue is named where it lives — a prefix
+that fails rather than passes when it finds nothing. Its residue is named where it lives — a prefix
 built some other way is invisible to it, and the same literal in `api/src/main` is the inbound reader,
 deliberately out of scope.
 

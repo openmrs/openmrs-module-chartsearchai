@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -96,6 +97,10 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	 */
 	private static final long TOLERATED = 2L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
 
+	/** Distinctive enough that finding it in the log cannot be an accident. */
+	private static final String SHORT_ERROR_BODY =
+			"{\"error\":{\"message\":\"no such model: chartsearchai-446-probe\"}}";
+
 	/** ASCII only, so the envelope's byte length is its character length. */
 	private static final String CEILING_PREFIX = "{\"choices\":[{\"message\":{\"content\":\"";
 
@@ -116,6 +121,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		server.createContext("/ordinary-body", this::ordinaryBody);
 		server.createContext("/ordinary-stream", this::ordinaryStream);
 		server.createContext("/exactly-at-the-ceiling", this::exactlyAtTheCeiling);
+		server.createContext("/short-error", this::shortError);
 		server.start();
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME, "test-model");
@@ -218,6 +224,28 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	}
 
 	/**
+	 * The positive control for the TRUNCATING read. The ceiling cases only ever assert that an
+	 * oversized error body stopped, which an error read returning nothing at all would satisfy —
+	 * so an ordinary short error body has to come back whole. Asserted through the log because
+	 * that is the only place it goes: nothing parses a non-2xx body, and the status-code
+	 * {@link APIException} does not carry it.
+	 */
+	@Test
+	public void anOrdinaryErrorBodyReachesTheLogWhole() {
+		pointEngineAt("/short-error");
+
+		try (LogCapture capture = LogCapture.on(RemoteLlmEngine.class.getName())) {
+			APIException raised = callAndCatch(() -> engine.infer("system", "user", 60));
+
+			assertNotNull(raised, "a 503 from the endpoint is a failed call");
+			assertTrue(capture.describeAll().stream().anyMatch(e -> e.contains(SHORT_ERROR_BODY)),
+					"the whole of a short error body must reach the log — an error read that "
+							+ "returned nothing would still pass every ceiling case above. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	/**
 	 * Runs the call and hands back the {@link APIException} it raised, or {@code null}. Deliberately
 	 * not {@code assertThrows}: the byte assertion is the one that says the heap was bounded, and it
 	 * has to be reached even on the run where no exception was raised at all — which is precisely
@@ -292,6 +320,12 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 						+ "data: {\"choices\":[{\"delta\":{\"content\":\" two\"}}]}\n\n"
 						+ "data: {\"choices\":[{\"delta\":{\"content\":\" three\"}}]}\n\n"
 						+ "data: [DONE]\n\n").getBytes(StandardCharsets.UTF_8));
+	}
+
+	/** A non-2xx body well under {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES}, so nothing is cut. */
+	private void shortError(HttpExchange exchange) throws IOException {
+		respondOnce(exchange, 503, "application/json",
+				SHORT_ERROR_BODY.getBytes(StandardCharsets.UTF_8));
 	}
 
 	/** A well-formed completion whose body is exactly {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}. */

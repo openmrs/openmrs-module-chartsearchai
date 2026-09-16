@@ -691,7 +691,10 @@ public final class DrugReferenceTestSupport {
 	 * the LEVEL an outcome is reported at (issue #149). Owned here for the same reason
 	 * {@link #ATC_SAMPLE} is, and with a sharper consequence: renaming the package leaves a stale
 	 * string literal that no refactor touches, the capture then receives nothing, and every
-	 * "no WARN was logged" assertion passes VACUOUSLY.
+	 * "no WARN was logged" assertion passes VACUOUSLY. Since issue #439 the disclosure negatives read
+	 * it for that same consequence — {@code PairChipCapContextTest}'s screening case and
+	 * {@code ActiveOrderReconciliationTest}'s reconciliation case each capture this package to assert
+	 * that no captured line names a drug the patient is prescribed.
 	 */
 	static final String REFERENCE_LOGGER = "org.openmrs.module.chartsearchai.reference";
 

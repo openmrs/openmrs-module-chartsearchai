@@ -7965,13 +7965,44 @@ both directions, and with the fix in place the probe reddens
 blind spot belonged to no one guard: every package-scoped capture in the suite was exposed to it
 through any sibling file that captures a logger beneath that package by name, and both are plentiful
 — `FindingPartnerLogDisclosureTest`'s own PACKAGE javadoc records the same mechanism biting a
-module-root capture from the other direction, and each fidelity check's own logger inside `api.impl`,
-along with `LlmAnswerExtractor`'s and `QueryStoreChartBuilder`'s, is captured by name by its own test
+module-root capture from the other direction, which is why that file named a package until round 4
+undid a narrowing this fix had made unnecessary; and each fidelity check's own logger inside
+`api.impl`, along with `LlmAnswerExtractor`'s and `QueryStoreChartBuilder`'s, is captured by name by its own test
 file. Beside that, the two reference-package negatives now assert that the capture is live BELOW warn
 for the very logger they are about — `DrugSafetyValidator`'s end-of-pass INFO line and the injector's
 end-of-pass DEBUG line — so a filtered capture fails the case instead of satisfying it. That belt is
 independent of the helper: with `close()` reverted and no probe present at all, it is what reddens
 `.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` (measured 2026-09-16).
+
+**Round 4 found claims this PR had written that were not true of the code it had written, and one
+hole in the guards themselves.** Each false claim is corrected where it was written; what belongs
+here is the hole and the scope change that followed it.
+**A name can reach the log through a THROWABLE's message, and the negatives could not see it.**
+`LogCapture.describeAll` rendered a throwable's TYPE alone, so a name attached to a diagnostic
+exception beside any of the three lines was invisible to the very assertions that read
+`describeAll()`. Measured 2026-09-16: an `IllegalStateException("withheld in full: " + …)` carrying
+each withheld chip's `getDetail()` as a trailing argument to the screening cap `WARN` put all six of
+that patient's medication names in the log and left
+`PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`
+green. The other two sites' negatives were green with it too, and that measures nothing — they never
+see that line. `describeAll` now renders each throwable's type AND message, and its causes and
+suppressed throwables, and with it a probe at each site reddens the negative for that site: the cap
+`WARN` reddens the case above, the reconciliation `WARN` reddens
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`,
+and the shortfall `WARN` reddens both of `FindingPartnerLogDisclosureTest`'s negatives (all measured
+2026-09-16, each probe removed after the reading). Widening what `describeAll` renders can only make
+an existing `assertFalse(…contains)` over it stricter, which is why the fix went there rather than
+into an accessor each negative would have had to remember to call.
+
+**And the first site's capture is the module ROOT since round 4**, the narrowing round 3's
+`close()` fix made unnecessary having been kept on a measurement that fix invalidated. Every event
+those cases captured on 2026-09-16 came from three loggers inside `api.impl` — `LlmInferenceService`,
+`ReferenceProseFidelityCheck` and the check itself — so the root buys no reach today; it is named so
+that the negative is not scoped to the package this harness happens to log from. That file's
+negatives also now assert liveness below `WARN` for the logger they are about, as the two
+reference-package cases do. `FindingPartnerCoverageCheck` writes nothing below `WARN`, so there is
+no production line to name and the case writes one through that logger itself — pinning that class
+at `WARN` reddens each case of that file which asserts over the capture (measured 2026-09-16).
 
 **Where that substitution does not hold, stated rather than pinned.** Under
 `chartsearchai.grounding.async=true` the REST layer emits `done` from the UNGROUNDED answer

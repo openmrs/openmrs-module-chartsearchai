@@ -428,8 +428,10 @@ public class ActiveOrderReconciliationTest {
 		// alternative the finding itself named and #439 declined was writing these names lower down
 		// (ADR Decision 102, "the names at DEBUG, was not taken"), and a capture raised only to INFO
 		// would leave that implementable with this case green.
-		try (LogCapture capture = LogCapture.on("org.openmrs.module.chartsearchai.reference",
-				Level.DEBUG)) {
+		// Through the shared constant and never a literal of this file's own: a second spelling of a
+		// package name is how a rename leaves a capture receiving nothing, which is the vacuous-pass
+		// this negative exists to avoid (DrugReferenceTestSupport.REFERENCE_LOGGER's own javadoc).
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
 			injector().injectRecords(DrugReferenceTestSupport.oneRecordChart(), oneActiveOrder(),
 					"what are her active medications?");
 

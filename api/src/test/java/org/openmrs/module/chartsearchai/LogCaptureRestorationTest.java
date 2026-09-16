@@ -40,7 +40,8 @@ import org.slf4j.LoggerFactory;
  * package by name, and the suite has both in quantity. A guard that only works under one test ORDER
  * is a guard whose other value was never built, and the shared helper is where that value is decided.
  * {@code FindingPartnerLogDisclosureTest}'s own PACKAGE javadoc records the same mechanism biting a
- * module-root capture from the other direction.
+ * module-root capture from the other direction — a narrowing that file kept until this fix let it
+ * name the root again.
  *
  * <p>It logs through real SLF4J loggers rather than fabricating events, as
  * {@link LogCaptureExclusionTest} does, because what is asserted is the relation between a capture
@@ -97,9 +98,17 @@ public class LogCaptureRestorationTest {
 		// assertion cannot pass because removal happened to restore the same effective level.
 		Configurator.setLevel(PINNED, Level.OFF);
 		try (LogCapture named = LogCapture.on(PINNED)) {
-			// Nothing to assert inside: at OFF the pin means this capture receives nothing, which is
-			// what the pin asks for.
-			assertTrue(named.describeAll().isEmpty(), "the pin holds while the capture is open too");
+			// The pin does NOT hold while the capture is open, and saying otherwise here was wrong
+			// until issue #439's fourth review round: the constructor raises the named logger to its
+			// requested level unconditionally, so for the duration this logger is at INFO and not OFF.
+			// That is what a capture is for — a helper that yielded to an existing pin could not
+			// observe anything on a logger the configuration had turned down — so it is asserted
+			// rather than merely noted. What survives the capture is the other half, and the package
+			// capture below is where that is read.
+			LoggerFactory.getLogger(PINNED).info("an INFO through the logger pinned OFF");
+			assertTrue(hasMessage(named, "an INFO through the logger pinned OFF"),
+					"a capture raises the level of the logger it names even where something had pinned "
+							+ "it lower. Captured: " + named.describeAll());
 		}
 
 		try (LogCapture wholePackage = LogCapture.on(PACKAGE, Level.DEBUG)) {

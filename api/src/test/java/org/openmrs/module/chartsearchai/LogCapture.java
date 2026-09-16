@@ -51,7 +51,10 @@ import org.apache.logging.log4j.core.config.Property;
  * events can be filtered while the package's neighbours arrive, so "nothing was logged from there"
  * and "nothing is reaching us from there" look identical. Name a line that logger writes at the
  * captured level and assert it first — {@code PairChipCapContextTest}'s screening case and
- * {@code ActiveOrderReconciliationTest}'s reconciliation case each do (issue #439).
+ * {@code ActiveOrderReconciliationTest}'s reconciliation case each do (issue #439). Where that
+ * logger writes nothing at the captured level — a check that only WARNs — there is no line to name,
+ * and the case writes one through that logger itself and asserts it arrived, which asks the same
+ * question of the same logger: {@code FindingPartnerLogDisclosureTest}, whose check is one.
  *
  * <p>Use with try-with-resources; it is not thread-safe against a concurrent
  * {@link #close()} but the collected event list is.
@@ -287,10 +290,13 @@ public final class LogCapture implements AutoCloseable {
 	 *         because log4j writes that to the log as well, so text attached to a diagnostic
 	 *         exception is a channel this rendering used to hide: with the type alone, a probe
 	 *         attaching each withheld chip's detail to the screening cap WARN put six of one
-	 *         patient's medication names in the log with all three of ADR Decision 102's negatives
-	 *         green (measured 2026-09-16). Causes and suppressed throwables are rendered for the
-	 *         same reason, being that channel one frame down. Stack FRAMES are not rendered, and no
-	 *         assertion anywhere reads this for them.
+	 *         patient's medication names in the log and left that site's own negative green
+	 *         (measured 2026-09-16 — the negatives for the other two sites never see that line, so
+	 *         their staying green measured nothing). With the message rendered, a probe at each of
+	 *         ADR Decision 102's three sites reddens the negative for the site it was added to.
+	 *         Causes and suppressed throwables are rendered for the same reason, being that channel
+	 *         one frame down. Stack FRAMES are not rendered, and no assertion anywhere reads this
+	 *         for them.
 	 *
 	 *         <p>Widening what this renders can only make an existing {@code assertFalse(…contains)}
 	 *         over it stricter, which is why the fix went here rather than into a second accessor the

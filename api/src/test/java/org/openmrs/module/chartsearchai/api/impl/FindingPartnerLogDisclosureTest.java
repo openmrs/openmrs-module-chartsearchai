@@ -39,6 +39,7 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.slf4j.LoggerFactory;
 
 /**
  * What {@link FindingPartnerCoverageCheck} may write to the server log about a patient
@@ -71,21 +72,28 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  */
 public class FindingPartnerLogDisclosureTest {
 
-	/** The package the orchestration logs from, so the claim is about every logger in it and not only
-	 *  this check's — a name leaking from a neighbour is the same disclosure. It is NOT a claim about
-	 *  the whole module: the answer path's other half logs from {@code ...chartsearchai.reference},
-	 *  which this harness stubs out (the validator and the injector are overridden below), and that
-	 *  half's own two sites are pinned where they are written —
+	/** The module ROOT, so the claim is about every logger a pass writes from and not only this
+	 *  check's — a name leaking from a neighbour is the same disclosure.
+	 *
+	 *  <p><b>What this scope reaches, measured rather than reasoned.</b> Every event these cases
+	 *  captured on 2026-09-16 came from three loggers, all inside {@code ...api.impl}:
+	 *  {@code LlmInferenceService}, {@code ReferenceProseFidelityCheck} and the check itself. The
+	 *  answer path's other half — the validator and the injector, which log from
+	 *  {@code ...chartsearchai.reference} — is stubbed out below, so naming the root reaches nothing
+	 *  there, and those two sites are pinned where they are written:
 	 *  {@code ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName}
 	 *  and {@code PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug}.
+	 *  The root is named anyway because the alternative scopes the negative to the package this
+	 *  harness happens to log from today, and nothing brings a maintainer back to the constant when a
+	 *  later pass logs from somewhere else in the module.
 	 *
-	 *  <p>Widening it to the module root was tried and reverted: {@link LogCapture} raises the level of
-	 *  the NAMED logger only, so with the root named this file's captures received this pass's WARN but
-	 *  not its INFO or DEBUG once the whole suite ran, and the liveness precondition each case asserts
-	 *  failed (measured 2026-09-16, on the one case that logs no WARN of its own). Named here, the
-	 *  capture is live: {@code LlmInferenceService}'s own [timing] INFO line arrives on every case, so a
-	 *  negative cannot pass because nothing was ever captured ({@link LogCapture}'s javadoc). */
-	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
+	 *  <p>An earlier round of this PR named {@code ...api.impl} and recorded the root as tried and
+	 *  reverted, a root capture having received this pass's WARN but not its INFO or DEBUG once the
+	 *  whole suite ran. The cause was the {@link LogCapture} defect round 3 found — a
+	 *  {@code LoggerConfig} a sibling file's class-named capture left installed, which
+	 *  {@link LogCapture#close()} now removes ({@code LogCaptureRestorationTest}) — so that
+	 *  measurement went with the fix, and the paragraph recording it goes here. */
+	private static final String PACKAGE = "org.openmrs.module.chartsearchai";
 
 	/** The check's own WARN, by a phrase no neighbour writes — for the cases whose negative needs
 	 *  this check to have RUN. */
@@ -127,6 +135,7 @@ public class FindingPartnerLogDisclosureTest {
 		// criterion is "nothing at INFO or above", and below it the module has no reason to write
 		// these names at all — the clinician's answer carries them.
 		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
+			assertLiveBelowWarnForTheCheck(capture);
 			ChartAnswer answer = service.search(patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
 			assertFalse(capture.describeAll().isEmpty(),
@@ -183,6 +192,7 @@ public class FindingPartnerLogDisclosureTest {
 		String answerNamingAll = namesThemAll.append(" so it should not be started.").toString();
 		service.setLlmProvider(answering(answerNamingAll));
 		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
+			assertLiveBelowWarnForTheCheck(capture);
 			ChartAnswer answer = service.search(patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
 			assertFalse(capture.describeAll().isEmpty(),
@@ -193,9 +203,13 @@ public class FindingPartnerLogDisclosureTest {
 			assertEquals(coverage.getNamed(), coverage.getStated(),
 					"the premise this case exists for: the arranged answer states every name the "
 							+ "findings carry, so there is no shortfall to report");
-			assertFalse(capture.hasMessageAt(Level.WARN, SHORTFALL_WARN),
-					"and then no shortfall may be reported at any level. Captured: "
-							+ capture.describeAll());
+			// At any level, which is what the capture was opened at DEBUG for: hasMessageAt(WARN, …)
+			// would leave the same report implementable one level down, and this sentence used to
+			// claim a reach the call it was written over did not have (issue #439, review round 4).
+			for (String logged : capture.describeAll()) {
+				assertFalse(logged.contains(SHORTFALL_WARN),
+						"and then no shortfall may be reported at any level. Found it in: " + logged);
+			}
 			assertEquals(answerNamingAll, answer.getAnswer(),
 					"and the answer is returned byte for byte, with nothing appended");
 		}
@@ -244,6 +258,7 @@ public class FindingPartnerLogDisclosureTest {
 		// case above stayed green.
 		service.setLlmProvider(answering(NAMES_NO_ORDER));
 		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
+			assertLiveBelowWarnForTheCheck(capture);
 			ChartAnswer answer = service.searchStreaming(patient(),
 					DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION, token -> { });
 
@@ -263,6 +278,33 @@ public class FindingPartnerLogDisclosureTest {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Liveness for the LOGGER these negatives are about, BELOW warn — {@link LogCapture}'s own rule
+	 * for a negative asserted over a package capture, which nothing in this file met until issue
+	 * #439's fourth review round. The neighbouring assertions establish that the capture received
+	 * SOMETHING and that this check wrote its WARN; neither says a sub-WARN event from this check's
+	 * logger would have arrived, and a {@code LoggerConfig} pinning that one class at WARN leaves
+	 * every "no line at any level names an order" assertion true of nothing below it.
+	 *
+	 * <p>The check writes nothing below WARN, so unlike the two reference-package cases there is no
+	 * production line to name. The case writes one through the check's own logger instead, which
+	 * asks the same question of the same logger: filtered, and this fails rather than the negative
+	 * passing. Its text names no drug, so it cannot redden the negatives it precedes.
+	 */
+	private static void assertLiveBelowWarnForTheCheck(LogCapture capture) {
+		String witness = "liveness witness, no patient data";
+		LoggerFactory.getLogger(FindingPartnerCoverageCheck.class).debug(witness);
+		boolean arrived = false;
+		for (String logged : capture.describeAll()) {
+			arrived = arrived || logged.contains(witness);
+		}
+		assertTrue(arrived,
+				"precondition: this capture must be live below WARN for "
+						+ FindingPartnerCoverageCheck.class.getName()
+						+ ", or a negative over every captured line says nothing about what is "
+						+ "written below WARN. Captured: " + capture.describeAll());
 	}
 
 	private static Patient patient() {

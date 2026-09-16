@@ -53,12 +53,6 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
-	/** The package both cap WARNs are written from. Captured whole, not just
-	 *  {@code DrugSafetyValidator}'s own logger, because a drug name leaking from a neighbour on this
-	 *  pass is the same disclosure — the argument {@code FindingPartnerLogDisclosureTest} makes for
-	 *  the other half of the answer path. */
-	private static final String REFERENCE_PACKAGE = "org.openmrs.module.chartsearchai.reference";
-
 	/** Above-floor pairs among the excerpt's 16 drugs — the candidate count every cap here cuts. */
 	private static final int CANDIDATE_PAIRS = 72;
 
@@ -213,7 +207,12 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		// WARN in addActiveOrderPairInteractions, and ADR Decision 102. The old method name and the old
 		// first line of this comment both said "names", against a loop that adds `finding.severity`.
 		configureCap("3");
-		try (LogCapture capture = LogCapture.on(REFERENCE_PACKAGE, Level.DEBUG)) {
+		// The whole package and not just DrugSafetyValidator's own logger, because a drug name leaking
+		// from a neighbour on this pass is the same disclosure — the argument
+		// FindingPartnerLogDisclosureTest makes for the other half of the answer path. Through the
+		// shared constant, since a second literal of a package name is how a rename leaves a capture
+		// receiving nothing (DrugReferenceTestSupport.REFERENCE_LOGGER's own javadoc).
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
 			questionPairChips();
 
 			String line = firstContaining(capture.messagesAt(Level.WARN), "question-named drug pairs shown");
@@ -234,7 +233,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		// sibling question-pair arm's cap WARN above has always logged; an operator who needs the pairs
 		// themselves raises the cap and re-asks, which puts them on the wire as chips.
 		configureCap("3");
-		try (LogCapture capture = LogCapture.on(REFERENCE_PACKAGE, Level.DEBUG)) {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
 			screeningChips();
 
 			// The precondition the negative below cannot supply for itself: this capture must be live

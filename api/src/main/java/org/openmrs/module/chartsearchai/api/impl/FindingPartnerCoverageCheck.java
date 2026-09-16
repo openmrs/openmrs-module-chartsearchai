@@ -55,8 +55,12 @@ public final class FindingPartnerCoverageCheck {
 	 * The active orders the response's findings name that {@code answer} does not — in the order the
 	 * chips name them, each once however many findings cover it.
 	 *
-	 * <p>Shared with {@link #measure}, so the sentence the module appends and the count it publishes
-	 * cannot come to disagree about which names were missing.
+	 * <p><b>Not shared with {@link #measure}</b>, which counts in a loop of its own and, since issue
+	 * #439, states no list of names at all — so there is no agreement between them left to keep. The
+	 * two never did agree in UNIT either: {@code measure} counts a partner once per warning that names
+	 * it while this dedups, so on two merged chips naming one order {@code named - stated} exceeds the
+	 * size of the list appended to the answer. That divergence is pre-existing and this sentence used
+	 * to claim it away.
 	 */
 	public static List<String> unstatedPartners(String answer, List<SafetyWarning> warnings) {
 		List<String> unstated = new ArrayList<String>();

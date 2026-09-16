@@ -56,6 +56,17 @@ public class ActiveOrderReconciliationTest {
 
 	private static final String ASPIRIN_ORDER_UUID = "66666666-7777-8888-9999-000000000000";
 
+	/** The drug name and the display {@link #oneActiveOrder} builds its one order from. The
+	 *  disclosure guard reads its negative from these rather than a literal of its own, so changing
+	 *  the fixture's drug cannot leave that case asserting about a drug nothing was screened for —
+	 *  the property {@code PairChipCapContextTest} gets from
+	 *  {@code DrugReferenceTestSupport.SCREENED_SIX_ORDER_NAMES} (issue #439, review round 3). The
+	 *  cases that pin a record's rendering exactly keep their own literals: there the string IS the
+	 *  assertion. */
+	private static final String ORDER_DRUG_NAME = "simvastatin";
+
+	private static final String ORDER_DISPLAY = "Simvastatin Co 20mg";
+
 	/** The injector with the validator wired — so the safety findings of #110 flow too and these tests
 	 *  see the whole injected record set, not a reconciliation-only subset. Through the shared
 	 *  arrangement rather than a copy of it, so "exactly as the other files build it" is a fact instead
@@ -68,9 +79,10 @@ public class ActiveOrderReconciliationTest {
 	/** A context holding one active simvastatin order — the shape of the observed case. */
 	private PatientClinicalContext oneActiveOrder() {
 		return DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("simvastatin"), DrugReferenceTestSupport.set("C10AA01"), null, null,
+				DrugReferenceTestSupport.set(ORDER_DRUG_NAME), DrugReferenceTestSupport.set("C10AA01"), null,
+				null,
 				Collections.singletonList(DrugReferenceTestSupport.activeOrder(SIMVASTATIN_ORDER_UUID,
-						"Simvastatin Co 20mg", "simvastatin")));
+						ORDER_DISPLAY, ORDER_DRUG_NAME)));
 	}
 
 	/** Every injected active-order record in {@code chart}. */
@@ -421,14 +433,26 @@ public class ActiveOrderReconciliationTest {
 			injector().injectRecords(DrugReferenceTestSupport.oneRecordChart(), oneActiveOrder(),
 					"what are her active medications?");
 
+			// Live BELOW warn for the logger this negative is about, asserted rather than assumed:
+			// the injector's own end-of-pass DEBUG line is the witness. Without it a capture whose
+			// sub-WARN events are being filtered — which a LoggerConfig left behind by another file's
+			// class-named capture used to do, see LogCaptureRestorationTest — satisfies the negative
+			// by receiving nothing.
+			assertTrue(capture.hasMessageAt(Level.DEBUG, "Injected", "reference slice"),
+					"precondition: the capture must receive this logger's DEBUG, or the negative "
+							+ "below is not a claim about what is written below WARN. Captured: "
+							+ capture.describeAll());
 			assertTrue(capture.hasMessageAt(Level.WARN, "Active-order reconciliation",
 					SIMVASTATIN_ORDER_UUID),
 					"the divergence must still be reported, and by the identifier querystore indexes "
 							+ "the document under. Captured: " + capture.describeAll());
-			for (String logged : capture.describeAll()) {
-				assertFalse(logged.toLowerCase(Locale.ROOT).contains("simvastatin"),
-						"and no line may name a drug this patient is prescribed: the order is on the "
-								+ "list because of what the patient is taking. Found it in: " + logged);
+			for (String prescribed : Arrays.asList(ORDER_DRUG_NAME, ORDER_DISPLAY)) {
+				for (String logged : capture.describeAll()) {
+					assertFalse(logged.toLowerCase(Locale.ROOT).contains(prescribed.toLowerCase(Locale.ROOT)),
+							"and no line may name a drug this patient is prescribed: the order is on the "
+									+ "list because of what the patient is taking. Found \"" + prescribed
+									+ "\" in: " + logged);
+				}
 			}
 		}
 	}

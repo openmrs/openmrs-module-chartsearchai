@@ -7940,6 +7940,39 @@ unrepresented-order list reddens
 (both measured 2026-09-16). The case for the first site had captured at DEBUG from the start and says
 why; the other two now match it.
 
+**Widening the capture was necessary and it was not sufficient: the third site's guard worked under
+one surefire order only** (round 3 of this PR's review). `LogCapture` raised the level by
+`Configurator.setLevel`, which INSTALLS a `LoggerConfig` for a name that has none, and its `close()`
+set a level back on that config and left it installed for the life of the JVM. A descendant's config
+wins over its package's, so once `UnreadableOrderDrugTest` had captured `DrugSafetyValidator` by
+name, a capture of the whole `reference` package at DEBUG no longer saw that class's INFO or DEBUG
+events at all — the appender was reached and the event was filtered before it. Reproduced here on
+2026-09-16 with the reviewer's probe restored and the two classes run together: BUILD FAILURE on
+that case under `-Dsurefire.runOrder=alphabetical`, BUILD SUCCESS under `reversealphabetical`, the
+probe the only change and the order the only difference. The mechanism control is inside
+`LogCaptureRestorationTest`: it asserts that the logger's WARN arrives before it asserts that its
+INFO does, and pre-fix the first passed while the second failed — so what a left-behind config takes
+is the LEVEL and not the appender. Surefire's default
+order is `filesystem`, so which of those two a CI host would have run was not a property of this
+code.
+
+**So the repair is in the shared helper, not in the guard that exposed it.** `LogCapture.close()`
+now REMOVES the `LoggerConfig` its own constructor caused log4j to install, and restores a level only
+where the name already had a config of its own — an outer capture of the same name, or one the log4j
+configuration declares, whose level is not this helper's to drop. `LogCaptureRestorationTest` holds
+both directions, and with the fix in place the probe reddens
+`.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` under BOTH orders. The
+blind spot belonged to no one guard: every package-scoped capture in the suite was exposed to it
+through any sibling file that captures a logger beneath that package by name, and both are plentiful
+— `FindingPartnerLogDisclosureTest`'s own PACKAGE javadoc records the same mechanism biting a
+module-root capture from the other direction, and each fidelity check's own logger inside `api.impl`,
+along with `LlmAnswerExtractor`'s and `QueryStoreChartBuilder`'s, is captured by name by its own test
+file. Beside that, the two reference-package negatives now assert that the capture is live BELOW warn
+for the very logger they are about — `DrugSafetyValidator`'s end-of-pass INFO line and the injector's
+end-of-pass DEBUG line — so a filtered capture fails the case instead of satisfying it. That belt is
+independent of the helper: with `close()` reverted and no probe present at all, it is what reddens
+`.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` (measured 2026-09-16).
+
 **Where that substitution does not hold, stated rather than pinned.** Under
 `chartsearchai.grounding.async=true` the REST layer emits `done` from the UNGROUNDED answer
 `searchStreaming` hands its consumer mid-pass, which is the model's own text — the append happens
@@ -7955,7 +7988,20 @@ and `reference` — 138 of them on 2026-09-16 — was extracted with its argumen
 ARGUMENTS could carry a name: anything mentioning a display, a name, a label, a token, prose, an
 answer, a question, an allergen, a partner or a detail. Those two packages are the scope because they
 are where the patient-specific reasoning lives; the remaining packages and `omod` were not swept, and
-this decision claims nothing about them. Two more sites answered, and neither was the reported one.
+this decision claims nothing about them. Two more sites answered with a drug NAME, and neither was the
+reported one.
+
+**The criterion as written above reaches further than that, and round 3 of this PR's review found
+where.** `LlmAnswerExtractor.reportNonConformantCitations` and `readNonArrayCitations` each log the
+model's own `citations` JSON verbatim, abbreviated to 40 characters apiece — model output about this
+patient's chart, which is the family the three sibling checks cited above keep out of the log, and
+there is no bound on what a model puts in that field. What they are NOT is a drug name this module
+wrote from what the patient is prescribed, which is the rule #439 reports, and what they are FOR is
+showing an operator what their model actually sent; so they are named here and left alone, with issue
+[#442](https://github.com/openmrs/openmrs-module-chartsearchai/issues/442) as their ticket, which
+also records what has to be decided before either line changes. What this sweep establishes is
+therefore narrower than its criterion: every one of those statements was read, and the two changed
+are the two that wrote a patient's medication NAMES.
 
 **The second site was an accident of a `toString`.** `DrugReferenceInjector.unrepresentedActiveOrders`
 was doing the same thing without saying so. It logs the `ActiveDrugOrder` list itself, and that type's
@@ -7995,11 +8041,16 @@ patient's. Same criterion, same defect.
 
 The remedy is the shape the SIBLING pairwise arm has always had: `addQuestionPairInteractions` logs
 its withheld candidates as ratings alone, and could do so without argument because its drugs come
-from the QUESTION. One concept, one shape — the argument #131 already makes for the two arms sharing
-one cap. What is given up is WHICH pairs went, which existed nowhere else (`interactionPairs`
-publishes counts); what survives is the criterion that line's own case states, that a withheld Major
-be recoverable. An operator who needs the pairs raises the cap and re-asks, which puts them on the
-wire as chips rather than in the log as PHI.
+from the QUESTION. Both lines now carry ratings and no name; they are NOT one spelling, and round 3
+of this PR's review was right to say so — the sibling passes the dataset's own severity through
+verbatim, so a candidate carrying none prints there as `null` where this arm prints `unrated`. That
+is a difference in how a MISSING rating renders, and aligning it is not what #439 asked for; neither
+line is a claim about the patient either way. What is given up is WHICH pairs went, which existed
+nowhere else (`interactionPairs` publishes counts); what survives is the criterion that line's own
+case states, that a withheld Major be recoverable. An operator who needs the pairs raises the cap and
+re-asks, which reproduces the screen rather than recovering the served request's own withheld list —
+the loss this decision states rather than remedies, below — and puts them on the wire as chips rather
+than in the log as PHI.
 
 **Why the second site's remedy does not transfer here.** The reconciliation WARN kept identity by
 switching from the name to the uuid, and the obvious question is why a withheld pair is not logged as

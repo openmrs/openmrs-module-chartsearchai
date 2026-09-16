@@ -1402,7 +1402,9 @@ public class DrugSafetyValidator {
 	 * a list of withheld pairs on the wire is the uncapped prompt expansion this cap exists to prevent.
 	 * WHICH pairs went is nowhere at all since issue #439: in the screening arm both sides of a pair are
 	 * the patient's own prescriptions, so that list was her medication list on a server-log line. An
-	 * operator who needs the pairs raises this property and re-asks. → ADR Decision 102.
+	 * operator who needs the pairs raises this property and re-asks, which reproduces the screen and
+	 * does not recover the served request's own withheld list. → ADR Decision 102, which states that
+	 * loss rather than remedying it.
 	 *
 	 * <p><b>One honest limit on "most severe first":</b> {@link #severityPriority} sorts an UNRATED rule
 	 * above Major, matching {@code DrugReferenceInjector.InteractionNote} and for the same reason —
@@ -7078,8 +7080,11 @@ public class DrugSafetyValidator {
 				// The RATING and no name (issue #439). Both sides of a screened pair are this patient's
 				// own prescriptions — this arm iterates orderDrugs — so a pair label is two entries of
 				// her medication list, and the WARN below is what wrote them to the server log. The
-				// sibling pairwise arm has always logged its withheld candidates as ratings alone; one
-				// concept, one shape. → ADR Decision 102.
+				// sibling pairwise arm has always logged its withheld candidates as ratings alone, so
+				// this is that arm's shape and not a new one. The two are not one spelling: there the
+				// dataset's own severity goes through verbatim, so a candidate carrying none prints as
+				// `null`, while here it prints as `unrated`. That is a difference in how a MISSING
+				// rating renders, not in what either line says about the patient. → ADR Decision 102.
 				pairs.add(new ScreenedPair(chip,
 						severityPriority(i.getSeverity()),
 						ChartSearchAiUtils.firstNonBlank(i.getSeverity(), "unrated")));
@@ -7138,7 +7143,8 @@ public class DrugSafetyValidator {
 			// it is the extent this method returns, not this line. What the log still holds alone is how
 			// many pairs went and at what RATINGS, so a withheld Major is recoverable: an operator who
 			// needs the pairs themselves raises the cap and re-asks, which puts them on the wire as
-			// chips rather than in the log as PHI.
+			// chips rather than in the log as PHI — reproducing the screen, not recovering the served
+			// request's own withheld list, which is a loss ADR Decision 102 states rather than remedies.
 			//
 			// RATINGS and no names, since issue #439: both sides of every pair here are the patient's
 			// own active orders, so the list this line used to carry was her medication list, at the

@@ -237,6 +237,20 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		try (LogCapture capture = LogCapture.on(REFERENCE_PACKAGE, Level.DEBUG)) {
 			screeningChips();
 
+			// The precondition the negative below cannot supply for itself: this capture must be live
+			// BELOW warn for the very logger the negative is about. DrugSafetyValidator's own
+			// end-of-pass INFO line is that witness, and asserting it is what makes the whole-capture
+			// negative fail rather than pass when something filters this logger's sub-WARN events. It
+			// was not hypothetical: a sibling file's class-named capture used to leave a LoggerConfig
+			// pinned on DrugSafetyValidator for the rest of the JVM, so under one surefire order this
+			// case stayed green with an INFO probe beside the cap WARN naming every withheld pair
+			// (issue #439's third review round; fixed in LogCapture, pinned by
+			// LogCaptureRestorationTest, and this line is the belt that does not depend on that fix).
+			assertTrue(capture.hasMessageAt(Level.INFO, "Drug-safety validator raised"),
+					"precondition: the capture must receive this logger's INFO, or a negative over "
+							+ "every captured line says nothing about what is written below WARN. "
+							+ "Captured: " + capture.describeAll());
+
 			String line = firstContaining(capture.messagesAt(Level.WARN), "Interaction screening across");
 			assertTrue(line.contains("found 15 pair(s)") && line.contains("reporting the 3 most severe"),
 					"the screening WARN must state the candidate count and the configured cap: " + line);
@@ -244,7 +258,10 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 					"and how many pairs it withheld: " + line);
 			// The whole tail, matched as a closed vocabulary rather than by hunting for names: anything
 			// the line reports a withheld pair BY other than its rating reddens this, including a name no
-			// case here thought to look for.
+			// case here thought to look for. It is narrower than production, which passes the dataset's
+			// own severity through — DDInter's `Unknown` rows would redden it, and they reach this arm
+			// only under a lowered floor (the default filters exactly them). That direction is a loud
+			// failure over a vocabulary that is supposed to be closed, which is the safe one.
 			int tail = line.indexOf("least severe last: ");
 			assertTrue(tail >= 0, "the withheld ratings must be reported: " + line);
 			String ratings = line.substring(tail + "least severe last: ".length()).trim();

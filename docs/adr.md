@@ -7753,7 +7753,13 @@ clinician's later `/feedback`, or an `error` in place of the answer. Every serve
 control this module publishes is rendered from those events, so the forgery pre-empts all of them at
 once. Bounded, and stated as such: one upstream delta chunk becomes one frame, so the sequence must
 arrive inside a single chunk — routine for a hostile or token-batching remote endpoint, impractical
-against the local llama-server, which streams a token at a time. Nothing in the server's own state or
+against the local llama-server, which streams a token at a time. **And a second bound decides whether
+the forgery substitutes an answer at all**: a client joins a frame's `data:` lines with LF, so any real
+text ahead of the CR lands in the same buffer as the forged JSON. Driven through this package's own
+decoder — the CR opening the chunk gives `"\n{…}"`, which parses, and the worked example above is that
+shape; the CR after a sentence of answer gives `"No anticoagulant is charted [8].\n{…}"`, which is a
+`JsonParseException` and reaches the shipped client as *Failed to parse final response*. Either way the
+forged event pre-empts the module's own; only the first replaces the answer with one of its choosing. Nothing in the server's own state or
 confidentiality is affected, which is why the finding is rated LOW.
 
 **And the reference frontend was never vulnerable, which is measured rather than argued.** Driven with
@@ -7769,8 +7775,16 @@ a client author for, and the reference client does not have. Both docs now state
 it instead: every line it terminates, it terminates with LF, so an LF-only split and a conforming one
 see the same frames. The asymmetry is worth keeping in view, because it runs opposite to intuition:
 against a writer that regressed here, the LF-only client is the SAFE one — it renders the stray CR —
-and the conforming client is the exposed one, and no client can tell a forged field from a real one.
-Which is why this belongs at the writer and nowhere else.
+and the conforming client is the exposed one. Measured, with the decoder narrowed to LF-only: the
+pre-fix bytes decode as one `token` event, not a `done`.
+
+**And what a client cannot do is reject the field by PARSING it**, which is the precise form of the
+claim and not "no client can tell". The grammar says to take the last `event:` in a frame, so a
+conformant parse has no basis to refuse one; a client could apply a stricter frame-SHAPE rule — after
+the `event:` line, every line must be a `data:` line — and this package's own reader does exactly that,
+which is what `assertEveryFrameIsWellFormed` is. No client was ever asked for that rule, and asking for
+it now would put a security control in every consumer instead of in the one writer. Which is why this
+belongs at the writer and nowhere else.
 
 **Decision.** The framing splits at every terminator the grammar recognises, as one `Pattern`
 (`SSE_LINE_TERMINATORS`, CRLF first so it is consumed as one terminator). A CR in a payload therefore
@@ -7816,17 +7830,23 @@ data, something the model can do with its own text anyway. Stated that way becau
 written as the universal, and the universal is false.
 
 Measured on the unfixed writer, with both readers spec-aware: the three channel cases fail on the
-frame structure and the fourth on the `token` event having been renamed to the payload's own event
-name. A fifth case is the known-bad control — the pre-fix bytes, hand-framed, asserting the decoder
-SEES the forgery in them — because a reader narrowed back to LF-only would leave the other four green
-on a stream carrying a forged frame, which is a green suite reporting this fixed.
+frame structure, and `everyTerminatorTheSpecificationRecognisesIsNeutralised` on the `token` event
+having been renamed to the payload's own event name.
+`aCarriageReturnInTheAnswerNeedsNoFramingBecauseJacksonEscapesIt` stays GREEN there, and should — it
+carries its CR on a composed event, which is the scope claim rather than the fix.
+`theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere` stays green too, being the known-bad
+control: the pre-fix bytes, hand-framed, asserting the decoder SEES the forgery in them, because a
+reader narrowed back to LF-only would leave the behavioural cases green on a stream carrying a forged
+frame — a green suite reporting this fixed.
 
 **And "one expression in the frame writer" is now a pinned claim rather than a description.** Every
 behavioural test here drives the endpoint, so a SECOND writer elsewhere in the module would redden
 nothing, and no client could tell — a conforming one cannot distinguish a forged field from a real one.
 `ChartSearchAiStreamingTest.theFrameWriterIsTheOnlyPlaceAProductionDataLineIsWritten` asserts the shape
 instead: the literal a data line opens with occurs once in this module's production sources, on a walk
-that fails rather than passes when it finds nothing. Its residue is named where it lives — a prefix
+that fails rather than passes when it finds nothing. (A second writer would also be invisible to every
+client, for the reason the frontend paragraph above gives — not because a client cannot see the shape,
+but because none was asked to check it.) Its residue is named where it lives — a prefix
 built some other way is invisible to it, and the same literal in `api/src/main` is the inbound reader,
 deliberately out of scope.
 

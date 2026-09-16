@@ -396,19 +396,22 @@ public class ChartSearchAiStreamingTest {
 	 * split at every line terminator the event-stream grammar recognises, so no model-written text can
 	 * begin a field line. That property belongs to the writer, not to the endpoint —
 	 * {@code ChartSearchAiSseFrameInjectionTest} drives {@code streamAnswer} and would say nothing
-	 * about a second writer somewhere else, and neither would any client, since a conforming one cannot
-	 * tell a forged field from a real one.</p>
+	 * about a second writer somewhere else — and neither would any client, for the reason ADR Decision
+	 * 101 gives: a conformant parse has no basis to refuse a field, and the stricter frame-shape rule
+	 * that would catch one was never asked of any consumer.</p>
 	 *
 	 * <p>So this asserts the shape rather than the behaviour: the literal a data line opens with occurs
 	 * ONCE in this module's production sources. The scan FAILS on an empty discovery, because a walk
 	 * that found nothing would pass this check for the wrong reason — which is how a source guard goes
 	 * quiet.</p>
 	 *
-	 * <p><b>Residue, named rather than left to be discovered.</b> A writer that builds the prefix some
-	 * other way — {@code "data" + ": "}, a character append, a constant elsewhere — is invisible here,
-	 * and no list of those spellings would be closed. The same literal in {@code api/src/main} is
-	 * deliberately out of scope: {@code LlmResponseParser} READS it, parsing the inference endpoint's
-	 * own stream, which is the opposite direction and correct.</p>
+	 * <p><b>Residue, named rather than left to be discovered.</b> A SECOND writer that builds the prefix
+	 * some other way — {@code "data" + ": "}, a character append, a constant elsewhere — is invisible
+	 * here, and no list of those spellings would be closed. Respelling the ONE occurrence that way is
+	 * not: it reddens, on the empty-discovery gate above, which is measured rather than reasoned. The
+	 * same literal in {@code api/src/main} is deliberately out of scope: {@code LlmResponseParser}
+	 * READS it, parsing the inference endpoint's own stream, which is the opposite direction and
+	 * correct.</p>
 	 */
 	@Test
 	public void theFrameWriterIsTheOnlyPlaceAProductionDataLineIsWritten() throws Exception {

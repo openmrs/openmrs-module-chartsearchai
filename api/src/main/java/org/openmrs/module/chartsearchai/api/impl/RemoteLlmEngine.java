@@ -44,6 +44,43 @@ public class RemoteLlmEngine implements LlmEngine {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	/**
+	 * What one output token is allowed to cost on the wire. An ALLOWANCE and not a measurement, and
+	 * the two terms it covers are not alike. The answer itself is recorded: a completion at
+	 * {@link ChartSearchAiConstants#DEFAULT_LLM_MAX_OUTPUT_TOKENS} is "roughly 16 kB" (ADR Decision
+	 * 76's cost table, and again Decision 78's), i.e. about four bytes a token. The rest is
+	 * server-sent-event framing — in the worst conformant case every token arrives as its own event
+	 * carrying a whole chunk object and its {@code data: } prefix — and nothing in this repository
+	 * measures that against a real provider, so it is set far above any shape one could take. Its
+	 * only cost is a looser bound: the defect being closed is growth the peer controls, not growth
+	 * of some particular size.
+	 */
+	static final int BYTES_PER_OUTPUT_TOKEN = 1024;
+
+	/**
+	 * How many bytes one response from the remote peer may deliver before the read is abandoned —
+	 * the output ceiling the request itself carries, priced at {@link #BYTES_PER_OUTPUT_TOKEN}.
+	 *
+	 * <p>The endpoint is an untrusted peer (issue #446) and {@code max_tokens} is advisory to it,
+	 * so this is the only thing that decides how much of the shared OpenMRS heap one answer can
+	 * occupy. It bounds BYTES and not TIME: a peer trickling less than this still holds the
+	 * clinician's thread for as long as it likes, because {@code HttpRequest.timeout()} stops
+	 * applying once the response headers arrive — see
+	 * {@link LlmEngine#inferStreaming(String, String, int, Consumer)}.</p>
+	 */
+	static final int MAX_RESPONSE_BYTES = ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
+			* BYTES_PER_OUTPUT_TOKEN;
+
+	/**
+	 * How much of a non-2xx body is read. Far tighter than {@link #MAX_RESPONSE_BYTES} because an
+	 * error body is never parsed — {@code truncateForLog} cuts it down again for one log line and
+	 * nothing else reads it — and because this read TRUNCATES where the others abort. Abandoning
+	 * an oversized error body with a size complaint would cost the status code and the
+	 * {@code chartsearchai.llm.remote.*} hint that go with it, which is the operator's only clue
+	 * that the endpoint URL or model name is wrong.
+	 */
+	static final int MAX_ERROR_BODY_BYTES = 8192;
+
 	private HttpClient httpClient;
 
 	@Override
@@ -71,19 +108,22 @@ public class RemoteLlmEngine implements LlmEngine {
 		HttpRequest request = requestBuilder.build();
 
 		try {
-			HttpResponse<String> response = getHttpClient().send(request,
-					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			HttpResponse<InputStream> response = getHttpClient().send(request,
+					HttpResponse.BodyHandlers.ofInputStream());
 
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
 				log.error("Remote LLM API returned HTTP {}: {}", response.statusCode(),
-						truncateForLog(response.body()));
+						truncateForLog(readTruncatedErrorBody(response.body())));
 				throw new APIException("Remote LLM API returned HTTP " + response.statusCode()
 						+ ". Check the endpoint URL and model name in the "
 						+ "chartsearchai.llm.remote.* global properties, and the API key "
 						+ "in openmrs-runtime.properties.");
 			}
 
-			return parseResponse(response.body());
+			return parseResponse(readBoundedBody(response.body()));
+		}
+		catch (BoundedResponseStream.ResponseTooLargeException e) {
+			throw oversized(e);
 		}
 		catch (IOException e) {
 			throw new APIException("Failed to call remote LLM API: " + e.getMessage(), e);
@@ -118,13 +158,16 @@ public class RemoteLlmEngine implements LlmEngine {
 					HttpResponse.BodyHandlers.ofInputStream());
 
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				String body = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
+				String body = readTruncatedErrorBody(response.body());
 				log.error("Remote LLM API returned HTTP {}: {}", response.statusCode(),
 						truncateForLog(body));
 				throw new APIException("Remote LLM API returned HTTP " + response.statusCode());
 			}
 
 			return parseStreamingResponse(response.body(), tokenConsumer);
+		}
+		catch (BoundedResponseStream.ResponseTooLargeException e) {
+			throw oversized(e);
 		}
 		catch (IOException e) {
 			throw new APIException("Failed to call remote LLM API: " + e.getMessage(), e);
@@ -210,7 +253,67 @@ public class RemoteLlmEngine implements LlmEngine {
 
 	InferenceResult parseStreamingResponse(InputStream inputStream,
 			Consumer<String> tokenConsumer) throws IOException {
-		return LlmResponseParser.parseStreamingResponse(inputStream, tokenConsumer, log);
+		return LlmResponseParser.parseStreamingResponse(bounded(inputStream), tokenConsumer, log);
+	}
+
+	/**
+	 * The ONE place a remote response body is given its ceiling. Both ways bytes from the peer
+	 * become heap go through it — this seam and {@link #readBoundedBody} — so a caller cannot
+	 * acquire an unbounded one by reaching for the seam instead of the engine method above it.
+	 */
+	private static BoundedResponseStream bounded(InputStream body) {
+		return new BoundedResponseStream(body, MAX_RESPONSE_BYTES);
+	}
+
+	/**
+	 * The whole body as text, or {@link BoundedResponseStream.ResponseTooLargeException} if the peer
+	 * sent more than {@link #MAX_RESPONSE_BYTES}. Aborts rather than truncating, unlike
+	 * {@link #readTruncatedErrorBody}: half a completion envelope is not a completion, and a caller
+	 * handed one would report a parse failure for what is really an oversized response.
+	 */
+	String readBoundedBody(InputStream body) throws IOException {
+		try (InputStream ceilinged = bounded(body)) {
+			return new String(ceilinged.readAllBytes(), StandardCharsets.UTF_8);
+		}
+	}
+
+	/**
+	 * At most {@link #MAX_ERROR_BODY_BYTES} of a non-2xx body, abandoning the rest unread. This one
+	 * truncates instead of raising, because the caller is about to throw an
+	 * {@link APIException} naming the status code and the misconfigured global properties, and that
+	 * message is the operator's only clue; losing it to a complaint about size would trade a
+	 * diagnosis for a symptom. The cut is at a byte and not a character boundary — the result only
+	 * ever reaches {@code truncateForLog}, so a split multi-byte character costs one replacement
+	 * character in a log line.
+	 */
+	private static String readTruncatedErrorBody(InputStream body) {
+		try (InputStream in = body) {
+			byte[] buffer = new byte[MAX_ERROR_BODY_BYTES];
+			int total = 0;
+			while (total < buffer.length) {
+				int read = in.read(buffer, total, buffer.length - total);
+				if (read < 0) {
+					break;
+				}
+				total += read;
+			}
+			return new String(buffer, 0, total, StandardCharsets.UTF_8);
+		}
+		catch (IOException e) {
+			log.debug("Could not read the error body from the remote LLM API", e);
+			return "";
+		}
+	}
+
+	/** What an operator is told when the peer sent more than one answer can be. */
+	private static APIException oversized(BoundedResponseStream.ResponseTooLargeException e) {
+		return new APIException("Remote LLM API sent more than " + e.getLimit()
+				+ " bytes, and the response was abandoned rather than read into memory. The "
+				+ "endpoint configured in " + ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL
+				+ " returned more data than a completion of "
+				+ ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
+				+ " output tokens can be, so it is either not an OpenAI-compatible endpoint or "
+				+ "not the one intended.", e);
 	}
 
 	private String getRequiredGlobalProperty(String propertyName) {

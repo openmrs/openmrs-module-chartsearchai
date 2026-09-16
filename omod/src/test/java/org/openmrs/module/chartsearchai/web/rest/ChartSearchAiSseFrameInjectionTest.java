@@ -193,13 +193,15 @@ public class ChartSearchAiSseFrameInjectionTest {
 	}
 
 	/**
-	 * The second known-bad control, and it is about the DIVISION OF LABOUR between the two assertions
+	 * A known-bad control about the DIVISION OF LABOUR between the two assertions
 	 * {@link #assertOnlyTheModulesOwnDoneEvent} makes.
 	 *
-	 * <p>{@link SseEvents#assertEveryFrameIsWellFormed} PASSES on these bytes — measured — because a
-	 * run of terminators does not leave a stray field inside a frame, it opens a new one. So the frame
-	 * check is not what catches this shape; the event list is, and that is why the shared assertion
-	 * asks both questions rather than treating one as the other restated.</p>
+	 * <p>{@link SseEvents#assertEveryFrameIsWellFormed} passes on these bytes — asserted below, not
+	 * merely stated — because a run of terminators does not leave a stray field inside a frame, it
+	 * opens a new one. So the frame check is not what catches this shape; the event list is, and that
+	 * is why the shared assertion asks both questions rather than treating one as the other restated.
+	 * A frame check later made strict enough to catch a run would redden that line, which is the
+	 * moment to rewrite this division of labour rather than to delete the assertion.</p>
 	 */
 	@Test
 	public void aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee() throws Exception {
@@ -207,6 +209,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 		unfixed.write(("event: token\ndata: " + REAL_ANSWER + FORGED_AFTER_A_RUN + "\n\n")
 				.getBytes(StandardCharsets.UTF_8));
 
+		SseEvents.assertEveryFrameIsWellFormed(unfixed);
 		assertEquals(Arrays.asList("token", "done"), SseEvents.types(unfixed),
 				"a run of terminators in a payload must be read as ending the genuine frame and "
 						+ "opening a forged one — if this reads as one event, the shape this case is "
@@ -251,15 +254,16 @@ public class ChartSearchAiSseFrameInjectionTest {
 	}
 
 	/**
-	 * The known-bad control for every assertion above: the bytes the writer emitted BEFORE the fix,
-	 * hand-framed here because the production writer can no longer be made to emit them, and
-	 * {@link SseEvents} must SEE the forgery in them.
+	 * The known-bad control for the cases that read a written stream back through {@link SseEvents}:
+	 * the bytes the writer emitted BEFORE the fix, hand-framed here because the production writer can
+	 * no longer be made to emit them, and {@link SseEvents} must SEE the forgery in them.
 	 *
-	 * <p>It is the one thing in this class that frames a payload itself, and it earns that: the other
-	 * tests pass either because the writer neutralises the terminator or because the decoder cannot
-	 * tell that it did not. A decoder narrowed back to LF-only — which is how this package's decoder
-	 * was written until this finding — would leave all four green on a stream carrying a forged
-	 * frame, and that is a green suite reporting the vulnerability as fixed.</p>
+	 * <p>Why it is needed: those cases pass either because the writer neutralises the terminator or
+	 * because the decoder cannot tell that it did not, and nothing else separates the two. A decoder
+	 * narrowed back to LF-only — which is how this package's decoder was written until this finding —
+	 * leaves them green on a stream carrying a forged frame, which is a green suite reporting the
+	 * vulnerability as fixed. What reddens under that narrowing is this case and
+	 * {@link #aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee}.</p>
 	 */
 	@Test
 	public void theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere() throws Exception {
@@ -311,10 +315,9 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * order, with each CR arriving as the line break SSE can carry.
 	 *
 	 * <p>Whole rather than {@code contains}, because the two halves of this fix are separately
-	 * defeatable and only one of them has four tests. Measured: a writer that STRIPPED terminators
-	 * instead of framing them left every security assertion in this class green — no forged event, no
-	 * malformed frame — while silently deleting the clinician's text. This is the assertion that
-	 * reddens on it.</p>
+	 * defeatable and the security half is the one with cases of its own. Measured: a writer that
+	 * STRIPPED terminators instead of framing them raised no forged event and no malformed frame,
+	 * while silently deleting the clinician's text. This is the assertion that reddens on it.</p>
 	 */
 	private void assertCarriedWhole(String channel, String payload) {
 		SseEvent event = SseEvents.ofType(out, channel);

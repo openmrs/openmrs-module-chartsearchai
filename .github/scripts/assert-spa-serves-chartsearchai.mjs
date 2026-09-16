@@ -51,10 +51,18 @@ const ROUTES = '/openmrs/spa/routes.registry.json';
 // can be asked WHICH commit it is serving rather than only whether a file exists.
 const ESM_SHA = '/openmrs/spa/chartsearchai-esm.sha';
 
-// The commit the deployment ought to be serving, resolved by the workflow (deploy.yml) so this
-// script needs no GitHub access of its own. Left empty, the sha comparison is skipped and only
-// the provenance check below runs — an older image predating the stamp then fails on the stamp
-// being absent, which is the correct outcome and says so.
+// The ESM's main tip, resolved by deploy.yml. Reported, never failed on — and that is a
+// deliberate demotion, not laziness. Nothing rebuilds the frontend image when the ESM repo
+// moves: build-docker.yml triggers on pushes to THIS repo and on workflow_dispatch, and there is
+// no schedule, workflow_run or repository_dispatch watching the other one. So between an ESM
+// merge and the next module-repo push, the live image is legitimately behind that tip, and a
+// gate that failed on it would fail every deploy while no fresher image existed — sending
+// whoever read it to the host for a problem that was not there.
+//
+// What this leaves uncovered, stated rather than papered over: an image that is wholly stale but
+// self-consistent passes both hard checks below. Closing that needs the expectation to come from
+// the registry (the ESM sha the live tag was built from) rather than from a branch tip, which is
+// a bigger change than this one.
 const EXPECTED_SHA = (process.env.ESM_EXPECTED_SHA || '').trim();
 
 // Overridable so the gate can be exercised without waiting out the full poll.
@@ -110,13 +118,19 @@ async function probe(page, paths) {
 async function readHead(page, url) {
   return page.evaluate(
     async ({ u, challengeMs }) => {
+      // `cache: 'no-store'` is a BROWSER-cache directive and sends no request header, so an edge
+      // cache may still answer. The entry is a `.js`, which is in Cloudflare's default cacheable
+      // set, while the `.sha` stamp is not — an edge-cached entry compared against an
+      // origin-fresh stamp is exactly the comparison this gate must not get wrong, and the retry
+      // loop cannot clear an edge cache. So the URL is made unique per read.
+      const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}`;
       // Polls out a 403 the same way the fixed probe does. Without it a transient challenge on
       // this one asset reads as "the importmap names a file that is not served", which is a
       // different and much more alarming failure than the one that happened.
       const deadline = Date.now() + challengeMs;
       for (;;) {
         try {
-          const r = await fetch(u, { cache: 'no-store' });
+          const r = await fetch(bust, { cache: 'no-store' });
           if (r.status !== 403 || Date.now() > deadline) {
             return { url: u, status: r.status, lastModified: r.headers.get('last-modified') };
           }
@@ -130,19 +144,32 @@ async function readHead(page, url) {
   );
 }
 
-/** The importmap entry for the ESM, resolved against the SPA base, or null. */
+/**
+ * The importmap entry for the ESM, resolved against the SPA base, or null.
+ *
+ * `pathname` on purpose: the gate reads everything same-origin through the page that cleared the
+ * challenge, so a specifier naming another host would be read from THIS one. That is a wrong
+ * answer rather than a missing one, so it is refused below instead.
+ */
 function entryUrlFrom(importmapBody) {
   try {
     const specifier = (JSON.parse(importmapBody).imports || {})[ESM];
-    return specifier ? new URL(specifier, `${BASE}/openmrs/spa/`).pathname : null;
+    if (!specifier) return null;
+    const resolved = new URL(specifier, `${BASE}/openmrs/spa/`);
+    if (resolved.origin !== new URL(BASE).origin) return { foreign: resolved.href };
+    return resolved.pathname;
   } catch {
     return null;
   }
 }
 
-/** Returns the reasons the deployment is not serving the ESM; empty means healthy. */
+/**
+ * Splits what it finds: `problems` fail the gate, `warnings` are printed and do not. The only
+ * warning is the ESM-tip comparison — see EXPECTED_SHA for why it cannot be a failure.
+ */
 function problemsWith({ importmap, routes, esmSha }, entryHead) {
   const problems = [];
+  const warnings = [];
   const enc = (r) => `content-encoding: ${r.encoding ?? 'none'}`;
 
   if (importmap.status !== 200) {
@@ -188,10 +215,10 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
           ' — most likely an image built before the stamp existed, answered by the SPA fallback',
       );
     } else if (EXPECTED_SHA && served !== EXPECTED_SHA) {
-      problems.push(
-        `serving ESM commit ${served.slice(0, 12)}, but ${EXPECTED_SHA.slice(0, 12)} is current on the ESM's main` +
-          ' — either the host is running an older image than the one just built, or main moved ahead' +
-          ' mid-deploy, in which case the next deploy clears it',
+      warnings.push(
+        `serving ESM commit ${served.slice(0, 12)}; the ESM's main is at ${EXPECTED_SHA.slice(0, 12)}.` +
+          ' Expected whenever the ESM has moved since the frontend image was last built — only a new' +
+          ' image build changes it, and no deploy can.',
       );
     }
 
@@ -230,16 +257,36 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     }
   }
 
+  // An importmap that names the ESM with an empty or foreign specifier passed the whole gate:
+  // `names.includes(ESM)` was true, the entry URL came back null, and every check below was
+  // skipped. Contrived for this deployment, but it produced a CONFIDENT green, which is the one
+  // outcome this script exists to stop being trusted.
+  if (importmap.status === 200 && !problems.length) {
+    const entry = entryUrlFrom(importmap.body);
+    if (entry === null) {
+      problems.push(`${IMPORTMAP} names ${ESM} but gives it no usable specifier`);
+    } else if (typeof entry === 'object' && entry.foreign) {
+      problems.push(`${IMPORTMAP} points ${ESM} at another origin (${entry.foreign}), which this gate cannot verify`);
+    }
+  }
+
   // Outside the stamp's branch on purpose: an entry the importmap names but nginx does not serve
   // is a failure whether or not the stamp exists to date it.
+  //
+  // 403 and 0 are told apart from a genuine 404: readHead polls a challenge out, but it gives up
+  // after CHALLENGE_MS and returns the 403, and "the importmap names a file that is not served"
+  // would then be both alarming and wrong.
   if (entryHead && entryHead.status !== 200) {
+    const unreachable = entryHead.status === 403 || entryHead.status === 0;
     problems.push(
       `${entryHead.url} returned HTTP ${entryHead.status}${entryHead.error ? ` (${entryHead.error})` : ''}` +
-        ' — the importmap names a file that is not served',
+        (unreachable
+          ? ' — could not be read at all (challenge or network), so nothing about it was checked'
+          : ' — the importmap names a file that is not served'),
     );
   }
 
-  return problems;
+  return { problems, warnings };
 }
 
 const browser = await chromium.launch({ headless: false });
@@ -248,15 +295,35 @@ try {
   let problems = ['the gate never completed a probe'];
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    let warnings = [];
+    let served = null;
     try {
       const probed = await probe(page, { importmap: IMPORTMAP, routes: ROUTES, esmSha: ESM_SHA });
-      const entryPath = probed.importmap.status === 200 ? entryUrlFrom(probed.importmap.body) : null;
-      problems = problemsWith(probed, entryPath ? await readHead(page, entryPath) : null);
+      const entry = probed.importmap.status === 200 ? entryUrlFrom(probed.importmap.body) : null;
+      // Only a same-origin path is readable; a foreign or missing specifier is reported by
+      // problemsWith instead of fetched.
+      const entryHead = typeof entry === 'string' ? await readHead(page, entry) : null;
+      ({ problems, warnings } = problemsWith(probed, entryHead));
+      served = {
+        sha: (probed.esmSha.body || '').trim().slice(0, 12) || null,
+        stampAt: probed.esmSha.lastModified,
+        entry: entryHead && entryHead.url,
+        entryAt: entryHead && entryHead.lastModified,
+      };
     } catch (e) {
       problems = [`probe failed: ${e.message.split('\n')[0]}`];
     }
+    for (const w of warnings) console.log(`note: ${w}`);
     if (problems.length === 0) {
-      console.log(`OK: ${BASE} serves an importmap naming ${ESM} (attempt ${attempt})`);
+      // The whole premise here is that a green gate was once trusted wrongly, so say what was
+      // actually established rather than only that it passed.
+      console.log(`OK: ${BASE} serves ${ESM} (attempt ${attempt})`);
+      if (served) {
+        console.log(`  ESM commit served: ${served.sha ?? 'unknown'} (stamp ${served.stampAt ?? 'no Last-Modified'})`);
+        console.log(`  entry bundle: ${served.entry ?? 'not read'} (${served.entryAt ?? 'no Last-Modified'})`);
+        console.log('  checked: the entry does not pre-date this build. NOT checked: whether the whole');
+        console.log('  image is older than the registry — see EXPECTED_SHA in this script.');
+      }
       process.exit(0);
     }
     console.log(`attempt ${attempt}/${ATTEMPTS}: ${problems.join('; ')}`);
@@ -276,14 +343,23 @@ try {
       'importmap.json — Dockerfile.frontend guards the image against exactly',
       'that at build time.',
       '',
-      'A commit-sha or provenance failure above means something different: the',
-      'files are served, but not all from the build that was just pushed. The',
-      'image on Docker Hub has been verified consistent in that situation, so',
-      'look at the host — `nightly-chartsearch` is a MUTABLE tag, and',
-      '`docker compose up -d` recreates a service only when the resolved image',
-      'ID changes, so a host that does not pull first keeps running whatever it',
-      'cached. The per-commit `sha-<commit>` tags now published alongside it can',
-      'be pinned via TAG, which docker-compose.yml already parameterises.',
+      'A provenance failure above means something different: the files are served,',
+      'but not all from one build. The image on Docker Hub was verified consistent',
+      'when this happened, so look at the host — `nightly-chartsearch` is a MUTABLE',
+      'tag, and `docker compose up -d` recreates a service only when the resolved',
+      'image ID changes, so a host that does not pull first keeps running whatever',
+      'it cached. docker-compose.yml parameterises `${TAG:-nightly-chartsearch}`,',
+      'and build-docker.yml now publishes `sha-<commit>` beside the moving tag, so',
+      'an exact image can be pinned — but note what that tag does and does not say:',
+      'it is the MODULE commit, and the ESM is re-cloned on every build, so a',
+      'dispatch re-run at the same module commit re-publishes it with different ESM',
+      'content. It pins an image, not an ESM revision.',
+      '',
+      'Two directions this gate does NOT cover, so that a green run is not read for',
+      'more than it says: a wholly stale but self-consistent image (see EXPECTED_SHA',
+      'above), and the mirror of the observed failure — a NEW entry beside OLD',
+      'chunks, which is equally fatal and which only the entry bundle being checked',
+      'leaves invisible.',
     ].join('\n'),
   );
   process.exit(1);

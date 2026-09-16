@@ -26,11 +26,32 @@ WORKDIR /app
 
 RUN openmrs assemble --mode config --config spa-build-config.json
 
-# Served as a plain file so the post-deploy gate can ask what it is looking at. It lands
-# before the pre-compression pass below so it gets the same sibling treatment as every
-# other asset, and so its own Last-Modified matches the assembly it came from — which is
-# what lets the gate compare the entry bundle's provenance against it.
+# Served as a plain file so the post-deploy gate can ask what it is looking at.
+#
+# Its mtime is NOT the assembly's: `COPY --from` preserves the source's, and the source was
+# written by `git rev-parse` in the stage above, before `yarn build`. So it is the EARLIEST
+# artifact of its own build, minutes older than anything `openmrs assemble` wrote. That ordering
+# is the whole basis of the gate's provenance check — an entry bundle older than this stamp
+# cannot have come from this build — which is why the assertion below exists rather than a
+# comment claiming it.
+#
+# It lands before the pre-compression pass so it is compressed like everything else; measured, a
+# 41-byte sha gzips LARGER than it started, so precompress-spa.mjs writes a `.br` and no `.gz`.
+# Harmless (nginx tries `.br` first, and a gzip-only client gets the plain file at the same
+# mtime), but do not read this as "siblings, plural".
 COPY --from=chartsearchai-esm /esm/ESM_SHA /app/dist/chartsearchai-esm.sha
+
+# Assert that ordering here, where it is cheap, instead of discovering it on a deploy. If a later
+# edit moves the COPY above after the assembly, or `openmrs assemble` ever normalises mtimes, the
+# gate's comparison inverts and fails every healthy deploy — a check that cries wolf gets muted,
+# which is worse than not having it. Nothing else in the build or the gate verifies this.
+RUN node -e 'const {statSync,readFileSync}=require("fs"); \
+  const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-chartsearchai-app"]; \
+  if(!spec){console.error("importmap does not name the ESM");process.exit(1);} \
+  const entry="/app/dist/"+spec.replace(/^\.\//,""); \
+  const stamp=statSync("/app/dist/chartsearchai-esm.sha").mtimeMs, e=statSync(entry).mtimeMs; \
+  console.log("stamp mtime",stamp,"entry mtime",e,entry); \
+  if(stamp>e){console.error("stamp is NEWER than the entry bundle: the gate provenance check would invert");process.exit(1);}'
 
 # Give the assembled SPA the pre-compressed siblings the base image's nginx
 # expects. Without them the base's own siblings answer for these files — see

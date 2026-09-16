@@ -41,7 +41,8 @@
 //
 // Usage: xvfb-run -a node assert-spa-serves-chartsearchai.mjs [baseUrl]
 
-import { chromium } from 'playwright';
+// Imported inside the run block, not here, so the self-test beside this file can drive `probe`,
+// `readHead`, `entryUrlFrom` and `problemsWith` without playwright installed at all.
 
 const BASE = (process.argv[2] || 'https://chartsearchai.openmrs.org').replace(/\/+$/, '');
 const ESM = '@openmrs/esm-chartsearchai-app';
@@ -86,14 +87,24 @@ async function probe(page, paths) {
     async ({ paths, challengeMs }) => {
       const read = async (path) => {
         const deadline = Date.now() + challengeMs;
+        // Unique per read, for the same reason readHead does it: `cache: 'no-store'` sends no
+        // request header, so an edge cache may answer. Extension defaults are only one way
+        // Cloudflare caches — an origin `Cache-Control` or a cache-everything rule reaches the
+        // stamp too, and an edge-stale stamp reads OLDER than it is, which flips the provenance
+        // comparison to a false GREEN on exactly the failure this gate exists for.
+        const bust = `${path}${path.includes('?') ? '&' : '?'}cb=${Date.now()}`;
         for (;;) {
           try {
-            const r = await fetch(path, { cache: 'no-store' });
+            const r = await fetch(bust, { cache: 'no-store' });
             if (r.status !== 403 || Date.now() > deadline) {
               return {
                 status: r.status,
                 encoding: r.headers.get('content-encoding'),
                 lastModified: r.headers.get('last-modified'),
+                // So a comparison made against a CACHED stamp is visible in the output rather
+                // than only in its conclusion.
+                cache: r.headers.get('cf-cache-status'),
+                age: r.headers.get('age'),
                 body: await r.text(),
               };
             }
@@ -231,12 +242,15 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     // so an entry older than the stamp cannot have come from it.
     //
     // This works through the compressed variants a browser is actually served, because
-    // precompress-spa.mjs stamps each sibling with its source's mtime (utimesSync, and
-    // Dockerfile.frontend's own guard relies on the same thing).
+    // precompress-spa.mjs stamps each sibling with its source's mtime (utimesSync). Measured:
+    // with distinct mtimes, a stamp at 21:01 yields a .br at 21:01 and an entry at 21:09 a .br
+    // at 21:09, so the comparison survives compression. Note what does NOT cover it —
+    // Dockerfile.frontend's final-stage sibling guard lists importmap.json and
+    // routes.registry.json only, i.e. neither of the two files compared here.
     //
-    // Replayed against 2026-09-15's real values — entry Tue 15 Sep 10:05:20 GMT against a stamp
-    // from the 21:01:32 assembly — this reports the entry as pre-dating the build. The opposite
-    // skew, a whole directory consistently old, is caught by the sha comparison above instead.
+    // Replayed against 2026-09-15's real values — an entry at Tue 15 Sep 10:05:20 GMT against a
+    // stamp from the build that assembled at 21:01:32 (the stamp's own mtime is earlier still,
+    // being the `git rev-parse` time) — this reports the entry as pre-dating the build.
     if (entryHead && entryHead.status === 200) {
       const entryAt = Date.parse(entryHead.lastModified ?? '');
       const stampAt = Date.parse(esmSha.lastModified ?? '');
@@ -257,10 +271,12 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     }
   }
 
-  // An importmap that names the ESM with an empty or foreign specifier passed the whole gate:
-  // `names.includes(ESM)` was true, the entry URL came back null, and every check below was
-  // skipped. Contrived for this deployment, but it produced a CONFIDENT green, which is the one
-  // outcome this script exists to stop being trusted.
+  // Two shapes an importmap can take that the name check above is satisfied by. They failed
+  // differently, which is worth keeping straight: an EMPTY specifier resolved to null, so every
+  // check below was skipped and the gate went confidently green; a FOREIGN one resolved to a
+  // non-null pathname, so the checks ran — against this origin at the other host's path, which
+  // is a wrong answer rather than a missing one. Contrived for this deployment; both are refused
+  // because a confident green is the single outcome this script exists to stop being trusted.
   if (importmap.status === 200 && !problems.length) {
     const entry = entryUrlFrom(importmap.body);
     if (entry === null) {
@@ -289,10 +305,25 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   return { problems, warnings };
 }
 
+// Everything above is importable; the gate itself is below. GATE_SELFTEST makes importing this
+// file inert, which is what lets assert-spa-serves-chartsearchai.test.mjs exercise the real
+// functions rather than a copy of them — every behaviour here used to be first executed against
+// production.
+export { entryUrlFrom, problemsWith, probe, readHead };
+
+if (process.env.GATE_SELFTEST) {
+  // imported for its exports only
+} else {
+const { chromium } = await import('playwright');
 const browser = await chromium.launch({ headless: false });
 try {
   const page = await browser.newPage();
   let problems = ['the gate never completed a probe'];
+  // The newest attempt's problems replace the older ones, so a transient error on the LAST
+  // attempt would bury a real finding from the first and send the reader down the wrong
+  // paragraph of the epilogue. Both are kept and both are printed.
+  let firstProblems = null;
+  let lastDiagnostics = null;
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     let warnings = [];
@@ -307,22 +338,41 @@ try {
       served = {
         sha: (probed.esmSha.body || '').trim().slice(0, 12) || null,
         stampAt: probed.esmSha.lastModified,
+        stampCache: probed.esmSha.cache,
         entry: entryHead && entryHead.url,
         entryAt: entryHead && entryHead.lastModified,
+        // Whether the comparison actually ran, asserted rather than inferred from a caller
+        // invariant — the success line below says it ran, and must not say so on trust.
+        provenanceCompared: Boolean(
+          entryHead &&
+            entryHead.status === 200 &&
+            Number.isFinite(Date.parse(entryHead.lastModified ?? '')) &&
+            Number.isFinite(Date.parse(probed.esmSha.lastModified ?? '')),
+        ),
       };
+      lastDiagnostics = served;
     } catch (e) {
       problems = [`probe failed: ${e.message.split('\n')[0]}`];
     }
+    if (firstProblems === null && problems.length) firstProblems = problems;
     for (const w of warnings) console.log(`note: ${w}`);
     if (problems.length === 0) {
       // The whole premise here is that a green gate was once trusted wrongly, so say what was
       // actually established rather than only that it passed.
       console.log(`OK: ${BASE} serves ${ESM} (attempt ${attempt})`);
       if (served) {
-        console.log(`  ESM commit served: ${served.sha ?? 'unknown'} (stamp ${served.stampAt ?? 'no Last-Modified'})`);
+        console.log(
+          `  ESM commit served: ${served.sha ?? 'unknown'} (stamp ${served.stampAt ?? 'no Last-Modified'}` +
+            `${served.stampCache ? `, cf-cache-status: ${served.stampCache}` : ''})`,
+        );
         console.log(`  entry bundle: ${served.entry ?? 'not read'} (${served.entryAt ?? 'no Last-Modified'})`);
-        console.log('  checked: the entry does not pre-date this build. NOT checked: whether the whole');
-        console.log('  image is older than the registry — see EXPECTED_SHA in this script.');
+        console.log(
+          served.provenanceCompared
+            ? '  checked: the entry does not pre-date this build.'
+            : '  NOT checked: the provenance comparison did not run (see above).',
+        );
+        console.log('  NOT checked either: whether the whole image is older than the registry, or');
+        console.log('  whether a NEW entry sits beside OLD chunks — see this script\'s epilogue.');
       }
       process.exit(0);
     }
@@ -332,6 +382,21 @@ try {
 
   console.error(`\nFAILED: ${BASE} does not load ${ESM}.`);
   for (const p of problems) console.error(`  - ${p}`);
+  if (firstProblems && firstProblems.join('; ') !== problems.join('; ')) {
+    console.error('\n  The FIRST attempt reported something different, which is the more likely');
+    console.error('  diagnosis if what remains above looks transient:');
+    for (const p of firstProblems) console.error(`  - ${p}`);
+  }
+  if (lastDiagnostics) {
+    console.error(
+      `\n  Served ESM commit: ${lastDiagnostics.sha ?? 'unknown'}` +
+        ` (stamp ${lastDiagnostics.stampAt ?? 'no Last-Modified'}` +
+        `${lastDiagnostics.stampCache ? `, cf-cache-status: ${lastDiagnostics.stampCache}` : ''})`,
+    );
+    console.error(
+      `  Entry bundle: ${lastDiagnostics.entry ?? 'not read'} (${lastDiagnostics.entryAt ?? 'no Last-Modified'})`,
+    );
+  }
   console.error(
     [
       '',
@@ -349,11 +414,12 @@ try {
       'tag, and `docker compose up -d` recreates a service only when the resolved',
       'image ID changes, so a host that does not pull first keeps running whatever',
       'it cached. docker-compose.yml parameterises `${TAG:-nightly-chartsearch}`,',
-      'and build-docker.yml now publishes `sha-<commit>` beside the moving tag, so',
-      'an exact image can be pinned — but note what that tag does and does not say:',
-      'it is the MODULE commit, and the ESM is re-cloned on every build, so a',
-      'dispatch re-run at the same module commit re-publishes it with different ESM',
-      'content. It pins an image, not an ESM revision.',
+      'and build-docker.yml now publishes `sha-<commit>` beside the moving tag. Read',
+      'that tag for what it is: the MODULE commit, with the ESM re-cloned on every',
+      'build, so a dispatch re-run at the same module commit re-publishes the same',
+      'tag over different ESM content. Being re-publishable it is mutable too, so it',
+      'narrows what a host can be running without pinning it — only a digest pins.',
+      'Nothing in this repo sets TAG; doing so is a host-side change.',
       '',
       'Two directions this gate does NOT cover, so that a green run is not read for',
       'more than it says: a wholly stale but self-consistent image (see EXPECTED_SHA',
@@ -365,4 +431,5 @@ try {
   process.exit(1);
 } finally {
   await browser.close();
+}
 }

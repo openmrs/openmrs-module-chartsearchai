@@ -23,13 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # Before the deploy, not after: this is a read-only API call that the deploy does not depend
-      # on, so failing it here costs nothing, while failing it afterwards would turn the run red
-      # with production already changed AND the gate never run — losing the assertion entirely.
-      # It is reported to the gate as a NOTE rather than a failure; see EXPECTED_SHA in the script
-      # for why a branch tip cannot be a hard expectation here.
+      # Before the deploy so a failure here cannot leave production changed with the gate never
+      # run — and `continue-on-error` because the value is only a printed NOTE (see EXPECTED_SHA
+      # in the script for why a branch tip cannot be a hard expectation). Without that, an API
+      # blip or a token-scope change would block the deploy to compute something the gate is
+      # forbidden to fail on. The script treats an empty value as "skip the note".
       - name: Resolve the ESM commit that should be live
         id: esm
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -75,6 +76,12 @@ jobs:
       # headless Chromium never clears Cloudflare's managed challenge (the page
       # stays on the interstitial and an in-page fetch throws), while a headed
       # one read the importmap at t+10s. The script's header records the rest.
+      # The gate's own predicates, before they are trusted against production. Runs in about a
+      # second and needs no browser: it imports the gate with GATE_SELFTEST set and drives the
+      # real functions over fabricated inputs, including the 2026-09-15 defect's own timestamps.
+      - name: Self-test the gate's logic
+        run: node .github/scripts/assert-spa-serves-chartsearchai.test.mjs
+
       - name: Assert the deployed SPA loads the Chart Search AI ESM
         env:
           ESM_EXPECTED_SHA: ${{ steps.esm.outputs.sha }}

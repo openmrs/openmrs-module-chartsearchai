@@ -72,7 +72,7 @@ public class ChartSearchAiStreamEventOrderTest {
 	}
 
 	// SSE decoding lives in SseEvents so this class and the reference-grouping tests cannot
-	// drift apart on the wire format again; the decoder there is this class's original one.
+	// drift apart on the wire format again.
 	private List<SseEvent> emittedEvents() {
 		return SseEvents.parse(out);
 	}

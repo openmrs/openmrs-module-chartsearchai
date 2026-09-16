@@ -471,8 +471,8 @@ public class LlmProviderTest {
 	@Test
 	public void streamingConsumer_shouldDecodeUnicodeCarriageReturnEscape() {
 		// The second spelling of the same code point. \\u000d is as legal in a JSON string as \\r, so
-		// the escape above is not the only route by which a CR — alone among these characters, a line
-		// terminator to every SSE client — reaches the streaming channels. Pinned as a LITERAL here
+		// the escape above is not the only route by which a CR reaches the streaming channels.
+		// Pinned as a LITERAL here
 		// because it is what ChartSearchAiSseFrameInjectionTest's payloads assume already arrived:
 		// the framing over there can only be tested on the character, never on the spelling.
 		String json = "{\"reasoning\": \"x\", \"answer\": \"before\\u000dafter\", \"citations\": []}";

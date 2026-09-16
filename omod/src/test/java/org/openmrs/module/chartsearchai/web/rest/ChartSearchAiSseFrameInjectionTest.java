@@ -177,7 +177,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * frame of their OWN, so both frames are well formed and the forged `done` carries nothing but its
 	 * own JSON — no answer text to make it unparseable, whatever preceded it. Measured on the pre-fix
 	 * bytes, that is two clean events, `token` then a `done` reading "Stop all anticoagulants"; the
-	 * case below pins that the framing refuses it, and
+	 * this case pins that the framing refuses it, and
 	 * {@link #aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee} pins which assertion here sees it
 	 * when it happens.</p>
 	 */
@@ -317,7 +317,8 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * <p>Whole rather than {@code contains}, because the two halves of this fix are separately
 	 * defeatable and the security half is the one with cases of its own. Measured: a writer that
 	 * STRIPPED terminators instead of framing them raised no forged event and no malformed frame,
-	 * while silently deleting the clinician's text. This is the assertion that reddens on it.</p>
+	 * while silently deleting the clinician's text — so neither the frame check nor the event list
+	 * sees it, and this assertion does.</p>
 	 */
 	private void assertCarriedWhole(String channel, String payload) {
 		SseEvent event = SseEvents.ofType(out, channel);

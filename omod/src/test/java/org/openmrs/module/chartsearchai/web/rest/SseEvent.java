@@ -13,7 +13,7 @@ package org.openmrs.module.chartsearchai.web.rest;
  * One parsed SSE event: the {@code event:} type plus its {@code data:} payload, assembled the way a
  * client does — the lines joined with LF, per {@link SseEvents}, which is also the parser.
  *
- * <p>Top-level rather than nested so both controller-streaming test classes can name the type
+ * <p>Top-level rather than nested so the test classes in this package can name the type
  * unqualified.
  */
 final class SseEvent {

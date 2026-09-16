@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,6 +19,9 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -78,6 +82,11 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	 */
 	private static final long TOLERATED = 2L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
 
+	/** ASCII only, so the envelope's byte length is its character length. */
+	private static final String CEILING_PREFIX = "{\"choices\":[{\"message\":{\"content\":\"";
+
+	private static final String CEILING_SUFFIX = "\"}}]}";
+
 	private HttpServer server;
 
 	private final AtomicLong written = new AtomicLong();
@@ -90,6 +99,9 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		server.createContext("/flood-stream", exchange -> floodStream(exchange, 200));
 		server.createContext("/flood-body", exchange -> floodBody(exchange, 200));
 		server.createContext("/flood-error", exchange -> floodBody(exchange, 500));
+		server.createContext("/ordinary-body", this::ordinaryBody);
+		server.createContext("/ordinary-stream", this::ordinaryStream);
+		server.createContext("/exactly-at-the-ceiling", this::exactlyAtTheCeiling);
 		server.start();
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME, "test-model");
@@ -139,6 +151,55 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	}
 
 	/**
+	 * The positive control for the two aborting reads. A ceiling nothing can reach would satisfy
+	 * every case above — they only ever assert that a flood STOPPED — so an ordinary completion has
+	 * to come back whole and parsed, through the same rewritten read.
+	 */
+	@Test
+	public void anOrdinaryCompletionIsStillReadAndParsedWhole() {
+		pointEngineAt("/ordinary-body");
+
+		LlmEngine.InferenceResult result = engine.infer("system", "user", 60);
+
+		assertEquals("the whole answer", result.getText(),
+				"the non-streaming read now goes through the ceiling, and must still deliver "
+						+ "every byte of a response that stays under it");
+		assertEquals(11, result.getInputTokens());
+		assertEquals(22, result.getOutputTokens());
+	}
+
+	/** The same control for the streaming read, whose parser is now handed a bounded stream. */
+	@Test
+	public void anOrdinaryTokenStreamIsStillAssembledAndDelivered() {
+		pointEngineAt("/ordinary-stream");
+		List<String> delivered = new ArrayList<String>();
+
+		LlmEngine.InferenceResult result = engine.inferStreaming("system", "user", 60,
+				delivered::add);
+
+		assertEquals("one two three", result.getText());
+		assertEquals(Arrays.asList("one", " two", " three"), delivered,
+				"every chunk must still reach the consumer as it arrives — a ceiling that "
+						+ "swallowed or reordered chunks would leave the assembled text intact");
+	}
+
+	/**
+	 * The boundary the ceiling is written on: a body of EXACTLY the ceiling is a body that fits, so
+	 * it must arrive whole. Off by one here and the largest legitimate answer is the one that fails.
+	 */
+	@Test
+	public void aBodyOfExactlyTheCeilingArrivesWholeRatherThanCutOff() {
+		pointEngineAt("/exactly-at-the-ceiling");
+
+		LlmEngine.InferenceResult result = engine.infer("system", "user", 60);
+
+		assertEquals(RemoteLlmEngine.MAX_RESPONSE_BYTES, written.get(),
+				"the fixture has to sit ON the boundary for this case to be about the boundary");
+		assertEquals(ceilingPadding(), result.getText().length(),
+				"a response of exactly the ceiling is within it and must not be abandoned");
+	}
+
+	/**
 	 * Runs the call and hands back the {@link APIException} it raised, or {@code null}. Deliberately
 	 * not {@code assertThrows}: the byte assertion is the one that says the heap was bounded, and it
 	 * has to be reached even on the run where no exception was raised at all — which is precisely
@@ -170,6 +231,35 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 						+ "the read.");
 	}
 
+	/** A well-formed completion, comfortably under the ceiling. */
+	private void ordinaryBody(HttpExchange exchange) throws IOException {
+		respondOnce(exchange, 200, "application/json",
+				("{\"choices\":[{\"message\":{\"content\":\"the whole answer\"}}],"
+						+ "\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":22}}")
+						.getBytes(StandardCharsets.UTF_8));
+	}
+
+	/** A well-formed SSE stream that ends the way a conformant peer ends one. */
+	private void ordinaryStream(HttpExchange exchange) throws IOException {
+		respondOnce(exchange, 200, "text/event-stream",
+				("data: {\"choices\":[{\"delta\":{\"content\":\"one\"}}]}\n\n"
+						+ "data: {\"choices\":[{\"delta\":{\"content\":\" two\"}}]}\n\n"
+						+ "data: {\"choices\":[{\"delta\":{\"content\":\" three\"}}]}\n\n"
+						+ "data: [DONE]\n\n").getBytes(StandardCharsets.UTF_8));
+	}
+
+	/** A well-formed completion whose body is exactly {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}. */
+	private void exactlyAtTheCeiling(HttpExchange exchange) throws IOException {
+		respondOnce(exchange, 200, "application/json",
+				(CEILING_PREFIX + repeat('z', ceilingPadding()) + CEILING_SUFFIX)
+						.getBytes(StandardCharsets.UTF_8));
+	}
+
+	/** How much filler makes {@link #CEILING_PREFIX} + filler + {@link #CEILING_SUFFIX} the ceiling. */
+	private static int ceilingPadding() {
+		return RemoteLlmEngine.MAX_RESPONSE_BYTES - CEILING_PREFIX.length() - CEILING_SUFFIX.length();
+	}
+
 	/** An SSE stream that never reaches {@code [DONE]} — one content chunk after another. */
 	private void floodStream(HttpExchange exchange, int status) throws IOException {
 		byte[] chunk = ("data: {\"choices\":[{\"delta\":{\"content\":\""
@@ -191,11 +281,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	 */
 	private void respond(HttpExchange exchange, int status, String contentType, byte[]... parts)
 			throws IOException {
-		try (InputStream request = exchange.getRequestBody()) {
-			while (request.read() >= 0) {
-				// The engine POSTs a prompt; drain it so the client's write completes.
-			}
-		}
+		drainRequest(exchange);
 		exchange.getResponseHeaders().add("Content-Type", contentType);
 		exchange.sendResponseHeaders(status, 0);
 		try (OutputStream out = exchange.getResponseBody()) {
@@ -212,6 +298,27 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		}
 		catch (IOException e) {
 			// The client stopped reading — which is the whole point of the cases above.
+		}
+	}
+
+	/** Answers with {@code status} and exactly {@code body}, counting what left. */
+	private void respondOnce(HttpExchange exchange, int status, String contentType, byte[] body)
+			throws IOException {
+		drainRequest(exchange);
+		exchange.getResponseHeaders().add("Content-Type", contentType);
+		exchange.sendResponseHeaders(status, body.length);
+		try (OutputStream out = exchange.getResponseBody()) {
+			out.write(body);
+			written.addAndGet(body.length);
+		}
+	}
+
+	/** The engine POSTs a prompt; read it so the client's write completes. */
+	private static void drainRequest(HttpExchange exchange) throws IOException {
+		try (InputStream request = exchange.getRequestBody()) {
+			while (request.read() >= 0) {
+				continue;
+			}
 		}
 	}
 

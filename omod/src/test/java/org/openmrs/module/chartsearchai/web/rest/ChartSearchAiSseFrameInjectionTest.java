@@ -135,8 +135,7 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * <p>The form feed is here for the OTHER direction, because widening the set is as silent as
 	 * shrinking it. It is not an SSE terminator and nothing strips it on the response path, so it must
 	 * come back inside its data line — which is what reddens on {@code \R}, the simplification that
-	 * would otherwise pass the whole suite while turning a form feed in the clinician's answer into a
-	 * newline.</p>
+	 * turns a form feed in the clinician's answer into a newline.</p>
 	 */
 	@Test
 	public void everyTerminatorTheSpecificationRecognisesIsNeutralised() throws Exception {

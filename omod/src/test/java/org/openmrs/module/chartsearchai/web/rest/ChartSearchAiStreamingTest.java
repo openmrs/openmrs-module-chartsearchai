@@ -465,11 +465,11 @@ public class ChartSearchAiStreamingTest {
 	/**
 	 * Reads the controller's production source as UTF-8.
 	 *
-	 * <p>One reader for every source-scanning test that reads this controller — the ones in this
-	 * class, which had each grown its own spelling of it, and since issue #336
-	 * {@code ChartSearchAiInteractionPairExtentTest}'s guard as well. Stated as "every" rather than
-	 * counted, for the reason {@link #resolveSourceFile()} gives one level up: a count here drifts the
-	 * moment a test is added, as it already has.</p>
+	 * <p>One reader for every source-scanning test that reads this controller — the ones in this class,
+	 * which had each grown its own spelling of it, and the others across the package that borrow it.
+	 * Stated as "every" rather than counted, and no longer naming one of them either, for the reason
+	 * {@link #resolveSourceFile()} gives one level up: both the count and the example drift the moment
+	 * a test is added, as each already had.</p>
 	 *
 	 * <p>The charset is explicit because the file contains non-ASCII characters and
 	 * {@code new String(byte[])} decodes with the platform default: every needle asserted here is

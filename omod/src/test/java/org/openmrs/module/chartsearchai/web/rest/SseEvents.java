@@ -35,7 +35,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p><b>It decodes the way the event-stream specification says a client must, and that is the
  * point of it rather than a detail.</b> The decoder this replaced recognised only LF as a line
  * terminator, while the spec recognises CRLF, CR and LF alike — so a lone CR written into a frame's
- * payload ends the {@code data:} line for every real client and turns whatever follows into further
+ * payload ends the {@code data:} line for a client that follows that grammar, and turns what follows into further
  * field lines of that same event, and a LF-only decoder cannot see it happen. That is the finding
  * {@link ChartSearchAiSseFrameInjectionTest} pins, and it was invisible to this package until this
  * class was the thing a conforming client would do. Field parsing (name up to the first colon, one

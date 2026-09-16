@@ -7771,8 +7771,11 @@ wrote, because each chunk is framed on its own and nothing carries the pending C
 each upstream delta becomes one frame, and char-by-char chunking is a mode `LlmProviderTest` pins. The
 writer is not changed for it — spanning a terminator across frames needs state in a per-event writer,
 for a cosmetic difference on a channel whose fidelity contract is `done.answer`. Both shapes are why
-README states that the streamed text is not byte-identical and names where the verbatim answer lives,
-instead of giving a client per-terminator arithmetic to reverse.
+README states the rule rather than the property — do not RELY on the streamed text being
+byte-identical, and use `done`'s `answer` where fidelity matters — because the property is not general:
+an answer whose breaks are LF streams back byte-identical, which is the ordinary case and is measured.
+A directive survives that; a claim about the channel does not, and four of them were refuted here one
+per review pass before this one was written as a rule.
 
 The same sweep found a second, unrelated fidelity defect on that channel and it is
 [#438](https://github.com/openmrs/openmrs-module-chartsearchai/issues/438) rather than part of this

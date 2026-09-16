@@ -60,7 +60,22 @@ jobs:
       # headless Chromium never clears Cloudflare's managed challenge (the page
       # stays on the interstitial and an in-page fetch throws), while a headed
       # one read the importmap at t+10s. The script's header records the rest.
+      # The commit the deployment ought to be serving. Resolved here rather than in the gate so
+      # the script needs no GitHub credentials of its own, and so a rate-limited lookup fails
+      # this step loudly instead of silently weakening the assertion.
+      - name: Resolve the ESM commit that should be live
+        id: esm
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sha="$(gh api repos/openmrs/openmrs-esm-chartsearchai/commits/main --jq .sha)"
+          [ -n "$sha" ] || { echo "could not resolve openmrs-esm-chartsearchai main sha" >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "expecting ESM commit $sha"
+
       - name: Assert the deployed SPA loads the Chart Search AI ESM
+        env:
+          ESM_EXPECTED_SHA: ${{ steps.esm.outputs.sha }}
         run: |
           sudo apt-get update && sudo apt-get install -y xvfb
           npm install --no-save playwright@1.59.1

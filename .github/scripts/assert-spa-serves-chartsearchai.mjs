@@ -38,6 +38,15 @@ const BASE = (process.argv[2] || 'https://chartsearchai.openmrs.org').replace(/\
 const ESM = '@openmrs/esm-chartsearchai-app';
 const IMPORTMAP = '/openmrs/spa/importmap.json';
 const ROUTES = '/openmrs/spa/routes.registry.json';
+// Written by Dockerfile.frontend from `git rev-parse HEAD` of the ESM clone, so the deployment
+// can be asked WHICH commit it is serving rather than only whether a file exists.
+const ESM_SHA = '/openmrs/spa/chartsearchai-esm.sha';
+
+// The commit the deployment ought to be serving, resolved by the workflow (deploy.yml) so this
+// script needs no GitHub access of its own. Left empty, the sha comparison is skipped and only
+// the provenance check below runs — an older image predating the stamp then fails on the stamp
+// being absent, which is the correct outcome and says so.
+const EXPECTED_SHA = (process.env.ESM_EXPECTED_SHA || '').trim();
 
 // Overridable so the gate can be exercised without waiting out the full poll.
 const ATTEMPTS = Number(process.env.GATE_ATTEMPTS || 10);
@@ -66,6 +75,7 @@ async function probe(page, paths) {
               return {
                 status: r.status,
                 encoding: r.headers.get('content-encoding'),
+                lastModified: r.headers.get('last-modified'),
                 body: await r.text(),
               };
             }
@@ -83,8 +93,33 @@ async function probe(page, paths) {
   );
 }
 
+/**
+ * Reads one asset's headers. Used for the ESM entry bundle, whose URL is only known after the
+ * importmap has been parsed, so it cannot join the fixed probe above.
+ */
+async function readHead(page, url) {
+  return page.evaluate(async (u) => {
+    try {
+      const r = await fetch(u, { cache: 'no-store' });
+      return { url: u, status: r.status, lastModified: r.headers.get('last-modified') };
+    } catch (e) {
+      return { url: u, status: 0, lastModified: null, error: e.message };
+    }
+  }, url);
+}
+
+/** The importmap entry for the ESM, resolved against the SPA base, or null. */
+function entryUrlFrom(importmapBody) {
+  try {
+    const specifier = (JSON.parse(importmapBody).imports || {})[ESM];
+    return specifier ? new URL(specifier, `${BASE}/openmrs/spa/`).pathname : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Returns the reasons the deployment is not serving the ESM; empty means healthy. */
-function problemsWith({ importmap, routes }) {
+function problemsWith({ importmap, routes, esmSha }, entryHead) {
   const problems = [];
   const enc = (r) => `content-encoding: ${r.encoding ?? 'none'}`;
 
@@ -108,6 +143,44 @@ function problemsWith({ importmap, routes }) {
     problems.push(`${ROUTES} names no chartsearchai route (${enc(routes)})`);
   }
 
+  // Which commit is being served, and is the whole assembly from one build?
+  //
+  // Both checks exist because of 2026-09-15: the importmap named the ESM, both files above were
+  // present and correct, the deploy and this gate were green — and the browser ran pre-merge
+  // code, because the served directory mixed two builds and the ENTRY bundle was the older one.
+  // Chunk ids are per-build, so an old entry requests the old build's chunks and the new ones are
+  // never loaded. Asserting that a named file exists cannot see this; asserting provenance can.
+  if (esmSha.status !== 200) {
+    problems.push(
+      `${ESM_SHA} returned HTTP ${esmSha.status}${esmSha.error ? ` (${esmSha.error})` : ''}` +
+        ' — an image built before this stamp existed, so its age cannot be checked',
+    );
+  } else {
+    const served = esmSha.body.trim();
+    if (!/^[0-9a-f]{40}$/.test(served)) {
+      problems.push(`${ESM_SHA} is not a commit sha: ${JSON.stringify(served.slice(0, 60))}`);
+    } else if (EXPECTED_SHA && served !== EXPECTED_SHA) {
+      problems.push(
+        `serving ESM commit ${served.slice(0, 12)} but ${EXPECTED_SHA.slice(0, 12)} is current on main` +
+          ' — the frontend container is running an older image than the one just built',
+      );
+    }
+
+    // Same assembly, so same mtime: Dockerfile.frontend copies the stamp in beside the assembled
+    // output. A differing Last-Modified on the entry the importmap actually names means the
+    // directory holds more than one build, whichever file happens to be newer.
+    if (entryHead && entryHead.status === 200 && entryHead.lastModified && esmSha.lastModified) {
+      if (entryHead.lastModified !== esmSha.lastModified) {
+        problems.push(
+          `${entryHead.url} is from a different build than ${ESM_SHA}` +
+            ` (entry: ${entryHead.lastModified}; stamp: ${esmSha.lastModified})`,
+        );
+      }
+    } else if (entryHead && entryHead.status !== 200) {
+      problems.push(`${entryHead.url} returned HTTP ${entryHead.status} — the importmap names a file that is not served`);
+    }
+  }
+
   return problems;
 }
 
@@ -118,7 +191,9 @@ try {
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
-      problems = problemsWith(await probe(page, { importmap: IMPORTMAP, routes: ROUTES }));
+      const probed = await probe(page, { importmap: IMPORTMAP, routes: ROUTES, esmSha: ESM_SHA });
+      const entryPath = probed.importmap.status === 200 ? entryUrlFrom(probed.importmap.body) : null;
+      problems = problemsWith(probed, entryPath ? await readHead(page, entryPath) : null);
     } catch (e) {
       problems = [`probe failed: ${e.message.split('\n')[0]}`];
     }
@@ -142,6 +217,15 @@ try {
       'that no stale importmap.json.br or .gz shadows the assembled',
       'importmap.json — Dockerfile.frontend guards the image against exactly',
       'that at build time.',
+      '',
+      'A commit-sha or provenance failure above means something different: the',
+      'files are served, but not all from the build that was just pushed. The',
+      'image on Docker Hub has been verified consistent in that situation, so',
+      'look at the host — `nightly-chartsearch` is a MUTABLE tag, and',
+      '`docker compose up -d` recreates a service only when the resolved image',
+      'ID changes, so a host that does not pull first keeps running whatever it',
+      'cached. The per-commit `sha-<commit>` tags now published alongside it can',
+      'be pinned via TAG, which docker-compose.yml already parameterises.',
     ].join('\n'),
   );
   process.exit(1);

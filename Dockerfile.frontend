@@ -7,6 +7,13 @@ ARG CACHE_BUST
 RUN git clone --depth 1 https://github.com/openmrs/openmrs-esm-chartsearchai.git /esm
 
 WORKDIR /esm
+# Record WHICH commit was cloned, and ship it with the assembly. Without it, a stale
+# deploy is invisible: measured 2026-09-15, the served ESM directory held files from two
+# builds — the numbered chunks from the current one and the ENTRY bundle the importmap
+# names from a build 11 hours older — so the browser ran pre-merge code while every file
+# the gate could name was present and the deploy reported success. The entry is byte-
+# identical in size across those builds (83,245), so nothing comparing sizes sees it.
+RUN git rev-parse HEAD > /esm/ESM_SHA
 RUN yarn install --immutable && yarn build && yarn pack
 
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build-spa
@@ -18,6 +25,12 @@ COPY --from=chartsearchai-esm /esm/package.tgz /chartsearch/package.tgz
 WORKDIR /app
 
 RUN openmrs assemble --mode config --config spa-build-config.json
+
+# Served as a plain file so the post-deploy gate can ask what it is looking at. It lands
+# before the pre-compression pass below so it gets the same sibling treatment as every
+# other asset, and so its own Last-Modified matches the assembly it came from — which is
+# what lets the gate compare the entry bundle's provenance against it.
+COPY --from=chartsearchai-esm /esm/ESM_SHA /app/dist/chartsearchai-esm.sha
 
 # Give the assembled SPA the pre-compressed siblings the base image's nginx
 # expects. Without them the base's own siblings answer for these files — see

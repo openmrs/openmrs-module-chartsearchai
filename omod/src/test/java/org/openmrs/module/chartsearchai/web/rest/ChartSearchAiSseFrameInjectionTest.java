@@ -134,9 +134,8 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 *
 	 * <p>The payload also ENDS in a terminator, which is what pins the framing's {@code -1} limit: at
 	 * Java's default limit the split drops trailing empty strings, so the last {@code data: } line is
-	 * never written and the clinician loses the line break the model put at the end of its text. That
-	 * mutation left every other case in this class green, this one included until the payload gained
-	 * its trailing CR.</p>
+	 * never written and the clinician loses the line break the model put at the end of its text. This
+	 * is the case that reddens on it, and it did not until the payload gained its trailing CR.</p>
 	 *
 	 * <p>The form feed is here for the OTHER direction, because widening the set is as silent as
 	 * shrinking it. It is not an SSE terminator and nothing strips it on the response path, so it must

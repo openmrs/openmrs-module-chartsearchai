@@ -1386,7 +1386,8 @@ public class DrugSafetyValidator {
 	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and the number of
 	 * withheld pairs and each one's RATING are logged in a WARN — a silent truncation would read to a
 	 * clinician as "everything is covered". (It NAMED each pair until issue #439; the screening arm's
-	 * pair is two of the patient's own prescriptions, so the names were PHI. ADR Decision 102.) <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
+	 * pair is two of the patient's own prescriptions, so the names were PHI. ADR Decision 102.)
+	 * <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
 	 * now state how many pairs they found beside how many they reported — and since issue #356 so does
 	 * the uncapped drug-in-play arm, where neither of these stated one AND the question resolved a drug
 	 * it could screen (issue #370, ADR Decision 71) — on the answer as
@@ -5759,11 +5760,17 @@ public class DrugSafetyValidator {
 		int cap = maxPairChips();
 		int shown = Math.min(found.size(), cap);
 		if (shown < found.size()) {
-			// WARN, not INFO: which pairs went, and at what ratings, is an operator's diagnostic and it
-			// lives only here — the response states the COUNTS (see the extent returned below) and
-			// deliberately not the list, because putting the withheld pairs on the wire is the unbounded
-			// expansion this cap exists to prevent. Silent truncation in a safety net reads as "nothing
-			// else was found", which since issue #336 the response itself no longer says.
+			// WARN, not INFO: how many pairs went, and at what ratings, is an operator's diagnostic and
+			// it lives only here — the response states the two COUNTS (see the extent returned below)
+			// and never the ratings, and a list of withheld pairs on the wire is the unbounded expansion
+			// this cap exists to prevent. Silent truncation in a safety net reads as "nothing else was
+			// found", which since issue #336 the response itself no longer says.
+			//
+			// WHICH pairs went is nowhere, here or on the wire. That is what the list below is: each
+			// withheld candidate's RATING and no name — which is why issue #439 could make the sibling
+			// screening arm match this shape without losing anything this line has. This paragraph said
+			// "which pairs went" from issue #336 (the sentence it replaced said "which ratings went
+			// unshown", which was right) until round 2 of #439's review read it against the loop.
 			List<String> withheld = new ArrayList<String>();
 			for (PairFinding finding : found.subList(shown, found.size())) {
 				withheld.add(finding.severity);

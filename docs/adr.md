@@ -7926,6 +7926,20 @@ publishes the same two numbers the log now carries — so a maintainer triaging 
 same `stated`/`named` in both places. The finding's own alternative, the names at DEBUG, was not
 taken: a channel nobody needs is not worth the bytes of PHI it writes.
 
+**And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
+PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
+captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A
+WARN-only capture leaves the declined alternative implementable with the suite green, which the
+reviewer demonstrated: `log.info("Withheld pairs in full: {}", …)` beside the third site's cap WARN,
+carrying each withheld chip's `getDetail()` — which names both drugs — left
+`PairChipCapContextTest` at nine passing cases (re-measured here on 2026-09-16), and the reviewer
+reports the whole root build green with it. Under the widened capture that same probe reddens
+`.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`, and a `log.debug` of the
+unrepresented-order list reddens
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
+(both measured 2026-09-16). The case for the first site had captured at DEBUG from the start and says
+why; the other two now match it.
+
 **Where that substitution does not hold, stated rather than pinned.** Under
 `chartsearchai.grounding.async=true` the REST layer emits `done` from the UNGROUNDED answer
 `searchStreaming` hands its consumer mid-pass, which is the model's own text — the append happens
@@ -7987,6 +8001,27 @@ publishes counts); what survives is the criterion that line's own case states, t
 be recoverable. An operator who needs the pairs raises the cap and re-asks, which puts them on the
 wire as chips rather than in the log as PHI.
 
+**Why the second site's remedy does not transfer here.** The reconciliation WARN kept identity by
+switching from the name to the uuid, and the obvious question is why a withheld pair is not logged as
+two uuids. Because there is no pair of uuids to log. That line reports a list of ORDERS, so each
+element already carries the uuid querystore indexes it under. This arm iterates `orderDrugs`, a
+`List<DrugReference>` — reference rows the active orders resolved to — and keys each pair on substance
+names, not on orders. The relation is many-to-many in both directions: one prescription can resolve to
+several reference substances and one substance can be resolved from several orders, which is why a
+chip carries a LIST of `SafetyWarning.ChartOrderBridge` and why that type holds `substance` and
+`orderDisplay` and no uuid. Building a uuid pair at the cap would mean resolving substances back to
+orders a second time at the log site — the two-resolutions-that-agree shape #151 forbids — and would
+still be a list per side rather than an identifier.
+
+What the two lines are FOR differs too, which is the substantive half. The reconciliation WARN exists
+to point an operator at a querystore index that is behind, and a reindex takes a uuid, so the uuid is
+not a substitute for the name there but the better identifier. This line exists to say how much the
+cap cut and how severe what went was; a uuid answers neither question, and the operator who needs the
+pairs themselves has the cap to raise. **So the retrospective loss is real and is stated rather than
+remedied**: for a request already served, which pairs were withheld is unrecoverable, and raising
+`maxPairChips` and re-asking only reproduces it while the chart and the question still do. That is the
+cost this decision accepts, not a cost it claims away.
+
 **That is a deliberate change to the specification, which is why it is argued here.**
 `PairChipCapContextTest.theScreeningWarnNamesTheWithheldPairsAtTheConfiguredCap` asserted `" x "` and
 `"(Major)"` — it required the names. It is renamed
@@ -7997,12 +8032,32 @@ asserted are untouched. Keeping the site and recording it as a named exception w
 option and was declined: #439 reports a rule, not a line, and a decision stating the rule while
 leaving a site that breaks it tells the next scan finding it is already settled.
 
-**What the sweep deliberately did not change.** The sibling checks log ATC codes — the ones the
-answer states and the ones its cited records state — beside the patient id, on their own stated
-reasoning that the code with the patient is what identifies the claim being triaged. Whether a class
-code beside a patient id is a disclosure of the same kind is a question this decision does not
-settle; it is not what #439 reported, and the answer would be the same for every one of those sites
-rather than a change to one.
+**What the sweep deliberately did not change, and it is not one shape.** Whether an ATC code
+selected by what a patient is prescribed is a disclosure of the same kind as the drug's name is a
+question this decision does not settle; it is not what #439 reported. What round 2 of this PR's
+review established is that this paragraph described the residue as one shape on one reasoning when at
+least two shapes answer to it, and the one it described is not the one closest to what #439 reported.
+Issue [#441](https://github.com/openmrs/openmrs-module-chartsearchai/issues/441) is their ticket, so
+the open question is not left to be rediscovered by the next scan.
+
+The first is the sibling checks, which log ATC codes — the ones the answer states and the ones its
+cited records state — beside the patient id, on their own stated reasoning that the code with the
+patient is what identifies the claim being triaged. The answer there would be the same for every one
+of those sites rather than a change to one.
+
+The second is `PatientClinicalContextBuilder`'s code-only active-order WARN, and the sentence above
+does not reach it. It logs the ATC codes read off the patient's OWN active order, rendered by
+`codeOnlyDisplay`, beside that order's uuid: not the answer's codes and not a cited record's, and no
+patient id on the line. Its own stated reasoning is not the siblings' either — the line is the trace
+that a chip is speaking for an order the module could not name, so the code is standing in for the
+missing name rather than identifying a claim being triaged, and it is also the label that order's chip
+carries. Which codes appear is decided entirely by what the patient is prescribed, which is this
+decision's own criterion for the partner names it removed. It stays for now because replacing it needs
+a decision about what an operator reads instead — the code string IS the chip label they would
+correlate the line with, and a count of codes is not actionable — and because that decision should
+move all of these sites or none. Naming it here is not the "named exception" option this decision
+declined for the third site: that site wrote drug NAMES, which is the rule #439 reported, whereas
+whether the rule reaches a code at all is the question #441 opens.
 
 → `FindingPartnerLogDisclosureTest` (the counts survive, the names do not, they reach the answer
 each path RETURNS — on both `search` and `searchStreaming` — and, since round 1 of this PR's review, an

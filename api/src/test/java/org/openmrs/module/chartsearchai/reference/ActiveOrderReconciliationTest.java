@@ -412,7 +412,12 @@ public class ActiveOrderReconciliationTest {
 		// operator at a querystore index that is behind, and the uuid is the identifier a reindex
 		// takes. Nothing about the rendering said so at the call site, which is why the sweep behind
 		// #439 found this one and the scan did not.
-		try (LogCapture capture = LogCapture.on("org.openmrs.module.chartsearchai.reference")) {
+		// DEBUG, so the negative below covers every level and not only the one core ships: the
+		// alternative the finding itself named and #439 declined was writing these names lower down
+		// (ADR Decision 102, "the names at DEBUG, was not taken"), and a capture raised only to INFO
+		// would leave that implementable with this case green.
+		try (LogCapture capture = LogCapture.on("org.openmrs.module.chartsearchai.reference",
+				Level.DEBUG)) {
 			injector().injectRecords(DrugReferenceTestSupport.oneRecordChart(), oneActiveOrder(),
 					"what are her active medications?");
 

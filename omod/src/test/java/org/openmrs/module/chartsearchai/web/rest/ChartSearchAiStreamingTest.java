@@ -38,10 +38,9 @@ import org.junit.jupiter.api.Test;
  * them.</p>
  *
  * <p>It said "the only test class that reads the controller's own SOURCE" until this was written, and
- * that had become false by a wide margin — the reader below is called from more than a dozen classes
- * in this package, and the javadoc on {@link #resolveSourceFile} contradicted the claim two members
- * later. Owning the reader is the part that was ever true, and is the part that makes this the right
- * home for a shape assertion.</p>
+ * that had become false: the reader below is borrowed across this package, and the javadoc on
+ * {@link #resolveSourceFile} said so while this paragraph denied it. Owning the reader is the part
+ * that was ever true, and is the part that makes this the right home for a shape assertion.</p>
  */
 public class ChartSearchAiStreamingTest {
 
@@ -468,7 +467,7 @@ public class ChartSearchAiStreamingTest {
 	 * <p>One reader for every source-scanning test that reads this controller — the ones in this class,
 	 * which had each grown its own spelling of it, and the others across the package that borrow it.
 	 * Stated as "every" rather than counted, and no longer naming one of them either, for the reason
-	 * {@link #resolveSourceFile()} gives one level up: both the count and the example drift the moment
+	 * {@link #resolveSourceFile()} gives one level up: both a count and a named example drift the moment
 	 * a test is added, as each already had.</p>
 	 *
 	 * <p>The charset is explicit because the file contains non-ASCII characters and
@@ -486,8 +485,8 @@ public class ChartSearchAiStreamingTest {
 	/**
 	 * Locates the controller's production source, which every source-scanning assertion against that
 	 * file reads — in this class and in the others across this package that borrow it, which is why an
-	 * enumeration of them is not kept here: the one this javadoc used to name had already been joined
-	 * by a dozen more.
+	 * enumeration of them is not kept here: the one this javadoc used to name had long since stopped
+	 * being the only other.
 	 *
 	 * <p>A file it cannot find FAILS rather than skips. It skipped until now, through
 	 * {@code Assumptions.assumeTrue}, and that is the same defect as the short-region one above, one

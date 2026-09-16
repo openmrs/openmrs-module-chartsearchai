@@ -717,7 +717,8 @@ public class ChartSearchAiRestController {
 			// async grounding is active — on a trailing "grounded" event after an early "done". The
 			// frontend must render "thinking" distinctly (e.g. a collapsible panel), never as the
 			// answer; citations must show as unverified until verdicts arrive. All unwind on client
-			// disconnect via writeSseEventOrThrow.
+			// disconnect via writeSseEventOrThrow — those four do; the early done above is written with
+			// writeSseEvent inside its own try, which is the distinction that method's javadoc draws.
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 					patient, sanitizedQuestion,
 					token -> writeSseEventOrThrow(out, "token", token),

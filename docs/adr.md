@@ -7866,8 +7866,10 @@ green there and say so themselves —
 `theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere` proves the decoder can still see a
 forgery, and `aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee` proves which assertion catches the
 run. A reader narrowed back to LF-only would leave the behavioural cases green on a stream carrying a
-forged frame — a green suite reporting this fixed — which is what the first of those controls exists
-to prevent.
+forged frame — a green suite reporting this fixed — which is what
+`theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere` exists to prevent. Measured under
+that narrowing, it and the run control both redden and the Jackson one does not, which is why they are
+named here rather than pointed at by position.
 
 **And "one expression in the frame writer" is now a pinned claim rather than a description.** Every
 behavioural test here drives the endpoint, so a SECOND writer elsewhere in the module would redden

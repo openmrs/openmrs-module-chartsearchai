@@ -468,8 +468,8 @@ try {
             ? '  checked: the entry does not pre-date this build.'
             : '  NOT checked: the provenance comparison did not run (see above).',
         );
-        console.log('  NOT checked either: whether the whole image is older than the registry, or');
-        console.log('  whether a NEW entry sits beside OLD chunks — see this script\'s epilogue.');
+        console.log('  NOT checked: the directions this gate cannot see — enumerated in the failure');
+        console.log('  epilogue below, and worth reading before treating this OK as "all is well".');
       }
       process.exit(0);
     }

@@ -48,7 +48,9 @@ jobs:
       # no browser — so a failure here cannot strand a deployed instance with the gate skipped,
       # which is the property the resolve step above was moved for. It imports the gate (inert on
       # import) and drives the real functions over fabricated inputs, the 2026-09-15 defect's own
-      # timestamps among them. Measured at 0.13s: the suite sets GATE_POLL_MS itself.
+      # timestamps among them. It sets GATE_POLL_MS itself so the challenge-poll cases do not wait
+      # out real intervals. (No timing figure here on purpose: the last two were each falsified by
+      # the next commit that added a case.)
       - name: Self-test the gate's logic
         run: node .github/scripts/assert-spa-serves-chartsearchai.test.mjs
 

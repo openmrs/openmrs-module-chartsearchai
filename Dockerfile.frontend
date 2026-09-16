@@ -35,10 +35,11 @@ RUN openmrs assemble --mode config --config spa-build-config.json
 # cannot have come from this build — which is why the assertion below exists rather than a
 # comment claiming it.
 #
-# It lands before the pre-compression pass so it is compressed like everything else; measured, a
-# 41-byte sha gzips LARGER than it started, so precompress-spa.mjs writes a `.br` and no `.gz`.
-# Harmless (nginx tries `.br` first, and a gzip-only client gets the plain file at the same
-# mtime), but do not read this as "siblings, plural".
+# It lands before the pre-compression pass so it is compressed like everything else — but a file
+# this small may compress to nothing useful, and what precompress then writes depends on the sha
+# itself. The assertion below states the measured distribution; read it there rather than assuming
+# a sibling exists. Harmless either way: nginx tries `.br` first and otherwise serves the plain
+# file at the same mtime.
 COPY --from=chartsearchai-esm /esm/ESM_SHA /app/dist/chartsearchai-esm.sha
 
 # Give the assembled SPA the pre-compressed siblings the base image's nginx

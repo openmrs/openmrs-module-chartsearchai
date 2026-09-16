@@ -104,6 +104,10 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 96: An answer quoting one of a substance's ceilings says which stricter one it left unstated](#decision-96-an-answer-quoting-one-of-a-substances-ceilings-says-which-stricter-one-it-left-unstated)
 - [Decision 97: The accusation that a finding lost its rating counts cited the way the published count does](#decision-97-the-accusation-that-a-finding-lost-its-rating-counts-cited-the-way-the-published-count-does)
 - [Decision 98: The module states when a cited prescription stopped, because no wording of the prompt will](#decision-98-the-module-states-when-a-cited-prescription-stopped-because-no-wording-of-the-prompt-will)
+- [Decision 99: One mechanism is stated once, naming every active order it covers](#decision-99-one-mechanism-is-stated-once-naming-every-active-order-it-covers)
+- [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
+- [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
+- [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -4107,7 +4111,7 @@ one the check is silent on.
 - **`PairChipExtent`** — an immutable `{found, reported}` produced by the arms, carried on `ChartAnswer.getPairChipExtent()`, published as `interactionPairs` on the `/search` response and on the `done` and `grounded` SSE events. `found` is the candidate count before the cut; `reported` is what the cut left, i.e. `min(found, maxPairChips())`, read off the cut and never off the GP.
 - **Both arms, one statement.** Their gates are mutually exclusive (the question-pair arm needs two or more question-named reference drugs, the screen needs none), so at most one runs per question and one field speaks for both — the same argument #131 uses for the two arms sharing one cap. Publishing it for only the arm the ticket measured would have left it silently absent on exactly the question shape the other answers. **Two arms turned out not to be enough, and Decision 65 (issue [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)) is the residue**: between them those two gates exclude the single-drug prescribing question, where the drug-in-play arm does the screening and stated nothing — so the field was silently absent on the commonest drug-safety question there is. Read that decision beside this one; it amends this bullet, the `PairChipExtent` bullet's `reported` definition above (`min(found, maxPairChips())` is the two capped arms' rule and not the third's), the "at most one record per pass" rule, and the trade-off below about `reported` counting pairs.
 - **A caller-supplied sink, not a field.** `validate`'s widest arity gains a nullable `PairChipExtent.Sink`; `LlmInferenceService` creates one per call. `DrugSafetyValidator` is a Spring singleton, so a field would be one slot shared by every concurrent request — #172's constraint, met by the shape rather than by discipline, exactly as Decision 58 met it for `resolvedOrderEntries`.
-- **The counts, and deliberately not the list.** Which pairs went and at what ratings stays in the `WARN`. Putting the withheld pairs on the wire is the unbounded, question-controlled expansion the cap exists to prevent (72 chips carrying 42,708 characters, `maxPairChips()`'s own measurement).
+- **The counts, and deliberately not the list.** How many pairs went and at what ratings stays in the `WARN`. Putting the withheld pairs on the wire is the unbounded, question-controlled expansion the cap exists to prevent (72 chips carrying 42,708 characters, `maxPairChips()`'s own measurement). **Decision 102 amends this bullet**: WHICH pairs went is now nowhere, the screening arm's `WARN` having named the patient's own prescriptions.
 - **Zero is a measurement and absence is not.** An arm that ran and related no pairs states `found == 0` — a complete screen, positively assertable. **Decisions 69 and 71 amend this bullet**: an arm can also relate pairs and be left with none of its own by a cede to another arm, and both pairwise arms now state nothing there rather than a zero — the question-pair arm's nothing being consumed by Decision 65's fallback, the screening arm's reaching the client. `null` says the producer stated nothing. What that covers is carried by `PairChipExtent`'s class javadoc and by `README.md`'s client-facing form, the second because it is the only one a frontend author reads; this decision points at them rather than restating it, which is the discipline `getOrderActive()`'s own list prescribes. **What it deliberately does not do is count them**, and that is the part worth recording: three drafts of these bullets published a count and each was refuted by the next review — three situations where the class listed two, one home while README held a second, and two situations while the async early-`done` answer was a third nobody had counted. After a second refuted attempt the move is to stop making a claim of that kind, not to make a better one.
 - **Published once, on `validate`'s normal return, from a local both arms assign** — never per arm. The public entry answers a `RuntimeException` with an empty warning list, so a sink written as each arm finished could describe a screen whose chips were then discarded. Not test-observable, because no reachable path throws between an arm and the return; recorded here because nothing else can record it.
 
@@ -7882,3 +7886,264 @@ deliberately out of scope.
 
 → `ChartSearchAiSseFrameInjectionTest`, that guard, and `LlmProviderTest`'s two escape-decoding tests
 for the route the CR arrives on.
+
+## Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#439](https://github.com/openmrs/openmrs-module-chartsearchai/issues/439), a security-scan finding
+(CWE-532, severity LOW). It changes no prompt, no chip, no response key and no wire format: three
+`log.warn` lines, and a named rendering beside the `toString` that made one of them easy to write.
+
+**Context.** Decision 100's shortfall report logged the list it had just computed:
+
+```
+Answer for patient=1 stated 0 of 3 active order(s) its safety finding(s) name; the module named the
+rest itself (ADR Decision 100): [methylprednisolone, prednisone, heparin].
+```
+
+— produced by the real pipeline in
+`FindingPartnerLogDisclosureTest.noLogLineNamesAnOrderTheFindingsCover` before the fix. The comment
+above the line justified it: the partner names are "this module's own reference vocabulary, not the
+patient's data". **The vocabulary is the module's; the SELECTION is the patient's.** An interaction
+chip is raised only for a partner this patient has an active order for, and
+`reconciledPartnerFor` may label it with that order's own display name, so the list is a subset of
+that patient's current medications on a line that carries their id.
+
+**Why the level is part of the finding.** Core ships `org.openmrs` at WARN, so this line reached the
+default server log and whatever log shipping a deployment configures with no deployment opting in to
+it — unlike the module's DEBUG diagnostics, which an administrator has to enable. A log reader — host operations staff, a
+log-aggregation system and its operators, the holder of a server-log view — is a wider audience than
+the clinicians holding *AI Query Patient Data*. The project already keeps that boundary and states it
+at each site: `ClassCodeFidelityCheck`, `ActiveOrderCitationFidelityCheck` and
+`SafetyFindingSeverityFidelityCheck` each say that the answer and the record text "carry patient
+data" and log the patient id beside indexes, counts and closed vocabulary only. This check was the
+one that did not.
+
+**Decision.** The WARN states the two counts and the patient, and no name. This needed no second
+channel, because Decision 100 has the module APPEND every unstated order to the ANSWER each path
+RETURNS, so the reader who holds the privilege receives the names there, and `findingPartners`
+publishes the same two numbers the log now carries — so a maintainer triaging a shortfall reads the
+same `stated`/`named` in both places. The finding's own alternative, the names at DEBUG, was not
+taken: a channel nobody needs is not worth the bytes of PHI it writes.
+
+**And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
+PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
+captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A
+WARN-only capture leaves the declined alternative implementable with the suite green, which the
+reviewer demonstrated: `log.info("Withheld pairs in full: {}", …)` beside the third site's cap WARN,
+carrying each withheld chip's `getDetail()` — which names both drugs — left
+`PairChipCapContextTest` at nine passing cases (re-measured here on 2026-09-16), and the reviewer
+reports the whole root build green with it. Under the widened capture that same probe reddens
+`.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`, and a `log.debug` of the
+unrepresented-order list reddens
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
+(both measured 2026-09-16). The case for the first site had captured at DEBUG from the start and says
+why; the other two now match it.
+
+**Widening the capture was necessary and it was not sufficient: the third site's guard worked under
+one surefire order only** (round 3 of this PR's review). `LogCapture` raised the level by
+`Configurator.setLevel`, which INSTALLS a `LoggerConfig` for a name that has none, and its `close()`
+set a level back on that config and left it installed for the life of the JVM. A descendant's config
+wins over its package's, so once `UnreadableOrderDrugTest` had captured `DrugSafetyValidator` by
+name, a capture of the whole `reference` package at DEBUG no longer saw that class's INFO or DEBUG
+events at all — the appender was reached and the event was filtered before it. Reproduced here on
+2026-09-16 with the reviewer's probe restored and the two classes run together: BUILD FAILURE on
+that case under `-Dsurefire.runOrder=alphabetical`, BUILD SUCCESS under `reversealphabetical`, the
+probe the only change and the order the only difference. The mechanism control is inside
+`LogCaptureRestorationTest`: it asserts that the logger's WARN arrives before it asserts that its
+INFO does, and pre-fix the first passed while the second failed — so what a left-behind config takes
+is the LEVEL and not the appender. Surefire's default
+order is `filesystem`, so which of those two a CI host would have run was not a property of this
+code.
+
+**So the repair is in the shared helper, not in the guard that exposed it.** `LogCapture.close()`
+now REMOVES the `LoggerConfig` its own constructor caused log4j to install, and restores a level only
+where the name already had a config of its own — an outer capture of the same name, or one the log4j
+configuration declares, whose level is not this helper's to drop. `LogCaptureRestorationTest` holds
+both directions, and with the fix in place the probe reddens
+`.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` under BOTH orders. The
+blind spot belonged to no one guard: every package-scoped capture in the suite was exposed to it
+through any sibling file that captures a logger beneath that package by name, and both are plentiful
+— `FindingPartnerLogDisclosureTest`'s own PACKAGE javadoc records the same mechanism biting a
+module-root capture from the other direction, which is why that file named a package until round 4
+undid a narrowing this fix had made unnecessary; and each fidelity check's own logger inside
+`api.impl`, along with `LlmAnswerExtractor`'s and `QueryStoreChartBuilder`'s, is captured by name by its own test
+file. Beside that, the two reference-package negatives now assert that the capture is live BELOW warn
+for the very logger they are about — `DrugSafetyValidator`'s end-of-pass INFO line and the injector's
+end-of-pass DEBUG line — so a filtered capture fails the case instead of satisfying it. That belt is
+independent of the helper: with `close()` reverted and no probe present at all, it is what reddens
+`.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` (measured 2026-09-16).
+
+**Round 4 found claims this PR had written that were not true of the code it had written, and one
+hole in the guards themselves.** Each false claim is corrected where it was written; what belongs
+here is the hole and the scope change that followed it.
+**A name can reach the log through a THROWABLE's message, and the negatives could not see it.**
+`LogCapture.describeAll` rendered a throwable's TYPE alone, so a name attached to a diagnostic
+exception beside any of the three lines was invisible to the very assertions that read
+`describeAll()`. Measured 2026-09-16: an `IllegalStateException("withheld in full: " + …)` carrying
+each withheld chip's `getDetail()` as a trailing argument to the screening cap `WARN` put all six of
+that patient's medication names in the log and left
+`PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`
+green. The other two sites' negatives were green with it too, and that measures nothing — they never
+see that line. `describeAll` now renders each throwable's type AND message, and its causes and
+suppressed throwables, and with it a probe at each site reddens the negative for that site: the cap
+`WARN` reddens the case above, the reconciliation `WARN` reddens
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`,
+and the shortfall `WARN` reddens both of `FindingPartnerLogDisclosureTest`'s negatives (all measured
+2026-09-16, each probe removed after the reading). Widening what `describeAll` renders can only make
+an existing `assertFalse(…contains)` over it stricter, which is why the fix went there rather than
+into an accessor each negative would have had to remember to call.
+
+**And the first site's capture is the module ROOT since round 4**, the narrowing round 3's
+`close()` fix made unnecessary having been kept on a measurement that fix invalidated. Every event
+those cases captured on 2026-09-16 came from three loggers inside `api.impl` — `LlmInferenceService`,
+`ReferenceProseFidelityCheck` and the check itself — so the root buys no reach today; it is named so
+that the negative is not scoped to the package this harness happens to log from. That file's
+negatives also now assert liveness below `WARN` for the logger they are about, as the two
+reference-package cases do. `FindingPartnerCoverageCheck` writes nothing below `WARN`, so there is
+no production line to name and the case writes one through that logger itself — pinning that class
+at `WARN` reddens each case of that file which asserts over the capture (measured 2026-09-16).
+
+**Where that substitution does not hold, stated rather than pinned.** Under
+`chartsearchai.grounding.async=true` the REST layer emits `done` from the UNGROUNDED answer
+`searchStreaming` hands its consumer mid-pass, which is the model's own text — the append happens
+after that handoff, and the trailing `grounded` event carries references and the module statements
+but no `answer` key, so the appended sentence reaches no event. The names still reach that client, on
+the same event, as each chip's `namedPartners`. The GP defaults false, so no stock install is on that
+path. It is stated here rather than asserted in a case because a case pinning it would forbid the
+fix; `FindingPartnerLogDisclosureTest` asserts the append of each path's RETURNED answer instead, on
+both `search` and `searchStreaming`.
+
+**The sweep, and what it found.** Every `log.warn`/`log.info`/`log.error` statement in `api.impl`
+and `reference` — 138 of them on 2026-09-16 — was extracted with its arguments and read for one whose
+ARGUMENTS could carry a name: anything mentioning a display, a name, a label, a token, prose, an
+answer, a question, an allergen, a partner or a detail. Those two packages are the scope because they
+are where the patient-specific reasoning lives; the remaining packages and `omod` were not swept, and
+this decision claims nothing about them. Two more sites answered with a drug NAME, and neither was the
+reported one.
+
+**The criterion as written above reaches further than that, and round 3 of this PR's review found
+where.** `LlmAnswerExtractor.reportNonConformantCitations` and `readNonArrayCitations` each log the
+model's own `citations` JSON verbatim, abbreviated to 40 characters apiece — model output about this
+patient's chart, which is the family the three sibling checks cited above keep out of the log, and
+there is no bound on what a model puts in that field. What they are NOT is a drug name this module
+wrote from what the patient is prescribed, which is the rule #439 reports, and what they are FOR is
+showing an operator what their model actually sent; so they are named here and left alone, with issue
+[#442](https://github.com/openmrs/openmrs-module-chartsearchai/issues/442) as their ticket, which
+also records what has to be decided before either line changes. What this sweep establishes is
+therefore narrower than its criterion: every one of those statements was read, and the two changed
+are the two that wrote a patient's medication NAMES.
+
+**The second site was an accident of a `toString`.** `DrugReferenceInjector.unrepresentedActiveOrders`
+was doing the same thing without saying so. It logs the `ActiveDrugOrder` list itself, and that type's
+`toString()` is `display + " [" + uuid + "]"`:
+
+```
+Active-order reconciliation: 1 of 1 active drug order(s) have no drug-order record in the retrieved
+chart … Unrepresented: [Simvastatin Co 20mg [11111111-2222-3333-4444-555555555555]]
+```
+
+— produced by the real injector in
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
+before the fix. Nothing at the call site said a name was being written; the rendering decided it.
+That line now goes through `PatientClinicalContext.ActiveDrugOrder.uuidsOf`, a named method whose
+javadoc sits beside the `toString` it exists to not be — and the uuid was the better identifier for
+this line all along, since it exists to point an operator at a querystore index that is behind, and
+querystore indexes the drug-order document under exactly that uuid.
+
+**The third site is the interaction-screening cap, and it cost a spec change.**
+`DrugSafetyValidator.addActiveOrderPairInteractions` caps its chips at
+`chartsearchai.drugSafety.maxPairChips` (default 10) and logged each withheld pair as
+`subject.displayLabel() + " x " + loggedPartner`. That arm screens the patient's active orders
+against EACH OTHER, so both sides of every pair are her prescriptions. Measured by driving the real
+validator over the six-order screening fixture at a cap of 3 (`PairChipCapContextTest`'s own
+arrangement, with the pre-fix label expression restored for the reading):
+
+```
+Interaction screening across 6 active-order reference entries found 15 pair(s) above the severity
+floor; reporting the 3 most severe and WITHHOLDING 12 … [Warfarin x Ciprofloxacin (Major), Warfarin
+x Clarithromycin (Major), … Simvastatin x Warfarin (Minor), Clarithromycin x Fluconazole (Minor)]
+```
+
+— all SIX of that patient's medications appear across those twelve pairs, on the ordinary screening
+question. The line carries no patient id; neither does the reconciliation WARN above, which this
+decision fixed on the criterion that the vocabulary is the module's and the SELECTION is the
+patient's. Same criterion, same defect.
+
+The remedy is the shape the SIBLING pairwise arm has always had: `addQuestionPairInteractions` logs
+its withheld candidates as ratings alone, and could do so without argument because its drugs come
+from the QUESTION. Both lines now carry ratings and no name; they are NOT one spelling, and round 3
+of this PR's review was right to say so — the sibling passes the dataset's own severity through
+verbatim, so a candidate carrying none prints there as `null` where this arm prints `unrated`. That
+is a difference in how a MISSING rating renders, and aligning it is not what #439 asked for; neither
+line is a claim about the patient either way. What is given up is WHICH pairs went, which existed
+nowhere else (`interactionPairs` publishes counts); what survives is the criterion that line's own
+case states, that a withheld Major be recoverable. An operator who needs the pairs raises the cap and
+re-asks, which reproduces the screen rather than recovering the served request's own withheld list —
+the loss this decision states rather than remedies, below — and puts them on the wire as chips rather
+than in the log as PHI.
+
+**Why the second site's remedy does not transfer here.** The reconciliation WARN kept identity by
+switching from the name to the uuid, and the obvious question is why a withheld pair is not logged as
+two uuids. Because there is no pair of uuids to log. That line reports a list of ORDERS, so each
+element already carries the uuid querystore indexes it under. This arm iterates `orderDrugs`, a
+`List<DrugReference>` — reference rows the active orders resolved to — and keys each pair on substance
+names, not on orders. The relation is many-to-many in both directions: one prescription can resolve to
+several reference substances and one substance can be resolved from several orders, which is why a
+chip carries a LIST of `SafetyWarning.ChartOrderBridge` and why that type holds `substance` and
+`orderDisplay` and no uuid. Building a uuid pair at the cap would mean resolving substances back to
+orders a second time at the log site — the two-resolutions-that-agree shape #151 forbids — and would
+still be a list per side rather than an identifier.
+
+What the two lines are FOR differs too, which is the substantive half. The reconciliation WARN exists
+to point an operator at a querystore index that is behind, and a reindex takes a uuid, so the uuid is
+not a substitute for the name there but the better identifier. This line exists to say how much the
+cap cut and how severe what went was; a uuid answers neither question, and the operator who needs the
+pairs themselves has the cap to raise. **So the retrospective loss is real and is stated rather than
+remedied**: for a request already served, which pairs were withheld is unrecoverable, and raising
+`maxPairChips` and re-asking only reproduces it while the chart and the question still do. That is the
+cost this decision accepts, not a cost it claims away.
+
+**That is a deliberate change to the specification, which is why it is argued here.**
+`PairChipCapContextTest.theScreeningWarnNamesTheWithheldPairsAtTheConfiguredCap` asserted `" x "` and
+`"(Major)"` — it required the names. It is renamed
+`.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` and now matches the whole
+withheld tail against the closed rating vocabulary and asserts that no captured line names any of the
+six drugs the screened patient is prescribed, read from the fixture's own list. The counts it
+asserted are untouched. Keeping the site and recording it as a named exception was the cheaper
+option and was declined: #439 reports a rule, not a line, and a decision stating the rule while
+leaving a site that breaks it tells the next scan finding it is already settled.
+
+**What the sweep deliberately did not change, and it is not one shape.** Whether an ATC code
+selected by what a patient is prescribed is a disclosure of the same kind as the drug's name is a
+question this decision does not settle; it is not what #439 reported. What round 2 of this PR's
+review established is that this paragraph described the residue as one shape on one reasoning when at
+least two shapes answer to it, and the one it described is not the one closest to what #439 reported.
+Issue [#441](https://github.com/openmrs/openmrs-module-chartsearchai/issues/441) is their ticket, so
+the open question is not left to be rediscovered by the next scan.
+
+The first is the sibling checks, which log ATC codes — the ones the answer states and the ones its
+cited records state — beside the patient id, on their own stated reasoning that the code with the
+patient is what identifies the claim being triaged. The answer there would be the same for every one
+of those sites rather than a change to one.
+
+The second is `PatientClinicalContextBuilder`'s code-only active-order WARN, and the sentence above
+does not reach it. It logs the ATC codes read off the patient's OWN active order, rendered by
+`codeOnlyDisplay`, beside that order's uuid: not the answer's codes and not a cited record's, and no
+patient id on the line. Its own stated reasoning is not the siblings' either — the line is the trace
+that a chip is speaking for an order the module could not name, so the code is standing in for the
+missing name rather than identifying a claim being triaged, and it is also the label that order's chip
+carries. Which codes appear is decided entirely by what the patient is prescribed, which is this
+decision's own criterion for the partner names it removed. It stays for now because replacing it needs
+a decision about what an operator reads instead — the code string IS the chip label they would
+correlate the line with, and a count of codes is not actionable — and because that decision should
+move all of these sites or none. Naming it here is not the "named exception" option this decision
+declined for the third site: that site wrote drug NAMES, which is the rule #439 reported, whereas
+whether the rule reaches a code at all is the question #441 opens.
+
+→ `FindingPartnerLogDisclosureTest` (the counts survive, the names do not, they reach the answer
+each path RETURNS — on both `search` and `searchStreaming` — and, since round 1 of this PR's review, an
+answer naming every order reports no shortfall at all, which is what asks the rewritten
+`stated < named` guard in its other state),
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
+and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.

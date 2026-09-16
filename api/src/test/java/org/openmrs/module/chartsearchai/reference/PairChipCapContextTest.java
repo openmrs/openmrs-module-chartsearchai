@@ -10,25 +10,18 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.core.Filter;
-import org.apache.logging.log4j.core.Layout;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.Configurator;
-import org.apache.logging.log4j.core.config.Property;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -203,43 +196,98 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
-	public void theQuestionPairWarnNamesTheWithheldPairsAndTheConfiguredCap() {
-		// WHICH pairs went, and at what ratings, exists only in this log line: since issue #336 the
-		// response states the COUNTS (PairChipExtentContextTest) but deliberately not the list, so this
-		// is still the only place an operator can see what was dropped. It must report the CAP THAT
-		// ACTUALLY CUT, not the compiled-in default.
+	public void theQuestionPairWarnRatesTheWithheldPairsAndStatesTheConfiguredCap() {
+		// HOW MANY pairs went, and at what ratings, exists only in this log line: since issue #336 the
+		// response states the two COUNTS (PairChipExtentContextTest) and never the ratings, so this is
+		// still the only place an operator can see how severe what was dropped was. It must report the
+		// CAP THAT ACTUALLY CUT, not the compiled-in default.
+		//
+		// It never named the pairs, in this arm: the list it builds is each withheld candidate's
+		// severity. That is why #439 could give the sibling screening arm the same shape — see the cap
+		// WARN in addActiveOrderPairInteractions, and ADR Decision 102. The old method name and the old
+		// first line of this comment both said "names", against a loop that adds `finding.severity`.
 		configureCap("3");
-		List<String> logged = capturedWarnings(new Runnable() {
+		// The whole package and not just DrugSafetyValidator's own logger, because a drug name leaking
+		// from a neighbour on this pass is the same disclosure — the argument
+		// FindingPartnerLogDisclosureTest makes for the other half of the answer path. Through the
+		// shared constant, since a second literal of a package name is how a rename leaves a capture
+		// receiving nothing (DrugReferenceTestSupport.REFERENCE_LOGGER's own javadoc).
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+			questionPairChips();
 
-			@Override
-			public void run() {
-				questionPairChips();
-			}
-		});
-
-		String line = firstContaining(logged, "question-named drug pairs shown");
-		assertTrue(line.contains("3 of " + CANDIDATE_PAIRS) && line.contains("(cap 3)"),
-				"the WARN must state the shown count, the candidate count and the configured cap: " + line);
-		assertTrue(line.contains("Major"),
-				"and must name the withheld pairs' ratings, so a withheld Major is recoverable: " + line);
+			String line = firstContaining(capture.messagesAt(Level.WARN), "question-named drug pairs shown");
+			assertTrue(line.contains("3 of " + CANDIDATE_PAIRS) && line.contains("(cap 3)"),
+					"the WARN must state the shown count, the candidate count and the configured cap: " + line);
+			assertTrue(line.contains("Major"),
+					"and must report the withheld pairs' ratings, so a withheld Major is recoverable: " + line);
+		}
 	}
 
 	@Test
-	public void theScreeningWarnNamesTheWithheldPairsAtTheConfiguredCap() {
+	public void theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug() {
+		// A DELIBERATE spec change, issue #439 and ADR Decision 102: this case asserted `" x "` and
+		// `"(Major)"`, i.e. that the line named every withheld pair on both sides. Both sides of a
+		// screened pair are this patient's own active orders, so that list was her medication list on a
+		// line the default log configuration keeps — the disclosure #439 reported one site of. The
+		// diagnostic the issue's own criterion asks for survives as the RATINGS, which is what the
+		// sibling question-pair arm's cap WARN above has always logged; an operator who needs the pairs
+		// themselves raises the cap and re-asks, which puts them on the wire as chips.
 		configureCap("3");
-		List<String> logged = capturedWarnings(new Runnable() {
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+			screeningChips();
 
-			@Override
-			public void run() {
-				screeningChips();
+			// The precondition the negative below cannot supply for itself: this capture must be live
+			// BELOW warn for the very logger the negative is about. DrugSafetyValidator's own
+			// end-of-pass INFO line is that witness, and asserting it is what makes the whole-capture
+			// negative fail rather than pass when something filters this logger's sub-WARN events. It
+			// was not hypothetical: a sibling file's class-named capture used to leave a LoggerConfig
+			// pinned on DrugSafetyValidator for the rest of the JVM, so under one surefire order this
+			// case stayed green with an INFO probe beside the cap WARN naming every withheld pair
+			// (issue #439's third review round; fixed in LogCapture, pinned by
+			// LogCaptureRestorationTest, and this line is the belt that does not depend on that fix).
+			assertTrue(capture.hasMessageAt(Level.INFO, "Drug-safety validator raised"),
+					"precondition: the capture must receive this logger's INFO, or a negative over "
+							+ "every captured line says nothing about what is written below WARN. "
+							+ "Captured: " + capture.describeAll());
+
+			String line = firstContaining(capture.messagesAt(Level.WARN), "Interaction screening across");
+			assertTrue(line.contains("found 15 pair(s)") && line.contains("reporting the 3 most severe"),
+					"the screening WARN must state the candidate count and the configured cap: " + line);
+			assertTrue(line.contains("WITHHOLDING 12"),
+					"and how many pairs it withheld: " + line);
+			// The whole tail, matched as a closed vocabulary rather than by hunting for names: anything
+			// the line reports a withheld pair BY other than its rating reddens this, including a name no
+			// case here thought to look for. It is narrower than production, which passes the dataset's
+			// own severity through — DDInter's `Unknown` rows would redden it, and they reach this arm
+			// only under a lowered floor (the default filters exactly them). That direction is a loud
+			// failure over a vocabulary that is supposed to be closed, which is the safe one.
+			int tail = line.indexOf("least severe last: ");
+			assertTrue(tail >= 0, "the withheld ratings must be reported: " + line);
+			String ratings = line.substring(tail + "least severe last: ".length()).trim();
+			assertTrue(ratings.matches("\\[(Major|Moderate|Minor|unrated)(, (Major|Moderate|Minor|unrated))*\\]"),
+					"the withheld pairs must be reported as ratings and nothing else, so a withheld Major "
+							+ "is recoverable without naming a drug: " + ratings);
+			assertTrue(ratings.contains("Major"),
+					"and a withheld Major must be recoverable from them: " + ratings);
+			// And the negative, over every captured line at EVERY level: none of the six drugs this
+			// patient is prescribed. Read from the chart's own list, so it cannot drift from what was
+			// screened.
+			//
+			// describeAll() and not messagesAt(WARN), and the capture is opened at DEBUG, because the
+			// alternative #439 explicitly declined was these names at a lower level — ADR Decision 102,
+			// "the names at DEBUG, was not taken". A WARN-only capture leaves that alternative
+			// implementable with this case green: the reviewer's probe for round 2 of this PR's review
+			// put `log.info("Withheld pairs in full: {}", …)` beside the cap WARN, carrying each withheld
+			// chip's detail (which names both drugs), and the whole build stayed green. Under this
+			// capture that probe reddens exactly here.
+			for (String prescribed : DrugReferenceTestSupport.SCREENED_SIX_ORDER_NAMES) {
+				for (String captured : capture.describeAll()) {
+					assertFalse(captured.toLowerCase(Locale.ROOT).contains(prescribed.toLowerCase(Locale.ROOT)),
+							"no captured line may name a drug this patient is prescribed — a screened pair is "
+									+ "two of her active orders. Found \"" + prescribed + "\" in: " + captured);
+				}
 			}
-		});
-
-		String line = firstContaining(logged, "Interaction screening across");
-		assertTrue(line.contains("found 15 pair(s)") && line.contains("reporting the 3 most severe"),
-				"the screening WARN must state the candidate count and the configured cap: " + line);
-		assertTrue(line.contains("WITHHOLDING 12") && line.contains(" x ") && line.contains("(Major)"),
-				"and must name every withheld pair with its rating: " + line);
+		}
 	}
 
 	/** @return the first captured line containing {@code needle}; fails the test when none does. */
@@ -250,53 +298,5 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 			}
 		}
 		throw new AssertionError("no WARN line contained \"" + needle + "\"; captured: " + lines);
-	}
-
-	/**
-	 * Runs {@code work} with the validator's own logger captured, and returns the WARN messages it
-	 * emitted — the real log line the real arm writes, since a log-only signal cannot be asserted any
-	 * other way and asserting it through a helper method would test the helper, not the arm.
-	 */
-	private static List<String> capturedWarnings(Runnable work) {
-		org.apache.logging.log4j.core.Logger logger =
-				(org.apache.logging.log4j.core.Logger) LogManager.getLogger(DrugSafetyValidator.class);
-		// The EFFECTIVE level, which is what there is to restore: setLevel gives this logger name a
-		// configuration of its own, so afterwards it no longer inherits later level changes from its
-		// parents. Test-JVM only, and nothing here retunes chartsearchai log levels.
-		Level previous = logger.getLevel();
-		// Level first, so the appender attaches to a config of this logger's own rather than to root's.
-		Configurator.setLevel(logger.getName(), Level.WARN);
-		CapturingAppender appender = new CapturingAppender();
-		appender.start();
-		logger.addAppender(appender);
-		try {
-			work.run();
-			// Copied under the list's own monitor: log4j may deliver from another thread, and
-			// synchronizedList guards its mutators, not an iteration over it.
-			synchronized (appender.messages) {
-				return new ArrayList<String>(appender.messages);
-			}
-		}
-		finally {
-			logger.removeAppender(appender);
-			appender.stop();
-			Configurator.setLevel(logger.getName(), previous);
-		}
-	}
-
-	/** Collects formatted log messages; the minimum an appender can be. */
-	private static final class CapturingAppender extends AbstractAppender {
-
-		final List<String> messages = Collections.synchronizedList(new ArrayList<String>());
-
-		CapturingAppender() {
-			super("chartsearchai-pair-cap-capture", (Filter) null, (Layout<? extends Serializable>) null,
-					true, Property.EMPTY_ARRAY);
-		}
-
-		@Override
-		public void append(LogEvent event) {
-			messages.add(event.getMessage().getFormattedMessage());
-		}
 	}
 }

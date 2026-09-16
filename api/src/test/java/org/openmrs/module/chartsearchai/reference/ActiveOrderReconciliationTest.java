@@ -19,10 +19,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -41,8 +44,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p>The chip is deliberately NOT suppressed when the chart disagrees: it comes from the
  * authoritative service read and was right in every observed case, so silencing it would trade a
- * visible contradiction for a missing safety warning. These tests therefore only assert what the
- * chart gains.
+ * visible contradiction for a missing safety warning. These tests therefore assert what the chart
+ * gains — and, since issue #439, what the WARN beside it may say about the patient.
  */
 public class ActiveOrderReconciliationTest {
 
@@ -52,6 +55,17 @@ public class ActiveOrderReconciliationTest {
 	private static final String SIMVASTATIN_ORDER_UUID = "11111111-2222-3333-4444-555555555555";
 
 	private static final String ASPIRIN_ORDER_UUID = "66666666-7777-8888-9999-000000000000";
+
+	/** The drug name and the display {@link #oneActiveOrder} builds its one order from. The
+	 *  disclosure guard reads its negative from these rather than a literal of its own, so changing
+	 *  the fixture's drug cannot leave that case asserting about a drug nothing was screened for —
+	 *  the property {@code PairChipCapContextTest} gets from
+	 *  {@code DrugReferenceTestSupport.SCREENED_SIX_ORDER_NAMES} (issue #439, review round 3). The
+	 *  cases that pin a record's rendering exactly keep their own literals: there the string IS the
+	 *  assertion. */
+	private static final String ORDER_DRUG_NAME = "simvastatin";
+
+	private static final String ORDER_DISPLAY = "Simvastatin Co 20mg";
 
 	/** The injector with the validator wired — so the safety findings of #110 flow too and these tests
 	 *  see the whole injected record set, not a reconciliation-only subset. Through the shared
@@ -65,9 +79,10 @@ public class ActiveOrderReconciliationTest {
 	/** A context holding one active simvastatin order — the shape of the observed case. */
 	private PatientClinicalContext oneActiveOrder() {
 		return DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("simvastatin"), DrugReferenceTestSupport.set("C10AA01"), null, null,
+				DrugReferenceTestSupport.set(ORDER_DRUG_NAME), DrugReferenceTestSupport.set("C10AA01"), null,
+				null,
 				Collections.singletonList(DrugReferenceTestSupport.activeOrder(SIMVASTATIN_ORDER_UUID,
-						"Simvastatin Co 20mg", "simvastatin")));
+						ORDER_DISPLAY, ORDER_DRUG_NAME)));
 	}
 
 	/** Every injected active-order record in {@code chart}. */
@@ -398,6 +413,50 @@ public class ActiveOrderReconciliationTest {
 		assertTrue(activeOrder < reference && reference < finding,
 				"the patient's own active order must precede the reference material and the finding "
 						+ "derived from it");
+	}
+
+	@Test
+	public void theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName() {
+		// Issue #439. The WARN was handed the ActiveDrugOrder list itself, and that type renders as
+		// `display + " [" + uuid + "]"` — so the line carried the DRUG NAME of each of this patient's
+		// unrepresented orders, at the level core ships org.openmrs at, where a log reader who holds
+		// no chart privilege reads it. The name was never what this line is for: it exists to point an
+		// operator at a querystore index that is behind, and the uuid is the identifier a reindex
+		// takes. Nothing about the rendering said so at the call site, which is why the sweep behind
+		// #439 found this one and the scan did not.
+		// DEBUG, so the negative below covers every level and not only the one core ships: the
+		// alternative the finding itself named and #439 declined was writing these names lower down
+		// (ADR Decision 102, "the names at DEBUG, was not taken"), and a capture raised only to INFO
+		// would leave that implementable with this case green.
+		// Through the shared constant and never a literal of this file's own: a second spelling of a
+		// package name is how a rename leaves a capture receiving nothing, which is the vacuous-pass
+		// this negative exists to avoid (DrugReferenceTestSupport.REFERENCE_LOGGER's own javadoc).
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+			injector().injectRecords(DrugReferenceTestSupport.oneRecordChart(), oneActiveOrder(),
+					"what are her active medications?");
+
+			// Live BELOW warn for the logger this negative is about, asserted rather than assumed:
+			// the injector's own end-of-pass DEBUG line is the witness. Without it a capture whose
+			// sub-WARN events are being filtered — which a LoggerConfig left behind by another file's
+			// class-named capture used to do, see LogCaptureRestorationTest — satisfies the negative
+			// by receiving nothing.
+			assertTrue(capture.hasMessageAt(Level.DEBUG, "Injected", "reference slice"),
+					"precondition: the capture must receive this logger's DEBUG, or the negative "
+							+ "below is not a claim about what is written below WARN. Captured: "
+							+ capture.describeAll());
+			assertTrue(capture.hasMessageAt(Level.WARN, "Active-order reconciliation",
+					SIMVASTATIN_ORDER_UUID),
+					"the divergence must still be reported, and by the identifier querystore indexes "
+							+ "the document under. Captured: " + capture.describeAll());
+			for (String prescribed : Arrays.asList(ORDER_DRUG_NAME, ORDER_DISPLAY)) {
+				for (String logged : capture.describeAll()) {
+					assertFalse(logged.toLowerCase(Locale.ROOT).contains(prescribed.toLowerCase(Locale.ROOT)),
+							"and no line may name a drug this patient is prescribed: the order is on the "
+									+ "list because of what the patient is taking. Found \"" + prescribed
+									+ "\" in: " + logged);
+				}
+			}
+		}
 	}
 
 	@Test

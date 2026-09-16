@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -39,11 +38,6 @@ import org.openmrs.module.chartsearchai.api.impl.FindingPartnerCoverageCheck;
  */
 public class SharedMechanismChipCollapseTest {
 
-	/** A verbatim shipped-KB slice: one subject, two partners the data files under ONE mechanism
-	 *  group and a third under another — see the fixture's own note. */
-	private static final String SHARED_MECHANISM_FIXTURE =
-			"chartsearchai-test/ddi-shared-mechanism-partners.json";
-
 	/** What the excerpt's aspirin ROW is called — {@code DrugReference.displayLabel()}. */
 	private static final String ASPIRIN = "Acetylsalicylic acid (aspirin)";
 
@@ -51,25 +45,12 @@ public class SharedMechanismChipCollapseTest {
 	private static final String CORTICOSTEROID_MECHANISM =
 			"Coadministration with corticosteroids may decrease the serum concentrations";
 
-	private static PatientClinicalContext threeOrderChart() {
-		return DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Prednisone 5mg", "Methylprednisolone 4mg",
-						"Heparin 5000 units"),
-				null, null, null);
-	}
-
+	/** Through the shared arrangement, which is where it lives since issue #439 gave it a second
+	 *  reader — {@code FindingPartnerLogDisclosureTest} drives these same chips through the real
+	 *  inference path, and a copy of the fixture wiring here would let the two describe different
+	 *  chips while both stayed green. */
 	private static List<SafetyWarning> interactionsFor(PairChipExtent.Sink sink) throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
-				DrugReferenceTestSupport.ddiFixtureEntries(SHARED_MECHANISM_FIXTURE));
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", "Is aspirin safe for her?", threeOrderChart(), null, null, sink);
-		List<SafetyWarning> interactions = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
-				interactions.add(warning);
-			}
-		}
-		return interactions;
+		return DrugReferenceTestSupport.sharedMechanismInteractionChips(sink);
 	}
 
 	@Test

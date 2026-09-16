@@ -24,7 +24,11 @@ package org.openmrs.module.chartsearchai.reference;
  * the other eight — the answer text ended in an ordinary enumeration, the chip array simply stopped,
  * and every reference's {@code withheldInteractions} read {@code 0} (that field counts a cited
  * record's unshown partners, a different thing). Silent truncation in a safety net reads as "nothing
- * else was found", which is the one thing it does not mean.
+ * else was found", which is the one thing it does not mean. Since issue #439 that WARN line names no
+ * pair either: it reports how many went and at what ratings, both sides of a screened pair being the
+ * patient's own prescriptions (ADR Decision 102). So no channel names them, and an operator who needs
+ * them raises the cap and re-asks, which reproduces the screen rather than recovering the served
+ * request's own withheld list — Decision 102 states that loss rather than remedying it.
  *
  * <p>Not to be confused with {@code DrugSafetyValidator.InteractionPairs}, one case-change away:
  * that is the cross-arm ledger of which pairs a pass has already chipped, and it has a

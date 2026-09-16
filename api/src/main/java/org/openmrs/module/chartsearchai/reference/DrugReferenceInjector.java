@@ -937,12 +937,17 @@ public class DrugReferenceInjector {
 			// behind the authoritative order list, which an operator must be able to see. The chart
 			// comes from the querystore index, so the usual cause is that index being behind — a
 			// querystore concern, named here so the log points at the right module.
+			// By UUID and never by name (issue #439): an order is on this list because of what this
+			// patient is prescribed, and the uuid is the identifier the line is FOR — querystore
+			// indexes the drug-order document under it. Through the named rendering and not the list,
+			// whose toString carries the display name. → ADR Decision 102.
 			log.warn("Active-order reconciliation: {} of {} active drug order(s) have no drug-order record "
 					+ "in the retrieved chart, so the answer could deny a medication the drug-safety "
 					+ "chips name; injecting them as records. The chart is built from the querystore "
 					+ "index, so this normally means that index is behind the OrderService read "
-					+ "(querystore owns indexing). Unrepresented: {}",
-					unrepresented.size(), context.getActiveDrugOrders().size(), unrepresented);
+					+ "(querystore owns indexing). Unrepresented order(s): {}",
+					unrepresented.size(), context.getActiveDrugOrders().size(),
+					PatientClinicalContext.ActiveDrugOrder.uuidsOf(unrepresented));
 		}
 		return unrepresented;
 	}

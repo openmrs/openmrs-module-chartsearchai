@@ -18,8 +18,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.Appender;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.config.Property;
 
 /**
@@ -38,9 +41,20 @@ import org.apache.logging.log4j.core.config.Property;
  * by descendant loggers, sees everything logged under that name — pass a package name to capture a
  * whole package. The level is raised to {@code INFO} for the duration (via {@link Configurator}, so
  * the change lands on the shared logger CONFIG and therefore reaches descendant loggers —
- * {@code Logger.setLevel} would only affect the one instance) and is restored on {@link #close()}.
+ * {@code Logger.setLevel} would only affect the one instance) and undone on {@link #close()}, which
+ * has to undo an INSTALLED config and not only a level — see there.
  * Capturing INFO as well as WARN matters for more than an INFO assertion: a capture that silently
  * received nothing at all would make "no WARN was logged" pass vacuously.
+ *
+ * <p><b>A negative asserted over a PACKAGE capture has to assert liveness for the LOGGER it is
+ * about, not just for the package</b>, and below WARN where that is what it claims: one logger's
+ * events can be filtered while the package's neighbours arrive, so "nothing was logged from there"
+ * and "nothing is reaching us from there" look identical. Name a line that logger writes at the
+ * captured level and assert it first — {@code PairChipCapContextTest}'s screening case and
+ * {@code ActiveOrderReconciliationTest}'s reconciliation case each do (issue #439). Where that
+ * logger writes nothing at the captured level — a check that only WARNs — there is no line to name,
+ * and the case writes one through that logger itself and asserts it arrived, which asks the same
+ * question of the same logger: {@code FindingPartnerLogDisclosureTest}, whose check is one.
  *
  * <p>Use with try-with-resources; it is not thread-safe against a concurrent
  * {@link #close()} but the collected event list is.
@@ -57,9 +71,16 @@ public final class LogCapture implements AutoCloseable {
 
 	private final Level restoreLevel;
 
+	/** Whether {@code loggerName} already had a {@link LoggerConfig} of its own before this capture
+	 *  raised it — which is what decides whether {@link #close()} restores a level or removes the
+	 *  config this capture caused log4j to install. See {@link #close()}. */
+	private final boolean ownConfigExisted;
+
 	private LogCapture(String loggerName, Level level) {
 		this.loggerName = loggerName;
-		this.restoreLevel = ((Logger) LogManager.getLogger(loggerName)).getLevel();
+		Logger target = (Logger) LogManager.getLogger(loggerName);
+		this.restoreLevel = target.getLevel();
+		this.ownConfigExisted = hasOwnConfig(target.getContext().getConfiguration(), loggerName);
 		Configurator.setLevel(loggerName, level);
 		this.logger = (Logger) LogManager.getLogger(loggerName);
 		this.appender = new CollectingAppender(events);
@@ -259,24 +280,112 @@ public final class LogCapture implements AutoCloseable {
 		return false;
 	}
 
-	/** @return every captured event rendered as {@code LEVEL message [thrown]}, for assertion
-	 *          failure text. The throwable's TYPE is included because a rule about whether a trace
-	 *          is attached (issue #247) is otherwise invisible in a failure message. */
+	/**
+	 * @return every captured event rendered as {@code LEVEL message [thrown TYPE: message …]}, for
+	 *         assertion failure text — and, since issue #439's fourth review round, as the whole of
+	 *         what a disclosure negative asserting "no captured line names X" actually sees.
+	 *
+	 *         <p>The throwable's TYPE is included because a rule about whether a trace is attached
+	 *         (issue #247) is otherwise invisible in a failure message. Its MESSAGE is included
+	 *         because log4j writes that to the log as well, so text attached to a diagnostic
+	 *         exception is a channel this rendering used to hide: with the type alone, a probe
+	 *         attaching each withheld chip's detail to the screening cap WARN put six of one
+	 *         patient's medication names in the log and left that site's own negative green
+	 *         (measured 2026-09-16 — the negatives for the other two sites never see that line, so
+	 *         their staying green measured nothing). With the message rendered, a probe at each of
+	 *         ADR Decision 102's three sites reddens the negative for the site it was added to.
+	 *         Causes and suppressed throwables are rendered for the same reason, being that channel
+	 *         one frame down. Stack FRAMES are not rendered, and no assertion anywhere reads this
+	 *         for them.
+	 *
+	 *         <p>Widening what this renders can only make an existing {@code assertFalse(…contains)}
+	 *         over it stricter, which is why the fix went here rather than into a second accessor the
+	 *         three negatives would each have had to remember to call.
+	 */
 	public List<String> describeAll() {
 		List<String> out = new ArrayList<String>();
 		synchronized (events) {
 			for (LogEvent event : events) {
 				out.add(event.getLevel() + " " + event.getMessage().getFormattedMessage()
-						+ (event.getThrown() == null ? "" : " [thrown " + event.getThrown().getClass().getName() + "]"));
+						+ describeThrown(event.getThrown()));
 			}
 		}
 		return out;
 	}
 
+	/**
+	 * @return {@code thrown} and everything reachable from it by cause and suppression, each as its
+	 *         type and its message, or the empty string where there is no throwable. Identity-checked
+	 *         against what has already been rendered, because {@code getCause()} is free to return a
+	 *         throwable already on the walk.
+	 */
+	private static String describeThrown(Throwable thrown) {
+		if (thrown == null) {
+			return "";
+		}
+		StringBuilder rendered = new StringBuilder(" [thrown");
+		List<Throwable> seen = new ArrayList<Throwable>();
+		List<Throwable> pending = new ArrayList<Throwable>();
+		pending.add(thrown);
+		while (!pending.isEmpty()) {
+			Throwable next = pending.remove(0);
+			if (next == null || seen.contains(next)) {
+				continue;
+			}
+			seen.add(next);
+			rendered.append(' ').append(next.getClass().getName());
+			if (next.getMessage() != null) {
+				rendered.append(": ").append(next.getMessage());
+			}
+			pending.add(next.getCause());
+			for (Throwable suppressed : next.getSuppressed()) {
+				pending.add(suppressed);
+			}
+		}
+		return rendered.append(']').toString();
+	}
+
+	/**
+	 * @return whether {@code loggerName} has a {@link LoggerConfig} of its OWN, as opposed to
+	 *         inheriting an ancestor's. {@code getLoggerConfig} answers with the nearest config at or
+	 *         above the name, so the name test is the whole question.
+	 */
+	private static boolean hasOwnConfig(Configuration configuration, String loggerName) {
+		LoggerConfig config = configuration.getLoggerConfig(loggerName);
+		return config != null && loggerName.equals(config.getName());
+	}
+
+	/**
+	 * Restores what the constructor changed, and that is two different things.
+	 *
+	 * <p><b>A level, where the named logger had a {@link LoggerConfig} of its own.</b> Something else
+	 * owns that config — the log4j configuration, or an outer capture of the same name — and its level
+	 * is not this capture's to drop.
+	 *
+	 * <p><b>The whole config, where it did not.</b> {@code Configurator.setLevel} INSTALLS a config for
+	 * a name that has none, and setting a level back on it leaves it installed for the life of the JVM.
+	 * A descendant's config wins over its package's, so one left behind makes a later capture of the
+	 * PACKAGE blind to that one logger's events below the level it was left at — the appender is
+	 * reached, the event is filtered before it. Every negative asserted over a package capture then
+	 * passes vacuously, decided by nothing but which test file surefire ran first (issue #439's third
+	 * review round; {@link LogCaptureRestorationTest} holds both directions).
+	 *
+	 * <p>Removing is what every caller already expected: {@link #restoreLevel} was read as the
+	 * EFFECTIVE level, which for a name with no config of its own is the ancestor's, so pinning it
+	 * back produced the same effective level that removal produces — and keeps producing it if that
+	 * ancestor later changes. What removal drops is only the config's precedence over the package.
+	 */
 	@Override
 	public void close() {
 		logger.removeAppender(appender);
-		Configurator.setLevel(loggerName, restoreLevel);
+		if (ownConfigExisted) {
+			Configurator.setLevel(loggerName, restoreLevel);
+		}
+		else {
+			LoggerContext context = logger.getContext();
+			context.getConfiguration().removeLogger(loggerName);
+			context.updateLoggers();
+		}
 		appender.stop();
 	}
 

@@ -29,11 +29,19 @@ import org.junit.jupiter.api.Test;
  * method also pins the mechanism that keeps its writes inside the request: the stop flag must be
  * read, not merely set.</p>
  *
- * <p>Threads and auth state are not the whole of it, and saying so is the point: this is the only
- * test class that reads the controller's own SOURCE, so it is also where the keep-alive's
- * source-level facts live: that the production entry point passes the interval CONSTANT, and that
- * the timer is scheduled at a fixed DELAY. Neither is about threads, and a javadoc naming only
- * threads and auth sends the next reader looking elsewhere for them.</p>
+ * <p>Threads and auth state are not the whole of it, and saying so is the point: this class OWNS the
+ * reader every source-scanning assertion in the package borrows ({@link #controllerSource} through
+ * {@link #resolveSourceFile}), so it is also where facts about the controller's SHAPE live rather than
+ * its behaviour — that the production entry point passes the interval CONSTANT, that the timer is
+ * scheduled at a fixed DELAY, and that a data line is written in one place. None of those is about
+ * threads, and a javadoc naming only threads and auth sends the next reader looking elsewhere for
+ * them.</p>
+ *
+ * <p>It said "the only test class that reads the controller's own SOURCE" until this was written, and
+ * that had become false by a wide margin — the reader below is called from more than a dozen classes
+ * in this package, and the javadoc on {@link #resolveSourceFile} contradicted the claim two members
+ * later. Owning the reader is the part that was ever true, and is the part that makes this the right
+ * home for a shape assertion.</p>
  */
 public class ChartSearchAiStreamingTest {
 
@@ -476,8 +484,9 @@ public class ChartSearchAiStreamingTest {
 
 	/**
 	 * Locates the controller's production source, which every source-scanning assertion against that
-	 * file reads — in this class, and since issue #336 in
-	 * {@code ChartSearchAiInteractionPairExtentTest} too.
+	 * file reads — in this class and in the others across this package that borrow it, which is why an
+	 * enumeration of them is not kept here: the one this javadoc used to name had already been joined
+	 * by a dozen more.
 	 *
 	 * <p>A file it cannot find FAILS rather than skips. It skipped until now, through
 	 * {@code Assumptions.assumeTrue}, and that is the same defect as the short-region one above, one

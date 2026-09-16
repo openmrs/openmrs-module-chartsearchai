@@ -7753,13 +7753,16 @@ clinician's later `/feedback`, or an `error` in place of the answer. Every serve
 control this module publishes is rendered from those events, so the forgery pre-empts all of them at
 once. Bounded, and stated as such: one upstream delta chunk becomes one frame, so the sequence must
 arrive inside a single chunk — routine for a hostile or token-batching remote endpoint, impractical
-against the local llama-server, which streams a token at a time. **And a second bound decides whether
-the forgery substitutes an answer at all**: a client joins a frame's `data:` lines with LF, so any real
-text ahead of the CR lands in the same buffer as the forged JSON. Driven through this package's own
-decoder — the CR opening the chunk gives `"\n{…}"`, which parses, and the worked example above is that
-shape; the CR after a sentence of answer gives `"No anticoagulant is charted [8].\n{…}"`, which is a
-`JsonParseException` and reaches the shipped client as *Failed to parse final response*. Either way the
-forged event pre-empts the module's own; only the first replaces the answer with one of its choosing. Nothing in the server's own state or
+against the local llama-server, which streams a token at a time. **What a single CR buys depends on where it
+falls, and a RUN of them removes even that**: a client joins a frame's `data:` lines with LF, so text
+ahead of a lone CR lands in the same buffer as the forged JSON. Driven through this package's own
+decoder — a CR opening the chunk gives `"\n{…}"`, which parses; a CR after a sentence of answer gives
+`"No anticoagulant is charted [8].\n{…}"`, a `JsonParseException` reaching the shipped client as
+*Failed to parse final response*. **Two CRs in a row defeat that distinction entirely**, which is
+measured and is why it is not recorded here as a bound: the pair ends the genuine frame and its
+dispatch line, so the forged fields open a frame of their OWN and its data is nothing but the JSON —
+two clean events, whatever preceded them. The stronger shape, and the one
+`ChartSearchAiSseFrameInjectionTest.aRunOfTerminatorsCannotOpenAFrameOfItsOwn` now pins. Nothing in the server's own state or
 confidentiality is affected, which is why the finding is rated LOW.
 
 **What the streamed text now renders differently, measured in both shapes.** A terminator the model
@@ -7844,12 +7847,13 @@ specification (terminator set, field parsing, one optional space dropped, `data:
 the dispatch step, comments skipped). The second reader was the keep-alive test's private
 frame-well-formedness assertion, which it now owns as `SseEvents.assertEveryFrameIsWellFormed` and
 states over the lines a client splits: after the `event:` line, every line of a frame must be a
-`data:` line. That one assertion covers a keep-alive spliced in from outside, and a terminator left
-inside a payload whose next line is not itself a `data:` line — which is every field a forgery needs,
-`event:`, `id:` and `retry:` alike, whether or not it names an event this module emits. It does not
-catch a payload that opens a further `data:` line of its own, which only appends to the same event's
-data, something the model can do with its own text anyway. Stated that way because it was first
-written as the universal, and the universal is false.
+`data:` line. That one assertion covers a keep-alive spliced in from outside, and a stray FIELD left
+inside a frame by a lone terminator, whatever that field is called. It does not catch a terminator
+whose next line is a further `data:` line — which only appends to the same event's data — nor a RUN of
+terminators, which ends the frame and its dispatch line so the forged fields open a well-formed frame
+of their own. That second one is the stronger attack and the event LIST is what sees it, which is why
+the shared assertion in that class asks both questions. Stated this way because the claim was written
+as a universal, narrowed once, and was still a universal.
 
 Measured on the unfixed writer, with both readers spec-aware: the three channel cases fail on the
 frame structure, and `everyTerminatorTheSpecificationRecognisesIsNeutralised` on the `token` event

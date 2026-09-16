@@ -145,16 +145,20 @@ final class SseEvents {
 	 * the lines as a CLIENT splits them — per {@link #frames}.
 	 *
 	 * <p>One assertion, two ways to break it. A keep-alive spliced into a frame breaks it from the
-	 * outside; a line terminator left inside a payload breaks it from the inside, and until the writer
-	 * split on the whole terminator set this method could not see the second case, because it split on
-	 * LF like the writer did.</p>
+	 * outside; a lone line terminator left inside a payload breaks it from the inside, and until the
+	 * writer split on the whole terminator set this method could not see the second case, because it
+	 * split on LF like the writer did. A RUN of terminators breaks neither — see below.</p>
 	 *
-	 * <p><b>It catches a payload terminator whose next line is not itself {@code data:}</b>, which is
-	 * every field a forgery needs — {@code event:}, {@code id:}, {@code retry:} — and not a payload
-	 * that opens a further {@code data:} line of its own, which only appends to the same event's data,
-	 * something the model can do with its own text anyway. Measured: {@code data: real<CR>data: more}
-	 * passes here, and the claim is stated this way because it was first written as the universal and
-	 * that universal is false.</p>
+	 * <p><b>What it catches is a stray field INSIDE a frame</b> — a terminator whose next line is not
+	 * itself a {@code data:} line, whatever that field is called ({@code event:}, {@code id:},
+	 * {@code retry:}). Two measured shapes it does NOT catch, named because this claim has been
+	 * narrowed twice and was still a universal both times: a terminator followed by a further
+	 * {@code data:} line, which only appends to the same event's data and is something the model can
+	 * do with its own text anyway; and a RUN of terminators, which ends the frame and its dispatch
+	 * line, so the forged fields open a well-formed frame of their own. The second is the stronger
+	 * attack, and what sees it is the event LIST —
+	 * {@code ChartSearchAiSseFrameInjectionTest.aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee}
+	 * pins that division of labour.</p>
 	 */
 	static void assertEveryFrameIsWellFormed(ByteArrayOutputStream out) {
 		for (List<String> frame : frames(text(out))) {

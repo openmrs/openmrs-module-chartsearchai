@@ -32,13 +32,15 @@ import java.io.InputStream;
  * — so the caller that reads through it must close it on the failure path too. Every caller does,
  * by reading inside a try-with-resources.</p>
  *
- * <p><b>Three things here are defence in depth and the suite does not discriminate them</b>, said
- * once rather than at each: the {@code len} clamp, the two post-throw guards, and {@link #skip}.
+ * <p><b>Several clauses here are defence in depth and the suite does not discriminate them</b>,
+ * said once rather than at each: the {@code len} clamp, the post-throw guard in each read, and
+ * the single-byte {@link #read()} override ENTIRE — its counting included, not merely its guard.
  * Measured against a loopback peer, production reaches this class through exactly two callers,
- * neither of which skips, reads a byte at a time, asks for more than 16384 at once, or reads on
- * after the throw — so removing any of the three leaves every test green. They are kept because
- * each closes a hole a future caller could open in the count, and named here because a clause no
- * test discriminates is one the next change can delete for free without knowing it.</p>
+ * and neither skips, reads a byte at a time, asks for more than 16384 at once, or reads on after
+ * the throw; each of those clauses can be deleted with every test still green. They are kept
+ * because each closes a hole a future caller could open in the count, and named here because a
+ * clause no test discriminates is one the next change can delete for free without knowing it. The
+ * list is what was measured, not a proof that nothing else here is undiscriminated.</p>
  */
 final class BoundedResponseStream extends FilterInputStream {
 
@@ -92,12 +94,18 @@ final class BoundedResponseStream extends FilterInputStream {
 			// clamp below would otherwise compute, which every caller would read as end-of-stream.
 			throw new ResponseTooLargeException(limit);
 		}
-		// Ask for at most one byte beyond the ceiling: enough to notice the peer went past it, and
-		// never enough for the overshoot to be the thing that fills the heap. Defence in depth
-		// rather than a live constraint — measured against a loopback peer, neither production
-		// caller ever asks for more than it allows ({@code readNBytes} 16384, the stream decoder
-		// 8192), so no test discriminates it and removing it changes nothing today.
-		int allowed = (int) Math.min(len, limit - delivered + 1);
+		// Ask for at most one byte beyond the ceiling: enough to notice the peer went past it,
+		// and never enough for the overshoot to be the thing that fills the heap. See the class
+		// javadoc for why no test discriminates this.
+		//
+		// Only NARROW the caller's request, never widen it and never floor it: `readAllBytes`
+		// passes len == 0 to probe for end-of-stream against a full buffer, and answering that
+		// with a read of 1 overruns the buffer — measured. And `room` is checked positive because
+		// it overflows negative for a limit near Long.MAX_VALUE, which made `allowed` 0 and left
+		// `readAllBytes` spinning on zero-length reads rather than throwing — measured at 780 s
+		// of CPU. An unusable ceiling stops clamping; it does not stop the read.
+		long room = limit - delivered + 1;
+		int allowed = (room > 0 && room < len) ? (int) room : len;
 		int n = in.read(b, off, allowed);
 		if (n > 0) {
 			count(n);
@@ -107,9 +115,9 @@ final class BoundedResponseStream extends FilterInputStream {
 
 	/**
 	 * Counted, not delegated. {@link FilterInputStream#skip} would hand straight to the peer and
-	 * leave those bytes out of the total — harmless for heap, since skipping allocates nothing, but
-	 * it would let a peer put arbitrarily many bytes past the ceiling and keep the stream open. No
-	 * caller on either read path skips today; this is so the counter has no hole to find later.
+	 * leave those bytes out of the total — harmless for heap, since skipping allocates nothing,
+	 * but it would let a peer put arbitrarily many bytes past the ceiling and keep the stream
+	 * open. See the class javadoc for why no test discriminates this.
 	 */
 	@Override
 	public long skip(long n) throws IOException {

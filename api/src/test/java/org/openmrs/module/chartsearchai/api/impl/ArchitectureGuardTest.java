@@ -474,16 +474,30 @@ public class ArchitectureGuardTest {
 	 * <p><b>The two halves read the source differently, and each way was measured wrong the
 	 * other way round.</b> The {@code response.body()} half is per line, where a call wrapped
 	 * across two lines reads as a violation — loud and wrong rather than silent, the safe
-	 * direction. The {@code BodyHandlers.ofString} half is over the file's code with whitespace
-	 * removed, because per line a wrapped call passed silently; and it stays QUALIFIED, because
-	 * matching the bare method name reddened the two correct {@code BodyPublishers.ofString}
-	 * calls that build the request body.</p>
+	 * direction. The {@link #BUFFERING_BODY_HANDLERS} half is over the file's code with
+	 * whitespace removed, because per line a wrapped call passed silently; and each entry stays
+	 * QUALIFIED, because matching a bare method name reddened the two correct
+	 * {@code BodyPublishers.ofString} calls that build the request body.</p>
 	 *
-	 * <p><b>Residue.</b> Neither half sees a body reached through a differently-named reference,
-	 * since both match a spelling rather than a call. Assigning {@code response.body()} to a
+	 * <p><b>Residue.</b> The source map is keyed on the simple file name, so two production
+	 * classes sharing one would leave a file unscanned; there are none today. And neither half
+	 * sees a body reached through a differently-named reference, since both match a spelling
+	 * rather than a call. Assigning {@code response.body()} to a
 	 * local does NOT escape it — measured: the local form reddens this rule and nothing else —
 	 * because the spelling then has no reader in front of it, which is the violation.</p>
 	 */
+	/**
+	 * The {@code BodyHandlers} that hand back a whole buffered body. Spelled as a SET because the
+	 * gap is what nobody thinks of: the first version named {@code ofString} alone, and
+	 * {@code ofByteArray} — the same defect, one rename away — passed it, measured. Named
+	 * positively and not by exclusion, so {@code ofInputStream} needs no entry and the residue is
+	 * a handler nobody added here rather than one this list happens to allow.
+	 */
+	private static final String[] BUFFERING_BODY_HANDLERS = {
+		"BodyHandlers.ofString", "BodyHandlers.ofByteArray", "BodyHandlers.ofFile",
+		"BodyHandlers.ofByteArrayConsumer",
+	};
+
 	@Test
 	public void everyRemoteResponseBodyIsReadUnderACeiling() throws IOException {
 		// Scoped to PRODUCTION sources by its own walk: getSourceCache() covers src/test too, where
@@ -528,15 +542,11 @@ public class ArchitectureGuardTest {
 				// reach it. Named here so the exclusion is reviewable rather than merely absent.
 				continue;
 			}
-			List<String> lines = sources.get(name);
+			List<String> lines = codeLines(sources.get(name));
 			StringBuilder code = new StringBuilder();
 			for (int i = 0; i < lines.size(); i++) {
 				String line = lines.get(i);
 				String trimmed = line.trim();
-				if (trimmed.startsWith("//") || trimmed.startsWith("*")
-						|| trimmed.startsWith("/*")) {
-					continue;
-				}
 				code.append(trimmed);
 				if (line.contains("response.body()")) {
 					remoteBodyReads++;
@@ -551,10 +561,13 @@ public class ArchitectureGuardTest {
 			// passes a line scan SILENTLY — measured. Qualified rather than on the method alone,
 			// because `BodyPublishers.ofString` builds the REQUEST body and is correct: matching
 			// the bare method reddened the two request sites, also measured.
-			if (code.toString().replaceAll("\\s+", "").contains("BodyHandlers.ofString")) {
-				violations.add(name + " — BodyHandlers.ofString buffers the whole response body "
-						+ "before anything can count it; read an InputStream under a ceiling "
-						+ "instead (issue #446)");
+			String dense = code.toString().replaceAll("\\s+", "");
+			for (String buffering : BUFFERING_BODY_HANDLERS) {
+				if (dense.contains(buffering)) {
+					violations.add(name + " — " + buffering + " buffers the whole response body "
+							+ "before anything can count it; read an InputStream under a ceiling "
+							+ "instead (issue #446)");
+				}
 			}
 		}
 

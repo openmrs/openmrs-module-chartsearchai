@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,8 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	 * instrument's rather than the module's: the JDK's {@code HttpServer} and macOS loopback
 	 * auto-tuning together absorbed ~0.7 MB before the server's write saw the broken pipe, far
 	 * past the socket slack {@link #TOLERATED} describes. So this measures what a socket can
-	 * swallow and not what the module read — the module read 8192 — and what it discriminates is
+	 * swallow and not what the module read — the module read {@code MAX_ERROR_BODY_BYTES} — and
+	 * what it discriminates is
 	 * a ceiling raised to megabytes, which is the mutation that matters.
 	 */
 	private static final long ERROR_BODY_BUDGET = 2L * 1024 * 1024;
@@ -102,9 +104,9 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 			"{\"error\":{\"message\":\"no such model: chartsearchai-446-probe\"}}";
 
 	/** ASCII only, so the envelope's byte length is its character length. */
-	private static final String CEILING_PREFIX = "{\"choices\":[{\"message\":{\"content\":\"";
+	private static final String COMPLETION_PREFIX = "{\"choices\":[{\"message\":{\"content\":\"";
 
-	private static final String CEILING_SUFFIX = "\"}}]}";
+	private static final String COMPLETION_SUFFIX = "\"}}]}";
 
 	private HttpServer server;
 
@@ -229,19 +231,27 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	 * so an ordinary short error body has to come back whole. Asserted through the log because
 	 * that is the only place it goes: nothing parses a non-2xx body, and the status-code
 	 * {@link APIException} does not carry it.
+	 *
+	 * <p>At DEBUG, and the second assertion is the point of the first: the body is the
+	 * ENDPOINT's text, so it stays off the default log for the reason
+	 * {@code RemoteLlmEngine.logErrorBody} gives.</p>
 	 */
 	@Test
 	public void anOrdinaryErrorBodyReachesTheLogWhole() {
 		pointEngineAt("/short-error");
 
-		try (LogCapture capture = LogCapture.on(RemoteLlmEngine.class.getName())) {
+		try (LogCapture capture = LogCapture.on(RemoteLlmEngine.class.getName(), Level.DEBUG)) {
 			APIException raised = callAndCatch(() -> engine.infer("system", "user", 60));
 
 			assertNotNull(raised, "a 503 from the endpoint is a failed call");
-			assertTrue(capture.describeAll().stream().anyMatch(e -> e.contains(SHORT_ERROR_BODY)),
+			assertTrue(capture.hasMessageAt(Level.DEBUG, SHORT_ERROR_BODY),
 					"the whole of a short error body must reach the log — an error read that "
 							+ "returned nothing would still pass every ceiling case above. "
 							+ "Captured: " + capture.describeAll());
+			assertFalse(capture.hasMessageAt(Level.ERROR, SHORT_ERROR_BODY),
+					"and it must not reach ERROR: the body is the ENDPOINT's text, which a "
+							+ "compromised one can make this patient's chart, and core ships "
+							+ "org.openmrs at WARN. Captured: " + capture.describeAll());
 		}
 	}
 
@@ -331,14 +341,14 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/** A well-formed completion whose body is exactly {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}. */
 	private void exactlyAtTheCeiling(HttpExchange exchange) throws IOException {
 		respondOnce(exchange, 200, "application/json",
-				(CEILING_PREFIX + "z".repeat(ceilingPadding()) + CEILING_SUFFIX)
+				(COMPLETION_PREFIX + "z".repeat(ceilingPadding()) + COMPLETION_SUFFIX)
 						.getBytes(StandardCharsets.UTF_8));
 	}
 
-	/** How much filler makes {@link #CEILING_PREFIX} + filler + {@link #CEILING_SUFFIX} the ceiling. */
+	/** How much filler makes {@link #COMPLETION_PREFIX} + filler + {@link #COMPLETION_SUFFIX} the ceiling. */
 	private static int ceilingPadding() {
-		return (int) RemoteLlmEngine.MAX_RESPONSE_BYTES - CEILING_PREFIX.length()
-				- CEILING_SUFFIX.length();
+		return (int) RemoteLlmEngine.MAX_RESPONSE_BYTES - COMPLETION_PREFIX.length()
+				- COMPLETION_SUFFIX.length();
 	}
 
 	/** An SSE stream that never reaches {@code [DONE]} — one content chunk after another. */
@@ -350,8 +360,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	/** A single JSON body that never ends — a plausible completion envelope, then filler. */
 	private void floodBody(HttpExchange exchange, int status) throws IOException {
-		byte[] opening = "{\"choices\":[{\"message\":{\"content\":\""
-				.getBytes(StandardCharsets.UTF_8);
+		byte[] opening = COMPLETION_PREFIX.getBytes(StandardCharsets.UTF_8);
 		byte[] filler = "y".repeat(4096).getBytes(StandardCharsets.UTF_8);
 		respond(exchange, status, "application/json", opening, filler);
 	}

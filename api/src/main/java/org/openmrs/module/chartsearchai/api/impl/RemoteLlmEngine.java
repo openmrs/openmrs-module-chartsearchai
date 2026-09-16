@@ -121,8 +121,7 @@ public class RemoteLlmEngine implements LlmEngine {
 					HttpResponse.BodyHandlers.ofInputStream());
 
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				log.error("Remote LLM API returned HTTP {}: {}", response.statusCode(),
-						truncateForLog(readTruncatedErrorBody(response.body())));
+				logErrorBody(response.statusCode(), readTruncatedErrorBody(response.body()));
 				throw new APIException("Remote LLM API returned HTTP " + response.statusCode()
 						+ ". Check the endpoint URL and model name in the "
 						+ "chartsearchai.llm.remote.* global properties, and the API key "
@@ -167,9 +166,7 @@ public class RemoteLlmEngine implements LlmEngine {
 					HttpResponse.BodyHandlers.ofInputStream());
 
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				String body = readTruncatedErrorBody(response.body());
-				log.error("Remote LLM API returned HTTP {}: {}", response.statusCode(),
-						truncateForLog(body));
+				logErrorBody(response.statusCode(), readTruncatedErrorBody(response.body()));
 				throw new APIException("Remote LLM API returned HTTP " + response.statusCode());
 			}
 
@@ -312,6 +309,26 @@ public class RemoteLlmEngine implements LlmEngine {
 	}
 
 	/**
+	 * The status code at ERROR and the endpoint's own text at DEBUG.
+	 *
+	 * <p>Split because the two have different audiences. The status code and the
+	 * {@code chartsearchai.llm.remote.*} hint are what an operator needs, and carry nothing of the
+	 * patient's. The BODY is bytes the endpoint chose, and a compromised or merely verbose one can
+	 * echo the prompt — which is this patient's chart — straight back as an error message:
+	 * measured against a loopback peer, name, date of birth, diagnosis, allergy and three drug
+	 * names all fit inside what {@code truncateForLog} keeps. Core ships {@code org.openmrs} at
+	 * WARN, so ERROR would put that in the default server log and whatever ships it onward, with
+	 * nobody opting in. DEBUG is the opt-in boundary — the one issue #439 drew for the
+	 * safety-finding shortfall, and the position {@code ClassCodeFidelityCheck} states for record
+	 * text.</p>
+	 */
+	private static void logErrorBody(int statusCode, String body) {
+		log.error("Remote LLM API returned HTTP {}; its response body is logged at DEBUG",
+				statusCode);
+		log.debug("Remote LLM API HTTP {} body: {}", statusCode, truncateForLog(body));
+	}
+
+	/**
 	 * What an operator is told when the peer sent more than one answer can be.
 	 *
 	 * <p><b>The cause is logged here and deliberately NOT attached.</b>
@@ -319,8 +336,9 @@ public class RemoteLlmEngine implements LlmEngine {
 	 * streaming route's terminal handler reads {@code getCause() instanceof IOException} as "the
 	 * client hung up" — it then logs at DEBUG and sends no {@code error} event, so an
 	 * {@code APIException} carrying this cause would reach a clinician as a stream that simply
-	 * stopped, and reach the operator not at all. Attaching it was measured doing exactly that
-	 * before this comment existed. → {@code ChartSearchAiRestController.streamAnswer}.</p>
+	 * stopped. The operator is reached either way, by the ERROR line below; what detaching the
+	 * cause buys is the {@code error} event, and nothing else. Attaching it was measured
+	 * suppressing exactly that. → {@code ChartSearchAiRestController.streamAnswer}.</p>
 	 *
 	 * <p><b>That heuristic is itself wrong, and this only steps around it.</b> Every other
 	 * {@code IOException} the engines wrap is misread the same way — a peer that hangs up

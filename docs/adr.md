@@ -7750,6 +7750,17 @@ arrive inside a single chunk — routine for a hostile or token-batching remote 
 against the local llama-server, which streams a token at a time. Nothing in the server's own state or
 confidentiality is affected, which is why the finding is rated LOW.
 
+**And the reference frontend was never vulnerable, which is measured rather than argued.** Driven with
+the pre-fix bytes — `event:token\ndata: real answer<CR>event: done<CR>data: {"answer":"FORGED"}` —
+`openmrs-esm-chartsearchai`'s own stream reader (commit `d0e0d0c`, its `vitest` harness, 2026-09-16)
+delivered the whole CR-bearing payload as ONE `token` callback, forged bytes and all, and dispatched
+exactly one `done`: the genuine one. It splits its buffer on `'\n'` alone, so the CR never ended a
+line there. The probe was calibrated in both directions — told to expect the forged answer it failed,
+reporting `expected 'genuine' to be 'FORGED'` — and it was thrown away rather than committed to that
+repository. So this needed no client change. What was exposed is a client that ends a line at a lone
+CR — which the specification requires, and which this module's README and ONBOARDING both instruct a
+client author to do.
+
 **Decision.** The framing splits at every terminator the grammar recognises, as one `Pattern`
 (`SSE_LINE_TERMINATORS`, CRLF first so it is consumed as one terminator). A CR in a payload therefore
 becomes a data-line break, which is the only thing SSE can carry: the format has no representation
@@ -7758,21 +7769,29 @@ content — `event: done` stays a sentence — and the byte does not.
 
 **The alternative was to JSON-encode the three raw channels**, which the finding offers as defence in
 depth. Rejected as the primary fix: it changes the payload of `token`, `thinking` and `preliminary`
-for every existing client, including one in another repository, to buy a property the split already
-has — the framing no longer depends on the content of model output. Encoding remains available later
+for every existing client — including the `openmrs-esm-chartsearchai` reader measured above, which
+would then render JSON at the clinician — to buy a property the split already has: the framing no
+longer depends on the content of model output. Encoding remains available later
 as a wire change with a client change beside it, and is not what a LOW-severity framing bug should
 force.
 
-**The suite could not see it, and that is the more useful half.** `SseEvents`, the decoder every
-streaming test in the package reads through, recognised only LF — the same mistake as the code it was
-checking, so every assertion about an event's type was an assertion about what the controller
-intended rather than what a client parses. It now decodes per the specification (terminator set,
-field parsing, one optional space dropped, `data:` joined with LF, comments skipped), which is what
-makes the four behavioural cases below fail on the unfixed writer: three dispatch a forged `done`
-ahead of the module's own, and the fourth renames the `token` event outright. A fifth case is the
-known-bad control — the pre-fix bytes, hand-framed, asserting the decoder SEES the forgery in them —
-because a decoder narrowed back to LF-only would leave the other four green on a stream carrying a
-forged frame, which is a green suite reporting this fixed.
+**The suite could not see it, and that is the more useful half.** The test package read the wire
+through two readers and BOTH split on LF — the same mistake as the code they were checking — so every
+assertion about an event's type was an assertion about what the controller intended rather than what a
+client parses. `SseEvents`, the decoder every streaming test reads through, now decodes per the
+specification (terminator set, field parsing, one optional space dropped, `data:` assembled through
+the dispatch step, comments skipped). The second reader was the keep-alive test's private
+frame-well-formedness assertion, which it now owns as `SseEvents.assertEveryFrameIsWellFormed` and
+states over the lines a client splits: after the `event:` line, every line of a frame must be a
+`data:` line. That one assertion covers a keep-alive spliced in from outside and a terminator left
+inside a payload, and it does not care whether the forged field names an event — so it is also what
+covers `id:` and `retry:`, which change stream state and dispatch nothing.
+
+Measured on the unfixed writer, with both readers spec-aware: the three channel cases fail on the
+frame structure and the fourth on the `token` event having been renamed to the payload's own event
+name. A fifth case is the known-bad control — the pre-fix bytes, hand-framed, asserting the decoder
+SEES the forgery in them — because a reader narrowed back to LF-only would leave the other four green
+on a stream carrying a forged frame, which is a green suite reporting this fixed.
 
 → `ChartSearchAiSseFrameInjectionTest`, and `LlmProviderTest`'s two escape-decoding tests for the
 route the CR arrives on.

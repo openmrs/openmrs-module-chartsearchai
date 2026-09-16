@@ -92,13 +92,13 @@ public class ChartSearchAiStreamKeepAliveTest {
 						+ "E4B query on the demo died at ~125s with zero bytes delivered");
 		assertTrue(beforeGeneration.startsWith(":"),
 				"the early write must be an SSE comment so a spec-compliant client ignores it; got "
-						+ quoted(beforeGeneration));
+						+ SseEvents.quoted(beforeGeneration));
 		assertFalse(beforeGeneration.contains("event:"),
 				"the keep-alive must not fabricate an event — no client has a handler for one, and the "
-						+ "UI would render it; got " + quoted(beforeGeneration));
+						+ "UI would render it; got " + SseEvents.quoted(beforeGeneration));
 		assertTrue(beforeGeneration.endsWith("\n\n"),
 				"an SSE frame is terminated by a blank line, or the next real event is folded into this "
-						+ "one by the client's parser; got " + quoted(beforeGeneration));
+						+ "one by the client's parser; got " + SseEvents.quoted(beforeGeneration));
 	}
 
 	@Test
@@ -113,7 +113,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 				"the silence must carry several keep-alives, not just the opening one: a proxy's read "
 						+ "timeout restarts on every byte, so one early byte does not save a prefill that "
 						+ "outlasts the timeout, as E4B's did on the demo. Got " + written
-						+ " in " + quoted(stub.writtenAtEntry));
+						+ " in " + SseEvents.quoted(stub.writtenAtEntry));
 	}
 
 	@Test
@@ -219,7 +219,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		assertEquals(stub.emitted, tokens,
 				"every token event must reach the client exactly once; a comment spliced into a frame "
 						+ "would split it into a malformed pair and change this count");
-		assertEveryFrameIsWellFormed(tearing.text());
+		SseEvents.assertEveryFrameIsWellFormed(tearing.text());
 
 		// Counted LAST, and that ordering is load-bearing. countKeepAlives finds comments at line
 		// starts, and a comment spliced into a frame is no longer at one — so with the production lock
@@ -462,33 +462,6 @@ public class ChartSearchAiStreamKeepAliveTest {
 	}
 
 	/**
-	 * Asserts the whole stream decomposes into frames that are each either a lone keep-alive comment
-	 * or a well-formed event — the single invariant that a comment was never written into the middle
-	 * of an event.
-	 */
-	private void assertEveryFrameIsWellFormed(String raw) {
-		for (String frame : raw.split("\n\n")) {
-			if (frame.isEmpty()) {
-				continue;
-			}
-			String[] lines = frame.split("\n");
-			if (lines[0].startsWith(":")) {
-				assertEquals(1, lines.length,
-						"a keep-alive frame must stand alone; got " + quoted(frame));
-				continue;
-			}
-			assertTrue(lines[0].startsWith("event: "),
-					"a frame must open with its event line; got " + quoted(frame));
-			for (int i = 1; i < lines.length; i++) {
-				assertTrue(lines[i].startsWith("data: "),
-						"every later line of an event frame must be data — a keep-alive spliced into "
-								+ "this event would show up here, splitting it in two for every client; got "
-								+ quoted(frame));
-			}
-		}
-	}
-
-	/**
 	 * Counts keep-alive comments at LINE STARTS, which makes this an UNDERCOUNT over a stream that can
 	 * tear: a comment spliced into the middle of an event frame is no longer at a line start, so a run
 	 * with the production lock dropped counts short by however many were spliced. Two callers depend on
@@ -507,10 +480,6 @@ public class ChartSearchAiStreamKeepAliveTest {
 			}
 		}
 		return count;
-	}
-
-	private static String quoted(String s) {
-		return "\"" + s.replace("\n", "\\n") + "\"";
 	}
 
 	private static ChartSearchService.ChartAnswer answer() {

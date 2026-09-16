@@ -9,7 +9,9 @@
  */
 package org.openmrs.module.chartsearchai.web.rest;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -90,6 +92,66 @@ final class SseEvents {
 			events.add(new SseEvent(type, dispatched(data)));
 		}
 		return events;
+	}
+
+	/**
+	 * Asserts the whole stream decomposes into frames that are each either a lone keep-alive comment
+	 * or a well-formed event — a comment was never written into the middle of an event, and no field
+	 * line of a frame came from the model rather than from the writer.
+	 *
+	 * <p>Both of those are the same assertion, and it is worth saying why they are one. The check is
+	 * "after the {@code event:} line, every line is a {@code data:} line", over the lines as a CLIENT
+	 * splits them — at CR, LF or CRLF. A keep-alive spliced into a frame breaks it from the outside; a
+	 * terminator left inside a payload breaks it from the inside, and until the writer split on the
+	 * whole terminator set this method could not see the second case, because it split on LF like the
+	 * writer did. So a failure here reads as a line that should have been data and is not, whichever
+	 * of the two put it there.</p>
+	 *
+	 * <p>Frames are separated by a blank LINE, walked here rather than matched as a pair of
+	 * terminators: {@code (\r\n|\r|\n){2}} matches a single CRLF — first alternative, then
+	 * backtracking to {@code \r} and {@code \n} — so a regex for "two terminators" reports a frame
+	 * boundary in the middle of one ordinary line break.</p>
+	 */
+	static void assertEveryFrameIsWellFormed(String raw) {
+		List<String> frame = new ArrayList<String>();
+		for (String line : LINE_TERMINATORS.split(raw, -1)) {
+			if (line.isEmpty()) {
+				assertFrameIsWellFormed(frame);
+				frame.clear();
+				continue;
+			}
+			frame.add(line);
+		}
+		assertFrameIsWellFormed(frame);
+	}
+
+	private static void assertFrameIsWellFormed(List<String> lines) {
+		if (lines.isEmpty()) {
+			return;
+		}
+		String frame = String.join("\n", lines);
+		if (lines.get(0).startsWith(":")) {
+			assertEquals(1, lines.size(),
+					"a keep-alive frame must stand alone; got " + quoted(frame));
+			return;
+		}
+		assertTrue(lines.get(0).startsWith("event: "),
+				"a frame must open with its event line; got " + quoted(frame));
+		for (int i = 1; i < lines.size(); i++) {
+			assertTrue(lines.get(i).startsWith("data: "),
+					"every later line of an event frame must be data — a keep-alive spliced into "
+							+ "this event, or a line terminator left inside a payload, would show up "
+							+ "here, splitting it in two for every client; got " + quoted(frame));
+		}
+	}
+
+	/**
+	 * A stream or frame for a failure message, with its line terminators visible — both of them, since
+	 * a CR is the one this package's tests are about and an unescaped one would overwrite the message
+	 * it appears in.
+	 */
+	static String quoted(String s) {
+		return "\"" + s.replace("\r", "\\r").replace("\n", "\\n") + "\"";
 	}
 
 	/**

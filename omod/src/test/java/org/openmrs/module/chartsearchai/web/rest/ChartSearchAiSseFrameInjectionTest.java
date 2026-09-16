@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -122,12 +123,18 @@ public class ChartSearchAiSseFrameInjectionTest {
 	/**
 	 * CR and CRLF and LF, on one payload, each followed by field syntax — because the framing is one
 	 * expression over a terminator SET and a shrunk set is the silent failure. A client must see one
-	 * {@code token} event whose data carries all three attempts as text.
+	 * {@code token} event, and the payload back.
+	 *
+	 * <p>The data is asserted WHOLE rather than by {@code contains}, which is what pins the two things
+	 * a looser assertion would let through: the leading terminator, which frames an empty first
+	 * {@code data:} line and so must come back as a leading LF, and the CRLF, which must be consumed
+	 * as ONE break rather than two. Both are shapes a payload opening with, or joining lines by, a
+	 * terminator produces — and the pieces between them must still be in order.</p>
 	 */
 	@Test
 	public void everyTerminatorTheSpecificationRecognisesIsNeutralised() throws Exception {
 		controller.setChartSearchService(new InjectingStubService(
-				"a\revent: cr\rb\r\nevent: crlf\r\nc\nevent: lf\nd", "reasoning", null));
+				"\revent: cr\ra\r\nevent: crlf\r\nb\nevent: lf\nc", "reasoning", null));
 
 		controller.streamAnswer(out, patient(), "any allergies?", user(), false);
 
@@ -139,12 +146,11 @@ public class ChartSearchAiSseFrameInjectionTest {
 					"no terminator in a payload may name an event type; '" + forged
 							+ "' was dispatched in " + types);
 		}
-		String data = SseEvents.ofType(out, "token").data;
-		for (String attempt : Arrays.asList("event: cr", "event: crlf", "event: lf")) {
-			assertTrue(data.contains(attempt),
-					"the payload's own text must survive as data content; '" + attempt
-							+ "' is missing from " + data);
-		}
+		SseEvents.assertEveryFrameIsWellFormed(out.toString("UTF-8"));
+		assertEquals("\nevent: cr\na\nevent: crlf\nb\nevent: lf\nc",
+				SseEvents.ofType(out, "token").data,
+				"every terminator must arrive as the line break SSE can carry, and nothing else may "
+						+ "change: the text between them, in order, with one LF per terminator");
 	}
 
 	/**
@@ -170,10 +176,25 @@ public class ChartSearchAiSseFrameInjectionTest {
 						+ "and nothing else in this class proves anything");
 		assertTrue(SseEvents.ofType(unfixed, "done").data.contains("Stop all anticoagulants"),
 				"and the forged frame's own payload must be what that event carries");
+		assertThrows(AssertionError.class,
+				() -> SseEvents.assertEveryFrameIsWellFormed(unfixed.toString("UTF-8")),
+				"and the frame check must REFUSE those bytes — it is asserted to pass on every stream "
+						+ "in this class, and a negative assertion that could never have failed is not "
+						+ "evidence of anything");
 	}
 
-	/** Exactly one {@code done} event, and it is the module's own answer rather than the payload's. */
+	/**
+	 * Exactly one {@code done} event, and it is the module's own answer rather than the payload's —
+	 * over the parsed events, and over the frame structure they were parsed out of.
+	 *
+	 * <p>The second is not the first restated. {@link SseEvents#assertEveryFrameIsWellFormed} asks
+	 * whether any line of a frame after its {@code event:} line is something other than data, which is
+	 * the injection's shape whether or not the forged field happens to name an event type this module
+	 * emits — so it also covers {@code id:} and {@code retry:}, which change stream state and dispatch
+	 * no event at all.</p>
+	 */
 	private void assertOnlyTheModulesOwnDoneEvent() throws Exception {
+		SseEvents.assertEveryFrameIsWellFormed(out.toString("UTF-8"));
 		List<String> types = SseEvents.types(out);
 		assertEquals(1, Collections.frequency(types, "done"),
 				"a payload holding a done frame must not become a second done event; got " + types);

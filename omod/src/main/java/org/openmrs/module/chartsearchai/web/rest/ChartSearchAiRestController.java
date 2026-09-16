@@ -2025,8 +2025,12 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * Writes an SSE event, converting a client-disconnect {@link IOException} into the
-	 * {@link RuntimeException} the streaming loop unwinds on. Shared by the answer ({@code token})
-	 * and reasoning ({@code thinking}) channels so both handle a mid-stream disconnect identically.
+	 * {@link RuntimeException} the streaming loop unwinds on. Shared by every event written while the
+	 * answer is still being produced — the three raw-text channels ({@code token}, {@code thinking},
+	 * {@code preliminary}) and the early {@code references} — so all of them handle a mid-stream
+	 * disconnect identically. The terminal events ({@code done}, {@code grounded}, {@code error})
+	 * call {@link #writeSseEvent} directly, each inside the handler that decides what a failure there
+	 * means.
 	 */
 	private void writeSseEventOrThrow(OutputStream out, String event, String data) {
 		try {

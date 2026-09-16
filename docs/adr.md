@@ -104,6 +104,10 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 96: An answer quoting one of a substance's ceilings says which stricter one it left unstated](#decision-96-an-answer-quoting-one-of-a-substances-ceilings-says-which-stricter-one-it-left-unstated)
 - [Decision 97: The accusation that a finding lost its rating counts cited the way the published count does](#decision-97-the-accusation-that-a-finding-lost-its-rating-counts-cited-the-way-the-published-count-does)
 - [Decision 98: The module states when a cited prescription stopped, because no wording of the prompt will](#decision-98-the-module-states-when-a-cited-prescription-stopped-because-no-wording-of-the-prompt-will)
+- [Decision 99: One mechanism is stated once, naming every active order it covers](#decision-99-one-mechanism-is-stated-once-naming-every-active-order-it-covers)
+- [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
+- [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
+- [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -7718,13 +7722,177 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 → `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` and
 `.anAnswerNamingEveryOrderIsReturnedByteForByte`.
 
+## Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF
+
+**Status: Accepted** (September 2026) — implemented, issue [#435](https://github.com/openmrs/openmrs-module-chartsearchai/issues/435), a security-scan finding (CWE-93, severity LOW). It changes no prompt, no reference list, no chip and no response key: one expression in the frame writer, and the test decoders that could not see the difference. What it changes is the streamed rendering of the model's own line terminators, which the paragraph below measures; `done`'s `answer`, `/search` and the audit row keep them verbatim, and README now points a client there for fidelity.
+
+**Context.** `ChartSearchAiRestController.writeSseEvent` frames every streamed event by splitting the
+payload and prefixing each piece with `data: `. It split on `\n` alone. The event-stream grammar ends
+a line at CRLF, CR **or** LF, so the two disagreed on exactly one byte: a lone CR left inside a
+payload ended that `data:` line for the client while the writer believed it was still writing
+content, and the bytes after it became the client's next FIELD of the same event — `event:` renaming
+it, `data:` appending to it, `id:`/`retry:` setting stream state.
+
+**Why that byte reaches the framing at all.** Three channels carry model output as raw text rather
+than JSON: `token`, `thinking`, `preliminary`. Every other event is written from something the module
+composed — Jackson-encoded on `references`, `done` and `grounded`, which escapes a CR, and a literal
+on `error`. The clinician's own input is scrubbed by `CONTROL_CHARS` — which deliberately excludes CR
+and LF, and is applied to the question and the feedback comment, never to the response path. And model text is
+attacker-influenced by design on two routes this module accepts: chart text any clinician can author
+reaches the prompt, and a remote OpenAI-compatible endpoint is an untrusted network peer. Both JSON
+spellings of the character, `\r` and the unicode escape, are legal under the strict `json_schema`
+response format and are decoded to a literal CR by `LlmProvider.AnswerExtractingConsumer` — which is
+correct, and pinned, because it mirrors Jackson on the non-streaming path.
+
+The asymmetry is worth naming: this module is an SSE CLIENT too, of the inference endpoint, and that
+side was never the LF-only shape — `LlmResponseParser.parseStreamingResponse` reads the upstream stream
+with `BufferedReader.readLine()`, which ends a line at CR, LF and CRLF alike. Only the writer disagreed
+with the grammar.
+
+**What it bought.** A whole forged frame. A payload of `<CR>event: done<CR>data: {…}` was delivered to
+a conforming client as a `done` event carrying attacker-chosen JSON: an answer contradicting the real
+one, references stamped `grounded: true` — a verdict the server publishes only after its own
+verification — forged `safetyWarnings`/`interactionPairs`, a `questionId` that would misattribute the
+clinician's later `/feedback`, or an `error` in place of the answer. Every server-side integrity
+control this module publishes is rendered from those events, so the forgery pre-empts all of them at
+once. Bounded, and stated as such: one upstream delta chunk becomes one frame, so the sequence must
+arrive inside a single chunk — routine for a hostile or token-batching remote endpoint, impractical
+against the local llama-server, which streams a token at a time. **What a single CR buys depends on where it
+falls, and a RUN of them removes even that**: a client joins a frame's `data:` lines with LF, so text
+ahead of a lone CR lands in the same buffer as the forged JSON. Driven through this package's own
+decoder — a CR opening the chunk gives `"\n{…}"`, which parses; a CR after a sentence of answer gives
+`"No anticoagulant is charted [8].\n{…}"`, a `JsonParseException` reaching the shipped client as
+*Failed to parse final response*. **Two CRs in a row defeat that distinction entirely**, which is
+measured and is why it is not recorded here as a bound: the pair ends the genuine frame and its
+dispatch line, so the forged fields open a frame of their OWN and its data is nothing but the JSON —
+two clean events, whatever preceded them. The stronger shape, and the one
+`ChartSearchAiSseFrameInjectionTest.aRunOfTerminatorsCannotOpenAFrameOfItsOwn` now pins. Nothing in the server's own state or
+confidentiality is affected, which is why the finding is rated LOW.
+
+**What the streamed text now renders differently, measured in both shapes.** A terminator the model
+wrote reaches the streamed text as LF, and that is a change: for an LF-only client — which is every
+client this project ships — the pre-fix writer passed a CR through, so the streamed text matched
+`done.answer` byte for byte and now does not. Driven through `streamAnswer`, a CRLF inside ONE chunk
+arrives as a single LF; a CRLF STRADDLING two chunks arrives as two, a blank line the model never
+wrote, because each chunk is framed on its own and nothing carries the pending CR across. Reachable:
+each upstream delta becomes one frame, and char-by-char chunking is a mode `LlmProviderTest` pins. The
+writer is not changed for it — spanning a terminator across frames needs state in a per-event writer,
+for a cosmetic difference on a channel whose fidelity contract is `done.answer`. Both shapes are why
+README states the rule rather than the property — do not RELY on the streamed text being
+byte-identical, and use `done`'s `answer` where fidelity matters — because the property is not general:
+an answer whose breaks are LF streams back byte-identical, which is the ordinary case and is measured.
+A directive survives that; a claim about the channel does not, and four of them were refuted here one
+per review pass before this one was written as a rule.
+
+The same sweep found a second, unrelated fidelity defect on that channel and it is
+[#438](https://github.com/openmrs/openmrs-module-chartsearchai/issues/438) rather than part of this
+decision: a code point split across two chunks is encoded as two unpaired surrogates, one per frame, so
+a clinician sees `??` where the model wrote a non-BMP character. Measured the same way, unchanged by
+this fix, and fixing it means holding a partial code point across frames — a change to the writer's
+contract, not a framing correction.
+
+**And the reference frontend was never vulnerable, which is measured rather than argued.** Driven with
+the pre-fix bytes — `event:token\ndata: real answer<CR>event: done<CR>data: {"answer":"FORGED"}` —
+`openmrs-esm-chartsearchai`'s own stream reader (commit `d0e0d0c`, its `vitest` harness, 2026-09-16)
+delivered the whole CR-bearing payload as ONE `token` callback, forged bytes and all, and dispatched
+exactly one `done`: the genuine one. It splits its buffer on `'\n'` alone, so the CR never ended a
+line there. The probe was calibrated in both directions — told to expect the forged answer it failed,
+reporting `expected 'genuine' to be 'FORGED'` — and it was thrown away rather than committed to that
+repository. So this needed no client change. What was exposed is a client that ends a line at a lone
+CR, as the specification requires — a shape neither this module's README nor ONBOARDING had ever asked
+a client author for, and the reference client does not have. Both docs now state the server's side of
+it instead: every line it terminates, it terminates with LF, so an LF-only split and a conforming one
+see the same frames. The asymmetry is worth keeping in view, because it runs opposite to intuition:
+against a writer that regressed here, the LF-only client is the SAFE one — it renders the stray CR —
+and the conforming client is the exposed one. Measured, with the decoder narrowed to LF-only: the
+pre-fix bytes decode as one `token` event, not a `done`.
+
+**And what a client cannot do is reject the field by PARSING it**, which is the precise form of the
+claim and not "no client can tell". The grammar says to take the last `event:` in a frame, so a
+conformant parse has no basis to refuse one; a client could apply a stricter frame-SHAPE rule — after
+the `event:` line, every line must be a `data:` line — and this package's own reader does exactly that,
+which is what `assertEveryFrameIsWellFormed` is. No client was ever asked for that rule, and asking for
+it now would put a security control in every consumer instead of in the one writer. Which is why this
+belongs at the writer and nowhere else.
+
+**Decision.** The framing splits at every terminator the grammar recognises, as one `Pattern`
+(`SSE_LINE_TERMINATORS`, CRLF first so it is consumed as one terminator). A CR in a payload therefore
+becomes a data-line break, which is the only thing SSE can carry: the format has no representation
+for a CR inside data at all, since a client assembles `data:` lines with LF. So the text survives as
+content — `event: done` stays a sentence — and the byte does not.
+
+**The cost was measured, because a regex on a per-token path invites the question.** Driving the real
+writer over a loopback socket: `Pattern.split` runs at about 12.6 ns per character against
+`String.split`'s single-char intrinsic at 0.25, and overtakes the `write` + `flush` beside it at around
+85 characters. End to end through `streamAnswer`, a 400-token response with reasoning, references and
+an eight-reference `done` cost **+131 µs** — against the 15.1 s baseline mean over fourteen cells that
+[Decision 85](#decision-85-an-answer-short-of-the-findings-its-prompt-carried-is-repaired-by-asking-again-not-by-another-wording)
+records for a local-engine answer, about 9 parts per million. An `indexOf` walk that keeps the
+intrinsic and still consumes CRLF as one terminator exists and was not taken: this line is the whole of
+a security control and reads as the rule it enforces. (Measured 2026-09-16, JDK 25, min of 3–5 reps,
+the comparison arm restored from the base commit rather than hand-edited.)
+
+**The alternative was to JSON-encode the three raw channels**, which the finding offers as defence in
+depth. Rejected as the primary fix: it changes the payload of `token`, `thinking` and `preliminary`
+for every existing client — including the `openmrs-esm-chartsearchai` reader measured above, which
+would then render JSON at the clinician — to buy a property the split already has: the framing no
+longer depends on the content of model output. Encoding remains available later
+as a wire change with a client change beside it, and is not what a LOW-severity framing bug should
+force.
+
+**The suite could not see it, and that is the more useful half.** The test package read the wire
+through two frame decoders and BOTH split on LF — the same mistake as the code they were checking — so
+every assertion about an event's type was an assertion about what the controller intended rather than
+what a client parses. (A third reader there, `countKeepAlives`, still splits on LF and stays that way
+deliberately: it asks whether a line OPENS with `:`, and the writer prefixes every payload line with
+`data: `, so no payload can produce a `:`-leading line under either writer. It is not asking a question
+about line boundaries.) `SseEvents`, the decoder every streaming test reads through, now decodes per the
+specification (terminator set, field parsing, one optional space dropped, `data:` assembled through
+the dispatch step, comments skipped). The second reader was the keep-alive test's private
+frame-well-formedness assertion, which it now owns as `SseEvents.assertEveryFrameIsWellFormed` and
+states over the lines a client splits: after the `event:` line, every line of a frame must be a
+`data:` line. That one assertion covers a keep-alive spliced in from outside, and a stray FIELD left
+inside a frame by a lone terminator, whatever that field is called. It does not catch a terminator
+whose next line is a further `data:` line — which only appends to the same event's data — nor a RUN of
+terminators, which ends the frame and its dispatch line so the forged fields open a well-formed frame
+of their own. That second one is the stronger attack and the event LIST is what sees it, which is why
+the shared assertion in that class asks both questions. Stated this way because the claim was written
+as a universal, narrowed once, and was still a universal.
+
+On the unfixed writer the behavioural cases in that class fail, each in the place its own javadoc
+names — the three channel cases on the frame structure,
+`everyTerminatorTheSpecificationRecognisesIsNeutralised` on the `token` event having been renamed to
+the payload's own event name, and `aRunOfTerminatorsCannotOpenAFrameOfItsOwn` on the event list, which
+is the shape the frame structure cannot see. **No tally of them is kept here**: this paragraph carried
+one, and it went stale inside a single review cycle when that last case was added. The controls stay
+green there and say so themselves —
+`aCarriageReturnInTheAnswerNeedsNoFramingBecauseJacksonEscapesIt` carries its CR on a composed event,
+`theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere` proves the decoder can still see a
+forgery, and `aRunOfTerminatorsIsTheForgeryTheFrameShapeCannotSee` proves which assertion catches the
+run. A reader narrowed back to LF-only would leave the behavioural cases green on a stream carrying a
+forged frame — a green suite reporting this fixed — which is what
+`theDecoderTheseAssertionsReadThroughSeesTheForgeryWhenItIsThere` exists to prevent. Measured under
+that narrowing, it and the run control both redden and the Jackson one does not, which is why they are
+named here rather than pointed at by position.
+
+**And "one expression in the frame writer" is now a pinned claim rather than a description.** Every
+behavioural test here drives the endpoint, so a SECOND writer elsewhere in the module would redden
+nothing, and no consumer was ever asked to check the frame shape that would catch it.
+`ChartSearchAiStreamingTest.theFrameWriterIsTheOnlyPlaceAProductionDataLineIsWritten` asserts the shape
+instead: the literal a data line opens with occurs once in this module's production sources, on a walk
+that fails rather than passes when it finds nothing. Its residue is named where it lives — a prefix
+built some other way is invisible to it, and the same literal in `api/src/main` is the inbound reader,
+deliberately out of scope.
+
+→ `ChartSearchAiSseFrameInjectionTest`, that guard, and `LlmProviderTest`'s two escape-decoding tests
+for the route the CR arrives on.
+
 ## Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#439](https://github.com/openmrs/openmrs-module-chartsearchai/issues/439), a security-scan finding
 (CWE-532, severity LOW). It changes no prompt, no chip, no response key and no wire format: two
-`log.warn` lines, and a named rendering beside the `toString` that made one of them easy to write. Decision 101 is the streaming-frame fix and is numbered on its own branch; the gap closes when
-that lands.
+`log.warn` lines, and a named rendering beside the `toString` that made one of them easy to write.
 
 **Context.** Decision 100's shortfall report logged the list it had just computed:
 

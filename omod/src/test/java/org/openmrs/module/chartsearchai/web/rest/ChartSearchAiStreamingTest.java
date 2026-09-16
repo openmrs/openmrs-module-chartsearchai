@@ -29,11 +29,18 @@ import org.junit.jupiter.api.Test;
  * method also pins the mechanism that keeps its writes inside the request: the stop flag must be
  * read, not merely set.</p>
  *
- * <p>Threads and auth state are not the whole of it, and saying so is the point: this is the only
- * test class that reads the controller's own SOURCE, so it is also where the keep-alive's
- * source-level facts live: that the production entry point passes the interval CONSTANT, and that
- * the timer is scheduled at a fixed DELAY. Neither is about threads, and a javadoc naming only
- * threads and auth sends the next reader looking elsewhere for them.</p>
+ * <p>Threads and auth state are not the whole of it, and saying so is the point: this class OWNS the
+ * reader every source-scanning assertion in the package borrows ({@link #controllerSource} through
+ * {@link #resolveSourceFile}), so it is also where facts about the controller's SHAPE live rather than
+ * its behaviour — that the production entry point passes the interval CONSTANT, that the timer is
+ * scheduled at a fixed DELAY, and that a data line is written in one place. None of those is about
+ * threads, and a javadoc naming only threads and auth sends the next reader looking elsewhere for
+ * them.</p>
+ *
+ * <p>It said "the only test class that reads the controller's own SOURCE" until this was written, and
+ * that had become false: the reader below is borrowed across this package, and the javadoc on
+ * {@link #resolveSourceFile} said so while this paragraph denied it. Owning the reader is the part
+ * that was ever true, and is the part that makes this the right home for a shape assertion.</p>
  */
 public class ChartSearchAiStreamingTest {
 
@@ -390,13 +397,78 @@ public class ChartSearchAiStreamingTest {
 	}
 
 	/**
+	 * One writer of SSE frames in this module's production code, and it is {@code writeSseEvent}.
+	 *
+	 * <p>ADR Decision 101 rests a security fix on "one expression in the frame writer": the payload is
+	 * split at every line terminator the event-stream grammar recognises, so no model-written text can
+	 * begin a field line. That property belongs to the writer, not to the endpoint —
+	 * {@code ChartSearchAiSseFrameInjectionTest} drives {@code streamAnswer} and would say nothing
+	 * about a second writer somewhere else — and neither would any client, for the reason ADR Decision
+	 * 101 gives: a conformant parse has no basis to refuse a field, and the stricter frame-shape rule
+	 * that would catch one was never asked of any consumer.</p>
+	 *
+	 * <p>So this asserts the shape rather than the behaviour: the literal a data line opens with occurs
+	 * ONCE in this module's production sources. The scan FAILS on an empty discovery, because a walk
+	 * that found nothing would pass this check for the wrong reason — which is how a source guard goes
+	 * quiet.</p>
+	 *
+	 * <p><b>Residue, named rather than left to be discovered.</b> A SECOND writer that builds the prefix
+	 * some other way — {@code "data" + ": "}, a character append, a constant elsewhere — is invisible
+	 * here, and no list of those spellings would be closed. Respelling the ONE occurrence that way is
+	 * not: it reddens on the writers-list assertion below, which comes back empty — measured, and
+	 * measured because the first version of this sentence credited the wrong assertion. The
+	 * same literal in {@code api/src/main} is deliberately out of scope: {@code LlmResponseParser}
+	 * READS it, parsing the inference endpoint's own stream, which is the opposite direction and
+	 * correct.</p>
+	 */
+	@Test
+	public void theFrameWriterIsTheOnlyPlaceAProductionDataLineIsWritten() throws Exception {
+		// Walked up to the named root rather than by a count of parents: a count is a claim about the
+		// package depth that a moved class breaks silently, and this one did while being written.
+		java.nio.file.Path wanted = java.nio.file.Paths.get("omod", "src", "main", "java");
+		java.nio.file.Path root = resolveSourceFile().toPath();
+		while (root != null && !root.endsWith(wanted)) {
+			root = root.getParent();
+		}
+		assertNotNull(root, "the scan must start at this module's production source root, and no "
+				+ "ancestor of " + resolveSourceFile() + " is " + wanted);
+
+		java.util.List<String> scanned = new java.util.ArrayList<String>();
+		java.util.List<String> writers = new java.util.ArrayList<String>();
+		try (java.util.stream.Stream<java.nio.file.Path> tree = java.nio.file.Files.walk(root)) {
+			for (java.nio.file.Path file : (Iterable<java.nio.file.Path>) tree
+					.filter(f -> f.toString().endsWith(".java"))::iterator) {
+				scanned.add(file.getFileName().toString());
+				String text = new String(java.nio.file.Files.readAllBytes(file),
+						java.nio.charset.StandardCharsets.UTF_8);
+				int occurrences = 0;
+				for (int at = text.indexOf("\"data: \""); at >= 0; at = text.indexOf("\"data: \"", at + 1)) {
+					occurrences++;
+				}
+				if (occurrences > 0) {
+					writers.add(file.getFileName() + " x" + occurrences);
+				}
+			}
+		}
+
+		assertTrue(scanned.contains("ChartSearchAiRestController.java"),
+				"the walk must have reached the controller, or this guard passed having read nothing; "
+						+ "scanned " + scanned);
+		assertEquals(java.util.Collections.singletonList("ChartSearchAiRestController.java x1"), writers,
+				"a data line may be written in exactly one place, because that is where the payload is "
+						+ "split at every terminator a client honours — ADR Decision 101. A second "
+						+ "writer, or a second occurrence in this one, reddens here and is invisible to "
+						+ "every behavioural test in the package; got " + writers);
+	}
+
+	/**
 	 * Reads the controller's production source as UTF-8.
 	 *
-	 * <p>One reader for every source-scanning test that reads this controller — the ones in this
-	 * class, which had each grown its own spelling of it, and since issue #336
-	 * {@code ChartSearchAiInteractionPairExtentTest}'s guard as well. Stated as "every" rather than
-	 * counted, for the reason {@link #resolveSourceFile()} gives one level up: a count here drifts the
-	 * moment a test is added, as it already has.</p>
+	 * <p>One reader for every source-scanning test that reads this controller — the ones in this class,
+	 * which had each grown its own spelling of it, and the others across the package that borrow it.
+	 * Stated as "every" rather than counted, and no longer naming one of them either, for the reason
+	 * {@link #resolveSourceFile()} gives one level up: both a count and a named example drift the moment
+	 * a test is added, as each already had.</p>
 	 *
 	 * <p>The charset is explicit because the file contains non-ASCII characters and
 	 * {@code new String(byte[])} decodes with the platform default: every needle asserted here is
@@ -412,8 +484,9 @@ public class ChartSearchAiStreamingTest {
 
 	/**
 	 * Locates the controller's production source, which every source-scanning assertion against that
-	 * file reads — in this class, and since issue #336 in
-	 * {@code ChartSearchAiInteractionPairExtentTest} too.
+	 * file reads — in this class and in the others across this package that borrow it, which is why an
+	 * enumeration of them is not kept here: the one this javadoc used to name had long since stopped
+	 * being the only other.
 	 *
 	 * <p>A file it cannot find FAILS rather than skips. It skipped until now, through
 	 * {@code Assumptions.assumeTrue}, and that is the same defect as the short-region one above, one

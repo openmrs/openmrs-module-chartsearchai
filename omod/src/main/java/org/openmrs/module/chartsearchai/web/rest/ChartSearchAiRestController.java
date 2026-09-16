@@ -100,6 +100,33 @@ public class ChartSearchAiRestController {
 	private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
 
 	/**
+	 * Every line terminator the SSE event-stream grammar recognises — CRLF, CR and LF alike — used by
+	 * {@link #writeSseEvent} to decide where one {@code data:} line of a frame ends.
+	 *
+	 * <p>It is a SET rather than {@code '\n'} because a client's is: the grammar ends a line at any of
+	 * the three, so a lone CR left inside a payload ends that {@code data:} line for the client while
+	 * this writer still believes it is writing content, and the bytes after it are read as the next
+	 * FIELD of the same event — {@code event:} renaming it, {@code data:} appending to it,
+	 * {@code id:}/{@code retry:} setting stream state. Splitting on LF alone let a CR in model text
+	 * forge a whole {@code done} frame, references stamped {@code grounded: true} and all, which is
+	 * the finding recorded as ADR Decision 101.</p>
+	 *
+	 * <p><b>Exactly those three, and both directions are silent.</b> Shrinking the set reopens the
+	 * finding. Widening it corrupts the answer instead: {@code \R} is the tempting simplification and
+	 * it also matches VT, FF, NEL, LS and PS, none of which SSE treats as a terminator and none of
+	 * which anything strips on the response path — so a form feed in model text would silently become
+	 * a newline in the clinician's answer. What reddens on {@code \R} is
+	 * {@code ChartSearchAiSseFrameInjectionTest.everyTerminatorTheSpecificationRecognisesIsNeutralised},
+	 * which spells all three terminators out as characters and requires a form feed to come back inside
+	 * one data line.</p>
+	 *
+	 * <p>CRLF is first in the alternation so it is consumed as ONE terminator: matched the other way
+	 * round it would yield an extra empty line, and an empty {@code data:} line is a LF in the data
+	 * the client assembles.</p>
+	 */
+	private static final Pattern SSE_LINE_TERMINATORS = Pattern.compile("\r\n|\r|\n");
+
+	/**
 	 * The keep-alive frame written while the answer is still being generated: an SSE comment, which
 	 * the spec requires a client to ignore, so this needs no client change and can raise no phantom
 	 * event in the UI.
@@ -678,7 +705,8 @@ public class ChartSearchAiRestController {
 						earlyDoneSent[0] = true;
 					};
 
-			// Five channels: "token" carries the answer; "thinking" carries the committed full-chart
+			// Five consumers, four of them events on the wire (the fifth is ungroundedConsumer above,
+			// which becomes an early "done"): "token" carries the answer; "thinking" carries the committed full-chart
 			// reasoning (chain-of-thought), emitted first so the UI can show live progress and the
 			// rationale instead of a dead spinner; "preliminary" carries the optional progressive
 			// preview reasoning (only when progressiveReasoning.enabled) — streamed ahead of, and to
@@ -689,7 +717,8 @@ public class ChartSearchAiRestController {
 			// async grounding is active — on a trailing "grounded" event after an early "done". The
 			// frontend must render "thinking" distinctly (e.g. a collapsible panel), never as the
 			// answer; citations must show as unverified until verdicts arrive. All unwind on client
-			// disconnect via writeSseEventOrThrow.
+			// disconnect via writeSseEventOrThrow — those four do; the early done above is written with
+			// writeSseEvent inside its own try, which is the distinction that method's javadoc draws.
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 					patient, sanitizedQuestion,
 					token -> writeSseEventOrThrow(out, "token", token),
@@ -1889,11 +1918,19 @@ public class ChartSearchAiRestController {
 	 * unsynchronized writers on one servlet output stream can interleave: a comment landing between
 	 * an event's {@code event:} line and its {@code data:} lines would split one event into two
 	 * malformed ones for every client. Only the write is inside the lock, never the serialization.</p>
+	 *
+	 * <p>The payload is broken at every terminator {@link #SSE_LINE_TERMINATORS} recognises, because
+	 * a line the framing does not end is a line the CLIENT ends — and then the bytes after it are
+	 * the client's next FIELD, not this event's data. Three channels carry model output as raw text
+	 * ({@code token}, {@code thinking}, {@code preliminary}), which is attacker-influenced by design,
+	 * so this split is the whole of what keeps a generated sentence from renaming the event carrying
+	 * it; {@link #writeSseEventOrThrow} says which events those are and which are composed here. → ADR Decision 101;
+	 * {@code ChartSearchAiSseFrameInjectionTest}.</p>
 	 */
 	private void writeSseEvent(OutputStream out, String event, String data) throws IOException {
 		StringBuilder sb = new StringBuilder();
 		sb.append("event: ").append(event).append('\n');
-		for (String line : data.split("\n", -1)) {
+		for (String line : SSE_LINE_TERMINATORS.split(data, -1)) {
 			sb.append("data: ").append(line).append('\n');
 		}
 		sb.append('\n');
@@ -1998,8 +2035,12 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * Writes an SSE event, converting a client-disconnect {@link IOException} into the
-	 * {@link RuntimeException} the streaming loop unwinds on. Shared by the answer ({@code token})
-	 * and reasoning ({@code thinking}) channels so both handle a mid-stream disconnect identically.
+	 * {@link RuntimeException} the streaming loop unwinds on. Shared by the incremental events — the
+	 * three raw-text channels ({@code token}, {@code thinking}, {@code preliminary}) and the early
+	 * {@code references} — so all of them handle a mid-stream disconnect identically. Every other
+	 * event ({@code done}, whether early or classic, {@code grounded} and {@code error}) calls
+	 * {@link #writeSseEvent} directly, each inside the handler that decides what a failure there
+	 * means.
 	 */
 	private void writeSseEventOrThrow(OutputStream out, String event, String data) {
 		try {

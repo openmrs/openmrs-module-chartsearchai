@@ -469,6 +469,19 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void streamingConsumer_shouldDecodeUnicodeCarriageReturnEscape() {
+		// The second spelling of the same code point. \\u000d is as legal in a JSON string as \\r, so
+		// the escape above is not the only route by which a CR reaches the streaming channels.
+		// Pinned as a LITERAL here
+		// because it is what ChartSearchAiSseFrameInjectionTest's payloads assume already arrived:
+		// the framing over there can only be tested on the character, never on the spelling.
+		String json = "{\"reasoning\": \"x\", \"answer\": \"before\\u000dafter\", \"citations\": []}";
+		assertEquals("before\rafter", streamThrough(json, 0));
+		assertEquals("before\rafter", streamThrough(json, 1),
+				"char-by-char: the hex digits of a CR escape must decode across chunk boundaries too");
+	}
+
+	@Test
 	public void streamingConsumer_reasoningMentioningAnswerWordShouldNotFalseTrigger() {
 		// Adversarial: the reasoning text itself contains the escaped word \"answer\". An escaped
 		// quote inside the reasoning value must NOT be mistaken for the real "answer" key, or the

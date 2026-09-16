@@ -416,7 +416,8 @@ public class ChartSearchAiStreamingTest {
 	 * <p><b>Residue, named rather than left to be discovered.</b> A SECOND writer that builds the prefix
 	 * some other way — {@code "data" + ": "}, a character append, a constant elsewhere — is invisible
 	 * here, and no list of those spellings would be closed. Respelling the ONE occurrence that way is
-	 * not: it reddens, on the empty-discovery gate above, which is measured rather than reasoned. The
+	 * not: it reddens on the writers-list assertion below, which comes back empty — measured, and
+	 * measured because the first version of this sentence credited the wrong assertion. The
 	 * same literal in {@code api/src/main} is deliberately out of scope: {@code LlmResponseParser}
 	 * READS it, parsing the inference endpoint's own stream, which is the opposite direction and
 	 * correct.</p>

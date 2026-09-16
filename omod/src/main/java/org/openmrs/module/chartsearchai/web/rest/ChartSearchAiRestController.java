@@ -115,9 +115,10 @@ public class ChartSearchAiRestController {
 	 * finding. Widening it corrupts the answer instead: {@code \R} is the tempting simplification and
 	 * it also matches VT, FF, NEL, LS and PS, none of which SSE treats as a terminator and none of
 	 * which anything strips on the response path — so a form feed in model text would silently become
-	 * a newline in the clinician's answer. Measured: with {@code \R} here the whole module suite stays
-	 * green but for {@code ChartSearchAiSseFrameInjectionTest}, which spells all three terminators out
-	 * as characters and requires a form feed to come back inside one data line.</p>
+	 * a newline in the clinician's answer. What reddens on {@code \R} is
+	 * {@code ChartSearchAiSseFrameInjectionTest.everyTerminatorTheSpecificationRecognisesIsNeutralised},
+	 * which spells all three terminators out as characters and requires a form feed to come back inside
+	 * one data line.</p>
 	 *
 	 * <p>CRLF is first in the alternation so it is consumed as ONE terminator: matched the other way
 	 * round it would yield an extra empty line, and an empty {@code data:} line is a LF in the data

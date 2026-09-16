@@ -171,6 +171,12 @@ public class ChartSearchAiSseFrameInjectionTest {
 	 * above carries the CR on a raw channel, so the composed events were argued rather than measured.
 	 * A future {@code done} writer that hand-built its JSON would drop the property silently.</p>
 	 *
+	 * <p><b>It covers {@code done}, and {@code grounded} is the residue.</b> That event is composed at
+	 * its own call site with its own {@code writeValueAsString}, and it reaches no stream here — every
+	 * case in this class runs with async grounding off, which is the shape that emits one terminal
+	 * event. Named rather than closed: the property under test is Jackson's and is the same on both
+	 * paths, so a case for the second would pin the mapper twice and the second writer not at all.</p>
+	 *
 	 * <p>What a client sees differs between the two, deliberately and documented in README: the
 	 * streamed text renders the CR as a line break, while {@code done}'s {@code answer} round-trips
 	 * the character itself.</p>

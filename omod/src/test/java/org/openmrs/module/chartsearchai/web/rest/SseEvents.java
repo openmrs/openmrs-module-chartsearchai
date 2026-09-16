@@ -98,10 +98,14 @@ final class SseEvents {
 
 	/**
 	 * The stream's frames, each as its own raw lines, split where a CLIENT splits them — and the one
-	 * place this package decides where a line and a frame end.
+	 * splitter shared by the two readers that have to agree with each other.
 	 *
-	 * <p>Both readers here need that decision, and need it identically: {@link #parse} reads the fields
-	 * out of a frame, {@link #assertEveryFrameIsWellFormed} asks what KIND each line is. They
+	 * <p>Those two are {@link #parse}, which reads the fields out of a frame, and
+	 * {@link #assertEveryFrameIsWellFormed}, which asks what KIND each line is; they need the decision
+	 * identically. It is not every reader of the stream in this package —
+	 * {@code ChartSearchAiStreamKeepAliveTest.countKeepAlives} splits on LF and stays that way, for the
+	 * reason ADR Decision 101 records: it asks whether a line OPENS with {@code :}, which no payload
+	 * line can, since the writer prefixes every one of them. They
 	 * were written as two walkers, which is the state the class javadoc above records this package
 	 * having already paid for once — and the drift on offer was that one of them could be "simplified"
 	 * to a regex over the frame separator while the other went on walking.</p>

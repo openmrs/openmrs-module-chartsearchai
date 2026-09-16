@@ -35,11 +35,10 @@ RUN openmrs assemble --mode config --config spa-build-config.json
 # cannot have come from this build — which is why the assertion below exists rather than a
 # comment claiming it.
 #
-# It lands before the pre-compression pass so it is compressed like everything else — but a file
-# this small may compress to nothing useful, and what precompress then writes depends on the sha
-# itself. The assertion below states the measured distribution; read it there rather than assuming
-# a sibling exists. Harmless either way: nginx tries `.br` first and otherwise serves the plain
-# file at the same mtime.
+# Whether precompress writes a sibling for it depends on the sha's own compressibility, and it does
+# not matter either way: the base image's nginx serves a `.sha` from its plain-file location, with
+# no encoding negotiation (see the assertion below). The gate reads the plain file, at the mtime
+# `COPY --from` preserved.
 COPY --from=chartsearchai-esm /esm/ESM_SHA /app/dist/chartsearchai-esm.sha
 
 # Give the assembled SPA the pre-compressed siblings the base image's nginx
@@ -64,14 +63,14 @@ RUN node /app/precompress-spa.mjs /app/dist
 # from its source, so the ordering should survive compression — "should" being the reason this
 # asserts it rather than a comment claiming it.
 #
-# The positive control is the ENTRY's own `.br`, not a pair count. Whether the STAMP gets a sibling
-# depends on the commit sha's own compressibility: measured over 20,000 real-shaped stamps (40 hex
-# + newline) through precompress's exact encoder, brotli output spans 35-45 bytes and 26 of them
-# (0.13%) are no smaller than the 41-byte source, so no `.br` is written — and `.gz` is never
-# written (57-60 bytes, always larger). A pair count of zero is therefore a legitimate state for
-# about one sha in 770, and failing on it would refuse a healthy build with a message that reads
-# like a real defect. The entry bundle is ~83 KB and always compresses, so its `.br` is what proves
-# precompress ran over this assembly; any pair that DOES exist is still compared.
+# The positive control is the ENTRY's own `.br`. The stamp's own siblings are deliberately NOT
+# compared: read against the base image's nginx (openmrs-distro-referenceapplication,
+# frontend/nginx.conf), `try_files $uri$enc_suffix …` appears only inside extension-scoped
+# locations — service-worker.js, `\.js$`, `\.css$`, `\.json$`, `\.svg$` — and a `.sha` matches none
+# of them. It falls through to the plain-file location, so no browser is ever served a compressed
+# variant of it and comparing those siblings would prove nothing. The entry bundle is ~83 KB, is
+# a `.js`, and always compresses, so its `.br` is what establishes that precompress ran over this
+# assembly at all.
 RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
   const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-chartsearchai-app"]; \
   if(!spec){console.error("importmap does not name the ESM");process.exit(1);} \
@@ -80,14 +79,7 @@ RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
   console.log("stamp mtime",stamp,"entry mtime",e,entry); \
   if(stamp>e){console.error("stamp is NEWER than the entry bundle: the gate provenance check would invert");process.exit(1);} \
   if(!existsSync(entry+".br")){console.error("precompress wrote no .br for the entry bundle, so nothing here verified what a browser is served");process.exit(1);} \
-  let pairs=0; \
-  for(const ext of [".br",".gz"]){ \
-    const a="/app/dist/chartsearchai-esm.sha"+ext, b=entry+ext; \
-    if(!existsSync(a)||!existsSync(b)) continue; \
-    pairs++; \
-    if(statSync(a).mtimeMs>statSync(b).mtimeMs){console.error("compressed siblings invert the ordering: "+a+" newer than "+b);process.exit(1);} \
-  } \
-  console.log("entry .br present; stamp sibling pairs compared:",pairs);'
+  console.log("entry .br present, so precompress ran over this assembly");'
 
 # Use the official O3 frontend image as the base — it has the correct
 # index.html (with SPA bootstrap), nginx config, and env var substitution.

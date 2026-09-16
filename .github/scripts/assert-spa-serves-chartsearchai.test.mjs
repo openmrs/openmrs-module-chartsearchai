@@ -87,7 +87,7 @@ const entryHead = (over = {}) => ({ url: '/x/app.js', status: 200, lastModified:
     { importmap: importmapFor('./x/app.js'), routes, esmSha: res('<!doctype html><html>') },
     entryHead(),
   );
-  check('an SPA-fallback stamp fails as not-a-sha', has(problems, 'did not return a commit sha'), problems.join('; '));
+  check('a stamp whose body is not a sha fails', has(problems, 'is not a commit sha'), problems.join('; '));
 }
 {
   const { problems } = gate.problemsWith(
@@ -242,7 +242,7 @@ check('isHealthy is false for any problem', gate.isHealthy([]) === true && gate.
     { importmap: importmapFor('./x/app.js'), routes, esmSha: res(`${SHA}a`) },
     entryHead(),
   );
-  check('41 hex characters is not a sha', has(problems, 'did not return a commit sha'), problems.join('; '));
+  check('41 hex characters is not a sha', has(problems, 'is not a commit sha'), problems.join('; '));
 }
 {
   // The entry side of the provenance comparison, which no case covered: only the stamp's
@@ -268,7 +268,7 @@ check('isHealthy is false for any problem', gate.isHealthy([]) === true && gate.
   );
   check(
     'a non-sha stamp reports only that, not a fabricated pre-dating',
-    has(problems, 'did not return a commit sha') && !has(problems, 'pre-dates'),
+    has(problems, 'is not a commit sha') && !has(problems, 'pre-dates'),
     problems.join(' | '),
   );
 }

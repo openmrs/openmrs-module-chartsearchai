@@ -119,11 +119,12 @@ async function probe(page, paths) {
       let n = bustSeed;
       const read = async (path) => {
         const deadline = Date.now() + challengeMs;
-        // Unique per read, for the same reason readHead does it: `cache: 'no-store'` sends no
-        // request header, so an edge cache may answer. Extension defaults are only one way
-        // Cloudflare caches — an origin `Cache-Control` or a cache-everything rule reaches the
-        // stamp too, and an edge-stale stamp reads OLDER than it is, which flips the provenance
-        // comparison to a false GREEN on exactly the failure this gate exists for.
+        // Unique per read: `cache: 'no-store'` sends no request header, so an edge may answer from
+        // cache. The origin's own headers make the ENTRY the stale-prone side — the base image's
+        // nginx sets `expires 1y` on `.js` and `no-cache, must-revalidate` on the plain-file
+        // location the stamp falls into — so the realistic failure is a stale ENTRY reading NEWER
+        // than it is, i.e. a false RED. Either way the comparison must not be made against an edge
+        // copy, which is what the cache-status check below is for.
         for (;;) {
           // Per ATTEMPT, not per read: a challenged read used to re-fetch one identical URL.
           const bust = `${path}${path.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
@@ -142,13 +143,31 @@ async function probe(page, paths) {
               };
             }
           } catch (e) {
-            if (Date.now() > deadline) return { status: 0, encoding: null, body: '', error: e.message };
+            if (Date.now() > deadline) {
+              // Same record shape and the same one-line trim as readAssetHeaders': these drifted,
+              // and a multi-line fetch error then wrapped across the one-line `attempt N/M:` output
+              // while `lastModified` came back undefined here and null everywhere else.
+              return {
+                status: 0,
+                encoding: null,
+                lastModified: null,
+                cache: null,
+                age: null,
+                body: '',
+                error: e.message.split('\n')[0],
+              };
+            }
           }
           await new Promise((resolve) => setTimeout(resolve, pollMs));
         }
       };
+      // Concurrent, not serial. Each read waits out its OWN challenge deadline, so three serial
+      // reads cost three deadlines: measured 3050ms against a 1000ms deadline, and 1028ms when
+      // only one of the three was challenged. This gate went from two probed paths to three, which
+      // raised the per-attempt worst case from two deadlines to three before this was fixed.
+      // Uniqueness of the busters survives: `++n` runs synchronously before each await.
       const out = {};
-      for (const [key, path] of Object.entries(paths)) out[key] = await read(path);
+      await Promise.all(Object.entries(paths).map(async ([key, path]) => { out[key] = await read(path); }));
       return out;
     },
     { paths, challengeMs: CHALLENGE_MS, pollMs: POLL_MS, bustSeed: (reads += 100) },
@@ -268,12 +287,13 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     const served = esmSha.body.trim();
     const looksLikeSha = /^[0-9a-f]{40}$/.test(served);
     if (!looksLikeSha) {
-      // Not a redundant belt to the status check above: an SPA `try_files` fallback answers a
-      // MISSING file with index.html and HTTP 200, so an image built before this stamp existed
-      // shows up here rather than as a 404. Either way it means the same thing.
+      // NOT the "image predates the stamp" case, which arrives as a 404 and is handled above: the
+      // base image's SPA fallback (`location / { try_files /index.html =404; }`) is reachable only
+      // for a DOTLESS uri, and this path has a dot. So this branch means the file exists and its
+      // body is not a sha — truncation, a host-side swap, an edge mangling it — and the body is
+      // printed because none of those has an obvious cause to name.
       problems.push(
-        `${ESM_SHA} did not return a commit sha but ${JSON.stringify(served.slice(0, 48))}` +
-          ' — most likely an image built before the stamp existed, answered by the SPA fallback',
+        `${ESM_SHA} exists but its body is not a commit sha: ${JSON.stringify(served.slice(0, 48))}`,
       );
     } else if (EXPECTED_SHA && served !== EXPECTED_SHA) {
       warnings.push(
@@ -323,6 +343,24 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
             ` (entry: ${entryHead.lastModified}; stamp: ${esmSha.lastModified})`,
         );
       }
+    }
+  }
+
+  // A HIT on either side means the comparison was made against an edge copy, not the origin — the
+  // unique `?cb=` defeats that under default Cloudflare config, but a zone set to ignore query
+  // strings would serve one cached answer to every read. Collected and printed since the round
+  // that added them; nothing branched on it, which made the one failure mode they exist to expose
+  // invisible in the verdict.
+  for (const [label, rec] of [
+    [ESM_SHA, esmSha],
+    [entryHead && entryHead.url, entryHead],
+  ]) {
+    if (!rec || !label) continue;
+    if (rec.cache === 'HIT' || Number(rec.age) > 0) {
+      warnings.push(
+        `${label} was answered from an edge cache (cf-cache-status: ${rec.cache ?? 'none'},` +
+          ` age: ${rec.age ?? 'none'}) — the provenance comparison may not reflect the origin`,
+      );
     }
   }
 
@@ -455,6 +493,8 @@ try {
     if (isHealthy(problems)) {
       // The whole premise here is that a green gate was once trusted wrongly, so say what was
       // actually established rather than only that it passed.
+      // The `OK: ` prefix is a CONTRACT: deploy.yml greps for it so that a step exiting 0 without
+      // reaching a verdict is red. Rewording this line disarms that check silently.
       console.log(`OK: ${BASE} serves ${ESM} (attempt ${attempt})`);
       if (served) {
         console.log(
@@ -493,6 +533,7 @@ try {
     console.error(
       `  Entry bundle: ${lastDiagnostics.entry ?? 'not read'} (${lastDiagnostics.entryAt ?? 'no Last-Modified'})`,
     );
+    console.error(`  ESM tip comparison: ${EXPECTED_SHA ? 'compared' : 'NOT resolved, so not compared'}`);
   }
   console.error(
     [

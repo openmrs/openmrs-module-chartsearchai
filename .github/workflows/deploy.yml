@@ -16,6 +16,10 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
+    # The gate's failure path is tens of minutes — ten attempts, each with a page load, three
+    # challenge polls and the entry's own, plus nine 30s sleeps — against a 360-minute default.
+    # Nothing else in this repo's workflows bounds a job except build-standalone.yml.
+    timeout-minutes: 30
     if: ${{ github.repository_owner == 'openmrs' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
     environment:
       name: chartsearchai
@@ -35,7 +39,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sha="$(gh api repos/openmrs/openmrs-esm-chartsearchai/commits/main --jq .sha)"
-          [ -n "$sha" ] || { echo "could not resolve openmrs-esm-chartsearchai main sha" >&2; exit 1; }
+          # Shape-checked, not just non-empty: a 200 whose body lacks the field makes --jq print the
+          # literal "null", which would pass -n and make the gate's tip note read "main is at null"
+          # on every deploy — the cry-wolf outcome demoting that check was meant to avoid.
+          printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$' || {
+            echo "did not get a commit sha from the ESM repo: ${sha:-<empty>}" >&2
+            exit 1
+          }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "expecting ESM commit $sha"
 

@@ -7774,6 +7774,13 @@ for a cosmetic difference on a channel whose fidelity contract is `done.answer`.
 README states that the streamed text is not byte-identical and names where the verbatim answer lives,
 instead of giving a client per-terminator arithmetic to reverse.
 
+The same sweep found a second, unrelated fidelity defect on that channel and it is
+[#438](https://github.com/openmrs/openmrs-module-chartsearchai/issues/438) rather than part of this
+decision: a code point split across two chunks is encoded as two unpaired surrogates, one per frame, so
+a clinician sees `??` where the model wrote a non-BMP character. Measured the same way, unchanged by
+this fix, and fixing it means holding a partial code point across frames — a change to the writer's
+contract, not a framing correction.
+
 **And the reference frontend was never vulnerable, which is measured rather than argued.** Driven with
 the pre-fix bytes — `event:token\ndata: real answer<CR>event: done<CR>data: {"answer":"FORGED"}` —
 `openmrs-esm-chartsearchai`'s own stream reader (commit `d0e0d0c`, its `vitest` harness, 2026-09-16)

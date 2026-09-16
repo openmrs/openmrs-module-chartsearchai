@@ -260,11 +260,11 @@ public class ChartSearchAiSseFrameInjectionTest {
 				+ SseEvents.types(out));
 		assertEquals(payload.replace('\r', '\n'), event.data,
 				"the payload must reach the client whole as the '" + channel + "' event's data, one "
-						+ "LF per terminator and nothing else changed; got "
-						+ SseEvents.quoted(event.data));
+						+ "LF per terminator and nothing else changed; sent "
+						+ SseEvents.quoted(payload) + ", got " + SseEvents.quoted(event.data));
 	}
 
-	/** The package's one fixture patient and user, rather than an eighth copy of their field values. */
+	/** The package's one fixture patient and user, rather than another copy of their field values. */
 	private static Patient patient() {
 		return RestControllerContext.patient();
 	}
@@ -324,14 +324,14 @@ public class ChartSearchAiSseFrameInjectionTest {
 			if (preliminary != null) {
 				preliminaryReasoningConsumer.accept(preliminary);
 			}
-			reasoningConsumer.accept(reasoning);
+			if (reasoning != null) {
+				// Guarded like the channel above it: an unguarded null would stream the word "null"
+				// as the model's reasoning rather than emitting no thinking event.
+				reasoningConsumer.accept(reasoning);
+			}
 			tokenConsumer.accept(token);
 			citationsConsumer.accept(chartAnswer().getReferences());
 			return chartAnswer();
-		}
-
-		@Override
-		public void warmup(Patient patient) {
 		}
 
 		private ChartAnswer chartAnswer() {

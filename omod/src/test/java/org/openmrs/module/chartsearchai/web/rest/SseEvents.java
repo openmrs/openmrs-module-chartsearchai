@@ -101,7 +101,7 @@ final class SseEvents {
 	 * place this package decides where a line and a frame end.
 	 *
 	 * <p>Both readers here need that decision, and need it identically: {@link #parse} reads the fields
-	 * out of a frame, {@link #assertEveryFrameIsWellFormed(String)} asks what KIND each line is. They
+	 * out of a frame, {@link #assertEveryFrameIsWellFormed} asks what KIND each line is. They
 	 * were written as two walkers, which is the state the class javadoc above records this package
 	 * having already paid for once — and the drift on offer was that one of them could be "simplified"
 	 * to a regex over the frame separator while the other went on walking.</p>
@@ -153,15 +153,7 @@ final class SseEvents {
 	 * that universal is false.</p>
 	 */
 	static void assertEveryFrameIsWellFormed(ByteArrayOutputStream out) {
-		assertEveryFrameIsWellFormed(text(out));
-	}
-
-	/**
-	 * As {@link #assertEveryFrameIsWellFormed(ByteArrayOutputStream)}, for a caller holding a stream
-	 * that is already decoded.
-	 */
-	static void assertEveryFrameIsWellFormed(String raw) {
-		for (List<String> frame : frames(raw)) {
+		for (List<String> frame : frames(text(out))) {
 			assertFrameIsWellFormed(frame);
 		}
 	}
@@ -169,9 +161,15 @@ final class SseEvents {
 	/**
 	 * One frame, which {@link #frames} guarantees is non-empty. Every message is a {@code Supplier},
 	 * because the eager form rendered and quoted the whole frame once per LINE of it.
+	 *
+	 * <p>The frame is reported with every terminator shown as LF, and the message says so: the lines
+	 * reaching here have already been split, so a CR that caused the failure is no longer in them and
+	 * would otherwise print as an ordinary line break — on the one finding where which terminator it
+	 * was is the whole point.</p>
 	 */
 	private static void assertFrameIsWellFormed(List<String> lines) {
-		Supplier<String> frame = () -> "got " + quoted(String.join("\n", lines));
+		Supplier<String> frame = () -> "got, terminators shown as LF: "
+				+ quoted(String.join("\n", lines));
 		if (lines.get(0).startsWith(":")) {
 			assertEquals(1, lines.size(),
 					() -> "a keep-alive frame must stand alone; " + frame.get());
@@ -208,10 +206,10 @@ final class SseEvents {
 	 * and a client keeps it. Measured over both, they agree on every case except that one.</p>
 	 */
 	private static String dispatched(StringBuilder data) {
-		if (data.length() > 0 && data.charAt(data.length() - 1) == '\n') {
-			return data.substring(0, data.length() - 1);
-		}
-		return data.toString();
+		// Every appended value carries a trailing LF, so the only question here is whether anything
+		// was appended at all — a frame with an event line and no data line, which this writer never
+		// emits. A test for the last CHARACTER would read as a claim about it that nothing can falsify.
+		return data.length() == 0 ? "" : data.substring(0, data.length() - 1);
 	}
 
 	/** The event types in emission order, for asserting event ordering. */

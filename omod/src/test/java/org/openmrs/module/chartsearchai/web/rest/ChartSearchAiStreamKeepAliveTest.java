@@ -218,7 +218,7 @@ public class ChartSearchAiStreamKeepAliveTest {
 		assertEquals(stub.emitted, tokens,
 				"every token event must reach the client exactly once; a comment spliced into a frame "
 						+ "would split it into a malformed pair and change this count");
-		SseEvents.assertEveryFrameIsWellFormed(tearing.text());
+		SseEvents.assertEveryFrameIsWellFormed(tearing.sink());
 
 		// Counted LAST, and that ordering is load-bearing. countKeepAlives finds comments at line
 		// starts, and a comment spliced into a frame is no longer at one — so with the production lock

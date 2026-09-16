@@ -285,5 +285,34 @@ check('isHealthy is false for any problem', gate.isHealthy([]) === true && gate.
   check('probe never fetches one path at the same URL twice', new Set(seen).size === seen.length, seen.join(' '));
 }
 
+
+{
+  // Per POLL, not per call: readHead's buster sat above its loop while probe's sat inside, so a
+  // challenged read re-fetched one identical URL to the deadline — an edge-cached 403 would then
+  // be returned as unreadable, i.e. red on a healthy deployment.
+  const polled = [];
+  globalThis.fetch = async (u) => {
+    polled.push(u);
+    return { status: 403, text: async () => '', headers: { get: () => null } };
+  };
+  await gate.readHead(page, '/openmrs/spa/x/app.js');
+  check(
+    'a challenged readHead re-polls at a DIFFERENT url each time',
+    polled.length > 2 && new Set(polled).size === polled.length,
+    `${polled.length} polls, ${new Set(polled).size} distinct`,
+  );
+  const probed = [];
+  globalThis.fetch = async (u) => {
+    probed.push(u);
+    return { status: 403, text: async () => '', headers: { get: () => null } };
+  };
+  await gate.probe(page, { a: '/openmrs/spa/x/app.js' });
+  check(
+    'a challenged probe re-polls at a DIFFERENT url each time',
+    probed.length > 2 && new Set(probed).size === probed.length,
+    `${probed.length} polls, ${new Set(probed).size} distinct`,
+  );
+}
+
 console.log(failed === 0 ? '\nall gate self-tests passed' : `\n${failed} gate self-test(s) FAILED`);
 process.exit(failed === 0 ? 0 : 1);

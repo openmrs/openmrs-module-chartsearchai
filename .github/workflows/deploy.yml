@@ -91,5 +91,11 @@ jobs:
           sudo apt-get update && sudo apt-get install -y xvfb
           npm install --no-save playwright@1.59.1
           npx playwright install --with-deps chromium
+          set -o pipefail
           xvfb-run -a node .github/scripts/assert-spa-serves-chartsearchai.mjs \
-            "https://chartsearchai.openmrs.org"
+            "https://chartsearchai.openmrs.org" | tee /tmp/gate.log
+          # A green step must mean the gate REACHED A VERDICT, not merely that it exited 0. Three
+          # revisions of the script's run-condition each had a way to exit 0 without running, and
+          # a step that exits 0 is green in Actions whatever it wrote to stderr. This asserts the
+          # success line itself, so "no output" fails here regardless of the exit code.
+          grep -q '^OK: ' /tmp/gate.log

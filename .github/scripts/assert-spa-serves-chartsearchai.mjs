@@ -91,10 +91,12 @@ const POLL_MS = positiveNumber('GATE_POLL_MS', 2_000);
 // to prevent. Date.now() alone is not enough — it is millisecond-resolution, and two reads in
 // the same millisecond produced the same value, so a counter carries it.
 //
-// The counter advances by 100 per CALL — more than any single call consumes (probe reads three
-// paths) — so seeds from different calls cannot overlap and a repeated path is never fetched at
-// the same URL twice. It only SEEDS the page-side functions below, which cannot close over
-// module scope:
+// The counter advances by 100 per CALL, which is headroom for the usual case rather than a bound:
+// a CHALLENGED read consumes one increment per poll per path, so a probe of three paths polling
+// to a 60s deadline at 2s intervals takes about 93, and more if the interval is shortened. Seeds
+// can therefore overlap under sustained challenge; the `Date.now()` half carries uniqueness
+// there, which is why both are in the URL. It only SEEDS the page-side functions below, which
+// cannot close over module scope:
 // they are serialised into the browser, so anything they use must be passed in. (Under a stub
 // that runs them in Node they would see module scope and the divergence would go unnoticed —
 // which is its own reason to pass it explicitly.)
@@ -166,12 +168,16 @@ async function readHead(page, url) {
       // set, while the `.sha` stamp is not — an edge-cached entry compared against an
       // origin-fresh stamp is exactly the comparison this gate must not get wrong, and the retry
       // loop cannot clear an edge cache. So the URL is made unique per read.
-      const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
       // Polls out a 403 the same way the fixed probe does. Without it a transient challenge on
       // this one asset reads as "the importmap names a file that is not served", which is a
       // different and much more alarming failure than the one that happened.
       const deadline = Date.now() + challengeMs;
       for (;;) {
+        // Inside the loop, as in probe. Above it, a challenged read re-fetched ONE identical
+        // URL for the whole poll — an edge-cached 403 would then be polled to the deadline and
+        // returned as "could not be read at all", i.e. RED on a healthy deployment, and on the
+        // more cacheable side of the comparison at that.
+  const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
         try {
           const r = await fetch(bust, { cache: 'no-store' });
           if (r.status !== 403 || Date.now() > deadline) {
@@ -512,11 +518,13 @@ try {
       'narrows what a host can be running without pinning it — only a digest pins.',
       'Nothing in this repo sets TAG; doing so is a host-side change.',
       '',
-      'Two directions this gate does NOT cover, so that a green run is not read for',
-      'more than it says: a wholly stale but self-consistent image (see EXPECTED_SHA',
-      'above), and the mirror of the observed failure — a NEW entry beside OLD',
-      'chunks, which is equally fatal and which only the entry bundle being checked',
-      'leaves invisible.',
+      'Three directions this gate does NOT cover, so that a green run is not read for',
+      'more than it says. A wholly stale but self-consistent image (see EXPECTED_SHA',
+      'above). The mirror of the observed failure — a NEW entry beside OLD chunks,',
+      'equally fatal, invisible because only the entry bundle is checked. And any',
+      'mixing where the stamp travels with the OLDER half: the comparison is relative,',
+      'so an old entry beside an old stamp and new chunks — the 2026-09-15 shape with',
+      'the stamp on the other side — reads as consistent.',
     ].join('\n'),
   );
   process.exit(1);

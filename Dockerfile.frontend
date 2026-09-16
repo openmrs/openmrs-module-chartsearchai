@@ -63,11 +63,14 @@ RUN node /app/precompress-spa.mjs /app/dist
 # from its source, so the ordering should survive compression — "should" being the reason this
 # asserts it rather than a comment claiming it.
 #
-# It requires at least one PAIR, and says how many it compared. An absent sibling used to `continue`
-# silently, and the `.gz` arm is in that state on every build: the 41-byte stamp gzips to 59 bytes,
-# which precompress skips as no smaller, while brotli gives 38 and is written. So exactly one pair
-# exists, on a 3-byte margin — without the count, a change to the stamp's content or the brotli
-# quality would disable the whole sibling check and look identical in the build log.
+# The positive control is the ENTRY's own `.br`, not a pair count. Whether the STAMP gets a sibling
+# depends on the commit sha's own compressibility: measured over 20,000 real-shaped stamps (40 hex
+# + newline) through precompress's exact encoder, brotli output spans 35-45 bytes and 26 of them
+# (0.13%) are no smaller than the 41-byte source, so no `.br` is written — and `.gz` is never
+# written (57-60 bytes, always larger). A pair count of zero is therefore a legitimate state for
+# about one sha in 770, and failing on it would refuse a healthy build with a message that reads
+# like a real defect. The entry bundle is ~83 KB and always compresses, so its `.br` is what proves
+# precompress ran over this assembly; any pair that DOES exist is still compared.
 RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
   const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-chartsearchai-app"]; \
   if(!spec){console.error("importmap does not name the ESM");process.exit(1);} \
@@ -75,6 +78,7 @@ RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
   const stamp=statSync("/app/dist/chartsearchai-esm.sha").mtimeMs, e=statSync(entry).mtimeMs; \
   console.log("stamp mtime",stamp,"entry mtime",e,entry); \
   if(stamp>e){console.error("stamp is NEWER than the entry bundle: the gate provenance check would invert");process.exit(1);} \
+  if(!existsSync(entry+".br")){console.error("precompress wrote no .br for the entry bundle, so nothing here verified what a browser is served");process.exit(1);} \
   let pairs=0; \
   for(const ext of [".br",".gz"]){ \
     const a="/app/dist/chartsearchai-esm.sha"+ext, b=entry+ext; \
@@ -82,8 +86,7 @@ RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
     pairs++; \
     if(statSync(a).mtimeMs>statSync(b).mtimeMs){console.error("compressed siblings invert the ordering: "+a+" newer than "+b);process.exit(1);} \
   } \
-  console.log("compressed sibling pairs compared:",pairs); \
-  if(pairs===0){console.error("no compressed sibling pair was compared, so this check verified nothing about what a browser is served");process.exit(1);}'
+  console.log("entry .br present; stamp sibling pairs compared:",pairs);'
 
 # Use the official O3 frontend image as the base — it has the correct
 # index.html (with SPA bootstrap), nginx config, and env var substitution.

@@ -8256,8 +8256,8 @@ stops mattering.
 
 *A refusal that must stop the start is a library behaviour, not a branch at the call site.* The
 entrypoint used to read the library's exit code and branch on it, and the property "a refusal stops
-the start" was then something only a source-reading guard could check. Four reviewers defeated four
-readings of it in turn — a statement inserted between the fetch and the branch, so `$?` was that
+the start" was then something only a source-reading guard could check. Four readings of it were
+defeated in turn — a statement inserted between the fetch and the branch, so `$?` was that
 statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
 recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
 next. `fetch_or_exit` ends that class: there is no branch to spell, and what the shell DOES is a

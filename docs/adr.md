@@ -8176,8 +8176,11 @@ on the model's own text.
 **What was taken.** One manifest, `model-manifest.tsv`, records each artifact's pinned Hugging Face
 commit, its sha256 and its exact byte count; one POSIX-sh library, `scripts/model-manifest.sh`, is
 sourced by both fetch sites and is the only thing that downloads a model. Its composed step
-`fetch_and_verify` refuses anything that is not the recorded artifact, deletes it, and returns a
-distinct code per reason so a caller can add the diagnostic it alone has.
+`fetch_and_verify` refuses anything that is not the recorded artifact and returns a distinct code
+per reason, so a caller can add the diagnostic it alone has and can word its own message honestly.
+Two of those codes — a digest mismatch and a size mismatch — also delete the file; the others
+report that nothing was verified rather than that something was removed, and the library's own
+comment is the authority on which is which.
 
 The manifest is one file rather than one per consumer because the two consumers are one defect: a
 digest written twice is a digest that will be bumped once. That is also why the fix is one PR.
@@ -8190,9 +8193,10 @@ freezing what they served — but it is infrastructure this repository cannot pr
 digest is what actually binds the bytes either way. The manifest's `url` column is the whole of what
 a mirror would change.
 
-*A file already on the volume is verified, not trusted for its name, and replaced when it fails.* `/openmrs/data` outlives the
-container, so the population this fix most needs to reach — deployments provisioned before it
-existed — is exactly the one a download-time-only check never runs against. A file that fails is
+*A file already on the volume is verified, not trusted for its name, and replaced when it fails.*
+`/openmrs/data` outlives the container, so the population this fix most needs to reach —
+deployments provisioned before it existed — is exactly the one a download-time-only check never
+runs against. A file that fails is
 re-fetched from the pinned revision rather than merely refused, because a stale file and a
 substituted one are indistinguishable on disk and the replacement is bound to the same digest:
 that decides how many restarts recovery takes, not what is accepted.
@@ -8219,16 +8223,21 @@ between them is larger than any other factor here. Measured 2026-09-17 on one Ap
 
 That 5x is why `file_sha256` tries the two fast tools first and `shasum` last — an order this
 measurement changed, since it had been second. The backend image is Debian, so it takes the first
-row either way; the order matters on a checkout that has no coreutils. One machine and one file size is not a model of anyone else's
-host — what the numbers are here for is the comparison against the budget, and on that they are not
-close: `docker-compose.yml` gives the backend service a 30-minute `start_period`, which the
+row either way; the order matters on a checkout that has no coreutils. One machine and one file
+size is not a model of anyone else's host — what the numbers are here for is the comparison
+against the budget, and on that they are not close: `docker-compose.yml` gives the backend service a 30-minute `start_period`, which the
 synchronous half uses under a tenth of a percent of. Storage can dominate instead of the CPU, and
 this measurement says nothing about that case: it was taken warm, on NVMe.
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
-not subsume its diagnostic: a ~1 MB "successful" ONNX file means the upstream export moved to
-external-data format, which is a specific and previously-hit failure with a specific remedy, and
-"the digest did not match" would send an operator looking for an attacker instead.
+not subsume its message. The two failures an operator can act on differently are a transfer that
+stopped short and bytes that are not the artifact, and only the first has a remedy the operator
+owns — retry. A single "the digest did not match" would send them looking for an attacker in both
+cases. The guard exists at all because of the external-data ONNX export that once produced a ~1 MB
+file the runtime could open but not execute; pinning the revision is what retired that as a live
+cause, which is why the diagnostic now names a truncated transfer instead of an upstream format
+change. Both the guard and its wording are the size branch of `_mm_verify_file` and the `2)` arms in
+`backend-init.sh`; change one and the other reads false.
 
 **What this does not close.** Two fetches in these same files stay unverified and are out of scope
 for both findings: `Dockerfile.backend` downloads `openmrs.war` from a Maven repository, and

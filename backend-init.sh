@@ -161,7 +161,7 @@ _download_llm_file() {
 # Each invocation backgrounds, so two calls run in parallel — total volume
 # need on /openmrs/data is now ~8GB (E4B ~5GB + E2B ~3GB). A weights file
 # already present is no longer skipped: it is re-hashed in the background
-# for the reason the embedder is, and deleted if it is not the artifact the
+# for the reason the embedder is, and replaced if it is not the artifact the
 # manifest records.
 fetch_llm_in_background() {
   artifact_id=$1

@@ -32,27 +32,47 @@ MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model
 #   3  the download itself failed (including any non-2xx response, because curl runs with -f)
 #   4  the manifest does not carry the requested id
 
-# _mm_field <id> <column> — one field of the manifest row named by <id>, or a failure naming the id.
+# _mm_field <id> <sha256|bytes|url> — one field of the manifest row named by <id>, or a failure
+# naming the id.
+#
+# Read with the shell's own `read` rather than awk or cut. backend-init.sh depends on curl, sed,
+# grep and stat and on no text processor beyond them, and a five-row lookup is not worth making the
+# container entrypoint's tool list longer than it was.
 _mm_field() {
 	if [ ! -f "$MODEL_MANIFEST_FILE" ]; then
 		echo "model-manifest: no manifest at $MODEL_MANIFEST_FILE" >&2
 		return 1
 	fi
-	# `$1 == id` is an exact match on purpose: two ids here share a prefix, and a pattern match
-	# would silently hand back a neighbour's digest, which every later check would then pass.
-	_mm_value=$(awk -v id="$1" -v col="$2" '$1 == id { print $col; found = 1; exit } END { if (!found) exit 1 }' \
-		"$MODEL_MANIFEST_FILE") || {
+	_mm_f_value=''
+	# `=` is an exact comparison on purpose: one id here is a prefix of another, and a pattern
+	# match would hand back a neighbour's digest, which every later check would then pass.
+	while read -r _mm_f_id _mm_f_sha _mm_f_bytes _mm_f_url _mm_f_rest || [ -n "$_mm_f_id" ]; do
+		case "$_mm_f_id" in '' | \#*) continue ;; esac
+		[ "$_mm_f_id" = "$1" ] || continue
+		case "$2" in
+			sha256) _mm_f_value=$_mm_f_sha ;;
+			bytes) _mm_f_value=$_mm_f_bytes ;;
+			url) _mm_f_value=$_mm_f_url ;;
+			*)
+				echo "model-manifest: '$2' is not a manifest field" >&2
+				return 1
+				;;
+		esac
+		break
+	done < "$MODEL_MANIFEST_FILE"
+
+	if [ -z "$_mm_f_value" ]; then
 		echo "model-manifest: no artifact '$1' in $MODEL_MANIFEST_FILE" >&2
 		return 1
-	}
-	printf '%s\n' "$_mm_value"
+	fi
+	printf '%s\n' "$_mm_f_value"
 }
 
-manifest_sha256() { _mm_field "$1" 2; }
+manifest_sha256() { _mm_field "$1" sha256; }
 
-manifest_bytes() { _mm_field "$1" 3; }
+manifest_bytes() { _mm_field "$1" bytes; }
 
-manifest_url() { _mm_field "$1" 4; }
+manifest_url() { _mm_field "$1" url; }
 
 # file_sha256 <file> — the file's sha256 as lowercase hex. The three tools are tried in turn
 # because the fetch sites do not share an environment: the backend image is Debian (coreutils
@@ -126,12 +146,14 @@ fetch_and_verify_url() {
 	if [ -f "$_mm_target" ]; then
 		if _mm_verify_file "$_mm_target" "$_mm_expected" "$_mm_bytes" "$_mm_label"; then
 			return 0
-		else
-			# $? is the condition's status here. It has to be read inside the else: an `if` whose
-			# condition failed and which has no else branch exits 0, so `return $?` after the `fi`
-			# reports success for a file that was just refused and deleted.
-			return $?
 		fi
+		# _mm_verify_file has deleted it, and we fall through to fetch the artifact the manifest
+		# records. A file left by an older revision and a substituted one are indistinguishable
+		# here, and refusing outright would cost a deployment one failed start before the next one
+		# downloaded the right bytes anyway — the replacement is bound to the same digest, so this
+		# changes how many restarts it takes and nothing about what is accepted. A served copy
+		# that fails too is the refusal.
+		echo "Replacing $_mm_label from the revision model-manifest.tsv records..."
 	fi
 
 	if [ -f "$_mm_partial" ]; then

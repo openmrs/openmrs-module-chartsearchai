@@ -157,16 +157,37 @@ public class ModelDownloadIntegrityTest {
 	 * The case a fresh download cannot reach: bytes already on the persistent volume. A deployment
 	 * provisioned before this check existed, or one whose volume was written to directly, holds a file
 	 * the entrypoint would otherwise skip over on the strength of its name alone.
+	 *
+	 * <p>It is replaced rather than merely refused because a file left behind by an older upstream
+	 * revision and a substituted one are indistinguishable here, and the replacement is bound to the
+	 * same digest — so this decides how many restarts recovery takes, not what is accepted. The case
+	 * below is what "not accepted" looks like.
 	 */
 	@Test
-	public void aFileAlreadyOnTheVolumeIsVerifiedRatherThanTrustedForItsName() throws Exception {
+	public void aFileAlreadyOnTheVolumeThatDoesNotMatchIsReplacedByTheReviewedArtifact() throws Exception {
+		served = GOOD_BYTES;
 		Path target = work.resolve("model.bin");
 		Files.write(target, SUBSTITUTED_BYTES);
 
 		Result result = fetchAndVerify(url(), sha256(GOOD_BYTES), GOOD_BYTES.length, target, "test model");
 
-		assertEquals(DIGEST_MISMATCH, result.exit, "an existing file that does not match must be refused\n" + result);
+		assertEquals(OK, result.exit, "a stale file must be replaced by the reviewed artifact\n" + result);
+		assertEquals(sha256(GOOD_BYTES), sha256(Files.readAllBytes(target)),
+				"the file left behind must be the reviewed artifact, not the one that was there\n" + result);
+	}
+
+	@Test
+	public void aFileAlreadyOnTheVolumeIsRefusedWhenTheReviewedArtifactCannotBeFetchedEither() throws Exception {
+		served = SUBSTITUTED_BYTES;
+		Path target = work.resolve("model.bin");
+		Files.write(target, SUBSTITUTED_BYTES);
+
+		Result result = fetchAndVerify(url(), sha256(GOOD_BYTES), GOOD_BYTES.length, target, "test model");
+
+		assertEquals(DIGEST_MISMATCH, result.exit, "bytes that match nowhere must be refused\n" + result);
 		assertFalse(Files.exists(target), "an existing file that does not match must be deleted\n" + result);
+		assertFalse(Files.exists(work.resolve("model.bin.partial")),
+				"the refused replacement must be deleted too\n" + result);
 	}
 
 	@Test
@@ -211,22 +232,27 @@ public class ModelDownloadIntegrityTest {
 
 	// ---- the manifest is the one committed record ----------------------------------------------
 
+	/**
+	 * Each lookup is compared against the artifact's OWN row, read from the file independently. An
+	 * earlier form of this asserted only the SHAPE of each answer — that a digest is 64 hex, that a
+	 * url is https — and a mutation making the lookup match by prefix rather than exactly left it
+	 * green, because a wrong row's digest is shaped exactly like the right one's. Shape cannot
+	 * distinguish rows; the row can.
+	 */
 	@Test
-	public void everyArtifactBothCallSitesFetchIsLookedUpFromTheCommittedManifest() throws Exception {
-		for (String id : manifestIds()) {
-			Result digest = library("manifest_sha256 " + id);
-			assertEquals(0, digest.exit, "manifest_sha256 must resolve " + id + "\n" + digest);
-			assertTrue(digest.output.trim().matches("[0-9a-f]{64}"),
-					"manifest_sha256 " + id + " must be a sha256\n" + digest);
+	public void everyLookupReturnsTheFieldOnThatArtifactsOwnRow() throws Exception {
+		List<String[]> rows = manifestRows();
 
-			Result bytes = library("manifest_bytes " + id);
-			assertEquals(0, bytes.exit, "manifest_bytes must resolve " + id + "\n" + bytes);
-			assertTrue(Long.parseLong(bytes.output.trim()) > 0, "manifest_bytes " + id + " must be positive\n" + bytes);
-
-			Result url = library("manifest_url " + id);
-			assertEquals(0, url.exit, "manifest_url must resolve " + id + "\n" + url);
-			assertTrue(url.output.trim().startsWith("https://"), "manifest_url " + id + " must be https\n" + url);
+		for (String[] row : rows) {
+			String id = row[0];
+			assertEquals(row[1], library("manifest_sha256 " + id).output.trim(),
+					"manifest_sha256 " + id + " did not return the digest on that id's row");
+			assertEquals(row[2], library("manifest_bytes " + id).output.trim(),
+					"manifest_bytes " + id + " did not return the byte count on that id's row");
+			assertEquals(row[3], library("manifest_url " + id).output.trim(),
+					"manifest_url " + id + " did not return the url on that id's row");
 		}
+		assertTrue(rows.size() >= 2, "the manifest must carry the artifacts both call sites fetch, found " + rows.size());
 	}
 
 	@Test
@@ -239,44 +265,46 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	/**
-	 * A lookup that silently matched a neighbouring row would make every digest check above pass while
-	 * comparing against the wrong artifact. The two GGUF ids share a prefix, so this is the shape that
-	 * would actually occur.
+	 * One committed id is a prefix of another, so a lookup that matched loosely would hand back a
+	 * neighbour's digest and every later check would pass against the wrong artifact. The committed
+	 * manifest cannot show this on its own: with the rows in their current order a prefix match
+	 * happens to reach the right row anyway, so a mutation loosening the comparison left
+	 * {@link #everyLookupReturnsTheFieldOnThatArtifactsOwnRow} green. This asks the question the
+	 * committed order cannot — both orders, so neither can be the one that passes by luck.
 	 */
 	@Test
-	public void aLookupReturnsItsOwnRowRatherThanAPrefixNeighbours() throws Exception {
-		List<String> ids = manifestIds();
-		List<String> digests = new ArrayList<String>();
-		for (String id : ids) {
-			digests.add(library("manifest_sha256 " + id).output.trim());
+	public void anIdThatIsAPrefixOfAnotherResolvesToItsOwnRowInEitherOrder() throws Exception {
+		String shortRow = "shared-prefix " + "a".repeat(64) + " 10 " + pinnedUrl("short");
+		String longRow = "shared-prefix-more " + "b".repeat(64) + " 20 " + pinnedUrl("long");
+
+		for (String order : List.of(shortRow + "\n" + longRow, longRow + "\n" + shortRow)) {
+			Path fixture = work.resolve("manifest-" + System.nanoTime() + ".tsv");
+			Files.write(fixture, order.getBytes(StandardCharsets.UTF_8));
+
+			assertEquals(pinnedUrl("short"), library("manifest_url shared-prefix", fixture).output.trim(),
+					"the shorter id resolved to a neighbouring row, rows in this order:\n" + order);
+			assertEquals(pinnedUrl("long"), library("manifest_url shared-prefix-more", fixture).output.trim(),
+					"the longer id resolved to a neighbouring row, rows in this order:\n" + order);
 		}
-		for (int i = 0; i < ids.size(); i++) {
-			for (int j = i + 1; j < ids.size(); j++) {
-				if (!digests.get(i).equals(digests.get(j))) {
-					continue;
-				}
-				// Two rows may legitimately carry the same bytes; their URLs may not be the same row.
-				assertNotEquals(library("manifest_url " + ids.get(i)).output.trim(),
-						library("manifest_url " + ids.get(j)).output.trim(),
-						ids.get(i) + " and " + ids.get(j) + " resolved to the same row");
-			}
-		}
-		assertTrue(ids.size() >= 2, "the manifest must carry the artifacts both call sites fetch, found " + ids);
+	}
+
+	private static String pinnedUrl(String file) {
+		return "https://huggingface.co/owner/repo/resolve/" + "0".repeat(40) + "/" + file;
 	}
 
 	// ---- driving the real library ---------------------------------------------------------------
 
-	private List<String> manifestIds() throws IOException {
-		List<String> ids = new ArrayList<String>();
+	/** The manifest's artifact rows, read independently of the library the cases drive. */
+	private static List<String[]> manifestRows() throws IOException {
+		List<String[]> rows = new ArrayList<String[]>();
 		for (String line : Files.readAllLines(manifest(), StandardCharsets.UTF_8)) {
 			String trimmed = line.trim();
-			if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-				continue;
+			if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+				rows.add(trimmed.split("\\s+"));
 			}
-			ids.add(trimmed.split("\\s+")[0]);
 		}
-		assertFalse(ids.isEmpty(), "the manifest at " + manifest() + " carries no artifact rows");
-		return ids;
+		assertFalse(rows.isEmpty(), "the manifest at " + manifest() + " carries no artifact rows");
+		return rows;
 	}
 
 	private static Path manifest() {
@@ -293,11 +321,15 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	private Result library(String call) throws Exception {
+		return library(call, manifest());
+	}
+
+	private Result library(String call, Path manifestFile) throws Exception {
 		Path script = work.resolve("drive-" + System.nanoTime() + ".sh");
 		Files.write(script, (". '" + libraryPath() + "'\n" + call + "\n").getBytes(StandardCharsets.UTF_8));
 
 		ProcessBuilder builder = new ProcessBuilder("/bin/sh", script.toString());
-		builder.environment().put("MODEL_MANIFEST_FILE", manifest().toString());
+		builder.environment().put("MODEL_MANIFEST_FILE", manifestFile.toString());
 		builder.redirectErrorStream(true);
 		Process process = builder.start();
 		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);

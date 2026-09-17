@@ -1729,7 +1729,7 @@ Both decisions are correct simultaneously:
 
 ### Source: Xenova mirror, not the canonical repo
 
-Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. `backend-init.sh` carries a 200MB size guard as the second line of defense.
+Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. `backend-init.sh` refuses any file that is not the exact byte count and sha256 `model-manifest.tsv` records for the pinned revision, which rules that shape out ahead of the digest and keeps the diagnostic above as the message it prints ([Decision 103](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
 
 ### Trade-offs
 
@@ -8190,9 +8190,12 @@ freezing what they served — but it is infrastructure this repository cannot pr
 digest is what actually binds the bytes either way. The manifest's `url` column is the whole of what
 a mirror would change.
 
-*A file already on the volume is verified, not trusted for its name.* `/openmrs/data` outlives the
+*A file already on the volume is verified, not trusted for its name, and replaced when it fails.* `/openmrs/data` outlives the
 container, so the population this fix most needs to reach — deployments provisioned before it
-existed — is exactly the one a download-time-only check never runs against. The cost is hashing
+existed — is exactly the one a download-time-only check never runs against. A file that fails is
+re-fetched from the pinned revision rather than merely refused, because a stale file and a
+substituted one are indistinguishable on disk and the replacement is bound to the same digest:
+that decides how many restarts recovery takes, not what is accepted. The cost is hashing
 ~8 GB on every container start; it is paid in the background alongside the download it replaces, and
 the embedder's two files are hashed synchronously because the global properties they gate are
 written seconds later.

@@ -321,6 +321,66 @@ public class ModelDownloadPinningGuardTest {
 		return body;
 	}
 
+	/**
+	 * Ordering is only half of #444's refusal. The embedder fetches are followed by a {@code case}
+	 * over the library's exit code, and an arm that fell through instead of exiting would run on to
+	 * {@code configure_retrieval_gps} and point querystore at a file that had just been deleted —
+	 * with the ordering channel above still green, because the fetch would still precede the write.
+	 * So every arm but the success arm has to leave.
+	 *
+	 * <p><b>Scoped to the embedder's refusals, and the LLM's are deliberately not among them.</b> The
+	 * weights are fetched in a background subshell precisely so OpenMRS can come up without them, and
+	 * chart search already reports its own error while the file is absent — exiting there would take
+	 * the container down for a model it is designed to start without. What the two share is that the
+	 * rejected bytes are deleted; only the embedder gates something written seconds later.
+	 */
+	@Test
+	public void everyRefusalOfTheEmbedderStopsTheEntrypoint() throws IOException {
+		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
+		List<String> violations = new ArrayList<String>();
+		int blocks = 0;
+
+		for (int i = 0; i < lines.size(); i++) {
+			if (!lines.get(i).trim().equals("case $? in") || !precedingFetchIsTheEmbedder(lines, i)) {
+				continue;
+			}
+			blocks++;
+			String arm = null;
+			StringBuilder armBody = new StringBuilder();
+			for (int j = i + 1; j < lines.size(); j++) {
+				String line = lines.get(j).trim();
+				boolean opensArm = line.matches("^[0-9|*]+\\).*");
+				if (opensArm || line.equals("esac")) {
+					if (arm != null && !arm.startsWith("0") && !armBody.toString().contains("exit")) {
+						violations.add("backend-init.sh line " + (i + 1) + ": the '" + arm
+								+ "' arm continues past a refused model instead of exiting");
+					}
+					if (line.equals("esac")) {
+						break;
+					}
+					arm = line;
+					armBody.setLength(0);
+				}
+				armBody.append(line).append('\n');
+			}
+		}
+
+		assertEquals(List.of(), violations, "a refusal that does not stop the entrypoint");
+		assertTrue(blocks > 0, "no embedder fetch in backend-init.sh branches on its exit code; this guard read nothing");
+	}
+
+	/** Whether the nearest fetch above {@code index} is one of the embedder's. */
+	private static boolean precedingFetchIsTheEmbedder(List<String> lines, int index) {
+		for (int i = index - 1; i >= 0; i--) {
+			String line = lines.get(i).trim();
+			if (line.isEmpty() || line.startsWith("#")) {
+				continue;
+			}
+			return line.startsWith("fetch_and_verify ") && line.contains("embedder-e5-base-v2");
+		}
+		return false;
+	}
+
 	@Test
 	public void theImageCarriesBothTheLibraryAndTheManifestTheEntrypointReads() throws IOException {
 		String dockerfile = read("Dockerfile.backend");

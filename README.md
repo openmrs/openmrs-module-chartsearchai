@@ -82,7 +82,7 @@ Per-platform setup for the [downloaded standalone](#chart-search-ai-module) (Jav
 - Webservices REST module 2.44.0+
 - RAM for local LLM inference (not required when using a remote LLM):
   - **~6–8GB RAM** for the module's default model — Gemma 4 E4B (~5GB GGUF), as bundled with the standalone download. Suitable for most deployments adding the module to an existing OpenMRS site.
-  - **~24GB+ RAM** for the production-grade Gemma 4 26B MoE (optional; build the standalone bundle with the workflow's `gguf_model_url` input and point `chartsearchai.llm.modelFilePath` at the downloaded filename).
+  - **~24GB+ RAM** for the production-grade Gemma 4 26B MoE (optional; build the standalone bundle with the workflow's `gguf_model_url` and `gguf_sha256` inputs and point `chartsearchai.llm.modelFilePath` at the downloaded filename).
 - The [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) module — required; it owns all retrieval, indexing, and embedding.
 
 ## Docker

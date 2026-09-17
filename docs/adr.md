@@ -108,6 +108,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
+- [Decision 103: Per-marker claim splitting spends one allowance per ANSWER, and a fragment shares its parent's citation set](#decision-103-per-marker-claim-splitting-spends-one-allowance-per-answer-and-a-fragment-shares-its-parents-citation-set)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -1868,7 +1869,7 @@ Two refinements make the verdict match what the citation actually claims:
 - **Ground against the rendered chart line (date + body), not the bare record text** — the model sees dated chart lines, so the verifier compares against the same surface.
 - **Clause-scoping (`chartsearchai.grounding.clauseScoped`, default `false`, sentence-scoped)** — in a sentence citing multiple records, each citation is checked against the cumulative answer prefix *up to and including its own `[N]` marker* rather than the whole compound sentence. This flags a citation that supports its own clause but not a *later* clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not back the "provisional diagnosis" clause that [91] supports. The prefix keeps the sentence subject (which normally precedes the first marker), so it still flags family-history/negation flips in later clauses. It is left off by default because per-pair Tier-2 batching is not yet fully independent (shortening an earlier cite's statement can flip a later cite's verdict — tracked separately).
 
-- **Enumerating sentences are split per item regardless of that flag** ([#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)) — where a sentence announces a list with a colon before its first marker, each citation is checked against the preamble plus its OWN item, not the whole sentence and not the cumulative prefix. Both of the scopings above ask the wrong-sized question of a list: the whole sentence makes each record answer for a conjunction naming the others, and the cumulative prefix still names items 1..*k*−1, so only the first citation is ever asked about its own claim. Measured live, a correct three-allergen answer had every chart citation published `grounded=false`, which a client renders as *Unsupported*. This is not gated on `clauseScoped` because the claim is **mis-identified** rather than wide-scoped, and the defect bites on the shipped default. It also does not inherit that flag's reason for being off: these fragments are Tier-2 verified one pair per call, so the batching-independence problem above does not arise — at a measured ~0.5s per additional citation, bounded by `GROUNDING_ENTAILMENT_MAX_CHECKS`. Keyed on the colon, and the colon alone is deliberately not enough — the items must be name-shaped too, since the split is sound only while the preamble holds the SUBJECT. An item carrying its own subject (a pronoun, or a finite verb of clinical assertion) or running past a length backstop keeps whole-sentence scoping; measured through the production splitter over TWO corpora — the 7452 names the shipped KB publishes and the 1194 distinct condition/diagnosis/allergen forms on the demo database — the grammar test refuses none of either, and the length backstop refuses 93 and 24 respectively. Sweep BOTH before changing the grammar set: the drug KB alone would have cleared "patient", which the clinical corpus showed refuses "Patient died" and "Smear positive, new tuberculosis patient", and family terms were measured and rejected against both (13 refusals, 6 on "child"). A comma-only enumeration has no recoverable preamble/first-item boundary (in "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes"), and guessing it short strips the subject the prefix rule exists to retain — so that case is left unsplit. What being unsplit costs it is bounded by the compound-claim rule below: it stays mis-scoped, but the module no longer publishes the conjunction's refusal as each citation's own verdict.
+- **Enumerating sentences are split per item regardless of that flag** ([#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)) — where a sentence announces a list with a colon before its first marker, each citation is checked against the preamble plus its OWN item, not the whole sentence and not the cumulative prefix. Both of the scopings above ask the wrong-sized question of a list: the whole sentence makes each record answer for a conjunction naming the others, and the cumulative prefix still names items 1..*k*−1, so only the first citation is ever asked about its own claim. Measured live, a correct three-allergen answer had every chart citation published `grounded=false`, which a client renders as *Unsupported*. This is not gated on `clauseScoped` because the claim is **mis-identified** rather than wide-scoped, and the defect bites on the shipped default. It also does not inherit that flag's reason for being off: these fragments are Tier-2 verified one pair per call, so the batching-independence problem above does not arise — at a measured ~0.5s per additional citation, bounded by `GROUNDING_ENTAILMENT_MAX_CHECKS`. Keyed on the colon, and the colon alone is deliberately not enough — the items must be name-shaped too, since the split is sound only while the preamble holds the SUBJECT. An item carrying its own subject (a pronoun, or a finite verb of clinical assertion) or running past a length backstop keeps whole-sentence scoping; measured through the production splitter over TWO corpora — the 7452 names the shipped KB publishes and the 1194 distinct condition/diagnosis/allergen forms on the demo database — the grammar test refuses none of either, and the length backstop refuses 93 and 24 respectively. Sweep BOTH before changing the grammar set: the drug KB alone would have cleared "patient", which the clinical corpus showed refuses "Patient died" and "Smear positive, new tuberculosis patient", and family terms were measured and rejected against both (13 refusals, 6 on "child"). A comma-only enumeration has no recoverable preamble/first-item boundary (in "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes"), and guessing it short strips the subject the prefix rule exists to retain — so that case is left unsplit. What being unsplit costs it is bounded by the compound-claim rule below: it stays mis-scoped, but the module no longer publishes the conjunction's refusal as each citation's own verdict. Since [Decision 103](#decision-103-per-marker-claim-splitting-spends-one-allowance-per-answer-and-a-fragment-shares-its-parents-citation-set) this split, and the clause-scoped one above, are bounded by a per-answer allowance; a sentence past it is graded whole.
 
 ### Cost shaping
 
@@ -8147,3 +8148,218 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `stated < named` guard in its other state),
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
+
+## Decision 103: Per-marker claim splitting spends one allowance per ANSWER, and a fragment shares its parent's citation set
+
+**Status: Accepted** (September 2026) — implemented, issue [#448](https://github.com/openmrs/openmrs-module-chartsearchai/issues/448), a security-scan finding (CWE-407, severity MEDIUM). It changes no prompt, no reference list, no chip and no response key. What it changes is what splitting a marker-dense or very long answer costs; nothing in the shipped fixture corpus is split differently by it.
+
+**Context.** Both of `CitationGroundingVerifier`'s splitters build one claim fragment per inline
+`[N]` marker, and each fragment's length is of the order of its sentence's own:
+`splitIntoClauseScopedSentences` copies the cumulative prefix `text.substring(0, marker.end())`, and
+`splitEnumeration` builds `preamble + " " + item`, where the preamble is everything up to the colon
+nearest the first marker. A sentence of length L with M markers therefore cost about M×L characters,
+and nothing bounded either: `SENTENCE_BOUNDARY` splits on a terminator followed by whitespace or on a
+newline, so a one-line answer is one sentence of the whole answer's length, and `INLINE_CITATION`
+accepts any marker whether or not the index resolves. With the remote engine the answer's length is
+the endpoint's choice — `RemoteLlmEngine` buffers the body whole and `max_tokens` is a request to a
+peer, not a constraint on it — so a hostile or intercepted endpoint could turn the module's
+grounding into an `OutOfMemoryError` in the Tomcat JVM hosting the whole OpenMRS instance. That
+consequence is the scan finding's (issue #448, 2026-09-15, CWE-407, MEDIUM) and is not an incident
+this project observed; what this branch measured is the cost curve, below. An `OutOfMemoryError` is
+an `Error`, so none of the verifier's `RuntimeException` handlers catch it.
+
+**The issue names one sink; there are two.** The ticket states that "the sentence-scoped default
+splitter (splitIntoCitedSentences / splitEnumeration) is linear per sentence and does not have this
+property". It is not. `splitEnumeration`'s per-item guards test the marker-stripped ITEM — non-empty,
+within `MAX_ENUMERATION_ITEM_WORDS`, no `CLAUSE_MARKER` — and never the preamble, so
+`<filler>: a [1], b [2], …` hands every item the whole filler. It runs in BOTH scoping modes, so that
+sink is reachable with `chartsearchai.grounding.clauseScoped` left at its default false, which the
+ticket's conditions exclude. `CitationGroundingVerifierTest.enumerationSplitOfALongPreambleStaysLinearInTheAnswerLength`
+is the measurement.
+
+**Decision.** One `FragmentBudget` per answer, `MAX_SPLIT_FRAGMENT_CHARS` characters of fragment
+text, threaded through both splitters by `splitIntoClauseScopedSentences` so neither can spend a full
+allowance of its own. `newFragment` is the one place a fragment is built and charges before
+building; a refusal is all-or-nothing for that sentence, which is then graded whole — the
+sentence-scoped unit the issue's fix criteria names as an acceptable fallback. And a fragment SHARES
+its parent's `sourceCitedIndexes` instance rather than copying it.
+
+**Why the set sharing is part of this decision and not a tidy-up.** `sourceCitedIndexes` holds one
+entry per distinct marker in the parent sentence, and the old fragment constructor did
+`this.sourceCitedIndexes.addAll(sourceCitedIndexes)`. A character allowance alone would have
+reported itself satisfied while the exhaustion stayed reachable: the number of fragments a character
+allowance admits does not fall as the answer grows, so a megabyte-scale answer still builds hundreds
+of fragments each copying a set of a hundred thousand boxed integers. Nothing mutates either set
+after construction, so both are now stored rather than copied and both callers hand over something
+unmodifiable.
+
+**Alternatives rejected.**
+
+*Offsets into the sentence instead of substring copies* — the first remedy the issue's own fix
+criteria offers. It does not reach `splitEnumeration` at all, whose fragment is a concatenation and
+not a substring of anything, and for the clause sink it moves the M copies from peak heap to
+allocation churn without removing them: the M fragments are still built. Rejected on that second
+half — the fragments are built either way — and not on the embedding cost, which is a separate,
+pre-existing and still-open question this decision states under *What is NOT in this change*
+rather than characterising twice.
+
+*A per-sentence cap.* An answer of S sentences each just under a cap of B still costs S×B, which
+grows with the answer — the opposite of the bound the criterion asks for.
+`theSplitAllowanceIsSpentPerANSWERAndNotPerSENTENCE` fails a per-sentence cap at the same value.
+
+*Refunding an abandoned split.* Exact accounting, and it puts the copying work back: every sentence
+of a hostile answer could spend the whole allowance in turn. Not refunding only makes the guard
+stricter for the sentences after one that overspent, which is the conservative direction.
+
+*An allowance proportional to the answer length.* Linear by construction and useless as a bound:
+sixteen times a 20 MB answer is 320 MB of fragments.
+
+**What the fallback costs, which is real.** A refused enumeration split re-enters the mis-scoping
+issue #278 fixed — measured live then as `grounded=false` on all three citations of a correct,
+fully-cited allergy list, which a client renders as *Unsupported*. Since #302 that is a withheld
+verdict under entailment, but with entailment disabled the whole-sentence cosine verdict is
+published and the *Unsupported* rendering returns. What a refused CLAUSE split costs depends on the
+sentence, and the larger case is the ordinary one: where claim text separates two of its markers the
+whole sentence is a `compoundClaim()`, so under entailment every citation of it publishes no verdict
+at all (#302) — driven through the real `verify()` in clause-scoped mode, with the same prose shape
+short enough to split as the control, by
+`CitationGroundingVerifierTest.aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers`.
+Only where the markers are separated by nothing
+but list punctuation is it a co-citation, still graded, losing `isolate` and so co-batched for
+Tier-2 again — the coupling `Sentence.isolate` exists to prevent. Both are paid only by an answer
+whose splitting has already exceeded the allowance, and the alternative there is heap exhaustion for
+every user of the instance.
+
+**Bounding the splitter was not enough, and that is the part worth reading.** The first round of
+this change bounded the splitter and disclosed two consumer-side index-set copies as residue,
+reasoning that both were linear in the answer and so within the criterion. Two independent clean-context
+reviewers refuted that, each by measurement, and both sinks are now closed here.
+
+- `AnswerCitations`' constructor unioned each claim unit's `sourceCitedIndexes` into `anchored`
+  once per FRAGMENT. Because this change makes every fragment of a sentence SHARE one set of one
+  entry per distinct marker, that is the fragment count times the marker count — both of which are
+  the marker count. It is the answer-quadratic shape the issue is about, surviving in the consumer
+  after the splitter was bounded, and invisible to an allowance counted in characters. Measured
+  through the real `verify()` on enumerated answers: 254 ms at 5,000 markers, 879 at 10,000, 3,557
+  at 20,000 — four times the work for twice the answer. Closed by unioning each DISTINCT set once,
+  by identity: 25 / 18 / 30 ms across the same three sizes.
+- `AnswerCitations.restsOn` built a fresh `HashSet` per reference holding the claim's
+  `sourceCitedIndexes`, retained in `Tier1Result` for the length of the pass, so R copies of a
+  marker-count-sized set were live at once. R is bounded by the chart's cited records and not by the
+  answer, so it IS linear — and linear was not the property that mattered: with the copy restored as a
+  compiled mutant and the heap swept, a 910 KB clause-scoped answer carrying 113,494 distinct
+  markers at ten cited records completes at every heap from 256 MB down to 64 MB after this change
+  and runs out of memory between 96 MB and 80 MB before it (JDK 21; the pom targets 11) — with the
+  splitter's own WARN already in the log saying the split had been refused. An earlier draft of
+  this decision recorded that threshold as 256 MB, which a second reviewer could not reproduce and
+  which overstated it about threefold. Closed by `ClaimSupport`,
+  a membership view over the two operands rather than their union; both are unmodifiable, so
+  nothing is copied. `restsOnReferenceMaterial` now iterates the reference-group indexes, bounded by
+  the chart, instead of the claim's citations, bounded by the answer.
+
+The lesson generalises past this change: bounding a producer moves the question to every consumer
+that holds one structure per unit the producer emits, and a budget counted in one currency
+(characters) says nothing about the others (set entries, retained copies).
+
+**Sizing, and what the measurement is a bound OF.** The allowance bounds fragment TEXT, and the
+heap a split holds is a multiple of that once each fragment's `Sentence`, `String` and singleton set
+are counted — a reviewer of this change measured 186–192 bytes retained per fragment, against a
+cheapest-fragment ceiling of about 84,000 of them, so the characters are the smaller half of the
+number. Size a change to the constant against the characters and then measure; do not read the
+characters as the heap. An answer from this module's own local engine is capped at
+`ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS` tokens, on the order of 16 KB of text, and
+splitting one of that length whose every sentence carried ten markers costs about 8e4 characters —
+roughly a twelfth of the allowance, and the same figure whether that length is spread over ten
+sentences or a hundred. Measured 2026-09-17 by driving the production splitters over the 52 captured
+answers under `eval/drift-metric/fixtures`, 37 of which carry inline markers: the largest split
+either splitter CHARGES for is 474 characters, on a 346-character answer. An earlier draft quoted
+648 on a 654-character answer, which is the sum of every returned unit's text on an answer no
+sentence of which was split at all — the answer's own length, and not a spend. Even corrected this
+is a FLOOR and not a calibration: the corpus is short probe answers and cannot tell this value from
+one a hundred times smaller, so lowering it needs a corpus that can.
+
+What is deliberately NOT claimed is that only a remote endpoint can be refused. The cost is the
+marker count times the sentence length, so length alone does not bound it. Measured 2026-09-17 by
+driving `splitIntoClauseScopedSentences` over one-line answers of the shape `x [1] [2] …`, binary
+searching for the smallest the allowance refuses: **594 markers, 3,457 characters** — refused, with
+593 markers and 3,451 characters still split into 593 clauses. That is well inside what the local
+engine can produce, so a refusal is not a remote-endpoint-only event. It is the rule working rather
+than a gap in it: such a sentence has no clause worth grading, and grading it whole is the right
+reading of it.
+
+**What is NOT in this change.** The issue's recommended-fix item 2 asks for a length ceiling on the
+extracted answer before the validators run. That is a different layer from issue
+[#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which binds the
+transport, and a behaviour-visible decision of its own — it fails a clinician's request outright,
+at a value and under a global property nobody has chosen yet. It also does not close this defect and
+this defect does not wait on it: the issue's own words are that "this code should be linear
+regardless of what the transport enforces".
+
+**This decision is not a claim that the grounding path is bounded end to end**, and one neighbouring
+sink is stated precisely because it is still reachable. `verify()` caches one embedding vector per
+SENTENCE, uncapped, and `selectClaim` fills it for every candidate. A reviewer of this change
+reproduced `OutOfMemoryError` inside `verify()` on a 1.95 MB answer of ordinary short sentences
+under a 256 MB heap, after 68,014 embed calls — and at `c430a960`, before this change, at the same
+size, so it is neither introduced nor closed here. Two corrections to how an earlier draft of this
+decision described it, both from that reviewer's measurements: it is not only the GUESSED branch,
+since ten properly inline-cited references over a 1.6 MB answer drove 64,010 embeds and peaked at
+209 MB; and "linear, therefore within the criterion" is the wrong test, because the failure mode is
+reached at a size the issue's own threat model produces. Capping it decides which sentences get a
+verdict, which is a grounding-quality question and not this one; the answer-length ceiling of
+recommended-fix item 2 closes it without that cost, which is a second reason this PR states item
+2's absence rather than passing over it. The Tier-2 statement `entailsBatch` posts is unbounded in
+the same way, and the refused-split shape escapes it only where `compoundClaim()` fires. A refused
+CO-CITATION does not: driving the real `verify()` with entailment on and clause scope on over
+`<400,000 characters of filler> [1], [2], [3]` returns one unit, `compoundClaim=false`, three
+published `true` verdicts and three 400,003-character statements posted to the judge. The module
+manufactures that shape itself, from `[5/12/15]` via `normalizeSlashCitations`, so this is not an
+exotic reading of it. Also item 2's territory, and stated here so the next reader does not take the
+refusal as a guard against it.
+
+→ `CitationGroundingVerifierTest.theAnswersMarkersAreUnionedOncePerDISTINCTSetAndNotOncePerFragment`
+(asserted as a RATIO — four times the markers may cost four times the work and not sixteen — so the
+case says the same thing on a fast machine and a loaded one),
+`.oneAllowanceIsSharedBySplittingBOTHShapesOfOneAnswer`,
+`.clauseScopedSplitOfADenseOneLineAnswerStaysLinearInTheAnswerLength`,
+`.enumerationSplitOfALongPreambleStaysLinearInTheAnswerLength`,
+`.theSplitAllowanceIsSpentPerANSWERAndNotPerSENTENCE`,
+`.aRefusedSplitIsReportedAtWARNWithoutQuotingTheAnswer`,
+`.aRefusedSplitIsReportedOncePerANSWERAndNotOncePerSentence`,
+`.aSentenceBOTHSplittersRefuseIsOneSentenceInTheReport` (the one case that pins the identity-keyed
+refusal set — replacing it with a list reddens that case and nothing else),
+`.everyFragmentOfOneSentenceSharesItsParentsCitationSetRatherThanCopyingIt`,
+`.aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers`, and
+`ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory`,
+`.theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter` and
+`.aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints`, which between them cover the splitter that
+does not exist yet, and `.theCitationsAClaimRestsOnAreAViewAndNotACopy`, which covers the `restsOn`
+sink above. What each of those structural rules reaches that no behavioural case does is stated in
+its own javadoc, along with what it does NOT reach, and each is narrower than its name.
+
+**Three rounds of clean-context review were spent on those structural rules, and the lesson is about
+the KIND of question a rule asks.** Round two tightened both onto the construction rather than its
+neighbourhood: the first had allow-listed a whole METHOD, `splitIntoCitedSentences(String,
+FragmentBudget)`, because the whole-sentence construction sat there — so an uncharged per-marker
+splitter written into that same method, its natural home since it already holds the budget, passed
+it. The whole-sentence construction got a tiny factory of its own, `newSentence`, and the allow-list
+became the two factories. The second had read `restsOn`'s own body only, so collapsing the two
+operands into one set inside `ClaimSupport`'s CONSTRUCTOR restored the per-reference copy with the
+rule green; it was widened to read the `ClaimSupport` body too.
+
+Round three defeated both again, and neither defeat was a new hiding place — each was the same
+question answered in a spelling the rule had not enumerated. A per-marker splitter calling the
+allow-listed `newSentence` once per marker constructs nothing the construction rule objects to, and
+one creating a `FragmentBudget` per sentence charges the allow-listed `newFragment` correctly; both
+left the whole suite green. And `this.own = new java.util.HashSet<Integer>(own);` — the fully
+qualified idiom this very file carried at `c430a960` — was invisible to a rule listing five
+unqualified spellings. Adding a sixth needle would have lost the same way again, so the rules
+changed shape instead. The construction rule kept its scope and gave up its claim to cover
+more; the two forms it cannot see became rules asking checkable questions of their own, about CALL
+SITES and about where an allowance is CREATED. The copy rule stopped listing spellings altogether
+and now asks the positive shape: those two bodies assign fields, construct a `ClaimSupport` and test
+membership, so every `new` in them must be a `ClaimSupport` whatever its type is spelled like, and
+every call must be one of a named few — which is what reaches a copy made with no `new` at all,
+`Set.copyOf(own)`. Each mutation is spelled out in the javadoc of the rule that now reddens on it,
+with `CitationGroundingVerifierTest` staying green, which is the reason these rules are structural.
+So is the residue each one keeps: a rule whose javadoc over-claims is worse than no rule, because it
+tells the next maintainer not to look.

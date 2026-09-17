@@ -8228,9 +8228,11 @@ abandoned `thinking` frame, which is the first frame the module writes at all.
 **Its consequence, stated rather than hidden: those queries now consume a rate-limit slot.**
 `checkRateLimit` counts persisted rows against `chartsearchai.rateLimitPerMinute` (default 10), so a
 clinician on an oversized chart, or one reloading impatiently while a CPU install thinks, can throttle
-themselves out having received no answer. That is the intended direction — each of those attempts paid
-a full prefill on an engine this module serializes, and their being uncounted was the other half of
-what #450 reports — but an operator seeing 429s after abandoned queries should know why. The earlier
+themselves out having received no answer. That is the intended direction — their being uncounted was
+the other half of what #450 reports — but an operator seeing 429s after abandoned queries should know
+why. What each such attempt actually consumed is not uniform and is deliberately not averaged here: an
+abandoned `thinking` frame has paid a full prefill on an engine this module serializes, while a chart
+the engine refuses on its context check has not. The earlier
 draft of this decision claimed the gate did not reach the too-large path at all; that was false, and a
 review round measured it.
 
@@ -8239,8 +8241,9 @@ persistence failure at WARN, which on a default OpenMRS install sits among ordin
 noise; an access to PHI that went unrecorded is not that, so it reports at ERROR with the cause
 attached. The level is the whole of the observable difference — the method returns null both when
 the write failed and when the row got no id — which is the argument `LogCapture`'s javadoc makes
-about issue #149, and it is why that instrument is now published to the omod module rather than
-asserted by reading source text.
+about issue #149. That instrument is in the api module and out of omod's reach, so the assertion is
+made with `ControllerLog` in the omod test package; see the paragraph below on the test-jar that
+would have shared it.
 
 Making the failure *fail closed* was not taken. It is mechanically available on the blocking
 `/search` handler, which persists before returning the answer, and not available on the streaming
@@ -8253,8 +8256,8 @@ rather than a defect.
 **What it costs**, measured 2026-09-17 by driving the real `streamAnswer` from a throwaway omod case
 with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer — at
 200 requests per JVM after 30 warmups, per-request caller-thread allocation read off
-`com.sun.management.ThreadMXBean.getThreadAllocatedBytes` (the instrument Decision 102's neighbour
-#446 used), with an A/A control on every run:
+`com.sun.management.ThreadMXBean.getThreadAllocatedBytes` (the instrument issue #446's own
+measurement used), with an A/A control on every run:
 
 - accumulating the answer costs **+36,992 bytes** per request against the **1.94 MB** the REST layer
   already allocates for that answer, and wall clock sits below an A/A spread of 203 µs on a ~1.2 ms

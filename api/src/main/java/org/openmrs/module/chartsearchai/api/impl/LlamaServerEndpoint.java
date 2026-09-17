@@ -45,9 +45,11 @@ import org.slf4j.LoggerFactory;
  * FNAME}, and the {@code LLAMA_API_KEY} environment variable — and the command-line form is the one
  * that must not be used: an argument vector is world-readable through {@code ps}, so it would hand
  * the key to the very principal this change exists to lock out. A process's environment is not
- * exposed the same way — measured, {@code ps -E} lists the variables of a process this user owns
- * and none for a process owned by another — which is the same protection class as an owner-only key
- * file, with no file to write, restrict, or clean up on a failure path. See {@code docs/adr.md}
+ * exposed the same way — measured on macOS, {@code ps -E} lists the variables of a process this
+ * user owns and none for a process owned by another — which is the same protection class as an
+ * owner-only key file, with no file to write, restrict, or clean up on a failure path. The rated
+ * topology is a Linux OpenMRS host rather than the machine that measurement was taken on; ADR
+ * Decision 103 row 10 carries it with that qualifier. See {@code docs/adr.md}
  * Decision 103 for the measurement behind each of those claims.
  *
  * <p><b>A bearer token authenticates the CLIENT to the server and never the server to the
@@ -99,7 +101,7 @@ final class LlamaServerEndpoint {
 	 * against a real server they cost 1–2 ms, so this is a tail bound with three orders of
 	 * magnitude of headroom rather than a routine cost.
 	 */
-	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(2);
+	static final Duration PROBE_TIMEOUT = Duration.ofSeconds(2);
 
 	/**
 	 * The body the unauthenticated probe posts: a VALID one-token completion request carrying no

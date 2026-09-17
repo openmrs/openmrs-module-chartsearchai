@@ -8247,8 +8247,10 @@ control is possible at all, and row 8 is why it is free.
 **What ties readiness to the child, and the residue.** The port check and the liveness re-check,
 and nothing else. Row 7 sets the size of what is left: the check returns and the child binds ~0.14 s
 later, so an impostor must now win that window rather than simply arriving while the port is free.
-(The check connects and never holds the port itself, so there is no probe socket to close — that
-phrasing belonged to the bind form this decision replaced.) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
+(The check connects rather than binding, so it never holds the port against the child — the
+"probe socket closes" phrasing belonged to the bind form this decision replaced. Its own socket
+close is inside the try, and only a REFUSED connection reads as a free port, so a failure to close
+cannot make the check fail open.) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
 the liveness re-check then turns the adoption into a loud failure unless the re-check happens to run
 inside those 60 ms. The residue is that window, and the option that would close it rather than
 narrow it is an unpredictable ephemeral port handed to the child, which is not taken here because

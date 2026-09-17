@@ -462,47 +462,91 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * Every protection #445 adds is CALLED. The functions are pinned by
-	 * {@code LocalLlmServerAuthTest}, which drives each of them directly — and that leaves the
-	 * invocations unpinned: a review round measured that deleting
-	 * {@code requireLoopbackPortFree(serverPort)}, the {@code requireListenerMayBeServed} gate and
-	 * {@code endpoint.handOverTo(pb)} each left the FULL suite green. A dropped call is the whole
-	 * defect back — an unauthenticated child, or a foreign listener adopted — and nothing
-	 * behavioural can see it, because no test in this module can launch the subprocess those lines
-	 * guard.
+	 * The launch path still CALLS each protection #445 adds. The functions are pinned by
+	 * {@code LocalLlmServerAuthTest}, which drives each directly; the invocations are what this
+	 * covers, and they were measured invisible — deleting {@code requireLoopbackPortFree}, the
+	 * {@code requireListenerMayBeServed} gate, {@code handOverTo} or the {@code stopServer} that
+	 * makes a refusal stick each left the FULL suite green, because no test in this module can
+	 * launch the subprocess those lines guard.
 	 *
-	 * <p>It reads the SOURCE rather than the class file's constant pool, and that is the second
-	 * attempt: a pool check passed with the call deleted, because three of the four are methods of
-	 * this same class and their names are in the pool from the DECLARATION alone. Only
-	 * {@code handOverTo}, declared elsewhere, reddened. So the lookup is over code lines — comments
-	 * and string literals stripped by {@link #codeLines}, which is what makes commenting a call
-	 * out fail rather than pass. It cannot check the calls are in the right ORDER or on the right
-	 * path; it checks they have not vanished, which is the failure that was measured to be
-	 * invisible. The canary is what stops it passing vacuously on a file it never read.
+	 * <p>It is the THIRD shape this check has taken, and the two it replaced are why it is scoped
+	 * to a method body with literals stripped. A constant-pool check passed with the call deleted:
+	 * three of the four are methods of this same class, so their names are in the pool from the
+	 * DECLARATION alone. A class-wide source search then passed on a {@code log.debug} that merely
+	 * SPELLED the call, and reddened on a rename of a local that changed nothing. Slicing each
+	 * method's own body makes an occurrence a call rather than a declaration; stripping literals
+	 * makes a mention insufficient; and matching the name and its open paren alone makes an
+	 * argument rename a non-event.
+	 *
+	 * <p>One scope is a CATCH rather than a method, and that too is a measured correction: a
+	 * method-wide needle for {@code stopServer} passed with the refusal teardown deleted, because
+	 * the timeout path a few lines below calls it as well.
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> Text cannot see reachability or
+	 * identity, so two defeats remain and both were demonstrated: a call inside an
+	 * {@code if (false)}-shaped branch satisfies this while never running, and a call on the WRONG
+	 * receiver — {@code handOverTo} handed a throwaway {@code ProcessBuilder}, or the readiness
+	 * refusal caught and logged — satisfies it while restoring the defect. Nothing static closes
+	 * those; only launching the subprocess would, which is exactly what this module cannot do in a
+	 * test. So read this as "the line has not vanished from the method that must run it", and no
+	 * more.
 	 */
 	@Test
-	public void theLocalServerProtectionsAreAllCalled() throws IOException {
-		List<String> source = getSourceCache().get("LocalLlmEngine.java");
-		assertTrue(source != null && !source.isEmpty(),
-				"expected LocalLlmEngine.java in the source cache — a guard that reads nothing "
-						+ "reports no violations");
-		String code = String.join("\n", codeLines(source));
+	public void theLaunchPathStillCallsEachProtection() throws IOException {
+		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
 
-		assertTrue(code.contains("ensureServerRunning()"),
-				"canary: this file must carry its own calls, or every assertion below passes on a "
-						+ "source this test failed to read");
+		// method -> the calls its body must still contain
+		java.util.Map<String, List<String>> required = new java.util.LinkedHashMap<>();
+		required.put("private void startServer(String modelPath)",
+				java.util.Arrays.asList("requireLoopbackPortFree(", "handOverTo("));
+		required.put("private void waitForServerReady()",
+				java.util.Arrays.asList("requireListenerMayBeServed("));
+		// The CATCH's own scope, not the method's: waitForServerReady calls stopServer on its
+		// timeout path too, so a method-wide needle was satisfied with the refusal teardown
+		// deleted — measured. This is what makes a refusal stick, and its own comment says why.
+		required.put("catch (APIException refused)",
+				java.util.Arrays.asList("stopServer("));
 
 		List<String> violations = new ArrayList<>();
-		for (String call : java.util.Arrays.asList("requireLoopbackPortFree(serverPort)",
-				"requireListenerMayBeServed(endpoint", "endpoint.handOverTo(",
-				"rememberServerOutput(startOutput")) {
-			if (!code.contains(call)) {
-				violations.add("LocalLlmEngine no longer calls " + call
-						+ " — issue #445's protections are each one line at one call site, and"
-						+ " deleting one restores the defect with no behavioural test able to see it");
+		for (java.util.Map.Entry<String, List<String>> entry : required.entrySet()) {
+			String body = methodBodyWithoutLiterals(source, entry.getKey());
+			assertTrue(body != null && !body.isEmpty(),
+					"could not slice the body of " + entry.getKey()
+							+ " out of LocalLlmEngine.java — a guard that reads nothing reports no"
+							+ " violations, so this is a failure and not a pass");
+			for (String call : entry.getValue()) {
+				if (!body.contains(call)) {
+					violations.add(entry.getKey() + " no longer calls " + call
+							+ ") — issue #445's protections are one line each at one call site, and"
+							+ " dropping one restores the defect with nothing behavioural able to"
+							+ " see it");
+				}
 			}
 		}
 		assertNoViolations(violations);
+	}
+
+	/**
+	 * The body of the method whose declaration is {@code signature}, with comments and string and
+	 * character literals blanked. Literals go because a class-wide version of
+	 * {@link #theLaunchPathStillCallsEachProtection} was satisfied by a log line that merely
+	 * spelled a call; the body slice goes because a name that also has a declaration in the file is
+	 * otherwise present whether or not anything invokes it. Returns null when the signature is not
+	 * found, which the caller treats as a failure.
+	 */
+	private static String methodBodyWithoutLiterals(String source, String signature) {
+		int at = source.indexOf(signature);
+		if (at < 0) {
+			return null;
+		}
+		int open = source.indexOf('{', at + signature.length());
+		if (open < 0) {
+			return null;
+		}
+		String body = source.substring(open, endOfBody(source, open));
+		return String.join("\n", codeLines(java.util.Arrays.asList(body.split("\n", -1))))
+				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
+				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
 	}
 
 	/**

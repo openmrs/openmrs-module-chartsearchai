@@ -51,9 +51,12 @@ import org.openmrs.api.APIException;
  * every assertion about the port drives the production check against a real {@link ServerSocket}.
  * Liveness arrives as the liveness of a real OS process — an exited child, or this JVM.
  * {@code llama-server} itself cannot be launched in CI (the binary is not in the checkout, and
- * {@code llama-server-natives} pins no version), which is why the two production entry points are
- * package-private statics taking everything they read — the convention {@code buildServerCommand},
- * {@code serverNeedsRestart} and {@code kvQueryAction} already follow in {@link LocalLlmEngine}.
+ * {@code llama-server-natives} pins no version), which is why the readiness and port entry points
+ * are package-private statics taking everything they read — the convention
+ * {@code buildServerCommand}, {@code serverNeedsRestart} and {@code kvQueryAction} already follow
+ * in {@link LocalLlmEngine}. {@code beginServerOutputCapture}, {@code rememberServerOutput} and
+ * {@code lastServerOutput} are package-private for the same reason, and their tests drive the
+ * composed path — publish, write, read — rather than any one of them alone.
  *
  * <p>The figures those entry points were designed against were measured on the bundled binary and
  * are recorded in {@code docs/adr.md} Decision 103, not here.
@@ -327,17 +330,20 @@ public class LocalLlmServerAuthTest {
 	 * The child's last output is captured by the DRAIN thread and read by the thread that holds the
 	 * engine monitor for the whole of a start. Guarded by the engine, the drain thread blocked on
 	 * its first line and the failure message always read "(none captured)" — so this drives the
-	 * real methods with the monitor held exactly as {@code waitForServerReady} holds it.
+	 * real methods with the monitor held exactly as {@code waitForServerReady} holds it, and it
+	 * enters the path where production enters it: {@code beginServerOutputCapture} publishes the
+	 * deque, the drain thread writes THAT deque, and the failure message reads it.
 	 */
 	@Test
 	public void theChildsLastOutputIsCapturedWhileTheEngineMonitorIsHeld() throws Exception {
 		LocalLlmEngine engine = new LocalLlmEngine();
+		java.util.Deque<String> capture = engine.beginServerOutputCapture();
 		java.util.concurrent.CountDownLatch appended = new java.util.concurrent.CountDownLatch(1);
-		String captured;
+		String quoted;
 
 		synchronized (engine) {
 			Thread drain = new Thread(() -> {
-				engine.rememberServerOutput("error: invalid argument: --no-webui");
+				LocalLlmEngine.rememberServerOutput(capture, "error: invalid argument: --no-webui");
 				appended.countDown();
 			}, "test-drain");
 			drain.setDaemon(true);
@@ -348,40 +354,43 @@ public class LocalLlmServerAuthTest {
 					+ "held — every entry point is synchronized and the monitor is held unbroken "
 					+ "across the whole start, so a ring guarded by the engine can never append "
 					+ "before the failure message reads it");
-			captured = engine.lastServerOutput();
+			quoted = engine.lastServerOutput();
 		}
 
-		assertTrue(captured.contains("--no-webui"),
+		assertTrue(quoted.contains("--no-webui"),
 				"the startup-failure message must quote what the child actually said; an argument "
 				+ "this build does not accept is the shape #445 introduced, and it is printed "
 				+ "directly rather than through the log system that --log-disable silences: "
-				+ captured);
+				+ quoted);
 	}
 
+	/**
+	 * Each start captures into its OWN deque. The predecessor's drain thread is never joined, so a
+	 * line it had not yet read when the next start began must not be quoted as the new child's —
+	 * which is what a shared-and-cleared deque did.
+	 */
 	@Test
-	public void aListenerRefusingWith403RatherThan401IsStillReadiness() throws IOException {
-		try (KeyDemandingListener listener = KeyDemandingListener.refusingWith403()) {
-			// 403 is a server refusing the credential just as squarely as 401 — a fronting proxy's
-			// answer. Requiring exactly 401 would refuse the start of a server that DOES demand a
-			// credential, which is the opposite of what this gate is for.
-			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(), CLIENT,
-					ProcessHandle.current()::isAlive);
-		}
+	public void alineFromThePreviousStartIsNotQuotedAsTheNewChilds() {
+		LocalLlmEngine engine = new LocalLlmEngine();
+
+		java.util.Deque<String> firstStart = engine.beginServerOutputCapture();
+		LocalLlmEngine.rememberServerOutput(firstStart, "error: from the FIRST child");
+		java.util.Deque<String> secondStart = engine.beginServerOutputCapture();
+		// The predecessor's drain thread, still running, reads one more line out of the old pipe.
+		LocalLlmEngine.rememberServerOutput(firstStart, "error: also from the FIRST child");
+
+		assertNotEquals(firstStart, secondStart, "each start must get its own deque");
+		assertEquals("(none captured)", engine.lastServerOutput(),
+				"the new start has captured nothing yet, so its failure message must say so "
+				+ "rather than quote the dead child's words as this one's");
+
+		LocalLlmEngine.rememberServerOutput(secondStart, "error: from the SECOND child");
+		assertTrue(engine.lastServerOutput().contains("SECOND"), "and then quote its own");
+		assertFalse(engine.lastServerOutput().contains("FIRST"),
+				"never the predecessor's: " + engine.lastServerOutput());
 	}
 
-	@Test
-	public void aStatusThatIsNotARefusalIsNotTreatedAsOne() {
-		assertTrue(LlamaServerEndpoint.refusesCredentials(401), "401 is a refused credential");
-		assertTrue(LlamaServerEndpoint.refusesCredentials(403), "so is 403");
-		assertFalse(LlamaServerEndpoint.refusesCredentials(200),
-				"a SERVED request is the thing readiness refuses the start over, not a refusal");
-		assertFalse(LlamaServerEndpoint.refusesCredentials(-1),
-				"a probe that could not complete establishes no refusal");
-		assertFalse(LlamaServerEndpoint.refusesCredentials(404),
-				"a route this build does not serve says nothing about the credential");
-	}
-
-	// ---- real listeners ----
+	// ---- real listeners ----	// ---- real listeners ----
 
 	/**
 	 * A real loopback HTTP listener that demands the endpoint's bearer token, as

@@ -162,9 +162,17 @@ public class LocalLlmEngine implements LlmEngine {
 	 */
 	private java.util.Deque<String> recentServerOutput = new java.util.ArrayDeque<>();
 
-	/** A child this engine gave up on without seeing it reaped — the forcible-destroy and
-	 *  interrupt paths. Kept so the NEXT start can try again rather than leaving an orphan holding
-	 *  the port that nothing in the module has a handle to. */
+	/**
+	 * A child this engine gave up on without seeing it reaped — the forcible-destroy and interrupt
+	 * paths. Kept so that {@link #startServer} can try again rather than leave an orphan holding
+	 * the port with nothing in the module able to kill it.
+	 *
+	 * <p>Cleared only by {@link #reapAbandonedProcess()}, which only a start reaches, so
+	 * {@code close()} and {@code shutdown()} leave it set and a second abandonment overwrites the
+	 * first. Both are tolerable rather than tidy, and the reason is that every setter has ALREADY
+	 * sent {@code destroyForcibly}: what is held is a handle to something being killed, not a
+	 * running server, and it is not read for any purpose except that one retry.
+	 */
 	private Process abandonedProcess;
 
 	/** The KV-cache keys whose chart prefix has been loaded into THIS server process's RAM
@@ -924,10 +932,7 @@ public class LocalLlmEngine implements LlmEngine {
 		// A child this engine could not confirm dead still holds the port, and the port check
 		// below would blame it on a stranger. Try once more before probing.
 		reapAbandonedProcess();
-		// A fresh deque rather than a clear: see the field. The predecessor's drain thread keeps
-		// writing into the old one, where nothing reads it.
-		java.util.Deque<String> startOutput = new java.util.ArrayDeque<>();
-		recentServerOutput = startOutput;
+		java.util.Deque<String> startOutput = beginServerOutputCapture();
 
 		String serverBinaryPath = LlamaServerBinary.resolve();
 		serverPort = getServerPort();
@@ -1026,6 +1031,7 @@ public class LocalLlmEngine implements LlmEngine {
 	 * the strength of the gate below covering it.
 	 */
 	static void requireLoopbackPortFree(int port) {
+		boolean reached;
 		try (Socket probe = new Socket()) {
 			// getByName(LOOPBACK_HOST), not getLoopbackAddress(): the latter is ::1 on a JVM
 			// started with -Djava.net.preferIPv6Addresses, which would probe an address the
@@ -1034,10 +1040,18 @@ public class LocalLlmEngine implements LlmEngine {
 			probe.connect(new InetSocketAddress(
 					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), port),
 					PORT_PROBE_TIMEOUT_MS);
+			// Set INSIDE the try, so that only a refused connection reads as a free port. The
+			// close() the resource block runs after this, and a getByName failure before it, throw
+			// the same IOException — and taking those for "nothing listening" would fail this
+			// check OPEN, which is the one direction it exists to prevent.
+			reached = true;
 		}
-		catch (IOException refused) {
+		catch (IOException e) {
 			// Nothing accepted the connection, which is what a free port looks like — including a
 			// port whose previous socket is still in TIME_WAIT.
+			reached = false;
+		}
+		if (!reached) {
 			return;
 		}
 		throw new APIException("Something is already listening on "
@@ -1113,6 +1127,20 @@ public class LocalLlmEngine implements LlmEngine {
 	 * message read it. Package-private so that behaviour can be tested with the monitor held, the
 	 * way production holds it.
 	 */
+	/**
+	 * Opens the capture for one server start: a FRESH deque, published as the one
+	 * {@link #lastServerOutput()} reads, and returned so that start's drain thread can close over
+	 * it. Fresh rather than cleared — the predecessor's drain thread is never joined, so a line it
+	 * had not yet read would otherwise land after a clear and be quoted as the new child's. One
+	 * method because the two halves are the property: a test that only wrote through the field
+	 * would not exercise what the drain thread does.
+	 */
+	java.util.Deque<String> beginServerOutputCapture() {
+		java.util.Deque<String> output = new java.util.ArrayDeque<>();
+		recentServerOutput = output;
+		return output;
+	}
+
 	static void rememberServerOutput(java.util.Deque<String> output, String line) {
 		synchronized (output) {
 			output.addLast(line);
@@ -1120,11 +1148,6 @@ public class LocalLlmEngine implements LlmEngine {
 				output.removeFirst();
 			}
 		}
-	}
-
-	/** Into THIS start's deque, for the drain thread that belongs to it. */
-	void rememberServerOutput(String line) {
-		rememberServerOutput(recentServerOutput, line);
 	}
 
 	String lastServerOutput() {
@@ -1154,7 +1177,7 @@ public class LocalLlmEngine implements LlmEngine {
 			}
 			try {
 				HttpResponse<String> response = getHttpClient().send(
-						endpoint.request(endpoint.healthUrl(), Duration.ofSeconds(2))
+						endpoint.request(endpoint.healthUrl(), LlamaServerEndpoint.PROBE_TIMEOUT)
 								.GET()
 								.build(),
 						HttpResponse.BodyHandlers.ofString());
@@ -1214,8 +1237,10 @@ public class LocalLlmEngine implements LlmEngine {
 
 	/**
 	 * Gives a child this engine could not confirm dead one more chance to be reaped, so the port
-	 * check that follows is not told a stranger holds the port. Best effort and bounded: if it is
-	 * still alive the check refuses the start, which is the right answer — something IS listening.
+	 * check that follows is not told a stranger holds the port. Best effort and bounded, and it
+	 * promises nothing beyond the retry: an entry that outlives it is left for the port check,
+	 * which refuses the start only if something is actually listening on the port configured NOW —
+	 * a survivor on a port the global property has since changed is neither reaped nor refused.
 	 */
 	private void reapAbandonedProcess() {
 		if (abandonedProcess == null) {

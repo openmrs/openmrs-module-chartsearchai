@@ -106,15 +106,22 @@ final class LlmEndpointTestSupport {
 	 * <p>{@code /health} alone is not enough, and that is measured rather than assumed: llama-server
 	 * serves it PUBLICLY even when a key is enforced, so a module-spawned server (whose secret no
 	 * tester can supply, see {@link #apiKey()}) would pass a health-only probe and then fail every
-	 * case with a 401 — an ERROR per case, which reads like a broken answer rather than an endpoint
-	 * this suite may not use. Asking the completions route instead makes that a clean SKIP.
+	 * case with a refused credential — an ERROR per case, which reads like a broken answer rather
+	 * than an endpoint this suite may not use. Asking the completions route instead makes that a
+	 * clean SKIP.
+	 *
+	 * <p>Which statuses count as a refusal is {@link LlamaServerEndpoint#refusesCredentials}, the
+	 * predicate production uses, rather than a 401 of its own: measured, a 403-refusing endpoint —
+	 * a fronting proxy's answer, and the case that predicate was widened for — read as reachable
+	 * here and then ERRORed every case, which is the outcome this method exists to prevent.
 	 */
 	static boolean isReachable(String endpoint) {
 		try {
 			HttpClient client = HttpClient.newHttpClient();
 			HttpResponse<String> health = client.send(
-					HttpRequest.newBuilder().uri(URI.create(endpoint.replace("/v1/chat/completions", "/health")))
-							.timeout(Duration.ofSeconds(5)).GET().build(),
+					authorized(HttpRequest.newBuilder()
+							.uri(URI.create(endpoint.replace("/v1/chat/completions", "/health")))
+							.timeout(Duration.ofSeconds(5)).GET()),
 					HttpResponse.BodyHandlers.ofString());
 			if (health.statusCode() != 200) {
 				return false;
@@ -126,20 +133,22 @@ final class LlmEndpointTestSupport {
 			// it must not be capable of spending a completion. The measured llama-server answers
 			// 401 before validating a body at all, which is what makes the cheap shape usable
 			// here.
-			return client.send(authorized(HttpRequest.newBuilder()
+			return !LlamaServerEndpoint.refusesCredentials(client.send(
+					authorized(HttpRequest.newBuilder()
 							.uri(URI.create(endpoint))
 							.timeout(Duration.ofSeconds(5))
 							.header("Content-Type", "application/json")
 							.POST(HttpRequest.BodyPublishers.ofString("{}", StandardCharsets.UTF_8))),
-					HttpResponse.BodyHandlers.discarding()).statusCode() != 401;
+					HttpResponse.BodyHandlers.discarding()).statusCode());
 		}
 		catch (Exception e) {
 			return false;
 		}
 	}
 
-	/** Adds the configured bearer token, when one is configured. The one place either request
-	 *  shape carries a credential, for the reason the class javadoc gives. */
+	/** Adds the configured bearer token, when one is configured. The one place ANY request this
+	 *  class sends carries a credential — all three shapes go through it, the health probe
+	 *  included, since a gateway may require one where llama-server's own route does not. */
 	private static HttpRequest authorized(HttpRequest.Builder builder) {
 		String key = apiKey();
 		return key == null ? builder.build()

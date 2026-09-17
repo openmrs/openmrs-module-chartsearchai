@@ -6,7 +6,7 @@ which is the root file's "Documenting a decision" rule.
 
 ## The spawned llama-server
 
-- **Every request to the spawned llama-server is built by `LlamaServerEndpoint.request`**, which
+- **Every request the engine sends to the spawned llama-server is built by `LlamaServerEndpoint.request`**, which
   attaches the secret minted for that server start. Take the URL from the same object —
   `completionsUrl`, `healthUrl`, `propsUrl`, `slotUrl`.
   **Nothing else may spell the loopback address or call `HttpRequest.newBuilder` for it** (#445).

@@ -104,6 +104,11 @@ public class LocalLlmEngine implements LlmEngine {
 	/** How many of the child's last output lines a startup failure quotes. */
 	private static final int RECENT_SERVER_OUTPUT_LINES = 5;
 
+	/** How long {@link #stopServer()} waits for a forcibly-destroyed child to be reaped, so the
+	 *  next start's port check does not meet it still listening. Short because this is held under
+	 *  the engine monitor. */
+	private static final int REAP_WAIT_SECONDS = 2;
+
 	/**
 	 * How long a start REFUSED by {@link #requireListenerMayBeServed} is remembered, so the next
 	 * query fails in microseconds instead of re-loading the model to reach the same refusal. A
@@ -1200,10 +1205,14 @@ public class LocalLlmEngine implements LlmEngine {
 					serverProcess.destroyForcibly();
 					// destroyForcibly() returns before the process is reaped, and the listening
 					// socket is released only when it is. Without this wait, the NEXT start's
-					// requireLoopbackPortFree can find the port still held and refuse the start,
-					// accusing our own dying child of squatting it — on the restart path, which
-					// ensureServerRunning takes on any model, context or KV-directory change.
-					if (!serverProcess.waitFor(10, TimeUnit.SECONDS)) {
+					// requireLoopbackPortFree finds a still-listening child and refuses the start,
+					// accusing our own dying child of squatting the port — on the restart path,
+					// which ensureServerRunning takes on any model, context or KV-directory
+					// change. SECONDS rather than the ten above: a SIGKILLed process is reaped in
+					// milliseconds unless it is stuck in uninterruptible I/O, and this wait is
+					// taken under the engine monitor, where a clinician's query and a container
+					// shutdown both queue behind it.
+					if (!serverProcess.waitFor(REAP_WAIT_SECONDS, TimeUnit.SECONDS)) {
 						log.warn("llama-server survived being forcibly destroyed; the next start "
 								+ "may find port {} still held", serverPort);
 					}

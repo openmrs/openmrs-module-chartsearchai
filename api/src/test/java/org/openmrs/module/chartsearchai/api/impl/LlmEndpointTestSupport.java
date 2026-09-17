@@ -92,7 +92,9 @@ final class LlmEndpointTestSupport {
 	 */
 	static String apiKey() {
 		String key = System.getProperty("chartsearchai.test.llm.apiKey");
-		return (key != null && !key.isEmpty()) ? key : null;
+		// Trimmed: a whitespace-only value would otherwise be sent as a real bearer, which the
+		// server 401s, and the suite would skip for a reason the tester cannot see.
+		return (key != null && !key.trim().isEmpty()) ? key.trim() : null;
 	}
 
 	/**

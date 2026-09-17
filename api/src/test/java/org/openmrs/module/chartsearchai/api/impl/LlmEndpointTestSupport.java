@@ -82,21 +82,60 @@ final class LlmEndpointTestSupport {
 	}
 
 	/**
-	 * Whether {@code endpoint}'s server answers its {@code /health} probe. Any failure — refused
-	 * connection, timeout, non-200 — reads as "not reachable", because the only caller is an
-	 * {@code Assumptions.assumeTrue} that must skip rather than error when no server is running.
+	 * The bearer token to present, or null for none. A llama-server this MODULE spawned enforces a
+	 * secret minted per start (issue #445, {@code LlamaServerEndpoint}) which is never logged and
+	 * lives only in the child's environment, so it cannot be recovered and pasted here — these
+	 * suites are for a server the tester started, and this property is how a tester who gave their
+	 * own server a key points the suites at it.
+	 */
+	static String apiKey() {
+		String key = System.getProperty("chartsearchai.test.llm.apiKey");
+		return (key != null && !key.isEmpty()) ? key : null;
+	}
+
+	/**
+	 * Whether {@code endpoint}'s server answers its {@code /health} probe AND will accept this
+	 * client's completions. Any failure — refused connection, timeout, non-200 — reads as "not
+	 * reachable", because the only caller is an {@code Assumptions.assumeTrue} that must skip
+	 * rather than error when no server is running.
+	 *
+	 * <p>{@code /health} alone is not enough, and that is measured rather than assumed: llama-server
+	 * serves it PUBLICLY even when a key is enforced, so a module-spawned server (whose secret no
+	 * tester can supply, see {@link #apiKey()}) would pass a health-only probe and then fail every
+	 * case with a 401 — an ERROR per case, which reads like a broken answer rather than an endpoint
+	 * this suite may not use. Asking the completions route instead makes that a clean SKIP.
 	 */
 	static boolean isReachable(String endpoint) {
 		try {
-			HttpResponse<String> response = HttpClient.newHttpClient().send(
+			HttpClient client = HttpClient.newHttpClient();
+			HttpResponse<String> health = client.send(
 					HttpRequest.newBuilder().uri(URI.create(endpoint.replace("/v1/chat/completions", "/health")))
 							.timeout(Duration.ofSeconds(5)).GET().build(),
 					HttpResponse.BodyHandlers.ofString());
-			return response.statusCode() == 200;
+			if (health.statusCode() != 200) {
+				return false;
+			}
+			// The API-key middleware answers before the body is validated, so an empty object is
+			// enough to learn whether this client may post a completion at all, and costs no
+			// inference.
+			return client.send(authorized(HttpRequest.newBuilder()
+							.uri(URI.create(endpoint))
+							.timeout(Duration.ofSeconds(5))
+							.header("Content-Type", "application/json")
+							.POST(HttpRequest.BodyPublishers.ofString("{}", StandardCharsets.UTF_8))),
+					HttpResponse.BodyHandlers.discarding()).statusCode() != 401;
 		}
 		catch (Exception e) {
 			return false;
 		}
+	}
+
+	/** Adds the configured bearer token, when one is configured. The one place either request
+	 *  shape carries a credential, for the reason the class javadoc gives. */
+	private static HttpRequest authorized(HttpRequest.Builder builder) {
+		String key = apiKey();
+		return key == null ? builder.build()
+				: builder.header("Authorization", "Bearer " + key).build();
 	}
 
 	/**
@@ -134,13 +173,12 @@ final class LlmEndpointTestSupport {
 		root.set("messages", messages);
 
 		HttpResponse<String> response = HttpClient.newHttpClient().send(
-				HttpRequest.newBuilder()
+				authorized(HttpRequest.newBuilder()
 						.uri(URI.create(endpoint))
 						.timeout(COMPLETION_TIMEOUT)
 						.header("Content-Type", "application/json")
 						.POST(HttpRequest.BodyPublishers.ofString(
-								MAPPER.writeValueAsString(root), StandardCharsets.UTF_8))
-						.build(),
+								MAPPER.writeValueAsString(root), StandardCharsets.UTF_8))),
 				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
 		if (response.statusCode() != 200) {

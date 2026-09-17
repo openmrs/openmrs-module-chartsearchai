@@ -14,7 +14,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URI;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -34,6 +36,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -114,6 +117,11 @@ public class LocalLlmEngine implements LlmEngine {
 
 	private int serverPort;
 
+	/** How the running server is addressed and authenticated: the loopback URLs plus the secret
+	 *  minted for THIS start. Null when no server is running. Every request the engine sends is
+	 *  built by this object — see {@link LlamaServerEndpoint} for why there is exactly one. */
+	private LlamaServerEndpoint endpoint;
+
 	/** The KV-cache keys whose chart prefix has been loaded into THIS server process's RAM
 	 *  prompt-cache pool (by a warmup or query) since it last started. llama-server's
 	 *  {@code cache_prompt} pool retains many prefixes at once, so a key present here will be
@@ -159,12 +167,7 @@ public class LocalLlmEngine implements LlmEngine {
 	 * overloads. Called only from {@code synchronized} methods, so it runs under the engine lock.
 	 */
 	private InferenceResult postForResult(String requestBody, int timeoutSeconds) {
-		HttpRequest request = HttpRequest.newBuilder()
-				.uri(URI.create(getCompletionsUrl()))
-				.timeout(Duration.ofSeconds(timeoutSeconds))
-				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
-				.build();
+		HttpRequest request = completionsRequest(requestBody, timeoutSeconds);
 
 		try {
 			HttpResponse<String> response = getHttpClient().send(request,
@@ -173,6 +176,7 @@ public class LocalLlmEngine implements LlmEngine {
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
 				log.error("Local llama-server returned HTTP {}: {}", response.statusCode(),
 						truncate(response.body()));
+				rejectIfUnauthorized(response.statusCode());
 				if (response.statusCode() == 400 && LlmResponseParser.isContextOverflowError(response.body())) {
 					throw new ChartTooLargeException(
 							"Patient chart exceeds the LLM context window of "
@@ -230,12 +234,7 @@ public class LocalLlmEngine implements LlmEngine {
 
 		String requestBody = buildRequestBody(systemPrompt, userMessage, true);
 
-		HttpRequest request = HttpRequest.newBuilder()
-				.uri(URI.create(getCompletionsUrl()))
-				.timeout(Duration.ofSeconds(timeoutSeconds))
-				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
-				.build();
+		HttpRequest request = completionsRequest(requestBody, timeoutSeconds);
 
 		try {
 			HttpResponse<InputStream> response = getHttpClient().send(request,
@@ -245,6 +244,7 @@ public class LocalLlmEngine implements LlmEngine {
 				String body = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
 				log.error("Local llama-server returned HTTP {}: {}", response.statusCode(),
 						truncate(body));
+				rejectIfUnauthorized(response.statusCode());
 				if (response.statusCode() == 400 && LlmResponseParser.isContextOverflowError(body)) {
 					throw new ChartTooLargeException(
 							"Patient chart exceeds the LLM context window of "
@@ -359,12 +359,7 @@ public class LocalLlmEngine implements LlmEngine {
 		// cached this way is what a real query reuses via cache_prompt=true + --cache-reuse.
 		String requestBody = buildRequestBody(systemPrompt, userMessage, false, 1);
 
-		HttpRequest request = HttpRequest.newBuilder()
-				.uri(URI.create(getCompletionsUrl()))
-				.timeout(Duration.ofSeconds(timeoutSeconds))
-				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
-				.build();
+		HttpRequest request = completionsRequest(requestBody, timeoutSeconds);
 
 		try {
 			HttpResponse<String> response = getHttpClient().send(request,
@@ -373,6 +368,9 @@ public class LocalLlmEngine implements LlmEngine {
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
 				log.warn("Warmup returned HTTP {}: {}", response.statusCode(),
 						truncate(response.body()));
+				// A 401 here is not a warm-cache miss to shrug off: it means the server is not
+				// accepting this module's key, so every query that follows will fail too.
+				rejectIfUnauthorized(response.statusCode());
 				return;
 			}
 
@@ -574,13 +572,11 @@ public class LocalLlmEngine implements LlmEngine {
 	 *  is fixed at 0 because the server runs {@code --parallel 1}. Failures (missing file, disabled
 	 *  endpoint, I/O) are logged and treated as a miss so warmup degrades to a plain prefill. */
 	private boolean slotAction(String action, String filename, int timeoutSeconds) {
-		String url = "http://127.0.0.1:" + serverPort + "/slots/0?action=" + action;
 		ObjectNode body = MAPPER.createObjectNode();
 		body.put("filename", filename);
 		try {
-			HttpRequest request = HttpRequest.newBuilder()
-					.uri(URI.create(url))
-					.timeout(Duration.ofSeconds(timeoutSeconds))
+			HttpRequest request = endpoint.request(endpoint.slotUrl(action),
+							Duration.ofSeconds(timeoutSeconds))
 					.header("Content-Type", "application/json")
 					.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
 							StandardCharsets.UTF_8))
@@ -592,6 +588,9 @@ public class LocalLlmEngine implements LlmEngine {
 			}
 			log.warn("KV-cache slot {} returned HTTP {}: {}", action, response.statusCode(),
 					truncate(response.body()));
+			// Not a miss to degrade past: a 401 says the KV endpoints are rejecting this
+			// module's key, which no re-prefill recovers from.
+			rejectIfUnauthorized(response.statusCode());
 			return false;
 		}
 		catch (IOException e) {
@@ -827,6 +826,18 @@ public class LocalLlmEngine implements LlmEngine {
 		cmd.add(modelPath);
 		cmd.add("--port");
 		cmd.add(String.valueOf(port));
+		// Pin the bind to loopback rather than resting on llama.cpp's default (issue #445). The
+		// child inherits the JVM's environment, and --host reads LLAMA_ARG_HOST from it, so a
+		// server-wide variable could otherwise widen the bind to every interface without anything
+		// here saying so. Measured: this flag wins over LLAMA_ARG_HOST=0.0.0.0 in the environment.
+		cmd.add("--host");
+		cmd.add("127.0.0.1");
+		// The Web UI is enabled by default and its root is served OUTSIDE the API-key middleware,
+		// so it is the one route on this port that answers an unauthenticated caller (measured:
+		// GET / returns 200 with no credential). Nothing in this module renders it — the engine
+		// speaks only to the chat-completions, /health, /props and /slots routes — so the surface
+		// is switched off rather than left open for no reader.
+		cmd.add("--no-webui");
 		cmd.add("-ngl");
 		cmd.add("99");
 		cmd.add("-fa");
@@ -881,7 +892,15 @@ public class LocalLlmEngine implements LlmEngine {
 		List<String> command = buildServerCommand(serverBinaryPath, modelPath, serverPort,
 				getContextSize(), slotSavePath);
 
+		// Nothing may already be listening on the port we are about to hand a patient's chart to
+		// (issue #445). Without this, a local process that bound the port while the server was
+		// down — which it is at Tomcat boot and after every idle unload — is ADOPTED by the
+		// readiness poll below, and receives the system prompt and the serialized chart.
+		requireLoopbackPortFree(serverPort);
+
 		log.info("Starting llama-server on port {} with model {}", serverPort, modelPath);
+
+		endpoint = LlamaServerEndpoint.open(serverPort);
 
 		try {
 			ProcessBuilder pb = new ProcessBuilder(command);
@@ -891,6 +910,9 @@ public class LocalLlmEngine implements LlmEngine {
 				pb.environment().put("DYLD_LIBRARY_PATH", binDir);
 				pb.environment().put("LD_LIBRARY_PATH", binDir);
 			}
+			// The key goes into the child's environment, never onto its command line, which is
+			// world-readable through ps. Before start(), so the child parses it at launch.
+			endpoint.handOverTo(pb);
 			serverProcess = pb.start();
 
 			// Drain server output in a daemon thread to prevent buffer blocking
@@ -924,10 +946,83 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 	}
 
+	/**
+	 * Refuses to launch onto a port something is already listening on, so that a local process
+	 * which bound it while the server was down fails the start LOUDLY instead of being adopted as
+	 * the server (issue #445). The port is unbound at Tomcat boot and after every
+	 * {@code chartsearchai.llm.idleTimeoutMinutes} unload, so that window arises by default rather
+	 * than having to be raced for.
+	 *
+	 * <p>{@code setReuseAddress(true)} deliberately: the probe must be no stricter than the
+	 * child's own bind, which also sets it. With reuse off, a socket left in {@code TIME_WAIT} by
+	 * the previous child — guaranteed on the restart path, where {@link #ensureServerRunning}
+	 * calls {@link #stopServer()} and {@code startServer} back to back, and on the crash path,
+	 * which restarts without {@code stopServer} at all — would refuse a start the child would have
+	 * completed. Measured: with reuse on, a bind is still refused against a LIVE listener, which
+	 * is the only case this check exists to catch.
+	 */
+	static void requireLoopbackPortFree(int port) {
+		try (ServerSocket probe = new ServerSocket()) {
+			probe.setReuseAddress(true);
+			probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+		}
+		catch (IOException e) {
+			throw new APIException("Something is already listening on 127.0.0.1:" + port
+					+ ", the port configured for the local LLM server ("
+					+ ChartSearchAiConstants.GP_LLM_SERVER_PORT
+					+ "). Refusing to start: a foreign listener on this port would receive the "
+					+ "system prompt and the patient's chart. Stop it, or configure another port.", e);
+		}
+	}
+
+	/**
+	 * Whether the listener that has just reported itself healthy may be served: it must still be
+	 * the child we spawned, and it must be enforcing the key this start minted.
+	 *
+	 * <p>Three things are asked, and the first is the one the ticket (#445) turns on.
+	 * <ul>
+	 *   <li>{@code childAlive} — the spawned process's liveness, re-checked AFTER the health
+	 *       response and not only before it.
+	 *       A child that lost the bind race exits immediately (measured: exit 1 in ~0.06s with
+	 *       "couldn't bind HTTP server socket", before it touches the model), so an impostor's
+	 *       {@code status: ok} arrives beside a dead child. Checking liveness only before the
+	 *       probe is what let a foreign listener be left in service.</li>
+	 *   <li>An unauthenticated call must be REFUSED. See
+	 *       {@link LlamaServerEndpoint#rejectsUnauthenticatedCalls}: without this the module
+	 *       cannot tell an enforcing server from one that ignored the key and would take the
+	 *       chart from anyone.</li>
+	 *   <li>This start's key must be ACCEPTED, so a rejected key surfaces here rather than as a
+	 *       401 on a clinician's query.</li>
+	 * </ul>
+	 *
+	 * <p>Package-private and static, taking everything it reads, because llama-server itself cannot
+	 * be launched under test — the convention {@link #buildServerCommand},
+	 * {@link #serverNeedsRestart} and {@link #kvQueryAction} already follow in this class. Liveness
+	 * arrives as a supplier rather than a {@link Process} for the same reason: production passes
+	 * {@code serverProcess::isAlive}, and a test can then pass the liveness of a REAL OS process
+	 * (an exited child, or the running JVM) instead of standing one in.
+	 */
+	static void requireHealthyListenerIsTheSpawnedChild(LlamaServerEndpoint endpoint,
+			HttpClient client, BooleanSupplier childAlive) {
+		if (!childAlive.getAsBoolean()) {
+			throw new APIException("A listener on 127.0.0.1:" + endpoint.port()
+					+ " reported itself healthy but the llama-server this module spawned has "
+					+ "exited, so that listener is another process. Refusing to serve it.");
+		}
+		if (!endpoint.rejectsUnauthenticatedCalls(client)) {
+			throw new APIException("The listener on 127.0.0.1:" + endpoint.port()
+					+ " accepted an unauthenticated inference request, so it is not enforcing the "
+					+ "key this module minted for it. Refusing to send it a patient's chart.");
+		}
+		if (!endpoint.acceptsThisModulesKey(client)) {
+			throw new APIException("The listener on 127.0.0.1:" + endpoint.port()
+					+ " rejected this module's own key. Refusing to serve it.");
+		}
+	}
+
 	private void waitForServerReady() {
 		long deadline = System.currentTimeMillis()
 				+ (SERVER_STARTUP_TIMEOUT_SECONDS * 1000L);
-		String healthUrl = "http://127.0.0.1:" + serverPort + "/health";
 
 		while (System.currentTimeMillis() < deadline) {
 			if (!serverProcess.isAlive()) {
@@ -937,9 +1032,7 @@ public class LocalLlmEngine implements LlmEngine {
 			}
 			try {
 				HttpResponse<String> response = getHttpClient().send(
-						HttpRequest.newBuilder()
-								.uri(URI.create(healthUrl))
-								.timeout(Duration.ofSeconds(2))
+						endpoint.request(endpoint.healthUrl(), Duration.ofSeconds(2))
 								.GET()
 								.build(),
 						HttpResponse.BodyHandlers.ofString());
@@ -947,6 +1040,8 @@ public class LocalLlmEngine implements LlmEngine {
 					JsonNode json = MAPPER.readTree(response.body());
 					String status = json.has("status") ? json.get("status").asText() : "";
 					if ("ok".equals(status)) {
+						requireHealthyListenerIsTheSpawnedChild(endpoint, getHttpClient(),
+								serverProcess::isAlive);
 						return;
 					}
 				}
@@ -990,6 +1085,9 @@ public class LocalLlmEngine implements LlmEngine {
 			// disk restore that now actually avoids a re-prefill.
 			ramResidentKeys.clear();
 		}
+		// Outside the block above, beside the HttpClient: a start that minted a secret and then
+		// failed to launch leaves an endpoint with no process, and that stamp must clear too.
+		endpoint = null;
 		httpClient = null;
 	}
 
@@ -1079,8 +1177,31 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 	}
 
-	private String getCompletionsUrl() {
-		return "http://127.0.0.1:" + serverPort + "/v1/chat/completions";
+	/**
+	 * The one chat-completions request shape the three inference paths share, built by
+	 * {@link LlamaServerEndpoint} so it carries this start's key. The paths differ in how they read
+	 * the RESPONSE, never in how the request is addressed or authenticated.
+	 */
+	private HttpRequest completionsRequest(String requestBody, int timeoutSeconds) {
+		return endpoint.request(endpoint.completionsUrl(), Duration.ofSeconds(timeoutSeconds))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
+				.build();
+	}
+
+	/**
+	 * Turns a 401 from the local server into a named failure at every call site rather than a
+	 * generic HTTP error or, worse, a cache miss. It means the listener on the port is not
+	 * accepting the key this start minted — either a foreign process holds it, or the launched
+	 * build did not read {@link LlamaServerEndpoint#API_KEY_ENV} — and no retry or re-prefill
+	 * recovers from either.
+	 */
+	private void rejectIfUnauthorized(int statusCode) {
+		if (statusCode == 401) {
+			throw new APIException("The local llama-server rejected this module's key (HTTP 401). "
+					+ "Whatever is listening on 127.0.0.1:" + serverPort
+					+ " is not the server this module authenticated to.");
+		}
 	}
 
 	private String resolveModelPath() {

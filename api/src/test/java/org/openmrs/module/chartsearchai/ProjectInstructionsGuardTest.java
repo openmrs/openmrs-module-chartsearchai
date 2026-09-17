@@ -70,6 +70,9 @@ public class ProjectInstructionsGuardTest {
 	private static final Path REFERENCE_INSTRUCTIONS = REPO_ROOT
 			.resolve("api/src/main/java/org/openmrs/module/chartsearchai/reference/CLAUDE.md");
 
+	private static final Path LOCAL_LLM_INSTRUCTIONS = REPO_ROOT
+			.resolve("api/src/main/java/org/openmrs/module/chartsearchai/api/impl/CLAUDE.md");
+
 	private static final Path ADR = REPO_ROOT.resolve("docs/adr.md");
 
 	/**
@@ -179,6 +182,9 @@ public class ProjectInstructionsGuardTest {
 		Map<Path, Integer> m = new LinkedHashMap<>();
 		m.put(ROOT_INSTRUCTIONS, 25_000);
 		m.put(REFERENCE_INSTRUCTIONS, 76_000);
+		// The local-LLM subprocess rules (#445), set at the split a little under a tenth above what
+		// the file measured — room for a rule or two, not for a section, the principle above.
+		m.put(LOCAL_LLM_INSTRUCTIONS, 3_600);
 		return m;
 	}
 

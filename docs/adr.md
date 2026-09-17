@@ -8147,3 +8147,108 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `stated < named` guard in its other state),
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
+
+## Decision 103: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#445](https://github.com/openmrs/openmrs-module-chartsearchai/issues/445), a security-scan finding
+(CWE-306, severity HIGH). It changes no prompt, no chip, no response key and no wire format.
+
+**Context.** `LocalLlmEngine` spawned `llama-server` with `--port` and `--slot-save-path` and no
+credential at all, then addressed it by port at five call sites — `postForResult`, `inferStreaming`,
+`warmup`, `slotAction` and the readiness poll — each assembling `http://127.0.0.1:<port>/...` for
+itself. Two consequences, and the topology decides which matters. In the Docker distro Tomcat and
+its child are alone in the backend container's namespace, so no distinct principal exists; on the
+standalone workstation the documented `admin/Admin123` on `localhost:8081` already holds the same
+data by a sanctioned path. The rated position is the `.omod` installed on an existing OpenMRS site,
+where an unprivileged local OS user or a co-located compromised service holds no database or
+OpenMRS credential and yet could reach the port.
+
+First, *while the server ran*, that principal could run free inference and call
+`/slots/0?action=save|restore|erase` — the endpoints this module's own KV persistence depends on —
+against a patient's `<uuid>-<sha256>.bin` entry. Second, and worse, *while it did not*: the server
+starts lazily on the first query and unloads after `chartsearchai.llm.idleTimeoutMinutes`, so the
+port is unbound at Tomcat boot and after every idle period. A process that bound it then, and
+answered `{"status":"ok"}` on `/health`, was ADOPTED — `waitForServerReady` accepted any 200 from
+whoever replied and checked the child's liveness only *before* the probe — and thereafter received
+the system prompt and the serialized chart of every patient queried, returning whatever answer it
+liked for the pipeline to render to a clinician.
+
+**Decision.** The secret, and the readiness proof, are separate mechanisms for separate halves of
+the finding, and neither substitutes for the other.
+
+`LlamaServerEndpoint` is the one place that addresses and authenticates the server: it mints a
+256-bit `SecureRandom` secret per server start, owns the URL for every route the module calls, and
+is the only thing that builds a request to it.
+`ArchitectureGuardTest.everyLocalServerRequestCarriesTheModulesKey` and
+`theLocalServerAddressIsSpelledInOnePlace` are what keep a sixth call site from being hand-rolled
+beside the five — an unauthenticated request is silent, so no behavioural test would notice it.
+
+Readiness now requires, after a healthy `/health`, that the child is *still alive*, that an
+*unauthenticated* inference call is *refused*, and that this start's key is *accepted*; and
+`requireLoopbackPortFree` refuses to launch onto a port something already holds, so the
+no-race path — bind while the port is free — fails loudly instead of being adopted.
+
+**What was measured, on the bundled binary (it reports `version: 1 (4eac5b4)`; the natives module
+pins no llama.cpp version, and `LlamaServerBinary.resolve` reuses an operator-supplied binary where
+one is present, so these are properties of *a* build and are re-checkable by the same probes).**
+
+| # | question | measured |
+|---|---|---|
+| 1 | is a key enforced? | `POST /v1/chat/completions` and `POST /slots/0?action=save`: 401 with no bearer, 401 with a wrong bearer, 200 with the right one |
+| 2 | may the key go on the command line? | no — an argument vector is world-readable; with the key supplied out of band, `ps -ww -o args=` on the child contains no occurrence of it |
+| 3 | does the environment work? | yes — `LLAMA_API_KEY` alone, with no `--api-key`/`--api-key-file` argument, gives exactly row 1's behaviour |
+| 4 | does `--host` beat the inherited environment? | yes — `--host 127.0.0.1` with `LLAMA_ARG_HOST=0.0.0.0` set: `lsof` showed the listener on `127.0.0.1` |
+| 5 | which routes are public? | `/health` and `/v1/models` answer 200 with no credential; `/props` and `GET /slots` answer 401 |
+| 6 | is the Web UI a surface? | yes — at its default, `GET /` answers 200 with no credential; hence `--no-webui` |
+| 7 | how long is the bind window? | a prober attempting `bind` every 5 ms first failed **0.138 s** after exec, launching an 8.0 GB model at `-c 32768`; the port is taken long before the model is loaded |
+| 8 | does the probe cost inference? | no — the key middleware answers before the body is validated, so an unauthenticated `POST` of `{}` is 401 rather than 400 |
+| 9 | does a lost bind race kill the child? | yes — launched onto an occupied port it exits 1 in ~0.06 s with `couldn't bind HTTP server socket`, before touching the model |
+
+**Why the environment and not a key file.** The three ways to hand `llama-server` a key are an
+argument, a file, and an environment variable. Row 2 rules out the argument: it would publish the
+secret to the very principal the change exists to lock out. The file form works (and is readable
+once, at parse time, so it could be deleted after startup), but row 3 shows the environment gives
+the same enforcement with the same protection class — a process's environment is readable only by
+its owner — while deleting a whole lifecycle: a directory that must exist and be writable, a POSIX
+`chmod` with a non-POSIX fallback, a decision about what to do when neither can restrict the file,
+and a delete on every failure path. The simpler mechanism was taken because it is not weaker, not
+because it is simpler.
+
+**Why the unauthenticated probe is on the completions route, and what it does NOT prove.** A bearer
+token authenticates the CLIENT to the server and never the server to the client: the probe hands
+the secret to whatever is on the port, so a hostile listener can answer 401 unauthenticated and 200
+keyed and pass both legs at will. What the negative control catches is a *build that ignored the
+environment variable* — the case where this module would go on shipping charts to an unauthenticated
+server with nothing saying so. It asks `/v1/chat/completions` rather than a cheaper protected route
+(row 5 offers `/props`, which the authenticated leg uses) because that is the route the chart
+travels on: a future build that reclassified it as public is exactly one whose reclassification
+matters, so failing the start there reports the thing worth failing over. Rows 5 and 8 are why the
+control is possible at all, and row 8 is why it is free.
+
+**What ties readiness to the child, and the residue.** The pre-bind check and the liveness re-check,
+and nothing else. Row 7 sets the size of what is left: the probe socket closes and the child binds
+~0.14 s later, so an impostor must now win that window rather than simply arriving while the port is
+free. Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
+the liveness re-check then turns the adoption into a loud failure unless the re-check happens to run
+inside those 60 ms. The residue is that window, and the option that would close it rather than
+narrow it is an unpredictable ephemeral port handed to the child, which is not taken here because
+`chartsearchai.llm.serverPort` is a documented, operator-configured contract.
+
+**Why `setReuseAddress(true)` on the probe.** The check must be no stricter than the child's own
+bind, which sets it. `ensureServerRunning` calls `stopServer` and `startServer` back to back on any
+model, context or KV-directory change, and the crash path restarts without `stopServer` at all, so a
+socket lingering from the previous child is the normal state on a restart rather than an oddity.
+With reuse off, the probe refused starts the child would have completed; with it on, a bind is still
+refused against a live listener, which is the only case the check exists to catch. Both halves are
+pinned: `LocalLlmServerAuthTest.aPortLeftInTimeWaitByThePreviousChildDoesNotFailTheStart` and
+`aPortAnotherProcessIsListeningOnFailsTheStartLoudly`.
+
+**Consequences.** An operator-supplied `llama-server` must support the environment key and enforce
+it; a build that does not now fails the start loudly rather than serving charts unauthenticated,
+which is the direction this decision chooses deliberately, and README says so beside the
+operator-binary instructions. The opt-in LLM suites reach a server the tester started, not one this
+module spawned — the per-start secret is never logged and cannot be recovered — so
+`LlmEndpointTestSupport.isReachable` now asks the completions route rather than only `/health`
+(public, per row 5), which turns what would have been a 401 error per case into a clean skip, and
+`chartsearchai.test.llm.apiKey` points those suites at a keyed server of the tester's own.

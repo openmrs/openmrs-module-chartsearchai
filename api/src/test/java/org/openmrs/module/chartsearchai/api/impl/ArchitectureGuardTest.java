@@ -438,6 +438,45 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Every request to the spawned llama-server is built by {@link LlamaServerEndpoint}, which is
+	 * the only thing that attaches this start's key (issue #445). Before that class existed the
+	 * engine hand-assembled the loopback URL at five call sites and sent no credential at all, so
+	 * there was nowhere authentication COULD be added once and five places to forget it. A sixth
+	 * hand-rolled call site would be unauthenticated and silent — nothing about it fails a test
+	 * that reads behaviour — which is why this reads the source instead.
+	 *
+	 * <p>Scanned tree-wide minus the legitimate homes, the shape
+	 * {@link #noDirectGetEmbeddingPrefixCalls} uses. {@code RemoteLlmEngine} builds requests to the
+	 * operator's OWN configured endpoint, which this rule says nothing about, and
+	 * {@code LlmEndpointTestSupport} is the opt-in suites' client for a hand-started server.
+	 */
+	@Test
+	public void everyLocalServerRequestCarriesTheModulesKey() throws IOException {
+		assertNoViolations(scanForPattern(
+				SRC_ROOT,
+				Pattern.compile("HttpRequest\\s*\\.\\s*newBuilder\\s*\\("),
+				"LlamaServerEndpoint.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
+						+ "|ArchitectureGuardTest.java",
+				"Should build the request through LlamaServerEndpoint.request(), which attaches "
+						+ "the per-start key, instead of a bare HttpRequest.newBuilder()"));
+	}
+
+	/**
+	 * And nothing else spells the local server's loopback address, because a hand-built URL is how
+	 * a request comes to bypass {@link LlamaServerEndpoint} without looking like it does — the
+	 * form {@code slotAction} carried before #445. The endpoint class is the one home.
+	 */
+	@Test
+	public void theLocalServerAddressIsSpelledInOnePlace() throws IOException {
+		assertNoViolations(scanForPattern(
+				SRC_ROOT,
+				Pattern.compile("\"http://127\\.0\\.0\\.1:"),
+				"LlamaServerEndpoint.java|ArchitectureGuardTest.java",
+				"Should take the URL from LlamaServerEndpoint (completionsUrl/healthUrl/"
+						+ "propsUrl/slotUrl) instead of spelling the loopback address"));
+	}
+
+	/**
 	 * No file should reimplement cosine similarity. The canonical
 	 * implementation is in ChartSearchAiUtils.cosineSimilarity().
 	 * Reimplementations typically contain {@code dot +=} and

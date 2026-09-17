@@ -71,7 +71,10 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 # committed beside it. That happens on EVERY start, not only after a
 # fresh download: /openmrs/data outlives the container, so a volume
 # provisioned before this check existed is carrying whatever the mutable
-# `main` branch served at the time. See ADR Decision 103.
+# `main` branch served at the time. Such a file is re-fetched from the
+# pinned revision rather than only deleted, so recovery costs no extra
+# restart; bytes that fail on the fresh copy too are the refusal. See
+# ADR Decision 103.
 . /usr/local/bin/model-manifest.sh
 
 ONNX_FILE="$QS_DIR/model.onnx"

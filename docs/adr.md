@@ -8299,11 +8299,13 @@ raised it; nothing here refutes or confirms it.
 **An api test-jar was tried and reverted**, so that it is not re-proposed on the strength of the one
 thing it buys. Publishing api's test classes and depending on them from omod gives the omod suite
 `LogCapture`, which is the repo's instrument for asserting the LEVEL an outcome is reported at. It also
-opens api's whole test classpath — fixtures included — to omod, and prose across both modules states
-the opposite as load-bearing — `grep -rn "api test-jar" api/src omod/src` reaches both halves,
-where `no api test-jar` alone reaches only api's — the deciding one being a PRODUCTION javadoc:
-`DrugSafetyValidator`'s `StandingChartAlerts` factories are public because `omod/pom.xml` declares
-none. It also made `omod/pom.xml`'s `unpack-dependencies` execution, which filters by neither
+opens api's whole test classpath — fixtures included — to omod, and prose in both modules states the
+opposite as load-bearing. The one that decides is a PRODUCTION javadoc:
+`DrugSafetyValidator`'s `StandingChartAlerts` factories are public because `omod/pom.xml` declares no
+api test-jar. `StandingChartAlertsTest`, `ArchitectureGuardTest`,
+`ChartSearchAiSafetyWarningSeverityWireTest` and `ChartSearchAiChartAlertsTest` each say the same of
+themselves, and they do not all spell the artifact the same way, so no single search term finds them
+all. It also made `omod/pom.xml`'s `unpack-dependencies` execution, which filters by neither
 classifier nor scope, ship api's test classes and its Spring and Hibernate test configs inside the
 released `.omod` — measured, with the whole suite green and the build exit 0 — so it needed a
 load-bearing `excludeClassifiers` line that no test could hold. One level assertion does not buy that.

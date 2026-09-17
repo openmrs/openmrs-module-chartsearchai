@@ -32,10 +32,9 @@ import org.apache.logging.log4j.core.config.Property;
  * repo's general instrument for this question and would be the obvious reuse. It lives in
  * {@code api/src/test}, and reaching it from here means publishing an api test-jar and depending
  * on it — which was tried and reverted on this change: it opens api's whole test classpath to
- * omod, and prose across both modules states the opposite as a load-bearing fact. Grep
- * {@code no api test-jar} for them; the one that decides is a PRODUCTION javadoc,
- * {@code DrugSafetyValidator}'s {@code StandingChartAlerts} factories, which are public because
- * {@code omod/pom.xml} declares none. One
+ * omod, and prose in both modules states the opposite as a load-bearing fact. The one that decides
+ * is a PRODUCTION javadoc: {@code DrugSafetyValidator}'s {@code StandingChartAlerts} factories are
+ * public because {@code omod/pom.xml} declares no api test-jar. ADR Decision 103 names the rest. One
  * level assertion does not buy that. So this asks the one question those cases need, over one
  * logger, and claims to be no general instrument — {@code LogCapture} is that, and its javadoc is
  * where the reasoning about levels as the only observable lives.

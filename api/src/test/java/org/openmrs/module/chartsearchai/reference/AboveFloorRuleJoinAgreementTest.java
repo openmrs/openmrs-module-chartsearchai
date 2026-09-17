@@ -73,7 +73,7 @@ public class AboveFloorRuleJoinAgreementTest {
 	 *  the scan; that is all it buys, since the other two are not words. A javadoc MENTION in a
 	 *  production file does trip it, by design — the scan reads raw bytes and the case's own javadoc
 	 *  says why any mention in a production class is the thing forbidden. Measured: a probe class
-	 *  naming all three in prose alone reddens it three times. */
+	 *  naming all three in prose alone and calling none of them reddens it, listing all three. */
 	private static final List<String> RESERVED_TO_THE_VALIDATOR = Arrays.asList(
 			"identifies(", "entriesCodedBy(", "atcIndexOf(");
 
@@ -164,8 +164,8 @@ public class AboveFloorRuleJoinAgreementTest {
 	 * places and enforced in one is the shape this case exists to close.
 	 */
 	@Test
-	public void noProductionClassOutsideTheValidatorCallsWhatWasWidenedForTheseOracles() throws IOException {
-		List<String> callers = new ArrayList<String>();
+	public void noProductionClassOutsideTheValidatorNamesWhatWasWidenedForThisClass() throws IOException {
+		List<String> named = new ArrayList<String>();
 		Path root = ModuleSourceRoot.apiRoot().resolve("src/main/java");
 		try (Stream<Path> sources = Files.walk(root)) {
 			for (Path file : sources.filter(f -> f.toString().endsWith(".java")).collect(
@@ -176,7 +176,7 @@ public class AboveFloorRuleJoinAgreementTest {
 				String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
 				for (String reserved : RESERVED_TO_THE_VALIDATOR) {
 					if (text.contains(reserved)) {
-						callers.add(root.relativize(file) + " calls " + reserved);
+						named.add(root.relativize(file) + " names " + reserved);
 					}
 				}
 			}
@@ -185,7 +185,7 @@ public class AboveFloorRuleJoinAgreementTest {
 		assertTrue(Files.exists(root.resolve("org/openmrs/module/chartsearchai/reference/"
 				+ "DrugSafetyValidator.java")), "this guard must be reading the real source root, or it "
 						+ "forbids nothing by scanning nothing: " + root);
-		assertEquals(Collections.<String> emptyList(), callers,
+		assertEquals(Collections.<String> emptyList(), named,
 			"these members are package-private for this class's oracles alone (issue #447), and each"
 					+ " says in its own javadoc that no production class outside DrugSafetyValidator may"
 					+ " call it — for a naming question ask DrugReference.matchesText, matchesDrugName or"

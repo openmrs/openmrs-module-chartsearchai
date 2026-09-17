@@ -216,7 +216,8 @@ public class QuestionPairRuleScanPerPassTest {
 	}
 
 	/**
-	 * And that no future arm grows a rule read of its OWN. <b>This is not what would have caught issue
+	 * And that NEITHER PAIRWISE ARM grows a rule read of its own — the screening arm included, which
+	 * is what makes this pointer as wide as the rule the instruction file states. <b>This is not what would have caught issue
 	 * #447</b> — that scan lived in a private static helper rather than in an arm's body, and this case
 	 * passes against the pre-change code, measured. The walk counts above are what fail there. What
 	 * this adds is the shape those counts cannot see: a NEW read of an entry's rule list inside one of
@@ -232,23 +233,29 @@ public class QuestionPairRuleScanPerPassTest {
 	 * quietly start forbidding nothing.
 	 */
 	@Test
-	public void noArmOfTheQuestionPairScreenReadsARuleListOfItsOwn() throws IOException {
+	public void neitherPairwiseArmReadsARuleListOfItsOwn() throws IOException {
 		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
 				+ "DrugSafetyValidator.java");
 		List<String> arms = Arrays.asList(
 			"private PairChipExtent addQuestionPairInteractions(List<SafetyWarning> warnings,",
 			"private void collectQuestionPairInteraction(Map<List<String>, PairFinding> candidates,",
-			"private static Map<DrugReference, String> pairKeyNames(List<DrugReference> drugs,");
+			"private static Map<DrugReference, String> pairKeyNames(List<DrugReference> drugs,",
+			// The SCREENING arm too, so this is as wide as the rule the instruction file states:
+			// "neither pairwise arm may scan a rule list per pair". It reaches the join only through
+			// pairKeyNames above, so it reads nothing of its own today — which is the point of
+			// forbidding it here rather than discovering a second scan later.
+			"private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,");
 
 		for (String arm : arms) {
 			SourceScan.Region body = scan.body(arm);
 			for (int at : scan.literalOffsets("getInteractions")) {
 				assertTrue(!body.contains(at), "\"" + arm.trim() + "\" reads an entry's interaction list"
 						+ " directly, at line " + scan.lineOf(at) + ": " + scan.statementAt(at)
-						+ ". That is the per-pair scan issue #447 removed: it made the arm's cost"
-						+ " quadratic in a row count the QUESTION chooses, which nothing bounds but the"
-						+ " controller's 1000-character cap. Ask the arm's own AboveFloorRules instead;"
-						+ " it reads each list once. ADR Decision 103 carries what the scan cost.");
+						+ ". That is the per-pair scan issue #447 removed: it made each arm's cost"
+						+ " quadratic in a row count the arm does not choose — the QUESTION's for the"
+						+ " question-pair arm, the CHART's for the screen — and nothing bounds the first"
+						+ " but the controller's 1000-character cap. Ask the arm's own AboveFloorRules"
+						+ " instead; it reads each list once. ADR Decision 103 carries what it cost.");
 			}
 		}
 	}

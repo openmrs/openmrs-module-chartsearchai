@@ -186,8 +186,9 @@ final class ControllerLog implements AutoCloseable {
 			Configurator.setLevel(LOGGER_NAME, priorLevel);
 		}
 		else {
-			// The config log4j2 installed when the appender was attached, removed rather than left at
-			// its inherited level — see the class javadoc for what leaving it costs a later capture.
+			// The config log4j2 installed for this name — by the Configurator.setLevel above, which
+			// reaches it first; attaching the appender would install one too. Removed rather than left at
+			// its inherited level: see the class javadoc for what leaving it costs a later capture.
 			LoggerContext context = logger.getContext();
 			context.getConfiguration().removeLogger(LOGGER_NAME);
 			context.updateLoggers();

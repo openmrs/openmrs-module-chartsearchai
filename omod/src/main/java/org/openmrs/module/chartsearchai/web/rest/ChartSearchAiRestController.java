@@ -923,10 +923,10 @@ public class ChartSearchAiRestController {
 	 * effectively-final capture a lambda needs.
 	 *
 	 * <p>It carries the async shape's early-{@code done} state too — {@link #earlyQuestionId} and
-	 * {@link #earlyDoneSent}, which were two single-element arrays beside it. One object, because the
-	 * at-most-once guard and the row flag it has to agree with belong together: keeping them apart is
-	 * what let a second consumer fire after a refused {@code done} write pass the guard and write a
-	 * second row.
+	 * {@link #earlyDoneSent}, which were two single-element arrays beside it. One object, so that the
+	 * at-most-once guard ({@link #ungroundedSeen}) and the row flag it has to agree with
+	 * ({@link #auditAttempted}) sit together; {@code earlyDoneSent} answers a third question, whether
+	 * the early event went out, and the consumer's comment says why that is not the guard.
 	 *
 	 * <p>Unsynchronized, and that is not an oversight of the kind {@code SseKeepAlive} is careful
 	 * about: every consumer is called synchronously by the service on the REQUEST thread, and the
@@ -938,8 +938,8 @@ public class ChartSearchAiRestController {
 		/**
 		 * The answer as the model emitted it, appended BEFORE each frame is written — so a fragment
 		 * whose write the client refused is still on the record. Over-recording is the safe direction
-		 * for an audit trail; the alternative drops the last thing the model said about the patient on
-		 * every disconnect, which is the fragment the caller stopped to read.
+		 * for an audit trail: appending after the write instead would drop that fragment, which is the
+		 * one a caller who stopped mid-answer stopped to read.
 		 */
 		final StringBuilder answerSoFar = new StringBuilder();
 

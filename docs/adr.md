@@ -108,6 +108,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
+- [Decision 103: A streaming query that reached inference is audited however the stream ends](#decision-103-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -8185,7 +8186,7 @@ normally, so the flag is still raised and no second row follows it.
 One row per query holds for any implementation, not only for one honouring the ungrounded consumer's
 at-most-once contract. That consumer's idempotence is keyed on its having FIRED rather than on the
 early `done` having gone out, which also makes its warning reachable in the classic shape; and the
-classic write site skips its save where a row was already made. Neither shipped implementation can
+classic write site skips its save where a row was already attempted. Neither shipped implementation can
 reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
 `ChartSearchServiceRouter` never calls it, passing the caller's through — but "exactly one row" is a
 specification about the TABLE, and the module should not owe it to a collaborator's good behaviour.
@@ -8217,8 +8218,8 @@ the mode is a property of the chart that was assembled, which is the producer-st
 
 **The gate.** The row is owed once the pipeline has spoken on any of the consumer channels, which is
 the REST layer's only signal that inference produced something. A query that failed before any of
-them writes no row, as before: nothing was disclosed. A preview or an abandoned `thinking` frame IS
-model output about this patient that reached the client, so those are audited — including a chart too
+them writes no row, as before: nothing was produced. A preview, or an abandoned `thinking` frame, is
+model output about this patient that the pipeline produced, so those are audited — including a chart too
 large for the committed pass, where the preview ran, the preview being over a focused slice and the
 committed pass over the whole chart. `maybeEmitPreliminaryReasoning` returns early both where
 `chartsearchai.progressiveReasoning.enabled` is off, which ships, and where the chart mode is the
@@ -8249,8 +8250,7 @@ than a defect.
 **What it costs**, measured 2026-09-17 by driving the real `streamAnswer` from a throwaway omod case
 with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer —
 at 200 requests per JVM after 30 warmups, per-request caller-thread allocation read off
-`com.sun.management.ThreadMXBean.getThreadAllocatedBytes`, with an A/A control on every run, and
-reproduced independently by a second reviewer on the same rig:
+`com.sun.management.ThreadMXBean.getThreadAllocatedBytes`, with an A/A control on every run:
 
 - accumulating the answer costs **+36,992 bytes** per request against the **1.94 MB** the REST layer
   already allocates for that answer, and wall clock sits below an A/A spread of 203 µs on a ~1.2 ms

@@ -108,6 +108,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
+- [Decision 103: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-103-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)

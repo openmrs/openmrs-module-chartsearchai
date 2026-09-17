@@ -23,6 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,16 +60,33 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * {@code LlmResponseParser} are all production's. Only the peer is the test's, which is the
  * variable the measurement is about.
  *
- * <p><b>The load-bearing assertion is the byte count, not the exception.</b> A thrown
- * {@code APIException} says only that the call ended; the bytes the server managed to write before
- * the client stopped reading are what says the heap was bounded, and an oversized body can raise an
- * exception for the wrong reason (a truncated JSON body fails to parse). So every case about an
- * OVERSIZED peer asserts the peer's write total first. Of the positive controls only the
- * at-the-ceiling one asserts a write total, and it asserts EQUALITY, because the fixture has to
- * sit ON the boundary for that case to be about the boundary; the rest assert content. Every
- * handler that repeats until the client stops reading stops itself at
- * {@link #SAFETY_LIMIT}, well above the ceiling, so an absent bound fails the assertion rather
- * than running until the JVM dies.
+ * <p><b>The load-bearing assertion is that the peer was CUT OFF, not that an exception was
+ * raised.</b> A thrown {@code APIException} says only that the call ended, and an oversized body
+ * can raise one for the wrong reason (a truncated JSON body fails to parse). Every handler that
+ * repeats until the client stops reading stops itself at {@link #SAFETY_LIMIT} — so a peer being
+ * read to the end reaches that limit and records it, while a peer the module stopped reading is
+ * cut off short of it. That flag, read once the handler thread has stopped writing, is what every
+ * OVERSIZED case asserts, together with a floor: the peer must have got onto the wire at least the
+ * bytes the module reads before it stops, so a handler that failed at the start cannot pass for
+ * one that was cut off. Of the positive controls only the at-the-ceiling one asserts a write
+ * total, and it asserts EQUALITY, because the fixture has to sit ON the boundary for that case to
+ * be about the boundary; the rest assert content.
+ *
+ * <p><b>What that does and does not discriminate.</b> It separates a read that stops from one that
+ * does not, and the two verdicts are {@link #SAFETY_LIMIT} minus the ceiling apart — megabytes, on
+ * any platform, which is the whole point of stating it this way. It does NOT say WHERE the ceiling
+ * is: {@link #SAFETY_LIMIT} is itself a multiple of {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}, so
+ * raising that constant moves both sides together, and raising
+ * {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES} to megabytes leaves the peer cut off just the same
+ * — measured green at 2 MiB. What pins the ceilings from BELOW is the positive controls:
+ * {@link #aBodyOfExactlyTheCeilingArrivesWholeRatherThanCutOff} for the response ceiling and
+ * {@link #anOrdinaryErrorBodyReachesTheLogWhole} for the error one. Nothing here pins either from
+ * above, and the byte budget this replaced did not reliably do it either: calibrated against macOS
+ * loopback, where the peer got 0.7 to 0.8 MB onto the wire past the 8192-byte error ceiling and
+ * 0.8 to 1.9 MB past the 4 MiB response one (measured 2026-09-17, after the handler stopped), it
+ * was red on GitHub's Linux runners, which got 2.7 MB past that same error ceiling with the module
+ * working (issue #446, run 35173250728). A budget on the peer's wire total measures the kernel the
+ * suite happens to run on; this measures the handler.
  *
  * <p><b>Two of the streaming cases are about WHERE the ceiling is counted</b>, not merely
  * that there is one: a peer whose first line never ends
@@ -85,35 +105,22 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensitiveTest {
 
 	/**
-	 * Where a handler gives up. Four times {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}, so an
-	 * unbounded read is separated from a bounded one by a factor a socket buffer cannot explain,
-	 * and small enough that the pre-fix run's accumulated {@code StringBuilder} does not itself
-	 * exhaust the test JVM.
+	 * Where a handler gives up — and, since {@link #assertPeerWasCutOff} asks whether the handler
+	 * REACHED it, the distance by which an unbounded read is separated from a bounded one. Four
+	 * times {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}, so that distance is megabytes rather than
+	 * anything a socket buffer could account for, and small enough that the pre-fix run's
+	 * accumulated {@code StringBuilder} does not itself exhaust the test JVM. A handler that
+	 * reaches this wrote every byte it was ever going to; one the module stopped reading did not.
 	 */
 	private static final long SAFETY_LIMIT = 4L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
 
 	/**
-	 * What the peer may still get onto the wire after the module stops reading its ERROR body at
-	 * {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES}. Nothing like that ceiling, and the gap is the
-	 * instrument's rather than the module's: the JDK's {@code HttpServer} and macOS loopback
-	 * auto-tuning together absorbed 0.5 to 0.7 MB before the server's write saw the broken pipe,
-	 * many times the {@code net.inet.tcp.sendspace}/{@code recvspace} of 131072 this platform
-	 * reports. So this measures what a socket can swallow and not what the module read — the
-	 * module read {@code MAX_ERROR_BODY_BYTES} — and what it discriminates is a ceiling raised
-	 * to megabytes, which is the mutation that matters.
+	 * How long a cut-off handler is given to notice. It notices on its next write — the module has
+	 * closed the body, and closing it cancels the exchange — so this is a hang detector and not a
+	 * tuned wait: a handler still writing after this was not cut off at all, which is the failure
+	 * the oversized cases are looking for and must be reported rather than waited out.
 	 */
-	private static final long ERROR_BODY_BUDGET = 2L * 1024 * 1024;
-
-	/**
-	 * What the peer may still have got onto the wire after the module stopped reading: twice the
-	 * ceiling, i.e. {@link RemoteLlmEngine#MAX_RESPONSE_BYTES} of slack above it. Measured over
-	 * ten runs, the overshoot above the ceiling ran 0.76 to 1.98 MB — well past the
-	 * {@code net.inet.tcp.sendspace}/{@code recvspace} of 131072 this platform reports, because
-	 * the JDK's {@code HttpServer} and loopback auto-tuning buffer beyond it — so read the
-	 * margin here as about 2x and not as a socket buffer. What keeps the verdict unambiguous is
-	 * the other side: an unbounded read reaches {@link #SAFETY_LIMIT}, twice this again.
-	 */
-	private static final long TOLERATED = 2L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
+	private static final int PEER_EXIT_SECONDS = 30;
 
 	/** Distinctive enough that finding it in the log cannot be an accident. */
 	private static final String SHORT_ERROR_BODY =
@@ -134,6 +141,22 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	private HttpServer server;
 
 	private final AtomicLong written = new AtomicLong();
+
+	/**
+	 * Set by a repeating handler that ran out of {@link #SAFETY_LIMIT} instead of being cut off —
+	 * i.e. by a peer nothing stopped reading. The verdict of every oversized case is this flag and
+	 * not a byte count, because a byte count of the peer's wire total is a measurement of the
+	 * kernel that ran the test. Never set by {@link #respondOnce}, which writes a fixed body.
+	 */
+	private final AtomicBoolean peerReachedItsSafetyLimit = new AtomicBoolean();
+
+	/**
+	 * Counted down when the handler thread stops writing, however it stopped. Read {@link #written}
+	 * or {@link #peerReachedItsSafetyLimit} only after awaiting this: the call under test unwinds
+	 * as soon as the module stops reading, which is BEFORE the peer has finished filling the socket
+	 * it was writing into, and a sample taken then is a race that errs toward passing.
+	 */
+	private final CountDownLatch peerFinished = new CountDownLatch(1);
 
 	private final RemoteLlmEngine engine = new RemoteLlmEngine();
 
@@ -167,7 +190,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		APIException raised = callAndCatch(() -> engine.inferStreaming("system", "user", 60,
 				token -> { }));
 
-		assertWroteNoMoreThanTheCeiling("the streamed answer");
+		assertPeerWasCutOffAtTheResponseCeiling("the streamed answer");
 		assertNotNull(raised, "a peer that never stops streaming must end the call, not the heap");
 		assertCeilingFailureIsReportable(raised);
 	}
@@ -188,7 +211,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		APIException raised = callAndCatch(() -> engine.inferStreaming("system", "user", 60,
 				token -> { }));
 
-		assertWroteNoMoreThanTheCeiling("the endless line");
+		assertPeerWasCutOffAtTheResponseCeiling("the endless line");
 		assertNotNull(raised, "a peer whose first line never ends must end the call, not the heap");
 		assertCeilingFailureIsReportable(raised);
 	}
@@ -209,7 +232,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		APIException raised = callAndCatch(() -> engine.inferStreaming("system", "user", 60,
 				token -> { }));
 
-		assertWroteNoMoreThanTheCeiling("the run of short lines");
+		assertPeerWasCutOffAtTheResponseCeiling("the run of short lines");
 		assertNotNull(raised,
 				"a peer sending lines the parser discards must still end the call, not the heap");
 		assertCeilingFailureIsReportable(raised);
@@ -221,7 +244,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 		APIException raised = callAndCatch(() -> engine.infer("system", "user", 60));
 
-		assertWroteNoMoreThanTheCeiling("the non-streaming body");
+		assertPeerWasCutOffAtTheResponseCeiling("the non-streaming body");
 		assertNotNull(raised,
 				"a peer answering with an oversized body must end the call, not the heap");
 		assertCeilingFailureIsReportable(raised);
@@ -233,8 +256,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 		APIException raised = callAndCatch(() -> engine.infer("system", "user", 60));
 
-		assertPeerWasCutOffAt("the error body", ERROR_BODY_BUDGET,
-				RemoteLlmEngine.MAX_ERROR_BODY_BYTES);
+		assertPeerWasCutOff("the error body", RemoteLlmEngine.MAX_ERROR_BODY_BYTES);
 		assertNotNull(raised, "a 500 from the endpoint is still a failed call");
 		assertTrue(raised.getMessage() != null && raised.getMessage().contains("500"),
 				"the status code is the operator's only clue that the endpoint URL or model name "
@@ -287,6 +309,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 		LlmEngine.InferenceResult result = engine.infer("system", "user", 60);
 
+		awaitPeer("the at-the-ceiling body");
 		assertEquals(RemoteLlmEngine.MAX_RESPONSE_BYTES, written.get(),
 				"the fixture has to sit ON the boundary for this case to be about the boundary");
 		assertEquals(ceilingPadding(), result.getText().length(),
@@ -343,7 +366,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		APIException raised = callAndCatch(() -> engine.inferStreaming("system", "user", 60,
 				token -> { }));
 
-		assertPeerWasCutOffAt("the streaming route's error body", ERROR_BODY_BUDGET,
+		assertPeerWasCutOff("the streaming route's error body",
 				RemoteLlmEngine.MAX_ERROR_BODY_BYTES);
 		assertNotNull(raised, "a 500 from the endpoint is still a failed call");
 		assertTrue(raised.getMessage() != null && raised.getMessage().contains("500"),
@@ -365,7 +388,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		APIException raised = callAndCatch(() -> engine.infer("system", "user", 60,
 				new ObjectMapper().createObjectNode()));
 
-		assertWroteNoMoreThanTheCeiling("the batch-grounding body");
+		assertPeerWasCutOffAtTheResponseCeiling("the batch-grounding body");
 		assertNotNull(raised, "the grounding path must end the call too, not the heap");
 		assertCeilingFailureIsReportable(raised);
 	}
@@ -410,24 +433,56 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 						+ server.getAddress().getPort() + path);
 	}
 
-	private void assertWroteNoMoreThanTheCeiling(String what) {
-		assertPeerWasCutOffAt(what, TOLERATED, RemoteLlmEngine.MAX_RESPONSE_BYTES);
+	private void assertPeerWasCutOffAtTheResponseCeiling(String what) {
+		assertPeerWasCutOff(what, RemoteLlmEngine.MAX_RESPONSE_BYTES);
 	}
 
 	/**
-	 * The peer stopped being listened to somewhere under {@code budget}. Stated as what the PEER
-	 * got onto the wire rather than as what the module read, because the two differ by everything
-	 * the socket absorbed after the module stopped reading — so every caller sets {@code budget}
-	 * well above {@code ceiling}, by a margin of its own. {@link #TOLERATED} and
-	 * {@link #ERROR_BODY_BUDGET} each say what theirs is and why.
+	 * Something stopped reading the peer. Asked of the HANDLER and not of the wire total: the
+	 * handler repeats until it is cut off or reaches {@link #SAFETY_LIMIT}, so which of those
+	 * happened is a difference of megabytes, while the wire total is the ceiling plus whatever the
+	 * kernel under the test absorbed on the way down — under 1 MB on macOS loopback, 2.7 MB on
+	 * GitHub's Linux runners, both with the same working ceiling. The class javadoc has the
+	 * figures and what they cost.
+	 *
+	 * <p>{@code ceiling} is how much the module reads before it stops, and it is asserted as a
+	 * FLOOR on the wire total for one reason: a handler that threw on its first write is also a
+	 * handler that did not reach its safety limit, and without this an exchange that failed for
+	 * some unrelated reason would read as a bound doing its job. The peer cannot have written
+	 * fewer bytes than the module read.</p>
 	 */
-	private void assertPeerWasCutOffAt(String what, long budget, long ceiling) {
-		assertTrue(written.get() <= budget,
-				what + ": the peer got " + written.get() + " bytes onto the wire, so nothing "
-						+ "stopped reading them. A response may not grow the shared JVM's heap "
-						+ "past " + ceiling + " bytes no matter how much the endpoint sends, and "
-						+ "past " + budget + " the overshoot is more than a socket buffer can "
-						+ "explain.");
+	private void assertPeerWasCutOff(String what, long ceiling) {
+		awaitPeer(what);
+		assertFalse(peerReachedItsSafetyLimit.get(),
+				what + ": the peer got " + written.get() + " bytes onto the wire and stopped only "
+						+ "because it ran out of its own " + SAFETY_LIMIT + "-byte allowance, not "
+						+ "because anything cut it off. A response may not grow the shared JVM's "
+						+ "heap by whatever the endpoint chooses to send; the module stops reading "
+						+ "at " + ceiling + " bytes, and a peer that is stopped never gets near "
+						+ "its own limit.");
+		assertTrue(written.get() >= ceiling,
+				what + ": the peer got only " + written.get() + " bytes onto the wire, fewer than "
+						+ "the " + ceiling + " the module reads before it stops — so this run "
+						+ "never exercised the ceiling, and the handler's stopping says nothing "
+						+ "about it.");
+	}
+
+	/**
+	 * Blocks until the handler thread has stopped writing, so that {@link #written} and
+	 * {@link #peerReachedItsSafetyLimit} are final rather than sampled mid-flight.
+	 */
+	private void awaitPeer(String what) {
+		try {
+			assertTrue(peerFinished.await(PEER_EXIT_SECONDS, TimeUnit.SECONDS),
+					what + ": the peer was still writing " + PEER_EXIT_SECONDS + " seconds after "
+							+ "the call unwound, having got " + written.get() + " bytes onto the "
+							+ "wire. A peer the module stopped reading fails on its next write, so "
+							+ "this one was not stopped.");
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new AssertionError("interrupted while waiting for the peer to stop writing", e);
+		}
 	}
 
 	/** A well-formed completion, comfortably under the ceiling. */
@@ -504,39 +559,52 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/**
 	 * Answers with {@code status}, then writes every element of {@code parts} but the last once
 	 * each and repeats the last until the client stops reading or {@link #SAFETY_LIMIT} is
-	 * reached, counting every byte that left.
+	 * reached, counting every byte that left and recording WHICH of those two ended it. Reaching
+	 * the limit is the unbounded verdict and is recorded before the stream is closed, so that a
+	 * broken pipe raised by the close itself cannot erase it.
 	 */
 	private void respond(HttpExchange exchange, int status, String contentType, byte[]... parts)
 			throws IOException {
-		drainRequest(exchange);
-		exchange.getResponseHeaders().add("Content-Type", contentType);
-		exchange.sendResponseHeaders(status, 0);
-		try (OutputStream out = exchange.getResponseBody()) {
-			for (int i = 0; i < parts.length - 1; i++) {
-				out.write(parts[i]);
-				written.addAndGet(parts[i].length);
+		try {
+			drainRequest(exchange);
+			exchange.getResponseHeaders().add("Content-Type", contentType);
+			exchange.sendResponseHeaders(status, 0);
+			try (OutputStream out = exchange.getResponseBody()) {
+				for (int i = 0; i < parts.length - 1; i++) {
+					out.write(parts[i]);
+					written.addAndGet(parts[i].length);
+				}
+				byte[] repeated = parts[parts.length - 1];
+				while (written.get() < SAFETY_LIMIT) {
+					out.write(repeated);
+					out.flush();
+					written.addAndGet(repeated.length);
+				}
+				peerReachedItsSafetyLimit.set(true);
 			}
-			byte[] repeated = parts[parts.length - 1];
-			while (written.get() < SAFETY_LIMIT) {
-				out.write(repeated);
-				out.flush();
-				written.addAndGet(repeated.length);
+			catch (IOException e) {
+				// The client stopped reading — which is the whole point of the cases above.
 			}
 		}
-		catch (IOException e) {
-			// The client stopped reading — which is the whole point of the cases above.
+		finally {
+			peerFinished.countDown();
 		}
 	}
 
 	/** Answers with {@code status} and exactly {@code body}, counting what left. */
 	private void respondOnce(HttpExchange exchange, int status, String contentType, byte[] body)
 			throws IOException {
-		drainRequest(exchange);
-		exchange.getResponseHeaders().add("Content-Type", contentType);
-		exchange.sendResponseHeaders(status, body.length);
-		try (OutputStream out = exchange.getResponseBody()) {
-			out.write(body);
-			written.addAndGet(body.length);
+		try {
+			drainRequest(exchange);
+			exchange.getResponseHeaders().add("Content-Type", contentType);
+			exchange.sendResponseHeaders(status, body.length);
+			try (OutputStream out = exchange.getResponseBody()) {
+				out.write(body);
+				written.addAndGet(body.length);
+			}
+		}
+		finally {
+			peerFinished.countDown();
 		}
 	}
 

@@ -1590,4 +1590,148 @@ public class ArchitectureGuardTest {
 						+ "legitimate reason to name it, and the stamp cannot answer that, so add the "
 						+ "class file to MAY_NAME_THE_ORDER_READ_CAUSE and say here why (issue #421).");
 	}
+
+	/**
+	 * A per-citation claim FRAGMENT is built in one place, {@code CitationGroundingVerifier}'s
+	 * {@code newFragment}, which charges the answer's split allowance first — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/448">#448</a>.
+	 *
+	 * <p><b>Nothing behavioural can pin the ONE-PLACE half</b>, for the plain reason that a third
+	 * splitter is a code path no existing case invokes: every case in
+	 * {@code CitationGroundingVerifierTest} drives the two splitters that exist, so one added
+	 * beside them answers identically on all of them while restoring the quadratic copy for the
+	 * input shape the rule exists for — a marker-dense answer from a remote endpoint. The CHARGE
+	 * half is a different matter and is well covered there: delete the charge from
+	 * {@code newFragment} and the behavioural cases redden. This rule asserts it anyway, so that
+	 * the two halves of one sentence are read in one place.
+	 *
+	 * <p>The two constructions the rule allows are not interchangeable. The WHOLE-sentence one
+	 * copies text the answer already holds, once per sentence, so it is linear and needs no
+	 * allowance; a FRAGMENT is one per MARKER and is the copy that multiplies.
+	 *
+	 * <p>It reads SOURCE TEXT, and the constant-pool idiom
+	 * {@link #theOrderStopDateStampIsWrittenInOnePlace} uses cannot express this one: that helper
+	 * records which CLASS FILE invokes a constructor, and {@code newFragment} and both splitters
+	 * compile into the one outer class file, so it would report a single caller either way —
+	 * whichever of them held the construction. The residue of reading source instead: a construction spelled
+	 * some other way — a factory of its own that this needle does not name — is out of reach, the
+	 * same residue {@link #classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep}
+	 * records for its own scan.
+	 */
+	@Test
+	public void aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory() throws IOException {
+		List<String> lines = getSourceCache().get("CitationGroundingVerifier.java");
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: "
+				+ "CitationGroundingVerifier.java was not found by the source scan, so this rule "
+				+ "would pass vacuously");
+		List<String> stripped = codeLines(lines);
+		List<String> outside = new ArrayList<>();
+		int constructions = 0;
+		boolean factoryCharges = false;
+		for (int i = 0; i < stripped.size(); i++) {
+			String code = stripped.get(i);
+			String method = enclosingMethodOf(stripped, i);
+			if (code.contains("budget.charge(") && method.contains("newFragment(")) {
+				factoryCharges = true;
+			}
+			if (!code.contains("new Sentence(")) {
+				continue;
+			}
+			constructions++;
+			if (method.contains("newFragment(")
+					|| method.contains("splitIntoCitedSentences(String answer, FragmentBudget")) {
+				continue;
+			}
+			outside.add("line " + (i + 1) + ", in: " + method.trim());
+		}
+		assertTrue(constructions >= 2, "precondition: the scan found " + constructions
+				+ " Sentence constructions in CitationGroundingVerifier.java. It expects the "
+				+ "whole-sentence one and the fragment factory, so a smaller number means the "
+				+ "needle has stopped matching and the rule passes vacuously.");
+		assertTrue(factoryCharges, "newFragment must charge the answer's split allowance before it "
+				+ "builds a fragment. Without that charge a marker-dense answer copies the "
+				+ "cumulative prefix once per marker again, which is issue #448 — an "
+				+ "OutOfMemoryError in the Tomcat JVM, not a bad verdict.");
+		assertEquals(new ArrayList<String>(), outside, "a per-citation claim fragment is built only "
+				+ "through CitationGroundingVerifier.newFragment, which charges the answer's split "
+				+ "allowance first (issue #448). Constructing one anywhere else reopens the "
+				+ "quadratic copy with every behavioural case still green. Found at: " + outside);
+	}
+
+	/**
+	 * {@code AnswerCitations.restsOn} answers with a VIEW over the two sets a claim rests on and
+	 * never builds their union — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/448">#448</a>.
+	 *
+	 * <p><b>Nothing behavioural pins this either, and the gap was measured rather than supposed.</b>
+	 * The union it used to build was one fresh set per REFERENCE, each holding one entry per
+	 * distinct marker in the answer and all of them retained for the length of the pass. Restoring
+	 * it leaves {@code CitationGroundingVerifierTest} entirely green — measured, by putting the copy
+	 * back and running it — while reintroducing the heap exhaustion ADR Decision 103's sweep
+	 * measures: the verdicts are identical either way, so only the allocation tells the two apart,
+	 * and a unit test cannot fail on a heap it has enough of.
+	 *
+	 * <p>Reads the METHOD BODY by brace matching rather than the file, so a collection built
+	 * elsewhere in {@code AnswerCitations} — the constructor legitimately builds two — is out of
+	 * scope. Residue, the same one its neighbour above records: a union assembled some other way,
+	 * by a helper this needle does not name, is out of reach.
+	 */
+	@Test
+	public void theCitationsAClaimRestsOnAreAViewAndNotACopy() throws IOException {
+		String source = new String(Files.readAllBytes(SRC_ROOT.resolve(
+				"src/main/java/org/openmrs/module/chartsearchai/api/impl/CitationGroundingVerifier.java")),
+				StandardCharsets.UTF_8);
+		int signature = source.indexOf("ClaimSupport restsOn(");
+		org.junit.jupiter.api.Assertions.assertTrue(signature > 0,
+				"precondition: AnswerCitations.restsOn was not found, so this rule would pass "
+						+ "vacuously — it may have been renamed or its return type changed");
+		int open = source.indexOf('{', signature);
+		String body = source.substring(open, endOfBody(source, open));
+
+		List<String> built = new ArrayList<>();
+		for (String constructor : new String[] { "new HashSet", "new LinkedHashSet", "new TreeSet",
+				"new ArrayList", "addAll(" }) {
+			if (body.contains(constructor)) {
+				built.add(constructor);
+			}
+		}
+		assertEquals(new ArrayList<String>(), built, "AnswerCitations.restsOn must answer with a "
+				+ "ClaimSupport view over the two sets and never build their union: it is called "
+				+ "once per reference and the claim's own set holds one entry per distinct marker "
+				+ "in the answer, so a copy is the reference count times the marker count, live at "
+				+ "once (issue #448). Found: " + built);
+	}
+
+	/**
+	 * The declaration the line at {@code index} sits under — the nearest line above it indented ONE
+	 * tab that opens a signature OR declares a nested class, which is how this file declares both.
+	 *
+	 * <p><b>The nested-class arm is the load-bearing half, and it was added after a mutation walked
+	 * through without it.</b> A nested class's own members are indented two tabs, so a signature-only
+	 * scan walks past them to whatever one-tab declaration precedes the CLASS — and
+	 * {@code Sentence} is declared immediately after {@code newFragment}, so a fragment constructed
+	 * inside {@code Sentence} resolved to the allow-listed factory and the rule above stayed green
+	 * on exactly the regression it exists for. Returning the class declaration instead makes such a
+	 * construction match no allow-listed method and be reported.
+	 */
+	private static String enclosingMethodOf(List<String> stripped, int index) {
+		for (int i = index; i >= 0; i--) {
+			String line = stripped.get(i);
+			if (line.length() < 2 || line.charAt(0) != '\t' || line.charAt(1) == '\t') {
+				continue;
+			}
+			String trimmed = line.trim();
+			if (trimmed.startsWith("}")) {
+				continue;
+			}
+			if (trimmed.contains("class ") || trimmed.contains("interface ")
+					|| trimmed.contains("enum ")) {
+				return line;
+			}
+			if (line.indexOf('(') > 0) {
+				return line;
+			}
+		}
+		return "<file scope>";
+	}
 }

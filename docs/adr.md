@@ -8286,6 +8286,33 @@ shape to driving a behaviour — cut four spellings at once where four successiv
 bought one. It did not make the property unbreakable: a claim that it had was written here and
 refuted within a cycle, and the narrower claim that replaced it was refuted in the next one.
 
+*A model path is published only for bytes THIS shell verified.* The other half of #444's refusal is
+that the embedding global properties stay unconfigured, and that too was read off the source: a
+guard compared the line of the last embedder fetch against the line of the first
+`configure_retrieval_gps` invocation. A reviewer defeated it by wrapping the two fetches in a
+function defined where they already sat and calling it after the wiring — the verification then ran
+after the global-property write, with every source guard, `sh -n` and shellcheck green. Driven
+against a path-rewritten copy of the real entrypoint, a `mariadb` stub recording every statement and
+a loopback origin serving bytes no row records, that arrangement INSERTed
+`querystore.embedding.modelFilePath` and `querystore.embedding.vocabFilePath` before the embedder was
+refused; the unwrapped entrypoint wrote neither.
+
+So the ordering stopped being a fact about source layout. `fetch_and_verify` records each id that
+verified in the CURRENT shell, and `require_verified` is what `configure_retrieval_gps` asks before
+it writes either path. Re-driven the same way against the fixed entrypoint, the same wrap wrote
+neither path — the paths simply go unwritten, which is the fail-closed direction and the same state
+a refusal produces — while a run serving bytes that DO match the recorded digest wrote both, which
+is what says the gate is not merely refusing everything. The ledger is an ordinary shell variable,
+which settles the subshell family above in the direction that matters: a fetch backgrounded, piped,
+command-substituted, or taken inside a function that is any of those, records nothing the parent
+shell can see, so no path is published even though the `exit` stopped nothing. What it cannot do is
+make the `exit` land, which is why the line-level guard stays.
+
+That positional guard is now a second channel rather than the guarantee, and it asserts the premise
+it rests on: a must-have fetch is a top-level statement of the entrypoint, so where it is written is
+when it runs. The function wrap fails that premise, which is what reddens it.
+
+
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its message. The two failures an operator can act on differently are a transfer that
 stopped short and bytes that are not the artifact, and only the first has a remedy the operator
@@ -8325,8 +8352,9 @@ every deployment and every standalone build, on the first fetch — so the first
 pin move is the check, and it is the one step of this recipe a maintainer cannot skip.
 
 → `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
-serves substituted bytes, which is the acceptance both findings state.
+serves substituted bytes, which is the acceptance both findings state; its ledger cases are where
+"the embedder is verified before its path is published" now lives.
 `ModelDownloadPinningGuardTest` reads the source for what no behaviour of the library can show —
 that each site still routes through it, that the rename still follows the verification, that the
-embedder is still verified before anything writes its path into a global property, and that no
+entrypoint still asks `require_verified` before it publishes either embedder path, and that no
 revision has relaxed back to a branch name. Mutate any of those and read the failures.

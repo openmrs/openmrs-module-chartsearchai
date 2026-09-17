@@ -550,8 +550,20 @@ configure_retrieval_gps() {
   # Paths are relative to the application data directory, derived from the same
   # variables the downloads above wrote to so there is one source of truth.
   gp_set_if_blank 'chartsearchai.querystore.enabled' 'true'
-  gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
-  gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"
+
+  # #444: this is where a model file's path leaves the script and becomes something querystore
+  # loads, so it may only be written for bytes THIS start verified. require_verified answers that
+  # from the library's own record of what ran in this shell rather than from where the fetches
+  # above are written — so moving them, wrapping them in a function called later, or taking them
+  # in a subshell leaves these two properties unwritten instead of pointing querystore at bytes
+  # nothing checked. The autostart safety below then reads the blank modelFilePath and turns the
+  # sweep off, which is the same fail-closed state a refusal produces.
+  if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
+    gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
+    gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"
+  else
+    echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are not written." >&2
+  fi
 
   _model_gp=$(gp_value 'querystore.embedding.modelFilePath')
   _enabled_gp=$(gp_value 'chartsearchai.querystore.enabled')

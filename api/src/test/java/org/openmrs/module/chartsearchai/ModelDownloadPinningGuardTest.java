@@ -293,14 +293,23 @@ public class ModelDownloadPinningGuardTest {
 	}
 
 	/**
-	 * #444's refusal is stated as leaving the embedding global properties unconfigured, so the
-	 * verification has to be upstream of the call that writes them. A check that ran afterwards would
-	 * satisfy every other channel here and still point querystore at rejected bytes.
+	 * <b>A second channel, and no longer the guarantee.</b> #444's refusal is stated as leaving the
+	 * embedding global properties unconfigured. What holds that is the library's ledger of what
+	 * verified in THIS shell, which
+	 * {@link #noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger} reads and
+	 * {@code ModelDownloadIntegrityTest} drives. This check reads source POSITION, a weaker question:
+	 * a reviewer defeated the line comparison alone by wrapping the two fetches in a function called
+	 * after the wiring, leaving every other channel green.
+	 *
+	 * <p>So the premise the comparison rests on is asserted rather than assumed — a must-have fetch
+	 * is a top-level statement of the entrypoint, and only then does where it is written say when it
+	 * runs. That is what the function wrap fails.
 	 */
 	@Test
 	public void theEmbedderIsVerifiedBeforeAnythingWritesItsPathIntoAGlobalProperty() throws IOException {
 		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
 
+		List<String> violations = new ArrayList<String>();
 		int wiring = -1;
 		int lastEmbedderFetch = -1;
 		for (int i = 0; i < lines.size(); i++) {
@@ -313,13 +322,139 @@ public class ModelDownloadPinningGuardTest {
 			// Either fetch form; which one each site must use is the exiting-form guard's question.
 			if (line.trim().matches("^fetch_(and_verify|or_exit) .*") && line.contains("embedder-e5-base-v2")) {
 				lastEmbedderFetch = Math.max(lastEmbedderFetch, i);
+				String enclosing = enclosingFunction(lines, i);
+				if (enclosing != null) {
+					violations.add("backend-init.sh fetches the embedder inside " + enclosing + "() at line "
+							+ (i + 1) + ", so where it is written is not when it runs and the ordering read below"
+							+ " means nothing; a must-have fetch belongs at top level");
+				}
 			}
 		}
 
+		assertEquals(List.of(), violations, "a must-have fetch whose source position is not its run order");
 		assertTrue(wiring >= 0, "backend-init.sh no longer invokes configure_retrieval_gps; this guard read nothing");
 		assertTrue(lastEmbedderFetch >= 0, "backend-init.sh no longer fetches the embedder; this guard read nothing");
 		assertTrue(lastEmbedderFetch < wiring, "the embedder is verified at line " + (lastEmbedderFetch + 1)
 				+ ", after the global properties are written at line " + (wiring + 1));
+	}
+
+	/**
+	 * <b>The guarantee the check above is only a second channel for.</b> A model file's path reaches a
+	 * global property only behind {@code require_verified} naming that artifact, so what decides it is
+	 * what the running shell DID rather than where a fetch is written. Rearranging the entrypoint then
+	 * leaves the paths unwritten — the fail-closed direction, and where the property was blank the
+	 * autostart safety in that same function then turns the sweep off — instead of pointing
+	 * querystore at bytes this start never checked.
+	 *
+	 * <p>The write is tied to the artifact by the VARIABLE the fetch targets, not by a list of
+	 * property names: {@code $ONNX_FILE} is what {@code fetch_or_exit embedder-e5-base-v2-onnx} writes
+	 * and what the property's value is built from, so renaming a property or adding a third one cannot
+	 * slip past. What {@code require_verified} then answers is
+	 * {@code ModelDownloadIntegrityTest}'s question, driven against the real library.
+	 */
+	@Test
+	public void noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger() throws IOException {
+		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
+
+		List<String> violations = new ArrayList<String>();
+		int writes = 0;
+		for (String artifact : CANNOT_START_WITHOUT) {
+			String variable = fetchTargetVariable(lines, artifact);
+			assertTrue(variable != null, "no fetch of " + artifact + " in backend-init.sh names a target variable,"
+					+ " so this guard cannot tell which property carries its path");
+			Set<Integer> behindTheLedger = linesBehindTheLedger(lines, artifact);
+			for (int i = 0; i < lines.size(); i++) {
+				String line = lines.get(i);
+				if (line.trim().startsWith("#") || !line.contains(variable)) {
+					continue;
+				}
+				if (!line.contains("gp_set_if_blank") && !line.contains("global_property")) {
+					continue;
+				}
+				writes++;
+				if (!behindTheLedger.contains(i)) {
+					violations.add("backend-init.sh line " + (i + 1) + " publishes $" + variable + ", the file "
+							+ artifact + " is fetched into, without asking require_verified " + artifact
+							+ " first: " + line.trim());
+				}
+			}
+		}
+
+		assertEquals(List.of(), violations, "a model path published without the library's verdict on its bytes");
+		assertTrue(writes >= CANNOT_START_WITHOUT.size(), "backend-init.sh publishes no must-have artifact's path at"
+				+ " all; this guard read nothing");
+	}
+
+	/**
+	 * The name of the shell function {@code index} falls inside, or null when it is at top level. Only
+	 * the multi-line definition form is read, closing at column 0: a one-liner {@code f() { …; }}
+	 * encloses no other line, and a function whose brace is indented would read as never closing —
+	 * which over-reports rather than passing, so it fails loudly.
+	 */
+	private static String enclosingFunction(List<String> lines, int index) {
+		String open = null;
+		Matcher definition = Pattern.compile("^([A-Za-z_][A-Za-z0-9_]*)\\(\\)\\s*\\{\\s*$").matcher("");
+		for (int i = 0; i < index; i++) {
+			if (definition.reset(lines.get(i)).matches()) {
+				open = definition.group(1);
+			} else if (open != null && lines.get(i).equals("}")) {
+				open = null;
+			}
+		}
+		return open;
+	}
+
+	/** The variable a must-have artifact is fetched INTO, read off the fetch's own target argument. */
+	private static String fetchTargetVariable(List<String> lines, String artifact) {
+		Pattern fetch = Pattern.compile("^fetch_(?:and_verify|or_exit)\\s+" + Pattern.quote(artifact) + "\\s.*");
+		Matcher name = Pattern.compile("\\$\\{?([A-Za-z_][A-Za-z0-9_]*)").matcher("");
+		for (int i = 0; i < lines.size(); i++) {
+			String command = logicalCommand(lines, i).trim();
+			String[] words = command.split("\\s+");
+			if (command.startsWith("#") || words.length < 3 || !fetch.matcher(command).matches()) {
+				continue;
+			}
+			if (name.reset(words[2]).find()) {
+				return name.group(1);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The line indexes inside the then-branch of an {@code if require_verified …} naming
+	 * {@code artifact}. Nested {@code if}s are counted so the branch ends where it really ends; a
+	 * {@code case} would defeat this and the function it reads has none.
+	 */
+	private static Set<Integer> linesBehindTheLedger(List<String> lines, String artifact) {
+		Set<Integer> inside = new LinkedHashSet<Integer>();
+		for (int i = 0; i < lines.size(); i++) {
+			String opener = logicalCommand(lines, i).trim();
+			if (!opener.startsWith("if require_verified ")
+					|| !List.of(opener.split("[\\s;]+")).contains(artifact)) {
+				continue;
+			}
+			int depth = 1;
+			for (int j = i + 1; j < lines.size() && depth > 0; j++) {
+				String trimmed = lines.get(j).trim();
+				if (trimmed.startsWith("#")) {
+					continue;
+				}
+				if (trimmed.equals("fi")) {
+					depth--;
+					continue;
+				}
+				if (depth == 1 && (trimmed.equals("else") || trimmed.startsWith("elif "))) {
+					depth = 0;
+					continue;
+				}
+				inside.add(j);
+				if (trimmed.startsWith("if ")) {
+					depth++;
+				}
+			}
+		}
+		return inside;
 	}
 
 	/**
@@ -412,6 +547,13 @@ public class ModelDownloadPinningGuardTest {
 	 * inside a shell FUNCTION that is itself backgrounded or piped, or inside a multi-line
 	 * {@code ( … ) &} group — and closing that would mean the library detecting its own subshell,
 	 * which it has no portable way to do.
+	 *
+	 * <p>What escapes is the EXIT, and the global-property write no longer follows it. The ledger
+	 * {@link #noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger} reads is an
+	 * ordinary shell variable, so a verification taken in any of those subshells records nothing the
+	 * shell that publishes the path can see — {@code ModelDownloadIntegrityTest
+	 * .aVerificationTakenInASubshellPublishesNothingToTheShellThatWritesThePath} drives these shapes
+	 * and asserts the path stays unpublishable.
 	 */
 	@Test
 	public void everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm() throws IOException {

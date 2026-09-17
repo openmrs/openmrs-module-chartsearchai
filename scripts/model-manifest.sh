@@ -21,6 +21,15 @@
 # workflow and the test both point this at their own checkout.
 MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model-manifest.tsv}"
 
+# The artifact ids that have VERIFIED in THIS shell, space-delimited and space-bounded on both
+# sides so one id cannot match inside another. require_verified is the only reader; fetch_and_verify
+# the only writer.
+#
+# Assigned unconditionally rather than defaulted, so a value arriving in the environment is not a
+# verification anyone made here — ModelDownloadIntegrityTest
+# .theLedgerRefusesAQuestionNamingNothingAndCountsNothingItDidNotMeasure.
+MODEL_MANIFEST_VERIFIED=''
+
 # Exit codes fetch_and_verify_url contracts with its callers, which branch on them to say something
 # useful about the artifact they asked for:
 #   0  the file is present and is the reviewed artifact
@@ -301,5 +310,45 @@ fetch_and_verify() {
 	_mm_fv_url=$(manifest_url "$1") || return 4
 	_mm_fv_sha=$(manifest_sha256 "$1") || return 4
 	_mm_fv_bytes=$(manifest_bytes "$1") || return 4
-	fetch_and_verify_url "$_mm_fv_url" "$_mm_fv_sha" "$_mm_fv_bytes" "$2" "$3"
+	fetch_and_verify_url "$_mm_fv_url" "$_mm_fv_sha" "$_mm_fv_bytes" "$2" "$3" || return $?
+	# Recorded here rather than one level down because this is where the id is known, and only on
+	# the success path — the whole value of the ledger is that it says nothing about a refusal.
+	case " $MODEL_MANIFEST_VERIFIED " in
+		*" $1 "*) ;;
+		*) MODEL_MANIFEST_VERIFIED="$MODEL_MANIFEST_VERIFIED $1" ;;
+	esac
+	return 0
+}
+
+# require_verified <id>... — 0 only when EVERY named artifact verified in this shell, during this
+# run. The answer is a fact about what ran, not about where a call is written, which is why it is
+# what the entrypoint asks before it writes a model file's path into a global property: rearranging
+# the fetches leaves the paths unwritten rather than pointing querystore at unchecked bytes.
+#
+# The ledger is an ordinary shell variable, so a fetch taken in a SUBSHELL — backgrounded, piped,
+# in a command substitution, or inside a function that is any of those — records nothing the parent
+# shell can see, and this answers no. That is the direction to fail in, and it is what covers the
+# subshell shapes fetch_or_exit's line-level guard cannot see.
+#
+# 0 or 1, and 1 is NOT a code from the table above: nothing was fetched, so nothing was refused or
+# deleted. Naming no artifact is itself a failure — a call that lost its arguments would otherwise
+# answer yes to everything. → ADR Decision 103; ModelDownloadIntegrityTest's ledger cases.
+require_verified() {
+	if [ "$#" -eq 0 ]; then
+		echo "ERROR: require_verified was asked about no artifact at all." >&2
+		return 1
+	fi
+	_mm_rv_unverified=''
+	for _mm_rv_id in "$@"; do
+		case " $MODEL_MANIFEST_VERIFIED " in
+			*" $_mm_rv_id "*) ;;
+			*) _mm_rv_unverified="$_mm_rv_unverified $_mm_rv_id" ;;
+		esac
+	done
+	if [ -n "$_mm_rv_unverified" ]; then
+		echo "ERROR: not verified in this run:$_mm_rv_unverified" >&2
+		echo "       Refusing to publish a path to bytes this start has not checked." >&2
+		return 1
+	fi
+	return 0
 }

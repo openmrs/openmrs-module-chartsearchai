@@ -28,6 +28,7 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
@@ -529,6 +530,109 @@ public class ModelDownloadIntegrityTest {
 				"the script must continue when the artifact verifies\n" + accepted);
 	}
 
+	// ---- the ledger: a path is publishable only for bytes THIS shell verified ------------------
+
+	/**
+	 * #444's refusal is stated as leaving the embedding global properties unconfigured, and until the
+	 * ledger existed that was a property of where the fetch was WRITTEN — a guard compared source
+	 * line numbers, and a reviewer defeated it by wrapping the two embedder fetches in a function
+	 * called after the wiring, with every channel green. So the library records the ids that verified
+	 * in THIS shell and {@code require_verified} is what the entrypoint asks before it publishes a
+	 * path. Ask before the fetch has run — which is exactly what that wrap produces — and the answer
+	 * is no, whatever the source layout.
+	 */
+	@Test
+	public void anArtifactsPathIsPublishableOnlyOnceItsOwnBytesVerifyInThisShell() throws Exception {
+		Path fixture = ledgerManifest();
+		Path target = work.resolve("model.bin");
+		String fetch = "fetch_and_verify probe-artifact '" + target + "' 'the probe artifact'";
+
+		Result unfetched = library("require_verified probe-artifact", fixture);
+
+		assertNotEquals(0, unfetched.exit, "nothing has verified yet, so no path may be published\n" + unfetched);
+		assertTrue(unfetched.output.contains("probe-artifact"),
+				"the refusal must name the artifact nothing verified\n" + unfetched);
+
+		served = GOOD_BYTES;
+		Result verified = library(fetch + "\nrequire_verified probe-artifact", fixture);
+
+		assertEquals(OK, verified.exit, "an artifact this shell verified must be publishable\n" + verified);
+
+		Result partly = library(fetch + "\nrequire_verified probe-artifact probe-neighbour", fixture);
+
+		assertNotEquals(0, partly.exit, "one of two verified is not both, and the pair is asked as a pair\n" + partly);
+		assertTrue(partly.output.contains("probe-neighbour"),
+				"the refusal must name the artifact that did not verify\n" + partly);
+
+		served = SUBSTITUTED_BYTES;
+		Files.deleteIfExists(target);
+		Result refused = library(fetch + "\nrequire_verified probe-artifact", fixture);
+
+		assertNotEquals(0, refused.exit, "a refused fetch must leave nothing publishable\n" + refused);
+	}
+
+	/**
+	 * A verification taken in a subshell is one the shell that writes the path never saw, and the
+	 * ledger says so — the fail-closed direction, and the point. Every shape
+	 * {@code ModelDownloadPinningGuardTest.everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm}
+	 * reads a LINE for is here, plus the two its javadoc names as residue because no line spells
+	 * them: a function that is itself backgrounded, and a multi-line {@code ( … ) &} group.
+	 *
+	 * <p>The served bytes are GOOD, so each fetch SUCCEEDS and the file is placed; what the case
+	 * measures is that the success did not reach the parent shell. The placement assertion is the
+	 * control — without it a broken fetch would pass this for the wrong reason.
+	 */
+	@Test
+	public void aVerificationTakenInASubshellPublishesNothingToTheShellThatWritesThePath() throws Exception {
+		Path fixture = ledgerManifest();
+		served = GOOD_BYTES;
+		List<String> driven = new ArrayList<String>();
+
+		for (String shape : List.of("%s &\nwait", "%s | cat", "echo \"$(%s)\"", "(\n  %s\n) &\nwait",
+				"provision_embedder() {\n  %s\n}\nprovision_embedder &\nwait")) {
+			Path target = work.resolve("model-" + System.nanoTime() + ".bin");
+			String taken = String.format(shape,
+					"fetch_and_verify probe-artifact '" + target + "' 'the probe artifact'");
+
+			Result result = library(taken + "\nrequire_verified probe-artifact", fixture);
+
+			assertTrue(Files.exists(target), "the fetch itself failed, so this case would pass for the wrong"
+					+ " reason:\n" + taken + "\n" + result);
+			assertNotEquals(0, result.exit, "a verification taken in a subshell published a path:\n" + taken + "\n"
+					+ result);
+			driven.add(shape);
+		}
+		assertFalse(driven.isEmpty(), "no subshell shape was driven; this case proved nothing");
+	}
+
+	/**
+	 * Two ways the ledger could answer yes while measuring nothing, both closed: a question naming no
+	 * artifact at all, and a ledger handed in through the environment rather than earned by a fetch.
+	 */
+	@Test
+	public void theLedgerRefusesAQuestionNamingNothingAndCountsNothingItDidNotMeasure() throws Exception {
+		Path fixture = ledgerManifest();
+
+		Result nothingNamed = library("require_verified", fixture);
+
+		assertNotEquals(0, nothingNamed.exit, "a question naming no artifact must refuse rather than pass"
+				+ " vacuously\n" + nothingNamed);
+
+		Result preSeeded = library("require_verified probe-artifact", fixture, null,
+				Map.of("MODEL_MANIFEST_VERIFIED", "probe-artifact probe-neighbour"));
+
+		assertNotEquals(0, preSeeded.exit,
+				"a ledger inherited from the environment is not a verification this shell made\n" + preSeeded);
+	}
+
+	/** A two-row manifest, both rows served by the loopback server, for driving the ledger. */
+	private Path ledgerManifest() throws Exception {
+		Path fixture = work.resolve("manifest-ledger.tsv");
+		String row = " " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url() + "\n";
+		Files.write(fixture, ("probe-artifact" + row + "probe-neighbour" + row).getBytes(StandardCharsets.UTF_8));
+		return fixture;
+	}
+
 	// ---- the manifest is the one committed record ----------------------------------------------
 
 	/**
@@ -637,6 +741,11 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	private Result library(String call, Path manifestFile, Path onlyPathEntry) throws Exception {
+		return library(call, manifestFile, onlyPathEntry, Map.<String, String> of());
+	}
+
+	private Result library(String call, Path manifestFile, Path onlyPathEntry, Map<String, String> extraEnvironment)
+			throws Exception {
 		Path script = work.resolve("drive-" + System.nanoTime() + ".sh");
 		Files.write(script, (". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'\n" + call + "\n").getBytes(StandardCharsets.UTF_8));
 
@@ -645,6 +754,7 @@ public class ModelDownloadIntegrityTest {
 		if (onlyPathEntry != null) {
 			builder.environment().put("PATH", onlyPathEntry.toString());
 		}
+		builder.environment().putAll(extraEnvironment);
 		builder.redirectErrorStream(true);
 		Process process = builder.start();
 		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);

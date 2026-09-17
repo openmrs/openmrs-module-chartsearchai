@@ -8319,6 +8319,26 @@ That positional guard is now a second channel rather than the guarantee, and it 
 it rests on: a must-have fetch is a top-level statement of the entrypoint, so where it is written is
 when it runs. The function wrap fails that premise, which is what reddens it.
 
+*A decline turns the bootstrap sweep off itself, rather than by way of the property.* The other half
+of the refusal was written as a consequence of the first: the paths go unwritten, so the safety
+below them — `[ -z "$_model_gp" ]` over a read-back of `querystore.embedding.modelFilePath` — finds
+it blank and switches `querystore.bootstrap.autostart` off. That composition holds on a virgin
+database only. `gp_set_if_blank` leaves a row it finds non-blank standing, deliberately, so a
+deployment past its first good start reads back the path the LAST good start wrote — while this
+start's refusal has just deleted the file that path names. Measured 2026-09-17 against the
+entrypoint's own wiring functions, a `mariadb` stand-in whose store survives between starts and a
+refusal taken in a background subshell: the pre-fix arm left
+`modelFilePath=querystore/model.onnx bootstrap.autostart=true`, which is the per-record exception
+flood `configure_retrieval_gps` exists to prevent, reached from inside the gate that was supposed to
+close it. So the `else` arm now writes the sweep off on the ledger's verdict, and the blank-path
+test stays for the one case only it can answer — the gate PASSED and the write did not take, which
+`gp_set_if_blank` discards the error of. The two reasons are distinct in the line an operator gets.
+`EntrypointRetrievalWiringTest` drives both arms, that third case, and a verified control; it is a
+third channel because neither of the other two can see a composition — one drives the library with
+no database, the other reads source. The claim that the two halves already composed to one
+fail-closed state was written in the entrypoint's comment and in the guard's own allow-list, and
+believed in both for three review rounds, which is why the correction is recorded here.
+
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its message. The two failures an operator can act on differently are a transfer that
@@ -8365,3 +8385,6 @@ serves substituted bytes, which is the acceptance both findings state; its ledge
 that each site still routes through it, that the rename still follows the verification, that the
 entrypoint still asks `require_verified` before it publishes either embedder path, and that no
 revision has relaxed back to a branch name. Mutate any of those and read the failures.
+`EntrypointRetrievalWiringTest` runs `configure_retrieval_gps` itself, taken out of the entrypoint
+by name, against a `mariadb` stand-in whose global-property store persists across starts — the one
+channel that can see what the ledger and `gp_set_if_blank` compose to.

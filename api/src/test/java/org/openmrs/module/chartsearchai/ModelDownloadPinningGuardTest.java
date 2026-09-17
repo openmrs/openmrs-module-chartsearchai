@@ -120,8 +120,10 @@ public class ModelDownloadPinningGuardTest {
 			// The retrieval switch. It names no file, and maybe_seed_demo_data asserts it outright
 			// because a freshly imported dump brings its own value for it.
 			"chartsearchai.querystore.enabled",
-			// The bootstrap sweep, which configure_retrieval_gps turns OFF when no embedder path
-			// was published — the fail-closed half of the same gate.
+			// The bootstrap sweep, which configure_retrieval_gps turns OFF whenever the ledger
+			// declined — the fail-closed half of the same gate. Not on reading the path back:
+			// gp_set_if_blank leaves an earlier start's row standing, so that read is non-blank on
+			// every deployment past its first good start. EntrypointRetrievalWiringTest drives it.
 			"querystore.bootstrap.autostart",
 			// The demo seed's own bookkeeping and the CPU breadcrumb.
 			"chartsearchai.demo.seedStatus", "chartsearchai.demo.seededDataset", "chartsearchai.demo.cpuInfo");
@@ -369,9 +371,11 @@ public class ModelDownloadPinningGuardTest {
 	 * <b>The guarantee the check above is only a second channel for.</b> A model file's path reaches a
 	 * global property only behind {@code require_verified} naming that artifact, so what decides it is
 	 * what the running shell DID rather than where a fetch is written. Rearranging the entrypoint then
-	 * leaves the paths unwritten — the fail-closed direction, and where the property was blank the
-	 * autostart safety in that same function then turns the sweep off — instead of pointing
-	 * querystore at bytes this start never checked.
+	 * leaves the paths unwritten — the fail-closed direction — instead of pointing querystore at
+	 * bytes this start never checked, and the same decline turns the bootstrap sweep off so a
+	 * deployment whose embedder was refused cannot sweep against a file that is not there. What
+	 * that composes to in a database that remembers an earlier start is
+	 * {@link EntrypointRetrievalWiringTest}'s question, not this one's; source cannot answer it.
 	 *
 	 * <p><b>Two questions, and the second is asked the other way round.</b> The first ties a write to
 	 * an ARTIFACT by the VARIABLE the fetch targets: {@code $ONNX_FILE} is what

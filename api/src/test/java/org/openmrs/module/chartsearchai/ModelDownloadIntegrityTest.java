@@ -24,7 +24,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +64,9 @@ import com.sun.net.httpserver.HttpServer;
  *
  * @see ModelDownloadPinningGuardTest for the structural half — that each call site still routes
  *      through this library and still pins its revision, which no behaviour of this library can show
+ * @see EntrypointRetrievalWiringTest for what the entrypoint composes the ledger INTO: the global
+ *      properties a start leaves behind when its embedder did not verify, which needs a database
+ *      that remembers an earlier start and so is neither this suite's question nor the guard's
  */
 public class ModelDownloadIntegrityTest {
 
@@ -657,6 +659,54 @@ public class ModelDownloadIntegrityTest {
 				"a ledger inherited from the environment is not a verification this shell made\n" + preSeeded);
 	}
 
+	/**
+	 * The ledger's membership test is space-bounded on both sides for the reason the manifest
+	 * lookup's comparison is exact, and it has the same blind spot: <b>no committed id is a substring
+	 * of another</b>, so dropping the bounds changes no answer the committed manifest can ask, and
+	 * the ledger cases above use {@code probe-artifact} and {@code probe-neighbour}, neither of which
+	 * is inside the other. This fixture is the only thing that reddens for that mutation, and the
+	 * direction that matters runs one way: a ledger holding the LONGER id must not answer yes for the
+	 * shorter one it contains, because that answer is fail-OPEN — a path published for bytes this
+	 * start never checked. The control is that the shorter id IS publishable once its own bytes
+	 * verify, so the case cannot pass by refusing everything.
+	 *
+	 * <p>The premise is asserted rather than only stated, as it is for the lookup: a committed pair
+	 * like this would mean the manifest exercises the rule and this fixture is no longer the only
+	 * thing standing between the gate and that answer.
+	 */
+	@Test
+	public void anIdThatIsASubstringOfAnotherIsNotPublishableOnItsNeighboursVerification() throws Exception {
+		List<String[]> committed = ModelManifest.rows();
+		for (String[] row : committed) {
+			for (String[] other : committed) {
+				assertFalse(!row[0].equals(other[0]) && other[0].contains(row[0]),
+						"'" + row[0] + "' is now a substring of '" + other[0] + "', so the committed manifest DOES"
+								+ " exercise the ledger's bounded comparison; say so in the javadoc above rather"
+								+ " than leaving it claiming the opposite");
+			}
+		}
+
+		Path fixture = work.resolve("manifest-substring.tsv");
+		String row = " " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url() + "\n";
+		Files.write(fixture, ("gemma-4-e4b" + row + "llm-gemma-4-e4b" + row).getBytes(StandardCharsets.UTF_8));
+		served = GOOD_BYTES;
+
+		Path neighbour = work.resolve("neighbour.bin");
+		Result neighbourOnly = library("fetch_and_verify llm-gemma-4-e4b '" + neighbour + "' 'the longer artifact'"
+				+ "\nrequire_verified gemma-4-e4b", fixture);
+
+		assertTrue(Files.exists(neighbour), "the fetch itself failed, so this case would pass for the wrong"
+				+ " reason\n" + neighbourOnly);
+		assertNotEquals(0, neighbourOnly.exit, "an artifact nothing verified was publishable because a neighbour's"
+				+ " id contains its own\n" + neighbourOnly);
+
+		Path own = work.resolve("own.bin");
+		Result itsOwn = library("fetch_and_verify gemma-4-e4b '" + own + "' 'the shorter artifact'"
+				+ "\nrequire_verified gemma-4-e4b", fixture);
+
+		assertEquals(OK, itsOwn.exit, "an artifact whose own bytes verified was not publishable\n" + itsOwn);
+	}
+
 	/** A two-row manifest, both rows served by the loopback server, for driving the ledger. */
 	private Path ledgerManifest() throws Exception {
 		Path fixture = work.resolve("manifest-ledger.tsv");
@@ -822,12 +872,7 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	private static String sha256(byte[] bytes) throws Exception {
-		MessageDigest digest = MessageDigest.getInstance("SHA-256");
-		StringBuilder hex = new StringBuilder();
-		for (byte b : digest.digest(bytes)) {
-			hex.append(String.format("%02x", b));
-		}
-		return hex.toString();
+		return ModelManifest.sha256(bytes);
 	}
 
 	/** What the shell said and how it exited, carried together so a failure message shows both. */

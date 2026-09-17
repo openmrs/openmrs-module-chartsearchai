@@ -23,7 +23,10 @@ MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model
 
 # The artifact ids that have VERIFIED in THIS shell, space-delimited and space-bounded on both
 # sides so one id cannot match inside another. require_verified is the only reader; fetch_and_verify
-# the only writer.
+# the only writer. No committed pair is a substring pair, so — as with _mm_field's exact comparison
+# — the rule is pinned by a fixture rather than by the manifest: ModelDownloadIntegrityTest
+# .anIdThatIsASubstringOfAnotherIsNotPublishableOnItsNeighboursVerification. Dropping the bounds
+# fails OPEN, which is the other way round from the lookup's.
 #
 # Assigned unconditionally rather than defaulted, so a value arriving in the environment is not a
 # verification anyone made here — ModelDownloadIntegrityTest

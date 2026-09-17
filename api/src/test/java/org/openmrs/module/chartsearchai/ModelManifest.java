@@ -15,13 +15,17 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Reads {@code model-manifest.tsv} for the two suites that check it — {@link
  * ModelDownloadIntegrityTest}, which reconciles each row against what the shell library answers,
- * and {@link ModelDownloadPinningGuardTest}, which checks the rows themselves.
+ * and {@link ModelDownloadPinningGuardTest}, which checks the rows themselves. {@link
+ * EntrypointRetrievalWiringTest} builds a fixture manifest instead of reading the committed one,
+ * and takes the library's path and the digest helper from here.
  *
  * <p><b>One reader, so the format has two parsers rather than three.</b> {@code _mm_field} in
  * {@code scripts/model-manifest.sh} is the production one; a copy in each suite made three, and a
@@ -37,6 +41,20 @@ public final class ModelManifest {
 
 	/** The shell library both fetch sites source, repo-relative — spelled once for its readers. */
 	public static final String LIBRARY = "scripts/model-manifest.sh";
+
+	/**
+	 * The sha256 of some bytes, lowercase hex — what a suite driving the library writes into a
+	 * fixture row for bytes it is about to serve or place. Here rather than once per suite because
+	 * two copies that disagreed would each still produce 64 hex characters, and every fixture built
+	 * from the wrong one would be refused for a reason nobody meant.
+	 */
+	public static String sha256(byte[] bytes) throws NoSuchAlgorithmException {
+		StringBuilder hex = new StringBuilder();
+		for (byte b : MessageDigest.getInstance("SHA-256").digest(bytes)) {
+			hex.append(String.format("%02x", b));
+		}
+		return hex.toString();
+	}
 
 	public static Path path() {
 		return ModuleSourceRoot.repoRoot().resolve("model-manifest.tsv");

@@ -551,6 +551,11 @@ configure_retrieval_gps() {
     return 0
   fi
 
+  # Why the sweep has to go off, set by whichever check below finds a reason and empty until one
+  # does. Assigned here rather than defaulted, so a value arriving in the environment is not a
+  # reason anything measured — the same discipline MODEL_MANIFEST_VERIFIED keeps.
+  _sweep_off_because=''
+
   # Paths are relative to the application data directory, derived from the same
   # variables the downloads above wrote to so there is one source of truth.
   gp_set_if_blank 'chartsearchai.querystore.enabled' 'true'
@@ -560,27 +565,34 @@ configure_retrieval_gps() {
   # from the library's own record of what ran in this shell rather than from where the fetches
   # above are written — so moving them, wrapping them in a function called later, or taking them
   # in a subshell leaves these two properties unwritten instead of pointing querystore at bytes
-  # nothing checked. The autostart safety below then reads the blank modelFilePath and turns the
-  # sweep off, which is the same fail-closed state a refusal produces.
+  # nothing checked. A decline also turns the sweep off below, and says so HERE rather than
+  # leaving it to the blank-path test: gp_set_if_blank deliberately leaves an already-written row
+  # standing, so on every deployment past its first good start that property is non-blank whatever
+  # this start did, and the refusal that just DELETED the file it names would go unanswered.
   if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
     gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
     gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"
   else
-    echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are not written." >&2
+    echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are not written; a value already in the database is an earlier start's and no verdict on this one." >&2
+    _sweep_off_because='the embedder did not verify in this start'
   fi
 
   _model_gp=$(gp_value 'querystore.embedding.modelFilePath')
   _enabled_gp=$(gp_value 'chartsearchai.querystore.enabled')
 
-  # Never leave the combination that floods: a bootstrap sweep enabled with no
-  # embedder to run it. If the embedder is still unconfigured after the wiring
-  # above, switch the sweep off rather than let every record fail and log a stack
-  # trace.
+  # Never leave the combination that floods: a bootstrap sweep enabled with no embedder to run it.
+  # This test covers the case the property itself can state — nothing has ever configured one —
+  # and the gate above covers the case it cannot, a path an earlier start wrote reading exactly
+  # like one this start verified. The sweep goes off once whichever fired, and when both did the
+  # gate's reason is the one printed, because it names what changed in THIS start.
   if [ -z "$_model_gp" ]; then
+    _sweep_off_because="${_sweep_off_because:-no embedder path is configured}"
+  fi
+  if [ -n "$_sweep_off_because" ]; then
     seed_sql "$DB_NAME" -e \
       "UPDATE global_property SET property_value='false' WHERE property='querystore.bootstrap.autostart';" \
       >/dev/null 2>&1 || true
-    echo "[retrieval-wiring] embedder unconfigured; querystore.bootstrap.autostart forced to false so the sweep cannot fail per record."
+    echo "[retrieval-wiring] $_sweep_off_because; querystore.bootstrap.autostart forced to false so the sweep cannot fail per record."
   fi
 
   echo "[retrieval-wiring] chartsearchai.querystore.enabled=$_enabled_gp querystore.embedding.modelFilePath=$_model_gp bootstrap.autostart=$(gp_value 'querystore.bootstrap.autostart')"

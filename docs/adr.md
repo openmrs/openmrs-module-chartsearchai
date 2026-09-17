@@ -8163,39 +8163,32 @@ one. The four streamed channels — `token`, `thinking`, `preliminary`, `referen
 `searchStreaming` past both of those sites into the catch-all, whose `e.getCause() instanceof
 IOException` test reads it as a benign client hang-up and returns at DEBUG. So a user holding *AI
 Query Patient Data* could read a streamed answer about any patient and then reset the socket, and
-nothing recorded the query — deterministically, for any prefix of the answer they chose to stop at,
-and for the whole answer when the reset landed in the window after the last `token` frame and before
-the `references` one. Because `checkRateLimit` counts persisted rows, the query was also uncounted;
-that is a consequence and was not the basis of the finding.
+nothing recorded the query. Because `checkRateLimit` counts persisted rows, it was also uncounted;
+the ticket calls that a secondary effect and so does this.
 
-The second exit is not a disconnect at all and the ticket does not name it: between the ungrounded
-handoff and its return `LlmInferenceService` runs the fidelity checks and then the grounding pass, with
-no `catch` of its own, so anything thrown there unwinds into the same catch-all with the whole
-answer already delivered.
+A second exit the ticket does not name reaches the same catch-all: between the ungrounded handoff
+and its return, `LlmInferenceService` runs the fidelity checks and then the grounding pass with no
+`catch` of its own, so anything thrown there unwinds with the whole answer already delivered.
 
 **Decision.** `auditStreamedQueryIfUnrecorded` runs in the `finally` that already stops the
-keep-alive timer, so the row is owed on every exit of that try block rather than on one of them. It
-writes **through** `saveAuditLog`, which stays the only place a row is built, and **one per query at
-most**: each ordinary write site flags its attempt, so the finally adds nothing where one was already
-made. WHEN it flags is the whole of the next paragraph.
+keep-alive timer, so the row is owed on every exit of that try block that got as far as the pipeline
+producing something. It writes **through** `saveAuditLog`, which stays the only place a row is built,
+and one row per query at most.
 
-That holds for any implementation, not only for one honouring the ungrounded consumer's at-most-once
-contract, and it took three rounds of review to get there: two guards that were missing, and one that
-was present and on the wrong side of its save. **The flag goes up AFTER its
-save returns, never before** — everything from the service call onward sits inside `saveAuditLog`'s own
-`catch`, so anything that ESCAPES it was thrown before the insert and means no row exists; a flag
-raised ahead of the call had the `finally` decline and left a delivered answer unrecorded, which is
-this issue's own defect reappearing inside its own fix. A swallowed persistence failure returns
-normally, so the flag is still raised and no second row follows. The consumer's own idempotence was
-keyed on whether the early `done` had gone OUT, so a second fire after a refused `done` write
-re-entered and saved again; it is now keyed on the consumer having FIRED, which also makes its warning
-reachable in the classic shape, where nothing sets a done flag at all. And the classic write site now
-skips its save where a row was already attempted. Neither shipped implementation can reach either
-shape: `LlmInferenceService` calls the consumer once, inside a `try` that has a `finally` and no
-`catch`, and `ChartSearchServiceRouter` never calls the UNGROUNDED consumer at all — it passes the caller's
-consumer through, and on a cache hit deliberately does not fire it, an already-final answer being
-outside that consumer's contract. So a `RuntimeException` from it propagates through both. But "exactly one row" is a specification about the TABLE, and the module should not owe it
-to a collaborator's good behaviour.
+**The flag each write site raises goes up AFTER its save returns, never before.** Everything from
+the service call onward sits inside `saveAuditLog`'s own `catch`, and nothing after that `catch` can
+throw — so anything that ESCAPES the method was thrown before the insert and means no row exists. A
+flag raised ahead of the call had the `finally` decline, leaving a delivered answer unrecorded, which
+is this issue's own defect reappearing inside its own fix. A swallowed persistence failure returns
+normally, so the flag is still raised and no second row follows it.
+
+One row per query holds for any implementation, not only for one honouring the ungrounded consumer's
+at-most-once contract. That consumer's idempotence is keyed on its having FIRED rather than on the
+early `done` having gone out, which also makes its warning reachable in the classic shape; and the
+classic write site skips its save where a row was already made. Neither shipped implementation can
+reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
+`ChartSearchServiceRouter` never calls it, passing the caller's through — but "exactly one row" is a
+specification about the TABLE, and the module should not owe it to a collaborator's good behaviour.
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
 row before streaming and update it afterwards — was not taken: `ChartSearchAiAuditSearchModeTest`
@@ -8210,125 +8203,98 @@ specification. So the row is written once, at the end, from the best answer the 
   Filing `unknown` and two nulls with that object in scope would state "the producer stated no
   measurement" where the producer stated both.
 - otherwise the answer text the model had produced, accumulated by the token consumer **before** each
-  frame is written. Both disconnect windows the ticket describes fall here, because the handoff is
-  after the `references` frame — so those rows do state `unknown` and no slice. That is a residue,
-  not an oversight: closing it would need a new signal on the `searchStreaming` interface carrying
-  the mode ahead of the answer, and the mode is a property of the chart that was assembled, which is
-  the producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.
+  frame is written, so a fragment whose write the client refused is on the record. Over-recording by
+  one fragment is the safe direction for an audit trail.
 
-**A cache hit is a third disconnect window**, and one the ticket does not describe. The router hands
-the whole cached answer to the token consumer in ONE call and then fires the citations consumer, so a
-client that goes away there is audited off `answerSoFar` — with the entire answer in it, since one call
-carried all of it — and files `unknown`, the returned cached answer never having reached the
-controller. Pinned as its own case.
+**A row filed the second way states `unknown` and no slice, and that is a residue rather than an
+oversight.** The handoff comes after the `references` frame, so both disconnect windows the ticket
+describes fall here — and so does a third it does not describe, a cached answer, which the router
+hands over in one token call and never surfaces through the consumer. Such a row can therefore hold
+the answer in FULL under `unknown`: read the mode, not the length of the answer. Closing the residue
+would need a new signal on the `searchStreaming` interface carrying the mode ahead of the answer, and
+the mode is a property of the chart that was assembled, which is the producer-states-it discipline
+`ChartAnswer.getSearchMode()` exists for.
 
-Appending before the write, rather than after, means a fragment whose write the client refused is on
-the record. Over-recording by one fragment is the safe direction for an audit trail; the alternative
-drops the last thing the model said about the patient on every disconnect, which is the fragment the
-caller stopped to read.
+**The gate.** The row is owed once the pipeline has spoken on any of the consumer channels, which is
+the REST layer's only signal that inference produced something. A query that failed before any of
+them writes no row, as before: nothing was disclosed. A preview or an abandoned `thinking` frame IS
+model output about this patient that reached the client, so those are audited — including a chart too
+large for the committed pass, where the preview ran, the preview being over a focused slice and the
+committed pass over the whole chart. `maybeEmitPreliminaryReasoning` returns early both where
+`chartsearchai.progressiveReasoning.enabled` is off, which ships, and where the chart mode is the
+`queryScoped` one, which also ships — so on a stock install no preview runs and `thinking` is the
+first frame.
 
-**The gate, and what it does and does not reach.** The row is owed once the pipeline has spoken on
-any of the five consumer channels, which is the REST layer's only signal that inference produced
-something. So a query that failed before any of them — a chart too large on the committed pass with
-progressive reasoning off, a misconfiguration — writes no row, as before: nothing was disclosed.
-
-**A chart too large discovered after a PREVIEW is audited, and that is deliberate rather than
-incidental.** `maybeEmitPreliminaryReasoning` runs before the committed `llmProvider.searchStreaming`
-that raises `ChartTooLargeException`, and the preview runs over a focused top-K slice where the
-committed pass runs over the whole chart — so the preview is precisely what succeeds when the full
-chart overflows, and the two are positively correlated rather than merely co-possible. That preview is
-model output about this patient and it reached the client, so the row is owed. The same holds of an
-abandoned `thinking` frame, which is the first frame the module writes on a stock install. The preview
-can precede it, but only where BOTH `chartsearchai.progressiveReasoning.enabled` is on — it ships off —
-and the chart mode is not the `queryScoped` one that ships, `maybeEmitPreliminaryReasoning` returning
-early on either.
-
-**Its consequence, stated rather than hidden: those queries now consume a rate-limit slot.**
+**Its consequence, stated rather than hidden: those queries consume a rate-limit slot.**
 `checkRateLimit` counts persisted rows against `chartsearchai.rateLimitPerMinute` (default 10), so a
-clinician reloading impatiently while a CPU install thinks can throttle themselves out having received
-no answer. An oversized chart does this only where the preview ran — with progressive reasoning off,
-which is the shipped default, it writes no row and costs no slot, per the gate above. That is the intended direction — their being uncounted was
-the other half of what #450 reports — but an operator seeing 429s after abandoned queries should know
-why. What each such attempt actually consumed is not uniform and is deliberately not averaged here: an
-abandoned `thinking` frame has paid a full prefill on an engine this module serializes, while a chart
-the engine refuses on its context check has not. The earlier
-draft of this decision claimed the gate did not reach the too-large path at all; that was false, and a
-review round measured it.
+clinician reloading impatiently while a CPU install thinks can throttle themselves out having
+received no answer. That is the intended direction — their being uncounted was the other half of what
+#450 reports — but an operator seeing 429s after abandoned queries should know why.
 
 **The second recommendation, and the half of it that was declined.** `saveAuditLog` swallowed every
 persistence failure at WARN, which on a default OpenMRS install sits among ordinary operational
 noise; an access to PHI that went unrecorded is not that, so it reports at ERROR with the cause
-attached. The level is the whole of the observable difference — the method returns null both when
-the write failed and when the row got no id — which is the argument `LogCapture`'s javadoc makes
-about issue #149. That instrument is in the api module and out of omod's reach, so the assertion is
-made with `ControllerLog` in the omod test package; see the paragraph below on the test-jar that
-would have shared it.
+attached. The level is the whole of the observable difference — the method returns null both when the
+write failed and when the row got no id — which is the argument `LogCapture`'s javadoc makes about
+issue #149.
 
 Making the failure *fail closed* was not taken. It is mechanically available on the blocking
 `/search` handler, which persists before returning the answer, and not available on the streaming
 one, where the row is written after delivery and the one-row-per-query specification above rules out
-the pre-persist design that would make it available. A compliance switch that silently does not
-apply to the endpoint the frontend uses by default is worse than no switch, and which way to resolve
-that — pre-persist and re-specify the one-row assertions, or accept the asymmetry — is a policy call
-rather than a defect.
+the pre-persist design that would make it available. A compliance switch that silently does not apply
+to the endpoint the frontend uses by default is worse than no switch, and which way to resolve that —
+pre-persist and re-specify the one-row assertions, or accept the asymmetry — is a policy call rather
+than a defect.
 
 **What it costs**, measured 2026-09-17 by driving the real `streamAnswer` from a throwaway omod case
-with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer — at
-200 requests per JVM after 30 warmups, per-request caller-thread allocation read off
-`com.sun.management.ThreadMXBean.getThreadAllocatedBytes`, with an A/A control on every run:
+with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer —
+at 200 requests per JVM after 30 warmups, per-request caller-thread allocation read off
+`com.sun.management.ThreadMXBean.getThreadAllocatedBytes`, with an A/A control on every run, and
+reproduced independently by a second reviewer on the same rig:
 
 - accumulating the answer costs **+36,992 bytes** per request against the **1.94 MB** the REST layer
   already allocates for that answer, and wall clock sits below an A/A spread of 203 µs on a ~1.2 ms
-  request. For scale, that request writes 119,772 bytes to the socket in all — 102,400 of them the
-  token frames themselves, the rest the `references` frame and the `done` that carries the answer a
-  second time.
+  request.
 - firing the ungrounded consumer in the classic shape, where it was a no-op lambda, costs **+48
-  bytes** per request — one capturing lambda instance where a cached empty one used to serve. Measure
-  it against a stub that FIRES the consumer: with one that does not, the arms differ by whether the
-  allocation happens at all and the figure is not about this lambda.
-- the audit INSERT on the disconnect path extends neither the engine's critical section (the consumer
-  throws *inside* `LocalLlmEngine`'s `synchronized` method, so the monitor is released before the
-  `finally`) nor any client-visible latency — on the three branches that write a terminal frame,
-  `writeSseEvent` has already flushed it by then, and the disconnect branch writes none at all.
+  bytes** per request. Measure it against a stub that FIRES the consumer; with one that does not, the
+  arms differ by whether the allocation happens at all.
+- the audit INSERT on the disconnect path extends neither the engine's critical section — the
+  consumer throws inside `LocalLlmEngine`'s `synchronized` method, so the monitor is released before
+  the `finally` — nor any client-visible latency, `writeSseEvent` having flushed whatever terminal
+  frame the exit writes, where it writes one.
 
 **No ceiling on the accumulated text, and that is a decision.** `max_tokens` is advisory to the peer
-rather than enforced locally, which is issue #446's own premise — and #446 is OPEN, so nothing bounds a
-response today. That cuts against a cap here rather than for one: `LlmResponseParser` already
-accumulates the whole JSON envelope, reasoning and citations included, on the same request and through
-both engines, so it is strictly larger and equally unbounded. Capping this one would leave the larger
-one uncapped and change no outcome. Whatever ceiling #446 lands should cover both, at the source.
+rather than enforced locally, which is issue #446's premise — and #446 is OPEN, so nothing bounds a
+response today. That cuts against a cap here rather than for one: `LlmResponseParser` accumulates the
+whole JSON envelope, reasoning and citations included, on the same request and through both engines,
+so it is strictly larger and equally unbounded. Whatever ceiling #446 lands should cover both, at the
+source.
 
-**A residue this decision cannot close from a test, named rather than implied.** The fallback write runs
-in a `finally` reached *because* something threw, and `AuditLogServiceImpl` is class-level
-`@Transactional`. If the ambient Hibernate session or transaction is already unusable — a failure in the
-grounding tail, which touches chart state — `saveAuditLog` swallows it at ERROR and the row is lost,
-which is the hole this decision closes, on the path most likely to produce it. **It has not been
-measured**: it needs a live standalone with a real DAO, and the suite runs on stubs. A review round
-raised it; nothing here refutes or confirms it.
+**A residue this decision cannot close from a test, named rather than implied.** The fallback write
+runs in a `finally` reached *because* something threw, and `AuditLogServiceImpl` is class-level
+`@Transactional`. If the ambient Hibernate session or transaction is already unusable — a failure in
+the grounding tail, which touches chart state — `saveAuditLog` swallows it at ERROR and the row is
+lost, which is the hole this decision closes, on the path most likely to produce it. **It has not
+been measured**: it needs a live standalone with a real DAO, and the suite runs on stubs. A review
+round raised it; nothing here refutes or confirms it. Three further clauses the suite does not
+discriminate are named at their own sites rather than here.
 
 **An api test-jar was tried and reverted**, so that it is not re-proposed on the strength of the one
 thing it buys. Publishing api's test classes and depending on them from omod gives the omod suite
-`LogCapture`, which is the repo's instrument for asserting the LEVEL an outcome is reported at. It also
-opens api's whole test classpath — fixtures included — to omod, and prose in both modules states the
-opposite as load-bearing. The one that decides is a PRODUCTION javadoc:
-`DrugSafetyValidator`'s `StandingChartAlerts` factories are public because `omod/pom.xml` declares no
-api test-jar. `StandingChartAlertsTest`, `ArchitectureGuardTest`,
+`LogCapture`, the repo's instrument for asserting the LEVEL an outcome is reported at. It also opens
+api's whole test classpath — fixtures included — to omod, which prose in both modules states the
+opposite of as a load-bearing fact; the one that decides is a PRODUCTION javadoc,
+`DrugSafetyValidator`'s `StandingChartAlerts` factories being public because `omod/pom.xml` declares
+no api test-jar. `StandingChartAlertsTest`, `ArchitectureGuardTest`,
 `ChartSearchAiSafetyWarningSeverityWireTest` and `ChartSearchAiChartAlertsTest` each say the same of
-themselves. It also made `omod/pom.xml`'s `unpack-dependencies` execution, which filters by neither
-classifier nor scope, ship api's test classes and its Spring and Hibernate test configs inside the
-released `.omod` — measured, with the whole suite green and the build exit 0 — so it needed a
-load-bearing `excludeClassifiers` line that no test could hold. One level assertion does not buy that.
-`ControllerLog` in the omod test package asks the one question those cases need instead.
+themselves. And `omod/pom.xml`'s `unpack-dependencies` execution filters by neither classifier nor
+scope, so it shipped api's test classes and its Spring and Hibernate test configs inside the released
+`.omod` — measured, with the whole suite green and the build exit 0 — needing a load-bearing
+`excludeClassifiers` line no test could hold. One level assertion does not buy that. `ControllerLog`
+in the omod test package asks the one question those cases need instead, and pins its own
+restoration, because a capture that leaves a `LoggerConfig` behind blinds every later capture of the
+package (issue #439's third round).
 
-**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`, whose cases name the arrangements: the reset
-after the first token, the reset on the `references` frame, the cache hit, the non-`IOException`
-failure after the handoff (which also tells the `finally` from a statement at the tail of the
-disconnect branch), a save that THREW at either site, each channel that can speak before a token does,
-the handoff as the first channel to speak, an answer whose text is null, a second handoff, and the
-negative where a query that produced nothing writes no row. Some run in both shapes and some in one;
-where a case names a single shape it is because the arrangement is shape-invariant and one run of it
-says everything, except the handoff-first one, which the async shape audits at its ordinary site
-instead. The ERROR is pinned by `ChartSearchAiAuditWriteFailureLoudnessTest`, with the successful write
-as its control, and the capture's own restoration beside it. Mutate each guard and read the failures. The ERROR is pinned by
-`ChartSearchAiAuditWriteFailureLoudnessTest`, with the successful write as its control. Mutate each
-guard and read the failures.
+**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`, whose case names are the arrangements, and
+`ChartSearchAiAuditWriteFailureLoudnessTest` for the ERROR, with the successful write as its control
+and the capture's own restoration beside it. Mutate each guard and read the failures.

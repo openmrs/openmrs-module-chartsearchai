@@ -70,7 +70,10 @@ final class LlamaServerEndpoint {
 	 */
 	static final String API_KEY_ENV = "LLAMA_API_KEY";
 
-	/** How long the two readiness probes may take. They are loopback and do no inference. */
+	/** How long each readiness probe may take. Both are loopback, and neither spends inference on
+	 *  a server that authenticates — the unauthenticated one is refused before its body is read,
+	 *  and the keyed one asks {@code /props}. The single case that decodes a token is a listener
+	 *  credentialing nothing, which is the case readiness exists to refuse. */
 	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
 
 	/**
@@ -140,8 +143,11 @@ final class LlamaServerEndpoint {
 	}
 
 	/**
-	 * A request builder for {@code url} already carrying this start's key. The ONLY way a request
-	 * to the local server is built — see the class javadoc for the guard that keeps it so.
+	 * A request builder for {@code url} already carrying this start's key. Every request the engine
+	 * sends comes from here; the guard named in the class javadoc, and the nested {@code CLAUDE.md}
+	 * beside it, are what state that as a rule. (The unauthenticated readiness probe below builds
+	 * its own, deliberately without the key — which is why the rule is written about the engine's
+	 * requests rather than about every request in this file.)
 	 */
 	HttpRequest.Builder request(String url, Duration timeout) {
 		return HttpRequest.newBuilder()
@@ -197,8 +203,10 @@ final class LlamaServerEndpoint {
 		return statusOf(client, probe, "authenticated-probe") != 401;
 	}
 
-	/** The status code, or -1 when the probe could not complete (which every caller reads as a
-	 *  failed probe rather than a passed one). */
+	/** The status code, or -1 when the probe could not complete. What -1 MEANS is the caller's
+	 *  question and the two callers answer it differently — see each of them, and do not fold the
+	 *  difference in here: {@link #rejectsUnauthenticatedCalls} requires a 401 so -1 fails, while
+	 *  {@link #doesNotRefuseThisModulesKey} only excludes a 401 so -1 passes. */
 	private int statusOf(HttpClient client, HttpRequest probe, String what) {
 		try {
 			HttpResponse<Void> response = client.send(probe, HttpResponse.BodyHandlers.discarding());

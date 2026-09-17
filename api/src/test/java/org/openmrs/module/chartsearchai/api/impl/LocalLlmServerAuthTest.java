@@ -274,6 +274,18 @@ public class LocalLlmServerAuthTest {
 		}
 	}
 
+	@Test
+	public void aListenerWithNoPropsRouteIsStillReadiness() throws IOException {
+		try (KeyDemandingListener listener = KeyDemandingListener.withoutAPropsRoute()) {
+			// The key leg asks whether the key was REFUSED, so a 404 — this build does not serve
+			// that route — must not fail the start. Requiring 200 there would refuse a build for
+			// something that says nothing about its authentication, and the unauthenticated leg
+			// still proves the key is in force.
+			LocalLlmEngine.requireHealthyListenerIsTheSpawnedChild(listener.endpoint(),
+					HttpClient.newHttpClient(), ProcessHandle.current()::isAlive);
+		}
+	}
+
 	// ---- real listeners ----
 
 	/**
@@ -296,15 +308,22 @@ public class LocalLlmServerAuthTest {
 		}
 
 		static KeyDemandingListener start() throws IOException {
-			return start(true);
+			return start(true, true);
+		}
+
+		/** A listener that demands the key on inference but serves no {@code /props} route, the
+		 *  shape of a build that simply does not have one. */
+		static KeyDemandingListener withoutAPropsRoute() throws IOException {
+			return start(true, false);
 		}
 
 		/** A listener that is up and demands a key but will not accept the one this start minted. */
 		static KeyDemandingListener refusingEveryKey() throws IOException {
-			return start(false);
+			return start(false, true);
 		}
 
-		private static KeyDemandingListener start(boolean acceptTheModulesKey) throws IOException {
+		private static KeyDemandingListener start(boolean acceptTheModulesKey, boolean servesProps)
+				throws IOException {
 			HttpServer server = HttpServer.create(
 					new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
 			LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(server.getAddress().getPort());
@@ -318,6 +337,10 @@ public class LocalLlmServerAuthTest {
 				}
 				if (exchange.getRequestURI().getPath().equals("/health")) {
 					respond(exchange, 200, "{\"status\":\"ok\"}");
+					return;
+				}
+				if (!servesProps && exchange.getRequestURI().getPath().equals("/props")) {
+					respond(exchange, 404, "{\"error\":\"not found\"}");
 					return;
 				}
 				respond(exchange, keyed ? 200 : 401, keyed ? "{}" : "{\"error\":\"unauthorized\"}");

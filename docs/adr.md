@@ -108,6 +108,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
+- [Decision 103: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -671,7 +672,7 @@ The module ships two recommended choices, sized for different deployment context
 
 **Gemma 4 E4B Instruct** is the default in `config.xml` (`chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf`) for ordinary module installs. It is part of the Gemma 4 "E" line, which uses Per-Layer Embeddings (PLE) for memory efficiency: ~4.5B effective parameters at runtime, ~2.5GB on disk, ~6–8GB total RAM, ~10–20 tok/s on CPU. The 128K context window holds roughly 6,000 serialized patient records (~15 tokens each), enough for most patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF). Picked because it is the smallest model in the Gemma 4 family that follows the system prompt rules (never infer, cite every record) acceptably without a reasoning channel as a safety scaffold, while staying small enough to download on a slow connection (~2.5GB) and run on a modest server.
 
-**Gemma 4 26B MoE Instruct** is bundled with the standalone build and is the recommended upgrade for production hardware (~24GB+ RAM). It is a Mixture-of-Experts model with 26B total parameters but only ~3.8B activated per token, so per-token speed is comparable to a 4B dense model despite the 26B total size. The 256K context window comfortably holds even the largest patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). Picked because among CPU-viable models it has the strongest instruction following on list-completeness and adversarial-question handling, without depending on reasoning tokens.
+**Gemma 4 26B MoE Instruct** is the recommended upgrade for production hardware (~24GB+ RAM). It is not what the standalone download ships — that bundle carries E4B, the same model `model-manifest.tsv`'s `llm-gemma-4-e4b` row pins for the push build; a 26B bundle can be built by dispatching the standalone workflow with its `gguf_model_url` and `gguf_sha256` inputs. It is a Mixture-of-Experts model with 26B total parameters but only ~3.8B activated per token, so per-token speed is comparable to a 4B dense model despite the 26B total size. The 256K context window comfortably holds even the largest patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). Picked because among CPU-viable models it has the strongest instruction following on list-completeness and adversarial-question handling, without depending on reasoning tokens.
 
 For deployments that prefer medical-domain fine-tuning, **MedGemma 1.5 4B** (released January 2026) is a strong alternative — built on the Gemma 3 architecture and fine-tuned on clinical text, biomedical literature, medical Q&A, and synthetic EHR data, with native support for medical imaging (CT, MRI, histopathology). At 4B parameters with Q4_K_M, it is ~2.5GB on disk and ~6–8GB total RAM. GGUF quantizations are available from [unsloth/medgemma-1.5-4b-it-GGUF](https://huggingface.co/unsloth/medgemma-1.5-4b-it-GGUF). Licensed under the [Health AI Developer Foundations Terms of Use](https://developers.google.com/health-ai-developer-foundations/terms) — requires validation before clinical deployment, more restrictive than the Apache 2.0 licensing of Gemma 4. The original MedGemma 4B remains available from [unsloth/medgemma-4b-it-GGUF](https://huggingface.co/unsloth/medgemma-4b-it-GGUF) and works identically with the module (same chat template and resource requirements).
 
@@ -780,7 +781,7 @@ A server running OpenMRS typically uses 1–2GB for the JVM heap. A 4GB machine 
 
 The module requires sufficient RAM for both the OpenMRS JVM and the LLM model:
 - **Minimum**: ~3–5GB total (1–2GB JVM + ~2–3GB for a Gemma 4 E2B or Gemma 3n E2B model). Usable but with weaker instruction following and reasoning. For 3B models, ~6GB total.
-- **Recommended**: ~6–8GB total for the default Gemma 4 E4B model (or MedGemma 1.5 4B). Upgrade to ~10GB for the 8B model, which provides significantly better general reasoning, or ~24GB+ for the production-grade Gemma 4 26B MoE bundled with the standalone build.
+- **Recommended**: ~6–8GB total for the default Gemma 4 E4B model (or MedGemma 1.5 4B). Upgrade to ~10GB for the 8B model, which provides significantly better general reasoning, or ~24GB+ for the production-grade Gemma 4 26B MoE, which is a hand upgrade rather than what the standalone download ships.
 - The embedding pre-filter (opt-in via `chartsearchai.embedding.preFilter=true`) reduces the number of tokens sent to the LLM, which improves latency on huge patient charts at the cost of potentially omitting records the LLM needs for negative reasoning. The default is full-chart.
 
 ### Decision
@@ -8261,18 +8262,29 @@ defeated in turn — a statement inserted between the fetch and the branch, so `
 statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
 recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
 next. `fetch_or_exit` NARROWS that class rather than closing it: there is no branch to spell, and
-what the shell DOES is a behaviour a test drives. Two reviewers then found the fifth spelling — one
-`&` on the call's last continuation line backgrounds the whole command, so the `exit` runs in a
-subshell and the start continues, with both source guards and shellcheck green. The guard now
-refuses that shape too, and **the residue is named rather than claimed away**: a `fetch_or_exit`
-wrapped in a function that is itself backgrounded evades any line-level rule, and closing it would
-mean the library detecting its own subshell. What is bounded is the accidental edit, which is the
-shape all five defeats had.
+what the shell DOES is a behaviour a test drives. Reviewers then found two further spellings, and
+neither is a misread branch — each is a subshell sitting between the call and the entrypoint's own
+shell. One `&` on the call's last continuation line backgrounds the whole command; a `| tee`
+appended to the same call makes it an element of a pipeline, which POSIX also runs in a subshell.
+Both left every source guard and shellcheck green, and both were reproduced against the real
+library: the refusal printed in full, the script then ran on to the next statement and exited 0.
+The guard now reads the logical command and refuses all three shapes a line can spell — a call
+that is not the command itself, a command substitution being a subshell too; a trailing `&`; and a
+pipe.
+
+**The residue is named rather than claimed away**, and the previous attempt to bound it — "what is
+bounded is the accidental edit" — was itself falsified by the `| tee`, which is about as ordinary
+an edit as there is. What a line-level rule cannot see is a subshell the call's own line does not
+spell: a `fetch_or_exit` inside a shell function that is itself backgrounded or piped, or inside a
+multi-line `( … ) &` group — that last one driven against the real library here, printing the
+refusal and then running on to the next statement, exit 0, exactly as the two closed shapes did.
+Closing it would mean the library detecting its own subshell, for which POSIX sh offers no
+portable test.
 
 The pattern is worth naming beyond this decision. Changing the KIND of question — from parsing a
 shape to driving a behaviour — cut four spellings at once where four successive repairs had each
-bought one. It did not make the property unbreakable, and a claim that it had was written here and
-refuted within a cycle.
+bought one. It did not make the property unbreakable: a claim that it had was written here and
+refuted within a cycle, and the narrower claim that replaced it was refuted in the next one.
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its message. The two failures an operator can act on differently are a transfer that

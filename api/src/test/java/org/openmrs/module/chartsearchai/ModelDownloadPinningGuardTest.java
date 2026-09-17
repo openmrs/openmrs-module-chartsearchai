@@ -18,8 +18,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -81,6 +83,13 @@ public class ModelDownloadPinningGuardTest {
 	 */
 	private static final List<String> CANNOT_START_WITHOUT = List.of("embedder-e5-base-v2-onnx",
 			"embedder-e5-base-v2-vocab");
+
+	/**
+	 * What makes a line naming one of those artifacts a FETCH of it rather than a message about it.
+	 * Anything that puts bytes on the volume belongs here — the library's own entry points and the
+	 * transfer tools a call site could reach around them with.
+	 */
+	private static final List<String> FETCH_FORMS = List.of("fetch_or_exit", "fetch_and_verify", "curl ", "wget ");
 
 	/**
 	 * The fetches in these two files that are NOT models, each named by a fragment of its own line.
@@ -381,23 +390,28 @@ public class ModelDownloadPinningGuardTest {
 
 	/**
 	 * Each artifact the module cannot start without is fetched through {@code fetch_or_exit}, the
-	 * form that leaves rather than returning — and the call is not backgrounded, because an
-	 * {@code exit} in a background subshell stops nothing.
+	 * form that leaves rather than returning — and the call is the command itself, neither
+	 * backgrounded nor an element of a pipeline, because an {@code exit} in a subshell stops
+	 * nothing.
 	 *
-	 * <p><b>This narrows a property that was defeated five times; it does not close it.</b> While
-	 * the entrypoint branched on the library's status itself, four readings of the source were
-	 * defeated in turn (ADR Decision 103 lists them) and each repair made the next reachable.
+	 * <p><b>This narrows a property successive reviews have defeated; it does not close it.</b>
+	 * While the entrypoint branched on the library's status itself, four readings of the source
+	 * were defeated in turn (ADR Decision 103 lists them) and each repair made the next reachable.
 	 * Moving the branch into the library made the refusal a BEHAVIOUR that
 	 * {@code ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript}
-	 * drives — and two reviewers then found the fifth: one {@code &} on the last continuation line
-	 * backgrounds the whole command, so the exit runs in a subshell and the start continues to the
-	 * global-property write, with both source guards and shellcheck green.
+	 * drives — and reviewers then found two more spellings of the same subshell, each with both
+	 * source guards and shellcheck green: one {@code &} on the last continuation line backgrounds
+	 * the whole command, and a {@code | tee} appended to it runs it as a pipeline element, which
+	 * POSIX also puts in a subshell. Both let the start continue to the global-property write.
 	 *
-	 * <p><b>The residue, named rather than claimed away.</b> This checks the call: the right form,
-	 * and not backgrounded. A {@code fetch_or_exit} wrapped in a shell FUNCTION that is itself
-	 * backgrounded evades any line-level rule, and closing that would mean the library detecting
-	 * its own subshell. What is bounded is the accidental edit — which is the shape all five
-	 * defeats had.
+	 * <p><b>What this reads, and the residue.</b> It reads the logical command a must-have
+	 * artifact is named on, and asks three things of it: that the command IS a
+	 * {@code fetch_or_exit} rather than one taken inside another (a command substitution is a
+	 * subshell too), that it does not end in {@code &}, and that it contains no pipe. What a
+	 * line-level rule cannot see is a subshell the line does not spell — a {@code fetch_or_exit}
+	 * inside a shell FUNCTION that is itself backgrounded or piped, or inside a multi-line
+	 * {@code ( … ) &} group — and closing that would mean the library detecting its own subshell,
+	 * which it has no portable way to do.
 	 */
 	@Test
 	public void everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm() throws IOException {
@@ -407,26 +421,43 @@ public class ModelDownloadPinningGuardTest {
 
 		for (int i = 0; i < lines.size(); i++) {
 			String trimmed = lines.get(i).trim();
-			if (trimmed.startsWith("#") || CANNOT_START_WITHOUT.stream().noneMatch(trimmed::contains)) {
+			// Read whole logical commands, and only from the line that OPENS one: an artifact named
+			// on a continuation line belongs to the command above it, and asking the physical line
+			// would judge the wrong text — or, where the opener carries the fetch and the
+			// continuation the id, judge nothing at all.
+			if (trimmed.startsWith("#") || (i > 0 && lines.get(i - 1).trim().endsWith("\\"))) {
 				continue;
 			}
-			// A line that only TALKS about the artifact is not a fetch. The sibling guard skips
-			// these for the same reason; without it an `echo` naming an id failed this test with a
-			// message that was false about the line it named.
-			if (trimmed.startsWith("echo ") || trimmed.startsWith("printf ")) {
+			String command = logicalCommand(lines, i);
+			if (CANNOT_START_WITHOUT.stream().noneMatch(command::contains)) {
+				continue;
+			}
+			// A command that only TALKS about the artifact is not a fetch. Asked as "does it RUN a
+			// fetch" rather than "does it start with echo": the prefix form skipped
+			// `echo "$(fetch_or_exit ...)"` outright, and the entrypoint already writes
+			// echo-with-command-substitution lines.
+			if (FETCH_FORMS.stream().noneMatch(command::contains)) {
 				continue;
 			}
 			fetches++;
-			if (!trimmed.startsWith("fetch_or_exit ")) {
-				violations.add("backend-init.sh fetches an artifact the module cannot start without through a"
-						+ " form that returns instead of exiting, so a refusal would leave the start running on"
-						+ " to the global-property write: " + trimmed);
+			if (!command.startsWith("fetch_or_exit ")) {
+				violations.add(command.contains("fetch_or_exit")
+						? "backend-init.sh takes a fetch_or_exit inside another command, where a command"
+								+ " substitution runs it in a subshell and its exit stops nothing: " + command
+						: "backend-init.sh fetches an artifact the module cannot start without through a"
+								+ " form that returns instead of exiting, so a refusal would leave the start running on"
+								+ " to the global-property write: " + command);
 				continue;
 			}
-			String last = lastLineOfCommand(lines, i);
-			if (last.endsWith("&") && !last.endsWith("&&")) {
+			if (command.endsWith("&") && !command.endsWith("&&")) {
 				violations.add("backend-init.sh backgrounds a fetch_or_exit call, so its exit runs in a"
-						+ " subshell and stops nothing: " + last);
+						+ " subshell and stops nothing: " + command);
+			}
+			// `||` is an or-list separator and leaves the call in the current shell; a single `|`
+			// makes it an element of a pipeline, and POSIX runs every element in a subshell.
+			if (command.replace("||", "").indexOf('|') >= 0) {
+				violations.add("backend-init.sh pipes a fetch_or_exit call, and every element of a pipeline"
+						+ " runs in a subshell, so its exit stops nothing: " + command);
 			}
 		}
 
@@ -434,14 +465,105 @@ public class ModelDownloadPinningGuardTest {
 		assertTrue(fetches > 0, "backend-init.sh fetches no must-have artifact; this guard read nothing");
 	}
 
-	/** The last physical line of the logical command starting at {@code from}, following {@code \\}. */
-	private static String lastLineOfCommand(List<String> lines, int from) {
-		String line = lines.get(from).trim();
+	/** The logical command starting at {@code from}, continuation lines joined, {@code \\} dropped. */
+	private static String logicalCommand(List<String> lines, int from) {
+		StringBuilder command = new StringBuilder(lines.get(from).trim());
 		int i = from;
-		while (line.endsWith("\\") && i + 1 < lines.size()) {
-			line = lines.get(++i).trim();
+		while (command.length() > 0 && command.charAt(command.length() - 1) == '\\' && i + 1 < lines.size()) {
+			command.setLength(command.length() - 1);
+			command.append(' ').append(lines.get(++i).trim());
 		}
-		return line;
+		return command.toString().trim();
+	}
+
+	/**
+	 * Every digest the standalone build reads is paired with its url by the library's rule, and
+	 * paired with the RIGHT one. The rule itself is driven by
+	 * {@code ModelDownloadIntegrityTest.aDigestInputWithNoUrlOfItsOwnStopsTheBuildAndNamesBothInputs};
+	 * what source has to say is that the workflow still ASKS it, for each digest it accepts. Deleting
+	 * one of the three calls left that behavioural case green, which is the two-channel gap this
+	 * class exists for.
+	 *
+	 * <p><b>Asking only whether the digest appears on SOME call line is not enough.</b> A reviewer
+	 * crossed two of the three pairings — giving one url another's digest — and the earlier form of
+	 * this check stayed green, which left the rule unpinned on the very thing it exists for. So the
+	 * pairing is read off the workflow's two other statements of it, neither composed from the
+	 * other: the {@code env:} block, which says which workflow input each shell variable carries,
+	 * and the {@code fetch_and_verify_override} call, which is where a url and a digest are
+	 * actually used together. A {@code require_url_for_digest} line has to name the same two
+	 * variables as the override it guards, and to spell each one's own input name — which is the
+	 * reason the rule takes those names as arguments at all, {@code vocab_url} not being
+	 * {@code vocab_model_url}.
+	 */
+	@Test
+	public void everyDigestTheStandaloneBuildAcceptsIsPairedWithItsUrlByTheLibrarysRule() throws IOException {
+		List<String> code = codeLines(".github/workflows/build-standalone.yml");
+		String step = String.join("\n", code);
+
+		// Every digest variable the step declares, however it is declared — a digest that does NOT
+		// come from an input still has to reach the rule, and the pairing check below then reports
+		// that nothing carries it.
+		List<String> digests = new ArrayList<String>();
+		Matcher declaration = Pattern.compile("^([A-Z0-9_]*SHA256):").matcher("");
+		// Shell variable -> the workflow input it carries, as the env: block spells it.
+		Map<String, String> inputs = new LinkedHashMap<String, String>();
+		Matcher carried = Pattern.compile("^([A-Z0-9_]+):\\s*\\$\\{\\{\\s*inputs\\.([a-z0-9_]+)").matcher("");
+		for (String line : code) {
+			if (declaration.reset(line.trim()).find()) {
+				digests.add(declaration.group(1));
+			}
+			if (carried.reset(line.trim()).find()) {
+				inputs.put(carried.group(1), carried.group(2));
+			}
+		}
+		assertFalse(digests.isEmpty(), "the workflow declares no digest input; this guard read nothing");
+
+		List<String> violations = new ArrayList<String>();
+		Set<String> guarded = new LinkedHashSet<String>();
+		Matcher call = Pattern
+				.compile("require_url_for_digest\\s+\"\\$([A-Z0-9_]+)\"\\s+\"\\$([A-Z0-9_]+)\"\\s+(\\S+)\\s+(\\S+)")
+				.matcher(step);
+		while (call.find()) {
+			guarded.add(call.group(1) + " " + call.group(2));
+			String[] read = { call.group(1), call.group(2) };
+			String[] spelled = { call.group(3), call.group(4) };
+			for (int a = 0; a < read.length; a++) {
+				String declared = inputs.get(read[a]);
+				if (declared == null) {
+					violations.add("require_url_for_digest is passed $" + read[a]
+							+ ", which the workflow's env: block carries from no input at all");
+				} else if (!declared.equals(spelled[a])) {
+					violations.add("require_url_for_digest is passed $" + read[a] + " and told to call it '"
+							+ spelled[a] + "', but the env: block carries that variable from the input '" + declared
+							+ "', so the refusal would name an input the operator did not give");
+				}
+			}
+		}
+		assertFalse(guarded.isEmpty(), "no require_url_for_digest call in the workflow reads as a url, a digest and"
+				+ " the two input names; this guard read nothing");
+
+		for (String digest : digests) {
+			if (guarded.stream().noneMatch(pair -> pair.endsWith(" " + digest))) {
+				violations.add(digest + " is read by the step but never passed to require_url_for_digest, so a"
+						+ " digest given without its url would be accepted and then ignored");
+			}
+		}
+
+		int overrides = 0;
+		Matcher used = Pattern.compile("fetch_and_verify_override\\s+\"\\$([A-Z0-9_]+)\"\\s+\"\\$([A-Z0-9_]+)\"")
+				.matcher(step);
+		while (used.find()) {
+			overrides++;
+			String pair = used.group(1) + " " + used.group(2);
+			if (!guarded.contains(pair)) {
+				violations.add("the build fetches with $" + used.group(1) + " checked against $" + used.group(2)
+						+ ", a pairing no require_url_for_digest line asks about, so that digest given without that"
+						+ " url would be accepted and then ignored. Pairings that are guarded: " + guarded);
+			}
+		}
+		assertTrue(overrides > 0, "the workflow fetches no dispatched override; this guard read nothing");
+
+		assertEquals(List.of(), violations, "a digest input nothing pairs with its own url");
 	}
 
 	/**
@@ -457,36 +579,6 @@ public class ModelDownloadPinningGuardTest {
 	 * {@code entrypoint-lint} comment is written against, and neither {@code sh -n} nor shellcheck
 	 * can see it: both are happy with a {@code .} of an absolute path that does not exist.
 	 */
-	/**
-	 * Every digest the standalone build reads is paired with its url by the library's rule. The rule
-	 * itself is driven by
-	 * {@code ModelDownloadIntegrityTest.aDigestInputWithNoUrlOfItsOwnStopsTheBuildAndNamesBothInputs};
-	 * what source has to say is that the workflow still ASKS it, for each digest it accepts. Deleting
-	 * one of the three calls left that behavioural case green, which is the two-channel gap this
-	 * class exists for.
-	 */
-	@Test
-	public void everyDigestTheStandaloneBuildAcceptsIsPairedWithItsUrlByTheLibrarysRule() throws IOException {
-		List<String> code = codeLines(".github/workflows/build-standalone.yml");
-		List<String> digests = new ArrayList<String>();
-		for (String line : code) {
-			Matcher env = Pattern.compile("^([A-Z_]*SHA256):").matcher(line.trim());
-			if (env.find()) {
-				digests.add(env.group(1));
-			}
-		}
-		assertFalse(digests.isEmpty(), "the workflow declares no digest input; this guard read nothing");
-
-		List<String> violations = new ArrayList<String>();
-		for (String digest : digests) {
-			if (code.stream().noneMatch(l -> l.contains("require_url_for_digest") && l.contains("$" + digest))) {
-				violations.add(digest + " is read by the step but never passed to require_url_for_digest, so a"
-						+ " digest given without its url would be accepted and then ignored");
-			}
-		}
-		assertEquals(List.of(), violations, "a digest input nothing pairs with a url");
-	}
-
 	@Test
 	public void theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem() throws IOException {
 		String sourced = soleMatch("backend-init.sh", "^\\.\\s+(\\S*model-manifest\\.sh)\\s*$",

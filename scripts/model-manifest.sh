@@ -238,9 +238,12 @@ fetch_and_verify_override() {
 # returning. The caller's diagnostic lines are the SIZE message and are printed for code 2 alone —
 # ADR Decision 103 for why the size refusal has a message of its own.
 #
-# The exit leaves the shell this runs IN. Backgrounding the call, or taking it in a command
-# substitution, therefore does not stop the caller; the guard named below refuses the first shape
-# and nothing catches a call wrapped in a function that is itself backgrounded.
+# The exit leaves the shell this runs IN, so any subshell between here and the entrypoint's own
+# shell swallows it: backgrounding the call with `&`, taking it in a command substitution, and
+# making it an element of a pipeline (`| tee`) all do that, POSIX running every pipeline element in
+# a subshell. The guard named below refuses all three where the call site spells them on the call's
+# own line; a call wrapped in a function that is itself backgrounded or piped is not reachable from
+# a line.
 #
 # Exiting here rather than leaving the caller to branch narrows the ways of getting it wrong: there
 # is no branch to spell, and what the shell DOES is a behaviour a test drives —

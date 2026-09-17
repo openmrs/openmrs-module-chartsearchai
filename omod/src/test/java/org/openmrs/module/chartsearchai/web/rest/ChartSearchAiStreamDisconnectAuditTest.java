@@ -40,9 +40,9 @@ import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
  * who asked what about whom. ADR Decision 103 is canonical for why that happened and for what the
  * fix files; these cases are what pins it.
  *
- * <p>They drive {@code streamAnswer} — the production entry point every audit test in this package
- * uses — over {@link DisconnectingSink}, and each disconnect case asserts the sink actually refused
- * something: without that the pipeline RETURNS instead of unwinding and the case silently becomes a
+ * <p>They drive {@code streamAnswer} — the production entry point the package's other STREAMING
+ * audit tests use — over {@link DisconnectingSink}, and each disconnect case asserts the sink actually
+ * refused something: without that the pipeline RETURNS instead of unwinding and the case silently becomes a
  * duplicate of the happy path, which the neighbouring audit tests already cover.
  *
  * <p>No OpenMRS {@code Context} is installed, deliberately, as in
@@ -54,9 +54,10 @@ import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 public class ChartSearchAiStreamDisconnectAuditTest {
 
 	/**
-	 * One instance, held: {@code RestControllerContext.user()} mints a fresh {@link User} per call
-	 * and neither of them has an id, so comparing the row's user to a second call would compare two
-	 * objects that are equal to nothing including each other.
+	 * One instance, held: {@code RestControllerContext.user()} mints a fresh {@link User} per call, and
+	 * {@code BaseOpenmrsObject} equality is on the uuid, which each instance generates for itself — so
+	 * comparing the row's user against a second call would compare two objects equal to nothing,
+	 * including each other, however alike their fields.
 	 */
 	private static final User USER = RestControllerContext.user();
 
@@ -312,6 +313,27 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 	}
 
 	/**
+	 * A disconnect on a CACHED answer — a third window, and not one the ticket describes. The router
+	 * hands the whole cached answer to the token consumer in ONE call and then fires the citations
+	 * consumer, and it deliberately never fires the ungrounded handoff, an already-final answer being
+	 * outside that consumer's contract. So the row comes off the accumulated text with the entire
+	 * answer in it, and states no mode: the returned cached answer, which has one, never reached the
+	 * controller.
+	 */
+	@Test
+	public void aResetOnACachedAnswerAuditsTheWholeOfItWithNoMode() {
+		DisconnectingSink gone = streamWith(new CacheHitStub(), 1, false);
+
+		assertTrue(gone.refused >= 1, canary(false));
+		assertEquals(1, audit.saved.size(), "a cached answer disclosed is a query to record");
+		assertEquals(StreamingChartSearchStub.ANSWER, audit.saved.get(0).getAnswer(),
+				"one token call carried all of it, so all of it is on the row");
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_UNKNOWN,
+				audit.saved.get(0).getSearchMode(),
+				"the cached answer states a mode, but it is only RETURNED — the controller never held it");
+	}
+
+	/**
 	 * The negative: a query that failed BEFORE the model produced anything writes no row, exactly as
 	 * today. Nothing was disclosed and no inference ran, so there is nothing to record — and without
 	 * this case the gate on the fallback could be deleted, and the module would quietly start
@@ -546,6 +568,23 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(null, Collections.emptyList()));
 			throw new RuntimeException("the grounding pass failed");
+		}
+	}
+
+	/**
+	 * The caching router's cache-hit shape: the whole answer in ONE token call, then the citations, and
+	 * the ungrounded handoff never fired — see {@code ChartSearchServiceRouter.searchStreaming}.
+	 */
+	private static final class CacheHitStub extends StreamingChartSearchStub {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			tokenConsumer.accept(ANSWER);
+			citationsConsumer.accept(answer().getReferences());
+			return answer();
 		}
 	}
 

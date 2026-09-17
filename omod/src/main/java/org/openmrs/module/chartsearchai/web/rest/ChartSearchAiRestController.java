@@ -771,7 +771,10 @@ public class ChartSearchAiRestController {
 				// swallowed the early done's write failure to reach: neither shipped implementation does,
 				// and the point of the guard is that the row count is one per query for EVERY
 				// implementation rather than only for one honouring the consumer's at-most-once contract.
-				// The EVENT still goes out, because a client whose done was refused never received one.
+				// The EVENT still goes out, because a client whose done was refused never received one, and
+				// it carries the id of the row that WAS written. No test observes that id: the only
+				// arrangement reaching this line has already had a frame write refused, so the peer it would
+				// go to is gone. Named rather than pinned — mutating it to null leaves the suite green.
 				String questionId = auditState.earlyQuestionId;
 				if (!auditState.auditAttempted) {
 					questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
@@ -845,7 +848,13 @@ public class ChartSearchAiRestController {
 			// thread parked on a monitor does nothing.
 			keepAlive.stop();
 			// And this method's audit guarantee, over the same set of exits and for the same reason the
-			// comment above gives about them (issue #450).
+			// comment above gives about them (issue #450). After stop() rather than before it, so the
+			// insert does not run with the timer still live — nothing pins that order, and it is stated
+			// here rather than left to be rediscovered.
+			//
+			// The elapsed time is measured to HERE, which is what the user experienced of a stream that
+			// did not finish. No test discriminates it: a unit-test request finishes inside a millisecond,
+			// so a substituted 0 is a value the real clock also produces.
 			auditStreamedQueryIfUnrecorded(user, patient, sanitizedQuestion, auditState,
 					System.currentTimeMillis() - startTime);
 		}
@@ -910,8 +919,8 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * What one streaming request's consumers record for {@link #auditStreamedQueryIfUnrecorded} — one
-	 * object rather than three more single-element arrays, which is all the effectively-final capture
-	 * a lambda needs.
+	 * object rather than a single-element array per mutable field, an object being all the
+	 * effectively-final capture a lambda needs.
 	 *
 	 * <p>It carries the async shape's early-{@code done} state too — {@link #earlyQuestionId} and
 	 * {@link #earlyDoneSent}, which were two single-element arrays beside it. One object, because the

@@ -8176,11 +8176,12 @@ answer already delivered.
 **Decision.** `auditStreamedQueryIfUnrecorded` runs in the `finally` that already stops the
 keep-alive timer, so the row is owed on every exit of that try block rather than on one of them. It
 writes **through** `saveAuditLog`, which stays the only place a row is built, and **one per query at
-most**: each ordinary write site flags its attempt before making it, so the finally adds nothing where
-one was already attempted.
+most**: each ordinary write site flags its attempt, so the finally adds nothing where one was already
+made. WHEN it flags is the whole of the next paragraph.
 
 That holds for any implementation, not only for one honouring the ungrounded consumer's at-most-once
-contract, and it took three guards successive review rounds found missing. **The flag goes up AFTER its
+contract, and it took three rounds of review to get there: two guards that were missing, and one that
+was present and on the wrong side of its save. **The flag goes up AFTER its
 save returns, never before** — everything from the service call onward sits inside `saveAuditLog`'s own
 `catch`, so anything that ESCAPES it was thrown before the insert and means no row exists; a flag
 raised ahead of the call had the `finally` decline and left a delivered answer unrecorded, which is
@@ -8191,9 +8192,9 @@ re-entered and saved again; it is now keyed on the consumer having FIRED, which 
 reachable in the classic shape, where nothing sets a done flag at all. And the classic write site now
 skips its save where a row was already attempted. Neither shipped implementation can reach either
 shape: `LlmInferenceService` calls the consumer once, inside a `try` that has a `finally` and no
-`catch`, and `ChartSearchServiceRouter` never calls it at all — it passes the caller's consumer through,
-and on a cache hit deliberately fires nothing. So a `RuntimeException` from the consumer propagates
-through both. But "exactly one row" is a specification about the TABLE, and the module should not owe it
+`catch`, and `ChartSearchServiceRouter` never calls the UNGROUNDED consumer at all — it passes the caller's
+consumer through, and on a cache hit deliberately does not fire it, an already-final answer being
+outside that consumer's contract. So a `RuntimeException` from it propagates through both. But "exactly one row" is a specification about the TABLE, and the module should not owe it
 to a collaborator's good behaviour.
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
@@ -8215,6 +8216,12 @@ specification. So the row is written once, at the end, from the best answer the 
   the mode ahead of the answer, and the mode is a property of the chart that was assembled, which is
   the producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.
 
+**A cache hit is a third disconnect window**, and one the ticket does not describe. The router hands
+the whole cached answer to the token consumer in ONE call and then fires the citations consumer, so a
+client that goes away there is audited off `answerSoFar` — with the entire answer in it, since one call
+carried all of it — and files `unknown`, the returned cached answer never having reached the
+controller. Pinned as its own case.
+
 Appending before the write, rather than after, means a fragment whose write the client refused is on
 the record. Over-recording by one fragment is the safe direction for an audit trail; the alternative
 drops the last thing the model said about the patient on every disconnect, which is the fragment the
@@ -8231,9 +8238,10 @@ that raises `ChartTooLargeException`, and the preview runs over a focused top-K 
 committed pass runs over the whole chart — so the preview is precisely what succeeds when the full
 chart overflows, and the two are positively correlated rather than merely co-possible. That preview is
 model output about this patient and it reached the client, so the row is owed. The same holds of an
-abandoned `thinking` frame, which is the first frame the module writes on a stock install — the
-preview precedes it wherever `chartsearchai.progressiveReasoning.enabled` is on, and that property
-ships off.
+abandoned `thinking` frame, which is the first frame the module writes on a stock install. The preview
+can precede it, but only where BOTH `chartsearchai.progressiveReasoning.enabled` is on — it ships off —
+and the chart mode is not the `queryScoped` one that ships, `maybeEmitPreliminaryReasoning` returning
+early on either.
 
 **Its consequence, stated rather than hidden: those queries now consume a rate-limit slot.**
 `checkRateLimit` counts persisted rows against `chartsearchai.rateLimitPerMinute` (default 10), so a
@@ -8271,15 +8279,17 @@ with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,3
 
 - accumulating the answer costs **+36,992 bytes** per request against the **1.94 MB** the REST layer
   already allocates for that answer, and wall clock sits below an A/A spread of 203 µs on a ~1.2 ms
-  request. The same loop already writes 119,772 bytes to the socket for it.
+  request. For scale, that request writes 119,772 bytes to the socket in all — 102,400 of them the
+  token frames themselves, the rest the `references` frame and the `done` that carries the answer a
+  second time.
 - firing the ungrounded consumer in the classic shape, where it was a no-op lambda, costs **+48
-  bytes** per request — one capturing lambda instance where a cached empty one used to serve. Measured
-  against a stub that fires EVERY channel: one that never fires the consumer reports a far larger delta
-  that is an escape-analysis artifact and not this.
+  bytes** per request — one capturing lambda instance where a cached empty one used to serve. Measure
+  it against a stub that FIRES the consumer: with one that does not, the arms differ by whether the
+  allocation happens at all and the figure is not about this lambda.
 - the audit INSERT on the disconnect path extends neither the engine's critical section (the consumer
   throws *inside* `LocalLlmEngine`'s `synchronized` method, so the monitor is released before the
-  `finally`) nor any client-visible latency (every terminal frame is already written and flushed in
-  the `catch`).
+  `finally`) nor any client-visible latency — on the three branches that write a terminal frame,
+  `writeSseEvent` has already flushed it by then, and the disconnect branch writes none at all.
 
 **No ceiling on the accumulated text, and that is a decision.** `max_tokens` is advisory to the peer
 rather than enforced locally, which is issue #446's own premise — and #446 is OPEN, so nothing bounds a
@@ -8304,19 +8314,21 @@ opposite as load-bearing. The one that decides is a PRODUCTION javadoc:
 `DrugSafetyValidator`'s `StandingChartAlerts` factories are public because `omod/pom.xml` declares no
 api test-jar. `StandingChartAlertsTest`, `ArchitectureGuardTest`,
 `ChartSearchAiSafetyWarningSeverityWireTest` and `ChartSearchAiChartAlertsTest` each say the same of
-themselves, and they do not all spell the artifact the same way, so no single search term finds them
-all. It also made `omod/pom.xml`'s `unpack-dependencies` execution, which filters by neither
+themselves. It also made `omod/pom.xml`'s `unpack-dependencies` execution, which filters by neither
 classifier nor scope, ship api's test classes and its Spring and Hibernate test configs inside the
 released `.omod` — measured, with the whole suite green and the build exit 0 — so it needed a
 load-bearing `excludeClassifiers` line that no test could hold. One level assertion does not buy that.
 `ControllerLog` in the omod test package asks the one question those cases need instead.
 
-**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`. Over both shapes: the reset after the first
-token, the reset on the `references` frame, and the non-`IOException` failure after the handoff, which
-also tells the `finally` from a statement at the tail of the disconnect branch. Over the classic shape
-alone, each being an arrangement only one shape reaches: the negative where a query that produced
-nothing writes no row, each of the three non-token channels speaking on its own, and the handoff as the
-first channel to speak. And, per site rather than per shape, a save that THREW leaving the `finally` to
-write the row. The ERROR is pinned by
+**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`, whose cases name the arrangements: the reset
+after the first token, the reset on the `references` frame, the cache hit, the non-`IOException`
+failure after the handoff (which also tells the `finally` from a statement at the tail of the
+disconnect branch), a save that THREW at either site, each channel that can speak before a token does,
+the handoff as the first channel to speak, an answer whose text is null, a second handoff, and the
+negative where a query that produced nothing writes no row. Some run in both shapes and some in one;
+where a case names a single shape it is because the arrangement is shape-invariant and one run of it
+says everything, except the handoff-first one, which the async shape audits at its ordinary site
+instead. The ERROR is pinned by `ChartSearchAiAuditWriteFailureLoudnessTest`, with the successful write
+as its control, and the capture's own restoration beside it. Mutate each guard and read the failures. The ERROR is pinned by
 `ChartSearchAiAuditWriteFailureLoudnessTest`, with the successful write as its control. Mutate each
 guard and read the failures.

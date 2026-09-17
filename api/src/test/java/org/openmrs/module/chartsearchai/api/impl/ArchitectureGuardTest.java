@@ -661,9 +661,16 @@ public class ArchitectureGuardTest {
 	 * {@code LocalLlmEngine} legitimately opens one), a third-party client already on both modules'
 	 * compile classpath through {@code openmrs-api}, and reflection onto the JDK factory. What this
 	 * rule does is make the two SHORTEST ways to write the defect fail the build; it does not make
-	 * the defect unwriteable. Its false positives all fail CLOSED and cost a rename: the
-	 * {@code openConnection} alternative alone carries no lookbehind, because that call is always
-	 * made on a receiver, so it also reports one on something that is not a URL.
+	 * the defect unwriteable.
+	 *
+	 * <p>Its false positives all fail CLOSED, and there are two kinds. The three receiver-form
+	 * alternatives — {@code openConnection}, {@code openStream} and the {@code HttpURLConnection}
+	 * type — carry no lookbehind, because those calls are always made on a receiver, so each also
+	 * reports on a receiver that is not a URL; that costs a rename. And because the scan joins
+	 * lines, a receiver whose DOT ends the line reports too, which costs a reformat rather than a
+	 * rename and is the one such positive this file itself can produce, its two compliant
+	 * {@code HttpRequest.newBuilder()} calls being the reason it may not be excluded from the
+	 * lookbehind-guarded alternatives either.
 	 */
 	@Test
 	public void noDialectReachesTheLocalServerAroundThoseRules() throws IOException {

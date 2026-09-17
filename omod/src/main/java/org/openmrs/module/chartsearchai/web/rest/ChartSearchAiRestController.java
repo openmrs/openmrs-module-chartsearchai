@@ -642,6 +642,11 @@ public class ChartSearchAiRestController {
 	 * ungrounded answer (a cache hit returns an already-final answer), the classic {@code done}
 	 * is emitted instead and no {@code grounded} event follows.</p>
 	 *
+	 * <p><b>Either shape owes an audit row on every exit of the try block, not only on the one that
+	 * reaches its own write site</b> — {@link #auditStreamedQueryIfUnrecorded} in the {@code finally}
+	 * is what owes it, and issue #450 is what a delivered answer with no row cost before that. At most
+	 * one row per query either way.</p>
+	 *
 	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
 	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
 	 * configuration before delegating here. The audit row's search mode is NOT among that
@@ -723,7 +728,8 @@ public class ChartSearchAiRestController {
 			};
 
 			// Five consumers, four of them events on the wire (the fifth is ungroundedConsumer above,
-			// which becomes an early "done"): "token" carries the answer; "thinking" carries the committed full-chart
+			// which records the finished answer for the audit row in both shapes and becomes an early
+			// "done" in the async one): "token" carries the answer; "thinking" carries the committed full-chart
 			// reasoning (chain-of-thought), emitted first so the UI can show live progress and the
 			// rationale instead of a dead spinner; "preliminary" carries the optional progressive
 			// preview reasoning (only when progressiveReasoning.enabled) — streamed ahead of, and to
@@ -878,12 +884,19 @@ public class ChartSearchAiRestController {
 		ChartAnswer answer = state.pipelineAnswer != null ? state.pipelineAnswer
 				: new ChartAnswer(state.answerSoFar.toString(),
 						Collections.<RecordReference> emptyList());
+		// INFO, and the level is a judgement rather than an oversight: a client closing a tab
+		// mid-answer is an ordinary act, so this is no fault and does not belong beside the ERROR a
+		// failed audit write now gets — but it is about the completeness of the compliance trail rather
+		// than about the connection, which is what the DEBUG disconnect lines above are about. What
+		// distinguishes such a row is ON the row (see the README's audit-log section); this only says
+		// one was written here.
+		//
 		// One count and the patient id. The question and the answer are the two things this row exists
 		// to keep OUT of the log and in the table (issue #439). The length is read defensively because
 		// this runs in a finally: an NPE here would leave streamAnswer by a path its caller has no catch
 		// for, on a request whose own failure has already been handled.
 		String answerText = answer.getAnswer() == null ? "" : answer.getAnswer();
-		log.warn("Streaming query for patient [id={}] ended before its audit row was written;"
+		log.info("Streaming query for patient [id={}] ended before its audit row was written;"
 				+ " auditing {} characters of answer the pipeline had produced",
 				patient.getPatientId(), answerText.length());
 		saveAuditLog(user, patient, question, answer, responseTimeMs);
@@ -919,6 +932,11 @@ public class ChartSearchAiRestController {
 		 * citations the pipeline resolved and a hand-built one states none of them. Null until the
 		 * ungrounded handoff, which is after the {@code references} frame, so the two disconnect
 		 * windows the ticket describes both file the hand-built shape.
+		 *
+		 * <p>It is the UNGROUNDED answer, which the classic shape's own write site does not audit — it
+		 * audits the returned one, and {@code ChartSearchAiAuditSearchModeTest} pins that. There is no
+		 * returned answer on any exit that reaches {@link #auditStreamedQueryIfUnrecorded}, so nothing
+		 * chooses between them there; a real pipeline resolves one label and sets it on both.
 		 */
 		ChartAnswer pipelineAnswer;
 

@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,11 +23,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.apache.logging.log4j.Level;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
@@ -200,6 +204,53 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 			assertEquals(0, audit.saved.size(),
 					"no row for a query that produced nothing; got one after "
 							+ failure.getClass().getSimpleName());
+		}
+	}
+
+	/**
+	 * The line this path writes carries one count and the patient's id — never the question and never
+	 * a word of the answer. Issue #439 established that rule for a diagnostic about a patient, and
+	 * this is a new site bound by it: an audit row exists precisely so the question and the answer
+	 * live in a table behind <em>View AI Audit Logs</em> rather than in a server log, which a wider
+	 * audience reads.
+	 *
+	 * <p>Captured from DEBUG up and asserted over EVERY captured event, rendered with its throwables:
+	 * that is the shape issue #439's own review rounds arrived at, having lost the same guard three
+	 * times over — once to a capture raised to WARN while the details went out at {@code info}, once
+	 * to a renderer that showed a throwable's type and not its message, and once to a sibling's
+	 * leftover logger config.
+	 *
+	 * <p>The first assertion is the positive control, and a negative over a capture needs one: it
+	 * names a line this logger writes at the captured level, so the two negatives cannot pass on a
+	 * capture that received nothing. It fails on a re-wording of that line, which is the intended
+	 * cost of being the control rather than a claim about the wording.
+	 */
+	@Test
+	public void theAuditLineForAnEndedStreamNamesNoQuestionAndNoAnswerText() {
+		try (LogCapture capture = LogCapture.on(ChartSearchAiRestController.class.getName(),
+				Level.DEBUG)) {
+			DisconnectingSink gone = streamWith(new StreamingStub(), 1, false);
+
+			assertTrue(gone.refused >= 1, canary(false));
+			assertEquals(1, audit.saved.size(),
+					"precondition: this must be the exit that writes the line under test");
+			assertTrue(capture.hasMessageAt(Level.INFO, "ended before its audit row was written",
+					"[id=" + StreamingStub.PATIENT.getPatientId() + "]"),
+					"the control: the line must have arrived, at the level it is written at, naming the "
+							+ "patient by id. Captured: " + capture.describeAll());
+
+			String logged = capture.describeAll().toString();
+			assertFalse(logged.contains(QUESTION),
+					"no log line may carry the clinician's question. Captured: " + logged);
+			// Per FRAGMENT and not over the whole answer, which would be the weaker assertion and is
+			// implied by these: the pipeline produces the answer in pieces and a row written mid-stream
+			// holds only some of them, so a line carrying what was produced so far contains no fragment
+			// of a complete answer to match. Measured — logging answerText at DEBUG reddens the fragment
+			// assertion and leaves a whole-answer one green.
+			for (String fragment : FRAGMENTS) {
+				assertFalse(logged.contains(fragment.trim()),
+						"nor a fragment of the answer. Captured: " + logged);
+			}
 		}
 	}
 

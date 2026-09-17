@@ -8221,6 +8221,7 @@ one is present, so these are properties of *a* build and are re-checkable by the
 | 10 | is an environment safer than an argument vector *on this OS*? | yes — `ps -E` listed 8 `KEY=VALUE` pairs for a process this user owns and none at all for a root-owned one, while `ps -o args=` shows any process's arguments |
 | 11 | does a bind probe answer "is this port occupied"? | no, in both directions. Against a live listener on the WILDCARD address a loopback bind with `SO_REUSEADDR` SUCCEEDED (the probe would call the port free); against a listening port left in `TIME_WAIT` a bind without it was REFUSED (the probe would refuse an ordinary restart). A `connect` was correct on all four shapes — free, loopback-bound, wildcard-bound, `TIME_WAIT` — which is why the check connects |
 | 12 | which failures does the child announce past `--log-disable`? | of the three shapes driven, only an unrecognised ARGUMENT: `error: invalid argument: …` is printed directly and survives the flag, while a failed bind and a missing model file go through the log system and are suppressed, leaving the backend's startup banner. Not a claim about every failure — three were measured. Which is why the startup-failure message quotes the child at all (that argument shape is what #445's two new flags can provoke) and why the message says outright that the lines may be the banner rather than the cause |
+| 12b | may this module's traffic to its own subprocess be proxied? | no, and it was: with `http.proxyHost` set and `http.nonProxyHosts` emptied, the production `/health` request reached the PROXY rather than the server, carrying `Authorization: Bearer <this start's secret>` — with a no-proxy control in the same run showing it reaching the server and the proxy seeing nothing. The default selector excludes loopback, so this needs a deployment that overrides that property, but the client and the port probe are both pinned to no-proxy unconditionally: there is no deployment in which a loopback subprocess should be reached through one |
 | 13 | is `InetAddress.getLoopbackAddress()` the address the engine dials? | not always — under `-Djava.net.preferIPv6Addresses` it is `::1`, and a probe of it reported a real listener on `127.0.0.1` as free while reporting a `::1` listener that can never receive the chart as a conflict. The check resolves `LOOPBACK_HOST` instead, and the tests spell that address independently of the code under test |
 
 **Why the environment and not a key file.** The three ways to hand `llama-server` a key are an
@@ -8250,9 +8251,12 @@ later, so an impostor must now win that window rather than simply arriving while
 (The check connects rather than binding, so it never holds the port against the child — the
 "probe socket closes" phrasing belonged to the bind form this decision replaced. Only a
 `ConnectException` reads as a free port; a resolution failure, or a timeout against a listener that
-accepts nothing, establishes no refusal and refuses the start instead — and that last shape, a
-saturated accept backlog, is the only one of them reachable on a healthy host, which is why it is
-what pins the branch. An earlier form of this sentence claimed a flag set inside the `try` achieved
+accepts nothing, establishes no refusal and refuses the start instead. That last shape — a saturated
+accept backlog — is the one reachable on a healthy host, so it is what
+`LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart` drives the branch
+through, saturating the queue rather than assuming `listen(1)` admits one connection: Linux compares
+`sk_ack_backlog > sk_max_ack_backlog` and admits backlog+1, and a review round measured that a
+one-filler fixture flips onto the wrong branch. An earlier form of this sentence claimed a flag set inside the `try` achieved
 this, and a review round proved from the bytecode that the `catch` reassigned the flag, so every one
 of those cases still read as "free". A later form added "a failed close" to the list, which a second
 round measured wrong in the ordering that matters: when the connect is refused and the close then

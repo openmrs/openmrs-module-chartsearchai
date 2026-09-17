@@ -1028,9 +1028,13 @@ public class LocalLlmEngine implements LlmEngine {
 	 * every other {@link IOException} establishes no refusal and refuses the start, because
 	 * treating one as "nothing listening" is how this check fails OPEN — including a listener whose
 	 * accept backlog is full, which answers with a timeout and is refused HERE rather than passed
-	 * on to a later gate. That shape is the only way a non-{@code ConnectException} is reachable on
-	 * a healthy host, which is why it is the test for this whole branch:
-	 * {@code LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart}.
+	 * on to a later gate. That shape is what the branch is TESTED through, being the one reachable
+	 * on a healthy host:
+	 * {@code LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart}. It is not
+	 * the only path in: a connect that SUCCEEDS and then fails to close lands here too, where the
+	 * message says nothing could be established about a probe that established a listener. The
+	 * verdict is still right — refuse — and only the wording misdiagnoses, which is why this
+	 * branch reports the exception it caught rather than guessing.
 	 */
 	static void requireLoopbackPortFree(int port) {
 		// Proxy.NO_PROXY, not new Socket(): the no-arg constructor is proxy-aware, so a JVM with
@@ -1518,10 +1522,27 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 	}
 
-	private synchronized HttpClient getHttpClient() {
+	/**
+	 * The client every call to the local server goes through, built with proxying OFF.
+	 *
+	 * <p>{@code NO_PROXY} is the security-relevant part, not tidiness. {@link HttpClient} defaults
+	 * to {@code ProxySelector.getDefault()}, which honours {@code http.proxyHost} — and although
+	 * that selector's default {@code http.nonProxyHosts} excludes loopback, a deployment that
+	 * overrides the property can put loopback back in scope. Measured, with a control in the same
+	 * run: with {@code http.proxyHost} set and {@code http.nonProxyHosts} emptied, the production
+	 * {@code /health} request reached the PROXY and not the server, carrying
+	 * {@code Authorization: Bearer <this start's secret>} — so the credential minted to keep a
+	 * local process out was handed to a third party, and the completions POST on the same client
+	 * would have taken the patient's chart with it. Off unconditionally, because there is no
+	 * deployment in which a loopback subprocess should be reached through a proxy.
+	 *
+	 * <p>Package-private so {@code LocalLlmServerAuthTest} can ask the real client what it selects.
+	 */
+	synchronized HttpClient getHttpClient() {
 		if (httpClient == null) {
 			httpClient = HttpClient.newBuilder()
 					.connectTimeout(Duration.ofSeconds(5))
+					.proxy(HttpClient.Builder.NO_PROXY)
 					.build();
 		}
 		return httpClient;

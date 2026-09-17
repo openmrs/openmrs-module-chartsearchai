@@ -129,6 +129,29 @@ public class LocalLlmServerAuthTest {
 				+ "worthless against the next");
 	}
 
+	/**
+	 * Nothing this module sends to its own subprocess may be routed through a proxy. Measured with
+	 * a control: with {@code http.proxyHost} set and {@code http.nonProxyHosts} emptied, the
+	 * production {@code /health} request reached the proxy rather than the server and carried
+	 * {@code Authorization: Bearer <secret>} — the credential handed to a third party, on the same
+	 * client the completions POST uses to send the chart. This asks the real client what it selects
+	 * rather than setting a JVM-global property, which would leak into every other test.
+	 */
+	@Test
+	public void theClientTalkingToTheLocalServerUsesNoProxy() {
+		HttpClient client = new LocalLlmEngine().getHttpClient();
+
+		assertTrue(client.proxy().isPresent(),
+				"the client must carry an explicit proxy selector; with none it falls back to "
+				+ "ProxySelector.getDefault(), which honours http.proxyHost");
+		assertEquals(java.util.List.of(java.net.Proxy.NO_PROXY),
+				client.proxy().get().select(java.net.URI.create(
+						"http://" + LlamaServerEndpoint.LOOPBACK_HOST + ":18085/health")),
+				"and that selector must choose NO_PROXY for the local server, or a deployment "
+				+ "with a proxy configured sends this module's own key — and its patients' charts "
+				+ "— to whatever the proxy is");
+	}
+
 	// ---- the command line ----
 
 	@Test
@@ -226,30 +249,91 @@ public class LocalLlmServerAuthTest {
 	/**
 	 * The refusal branch, which nothing pinned: reverting it to the fail-open form that read every
 	 * {@code IOException} as "nothing listening" left the FULL suite green, and that form is what a
-	 * review round measured shipping twice. A listener that never accepts saturates its backlog, so
-	 * the probe neither connects nor is refused — it times out, which establishes no refusal and
-	 * must refuse the start. It is the only shape in which a non-{@code ConnectException} is
-	 * reachable on a healthy host, so it is the test for the whole branch.
+	 * review round measured shipping twice. A listener whose accept queue is full answers neither
+	 * with a connection nor with a refusal — the probe times out, which establishes no refusal and
+	 * must refuse the start.
+	 *
+	 * <p>The queue is SATURATED by connecting until a connect of the probe's own shape fails,
+	 * rather than by assuming {@code listen(1)} admits one. That depth is an OS parameter: Linux
+	 * compares {@code sk_ack_backlog > sk_max_ack_backlog}, so it admits backlog+1, and a review
+	 * round measured that hard-coding one filler flips this test onto the branch it is not about —
+	 * it went red accusing production of reporting "already listening". CI is Linux, so the
+	 * one-filler form would have reddened there.
 	 */
 	@Test
 	public void aPortHeldByAListenerThatAcceptsNothingFailsTheStart() throws IOException {
-		// Backlog 1, and never accept: the first pending connection fills the queue.
-		try (ServerSocket blackHole = new ServerSocket(0, 1,
-				InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST))) {
+		InetAddress loopback = InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST);
+		List<java.net.Socket> fillers = new ArrayList<>();
+		try (ServerSocket blackHole = new ServerSocket(0, 1, loopback)) {
 			int held = blackHole.getLocalPort();
-			try (java.net.Socket filler = new java.net.Socket(java.net.Proxy.NO_PROXY)) {
-				filler.connect(new InetSocketAddress(
-						InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), held), 2000);
-
-				APIException thrown = assertThrows(APIException.class,
-						() -> LocalLlmEngine.requireLoopbackPortFree(held),
-						"a probe that neither connects nor is refused has established nothing, so "
-						+ "the start must be refused — reading it as a free port is how this check "
-						+ "fails OPEN, which is the one direction it exists to prevent");
-				assertTrue(thrown.getMessage().contains("Could not establish"),
-						"and say that is what happened, rather than claiming a listener was found: "
-						+ thrown.getMessage());
+			boolean saturated = false;
+			for (int attempt = 0; attempt < 256 && !saturated; attempt++) {
+				java.net.Socket filler = new java.net.Socket(java.net.Proxy.NO_PROXY);
+				try {
+					filler.connect(new InetSocketAddress(loopback, held), 250);
+					fillers.add(filler);
+				}
+				catch (IOException queueIsFull) {
+					filler.close();
+					saturated = true;
+				}
 			}
+			assertTrue(saturated,
+					"could not fill the accept queue of a backlog-1 listener in 256 connects, so "
+					+ "this test never reached the state it is about — a fixture that asserts an "
+					+ "outcome it did not produce is the failure mode this loop exists to remove");
+
+			APIException thrown = assertThrows(APIException.class,
+					() -> LocalLlmEngine.requireLoopbackPortFree(held),
+					"a probe that neither connects nor is refused has established nothing, so "
+					+ "the start must be refused — reading it as a free port is how this check "
+					+ "fails OPEN, which is the one direction it exists to prevent");
+			assertTrue(thrown.getMessage().contains("Could not establish"),
+					"and say that is what happened, rather than claiming a listener was found: "
+					+ thrown.getMessage());
+		}
+		finally {
+			for (java.net.Socket filler : fillers) {
+				filler.close();
+			}
+		}
+	}
+
+	/**
+	 * The probe is built with {@code Proxy.NO_PROXY}, and nothing pinned that either: reverting it
+	 * to {@code new Socket()} left the full suite green. The no-arg constructor is proxy-aware, so
+	 * a JVM with {@code socksProxyHost} set would route a LOOPBACK probe through a proxy and answer
+	 * about the proxy rather than about the port.
+	 */
+	@Test
+	public void theProbeIsNotRoutedThroughAConfiguredProxy() throws IOException {
+		int free;
+		try (ServerSocket reserved = new ServerSocket()) {
+			reserved.setReuseAddress(true);
+			reserved.bind(new InetSocketAddress(
+					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), 0));
+			free = reserved.getLocalPort();
+		}
+		// 192.0.2.0/24 is TEST-NET-1 and routes nowhere, so a proxied probe cannot succeed.
+		String host = System.setProperty("socksProxyHost", "192.0.2.1");
+		String port = System.setProperty("socksProxyPort", "1080");
+		String skip = System.setProperty("socksNonProxyHosts", "");
+		try {
+			LocalLlmEngine.requireLoopbackPortFree(free);
+		}
+		finally {
+			restore("socksProxyHost", host);
+			restore("socksProxyPort", port);
+			restore("socksNonProxyHosts", skip);
+		}
+	}
+
+	private static void restore(String key, String previous) {
+		if (previous == null) {
+			System.clearProperty(key);
+		}
+		else {
+			System.setProperty(key, previous);
 		}
 	}
 
@@ -266,8 +350,9 @@ public class LocalLlmServerAuthTest {
 
 		// 32 random bytes, base64url without padding: ceil(32 * 4 / 3) = 43 characters.
 		assertEquals(43, secret.length(),
-				"a 256-bit secret is 43 base64url characters; anything shorter is a key a local "
-				+ "process can search, and the environment it travels in does not make it safe: "
+				"a 256-bit secret is exactly 43 base64url characters; fewer is a key a local "
+				+ "process can search, and the environment it travels in does not make it safe, "
+				+ "while more means the encoding changed and this assertion is what says so: "
 				+ secret.length() + " characters");
 		assertTrue(secret.matches("[A-Za-z0-9_-]+"),
 				"and base64url throughout, so it survives an environment variable and an HTTP "

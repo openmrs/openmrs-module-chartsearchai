@@ -1450,8 +1450,9 @@ public class ArchitectureGuardTest {
 
 	/**
 	 * The index one past the brace closing the block that opens at {@code openBrace}. Naive by
-	 * design: it counts braces and knows nothing of strings, chars or comments, which is why its
-	 * caller names the two signatures it may be asked about rather than scanning for methods.
+	 * design: it counts braces and knows nothing of strings, chars or comments, which is why each
+	 * caller names the declarations it asks about rather than scanning for them, and why a region
+	 * it is pointed at should be one a stray brace in a string or a comment cannot lengthen.
 	 */
 	private static int endOfBody(String source, int openBrace) {
 		int depth = 0;
@@ -1605,9 +1606,17 @@ public class ArchitectureGuardTest {
 	 * {@code newFragment} and the behavioural cases redden. This rule asserts it anyway, so that
 	 * the two halves of one sentence are read in one place.
 	 *
-	 * <p>The two constructions the rule allows are not interchangeable. The WHOLE-sentence one
-	 * copies text the answer already holds, once per sentence, so it is linear and needs no
-	 * allowance; a FRAGMENT is one per MARKER and is the copy that multiplies.
+	 * <p><b>The allow-list is the two FACTORIES and not the methods that call them</b>, which is
+	 * what makes the needle the construction rather than its neighbourhood. The two constructions
+	 * are not interchangeable — the WHOLE-sentence one copies text the answer already holds, once
+	 * per sentence, so it is linear and needs no allowance, while a FRAGMENT is one per MARKER and
+	 * is the copy that multiplies — and each has a factory of its own,
+	 * {@code newSentence} and {@code newFragment}, so no SPLITTER is allow-listed at all.
+	 * An earlier form of this rule allow-listed
+	 * {@code splitIntoCitedSentences(String, FragmentBudget)} instead, because the whole-sentence
+	 * construction sat there; a reviewer then wrote an uncharged per-marker splitter into that same
+	 * method — its natural home, since it already holds the budget and already constructed
+	 * Sentences — and this rule stayed green.
 	 *
 	 * <p>It reads SOURCE TEXT, and the constant-pool idiom
 	 * {@link #theOrderStopDateStampIsWrittenInOnePlace} uses cannot express this one: that helper
@@ -1616,7 +1625,9 @@ public class ArchitectureGuardTest {
 	 * whichever of them held the construction. The residue of reading source instead: a construction spelled
 	 * some other way — a factory of its own that this needle does not name — is out of reach, the
 	 * same residue {@link #classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep}
-	 * records for its own scan.
+	 * records for its own scan. And the allow-list is matched against the enclosing DECLARATION
+	 * LINE, so a method whose own signature happens to spell one of the two factory names is
+	 * admitted with them.
 	 */
 	@Test
 	public void aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory() throws IOException {
@@ -1638,29 +1649,30 @@ public class ArchitectureGuardTest {
 				continue;
 			}
 			constructions++;
-			if (method.contains("newFragment(")
-					|| method.contains("splitIntoCitedSentences(String answer, FragmentBudget")) {
+			if (method.contains("newFragment(") || method.contains("newSentence(")) {
 				continue;
 			}
 			outside.add("line " + (i + 1) + ", in: " + method.trim());
 		}
 		assertTrue(constructions >= 2, "precondition: the scan found " + constructions
-				+ " Sentence constructions in CitationGroundingVerifier.java. It expects the "
-				+ "whole-sentence one and the fragment factory, so a smaller number means the "
-				+ "needle has stopped matching and the rule passes vacuously.");
+				+ " Sentence constructions in CitationGroundingVerifier.java. It expects one in each "
+				+ "factory, newSentence and newFragment, so a smaller number means the needle has "
+				+ "stopped matching and the rule passes vacuously.");
 		assertTrue(factoryCharges, "newFragment must charge the answer's split allowance before it "
 				+ "builds a fragment. Without that charge a marker-dense answer copies the "
 				+ "cumulative prefix once per marker again, which is issue #448 — an "
 				+ "OutOfMemoryError in the Tomcat JVM, not a bad verdict.");
-		assertEquals(new ArrayList<String>(), outside, "a per-citation claim fragment is built only "
-				+ "through CitationGroundingVerifier.newFragment, which charges the answer's split "
-				+ "allowance first (issue #448). Constructing one anywhere else reopens the "
-				+ "quadratic copy with every behavioural case still green. Found at: " + outside);
+		assertEquals(new ArrayList<String>(), outside, "a claim unit is constructed only inside one of "
+				+ "CitationGroundingVerifier's two factories — newFragment for a per-citation "
+				+ "fragment, which charges the answer's split allowance first (issue #448), and "
+				+ "newSentence for a whole sentence, which needs none. Constructing one in a "
+				+ "SPLITTER instead, where the budget is already to hand, reopens the quadratic copy "
+				+ "with every behavioural case still green. Found at: " + outside);
 	}
 
 	/**
-	 * {@code AnswerCitations.restsOn} answers with a VIEW over the two sets a claim rests on and
-	 * never builds their union — issue
+	 * {@code AnswerCitations.restsOn} answers with a VIEW over the two sets a claim rests on, and
+	 * neither it nor the {@code ClaimSupport} it returns builds their union — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/448">#448</a>.
 	 *
 	 * <p><b>Nothing behavioural pins this either, and the gap was measured rather than supposed.</b>
@@ -1671,35 +1683,52 @@ public class ArchitectureGuardTest {
 	 * measures: the verdicts are identical either way, so only the allocation tells the two apart,
 	 * and a unit test cannot fail on a heap it has enough of.
 	 *
-	 * <p>Reads the METHOD BODY by brace matching rather than the file, so a collection built
-	 * elsewhere in {@code AnswerCitations} — the constructor legitimately builds two — is out of
-	 * scope. Residue, the same one its neighbour above records: a union assembled some other way,
-	 * by a helper this needle does not name, is out of reach.
+	 * <p>Reads TWO BODIES by brace matching rather than the file: {@code restsOn}'s own, and the
+	 * whole of {@code ClaimSupport}. The second is not a widening for its own sake — the view is
+	 * two fields and a membership test, so collapsing them into one set inside the CONSTRUCTOR
+	 * ({@code new HashSet<Integer>(unanchored); union.addAll(own);}) restores the per-reference copy
+	 * with {@code restsOn}'s own body untouched, and it is the obvious edit the first time a caller
+	 * wants to ITERATE what a claim rests on rather than test membership. A collection built
+	 * elsewhere in {@code AnswerCitations} — the constructor legitimately builds two — stays out of
+	 * scope, since those are per ANSWER and not per reference. Residue, the same one its neighbour
+	 * above records: a union assembled some other way, by a helper this needle does not name, is
+	 * out of reach; and {@link #endOfBody} counts braces blind to strings and comments, so an
+	 * unbalanced one inside either body moves the region's end.
 	 */
 	@Test
 	public void theCitationsAClaimRestsOnAreAViewAndNotACopy() throws IOException {
 		String source = new String(Files.readAllBytes(SRC_ROOT.resolve(
 				"src/main/java/org/openmrs/module/chartsearchai/api/impl/CitationGroundingVerifier.java")),
 				StandardCharsets.UTF_8);
-		int signature = source.indexOf("ClaimSupport restsOn(");
-		org.junit.jupiter.api.Assertions.assertTrue(signature > 0,
-				"precondition: AnswerCitations.restsOn was not found, so this rule would pass "
-						+ "vacuously — it may have been renamed or its return type changed");
-		int open = source.indexOf('{', signature);
-		String body = source.substring(open, endOfBody(source, open));
-
 		List<String> built = new ArrayList<>();
-		for (String constructor : new String[] { "new HashSet", "new LinkedHashSet", "new TreeSet",
-				"new ArrayList", "addAll(" }) {
-			if (body.contains(constructor)) {
-				built.add(constructor);
+		for (String declaration : new String[] { "ClaimSupport restsOn(",
+				"private static final class ClaimSupport" }) {
+			int start = source.indexOf(declaration);
+			org.junit.jupiter.api.Assertions.assertTrue(start > 0,
+					"precondition: \"" + declaration + "\" was not found in "
+							+ "CitationGroundingVerifier.java, so this rule would pass vacuously over "
+							+ "that half of it — the method may have been renamed or its return type "
+							+ "changed, or the class declared some other way");
+			org.junit.jupiter.api.Assertions.assertEquals(-1,
+					source.indexOf(declaration, start + declaration.length()),
+					"precondition: \"" + declaration + "\" occurs more than once in "
+							+ "CitationGroundingVerifier.java, and this rule reads the FIRST — the "
+							+ "others would go unscanned");
+			int open = source.indexOf('{', start);
+			String body = source.substring(open, endOfBody(source, open));
+			for (String constructor : new String[] { "new HashSet", "new LinkedHashSet", "new TreeSet",
+					"new ArrayList", "addAll(" }) {
+				if (body.contains(constructor)) {
+					built.add(declaration + " → " + constructor);
+				}
 			}
 		}
 		assertEquals(new ArrayList<String>(), built, "AnswerCitations.restsOn must answer with a "
-				+ "ClaimSupport view over the two sets and never build their union: it is called "
-				+ "once per reference and the claim's own set holds one entry per distinct marker "
-				+ "in the answer, so a copy is the reference count times the marker count, live at "
-				+ "once (issue #448). Found: " + built);
+				+ "ClaimSupport view over the two sets and never build their union — neither in its "
+				+ "own body nor one constructor deeper, inside ClaimSupport: it is called once per "
+				+ "reference and the claim's own set holds one entry per distinct marker in the "
+				+ "answer, so a copy is the reference count times the marker count, live at once "
+				+ "(issue #448). Found: " + built);
 	}
 
 	/**

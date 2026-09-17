@@ -1551,8 +1551,7 @@ public class CitationGroundingVerifier {
 			if (raw.trim().isEmpty()) {
 				continue;
 			}
-			Sentence sentence = new Sentence(raw,
-					Collections.unmodifiableSet(ChartSearchAiUtils.citedIndexes(raw)), false);
+			Sentence sentence = newSentence(raw);
 			List<Sentence> items = splitEnumeration(sentence, budget);
 			if (items != null) {
 				sentences.addAll(items);
@@ -1921,6 +1920,29 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
+	 * The one place a WHOLE sentence unit is built, beside {@link #newFragment} and deliberately
+	 * apart from the splitter that calls it: the two constructions are not interchangeable, and
+	 * keeping each in a factory of its own is what lets
+	 * {@code ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory} name the
+	 * CONSTRUCTION rather than the method it sits in. A per-marker split written inside
+	 * {@link #splitIntoCitedSentences(String, FragmentBudget)} — the natural home for a third one,
+	 * since it already holds the budget — is then reported by that rule rather than admitted by its
+	 * neighbourhood (issue #448, round two of its review).
+	 *
+	 * <p>It spends no allowance, and that is the difference from {@link #newFragment}: this copies
+	 * text the answer already holds, once per SENTENCE, so the characters it materialises are the
+	 * answer's own length. A fragment is one per MARKER and is the copy that multiplies.
+	 *
+	 * <p>The unit is its own source, so its {@code sourceCitedIndexes} is its own
+	 * {@code citedIndexes} — unmodifiable here, because {@link Sentence} stores both sets rather
+	 * than copying them.
+	 */
+	private static Sentence newSentence(String text) {
+		return new Sentence(text,
+				Collections.unmodifiableSet(ChartSearchAiUtils.citedIndexes(text)), false);
+	}
+
+	/**
 	 * An answer sentence, or a per-citation fragment of one — a clause under clause-scoped grounding,
 	 * or one item of an enumerating sentence in either mode — and the citation indices it is scored
 	 * against. For a whole sentence {@link #citedIndexes} is exactly the {@code [N]} markers in
@@ -1966,7 +1988,10 @@ public class CitationGroundingVerifier {
 		final boolean isolate;
 
 		/** Whole-sentence constructor: the unit is its own source, so {@link #sourceCitedIndexes}
-		 *  is the same instance as {@code citedIndexes}, which the caller has made unmodifiable. */
+		 *  is the same instance as {@code citedIndexes}, which the caller has made unmodifiable. A
+		 *  whole sentence reaches it through {@link CitationGroundingVerifier#newSentence}, as a
+		 *  fragment reaches the constructor below through
+		 *  {@link CitationGroundingVerifier#newFragment}. */
 		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate) {
 			this(text, citedIndexes, isolate, citedIndexes);
 		}

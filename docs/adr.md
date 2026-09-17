@@ -108,6 +108,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
+- [Decision 103: Per-marker claim splitting spends one allowance per ANSWER, and a fragment shares its parent's citation set](#decision-103-per-marker-claim-splitting-spends-one-allowance-per-answer-and-a-fragment-shares-its-parents-citation-set)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -8332,3 +8333,14 @@ refusal set — replacing it with a list reddens that case and nothing else),
 splitter that does not exist yet, and `.theCitationsAClaimRestsOnAreAViewAndNotACopy`, which covers
 the `restsOn` sink above. What each of those two structural rules reaches that no behavioural case
 does is stated in its own javadoc, and is narrower than either rule as a whole.
+
+A later reviewer walked through both, and each was tightened onto the construction rather than its
+neighbourhood. The first allow-listed a whole METHOD, `splitIntoCitedSentences(String,
+FragmentBudget)`, because the whole-sentence construction sat there — so an uncharged per-marker
+splitter written into that same method, its natural home since it already holds the budget, passed
+the rule. The whole-sentence construction now has a tiny factory of its own, `newSentence`, and the
+allow-list is the two factories. The second read `restsOn`'s own body only, so collapsing the two
+operands into one set inside `ClaimSupport`'s CONSTRUCTOR restored the per-reference copy with the
+rule green; it now reads the `ClaimSupport` body as well. Each mutation is spelled out in the
+javadoc of the rule it targets: applied against the tightened rules, that rule is what reddens while
+`CitationGroundingVerifierTest` stays green, which is the reason both rules are structural.

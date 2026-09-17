@@ -2459,14 +2459,18 @@ public class DrugReference {
 	 * The keys under which this entry answers {@link #isNamed} — every alias, {@link #normalizeName}d,
 	 * blanks dropped and duplicates collapsed.
 	 *
-	 * <p><b>The INVERSE of {@link #isNamed}, and it exists so that "every loaded entry this token
-	 * names" can be answered without walking the dataset.</b> That question is asked by
-	 * {@code DrugSafetyValidator.unambiguouslyNames}, which since issue #339 is asked once per rule
-	 * chip rather than once per folded chip, and a {@code getAll()} walk per ask grows with the drugs
-	 * in play — the very thing
+	 * <p><b>The INVERSE of {@link #isNamed}, and it exists so that "every entry of a population this
+	 * token names" can be answered without walking that population.</b> Issue #339 asked it of the
+	 * loaded dataset: {@code DrugSafetyValidator.unambiguouslyNames} is asked once per rule chip
+	 * rather than once per folded chip, and a {@code getAll()} walk per ask grows with the drugs in
+	 * play — the very thing
 	 * {@code CoMedicationResolutionPerPassTest.theCoMedicationResolutionDoesNotGrowWithTheDrugsInPlay}
 	 * forbids. So {@link DrugReferenceService#nameIndex()} inverts the whole dataset once per pass and
-	 * reads it back through {@link DrugReferenceService#entriesNamedBy}.
+	 * reads it back through {@link DrugReferenceService#entriesNamedBy}. Issue #447 asks the same
+	 * question of a SMALLER population — {@code DrugSafetyValidator.AboveFloorRules} inverts only the
+	 * rows one pairwise arm is screening, through {@link DrugReferenceService#nameIndexOf}, because
+	 * inverting all of a shipped dataset would put a whole-dataset walk on the commonest question.
+	 * Both read it back through the same accessor; neither may read a key out of this set by index.
 	 *
 	 * <p>Here rather than at the service, and derived from the same field through the same
 	 * normalisation as the predicate directly above, because the two must answer identically: an index

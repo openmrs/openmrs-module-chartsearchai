@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1115,15 +1116,37 @@ public class DrugReferenceService {
 	 * never a field on this bean (CLAUDE.md, issue #172): this map is keyed on the loaded aliases, so
 	 * it is bounded, but the bean is a Spring singleton and an unsynchronised map shared by concurrent
 	 * requests is the first of the two reasons that rule gives. {@code DrugSafetyValidator.CoMedications}
-	 * is the only holder.
+	 * is the only holder of an index over the WHOLE loaded dataset; since issue #447
+	 * {@code DrugSafetyValidator.AboveFloorRules} holds one over the handful of entries a single arm
+	 * is screening, through {@link #nameIndexOf}.
 	 *
 	 * @return a fresh index; the caller owns it. Read it back through
 	 *         {@link #entriesNamedBy(String, Map)} rather than by {@code get}, so the token is
 	 *         normalised the one way {@link DrugReference#isNamed} normalises it.
 	 */
 	Map<String, List<DrugReference>> nameIndex() {
+		return nameIndexOf(getAll());
+	}
+
+	/**
+	 * The same inversion over an arbitrary POPULATION — the body {@link #nameIndex()} is, asked of a
+	 * caller's own entries rather than of the loaded dataset. Issue #447's question-pair arm inverts
+	 * the handful of rows ONE question resolved, where inverting all 2283 shipped entries would put a
+	 * whole-dataset walk on the commonest two-drug question, which costs 8 ms today.
+	 *
+	 * <p><b>A distinct NAME and deliberately not an overload of {@link #nameIndex()}.</b> ADR Decision
+	 * 54 records what the overload shape costs here: dropping the argument at a call site reinstates
+	 * the full walk as an <em>overload resolution</em> rather than as a new mention, and that mutation
+	 * was measured to leave {@code CoMedicationResolutionPerPassTest} and the whole api suite green.
+	 * Under two names it does not compile.
+	 *
+	 * @param entries the population to invert; the caller owns the answer, exactly as above
+	 * @return a fresh index over {@code entries}, read back through
+	 *         {@link #entriesNamedBy(String, Map)} like any other
+	 */
+	static Map<String, List<DrugReference>> nameIndexOf(Collection<DrugReference> entries) {
 		Map<String, List<DrugReference>> index = new LinkedHashMap<String, List<DrugReference>>();
-		for (DrugReference entry : getAll()) {
+		for (DrugReference entry : entries) {
 			for (String key : entry.nameKeys()) {
 				List<DrugReference> named = index.get(key);
 				if (named == null) {

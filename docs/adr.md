@@ -8147,3 +8147,95 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `stated < named` guard in its other state),
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
+
+## Decision 103: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound
+
+Issue #447. The question-pair arm asked "which of `subject`'s above-floor rules name `other`?" by
+scanning `subject`'s whole interaction list, and both pairwise arms ask it once per ORDERED pair —
+twice per unordered pair from `collectQuestionPairInteraction`, and again from `pairKeyNames`, whose
+inner loop runs to the end of every list whenever nothing relates the drug it is naming. So the cost
+was quadratic in a list the QUESTION chooses, times the rules on each row, and the only bound on
+either factor was the controller's `MAX_QUESTION_LENGTH` of 1000 characters. `validate` runs twice per
+request, the first pass from `DrugReferenceInjector.preAnswerFindings` and therefore outside the
+serialised engine lock, so a request's CONTENT set a superlinear amount of CPU in the shared OpenMRS
+JVM.
+
+Measured on this branch by driving the real `validate` over the shipped knowledge base (2283 entries,
+590,312 links) on a chart with NO active orders, one pass, after a warm-up call — so these are the
+arms' cost with nothing else the chart could contribute, not a share of a realistic pass; Decision 54's
+43-order table is the baseline for that, and its chart-less column bounds rather than measures these
+arms. `N` is what `findImpliedByQuery` resolved:
+
+| question | N | before | after |
+|---|---|---|---|
+| "Does warfarin interact with aspirin?" | 2 | 8 ms | 3 ms |
+| 194 chars, highest-rule-count short names | 18 | 78 ms | 15 ms |
+| 997 chars, same packing | 95 | 1,844 ms | 55 ms |
+| 998 chars, packed by rows-resolved-per-character | 195 | 7,109 ms | 47 ms |
+
+The chips were identical at every cell, before and after (1 at N=2, 10 — the cap — at every other).
+N=195 is a LOWER BOUND on what 1000 characters can resolve and not a proven ceiling: the packer scored
+aliases of 3 to 12 characters independently and packed greedily.
+
+**The attribution is structural, not a quotient.** The same harness wrapped every entry's interaction
+list, through the public `DrugReference.setInteractions`, in a delegate holding the same elements in
+the same order and counting the times production asked it for an iterator. At N=95 that was 9,142
+walks against the 8,930 the pair loop alone predicts, and 6,575,839 rule reads; after the change, 190
+walks — exactly twice N, this arm's one plus `bestRulePerPartner`'s — and 136,562 reads. Dividing the
+pass time by the reads would only restate the total it came from, so no per-read figure is recorded
+here.
+
+**The fix is to invert, not to scan** — the remedy this module already took at #339, where
+`unambiguouslyNames` walked `getAll()` per ask. `DrugReference.nameKeys()` is the precomputed inverse
+of `isNamed`; `DrugSafetyValidator.AboveFloorRules` inverts the rows ONE arm is screening into it,
+through `DrugReferenceService.nameIndexOf`, plus an ATC index for `identifies`' second leg, and walks
+each subject's rule list exactly once. The population is the arm's own and deliberately not the loaded
+dataset: inverting all 2283 shipped entries would put a whole-dataset walk on the commonest two-drug
+question. `nameIndexOf` is a distinctly NAMED body rather than an overload of `nameIndex()`, because
+Decision 54 measured what the overload shape costs here — dropping the argument reinstates the full
+walk as an overload RESOLUTION, with the suite green.
+
+**Both callers of `pairKeyNames` are served, and that is a choice rather than a consequence.** The
+signature could have had `pairKeyNames` build its own. What is not a choice is that the join is
+reached from `addActiveOrderPairInteractions` too, so leaving it scanning would have left an
+`N(N-1)`-scan path standing inside the very arm the issue is about — reachable by a question naming
+drugs that relate nothing, where the inner break never fires. #447 filed that sibling arm as "noted,
+not filed"; this change closes its half of the same join as well, and its cost profile is never worse
+(`pairKeyNames` did between `N` and `N(N-1)` full scans; it now does `N`, and fewer than two screened
+entries admit no pair so nothing is read at all).
+
+**Alternatives rejected.**
+
+*Cap the number of question-resolved rows the arm screens, and state the truncation in
+`PairChipExtent`* — #447's own first suggestion. Refused on this decision's own measurement: at the
+largest question the controller admits the arm now costs 47 ms against 3-8 ms for an ordinary one, so
+a cap buys nothing measurable and costs a narrower safety screen. It would also cost a wire change
+that is not merely additive. `PairChipExtent.getFound()` is defined as how many candidate pairs the
+arm ENUMERATED, and `found == 0` asserts that an arm ran and the data related none of them; screening
+a subset makes that count a measurement of a population the arm chose, which a client cannot tell from
+a complete screen without a third number — the class of statement Decisions 60, 65, 69 and 71 price.
+This is NOT the refusal #131 and #256 record: those refuse stopping enumeration AT THE CHIP CAP,
+because the cut is "the least severe go" and an early stop changes WHICH pairs are dropped. That is a
+different lever and its argument does not transfer.
+
+*Count in-flight requests per user toward the rate limit* — #447's third criterion, and outside the
+arm its title and first evidence item scope it to. The issue itself files that half as "Amplifier
+only" and records its sibling finding as rejected. Left open; what changed is that the work a parallel
+request now multiplies is ~150x smaller.
+
+*Rewrite `DrugReference.isNamed` as `nameKeys.contains(normalizeName(token))`* — equivalent by
+construction, and it would retire the per-alias re-normalisation for every caller rather than only
+here. Not taken in this change: it reduces a CONSTANT whose multiplier this decision removes, and it
+touches every caller in the module. Its own ticket.
+
+**One residue, stated rather than closed.** The `identifies` confirmation that every indexed candidate
+is put through is not load-bearing today — the indexes are exact, and removing it leaves the whole api
+suite green, measured. It guards the too-WIDE direction only; nothing about the shape guarantees the
+too-NARROW one, and a lost candidate drops an interaction chip fail-closed, so that direction is asked
+of real data at every floor and every ordered pair instead.
+
+→ `AboveFloorRuleJoinAgreementTest` (the join's ANSWER, over the excerpt, over a fixture carrying an
+ATC-only rule — the leg nothing in the tree covered — and over the rows a route-variant question
+resolves from the shipped KB), `QuestionPairRuleScanPerPassTest` (what each added drug COSTS, and a
+body-scoped source guard against a future arm reading a rule list of its own),
+`NameIndexAgreesWithIsNamedTest.theIndexAgreesOverAProperSubsetOfADatasetRatherThanReachingPastIt`.

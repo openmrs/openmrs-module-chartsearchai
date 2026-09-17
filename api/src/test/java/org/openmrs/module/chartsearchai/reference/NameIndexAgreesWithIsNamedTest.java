@@ -114,6 +114,44 @@ public class NameIndexAgreesWithIsNamedTest {
 		assertAgrees(DrugReferenceTestSupport.shippedEntries(), "the shipped knowledge base");
 	}
 
+	/**
+	 * The same property over a PROPER SUBSET of a loaded dataset, which is the reading
+	 * {@link DrugReferenceService#nameIndexOf(java.util.Collection)} introduced at issue #447 and
+	 * which the cases above cannot see: each of them builds the index over the very list it then
+	 * walks, so an index that silently reached past its argument — to {@code getAll()}, say — would
+	 * agree with them. {@code DrugSafetyValidator.AboveFloorRules} inverts only the rows one arm is
+	 * screening, and an index answering for entries outside that population would relate a pair the
+	 * question never named.
+	 *
+	 * <p>The corpus stays the WHOLE dataset's names, deliberately: a token naming only an entry
+	 * outside the subset must find nothing, and asking the subset's own names alone would never put
+	 * that question.
+	 */
+	@Test
+	public void theIndexAgreesOverAProperSubsetOfADatasetRatherThanReachingPastIt() {
+		List<DrugReference> entries = DrugReferenceTestSupport.ddinterEntries();
+		List<DrugReference> half = entries.subList(0, entries.size() / 2);
+		assertTrue(half.size() > 1 && half.size() < entries.size(),
+			"the excerpt must split into a proper, non-trivial subset or this says nothing: "
+					+ half.size() + " of " + entries.size());
+
+		Map<String, List<DrugReference>> index = DrugReferenceService.nameIndexOf(half);
+		int excluded = 0;
+		for (String token : corpus(entries)) {
+			assertEquals(byPredicate(half, token),
+				DrugReferenceService.entriesNamedBy(token, index),
+				"an index built over half the excerpt disagrees with DrugReference.isNamed asked of"
+						+ " that same half about \"" + token + "\"; an index that answers for entries"
+						+ " outside the population it was built over would relate a pair the arm holding"
+						+ " it never screened (issue #447)");
+			if (byPredicate(entries, token).size() > byPredicate(half, token).size()) {
+				excluded++;
+			}
+		}
+		assertTrue(excluded > 0, "no name of the excerpt belonged to an entry outside the half, so the"
+				+ " subset reading was never actually put to the test");
+	}
+
 	@Test
 	public void aTokenNoEntryNamesAndABlankOneFindNothing() {
 		DrugReferenceService service =

@@ -8197,20 +8197,33 @@ re-fetched from the pinned revision rather than merely refused, because a stale 
 substituted one are indistinguishable on disk and the replacement is bound to the same digest:
 that decides how many restarts recovery takes, not what is accepted.
 
-The cost is real and was measured rather than estimated, because the earlier draft of this
-paragraph guessed and guessed wrong — it said the hashing is "paid alongside the download it
-replaces", which is true only of a first boot. On a steady-state restart there is no download: the
-old code returned early whenever the target existed, so a restart did no work on the weights at
-all, and removing that early return is the whole point of this decision. All four artifacts are
-8.52 GB, of which 0.44 GB is synchronous (the embedder, because the global properties it gates are
-written seconds later) and 8.08 GB is two parallel background subshells. Measured on an Apple M1
-Max, 2026-09-17: **5.17 s for all four at 1.69 GB/s** with the ARMv8 SHA extension, and **23.4 s at
-0.364 GB/s** with it disabled — the second being the honest figure for a deploy host without SHA-NI.
-Cold page cache added 0.1 s on NVMe; on 150 MB/s storage the read dominates at ~57 s whatever the
-CPU does. Against the budget, `docker-compose.yml` gives the backend service a 30-minute
-`start_period`, so the synchronous half is under a tenth of a percent of it. Which column a given
-host is in is decided by its ISA, which `record_cpu_breadcrumb` already records into
-`chartsearchai.demo.cpuInfo`.
+The cost is real, and two drafts of this paragraph got it wrong before it was measured — the first
+said the hashing is "paid alongside the download it replaces", which is true only of a first boot,
+and the second attributed a rate to a CPU feature when the measurement had actually varied the
+TOOL. What is true: on a steady-state restart there is no download, because the old code returned
+early whenever the target existed (`backend-init.sh:176-178` at `c430a960`), so a restart did no
+work on the weights at all. Removing that early return is the point of this decision, and the
+hashing it adds is net-new work with nothing to overlap.
+
+The volume is 8.52 GB across the four artifacts: 0.44 GB synchronous — the embedder, because the
+global properties it gates are written seconds later — and 8.08 GB in two parallel background
+subshells. What that costs depends on which of the three tools `file_sha256` finds, and the spread
+between them is larger than any other factor here. Measured 2026-09-17 on one Apple M1 Max over a
+1 GB file, warm cache, all three digests compared and identical:
+
+| tool | rate | 8.52 GB would take |
+|---|---|---|
+| `sha256sum` (coreutils) | 1.55 GB/s | ~5.5 s |
+| `openssl dgst -sha256` | 1.67 GB/s | ~5.1 s |
+| `shasum -a 256` (Perl) | 0.30 GB/s | ~28 s |
+
+That 5x is why `file_sha256` tries the two fast tools first and `shasum` last — an order this
+measurement changed, since it had been second. The backend image is Debian, so it takes the first
+row either way; the order matters on a checkout that has no coreutils. One machine and one file size is not a model of anyone else's
+host — what the numbers are here for is the comparison against the budget, and on that they are not
+close: `docker-compose.yml` gives the backend service a 30-minute `start_period`, which the
+synchronous half uses under a tenth of a percent of. Storage can dominate instead of the CPU, and
+this measurement says nothing about that case: it was taken warm, on NVMe.
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its diagnostic: a ~1 MB "successful" ONNX file means the upstream export moved to

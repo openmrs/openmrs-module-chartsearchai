@@ -78,22 +78,26 @@ manifest_bytes() { _mm_field "$1" bytes; }
 
 manifest_url() { _mm_field "$1" url; }
 
-# file_sha256 <file> — the file's sha256 as lowercase hex. The three tools are tried in turn
-# because the fetch sites do not share an environment: the backend image is Debian (coreutils
-# sha256sum), a maintainer's macOS checkout has shasum, and openssl is the last resort. The same
+# file_sha256 <file> — the file's sha256 as lowercase hex. Three tools are tried because the fetch
+# sites do not share an environment: the backend image is Debian and has coreutils `sha256sum`, a
+# maintainer's macOS checkout may have only `shasum`, and `openssl` is common on both. The same
 # hedge the neighbouring stat calls in backend-init.sh make, for the same reason.
+#
+# `shasum` is tried LAST rather than second because it is a Perl implementation and measurably
+# slower — ADR Decision 103 records the rates, and the gap is wide enough to matter over multi-GB
+# weights. Its digest agrees with the other two; only its speed differs.
 file_sha256() {
 	if command -v sha256sum >/dev/null 2>&1; then
 		_mm_sum=$(sha256sum "$1") || return 1
 		printf '%s\n' "${_mm_sum%% *}"
-	elif command -v shasum >/dev/null 2>&1; then
-		_mm_sum=$(shasum -a 256 "$1") || return 1
-		printf '%s\n' "${_mm_sum%% *}"
 	elif command -v openssl >/dev/null 2>&1; then
 		_mm_sum=$(openssl dgst -sha256 "$1") || return 1
 		printf '%s\n' "${_mm_sum##*= }"
+	elif command -v shasum >/dev/null 2>&1; then
+		_mm_sum=$(shasum -a 256 "$1") || return 1
+		printf '%s\n' "${_mm_sum%% *}"
 	else
-		echo "model-manifest: no sha256 tool available (looked for sha256sum, shasum, openssl)." >&2
+		echo "model-manifest: no sha256 tool available (looked for sha256sum, openssl, shasum)." >&2
 		return 1
 	fi
 }

@@ -151,7 +151,8 @@ _download_llm_file() {
     case $_code in
       1|2) echo "$_label was refused and deleted; restart the backend container to fetch it again from the start." >&2 ;;
       3)   echo "$_label download failed; restart the backend container to retry (curl -C - resumes from the .partial file)." >&2 ;;
-      *)   echo "$_label could not be verified (code $_code); it has been left where it is. Restart the backend container to retry." >&2 ;;
+      4)   echo "$_label is not recorded in model-manifest.tsv, so there is nothing to fetch it from; this is a packaging error and a restart will not help." >&2 ;;
+      *)   echo "$_label could not be hashed (code $_code), so it is still on disk unverified; restart the backend container to retry." >&2 ;;
     esac
   fi
 }

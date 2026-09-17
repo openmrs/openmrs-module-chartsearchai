@@ -297,6 +297,55 @@ public class ModelDownloadIntegrityTest {
 		assertFalse(Files.exists(target), "refused bytes must never reach the target name\n" + refused);
 	}
 
+	/**
+	 * {@code file_sha256} has three branches and the suite only ever executes the first, because
+	 * {@code sha256sum} is found on every machine that runs it. The other two are the ones that run
+	 * where it is not — and {@code openssl} needs its own output parsing, since it prints
+	 * {@code SHA2-256(file)= <hex>} rather than {@code <hex>  file}.
+	 *
+	 * <p>Each case runs with a PATH holding exactly ONE of the three, so the branch under test is the
+	 * only one reachable, and compares the answer against Java's own digest of the same bytes rather
+	 * than against another shell tool.
+	 */
+	@Test
+	public void everyHashingToolTheLibraryFallsBackToAgreesWithTheOthers() throws Exception {
+		Path file = work.resolve("hashed.bin");
+		Files.write(file, GOOD_BYTES);
+		List<String> exercised = new ArrayList<String>();
+
+		for (String tool : List.of("sha256sum", "openssl", "shasum")) {
+			Path real = which(tool);
+			if (real == null) {
+				continue;
+			}
+			Path only = Files.createDirectories(work.resolve("only-" + tool));
+			Path link = only.resolve(tool);
+			if (!Files.exists(link)) {
+				Files.createSymbolicLink(link, real);
+			}
+
+			Result result = libraryWithPath("file_sha256 '" + file + "'", only);
+
+			assertEquals(0, result.exit, "file_sha256 failed with only " + tool + " on PATH\n" + result);
+			assertEquals(sha256(GOOD_BYTES), result.output.trim(),
+					"the digest from " + tool + " does not match the bytes\n" + result);
+			exercised.add(tool);
+		}
+
+		assertTrue(exercised.contains("sha256sum") && exercised.size() >= 2,
+				"this case has to reach more than one branch to mean anything; it exercised " + exercised);
+	}
+
+	/** Where {@code tool} really lives, or null when this machine does not have it. */
+	private static Path which(String tool) throws Exception {
+		ProcessBuilder builder = new ProcessBuilder("/bin/sh", "-c", "command -v " + tool);
+		builder.redirectErrorStream(true);
+		Process process = builder.start();
+		String out = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8).trim();
+		process.waitFor(30, TimeUnit.SECONDS);
+		return process.exitValue() == 0 && !out.isEmpty() ? Paths.get(out) : null;
+	}
+
 	// ---- the manifest is the one committed record ----------------------------------------------
 
 	/**
@@ -388,12 +437,23 @@ public class ModelDownloadIntegrityTest {
 		return library(call, manifest());
 	}
 
+	private Result libraryWithPath(String call, Path onlyPathEntry) throws Exception {
+		return library(call, manifest(), onlyPathEntry);
+	}
+
 	private Result library(String call, Path manifestFile) throws Exception {
+		return library(call, manifestFile, null);
+	}
+
+	private Result library(String call, Path manifestFile, Path onlyPathEntry) throws Exception {
 		Path script = work.resolve("drive-" + System.nanoTime() + ".sh");
 		Files.write(script, (". '" + libraryPath() + "'\n" + call + "\n").getBytes(StandardCharsets.UTF_8));
 
 		ProcessBuilder builder = new ProcessBuilder("/bin/sh", script.toString());
 		builder.environment().put("MODEL_MANIFEST_FILE", manifestFile.toString());
+		if (onlyPathEntry != null) {
+			builder.environment().put("PATH", onlyPathEntry.toString());
+		}
 		builder.redirectErrorStream(true);
 		Process process = builder.start();
 		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);

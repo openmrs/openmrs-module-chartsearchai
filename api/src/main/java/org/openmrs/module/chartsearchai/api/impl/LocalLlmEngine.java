@@ -97,13 +97,35 @@ public class LocalLlmEngine implements LlmEngine {
 	/**
 	 * How long {@link #waitForServerReady} polls {@code /health}. It bounds the POLL and not the
 	 * whole of {@code startServer}: the deadline is tested at the top of each iteration, so the
-	 * final health request, the two readiness probes after it and any teardown on a refusal are
-	 * all spent past it — and all of it under the engine monitor. Do not read this as a ceiling on
-	 * how long a start can hold the lock.
+	 * final health request, the two readiness probes after it, the wait
+	 * {@link #CHILD_BIND_SETTLE_MS} bounds and any teardown on a refusal are all spent past it —
+	 * and all of it under the engine monitor. Do not read this as a ceiling on how long a start can
+	 * hold the lock.
 	 */
 	private static final int SERVER_STARTUP_TIMEOUT_SECONDS = 120;
 
 	private static final int HEALTH_POLL_INTERVAL_MS = 500;
+
+	/**
+	 * How long after the child was launched its bind attempt has been decided, one way or the
+	 * other — and so the earliest moment at which the child's liveness distinguishes a child that
+	 * HOLDS the port from one that has not yet tried for it. Only one process can hold
+	 * {@code 127.0.0.1:<port>}, so a child still alive past this point is the listener answering
+	 * there; a child that lost the port is gone by it.
+	 *
+	 * <p>{@code docs/adr.md} Decision 103 row 7 measured the bind 0.138 s after exec — before the
+	 * model is touched — and row 9 the exit ~0.06 s after losing it, so this is about two and a
+	 * half times what a doomed child needs to announce itself by dying. A host slow enough to
+	 * exceed it is the residue, which that decision names rather than claims away.
+	 *
+	 * <p>It is counted from the launch and not from the health reply, which is what keeps it off
+	 * the ordinary start path: {@code /health} answers {@code ok} only once the model is loaded, so
+	 * on any start that actually loaded one the window has long since passed and
+	 * {@link #requireListenerMayBeServed} waits no further. The wait it can cost is therefore
+	 * bounded by this value and paid only by a start whose first healthy reply arrives inside the
+	 * window — which is the impostor case.
+	 */
+	static final long CHILD_BIND_SETTLE_MS = 500;
 
 	/** How long {@link #requireLoopbackPortFree} waits for its connection. Loopback refuses
 	 *  immediately when nothing listens, so this bounds only a pathological case. */
@@ -1035,6 +1057,15 @@ public class LocalLlmEngine implements LlmEngine {
 	 * message says nothing could be established about a probe that established a listener. The
 	 * verdict is still right — refuse — and only the wording misdiagnoses, which is why this
 	 * branch reports the exception it caught rather than guessing.
+	 *
+	 * <p>A review round proposed that a socket bound but never LISTENING is the shape this check
+	 * passes over, its connect being refused. Measured on macOS 14 (driving this method against a
+	 * {@code Socket} bound to a loopback port and left unlistened), it is not: the SYN is dropped
+	 * rather than reset, the probe ends in {@code SocketTimeoutException}, and it is refused by
+	 * the branch above like any other listener that answers nothing. Only the platform it was
+	 * measured on is claimed — a kernel that answers such a port with a reset would read it as
+	 * free — so no test pins it in either direction, and README describes the BRANCH rather than
+	 * enumerating shapes.
 	 */
 	static void requireLoopbackPortFree(int port) {
 		// Proxy.NO_PROXY, not new Socket(): the no-arg constructor is proxy-aware, and a proxied
@@ -1094,14 +1125,15 @@ public class LocalLlmEngine implements LlmEngine {
 	 * listener is the process this engine spawned, and
 	 * {@link LlamaServerEndpoint}'s class javadoc says why no bearer token can.
 	 *
-	 * <p>Three things are asked, and the first is the one the ticket (#445) turns on.
+	 * <p>Four things are asked, and the LAST is the one the ticket (#445) turns on.
 	 * <ul>
-	 *   <li>{@code childAlive} — the spawned process's liveness, re-checked AFTER the health
-	 *       response and not only before it.
-	 *       A child that lost the bind race exits immediately (measured: exit 1 in ~0.06s with
-	 *       "couldn't bind HTTP server socket", before it touches the model), so an impostor's
-	 *       {@code status: ok} arrives beside a dead child. Checking liveness only before the
-	 *       probe is what let a foreign listener be left in service.</li>
+	 *   <li>{@code childAlive} — the spawned process's liveness, asked before anything is sent to
+	 *       the listener so that a child already gone is reported as that rather than as whatever
+	 *       the probes then say about a stranger. On its own this leg establishes nothing about
+	 *       who holds the port: {@link #waitForServerReady} sends its first health request a few
+	 *       milliseconds after {@code pb.start()}, and Decision 103 row 7 measured the child's
+	 *       bind 0.138 s after exec — so at a reply that early the child is alive and has not yet
+	 *       tried for the port, whoever is answering.</li>
 	 *   <li>An unauthenticated call must be REFUSED. See
 	 *       {@link LlamaServerEndpoint#unauthenticatedProbeStatus}: without this the module
 	 *       cannot tell an enforcing server from one that ignored the key and would take the
@@ -1111,7 +1143,27 @@ public class LocalLlmEngine implements LlmEngine {
 	 *       {@link LlamaServerEndpoint#doesNotRefuseThisModulesKey} for why anything
 	 *       {@link LlamaServerEndpoint#refusesCredentials} does not name passes, and why this leg
 	 *       alone is fail-open.</li>
+	 *   <li>And liveness AGAIN, not before {@link #CHILD_BIND_SETTLE_MS} has passed since
+	 *       {@code launchedAtNanos} — a {@link System#nanoTime} reading taken as readiness began,
+	 *       which is the child's launch plus one thread construction. This is the leg that ties
+	 *       this listener to the child, and what a child alive by then establishes about the port
+	 *       is that constant's javadoc. A child that lost the port has exited before the window
+	 *       closes, so the start fails loudly instead. The two probes above are spent inside the
+	 *       same window and pay part of it.</li>
 	 * </ul>
+	 *
+	 * <p>Two ways to reach that were on the table. Sleeping past the bind latency before the FIRST
+	 * health poll would delay every poll on the grid, including the "exited during startup" report
+	 * that an ordinary failure — a missing model file — reaches first, and it would still accept
+	 * the first healthy reply, leaving nothing that observes the child a second time. Re-asking
+	 * liveness here, after a delay counted from the launch, was taken instead: it is the last thing
+	 * before {@code loadedModelPath} is set, it says in its own message what refused the start, and
+	 * counting from the launch rather than from the reply is what makes it free on every start that
+	 * loaded a model. It does not accept the first healthy reply; it accepts a healthy reply beside
+	 * a child that has already survived its bind.
+	 *
+	 * <p>The wait interrupts rather than swallowing, so a cancelled start unwinds through
+	 * {@link #waitForServerReady}'s own handler, which stops the child BEFORE re-setting the flag.
 	 *
 	 * <p>Package-private and static, taking everything it reads, because llama-server itself cannot
 	 * be launched under test — the convention {@link #buildServerCommand},
@@ -1121,7 +1173,8 @@ public class LocalLlmEngine implements LlmEngine {
 	 * (an exited child, or the running JVM) instead of standing one in.
 	 */
 	static void requireListenerMayBeServed(LlamaServerEndpoint endpoint,
-			HttpClient client, BooleanSupplier childAlive) {
+			HttpClient client, BooleanSupplier childAlive, long launchedAtNanos)
+			throws InterruptedException {
 		if (!childAlive.getAsBoolean()) {
 			throw new APIException("A listener on " + endpoint.authority()
 					+ " reported itself healthy but the llama-server this module spawned has "
@@ -1140,6 +1193,30 @@ public class LocalLlmEngine implements LlmEngine {
 			throw new APIException("The listener on " + endpoint.authority()
 					+ " rejected this module's own key. Refusing to serve it.");
 		}
+		long remaining = CHILD_BIND_SETTLE_MS - millisSince(launchedAtNanos);
+		if (remaining > 0) {
+			Thread.sleep(remaining);
+		}
+		if (!childAlive.getAsBoolean()) {
+			throw new APIException("A listener on " + endpoint.authority()
+					+ " reported itself healthy but the llama-server this module spawned was no "
+					+ "longer alive when readiness re-checked it, " + millisSince(launchedAtNanos)
+					+ " ms into this start, past the point its bind attempt was decided. Either "
+					+ "that listener took the port and the child died of losing it, or the child "
+					+ "died after the reply; this module cannot tell, and neither may be served a "
+					+ "patient's chart. Refusing to serve it.");
+		}
+	}
+
+	/**
+	 * Milliseconds elapsed since a {@link System#nanoTime} reading. That clock and not
+	 * {@code currentTimeMillis}, because this measures a DURATION on the start path: a wall clock
+	 * stepped backwards by an NTP correction or a suspended VM would leave
+	 * {@link #requireListenerMayBeServed} sleeping for the size of the step, with the engine
+	 * monitor held and every query behind it.
+	 */
+	private static long millisSince(long nanos) {
+		return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - nanos);
 	}
 
 	/**
@@ -1181,9 +1258,18 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 	}
 
+	/**
+	 * Polls {@code /health} until the listener on the port answers {@code ok}, then puts that
+	 * listener through {@link #requireListenerMayBeServed} before the caller adopts it.
+	 */
 	private void waitForServerReady() {
-		long deadline = System.currentTimeMillis()
-				+ (SERVER_STARTUP_TIMEOUT_SECONDS * 1000L);
+		// The moment CHILD_BIND_SETTLE_MS is counted from, stamped HERE rather than passed in from
+		// startServer: all that separates this line from pb.start() is the construction of one
+		// daemon thread, and a stamp this method takes for itself cannot be wired to the wrong
+		// moment — which a parameter can, silently and fail-open, since every test of the gate
+		// supplies that value directly. Erring a millisecond late only lengthens the window.
+		long launchedAtNanos = System.nanoTime();
+		long deadline = System.currentTimeMillis() + (SERVER_STARTUP_TIMEOUT_SECONDS * 1000L);
 
 		while (System.currentTimeMillis() < deadline) {
 			if (!serverProcess.isAlive()) {
@@ -1216,7 +1302,7 @@ public class LocalLlmEngine implements LlmEngine {
 						// sends the chart to it — the refusal undone one call later.
 						try {
 							requireListenerMayBeServed(endpoint, getHttpClient(),
-									serverProcess::isAlive);
+									serverProcess::isAlive, launchedAtNanos);
 						}
 						catch (APIException refused) {
 							stopServer();
@@ -1232,7 +1318,9 @@ public class LocalLlmEngine implements LlmEngine {
 			catch (InterruptedException e) {
 				// NOT "not ready yet": swallowing this would clear the cancellation and keep
 				// polling for the rest of the deadline with a child mid-launch. Same handling as
-				// the sleep below, and for the same reason.
+				// the sleep below, and for the same reason. The readiness gate's own wait unwinds
+				// here too, and must: it is this handler that stops the child before the flag is
+				// re-set.
 				stopServer();
 				Thread.currentThread().interrupt();
 				throw new APIException("Interrupted while waiting for llama-server to start");

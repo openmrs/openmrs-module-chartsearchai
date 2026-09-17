@@ -183,9 +183,13 @@ public class ProjectInstructionsGuardTest {
 		m.put(ROOT_INSTRUCTIONS, 25_000);
 		m.put(REFERENCE_INSTRUCTIONS, 76_000);
 		// The local-LLM subprocess rules (#445). The principle above asks for headroom of roughly a
-		// tenth; a first draft of this entry said it had that and did not, so the number is now
-		// derived rather than asserted — read the file's size and add a tenth.
-		m.put(LOCAL_LLM_INSTRUCTIONS, 3_900);
+		// tenth; the first two drafts of this entry said it had that and did not — the second
+		// announced the correction while repeating the arithmetic of the first, which a review
+		// round caught (#461) — so the number is what the stated derivation gives rather than what
+		// it was thought to give: read the file's size and add a tenth, rounded up to the next
+		// hundred. Raised while the file still fits the number being replaced, which is what keeps
+		// the correction from being the move the paragraph above forbids.
+		m.put(LOCAL_LLM_INSTRUCTIONS, 4_300);
 		return m;
 	}
 

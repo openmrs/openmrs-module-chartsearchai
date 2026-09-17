@@ -8198,11 +8198,13 @@ is the only thing that builds a request to it.
 beside the five — an unauthenticated request is silent, so no behavioural test would notice it.
 
 Readiness now requires, after a healthy `/health`, that the child is *still alive*, that an
-*unauthenticated* inference call is *refused*, and that this start's key is *not refused* — the
+*unauthenticated* inference call is *refused*, that this start's key is *not refused* — the
 weaker of the two, deliberately, because a build that does not serve the route the second leg asks
-answers 404, which says nothing about the key; and
-`requireLoopbackPortFree` refuses to launch onto a port something already holds, so the
-no-race path — bind while the port is free — fails loudly instead of being adopted.
+answers 404, which says nothing about the key — and, last, that the child is *still alive once its
+bind attempt has been decided*, `CHILD_BIND_SETTLE_MS` after the start began. That fourth leg is
+the one that ties the listener to the child, and the residue section below is where the arithmetic
+of it sits. And `requireLoopbackPortFree` refuses to launch onto a port something already holds, so
+the no-race path — bind while the port is free — fails loudly instead of being adopted.
 
 **What was measured, on the bundled binary (it reports `version: 1 (4eac5b4)`; the natives module
 pins no llama.cpp version, and `LlamaServerBinary.resolve` reuses an operator-supplied binary where
@@ -8246,9 +8248,10 @@ travels on: a future build that reclassified it as public is exactly one whose r
 matters, so failing the start there reports the thing worth failing over. Rows 5 and 8 are why the
 control is possible at all, and row 8 is why it is free.
 
-**What ties readiness to the child, and the residue.** The port check and the liveness re-check,
-and nothing else. Row 7 sets the size of what is left: the check returns and the child binds ~0.14 s
-later, so an impostor must now win that window rather than simply arriving while the port is free.
+**What ties readiness to the child, and the residue.** The port check and the liveness asked after
+the child's bind window, and nothing else. Row 7 sizes that window: the check returns and the child
+binds ~0.138 s later, so an impostor has to win those milliseconds rather than simply arrive while
+the port is free — and then has to survive the leg below, which asks the child about it.
 (The check connects rather than binding, so it never holds the port against the child — the
 "probe socket closes" phrasing belonged to the bind form this decision replaced. Only a
 `ConnectException` reads as a free port; a resolution failure, or a timeout against a listener that
@@ -8262,11 +8265,46 @@ non-`ConnectException` case refuse the start, and a review round proved from the
 `catch` reassigned that flag, so every one of those cases still read as "free". A later form added "a failed close" to the list, which a second
 round measured wrong in the ordering that matters: when the connect is refused and the close then
 fails, the `ConnectException` handler wins and the close failure is suppressed — the right answer,
-since the port is free, but not that branch.) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
-the liveness re-check then turns the adoption into a loud failure unless the re-check happens to run
-inside those 60 ms. The residue is that window, and the option that would close it rather than
-narrow it is an unpredictable ephemeral port handed to the child, which is not taken here because
-`chartsearchai.llm.serverPort` is a documented, operator-configured contract.
+since the port is free, but not that branch.) Row 9 is what closes that window rather than narrowing it: a process that wins the bind kills the
+child, which exits in ~0.06 s, so the child's own liveness answers the question a bearer token
+cannot — a child alive once its bind attempt has been decided HOLDS the port, and only one process
+can hold it, so the listener that answered is that child.
+
+A first form of this leg read liveness at the first healthy `/health` reply and claimed exactly
+that, and a review round measured it backwards. `waitForServerReady` polls with no initial sleep, so
+the first reply lands a few milliseconds after `pb.start()` — inside the 0.138 s of row 7, while the
+doomed child is alive and has not yet tried for the port. An impostor answering `{"status":"ok"}`,
+401 unauthenticated and 200 to any bearer therefore passed all three legs in the steady state, and
+was handed the prompt and the chart; only a run slow enough to outlast the child's whole
+bind-and-die — the cold first start — refused it. The written record was worse than the code. The
+PR body called the window one in which the *start fails* rather than one in which a foreign
+listener is *served* — once per port-free window, repeatable on every relaunch. This section put
+the two windows in the wrong order instead, allowing that the re-check might run inside row 9's
+60 ms exit: it ran inside the PRE-BIND window of row 7, which comes first and lasts longer, so the
+exit window was never reached.
+
+So the leg is now asked LAST and not before `CHILD_BIND_SETTLE_MS` has passed since readiness began
+(≈ `pb.start()`, one thread construction earlier): 0.5 s, about two and a half times row 7's bind
+plus row 9's exit. It is counted from the launch rather than from the reply, which is what keeps it
+off the ordinary start path — `/health` answers `ok` only once the model is loaded, seconds later,
+by which point the window has passed and nothing is spent. Measured by
+`LocalLlmServerAuthTest.aHealthyReplyLongAfterTheBindWindowIsAdoptedWithoutWaitingFurther`, which
+is where that figure comes from: 2 ms for the gate's two warm loopback probes and no wait. The
+alternative considered — sleeping past the bind latency before the FIRST poll — was not taken: it
+delays every poll on the grid including the report an ordinary failure reaches first, and it still
+accepts the first healthy reply, so nothing observes the child a second time.
+
+Two residues, named rather than claimed away. The leg rests on the child being DEAD by the end of
+the window, so a host on which the bind outcome is not decided inside it — exec stalled under I/O
+contention past half a second — leaves the old adoption available; and an operator-supplied build
+that logs a failed bind and keeps running is not covered at all, row 9 being a property of the
+bundled one. The option that would close both rather than bound them is an unpredictable ephemeral
+port handed to the child, which is not taken here because `chartsearchai.llm.serverPort` is a
+documented, operator-configured contract. And the positive control stands: a listener that demands
+the key beside a child that holds the port is accepted without being identified, which is all this
+design can ask — `LocalLlmServerAuthTest.aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness`
+is that case, and `aHealthyReplyInsideTheChildsBindWindowIsRefusedRatherThanAdopted` is the one the
+fourth leg refuses.
 
 **Why the port check CONNECTS rather than binds, and how that was got wrong first.** The check's
 first form bound a probe socket with `SO_REUSEADDR` and read a refused bind as "occupied". Two

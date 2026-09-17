@@ -228,6 +228,37 @@ public class LocalLlmServerAuthTest {
 		}
 	}
 
+	/**
+	 * The two halves of the channel are the SAME secret, asserted against each other. Nothing else
+	 * here does that: the environment tests read what {@code handOverTo} wrote and stop there,
+	 * while the test above derives what its listener demands FROM the endpoint, so whatever
+	 * {@code request} sends is accepted by construction. A bearer built from anything other than
+	 * the field is therefore invisible to both — measured, with {@code "Bearer " + API_KEY_ENV} on
+	 * the wire (the constant sits a hundred lines above the field in the same small class) the
+	 * whole build stayed green, while what shipped would present a credential the child does not
+	 * hold: every start refused at readiness's keyed leg, on the default engine, re-paid per query.
+	 *
+	 * <p>It spells the header out rather than only looking for the secret inside it, which
+	 * {@code expectedBearer} deliberately does not do — the difference is that this test's subject
+	 * IS the relation between the two, and a containment check is vacuous if the secret is ever
+	 * empty.
+	 */
+	@Test
+	public void theBearerOnTheWireIsTheSecretTheChildWasHanded() {
+		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(9999);
+		ProcessBuilder child = new ProcessBuilder("/bin/llama-server");
+
+		endpoint.handOverTo(child);
+		String handedToTheChild = child.environment().get(LlamaServerEndpoint.API_KEY_ENV);
+		String sentOnTheWire = endpoint.request(endpoint.completionsUrl(), TIMEOUT).GET().build()
+				.headers().firstValue("Authorization").orElse("");
+
+		assertEquals("Bearer " + handedToTheChild, sentOnTheWire,
+				"the credential this endpoint puts on the wire must be the one it handed the same "
+				+ "start's child: they are the two ends of one shared secret, and a module "
+				+ "presenting anything else is refused by its own server on every query");
+	}
+
 	// ---- the port must be free before the child is launched ----
 
 	@Test
@@ -412,17 +443,22 @@ public class LocalLlmServerAuthTest {
 	// ---- readiness is the child's, and the key's ----
 
 	/**
-	 * The positive control, without which the three refusals below could all pass over a check that
-	 * refuses everything. It is also, read honestly, the residue: this listener is NOT the spawned
-	 * child, and it is accepted — because it demands the key and the child is alive, which is all
-	 * the design can ask. A perfect mimic that wins the bind race is not refusable by these
-	 * probes, and {@code docs/adr.md} Decision 103 states that rather than claiming otherwise.
+	 * The positive control, without which the refusals below could all pass over a check that
+	 * refuses everything. It is also, read honestly, part of the residue: this listener is NOT the
+	 * spawned child, and it is accepted — the probes cannot tell, and no bearer token could. What
+	 * the gate has instead is the bind window, which this control satisfies by leaving the child
+	 * alive right through it; a mimic that won the port would have killed the child and be refused
+	 * on that leg, which is
+	 * {@link #aHealthyReplyInsideTheChildsBindWindowIsRefusedRatherThanAdopted}. What is left is a
+	 * mimic that takes the port WITHOUT the child noticing — a host slow enough that the window
+	 * closes before the child has tried, or a build that survives a failed bind — and
+	 * {@code docs/adr.md} Decision 103 states that rather than claiming otherwise.
 	 */
 	@Test
-	public void aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness() throws IOException {
+	public void aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness() throws Exception {
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
 			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(),
-					CLIENT, ProcessHandle.current()::isAlive);
+					CLIENT, ProcessHandle.current()::isAlive, System.nanoTime());
 		}
 	}
 
@@ -433,10 +469,13 @@ public class LocalLlmServerAuthTest {
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
 			APIException thrown = assertThrows(APIException.class,
 					() -> LocalLlmEngine.requireListenerMayBeServed(
-							listener.endpoint(), CLIENT, exitedChild),
-					"a child that lost the bind race exits at once, so a healthy answer beside a "
-					+ "dead child is another process answering — it must fail the start rather "
-					+ "than leave a foreign listener in service");
+							listener.endpoint(), CLIENT, exitedChild,
+							System.nanoTime()),
+					"a healthy answer beside a child that is already gone is another process "
+					+ "answering, and must fail the start rather than leave a foreign listener in "
+					+ "service. This leg is the cheap one: it catches the case the module can see "
+					+ "without waiting, and says so, rather than reporting the stranger's "
+					+ "credentials");
 			assertTrue(thrown.getMessage().contains("exited"),
 					"the failure must say the spawned server is gone: " + thrown.getMessage());
 		}
@@ -449,7 +488,7 @@ public class LocalLlmServerAuthTest {
 			APIException thrown = assertThrows(APIException.class,
 					() -> LocalLlmEngine.requireListenerMayBeServed(
 							listener.endpoint(), CLIENT,
-							ProcessHandle.current()::isAlive),
+							ProcessHandle.current()::isAlive, System.nanoTime()),
 					"a listener that answers an inference request with no credential is not "
 					+ "enforcing the key this module minted, so it would have taken the chart "
 					+ "from anyone — and there is no way to tell it from an impostor");
@@ -468,7 +507,7 @@ public class LocalLlmServerAuthTest {
 			APIException thrown = assertThrows(APIException.class,
 					() -> LocalLlmEngine.requireListenerMayBeServed(
 							listener.endpoint(), CLIENT,
-							ProcessHandle.current()::isAlive),
+							ProcessHandle.current()::isAlive, System.nanoTime()),
 					"a server that rejects this start's key must fail the start, not surface as a "
 					+ "401 on a clinician's query");
 			assertTrue(thrown.getMessage().contains("rejected"),
@@ -477,14 +516,14 @@ public class LocalLlmServerAuthTest {
 	}
 
 	@Test
-	public void aListenerWithNoPropsRouteIsStillReadiness() throws IOException {
+	public void aListenerWithNoPropsRouteIsStillReadiness() throws Exception {
 		try (KeyDemandingListener listener = KeyDemandingListener.withoutAPropsRoute()) {
 			// The key leg asks whether the key was REFUSED, so a 404 — this build does not serve
 			// that route — must not fail the start. Requiring 200 there would refuse a build for
 			// something that says nothing about its authentication, and the unauthenticated leg
 			// still proves the key is in force.
 			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(),
-					CLIENT, ProcessHandle.current()::isAlive);
+					CLIENT, ProcessHandle.current()::isAlive, System.nanoTime());
 		}
 	}
 
@@ -553,13 +592,13 @@ public class LocalLlmServerAuthTest {
 	}
 
 	@Test
-	public void aListenerRefusingWith403RatherThan401IsStillReadiness() throws IOException {
+	public void aListenerRefusingWith403RatherThan401IsStillReadiness() throws Exception {
 		try (KeyDemandingListener listener = KeyDemandingListener.refusingWith403()) {
 			// 403 is a server refusing the credential just as squarely as 401 — a fronting proxy's
 			// answer. Requiring exactly 401 would refuse the start of a server that DOES demand a
 			// credential, which is the opposite of what this gate is for.
 			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(), CLIENT,
-					ProcessHandle.current()::isAlive);
+					ProcessHandle.current()::isAlive, System.nanoTime());
 		}
 	}
 
@@ -602,11 +641,100 @@ public class LocalLlmServerAuthTest {
 
 		APIException thrown = assertThrows(APIException.class,
 				() -> LocalLlmEngine.requireListenerMayBeServed(nobodyThere, CLIENT,
-						ProcessHandle.current()::isAlive),
+						ProcessHandle.current()::isAlive, System.nanoTime()),
 				"a listener that cannot be probed has not refused anything, so readiness must "
 				+ "refuse the start rather than take silence for a credential check");
 		assertTrue(thrown.getMessage().contains("could not be completed"),
 				"and say that is what happened: " + thrown.getMessage());
+	}
+
+	// ---- the child must outlive its own bind window ----
+
+	/**
+	 * The launch-window race, driven in the order production drives it. An impostor that binds the
+	 * port in the instant after the pre-launch port check returns answers the FIRST health poll —
+	 * which production sends a few milliseconds after {@code pb.start()} — while the doomed child
+	 * is still alive and still pre-bind, so a liveness check taken at that reply reads TRUE. The
+	 * child then loses its bind and exits. Readiness must not have committed by then.
+	 *
+	 * <p>Everything here is real: a {@link HttpServer} impostor that demands a bearer and answers
+	 * {@code {"status":"ok"}} publicly on {@code /health} (which satisfies the other two legs — a
+	 * bearer cannot authenticate the server to the client), a real OS child process, and that
+	 * child's real exit. It is killed rather than made to exit on its own so that WHEN it stops
+	 * being alive is the one thing the test controls; the module reads {@code isAlive} and never
+	 * the exit code on this path, so the two are the same observation to it.
+	 */
+	@Test
+	public void aHealthyReplyInsideTheChildsBindWindowIsRefusedRatherThanAdopted() throws Exception {
+		Process child = launchARealChildProcess();
+		java.util.concurrent.ScheduledExecutorService losesTheBind =
+				java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+		try (KeyDemandingListener impostor = KeyDemandingListener.start()) {
+			long launchedAt = System.nanoTime();
+			assertTrue(child.isAlive(), "the child must still be alive as readiness begins, which "
+					+ "is the whole case: a gate that reads liveness only here cannot tell this "
+					+ "impostor from the server");
+			// 250 ms is a LITERAL and not derived from the production constant: it is past the
+			// 0.138 s bind and the ~0.06 s exit Decision 103 rows 7 and 9 measured, so it is when
+			// a child that lost this port really stops being alive. Deriving it from the constant
+			// would let the constant be set to zero and leave this green.
+			losesTheBind.schedule(child::destroyForcibly, 250,
+					java.util.concurrent.TimeUnit.MILLISECONDS);
+
+			APIException thrown = assertThrows(APIException.class,
+					() -> LocalLlmEngine.requireListenerMayBeServed(
+							impostor.endpoint(), CLIENT, child::isAlive, launchedAt),
+					"a listener that answered healthy while the child was still pre-bind must not "
+					+ "be adopted on that reply: the child loses the bind moments later, and by "
+					+ "then this start has already been handed the system prompt and the chart");
+			assertTrue(thrown.getMessage().contains("no longer alive"),
+					"and the failure must name the observation that refused it — the child was "
+					+ "gone once its bind attempt had been decided: " + thrown.getMessage());
+		}
+		finally {
+			losesTheBind.shutdownNow();
+			child.destroyForcibly();
+		}
+	}
+
+	/**
+	 * The other side of the same leg: a healthy reply that arrives well after the bind window —
+	 * which is every start that actually loaded a model, the window being half a second and a
+	 * model load seconds — must be adopted without waiting any further. The wait is counted from
+	 * the LAUNCH for exactly this reason, and a leg that slept unconditionally instead would put
+	 * its whole delay on every start.
+	 *
+	 * <p>Measured after a warmup call, because the first HTTP send in a JVM pays the client's
+	 * one-time initialisation — measured in the hundreds of milliseconds — and that is not the
+	 * wait this asserts.
+	 */
+	@Test
+	public void aHealthyReplyLongAfterTheBindWindowIsAdoptedWithoutWaitingFurther()
+			throws Exception {
+		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
+			long longSinceLaunched = System.nanoTime() - java.util.concurrent.TimeUnit.MILLISECONDS
+					.toNanos(10 * LocalLlmEngine.CHILD_BIND_SETTLE_MS);
+			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(), CLIENT,
+					ProcessHandle.current()::isAlive, longSinceLaunched);
+
+			long before = System.nanoTime();
+			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(), CLIENT,
+					ProcessHandle.current()::isAlive, longSinceLaunched);
+			long spent = java.util.concurrent.TimeUnit.NANOSECONDS
+					.toMillis(System.nanoTime() - before);
+
+			// 250 ms is a LITERAL, not a fraction of the production constant: that constant is
+			// the thing this asserts is NOT being spent, so a bound derived from it moves
+			// whenever it does — measured, with the constant set to 0 the derived form asserted
+			// "2 < 0" and failed for no reason of its own. Two warm loopback probes were measured
+			// at 2 ms, so this leaves two orders of magnitude of headroom and still catches a
+			// wait paid unconditionally.
+			assertTrue(spent < 250,
+					"readiness must spend nothing on the bind window once it has passed; two "
+					+ "loopback probes cost single-digit milliseconds and this took " + spent
+					+ " ms, so the wait is being paid unconditionally rather than counted from "
+					+ "the launch");
+		}
 	}
 
 	// ---- real listeners ----
@@ -782,6 +910,44 @@ public class LocalLlmServerAuthTest {
 			}
 		}
 		return port;
+	}
+
+	/**
+	 * A real OS process that stays alive until the test stops it: this JVM's own launcher running
+	 * {@link SleepingChild} off the very class directory the suite is running from. Real because
+	 * the only thing the module ever asks about its child is whether the OS still has it, and a
+	 * stand-in for that would stand in for the thing these tests exist to pin. {@code java.home}
+	 * is contractually present, the same assumption {@link #livenessOfAnExitedProcess} makes.
+	 */
+	private static Process launchARealChildProcess() throws IOException {
+		Path launcher = javaLauncher();
+		Assumptions.assumeTrue(launcher != null, "no java launcher under java.home");
+		return new ProcessBuilder(launcher.toString(), "-cp", ownClassDirectory(),
+				SleepingChild.class.getName())
+						.redirectErrorStream(true)
+						.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+						.start();
+	}
+
+	private static String ownClassDirectory() {
+		try {
+			return Paths.get(LocalLlmServerAuthTest.class.getProtectionDomain().getCodeSource()
+					.getLocation().toURI()).toString();
+		}
+		catch (java.net.URISyntaxException e) {
+			throw new IllegalStateException("cannot locate this class's own directory", e);
+		}
+	}
+
+	/**
+	 * Does nothing but stay alive, bounded so that a test JVM killed mid-run leaves nothing behind
+	 * for long. Public with a {@code main} because it is launched as a separate OS process.
+	 */
+	public static class SleepingChild {
+
+		public static void main(String[] args) throws InterruptedException {
+			Thread.sleep(Duration.ofSeconds(30).toMillis());
+		}
 	}
 
 }

@@ -61,8 +61,12 @@ import org.slf4j.LoggerFactory;
  * {@code /props} passes both legs while accepting the key nowhere — and it is not "the listener is
  * the child the engine spawned", which no bearer token can establish in this direction. What ties
  * readiness to the child is {@link LocalLlmEngine#requireLoopbackPortFree} plus the liveness
- * re-check in {@link LocalLlmEngine#requireListenerMayBeServed}. Do not write these two probes up
- * as peer authentication.
+ * {@link LocalLlmEngine#requireListenerMayBeServed} asks once the child's bind attempt has been
+ * decided — and it is the TIMING of that question, not the asking of it, that carries the weight:
+ * a child alive by then holds the port, which only one process can, so the listener that answered
+ * is that child. Liveness read at the first healthy reply establishes none of that, the reply
+ * arriving milliseconds after the launch and the bind 0.138 s after it (Decision 103 row 7). Do
+ * not write these two probes up as peer authentication.
  *
  * <p>One instance per server start, discarded with the process it was minted for, so a secret is
  * never reused across two children.

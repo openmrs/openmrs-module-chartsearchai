@@ -12,10 +12,10 @@ which is the root file's "Documenting a decision" rule.
   `LlamaServerEndpoint.LOOPBACK_HOST` or `authority`, including in an operator-facing message and
   in the `--host` argument.
   **Nothing else may spell the loopback address or call `HttpRequest.newBuilder` for it** (#445).
-  An unauthenticated request is SILENT, which is why the rule is pinned by reading the source —
-  and note the guard's pattern reaches the URL form only, so a bare `"127.0.0.1"` elsewhere is
-  invisible to it and this directive is what covers that. `RemoteLlmEngine` addresses the
-  operator's own configured endpoint and this rule says nothing about it.
+  The rule is pinned by reading the source, and note the guard's pattern reaches the URL form
+  only, so a bare `"127.0.0.1"` elsewhere is invisible to it and this directive is what covers
+  that. `RemoteLlmEngine` addresses the operator's own configured endpoint and this rule says
+  nothing about it.
   → ADR Decision 103; `ArchitectureGuardTest.everyLocalServerRequestCarriesTheModulesKey`,
   `theLocalServerAddressIsSpelledInOnePlace`.
 - **The secret reaches the child in its ENVIRONMENT, never on its command line.** That is
@@ -25,9 +25,11 @@ which is the root file's "Documenting a decision" rule.
   → ADR Decision 103, rows 2 and 3.
 - **A listener answering `/health` is not the server until readiness says so.**
   `LocalLlmEngine.requireLoopbackPortFree` runs before the child is launched and
-  `requireListenerMayBeServed` after the health reply; the three questions the second
+  `requireListenerMayBeServed` after the health reply; the four questions the second
   asks each have their own reason, given in its javadoc.
-  **Only those two tie readiness to the child.**
+  **Only those two tie readiness to the child, and only the LAST of the four legs does** —
+  liveness asked no sooner than `CHILD_BIND_SETTLE_MS` past the launch, a child alive by then
+  holding the port. Never move it earlier.
   The key probes establish less than they look like they do, and `LlamaServerEndpoint`'s class
   javadoc says exactly what. Do not write either up as more than that — here, in a decision, or in
   a comment.
@@ -41,8 +43,7 @@ which is the root file's "Documenting a decision" rule.
   `theProbeIsNotRoutedThroughAConfiguredProxy`;
   `ArchitectureGuardTest.onlyOneClientTalksToTheLocalServer`, which reads both modules' source.
 - **`--host 127.0.0.1` and `--no-webui` are load-bearing, not tidiness.** The first stops an
-  inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root, which is not the
-  only unauthenticated route on the port but is the only one this module can close and does not use.
+  inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root.
   → ADR Decision 103, rows 4 and 6; `LocalLlmServerAuthTest`.
 
 ## Its opt-in test suites

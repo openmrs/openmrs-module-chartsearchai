@@ -8249,11 +8249,15 @@ and nothing else. Row 7 sets the size of what is left: the check returns and the
 later, so an impostor must now win that window rather than simply arriving while the port is free.
 (The check connects rather than binding, so it never holds the port against the child — the
 "probe socket closes" phrasing belonged to the bind form this decision replaced. Only a
-`ConnectException` reads as a free port; a resolution failure, a timeout against a listener that
-accepts nothing, or a failed close establishes no refusal and refuses the start instead. An earlier
-form of this sentence claimed a flag set inside the `try` achieved that, and a review round proved
-from the bytecode that the `catch` reassigned the flag, so every one of those cases still read as
-"free".) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
+`ConnectException` reads as a free port; a resolution failure, or a timeout against a listener that
+accepts nothing, establishes no refusal and refuses the start instead — and that last shape, a
+saturated accept backlog, is the only one of them reachable on a healthy host, which is why it is
+what pins the branch. An earlier form of this sentence claimed a flag set inside the `try` achieved
+this, and a review round proved from the bytecode that the `catch` reassigned the flag, so every one
+of those cases still read as "free". A later form added "a failed close" to the list, which a second
+round measured wrong in the ordering that matters: when the connect is refused and the close then
+fails, the `ConnectException` handler wins and the close failure is suppressed — the right answer,
+since the port is free, but not that branch.) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
 the liveness re-check then turns the adoption into a loud failure unless the re-check happens to run
 inside those 60 ms. The residue is that window, and the option that would close it rather than
 narrow it is an unpredictable ephemeral port handed to the child, which is not taken here because

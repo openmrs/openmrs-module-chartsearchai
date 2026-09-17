@@ -1026,16 +1026,18 @@ public class LocalLlmEngine implements LlmEngine {
 	 * different one — wrongly in both directions, measured over four socket shapes in
 	 * {@code docs/adr.md} Decision 103 row 11. Only {@link ConnectException} reads as a free port;
 	 * every other {@link IOException} establishes no refusal and refuses the start, because
-	 * treating one as "nothing listening" is how this check fails OPEN. It is not exhaustive
-	 * either: a listener whose accept backlog is full answers with a timeout — which now refuses
-	 * the start rather than passing it. What catches THAT is not
-	 * {@link #requireListenerMayBeServed} — a listener accepting nothing cannot answer
-	 * {@code /health}, so that gate is never reached — but {@link #waitForServerReady}'s own
-	 * {@code isAlive} throw, when the child loses the bind and exits. Do not weaken that check on
-	 * the strength of the gate below covering it.
+	 * treating one as "nothing listening" is how this check fails OPEN — including a listener whose
+	 * accept backlog is full, which answers with a timeout and is refused HERE rather than passed
+	 * on to a later gate. That shape is the only way a non-{@code ConnectException} is reachable on
+	 * a healthy host, which is why it is the test for this whole branch:
+	 * {@code LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart}.
 	 */
 	static void requireLoopbackPortFree(int port) {
-		try (Socket probe = new Socket()) {
+		// Proxy.NO_PROXY, not new Socket(): the no-arg constructor is proxy-aware, so a JVM with
+		// socksProxyHost set would route this loopback probe through a proxy — which answers about
+		// the proxy rather than about the port, and was measured taking seconds where a direct
+		// loopback probe costs ~100 µs.
+		try (Socket probe = new Socket(java.net.Proxy.NO_PROXY)) {
 			// getByName(LOOPBACK_HOST), not getLoopbackAddress(): the latter is ::1 on a JVM
 			// started with -Djava.net.preferIPv6Addresses, which would probe an address the
 			// engine never dials and the child never binds — reporting a real 127.0.0.1 squatter
@@ -1053,9 +1055,12 @@ public class LocalLlmEngine implements LlmEngine {
 			return;
 		}
 		catch (IOException e) {
-			// Anything else — a resolution failure, a timeout against a black-hole listener, a
-			// failed close — establishes NO refusal, so it must not be read as a free port. This
-			// is the one direction this check exists to prevent.
+			// Anything else — a resolution failure, a timeout against a listener that accepts
+			// nothing — establishes NO refusal, so it must not be read as a free port. That is the
+			// one direction this check exists to prevent. Note what this does NOT cover: when the
+			// connect is refused and the close then fails, the ConnectException handler above wins
+			// and the close failure is suppressed. That is the right answer (the port IS free) but
+			// it is not this branch, and an earlier comment claimed it was.
 			throw new APIException("Could not establish whether anything is listening on "
 					+ LlamaServerEndpoint.authority(port)
 					+ " (" + e.getClass().getSimpleName() + ": " + e.getMessage()

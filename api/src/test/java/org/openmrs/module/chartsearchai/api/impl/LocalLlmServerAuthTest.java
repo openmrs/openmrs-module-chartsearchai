@@ -223,6 +223,57 @@ public class LocalLlmServerAuthTest {
 		}
 	}
 
+	/**
+	 * The refusal branch, which nothing pinned: reverting it to the fail-open form that read every
+	 * {@code IOException} as "nothing listening" left the FULL suite green, and that form is what a
+	 * review round measured shipping twice. A listener that never accepts saturates its backlog, so
+	 * the probe neither connects nor is refused — it times out, which establishes no refusal and
+	 * must refuse the start. It is the only shape in which a non-{@code ConnectException} is
+	 * reachable on a healthy host, so it is the test for the whole branch.
+	 */
+	@Test
+	public void aPortHeldByAListenerThatAcceptsNothingFailsTheStart() throws IOException {
+		// Backlog 1, and never accept: the first pending connection fills the queue.
+		try (ServerSocket blackHole = new ServerSocket(0, 1,
+				InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST))) {
+			int held = blackHole.getLocalPort();
+			try (java.net.Socket filler = new java.net.Socket(java.net.Proxy.NO_PROXY)) {
+				filler.connect(new InetSocketAddress(
+						InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), held), 2000);
+
+				APIException thrown = assertThrows(APIException.class,
+						() -> LocalLlmEngine.requireLoopbackPortFree(held),
+						"a probe that neither connects nor is refused has established nothing, so "
+						+ "the start must be refused — reading it as a free port is how this check "
+						+ "fails OPEN, which is the one direction it exists to prevent");
+				assertTrue(thrown.getMessage().contains("Could not establish"),
+						"and say that is what happened, rather than claiming a listener was found: "
+						+ thrown.getMessage());
+			}
+		}
+	}
+
+	/**
+	 * The secret's size, which nothing pinned: shrinking it to one byte left the full suite green.
+	 * An 8-bit key is guessable in 256 tries by the local process this whole change exists to lock
+	 * out, so the length is part of the security property and not an implementation detail.
+	 */
+	@Test
+	public void theSecretIsLongEnoughToBeWorthDemanding() {
+		ProcessBuilder builder = new ProcessBuilder("/bin/llama-server");
+		LlamaServerEndpoint.open(9999).handOverTo(builder);
+		String secret = builder.environment().get(LlamaServerEndpoint.API_KEY_ENV);
+
+		// 32 random bytes, base64url without padding: ceil(32 * 4 / 3) = 43 characters.
+		assertEquals(43, secret.length(),
+				"a 256-bit secret is 43 base64url characters; anything shorter is a key a local "
+				+ "process can search, and the environment it travels in does not make it safe: "
+				+ secret.length() + " characters");
+		assertTrue(secret.matches("[A-Za-z0-9_-]+"),
+				"and base64url throughout, so it survives an environment variable and an HTTP "
+				+ "header without escaping: " + secret);
+	}
+
 	@Test
 	public void aFreePortDoesNotFailTheStart() throws IOException {
 		int free;

@@ -88,11 +88,18 @@ final class LlamaServerEndpoint {
 	 */
 	static final String LOOPBACK_HOST = "127.0.0.1";
 
-	/** How long each readiness probe may take. Both are loopback, and neither spends inference on
-	 *  a server that authenticates — the unauthenticated one is refused before its body is read,
-	 *  and the keyed one asks {@code /props}. The single case that decodes a token is a listener
-	 *  credentialing nothing, which is the case readiness exists to refuse. */
-	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
+	/**
+	 * How long each readiness probe may take. Both are loopback, and neither spends inference on a
+	 * server that authenticates — the unauthenticated one is refused before its body is read, and
+	 * the keyed one asks {@code /props}. The single case that decodes a token is a listener
+	 * credentialing nothing, which is the case readiness exists to refuse.
+	 *
+	 * <p>Two seconds because these run AFTER {@code waitForServerReady}'s deadline has been
+	 * checked, so whatever they take is spent past that budget, under the engine monitor. Measured
+	 * against a real server they cost 1–2 ms, so this is a tail bound with three orders of
+	 * magnitude of headroom rather than a routine cost.
+	 */
+	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(2);
 
 	/**
 	 * The body the unauthenticated probe posts: a VALID one-token completion request carrying no

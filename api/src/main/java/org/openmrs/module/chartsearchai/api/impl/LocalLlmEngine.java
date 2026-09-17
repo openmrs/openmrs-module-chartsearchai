@@ -93,6 +93,13 @@ public class LocalLlmEngine implements LlmEngine {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	/**
+	 * How long {@link #waitForServerReady} polls {@code /health}. It bounds the POLL and not the
+	 * whole of {@code startServer}: the deadline is tested at the top of each iteration, so the
+	 * final health request, the two readiness probes after it and any teardown on a refusal are
+	 * all spent past it — and all of it under the engine monitor. Do not read this as a ceiling on
+	 * how long a start can hold the lock.
+	 */
 	private static final int SERVER_STARTUP_TIMEOUT_SECONDS = 120;
 
 	private static final int HEALTH_POLL_INTERVAL_MS = 500;

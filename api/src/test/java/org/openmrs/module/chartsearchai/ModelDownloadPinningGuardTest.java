@@ -136,6 +136,16 @@ public class ModelDownloadPinningGuardTest {
 	private static final Pattern QUOTED_PROPERTY = Pattern
 			.compile("'([A-Za-z][A-Za-z0-9]*(?:\\.[A-Za-z0-9]+)+)'");
 
+	/** A {@code docker-compose.yml} service name: a key whose value is the block beneath it. */
+	private static final Pattern SERVICE_NAME = Pattern.compile("\\s*([A-Za-z0-9_.-]+):\\s*");
+
+	/**
+	 * A restart policy as either compose spells it — the plain {@code restart:} key, and Swarm's
+	 * {@code restart_policy:} nested under {@code deploy:}, which no service here declares but which
+	 * would have the same effect.
+	 */
+	private static final Pattern RESTART_KEY = Pattern.compile("^restart(_policy)?\\s*:");
+
 	private static Path repo(String relative) {
 		return ModuleSourceRoot.repoRoot().resolve(relative);
 	}
@@ -820,8 +830,9 @@ public class ModelDownloadPinningGuardTest {
 	 * stayed green.
 	 *
 	 * <p>The consequence is not subtle. Sourcing a file that is not there exits a POSIX shell, so
-	 * PID 1 dies before {@code exec}ing the server, and the backend service carries no {@code
-	 * restart:} key — the container stops and stays stopped. That is the failure {@code build.yml}'s
+	 * PID 1 dies before {@code exec}ing the server, and by
+	 * {@link #theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal} the container
+	 * stops and stays stopped. That is the failure {@code build.yml}'s
 	 * {@code entrypoint-lint} comment is written against, and neither {@code sh -n} nor shellcheck
 	 * can see it: both are happy with a {@code .} of an absolute path that does not exist.
 	 */
@@ -851,6 +862,89 @@ public class ModelDownloadPinningGuardTest {
 		assertTrue(copied.contains(manifest), "the library reads its digests from " + manifest
 				+ ", which Dockerfile.backend never COPYs there; every fetch would fail to resolve. COPY destinations: "
 				+ copied);
+	}
+
+	/**
+	 * A refusal only fails CLOSED if the container that refused stays down. Verification is not
+	 * stateful across starts, so a substituted or unreachable model file is refused again on every
+	 * start: a {@code restart:} policy on the backend service would turn one refusal into a loop
+	 * that leaves an operator a churning container instead of a stopped one to report. This asserts
+	 * the service declares no such policy, and that it would have seen one — a service in this file
+	 * carries a restart key, and the walk finds it there.
+	 *
+	 * <p><b>What it reads is THIS repository's compose file, and that is the whole of its reach.</b>
+	 * {@code Dockerfile.backend}'s HEALTHCHECK comment records that the deploy server's compose file
+	 * is not this one, so a policy added there is residue nothing here can see.
+	 */
+	@Test
+	public void theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal() throws IOException {
+		Map<String, List<String>> services = composeServices();
+
+		List<String> backend = services.get("backend");
+		assertTrue(backend != null && backend.stream().anyMatch(line -> line.trim().startsWith("image:")),
+				"this guard reads the backend service of docker-compose.yml and did not find it carrying an image: of"
+						+ " its own, so it would have had nothing to check. Services read: " + services.keySet());
+
+		Set<String> withAPolicy = new LinkedHashSet<String>();
+		for (Map.Entry<String, List<String>> service : services.entrySet()) {
+			if (service.getValue().stream().anyMatch(line -> RESTART_KEY.matcher(line.trim()).find())) {
+				withAPolicy.add(service.getKey());
+			}
+		}
+		assertFalse(withAPolicy.isEmpty(), "no service in docker-compose.yml carries a restart key, so this guard has"
+				+ " not shown it would see one on backend; the check needs a service that does, or another way to read"
+				+ " the key");
+		assertFalse(withAPolicy.contains("backend"), "the backend service declares a restart policy, so a model file"
+				+ " the entrypoint refuses would be refused again on every restart rather than leaving the container"
+				+ " stopped (#444, ADR Decision 103). Services declaring one: " + withAPolicy);
+	}
+
+	/**
+	 * Each entry of {@code docker-compose.yml}'s {@code services:} mapping, mapped to the lines of
+	 * its block. The service indent is taken from the file rather than assumed, so a reindented file
+	 * is still read rather than silently yielding no services.
+	 */
+	private static Map<String, List<String>> composeServices() throws IOException {
+		List<String> block = new ArrayList<String>();
+		boolean inServices = false;
+		for (String line : codeLines("docker-compose.yml")) {
+			if (indentOf(line) == 0) {
+				inServices = line.trim().equals("services:");
+			} else if (inServices) {
+				block.add(line);
+			}
+		}
+		assertFalse(block.isEmpty(),
+				"docker-compose.yml has no services: block, so every check over it would pass vacuously");
+
+		int serviceIndent = Integer.MAX_VALUE;
+		for (String line : block) {
+			serviceIndent = Math.min(serviceIndent, indentOf(line));
+		}
+
+		Map<String, List<String>> services = new LinkedHashMap<String, List<String>>();
+		List<String> current = null;
+		for (String line : block) {
+			Matcher name = SERVICE_NAME.matcher(line);
+			if (indentOf(line) == serviceIndent && name.matches()) {
+				current = new ArrayList<String>();
+				services.put(name.group(1), current);
+			} else if (current != null) {
+				current.add(line);
+			}
+		}
+		assertFalse(services.isEmpty(), "docker-compose.yml's services: block names no service, so every check over it"
+				+ " would pass vacuously");
+		return services;
+	}
+
+	/** How many leading whitespace characters {@code line} carries. */
+	private static int indentOf(String line) {
+		int indent = 0;
+		while (indent < line.length() && Character.isWhitespace(line.charAt(indent))) {
+			indent++;
+		}
+		return indent;
 	}
 
 	/** The one capture of {@code pattern} in {@code relative}, or a failure saying what was sought. */

@@ -8217,9 +8217,11 @@ own rather than sharing the one whose contract says nothing was deleted, and the
 operator gets says the copy is gone
 (`ModelDownloadIntegrityTest.aCopyDeletedForAReplacementThatNeverArrivesIsNotReportedAsAPlainFetchFailure`).
 For the embedder that means a container which
-refuses to start — and stays stopped, because the `backend` service carries no `restart:` key, as
-`ModelDownloadPinningGuardTest.theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem`
-records. That is the fail-closed direction and it is the point — the state
+refuses to start — and stays stopped, because the `backend` service declares no restart policy, which
+`ModelDownloadPinningGuardTest.theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal`
+asserts of this repository's `docker-compose.yml`. The deploy server's compose file is not that one —
+`Dockerfile.backend` repeats the HEALTHCHECK block for exactly that reason — so a policy added there
+is residue no test here can see. That is the fail-closed direction and it is the point — the state
 being removed is one where unverified weights answer clinical questions — but it is a real cost,
 and the refusal's own log lines, naming the expected and the received digest, are what an operator
 is left to report.

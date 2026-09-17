@@ -412,8 +412,10 @@ public class ModelDownloadIntegrityTest {
 	 * A resume that cannot succeed must not be retried forever. {@code curl -C -} exits 33 when the
 	 * origin answers a {@code Range} request with a whole 200 — which a caching proxy in front of the
 	 * container will do — and nothing else in the path deletes the {@code .partial}, so the next
-	 * start made the same impossible request. For the embedder that is a container which stops and,
-	 * with no restart policy, stays stopped.
+	 * start made the same impossible request. For the embedder that is a container which stops and stays
+	 * stopped, the end state
+	 * {@code ModelDownloadPinningGuardTest.theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal}
+	 * asserts of the compose file.
 	 *
 	 * <p>The server here does not honour {@code Range}, which is what makes the case reachable.
 	 */

@@ -46,6 +46,7 @@ jobs:
             CACHE_BUST=${{ github.run_id }}
           tags: |
             ${{ env.IMAGE }}-frontend:${{ env.DOCKER_IMAGE_TAG }}
+            ${{ env.IMAGE }}-frontend:sha-${{ github.sha }}
 
   build-and-publish-backend:
     name: Build and Publish the Backend Image
@@ -76,6 +77,7 @@ jobs:
             m2settings=/tmp/maven-settings.xml
           tags: |
             ${{ env.IMAGE }}-backend:${{ env.DOCKER_IMAGE_TAG }}
+            ${{ env.IMAGE }}-backend:sha-${{ github.sha }}
 
   build-and-publish-gateway:
     name: Build and Publish the Gateway Image
@@ -101,3 +103,4 @@ jobs:
           platforms: ${{ env.DOCKER_IMAGE_PLATFORMS }}
           tags: |
             ${{ env.IMAGE }}-gateway:${{ env.DOCKER_IMAGE_TAG }}
+            ${{ env.IMAGE }}-gateway:sha-${{ github.sha }}

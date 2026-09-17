@@ -8217,9 +8217,11 @@ one is present, so these are properties of *a* build and are re-checkable by the
 | 6 | is the Web UI a surface? | yes — at its default, `GET /` answers 200 with no credential; hence `--no-webui` |
 | 7 | how long is the bind window? | a prober attempting `bind` every 5 ms first failed **0.138 s** after exec, launching an 8.0 GB model at `-c 32768`; the port is taken long before the model is loaded |
 | 8 | does the probe cost inference? | no — the key middleware answers before the body is validated, so even an unauthenticated `POST` of `{}` is 401 rather than 400. The probe nonetheless sends a VALID one-token body carrying no patient text, so that a build validating in the other order is refused only for what it does with the credential |
-| 9 | does a lost bind race kill the child? | yes — launched onto an occupied port it exits 1 in ~0.06 s with `couldn't bind HTTP server socket`, before touching the model |
+| 9 | does a lost bind race kill the child? | yes — launched onto an occupied port it exits 1 in ~0.06 s, before touching the model. It says `couldn't bind HTTP server socket` **only when `--log-disable` is absent**; the launch always passes that flag, so what the module can actually read is the exit code. Measured with the no-flag run as its own control |
 | 10 | is an environment safer than an argument vector *on this OS*? | yes — `ps -E` listed 8 `KEY=VALUE` pairs for a process this user owns and none at all for a root-owned one, while `ps -o args=` shows any process's arguments |
 | 11 | does a bind probe answer "is this port occupied"? | no, in both directions. Against a live listener on the WILDCARD address a loopback bind with `SO_REUSEADDR` SUCCEEDED (the probe would call the port free); against a listening port left in `TIME_WAIT` a bind without it was REFUSED (the probe would refuse an ordinary restart). A `connect` was correct on all four shapes — free, loopback-bound, wildcard-bound, `TIME_WAIT` — which is why the check connects |
+| 12 | which failures does the child announce past `--log-disable`? | an unrecognised ARGUMENT, and that alone: `error: invalid argument: …` is printed directly and survives the flag, while a failed bind and a missing model file go through the log system and are suppressed, leaving the backend's startup banner. Which is why the startup-failure message quotes the child at all — that argument shape is what #445's two new flags can provoke — and why it claims no more |
+| 13 | is `InetAddress.getLoopbackAddress()` the address the engine dials? | not always — under `-Djava.net.preferIPv6Addresses` it is `::1`, and a probe of it reported a real listener on `127.0.0.1` as free while reporting a `::1` listener that can never receive the chart as a conflict. The check resolves `LOOPBACK_HOST` instead, and the tests spell that address independently of the code under test |
 
 **Why the environment and not a key file.** The three ways to hand `llama-server` a key are an
 argument, a file, and an environment variable. Row 2 rules out the argument: it would publish the
@@ -8272,12 +8274,23 @@ pinned, and the wildcard test reddens if the bind form is restored:
 `aPortAnotherProcessIsListeningOnFailsTheStartLoudly`,
 `aPortLeftInTimeWaitByThePreviousChildDoesNotFailTheStart`.
 
-**Why a refused start is remembered.** A refusal cannot be reached before the child has answered
-`/health` — i.e. after a whole model load, row 7's territory — so retrying it per query spends that
-load again to learn nothing, and `PrewarmBootstrapService` drives one attempt per patient, which
-turns a sweep over a key-ignoring binary into one discarded model load per patient. The refusal is
-therefore remembered for `START_REFUSAL_COOLDOWN_SECONDS`, and bounded rather than permanent so
-that fixing the binary does not also require restarting OpenMRS.
+**What a PERSISTENT refusal costs, and why nothing here memoizes it.** A refusal is only reachable
+after the child has answered `/health`, i.e. after a whole model load, so a build that starts and
+then fails the gate — an operator-supplied binary that ignores `LLAMA_API_KEY` is the case — is
+re-launched and re-refused on every query, and `PrewarmBootstrapService.runSweep` catches per
+patient and walks the whole table. A review round built a bounded per-process memo for this and it
+was reverted, for two reasons worth recording rather than rediscovering. It could not be pinned:
+deleting both the memo and the gate that consulted it left the whole suite green, because the only
+thing testable without a subprocess is the cooldown predicate, not that `ensureServerRunning`
+consults it. And it did not actually deliver the claim made for it — measured against this repo's
+own throttle and chart-build costs, a 60-second window covers on the order of 60–110 patients, so a
+sweep pays one discarded load per minute of sweeping rather than one in total.
+
+The condition is global, so the remedy belongs where the sweep is, not where the engine is:
+`runSweep` already has a `cancelRequested` flag it uses to abandon a sweep mid-way, and a start
+refusal is exactly the kind of thing it should abandon on. That is left undone deliberately and is
+not part of #445 — what #445 owes is that the module refuse such a build rather than serve charts
+to it, which it does, loudly, every time.
 
 **Consequences.** An operator-supplied `llama-server` must support the environment key and enforce
 it; a build that does not now fails the start loudly rather than serving charts unauthenticated,

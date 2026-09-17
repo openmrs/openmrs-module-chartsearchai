@@ -6,17 +6,16 @@ which is the root file's "Documenting a decision" rule.
 
 ## The spawned llama-server
 
-- **Every request the engine sends to the spawned llama-server is built by `LlamaServerEndpoint.request`**, which
-  attaches the secret minted for that server start. Take the URL from the same object —
-  `completionsUrl`, `healthUrl`, `propsUrl`, `slotUrl`.
+- **Every request the engine sends to the spawned llama-server is built by `LlamaServerEndpoint.request`**,
+  which attaches the secret minted for that server start. Take the URL from the same object —
+  `completionsUrl`, `healthUrl`, `propsUrl`, `slotUrl` — and the address itself from
+  `LlamaServerEndpoint.LOOPBACK_HOST` or `authority`, including in an operator-facing message and
+  in the `--host` argument.
   **Nothing else may spell the loopback address or call `HttpRequest.newBuilder` for it** (#445).
-  Before that class
-  five call sites each built their own request. A shared URL helper already existed, and that is
-  the point: one place for the URL is not one place for the REQUEST, and the request is what
-  carries the credential — so satisfying "do not spell the address" by adding another URL helper
-  while hand-rolling the builder is exactly the hole. An unauthenticated request is SILENT — no
-  behavioural test notices one — so the rule is pinned by reading the source. `RemoteLlmEngine` addresses the operator's own configured
-  endpoint and this rule says nothing about it.
+  An unauthenticated request is SILENT, which is why the rule is pinned by reading the source —
+  and note the guard's pattern reaches the URL form only, so a bare `"127.0.0.1"` elsewhere is
+  invisible to it and this directive is what covers that. `RemoteLlmEngine` addresses the
+  operator's own configured endpoint and this rule says nothing about it.
   → ADR Decision 103; `ArchitectureGuardTest.everyLocalServerRequestCarriesTheModulesKey`,
   `theLocalServerAddressIsSpelledInOnePlace`.
 - **The secret reaches the child in its ENVIRONMENT, never on its command line.** That is

@@ -182,7 +182,11 @@ public class LocalLlmServerAuthTest {
 	public void aPortAnotherProcessIsListeningOnFailsTheStartLoudly() throws IOException {
 		try (ServerSocket squatter = new ServerSocket()) {
 			squatter.setReuseAddress(true);
-			squatter.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+			// The address the ENGINE dials, spelled independently of the code under test — sharing
+			// InetAddress.getLoopbackAddress() with it hid a probe of ::1 on a JVM that prefers
+			// IPv6, which reported a real 127.0.0.1 squatter as free.
+			squatter.bind(new InetSocketAddress(
+					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), 0));
 			int squatted = squatter.getLocalPort();
 
 			APIException thrown = assertThrows(APIException.class,
@@ -217,7 +221,8 @@ public class LocalLlmServerAuthTest {
 		int free;
 		try (ServerSocket probe = new ServerSocket()) {
 			probe.setReuseAddress(true);
-			probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+			probe.bind(new InetSocketAddress(
+					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), 0));
 			free = probe.getLocalPort();
 		}
 
@@ -314,19 +319,39 @@ public class LocalLlmServerAuthTest {
 		}
 	}
 
+	/**
+	 * The child's last output is captured by the DRAIN thread and read by the thread that holds the
+	 * engine monitor for the whole of a start. Guarded by the engine, the drain thread blocked on
+	 * its first line and the failure message always read "(none captured)" — so this drives the
+	 * real methods with the monitor held exactly as {@code waitForServerReady} holds it.
+	 */
 	@Test
-	public void aRefusedStartIsNotRelaunchedUntilItsCooldownElapses() {
-		long now = 1_000_000L;
-		long refusedUntil = now + 60_000L;
+	public void theChildsLastOutputIsCapturedWhileTheEngineMonitorIsHeld() throws Exception {
+		LocalLlmEngine engine = new LocalLlmEngine();
+		java.util.concurrent.CountDownLatch appended = new java.util.concurrent.CountDownLatch(1);
+		String captured;
 
-		assertTrue(LocalLlmEngine.withinStartRefusalCooldown(refusedUntil, now),
-				"a refusal is only reached after a whole model load, so the next query must fail "
-				+ "fast rather than pay that load again to be refused for the same reason");
-		assertFalse(LocalLlmEngine.withinStartRefusalCooldown(refusedUntil, refusedUntil + 1),
-				"the memo is bounded, so fixing the binary does not also require restarting "
-				+ "OpenMRS");
-		assertFalse(LocalLlmEngine.withinStartRefusalCooldown(0L, now),
-				"nothing remembered must never block a start");
+		synchronized (engine) {
+			Thread drain = new Thread(() -> {
+				engine.rememberServerOutput("error: invalid argument: --no-webui");
+				appended.countDown();
+			}, "test-drain");
+			drain.setDaemon(true);
+			drain.start();
+
+			assertTrue(appended.await(5, java.util.concurrent.TimeUnit.SECONDS),
+					"the drain thread must be able to record a line while the engine monitor is "
+					+ "held — every entry point is synchronized and the monitor is held unbroken "
+					+ "across the whole start, so a ring guarded by the engine can never append "
+					+ "before the failure message reads it");
+			captured = engine.lastServerOutput();
+		}
+
+		assertTrue(captured.contains("--no-webui"),
+				"the startup-failure message must quote what the child actually said; an argument "
+				+ "this build does not accept is the shape #445 introduced, and it is printed "
+				+ "directly rather than through the log system that --log-disable silences: "
+				+ captured);
 	}
 
 	// ---- real listeners ----
@@ -378,8 +403,8 @@ public class LocalLlmServerAuthTest {
 
 		private static KeyDemandingListener start(boolean acceptTheModulesKey, boolean servesProps,
 				boolean demandsAKey) throws IOException {
-			HttpServer server = HttpServer.create(
-					new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+			HttpServer server = HttpServer.create(new InetSocketAddress(
+					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), 0), 0);
 			LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(server.getAddress().getPort());
 			KeyDemandingListener listener = new KeyDemandingListener(server, endpoint);
 			String expected = expectedBearer(endpoint);
@@ -480,10 +505,12 @@ public class LocalLlmServerAuthTest {
 		int port;
 		try (ServerSocket acceptor = new ServerSocket()) {
 			acceptor.setReuseAddress(true);
-			acceptor.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+			acceptor.bind(new InetSocketAddress(
+					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), 0));
 			port = acceptor.getLocalPort();
 			try (java.net.Socket client = new java.net.Socket()) {
-				client.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+				client.connect(new InetSocketAddress(
+						InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), port));
 				java.net.Socket accepted = acceptor.accept();
 				accepted.close();
 			}

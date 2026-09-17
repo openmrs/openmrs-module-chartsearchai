@@ -51,7 +51,7 @@ import org.slf4j.LoggerFactory;
  * Decision 103 for the measurement behind each of those claims.
  *
  * <p><b>A bearer token authenticates the CLIENT to the server and never the server to the
- * client.</b> Between them {@link #rejectsUnauthenticatedCalls} and
+ * client.</b> Between them {@link #unauthenticatedProbeStatus} and
  * {@link #doesNotRefuseThisModulesKey} establish exactly this much: SOME credential is demanded on
  * the route the chart travels, and ours was not actively refused. That is enough to catch a build
  * that ignored the environment variable, which is what they are for. It is NOT "the listener is
@@ -133,10 +133,6 @@ final class LlamaServerEndpoint {
 		builder.environment().put(API_KEY_ENV, apiKey);
 	}
 
-	int port() {
-		return port;
-	}
-
 	String completionsUrl() {
 		return baseUrl() + "/v1/chat/completions";
 	}
@@ -185,7 +181,8 @@ final class LlamaServerEndpoint {
 	 * could not establish the refusal has not established it. It returns the STATUS rather than a
 	 * boolean so the caller can say what it actually saw — a timeout ({@code -1}) and a served 200
 	 * are both refusals of the start, and telling an operator their server answered a chart request
-	 * unauthenticated when it never answered at all sends them after the wrong thing.
+	 * unauthenticated when it never answered at all sends them after the wrong thing. Which codes
+	 * COUNT as a refusal is {@link #refusesCredentials}, so both legs agree on it.
 	 */
 	int unauthenticatedProbeStatus(HttpClient client) {
 		HttpRequest probe = HttpRequest.newBuilder()
@@ -203,25 +200,36 @@ final class LlamaServerEndpoint {
 	 * the key, and the one protected route that neither runs inference nor needs a flag the
 	 * engine's command line does not already pass.
 	 *
-	 * <p>The question is "was the key refused", so anything other than a 401 passes. It
-	 * deliberately does not require a 200: a build that does not serve {@code /props} at all
-	 * answers 404, which says nothing about the key, and requiring 200 would refuse such a build
-	 * for the wrong reason. A 401 is the only answer that means what this leg is asking about.
+	 * <p>The question is "was the key refused", so anything {@link #refusesCredentials} does not
+	 * name passes. It deliberately does not require a 200: a build that does not serve
+	 * {@code /props} at all answers 404, which says nothing about the key, and requiring 200 would
+	 * refuse such a build for the wrong reason.
 	 *
 	 * <p>Unlike its sibling this leg fails OPEN: a probe that could not complete returns -1, which
 	 * is not 401, so it passes. That is what asking "was the key refused" means — an unreachable
 	 * probe establishes no refusal. Readiness as a whole is not fail-open, because
-	 * {@link #rejectsUnauthenticatedCalls} fails CLOSED on exactly the same condition, so a
+	 * {@link #unauthenticatedProbeStatus} fails CLOSED on exactly the same condition, so a
 	 * listener that cannot be probed at all is refused there.
 	 */
 	boolean doesNotRefuseThisModulesKey(HttpClient client) {
 		HttpRequest probe = request(propsUrl(), PROBE_TIMEOUT).GET().build();
-		return statusOf(client, probe, "authenticated-probe") != 401;
+		return !refusesCredentials(statusOf(client, probe, "authenticated-probe"));
+	}
+
+	/**
+	 * Whether {@code status} is a server REFUSING the credential it was given. Both 401 and 403:
+	 * llama-server answers 401, but a build or a fronting proxy that answers 403 is refusing just
+	 * as squarely, and requiring exactly 401 would have refused the start of a server that does
+	 * demand a credential — the opposite of what the readiness gate is for. One predicate so the
+	 * two legs cannot disagree about it.
+	 */
+	static boolean refusesCredentials(int status) {
+		return status == 401 || status == 403;
 	}
 
 	/** The status code, or -1 when the probe could not complete. What -1 MEANS is the caller's
 	 *  question and the two callers answer it differently — see each of them, and do not fold the
-	 *  difference in here: {@link #rejectsUnauthenticatedCalls} requires a 401 so -1 fails, while
+	 *  difference in here: {@link #unauthenticatedProbeStatus} requires a 401 so -1 fails, while
 	 *  {@link #doesNotRefuseThisModulesKey} only excludes a 401 so -1 passes. */
 	private int statusOf(HttpClient client, HttpRequest probe, String what) {
 		try {
@@ -240,6 +248,12 @@ final class LlamaServerEndpoint {
 
 	/** {@code host:port}, for the operator-facing messages that name where the engine is looking. */
 	String authority() {
+		return authority(port);
+	}
+
+	/** As {@link #authority()}, for the callers that have a port but no endpoint yet — the
+	 *  pre-launch port check runs before one is minted. */
+	static String authority(int port) {
 		return LOOPBACK_HOST + ":" + port;
 	}
 

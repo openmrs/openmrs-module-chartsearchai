@@ -149,7 +149,9 @@ public class ChartSearchAiStreamKeepAliveTest {
 	 */
 	@Test
 	public void aClientDisconnectStopsTheTimerToo() throws Exception {
-		DisconnectedClientSink gone = new DisconnectedClientSink();
+		// Refuses every EVENT frame, accepting keep-alive comments — see DisconnectingSink,
+		// which this case shared with issue #450's audit cases rather than keeping a copy.
+		DisconnectingSink gone = new DisconnectingSink(0);
 		// Waits for the keep-alives it asserts on rather than a fixed span, for the reason
 		// SilentThenAnswerStub.awaitingComments gives.
 		controller.setChartSearchService(SilentThenAnswerStub.awaitingComments(gone.sink(), 2));
@@ -375,52 +377,6 @@ public class ChartSearchAiStreamKeepAliveTest {
 				if (runtimeFailure) {
 					throw new IllegalStateException("response already recycled");
 				}
-				throw new IOException("client gone");
-			}
-			sink.write(frame, off, len);
-		}
-
-		ByteArrayOutputStream sink() {
-			return sink;
-		}
-
-		String text() {
-			return SseEvents.text(sink);
-		}
-	}
-
-	/**
-	 * A client that has gone away: the inverse of {@link RefusingSink}, in that the ANSWER's frames are
-	 * the ones refused, so the generation loop unwinds through {@code writeSseEventOrThrow} exactly as a
-	 * mid-stream disconnect does. Comment frames still land, which is what lets
-	 * {@link #aClientDisconnectStopsTheTimerToo} see whether the timer kept writing after the unwind.
-	 *
-	 * <p>An event frame is recognised by NOT opening with the {@code :} of an SSE comment, rather than by
-	 * matching {@code event:}, so a future frame shape the controller writes is refused too instead of
-	 * quietly turning this test green.</p>
-	 */
-	private static final class DisconnectedClientSink extends OutputStream {
-
-		private final ByteArrayOutputStream sink = new ByteArrayOutputStream();
-
-		/**
-		 * Read by the test after {@code streamAnswer} returns, so the disconnect can be asserted. Needs
-		 * no synchronization, and for a simpler reason than {@link RefusingSink}'s counters: only event
-		 * frames are refused here and only the calling thread writes those, so this is incremented on
-		 * the test's own thread. That sibling's cross-thread happens-before argument is about its
-		 * counters being touched by the keep-alive thread, which these are not.
-		 */
-		int refused;
-
-		@Override
-		public void write(int b) {
-			sink.write(b);
-		}
-
-		@Override
-		public void write(byte[] frame, int off, int len) throws IOException {
-			if (len > 0 && frame[off] != ':') {
-				refused++;
 				throw new IOException("client gone");
 			}
 			sink.write(frame, off, len);

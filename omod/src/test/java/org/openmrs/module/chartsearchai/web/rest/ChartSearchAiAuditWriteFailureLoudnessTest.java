@@ -13,18 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Consumer;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.LogCapture;
-import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +31,8 @@ import org.springframework.http.ResponseEntity;
  * OpenMRS install sits among ordinary operational noise; an access to PHI that went unrecorded is
  * not that. The return value cannot carry this: null is also what a caller sees when the row was
  * written by a DAO that assigns no id, so the level is the whole of the observable difference —
- * which is the argument {@link LogCapture}'s own javadoc makes about issue #149.
+ * which is the argument {@code LogCapture}'s own javadoc makes about issue #149 (that class is in
+ * the api module and out of reach here — see {@link ControllerLog}).
  *
  * <p>Asserted as a LEVEL and not as message text, for the reason that javadoc gives: a test matching
  * the wording would let a re-phrasing silently drop the guard. The throwable is asserted beside it
@@ -50,9 +44,6 @@ import org.springframework.http.ResponseEntity;
  */
 public class ChartSearchAiAuditWriteFailureLoudnessTest {
 
-	/** The controller's own logger, so a neighbour's ERROR cannot answer for the one under test. */
-	private static final String CONTROLLER_LOGGER = ChartSearchAiRestController.class.getName();
-
 	private ChartSearchAiRestController controller;
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
@@ -60,7 +51,7 @@ public class ChartSearchAiAuditWriteFailureLoudnessTest {
 	@BeforeEach
 	public void setUp() {
 		controller = new ChartSearchAiRestController();
-		controller.setChartSearchService(new StubService());
+		controller.setChartSearchService(new StreamingChartSearchStub());
 		controller.setPatientAccessCheck((user, patient) -> true);
 		openmrsContext.install();
 	}
@@ -75,7 +66,7 @@ public class ChartSearchAiAuditWriteFailureLoudnessTest {
 		controller.setAuditLogService(new ThrowingAuditLogService());
 
 		ResponseEntity<Object> response;
-		try (LogCapture capture = LogCapture.on(CONTROLLER_LOGGER)) {
+		try (ControllerLog capture = new ControllerLog()) {
 			response = controller.search(RestControllerContext.searchBody("any infections?"));
 
 			assertTrue(capture.hasEventAtOrAbove(Level.ERROR),
@@ -99,7 +90,7 @@ public class ChartSearchAiAuditWriteFailureLoudnessTest {
 	public void anAuditWriteThatSucceededIsSilentAtError() {
 		controller.setAuditLogService(new StubAuditLogService());
 
-		try (LogCapture capture = LogCapture.on(CONTROLLER_LOGGER)) {
+		try (ControllerLog capture = new ControllerLog()) {
 			controller.search(RestControllerContext.searchBody("any infections?"));
 
 			assertFalse(capture.hasEventAtOrAbove(Level.ERROR),
@@ -114,39 +105,6 @@ public class ChartSearchAiAuditWriteFailureLoudnessTest {
 		@Override
 		public ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog) {
 			throw new IllegalStateException("could not write the audit row");
-		}
-	}
-
-	/** The minimum a {@code /search} call needs to reach the audit write. */
-	private static final class StubService implements ChartSearchService {
-
-		private ChartAnswer answer() {
-			return new ChartAnswer("Has TB [8].",
-					Arrays.asList(new RecordReference(8, "condition", "u8", null, Boolean.TRUE)),
-					0, 0, 0, Collections.emptyList(), "queryScoped");
-		}
-
-		@Override
-		public ChartAnswer search(Patient patient, String question) {
-			return answer();
-		}
-
-		@Override
-		public ChartAnswer searchStreaming(Patient patient, String question,
-				Consumer<String> tokenConsumer) {
-			return answer();
-		}
-
-		@Override
-		public ChartAnswer searchStreaming(Patient patient, String question,
-				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				Consumer<List<RecordReference>> citationsConsumer,
-				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
-			return answer();
-		}
-
-		@Override
-		public void warmup(Patient patient) {
 		}
 	}
 }

@@ -110,15 +110,6 @@
 					<artifactId>maven-surefire-plugin</artifactId>
 					<version>3.5.5</version>
 				</plugin>
-				<!-- Pinned because the api module binds its test-jar goal (issue #450, so omod's tests can
-				     use LogCapture), and an unversioned plugin both warns and resolves whatever is newest
-				     on a runner with no Maven cache — which is the hazard build.yml's querystore-version
-				     step states for its own two plugins. -->
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-jar-plugin</artifactId>
-					<version>3.4.2</version>
-				</plugin>
 			</plugins>
 		</pluginManagement>
 	</build>

@@ -8148,7 +8148,7 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
 
-## Decision 103: The audit row for a streaming query is written on every exit of the request, not only the one where the client stayed
+## Decision 103: A streaming query that reached inference is audited however the stream ends
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#450](https://github.com/openmrs/openmrs-module-chartsearchai/issues/450), a security-scan finding
@@ -8175,9 +8175,18 @@ answer already delivered.
 
 **Decision.** `auditStreamedQueryIfUnrecorded` runs in the `finally` that already stops the
 keep-alive timer, so the row is owed on every exit of that try block rather than on one of them. It
-writes **through** `saveAuditLog`, which stays the only place a row is built, and **at most one**:
-each ordinary write site flags its attempt before making it, so the finally adds nothing where one
-was already attempted.
+writes **through** `saveAuditLog`, which stays the only place a row is built, and **one per query at
+most**: each ordinary write site flags its attempt before making it, so the finally adds nothing where
+one was already attempted.
+
+That holds for any implementation, not only for one honouring the ungrounded consumer's at-most-once
+contract, and it took two guards a review round found missing. The consumer's own idempotence was
+keyed on whether the early `done` had gone OUT, so a second fire after a refused `done` write
+re-entered and saved again; it is now keyed on the consumer having FIRED, which also makes its warning
+reachable in the classic shape, where nothing sets a done flag at all. And the classic write site now
+skips its save where a row was already attempted. Neither shipped implementation can reach either
+shape — both call the consumer once with no surrounding `try` — but "exactly one row" is a
+specification about the TABLE, and the module should not owe it to a collaborator's good behaviour.
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
 row before streaming and update it afterwards — was not taken: `ChartSearchAiAuditSearchModeTest`
@@ -8203,12 +8212,27 @@ the record. Over-recording by one fragment is the safe direction for an audit tr
 drops the last thing the model said about the patient on every disconnect, which is the fragment the
 caller stopped to read.
 
-**What it does not reach**, named rather than implied. `SseKeepAlive.start` runs above that try, so a
-failure there still escapes the whole request with no row — already-recorded state, see
-`ChartSearchAiStreamKeepAliveTest`. And a query whose chart was built and whose inference then
-produced nothing at all is left unaudited, because nothing was disclosed and the consumer traffic is
-the only signal the REST layer has; a gate that fired regardless would start auditing, and
-rate-limiting, the too-large-chart and misconfiguration paths, which the ticket does not ask for.
+**The gate, and what it does and does not reach.** The row is owed once the pipeline has spoken on
+any of the five consumer channels, which is the REST layer's only signal that inference produced
+something. So a query that failed before any of them — a chart too large on the committed pass with
+progressive reasoning off, a misconfiguration — writes no row, as before: nothing was disclosed.
+
+**A chart too large discovered after a PREVIEW is audited, and that is deliberate rather than
+incidental.** `maybeEmitPreliminaryReasoning` runs before the committed `llmProvider.searchStreaming`
+that raises `ChartTooLargeException`, and the preview runs over a focused top-K slice where the
+committed pass runs over the whole chart — so the preview is precisely what succeeds when the full
+chart overflows, and the two are positively correlated rather than merely co-possible. That preview is
+model output about this patient and it reached the client, so the row is owed. The same holds of an
+abandoned `thinking` frame, which is the first frame the module writes at all.
+
+**Its consequence, stated rather than hidden: those queries now consume a rate-limit slot.**
+`checkRateLimit` counts persisted rows against `chartsearchai.rateLimitPerMinute` (default 10), so a
+clinician on an oversized chart, or one reloading impatiently while a CPU install thinks, can throttle
+themselves out having received no answer. That is the intended direction — each of those attempts paid
+a full prefill on an engine this module serializes, and their being uncounted was the other half of
+what #450 reports — but an operator seeing 429s after abandoned queries should know why. The earlier
+draft of this decision claimed the gate did not reach the too-large path at all; that was false, and a
+review round measured it.
 
 **The second recommendation, and the half of it that was declined.** `saveAuditLog` swallowed every
 persistence failure at WARN, which on a default OpenMRS install sits among ordinary operational
@@ -8226,10 +8250,51 @@ apply to the endpoint the frontend uses by default is worse than no switch, and 
 that — pre-persist and re-specify the one-row assertions, or accept the asymmetry — is a policy call
 rather than a defect.
 
+**What it costs**, measured 2026-09-17 by driving the real `streamAnswer` from a throwaway omod case
+with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer — at
+200 requests per JVM after 30 warmups, per-request caller-thread allocation read off
+`com.sun.management.ThreadMXBean.getThreadAllocatedBytes` (the instrument Decision 102's neighbour
+#446 used), with an A/A control on every run:
+
+- accumulating the answer costs **+36,992 bytes** per request against the **1.94 MB** the REST layer
+  already allocates for that answer, and wall clock sits below an A/A spread of 203 µs on a ~1.2 ms
+  request. The same loop already writes 119,772 bytes to the socket for it.
+- firing the ungrounded consumer in the classic shape, where it was a no-op lambda, costs **+32
+  bytes** per request — one capturing lambda instance where a cached empty one used to serve.
+- the audit INSERT on the disconnect path extends neither the engine's critical section (the consumer
+  throws *inside* `LocalLlmEngine`'s `synchronized` method, so the monitor is released before the
+  `finally`) nor any client-visible latency (every terminal frame is already written and flushed in
+  the `catch`).
+
+**No ceiling on the accumulated text, and that is a decision.** #446 bounds a remote response at
+`MAX_RESPONSE_BYTES`, and `max_tokens` is advisory — which is that issue's own premise. But
+`LlmResponseParser` already accumulates the whole JSON envelope, reasoning and citations included, on
+the same request and through both engines: strictly larger, and bounded by the same #446 ceiling. A cap
+here alone would be cosmetic.
+
+**A residue this decision cannot close from a test, named rather than implied.** The fallback write runs
+in a `finally` reached *because* something threw, and `AuditLogServiceImpl` is class-level
+`@Transactional`. If the ambient Hibernate session or transaction is already unusable — a failure in the
+grounding tail, which touches chart state — `saveAuditLog` swallows it at ERROR and the row is lost,
+which is the hole this decision closes, on the path most likely to produce it. **It has not been
+measured**: it needs a live standalone with a real DAO, and the suite runs on stubs. A review round
+raised it; nothing here refutes or confirms it.
+
+**An api test-jar was tried and reverted**, so that it is not re-proposed on the strength of the one
+thing it buys. Publishing api's test classes and depending on them from omod gives the omod suite
+`LogCapture`, which is the repo's instrument for asserting the LEVEL an outcome is reported at. It also
+opens api's whole test classpath — fixtures included — to omod, and prose across both modules states
+the opposite as load-bearing (grep `no api test-jar`), the deciding one being a PRODUCTION javadoc:
+`DrugSafetyValidator`'s `StandingChartAlerts` factories are public because `omod/pom.xml` declares
+none. It also made `omod/pom.xml`'s `unpack-dependencies` execution, which filters by neither
+classifier nor scope, ship api's test classes and its Spring and Hibernate test configs inside the
+released `.omod` — measured, with the whole suite green and the build exit 0 — so it needed a
+load-bearing `excludeClassifiers` line that no test could hold. One level assertion does not buy that.
+`ControllerLog` in the omod test package asks the one question those cases need instead.
+
 **Pinned by** `ChartSearchAiStreamDisconnectAuditTest`, over both shapes: the reset after the first
 token, the reset on the `references` frame, the non-`IOException` failure after the handoff (which
 also tells the `finally` from a statement at the tail of the disconnect branch), and the negative
 where a query that produced nothing writes no row. The ERROR is pinned by
 `ChartSearchAiAuditWriteFailureLoudnessTest`, with the successful write as its control. Mutate each
-guard and read the failures; the one-row-per-query flag is held by the two pre-existing audit-row
-suites rather than by either new file.
+guard and read the failures.

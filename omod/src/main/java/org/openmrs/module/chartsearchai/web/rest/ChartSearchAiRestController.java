@@ -642,10 +642,10 @@ public class ChartSearchAiRestController {
 	 * ungrounded answer (a cache hit returns an already-final answer), the classic {@code done}
 	 * is emitted instead and no {@code grounded} event follows.</p>
 	 *
-	 * <p><b>Either shape owes an audit row on every exit of the try block, not only on the one that
-	 * reaches its own write site</b> — {@link #auditStreamedQueryIfUnrecorded} in the {@code finally}
-	 * is what owes it, and issue #450 is what a delivered answer with no row cost before that. At most
-	 * one row per query either way.</p>
+	 * <p><b>Either shape owes an audit row on every exit of the try block below, not only on the one
+	 * that reaches its own write site</b> — {@link #auditStreamedQueryIfUnrecorded} in the
+	 * {@code finally} is what owes it, and issue #450 is what a delivered answer with no row cost
+	 * before that. One row per query at most, for any implementation of the consumer contract.</p>
 	 *
 	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
 	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
@@ -679,13 +679,6 @@ public class ChartSearchAiRestController {
 		long startTime = System.currentTimeMillis();
 		final StreamAuditState auditState = new StreamAuditState();
 		try {
-			// Carries the early-done state from the consumer (fired mid-call) to the post-return
-			// code: [0] = the saved questionId (null if audit failed), and whether done was sent
-			// is tracked by earlyDoneSent. Single-element arrays because the consumer lambda needs
-			// effectively-final capture.
-			final String[] earlyQuestionId = new String[1];
-			final boolean[] earlyDoneSent = new boolean[1];
-
 			// It fires in BOTH shapes, and that is not only the async one's business: the consumer's
 			// own contract is "the answer is complete", so this is where the classic shape learns the
 			// pipeline's own answer — search mode, reference slice, citations and all. Without that
@@ -701,13 +694,16 @@ public class ChartSearchAiRestController {
 			// still carries groundMs. Serialization + write failures unwind like any mid-stream
 			// disconnect, via the same RuntimeException(IOException) shape writeSseEventOrThrow uses.
 			Consumer<ChartAnswer> ungroundedConsumer = ungrounded -> {
-				if (earlyDoneSent[0]) {
-					// Interface contract is at-most-once; stay idempotent anyway — a
-					// duplicate done would corrupt every client's completion handling.
+				if (!auditState.recordAnswerOnce(ungrounded)) {
+					// Interface contract is at-most-once; stay idempotent anyway. Keyed on this consumer
+					// having FIRED, not on the done event having gone out: a duplicate done would corrupt
+					// every client's completion handling, and a second fire after a REFUSED done write
+					// would otherwise re-enter and write a second audit row, which the one-row-per-query
+					// specification the audit suites pin does not allow. It reaches the classic shape too,
+					// where nothing sets a done flag at all.
 					log.warn("Ungrounded-answer consumer fired more than once; ignoring");
 					return;
 				}
-				auditState.recordAnswer(ungrounded);
 				if (!asyncGrounding) {
 					return;
 				}
@@ -715,16 +711,17 @@ public class ChartSearchAiRestController {
 				// true for every way the attempt can end — saveAuditLog's own swallowed persistence
 				// failure included, which is answered by the ERROR it logs and not by a retry.
 				auditState.auditAttempted = true;
-				earlyQuestionId[0] = saveAuditLog(user, patient, sanitizedQuestion,
+				auditState.earlyQuestionId = saveAuditLog(user, patient, sanitizedQuestion,
 						ungrounded, System.currentTimeMillis() - startTime);
 				try {
-					writeSseEvent(out, "done", doneEventJson(ungrounded, earlyQuestionId[0]));
+					writeSseEvent(out, "done",
+							doneEventJson(ungrounded, auditState.earlyQuestionId));
 				}
 				catch (IOException e) {
 					log.debug("Client disconnected during streaming (done)");
 					throw new RuntimeException("Client disconnected", e);
 				}
-				earlyDoneSent[0] = true;
+				auditState.earlyDoneSent = true;
 			};
 
 			// Five consumers, four of them events on the wire (the fifth is ungroundedConsumer above,
@@ -762,12 +759,21 @@ public class ChartSearchAiRestController {
 						writeSseEventOrThrow(out, "preliminary", preliminary);
 					});
 
-			if (!earlyDoneSent[0]) {
+			if (!auditState.earlyDoneSent) {
 				// Classic shape: async off, or the service returned an already-final answer (cache
 				// hit) without surfacing an ungrounded stage — audit and emit the single done.
-				auditState.auditAttempted = true;
-				String questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
-						System.currentTimeMillis() - startTime);
+				//
+				// The save is skipped where a row was already attempted, which needs a service that
+				// swallowed the early done's write failure to reach: neither shipped implementation does,
+				// and the point of the guard is that the row count is one per query for EVERY
+				// implementation rather than only for one honouring the consumer's at-most-once contract.
+				// The EVENT still goes out, because a client whose done was refused never received one.
+				String questionId = auditState.earlyQuestionId;
+				if (!auditState.auditAttempted) {
+					auditState.auditAttempted = true;
+					questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
+							System.currentTimeMillis() - startTime);
+				}
 				writeSseEvent(out, "done", doneEventJson(chartAnswer, questionId));
 			} else {
 				// done already went out before grounding; deliver the verdicts in the trailing
@@ -776,8 +782,8 @@ public class ChartSearchAiRestController {
 				Map<String, Object> groundedData = new HashMap<String, Object>();
 				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
 				putModuleStatements(groundedData, chartAnswer);
-				if (earlyQuestionId[0] != null) {
-					groundedData.put("questionId", earlyQuestionId[0]);
+				if (auditState.earlyQuestionId != null) {
+					groundedData.put("questionId", auditState.earlyQuestionId);
 				}
 				writeSseEvent(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
 			}
@@ -855,24 +861,19 @@ public class ChartSearchAiRestController {
 	 * block rather than one of them: the mid-stream disconnect, where a refused frame becomes the
 	 * {@code RuntimeException(IOException)} the catch-all reads as a benign client hang-up, and the
 	 * tail after the ungrounded handoff, which {@code LlmInferenceService} runs with no catch of its
-	 * own. Before this, the row was a statement on the success path, so either exit left a delivered
-	 * answer with no record of who asked what about whom — and, since {@code checkRateLimit} counts
-	 * persisted rows, uncounted by the limiter as well.
-	 *
-	 * <p><b>Two things it does not reach, named rather than implied.</b> {@code SseKeepAlive.start}
-	 * runs ABOVE that try, so a failure there still escapes the whole request with no row, which is
-	 * the state {@code ChartSearchAiStreamKeepAliveTest} already records. And a query whose chart was
-	 * built and whose inference then produced nothing at all is deliberately left unaudited: nothing
-	 * was disclosed, and what the REST layer can observe is exactly the consumer traffic
-	 * {@link StreamAuditState} records.
+	 * own.
 	 *
 	 * <p>It writes THROUGH {@link #saveAuditLog}, never building a row itself, which is that method's
-	 * rule; and it writes at most one, because each ordinary site flags its attempt before making it.
-	 * A swallowed persistence failure there is therefore not retried into a second row — it is
-	 * answered by the ERROR that method logs.
+	 * rule; and it writes one row per query at most, which each ordinary write site is what holds by
+	 * flagging its attempt. A swallowed persistence failure there is not retried into a second row —
+	 * it is answered by the ERROR that method logs.
 	 *
-	 * <p>The reasoning, the row this files where the pipeline never surfaced an answer, and the
-	 * pre-persist alternative the one-row-per-query specification rules out: ADR Decision 103.
+	 * <p><b>It is gated on the pipeline having produced something</b>, which {@link StreamAuditState}
+	 * records off the five consumer channels: a query that failed before any of them spoke is left
+	 * unaudited, because nothing was disclosed and that traffic is the only signal the REST layer
+	 * has. Which failures that does and does not cover, what the row states where the pipeline never
+	 * surfaced an answer, what it costs, and the pre-persist alternative the one-row-per-query
+	 * specification rules out: ADR Decision 103, which is canonical for all of it.
 	 *
 	 * @param state what this request's consumers recorded as the stream ran
 	 */
@@ -907,9 +908,11 @@ public class ChartSearchAiRestController {
 	 * object rather than three more single-element arrays, which is all the effectively-final capture
 	 * a lambda needs.
 	 *
-	 * <p>It does not absorb the early-done state beside it: {@code earlyQuestionId} and
-	 * {@code earlyDoneSent} carry what the async shape's own {@code done} needs, and moving them here
-	 * would put that shape's at-most-once guard on a different object from the flag it guards.
+	 * <p>It carries the async shape's early-{@code done} state too — {@link #earlyQuestionId} and
+	 * {@link #earlyDoneSent}, which were two single-element arrays beside it. One object, because the
+	 * at-most-once guard and the row flag it has to agree with belong together: keeping them apart is
+	 * what let a second consumer fire after a refused {@code done} write pass the guard and write a
+	 * second row.
 	 *
 	 * <p>Unsynchronized, and that is not an oversight of the kind {@code SseKeepAlive} is careful
 	 * about: every consumer is called synchronously by the service on the REQUEST thread, and the
@@ -943,6 +946,15 @@ public class ChartSearchAiRestController {
 		/** Whether the pipeline produced anything for this query — the gate on auditing it at all. */
 		boolean produced;
 
+		/** Whether the ungrounded consumer has fired; see {@link #recordAnswerOnce}. */
+		private boolean ungroundedSeen;
+
+		/** The async shape's saved {@code questionId}, or null where that save returned none. */
+		String earlyQuestionId;
+
+		/** Whether the async shape's early {@code done} reached the wire. */
+		boolean earlyDoneSent;
+
 		/**
 		 * Whether a row has been ATTEMPTED at an ordinary write site. Attempted and not written: see
 		 * {@link #auditStreamedQueryIfUnrecorded} for why that is the useful reading of it.
@@ -958,9 +970,20 @@ public class ChartSearchAiRestController {
 			produced = true;
 		}
 
-		void recordAnswer(ChartAnswer answer) {
+		/**
+		 * Records the pipeline's finished answer, and answers whether this was the FIRST time the
+		 * ungrounded consumer fired — which is what the caller's at-most-once handling turns on.
+		 *
+		 * @return false where it had already fired, in which case nothing is recorded
+		 */
+		boolean recordAnswerOnce(ChartAnswer answer) {
+			if (ungroundedSeen) {
+				return false;
+			}
+			ungroundedSeen = true;
 			pipelineAnswer = answer;
 			produced = true;
+			return true;
 		}
 	}
 

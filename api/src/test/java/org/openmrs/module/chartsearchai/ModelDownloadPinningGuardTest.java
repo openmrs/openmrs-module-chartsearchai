@@ -288,7 +288,8 @@ public class ModelDownloadPinningGuardTest {
 				// fetches still ordered after it.
 				wiring = i;
 			}
-			if (line.trim().startsWith("fetch_and_verify ") && line.contains("embedder-e5-base-v2")) {
+			// Either fetch form; which one each site must use is the exiting-form guard's question.
+			if (line.trim().matches("^fetch_(and_verify|or_exit) .*") && line.contains("embedder-e5-base-v2")) {
 				lastEmbedderFetch = Math.max(lastEmbedderFetch, i);
 			}
 		}
@@ -366,142 +367,41 @@ public class ModelDownloadPinningGuardTest {
 	}
 
 	/**
-	 * Ordering is only half of #444's refusal. Each embedder fetch is followed by a {@code case} over
-	 * the library's exit code, and an arm that fell through instead of exiting would run on to
-	 * {@code configure_retrieval_gps} and point querystore at a file that had just been deleted —
-	 * with the ordering channel above still green, because the fetch would still precede the write.
+	 * Each artifact the module cannot start without is fetched through {@code fetch_or_exit}, the
+	 * form that leaves rather than returning.
 	 *
-	 * <p><b>Driven from the FETCH, because a form driven from the {@code case} was defeated twice.</b>
-	 * Inserting any statement between the fetch and the {@code case} makes {@code $?} that
-	 * statement's status, so every refusal takes the {@code 0)} arm — and the old scan, which looked
-	 * backwards from each {@code case} for a fetch, then stopped recognising the block and reported
-	 * nothing, its one global "found something" tripwire still satisfied by the other block. So the
-	 * fetch is the anchor: each must be followed IMMEDIATELY by {@code case $? in}, and every arm but
-	 * the success arm must leave.
-	 *
-	 * <p><b>Scoped to the embedder's refusals; the LLM's are deliberately not among them</b> — the
-	 * comment above {@code _download_llm_file} in {@code backend-init.sh} says why.
+	 * <p><b>This is all that is left of a check that was defeated four times.</b> While the
+	 * entrypoint branched on the library's status itself, the property "a refusal stops the start"
+	 * could only be read out of the source, and each reading was defeated one more way — a statement
+	 * inserted between the fetch and the branch, an arm that printed the word "exit", a glob arm the
+	 * scan did not recognise, a pattern list {@code 0|2)} that folded the refusal into the success
+	 * case. The branch is now inside the library, where it is a BEHAVIOUR
+	 * {@code ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript}
+	 * drives. What is left for source to say is which form each call site asked for, and that is one
+	 * token rather than a shape.
 	 */
 	@Test
-	public void everyRefusalOfTheEmbedderStopsTheEntrypoint() throws IOException {
-		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
+	public void everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm() throws IOException {
 		List<String> violations = new ArrayList<String>();
 		int fetches = 0;
-
-		for (int i = 0; i < lines.size(); i++) {
-			String line = lines.get(i).trim();
-			if (!line.startsWith("fetch_and_verify ") || !line.contains("embedder-e5-base-v2")) {
+		for (String line : codeLines("backend-init.sh")) {
+			String trimmed = line.trim();
+			if (!trimmed.contains("embedder-e5-base-v2")) {
 				continue;
 			}
 			fetches++;
-			int next = nextCodeLine(lines, i + 1);
-			if (next < 0) {
-				violations.add("backend-init.sh line " + (i + 1) + ": nothing follows the embedder fetch");
-				continue;
+			if (!trimmed.startsWith("fetch_or_exit ")) {
+				violations.add("backend-init.sh fetches an embedder without the exiting form, so a refusal"
+						+ " would leave the start running on to the global-property write: " + trimmed);
 			}
-			String after = lines.get(next).trim();
-			// Either the verdict is branched on directly, or it is captured first and the capture is
-			// branched on — `_code=$?` then `case $_code in`, which is what the LLM path does and is
-			// the safer spelling of the same question. What is forbidden is anything BETWEEN them,
-			// because that makes $? the inserted statement's status.
-			Matcher captured = Pattern.compile("^([A-Za-z_][A-Za-z0-9_]*)=\\$\\?$").matcher(after);
-			if (captured.matches()) {
-				int branch = nextCodeLine(lines, next + 1);
-				if (branch < 0 || !lines.get(branch).trim().equals("case $" + captured.group(1) + " in")) {
-					violations.add("backend-init.sh line " + (i + 1) + ": the embedder fetch captures its"
-							+ " status into " + captured.group(1) + " but the next statement does not branch on it");
-					continue;
-				}
-				next = branch;
-			} else if (!after.equals("case $? in")) {
-				violations.add("backend-init.sh line " + (i + 1) + ": the embedder fetch is not followed"
-						+ " immediately by `case $? in`, so $? is no longer the library's verdict");
-				continue;
-			}
-			violations.addAll(armsThatDoNotLeave(lines, next));
 		}
-
-		assertEquals(List.of(), violations, "a refusal that does not stop the entrypoint");
+		assertEquals(List.of(), violations, "an embedder fetched through a form that returns instead of exiting");
 		assertTrue(fetches > 0, "backend-init.sh fetches no embedder; this guard read nothing");
 	}
 
-	/**
-	 * Whether {@code arm}'s WHOLE pattern list is the success code. Testing only that it starts with
-	 * {@code 0} exempted {@code 0|2) ;;} — which folds the size refusal into the success arm, so a
-	 * deleted embedder reached "Embedder ready" and the global-property write with this guard green.
-	 */
-	private static boolean isSuccessArm(String arm) {
-		int close = arm.indexOf(')');
-		return close > 0 && "0".equals(arm.substring(0, close).trim());
-	}
 
-	/** The index of the next line that is neither blank nor a whole-line comment, or -1. */
-	private static int nextCodeLine(List<String> lines, int from) {
-		for (int i = from; i < lines.size(); i++) {
-			String trimmed = lines.get(i).trim();
-			if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
-				return i;
-			}
-		}
-		return -1;
-	}
 
-	/**
-	 * Every arm of the {@code case} opening at {@code caseLine} that does not exit, the success arm
-	 * excepted. An arm opener is any line whose first token ends in {@code )} — an earlier form
-	 * matched only digits, pipes and {@code *}, so a glob arm such as {@code [1-9])} was not
-	 * recognised and its body folded into the exempt {@code 0)} arm above it.
-	 */
-	private static List<String> armsThatDoNotLeave(List<String> lines, int caseLine) {
-		List<String> violations = new ArrayList<String>();
-		String arm = null;
-		StringBuilder body = new StringBuilder();
-		for (int i = caseLine + 1; i < lines.size(); i++) {
-			String line = lines.get(i).trim();
-			// No `=` or `$` in the pattern token, so an assignment whose value ends in `)` — a
-			// `_stamp=$(date)` above the arm's own `exit` — is not read as opening a new arm and
-			// does not strand that exit in the wrong bucket. Measured: it did.
-			boolean opensArm = line.matches("^[^\\s#=$]*\\).*");
-			if (opensArm || line.equals("esac")) {
-				if (arm != null && !isSuccessArm(arm) && !leaves(body.toString())) {
-					violations.add("backend-init.sh line " + (caseLine + 1) + ": the '" + arm
-							+ "' arm continues past a refused model instead of exiting");
-				}
-				if (line.equals("esac")) {
-					return violations;
-				}
-				arm = line;
-				body.setLength(0);
-			}
-			body.append(line).append('\n');
-		}
-		violations.add("backend-init.sh line " + (caseLine + 1) + ": this case is never closed by esac");
-		return violations;
-	}
 
-	/**
-	 * Whether an arm's body actually exits, rather than merely containing the word somewhere. A
-	 * review agent defeated the substring form by rewording a diagnostic to end "the container will
-	 * not exit" and deleting the real {@code exit 1} beneath it: green, with a size-refused ONNX
-	 * falling through to "Embedder ready" and on to the global-property write.
-	 */
-	private static boolean leaves(String armBody) {
-		boolean firstLine = true;
-		for (String line : armBody.split("\n")) {
-			// The opening line carries the pattern — `*) exit 1 ;;` — so drop everything through
-			// its `)` before looking for a statement.
-			if (firstLine && line.indexOf(')') >= 0) {
-				line = line.substring(line.indexOf(')') + 1);
-			}
-			firstLine = false;
-			for (String statement : line.split(";")) {
-				if (statement.trim().matches("^exit\\b.*")) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
 
 
 	/**

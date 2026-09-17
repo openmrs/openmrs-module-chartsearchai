@@ -76,49 +76,17 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 ONNX_FILE="$QS_DIR/model.onnx"
 VOCAB_FILE="$QS_DIR/vocab.txt"
 
-fetch_and_verify embedder-e5-base-v2-onnx "$ONNX_FILE" "e5-base-v2 ONNX embedder (~440MB)"
-case $? in
-  0) ;;
-  2)
-    echo "       A graph-only ONNX file from an external-data export is ~1MB and the" >&2
-    echo "       runtime fails late, at first inference, with a misleading \"Not a" >&2
-    echo "       directory\" error reading a sidecar weights file that is not there." >&2
-    echo "       The revision is pinned, so it cannot have changed shape upstream: a" >&2
-    echo "       truncated transfer is the likely cause and a restart is the remedy." >&2
-    exit 1
-    ;;
-  4)
-    echo "       The id is not in model-manifest.tsv, so the image is built wrong; a" >&2
-    echo "       restart will not help." >&2
-    exit 1
-    ;;
-  *)
-    echo "       Chart search cannot run without a verified embedder, so this start is" >&2
-    echo "       refused rather than left to fail at the first query." >&2
-    exit 1
-    ;;
-esac
+fetch_or_exit embedder-e5-base-v2-onnx "$ONNX_FILE" "e5-base-v2 ONNX embedder (~440MB)" \
+  "A graph-only ONNX file from an external-data export is ~1MB and the" \
+  "runtime fails late, at first inference, with a misleading \"Not a" \
+  "directory\" error reading a sidecar weights file that is not there." \
+  "The revision is pinned, so it cannot have changed shape upstream: a" \
+  "truncated transfer is the likely cause and a restart is the remedy."
 echo "Embedder ready: $ONNX_FILE ($(file_bytes "$ONNX_FILE") bytes)."
 
-fetch_and_verify embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab"
-case $? in
-  0) ;;
-  2)
-    echo "       A truncated vocab fails tokenizer init or, worse, silently degrades" >&2
-    echo "       embeddings as missing tokens fall back to [UNK]." >&2
-    exit 1
-    ;;
-  4)
-    echo "       The id is not in model-manifest.tsv, so the image is built wrong; a" >&2
-    echo "       restart will not help." >&2
-    exit 1
-    ;;
-  *)
-    echo "       Chart search cannot run without a verified embedder, so this start is" >&2
-    echo "       refused rather than left to fail at the first query." >&2
-    exit 1
-    ;;
-esac
+fetch_or_exit embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab" \
+  "A truncated vocab fails tokenizer init or, worse, silently degrades" \
+  "embeddings as missing tokens fall back to [UNK]."
 echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 
 # ---- LLM: Gemma 4 E4B Instruct, Q4_K_M -------------------------------------

@@ -228,6 +228,49 @@ fetch_and_verify_override() {
 	fetch_and_verify_url "$1" "$2" 0 "$3" "$4" "the $5 input"
 }
 
+# fetch_or_exit <manifest-id> <target> <label> [diagnostic-line...]
+#
+# For an artifact the module cannot start without — the querystore embedder and its vocab, whose
+# paths configure_retrieval_gps writes into global properties seconds later. Fetches and verifies as
+# fetch_and_verify does, and on ANY refusal prints the caller's diagnostic lines, says what the code
+# means, and EXITS rather than returning.
+#
+# Exiting here rather than leaving the caller to branch is the point. A caller that branched had to
+# spell the branch correctly, and every spelling of it turned out to be a way to get it wrong: a
+# statement between the fetch and the branch made `$?` that statement's status; an arm that printed
+# the word "exit" without running it; a glob arm nothing recognised; a pattern list `0|2)` that
+# folded the refusal into the success case. Four of those shipped past a source-reading guard, each
+# found by a different reviewer. There is no branch to spell now, and the property is a behaviour a
+# test can drive — ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript.
+fetch_or_exit() {
+	_mm_oe_id=$1
+	_mm_oe_target=$2
+	_mm_oe_label=$3
+	shift 3
+	if fetch_and_verify "$_mm_oe_id" "$_mm_oe_target" "$_mm_oe_label"; then
+		return 0
+	else
+		_mm_oe_code=$?
+	fi
+
+	case $_mm_oe_code in
+		2)
+			for _mm_oe_line in "$@"; do
+				echo "       $_mm_oe_line" >&2
+			done
+			;;
+		4)
+			echo "       The id is not in $MODEL_MANIFEST_FILE, so the image is built wrong and a" >&2
+			echo "       restart will not help." >&2
+			;;
+		*)
+			echo "       Chart search cannot run without a verified copy of this file, so the start" >&2
+			echo "       is refused rather than left to fail at the first query." >&2
+			;;
+	esac
+	exit "$_mm_oe_code"
+}
+
 # require_url_for_digest <url> <sha256> <url-input-name> <digest-input-name>
 #
 # The mirror of fetch_and_verify_override's refusal: a digest with no url of its own would be

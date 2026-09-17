@@ -480,6 +480,56 @@ public class ModelDownloadIntegrityTest {
 				"shasum ran while a faster tool was on PATH, so the measured order is not the one taken\n" + result);
 	}
 
+	/**
+	 * For an artifact the module cannot start without, a refusal must STOP the script rather than
+	 * return a code someone has to remember to branch on.
+	 *
+	 * <p><b>This is the behaviour that replaced a source-reading guard defeated four times.</b>
+	 * While the entrypoint spelled the branch itself, every reading of the source was defeated one
+	 * more way and each fix opened the next; the branch now lives in {@code fetch_or_exit}, so the
+	 * question is what the shell DOES. The case asserts it by putting a line after the call and
+	 * checking it never runs — which is exactly what the entrypoint puts there
+	 * ({@code echo "Embedder ready..."} and then the global-property write).
+	 */
+	@Test
+	public void aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript() throws Exception {
+		Path fixture = work.resolve("manifest-or-exit.tsv");
+		Files.write(fixture, ("critical-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
+				+ "\n").getBytes(StandardCharsets.UTF_8));
+		Path target = work.resolve("model.bin");
+		String call = "fetch_or_exit critical-artifact '" + target + "' 'the critical artifact' 'a hint line'\n"
+				+ "echo REACHED-THE-LINE-AFTER";
+
+		served = SUBSTITUTED_BYTES;
+		Result substituted = library(call, fixture);
+
+		assertEquals(DIGEST_MISMATCH, substituted.exit, "a substitution must leave its own status\n" + substituted);
+		assertFalse(substituted.output.contains("REACHED-THE-LINE-AFTER"),
+				"the script ran on past a refusal, which is what reaches the global-property write\n" + substituted);
+
+		// The caller's hint lines are the size diagnostic — what a digest mismatch gets instead is
+		// the generic refusal, because "the export changed shape" is the wrong thing to tell someone
+		// whose bytes are the wrong bytes at the right length.
+		served = Arrays.copyOf(GOOD_BYTES, 10);
+		Result truncated = library(call, fixture);
+
+		assertEquals(SIZE_MISMATCH, truncated.exit, "a short file must leave its own status\n" + truncated);
+		assertFalse(truncated.output.contains("REACHED-THE-LINE-AFTER"),
+				"the script ran on past a short file\n" + truncated);
+		assertTrue(truncated.output.contains("a hint line"),
+				"the caller's size diagnostic must be printed\n" + truncated);
+		assertFalse(substituted.output.contains("a hint line"),
+				"the size diagnostic must not be printed for a substitution\n" + substituted);
+
+		served = GOOD_BYTES;
+		Files.deleteIfExists(target);
+		Result accepted = library(call, fixture);
+
+		assertEquals(OK, accepted.exit, "a verified artifact must not stop the script\n" + accepted);
+		assertTrue(accepted.output.contains("REACHED-THE-LINE-AFTER"),
+				"the script must continue when the artifact verifies\n" + accepted);
+	}
+
 	// ---- the manifest is the one committed record ----------------------------------------------
 
 	/**

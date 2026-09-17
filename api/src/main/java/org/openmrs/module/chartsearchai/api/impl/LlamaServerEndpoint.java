@@ -171,15 +171,24 @@ final class LlamaServerEndpoint {
 	}
 
 	/**
-	 * Whether the listener accepts this start's key, asked of {@code /props} — protected by the
-	 * key, and the one protected route that neither runs inference nor needs a flag the engine's
-	 * command line does not already pass.
+	 * Whether the listener does NOT reject this start's key, asked of {@code /props} — protected by
+	 * the key, and the one protected route that neither runs inference nor needs a flag the
+	 * engine's command line does not already pass.
 	 *
-	 * <p>Fails CLOSED, for the same reason {@link #rejectsUnauthenticatedCalls} does.
+	 * <p>The question is "was the key refused", so anything other than a 401 passes. It
+	 * deliberately does not require a 200: a build that does not serve {@code /props} at all
+	 * answers 404, which says nothing about the key, and requiring 200 would refuse such a build
+	 * for the wrong reason. A 401 is the only answer that means what this leg is asking about.
+	 *
+	 * <p>Unlike its sibling this leg fails OPEN: a probe that could not complete returns -1, which
+	 * is not 401, so it passes. That is what asking "was the key refused" means — an unreachable
+	 * probe establishes no refusal. Readiness as a whole is not fail-open, because
+	 * {@link #rejectsUnauthenticatedCalls} fails CLOSED on exactly the same condition, so a
+	 * listener that cannot be probed at all is refused there.
 	 */
 	boolean acceptsThisModulesKey(HttpClient client) {
 		HttpRequest probe = request(propsUrl(), PROBE_TIMEOUT).GET().build();
-		return statusOf(client, probe, "authenticated-probe") == 200;
+		return statusOf(client, probe, "authenticated-probe") != 401;
 	}
 
 	/** The status code, or -1 when the probe could not complete (which every caller reads as a

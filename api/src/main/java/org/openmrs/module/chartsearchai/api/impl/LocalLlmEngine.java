@@ -73,7 +73,7 @@ import org.springframework.stereotype.Component;
  *       prefixes would thrash the KV cache and erase the warmup gain.</li>
  *   <li>Subprocess and HTTP-client lifecycle state ({@code serverProcess},
  *       {@code loadedModelPath}, {@code loadedContextSize}, {@code httpClient},
- *       {@code idleUnloadFuture}) is shared mutable state that
+ *       {@code endpoint}, {@code idleUnloadFuture}) is shared mutable state that
  *       {@link #ensureServerRunning} and the idle timer mutate; without the
  *       monitor, callers could race on start/stop or tear down the
  *       {@code HttpClient} mid-request.</li>
@@ -570,7 +570,8 @@ public class LocalLlmEngine implements LlmEngine {
 
 	/** POSTs a {@code /slots/0} save/restore action, returning true on a 2xx response. The slot id
 	 *  is fixed at 0 because the server runs {@code --parallel 1}. Failures (missing file, disabled
-	 *  endpoint, I/O) are logged and treated as a miss so warmup degrades to a plain prefill. */
+	 *  endpoint, I/O, a rejected key) are logged and treated as a miss so warmup degrades to a
+	 *  plain prefill — see the comment on the non-2xx branch for why a 401 does not throw here. */
 	private boolean slotAction(String action, String filename, int timeoutSeconds) {
 		ObjectNode body = MAPPER.createObjectNode();
 		body.put("filename", filename);
@@ -586,11 +587,14 @@ public class LocalLlmEngine implements LlmEngine {
 			if (response.statusCode() >= 200 && response.statusCode() < 300) {
 				return true;
 			}
-			log.warn("KV-cache slot {} returned HTTP {}: {}", action, response.statusCode(),
+			// Logged and treated as a miss, 401 included. A 401 here says the key is being
+			// rejected, which is worth naming — but it must not throw: saveSlot runs AFTER the
+			// answer has been streamed to the client, so a throw would discard a delivered
+			// answer over a cache write. The inference paths fail loudly on 401 already, so
+			// nothing about a rejected key is silent.
+			log.warn("KV-cache slot {} returned HTTP {}{}: {}", action, response.statusCode(),
+					response.statusCode() == 401 ? " (this module's key was rejected)" : "",
 					truncate(response.body()));
-			// Not a miss to degrade past: a 401 says the KV endpoints are rejecting this
-			// module's key, which no re-prefill recovers from.
-			rejectIfUnauthorized(response.statusCode());
 			return false;
 		}
 		catch (IOException e) {
@@ -767,6 +771,12 @@ public class LocalLlmEngine implements LlmEngine {
 	 *
 	 * <p>Flag rationale:
 	 * <ul>
+	 *   <li>{@code --host 127.0.0.1} and {@code --no-webui} — the two security-relevant flags
+	 *       (#445). The first pins the bind rather than resting on llama.cpp's default, which reads
+	 *       {@code LLAMA_ARG_HOST} from the environment the child inherits from this JVM; the
+	 *       second closes the Web UI root, the one route on this port that answers a caller with no
+	 *       credential. Both are pinned in {@code LocalLlmServerAuthTest}; read the nested
+	 *       {@code CLAUDE.md} in this package before changing either.</li>
 	 *   <li>{@code -ngl 99} — offload all layers to GPU when a GPU build is in use; no-op on CPU build.</li>
 	 *   <li>{@code -fa on} — flash attention; cuts attention compute on long-context chart prompts.</li>
 	 *   <li>{@code --parallel 1} — single decode slot. Chart-search is one request at a time per
@@ -1040,8 +1050,19 @@ public class LocalLlmEngine implements LlmEngine {
 					JsonNode json = MAPPER.readTree(response.body());
 					String status = json.has("status") ? json.get("status").asText() : "";
 					if ("ok".equals(status)) {
-						requireHealthyListenerIsTheSpawnedChild(endpoint, getHttpClient(),
-								serverProcess::isAlive);
+						// stopServer() before the refusal propagates, exactly as the timeout path
+						// below does, and for a sharper reason: a refusal leaves a LIVE child
+						// whose listener we have just declined to serve, and the next call's
+						// ensureServerRunning sees a live process needing no restart, returns, and
+						// sends the chart to it — the refusal undone one call later.
+						try {
+							requireHealthyListenerIsTheSpawnedChild(endpoint, getHttpClient(),
+									serverProcess::isAlive);
+						}
+						catch (APIException refused) {
+							stopServer();
+							throw refused;
+						}
 						return;
 					}
 				}
@@ -1069,6 +1090,15 @@ public class LocalLlmEngine implements LlmEngine {
 			try {
 				if (!serverProcess.waitFor(10, TimeUnit.SECONDS)) {
 					serverProcess.destroyForcibly();
+					// destroyForcibly() returns before the process is reaped, and the listening
+					// socket is released only when it is. Without this wait, the NEXT start's
+					// requireLoopbackPortFree can find the port still held and refuse the start,
+					// accusing our own dying child of squatting it — on the restart path, which
+					// ensureServerRunning takes on any model, context or KV-directory change.
+					if (!serverProcess.waitFor(10, TimeUnit.SECONDS)) {
+						log.warn("llama-server survived being forcibly destroyed; the next start "
+								+ "may find port {} still held", serverPort);
+					}
 				}
 			}
 			catch (InterruptedException e) {

@@ -429,7 +429,10 @@ public class ModelDownloadPinningGuardTest {
 		StringBuilder body = new StringBuilder();
 		for (int i = caseLine + 1; i < lines.size(); i++) {
 			String line = lines.get(i).trim();
-			boolean opensArm = line.matches("^[^\\s#]*\\).*");
+			// No `=` or `$` in the pattern token, so an assignment whose value ends in `)` — a
+			// `_stamp=$(date)` above the arm's own `exit` — is not read as opening a new arm and
+			// does not strand that exit in the wrong bucket. Measured: it did.
+			boolean opensArm = line.matches("^[^\\s#=$]*\\).*");
 			if (opensArm || line.equals("esac")) {
 				if (arm != null && !arm.startsWith("0") && !leaves(body.toString())) {
 					violations.add("backend-init.sh line " + (caseLine + 1) + ": the '" + arm

@@ -638,13 +638,32 @@ public class ArchitectureGuardTest {
 	 * <p>It is a SEPARATE rule rather than an alternation bolted onto those two, because a bare
 	 * {@code newBuilder(} is ambiguous by name — {@code HttpClient} and {@code HttpRequest} both
 	 * declare one — so neither of their messages could tell a reader what they had actually done.
-	 * This one names the dialect instead. Its exclusions are theirs: the endpoint class is the one
-	 * home for a local-server request, {@code RemoteLlmEngine} addresses the operator's own
-	 * endpoint, and {@code LlmEndpointTestSupport} is the opt-in suites' client.
+	 * This one names the dialect instead.
 	 *
-	 * <p>Calibrated before it was written, which a scan for a shape nothing writes needs: the
-	 * pattern found ZERO occurrences over both trees at the commit that added it, and each of the
-	 * three shapes above reddens it.
+	 * <p><b>Its exclusions are NARROWER than theirs, and deliberately so.</b>
+	 * {@code RemoteLlmEngine} addresses the operator's own endpoint and
+	 * {@code LlmEndpointTestSupport} is the opt-in suites' client, so both may write these shapes;
+	 * {@code LlamaServerEndpoint} may not, and is NOT excluded. It is the one home for a
+	 * local-server REQUEST, which is why the rule beside this one exempts it — but it builds no
+	 * client at all, receiving one as a parameter precisely so that
+	 * {@code LocalLlmEngine.getHttpClient}'s remains the only one. A review round measured what
+	 * borrowing the other rule's list cost: a static-imported {@code newHttpClient()} written in
+	 * that file passed every rule, in the very file the client rule refuses to exempt.
+	 *
+	 * <p>Calibrated before it was written, which a scan for a shape nothing writes needs: with the
+	 * exclusions disabled the pattern found exactly one occurrence over both trees at the commit
+	 * that added it — this rule's own violation message, a string literal, which {@link #codeLines}
+	 * keeps by design — so it REPORTS none, and each alternative below reddens it in both trees.
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> No text rule can enumerate every way
+	 * to open a socket, and three more were measured to pass this one: a hand-written
+	 * {@code java.net.Socket} speaking HTTP (which cannot be banned here — the port probe in
+	 * {@code LocalLlmEngine} legitimately opens one), a third-party client already on both modules'
+	 * compile classpath through {@code openmrs-api}, and reflection onto the JDK factory. What this
+	 * rule does is make the two SHORTEST ways to write the defect fail the build; it does not make
+	 * the defect unwriteable. Its false positives all fail CLOSED and cost a rename: the
+	 * {@code openConnection} alternative alone carries no lookbehind, because that call is always
+	 * made on a receiver, so it also reports one on something that is not a URL.
 	 */
 	@Test
 	public void noDialectReachesTheLocalServerAroundThoseRules() throws IOException {
@@ -653,9 +672,11 @@ public class ArchitectureGuardTest {
 				// A bare factory call, so not preceded by a dot (a receiver the rules above read)
 				// or a word character (some other method whose name ends in one of these).
 				Pattern.compile("(?<![.\\w])(newHttpClient|newBuilder)\\s*\\("
-						+ "|\\bHttpURLConnection\\b|\\bopenConnection\\s*\\("),
-				"LlamaServerEndpoint.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
-						+ "|ArchitectureGuardTest.java",
+						+ "|\\bHttpURLConnection\\b|\\bopenConnection\\s*\\("
+						// openStream() IS openConnection().getInputStream(), and is enough on its
+						// own for an unkeyed GET of the local server's /health.
+						+ "|\\bopenStream\\s*\\("),
+				"RemoteLlmEngine.java|LlmEndpointTestSupport.java|ArchitectureGuardTest.java",
 				"Should reach the local server through LlamaServerEndpoint.request() and "
 						+ "LocalLlmEngine.getHttpClient(), instead of a statically imported factory "
 						+ "or the HttpURLConnection stack — both of which carry no credential and "

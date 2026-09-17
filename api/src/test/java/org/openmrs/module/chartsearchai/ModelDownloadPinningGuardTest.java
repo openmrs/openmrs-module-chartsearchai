@@ -27,9 +27,14 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /**
- * The structural half of issues #444 and #449: every fetch of a file the module later executes names
- * an immutable revision and an id in {@code model-manifest.tsv}, and never spells a Hugging Face URL
- * of its own.
+ * The structural half of issues #444 and #449: the two sites that fetch a MODEL — the container
+ * entrypoint and the standalone release pipeline — name an immutable revision and an id in
+ * {@code model-manifest.tsv}, and spell no Hugging Face URL of their own.
+ *
+ * <p>Those two sites are the scope both findings draw, and it is narrower than "everything this
+ * project downloads": {@code Dockerfile.backend} fetches {@code openmrs.war} from a Maven repository
+ * and {@code backend-init.sh} fetches the demo SQL dump, both unverified and both out of scope here.
+ * ADR Decision 103 records why.
  *
  * <p><b>This reads the SOURCE, and that is the point.</b> {@link ModelDownloadIntegrityTest} shows
  * that the shared library refuses substituted bytes; it cannot show that the two call sites still

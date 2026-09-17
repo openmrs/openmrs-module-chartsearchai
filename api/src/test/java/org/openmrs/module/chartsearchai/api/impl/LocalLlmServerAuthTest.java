@@ -213,6 +213,13 @@ public class LocalLlmServerAuthTest {
 
 	// ---- readiness is the child's, and the key's ----
 
+	/**
+	 * The positive control, without which the three refusals below could all pass over a check that
+	 * refuses everything. It is also, read honestly, the residue: this listener is NOT the spawned
+	 * child, and it is accepted — because it demands the key and the child is alive, which is all
+	 * the design can ask. A perfect mimic that wins the bind race is not refusable by these
+	 * probes, and {@code docs/adr.md} Decision 103 states that rather than claiming otherwise.
+	 */
 	@Test
 	public void aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness() throws IOException {
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
@@ -431,14 +438,17 @@ public class LocalLlmServerAuthTest {
 		try (ServerSocket acceptor = new ServerSocket()) {
 			acceptor.setReuseAddress(true);
 			acceptor.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
-			java.net.Socket client = new java.net.Socket();
-			client.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(),
-					acceptor.getLocalPort()));
-			int local = client.getLocalPort();
-			java.net.Socket accepted = acceptor.accept();
-			client.close();
-			accepted.close();
-			return local;
+			try (java.net.Socket client = new java.net.Socket()) {
+				client.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(),
+						acceptor.getLocalPort()));
+				int local = client.getLocalPort();
+				try (java.net.Socket accepted = acceptor.accept()) {
+					// The CLIENT side closes first, which is what puts its local port into
+					// TIME_WAIT; try-with-resources closes the accepted side after.
+					client.close();
+					return local;
+				}
+			}
 		}
 	}
 

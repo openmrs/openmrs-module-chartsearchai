@@ -74,11 +74,17 @@ final class LlamaServerEndpoint {
 	private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(5);
 
 	/**
-	 * The smallest request body {@code /v1/chat/completions} will parse. The unauthenticated probe
-	 * sends this rather than a prompt because the API-key middleware runs BEFORE body validation,
-	 * so a rejected probe costs no inference and leaks no text.
+	 * The body the unauthenticated probe posts: a VALID one-token completion request carrying no
+	 * patient text. Valid rather than minimal on purpose. The measured build answers 401 before it
+	 * validates a body at all, so either shape costs no inference there — but a build that
+	 * validated the body first would answer a malformed probe with 400, and 400 is not the refusal
+	 * this probe is asking about, so such a build would be refused for a reason that is not about
+	 * its authentication. A valid body can only be answered 401 (refused, the expected case) or
+	 * served (a build credentialing nothing, which readiness must refuse), and one token is the
+	 * whole cost in that second case.
 	 */
-	private static final String EMPTY_COMPLETION_BODY = "{}";
+	private static final String PROBE_COMPLETION_BODY =
+			"{\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}";
 
 	private static final SecureRandom SECRETS = new SecureRandom();
 
@@ -164,7 +170,7 @@ final class LlamaServerEndpoint {
 				.uri(URI.create(completionsUrl()))
 				.timeout(PROBE_TIMEOUT)
 				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString(EMPTY_COMPLETION_BODY,
+				.POST(HttpRequest.BodyPublishers.ofString(PROBE_COMPLETION_BODY,
 						StandardCharsets.UTF_8))
 				.build();
 		return statusOf(client, probe, "unauthenticated-probe") == 401;

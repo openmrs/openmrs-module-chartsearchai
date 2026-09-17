@@ -115,9 +115,13 @@ final class LlmEndpointTestSupport {
 			if (health.statusCode() != 200) {
 				return false;
 			}
-			// The API-key middleware answers before the body is validated, so an empty object is
-			// enough to learn whether this client may post a completion at all, and costs no
-			// inference.
+			// An empty object, deliberately unlike the VALID body LlamaServerEndpoint's readiness
+			// probe sends — do not "fix" one to match the other. That probe addresses a server
+			// this module launched on loopback, where a stray token costs nothing; this one
+			// addresses whatever endpoint a tester configured, which may be a metered remote, so
+			// it must not be capable of spending a completion. The measured llama-server answers
+			// 401 before validating a body at all, which is what makes the cheap shape usable
+			// here.
 			return client.send(authorized(HttpRequest.newBuilder()
 							.uri(URI.create(endpoint))
 							.timeout(Duration.ofSeconds(5))

@@ -45,8 +45,8 @@ import com.sun.net.httpserver.HttpServer;
  * sourced by {@code backend-init.sh} (the published backend image's ENTRYPOINT) and by
  * {@code .github/workflows/build-standalone.yml} (the release pipeline for the README's download) —
  * and every case here executes it with {@code /bin/sh} rather than restating what it ought to do.
- * The composed step {@code fetch_and_verify_url} is what both call sites call, so that is what is
- * tested: calling a download helper and a digest helper in sequence from Java would test an assembly
+ * The composed step {@code fetch_and_verify_url} is what both call sites reach, through the id and
+ * override forms above it, so that is what is tested: calling a download helper and a digest helper in sequence from Java would test an assembly
  * no call site uses, which is the failure the project instructions' composed-method rule names.
  *
  * <p><b>The bad bytes are SERVED, not simulated.</b> Both findings state their acceptance the same
@@ -57,8 +57,9 @@ import com.sun.net.httpserver.HttpServer;
  * the defect lived.
  *
  * <p><b>Both controls are measured.</b> A verification test that only shows a rejection cannot tell
- * a working check from one that rejects everything, so every rejection case here has a known-good
- * twin differing in one byte, and the twin asserts the file is placed AND left alone.
+ * a working check from one that rejects everything, so each rejection case has a counterpart that
+ * differs in the one thing being rejected — the same served bytes accepted under their own digest,
+ * the same fetch accepted at the recorded size — and the counterpart asserts the file is placed.
  *
  * @see ModelDownloadPinningGuardTest for the structural half — that each call site still routes
  *      through this library and still pins its revision, which no behaviour of this library can show
@@ -288,6 +289,16 @@ public class ModelDownloadIntegrityTest {
 					"manifest_url " + id + " did not return the url on that id's row");
 		}
 		assertTrue(rows.size() >= 2, "the manifest must carry the artifacts both call sites fetch, found " + rows.size());
+	}
+
+	@Test
+	public void aFetchOfAnIdTheManifestDoesNotCarryDownloadsNothing() throws Exception {
+		Path target = work.resolve("model.bin");
+
+		Result result = library("fetch_and_verify no-such-artifact '" + target + "' 'a model nobody recorded'");
+
+		assertEquals(MANIFEST_LOOKUP_FAILED, result.exit, "an unrecorded artifact must not be fetched\n" + result);
+		assertFalse(Files.exists(target), "an unrecorded artifact must leave no file behind\n" + result);
 	}
 
 	@Test

@@ -8215,8 +8215,13 @@ project trusts.
 records for the bundled knowledge base: change the revision in the `url` column, re-record `sha256`
 and `bytes` from the new revision, and run the suite. Take the digest from the file itself —
 huggingface.co's `paths-info` API reports a git-lfs object's `oid`, which is its sha256, and the
-`x-linked-etag` header on a HEAD of the pinned URL is an independent confirmation of the same value;
-a file that is not an lfs object has neither, and must be downloaded and hashed.
+`x-linked-etag` header on a HEAD of the pinned URL confirms the same value independently. **Do not
+reach for that header on a file that is not an lfs object.** It is present there too and it is a git
+blob sha1 — 40 hex characters rather than 64, of a different thing — so a small file like `vocab.txt`
+has to be downloaded and hashed. `ModelDownloadPinningGuardTest` requires 64 hex in that column, so
+the confusion reddens the build rather than shipping, but it is the mistake this recipe exists to
+prevent: measured 2026-09-17, `vocab.txt` at the pinned revision returns
+`x-linked-etag: "fb140275c155a9c7c5a3b3e0e77a9e839594a938"`, which is not its sha256.
 
 → `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
 serves substituted bytes, which is the acceptance both findings state.

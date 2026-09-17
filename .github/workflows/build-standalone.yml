@@ -25,7 +25,11 @@ on:
         type: string
       # Overriding any of these three builds a bundle from a file model-manifest.tsv does not
       # record, so the matching *_sha256 input is required with it and the build fails without one
-      # (#449). Left empty — every push build — the artifact and its digest come from the manifest.
+      # (#449). Left empty they do NOT all mean the same thing, and that is unchanged by #449:
+      # an empty gguf_model_url takes the served model from the manifest, while an empty
+      # onnx_model_url or vocab_url fetches nothing at all — those two are the deprecated
+      # chartsearchai-side pre-filter embedder, which the bundle has never carried. A push build
+      # leaves all three empty.
       gguf_model_url:
         description: 'Download URL for the GGUF model file (empty = the manifest entry)'
         required: false

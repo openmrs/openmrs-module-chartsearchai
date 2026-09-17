@@ -8256,9 +8256,9 @@ accept backlog — is the one reachable on a healthy host, so it is what
 `LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart` drives the branch
 through, saturating the queue rather than assuming `listen(1)` admits one connection: Linux compares
 `sk_ack_backlog > sk_max_ack_backlog` and admits backlog+1, and a review round measured that a
-one-filler fixture flips onto the wrong branch. An earlier form of this sentence claimed a flag set inside the `try` achieved
-this, and a review round proved from the bytecode that the `catch` reassigned the flag, so every one
-of those cases still read as "free". A later form added "a failed close" to the list, which a second
+one-filler fixture flips onto the wrong branch. An earlier form of this decision claimed a flag set inside the `try` made every
+non-`ConnectException` case refuse the start, and a review round proved from the bytecode that the
+`catch` reassigned that flag, so every one of those cases still read as "free". A later form added "a failed close" to the list, which a second
 round measured wrong in the ordering that matters: when the connect is refused and the close then
 fails, the `ConnectException` handler wins and the close failure is suppressed — the right answer,
 since the port is free, but not that branch.) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and

@@ -565,6 +565,47 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Only ONE client talks to the local server, so only one place decides that it is not
+	 * proxy-routable. A review round measured the residue: a SECOND
+	 * {@code HttpClient.newBuilder()} built without {@code .proxy(...)} and used for the
+	 * production {@code /health} request passed a full {@code clean install} with every guard
+	 * silent, because {@link #everyLocalServerRequestCarriesTheModulesKey} reads request
+	 * construction and nothing read client construction. A proxied client sends this module's own
+	 * key, and its patients' charts, wherever the proxy points — see
+	 * {@code LocalLlmEngine.getHttpClient}.
+	 *
+	 * <p>{@code RemoteLlmEngine} is excluded because its endpoint is the operator's own and is
+	 * MEANT to leave the host, and {@code LlmEndpointTestSupport} because it is the opt-in suites'
+	 * client for a server the tester started.
+	 */
+	@Test
+	public void onlyOneClientTalksToTheLocalServer() throws IOException {
+		Pattern construction =
+				Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\s*\\(");
+		assertNoViolations(scanForPattern(
+				SRC_ROOT, construction,
+				"LocalLlmEngine.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
+						+ "|ArchitectureGuardTest.java",
+				"Should reach the local server through LocalLlmEngine.getHttpClient(), which is "
+						+ "built with NO_PROXY, instead of constructing another HttpClient"));
+
+		// And LocalLlmEngine itself may build exactly ONE, which is getHttpClient's. Excluding the
+		// file wholesale is what the scan above must do — that method has to construct a client —
+		// and a review round measured that a SECOND construction inside it is then invisible.
+		int built = 0;
+		for (String line : codeLines(getSourceCache().get("LocalLlmEngine.java"))) {
+			if (construction.matcher(line).find()) {
+				built++;
+			}
+		}
+		assertEquals(1, built,
+				"LocalLlmEngine must build exactly one HttpClient — getHttpClient()'s, the only "
+						+ "one carrying NO_PROXY. A second would send this module's key and its "
+						+ "patients' charts wherever a configured proxy points, and the scan above "
+						+ "cannot see it because this file is its legitimate home");
+	}
+
+	/**
 	 * And nothing else spells the local server's loopback address, because a hand-built URL is how
 	 * a request comes to bypass {@link LlamaServerEndpoint} without looking like it does — the
 	 * form {@code slotAction} carried before #445. The endpoint class is the one home.

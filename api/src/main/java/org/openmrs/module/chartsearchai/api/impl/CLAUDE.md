@@ -36,7 +36,8 @@ which is the root file's "Documenting a decision" rule.
 - **Nothing this module sends to its own subprocess may be proxy-routable**, unconditionally: the
   port probe takes `Proxy.NO_PROXY` and `LocalLlmEngine.getHttpClient` takes
   `HttpClient.Builder.NO_PROXY`. `RemoteLlmEngine` must stay proxy-aware, its endpoint being meant
-  to leave the host. No guard can see a client's proxy setting, so this directive covers it.
+  to leave the host. **Build no second client for it** — a guard reads client construction, but
+  none can read the proxy setting of one that is built.
   → ADR Decision 103, row 12b; `LocalLlmServerAuthTest.theClientTalkingToTheLocalServerUsesNoProxy`,
   `theProbeIsNotRoutedThroughAConfiguredProxy`.
 - **`--host 127.0.0.1` and `--no-webui` are load-bearing, not tidiness.** The first stops an

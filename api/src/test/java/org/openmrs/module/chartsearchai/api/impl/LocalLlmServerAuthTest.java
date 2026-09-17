@@ -65,10 +65,15 @@ public class LocalLlmServerAuthTest {
 
 	private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
-	/** One client for the whole class. Each {@code CLIENT} starts a selector
-	 *  thread and workers that are not reclaimed until GC, and this is the only test class here
-	 *  that opens sockets — six of them left ~20 daemon threads and ~25 descriptors per run. */
-	private static final HttpClient CLIENT = HttpClient.newHttpClient();
+	/**
+	 * One client for the whole class, and the PRODUCTION one: each fresh
+	 * {@code HttpClient.newHttpClient()} starts a selector thread and workers that are not
+	 * reclaimed until GC, and this is the only test class here that opens sockets — six of them
+	 * left ~20 daemon threads and ~25 descriptors per run. Taking the engine's own client also
+	 * keeps this class out of {@code ArchitectureGuardTest.onlyOneClientTalksToTheLocalServer},
+	 * which is the rule rather than an exception to it.
+	 */
+	private static final HttpClient CLIENT = new LocalLlmEngine().getHttpClient();
 
 	// ---- the secret reaches the child, and only the child ----
 
@@ -134,22 +139,39 @@ public class LocalLlmServerAuthTest {
 	 * a control: with {@code http.proxyHost} set and {@code http.nonProxyHosts} emptied, the
 	 * production {@code /health} request reached the proxy rather than the server and carried
 	 * {@code Authorization: Bearer <secret>} — the credential handed to a third party, on the same
-	 * client the completions POST uses to send the chart. This asks the real client what it selects
-	 * rather than setting a JVM-global property, which would leak into every other test.
+	 * client the completions POST uses to send the chart.
+	 *
+	 * <p>It sets those two properties, because asking the selector in a clean JVM cannot tell the
+	 * fix from the leak: {@code ProxySelector.getDefault()} answers {@code [DIRECT]} there, and
+	 * {@code List.of(Proxy.NO_PROXY)} equals {@code [DIRECT]} — so an earlier form of this test
+	 * passed when the client was handed a property-honouring selector, which is the likelier
+	 * regression than deleting the call. Restored in a {@code finally}, the shape
+	 * {@link #theProbeIsNotRoutedThroughAConfiguredProxy} uses and which was measured to restore
+	 * completely.
 	 */
 	@Test
 	public void theClientTalkingToTheLocalServerUsesNoProxy() {
-		HttpClient client = new LocalLlmEngine().getHttpClient();
+		String host = System.setProperty("http.proxyHost", "192.0.2.1");
+		String port = System.setProperty("http.proxyPort", "3128");
+		String skip = System.setProperty("http.nonProxyHosts", "");
+		try {
+			HttpClient client = new LocalLlmEngine().getHttpClient();
 
-		assertTrue(client.proxy().isPresent(),
-				"the client must carry an explicit proxy selector; with none it falls back to "
-				+ "ProxySelector.getDefault(), which honours http.proxyHost");
-		assertEquals(java.util.List.of(java.net.Proxy.NO_PROXY),
-				client.proxy().get().select(java.net.URI.create(
-						"http://" + LlamaServerEndpoint.LOOPBACK_HOST + ":18085/health")),
-				"and that selector must choose NO_PROXY for the local server, or a deployment "
-				+ "with a proxy configured sends this module's own key — and its patients' charts "
-				+ "— to whatever the proxy is");
+			assertTrue(client.proxy().isPresent(),
+					"the client must carry an explicit proxy selector; with none it falls back to "
+					+ "ProxySelector.getDefault(), which honours http.proxyHost");
+			assertEquals(java.util.List.of(java.net.Proxy.NO_PROXY),
+					client.proxy().get().select(java.net.URI.create(
+							"http://" + LlamaServerEndpoint.LOOPBACK_HOST + ":18085/health")),
+					"and that selector must choose NO_PROXY for the local server even with a proxy "
+					+ "configured and loopback not excluded — which is the configuration measured "
+					+ "to send this module's own key, and its patients' charts, to the proxy");
+		}
+		finally {
+			restore("http.proxyHost", host);
+			restore("http.proxyPort", port);
+			restore("http.nonProxyHosts", skip);
+		}
 	}
 
 	// ---- the command line ----

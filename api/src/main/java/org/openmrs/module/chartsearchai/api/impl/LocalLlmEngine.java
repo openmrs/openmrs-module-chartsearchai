@@ -1037,10 +1037,17 @@ public class LocalLlmEngine implements LlmEngine {
 	 * branch reports the exception it caught rather than guessing.
 	 */
 	static void requireLoopbackPortFree(int port) {
-		// Proxy.NO_PROXY, not new Socket(): the no-arg constructor is proxy-aware, so a JVM with
-		// socksProxyHost set would route this loopback probe through a proxy — which answers about
-		// the proxy rather than about the port, and was measured taking seconds where a direct
-		// loopback probe costs ~100 µs.
+		// Proxy.NO_PROXY, not new Socket(): the no-arg constructor is proxy-aware, and a proxied
+		// probe answers about the proxy rather than about the port. The trigger is NOT
+		// socksProxyHost alone — measured, that is a no-op here, because the JDK's default
+		// selector appends its own loopback bypass to any NON-EMPTY socksNonProxyHosts. It is
+		// socksProxyHost together with an EMPTY socksNonProxyHosts, which drops that bypass; on
+		// the proxy-aware form a genuinely free port then reads "could not establish" and the
+		// engine can never start. Pinned by
+		// LocalLlmServerAuthTest.theProbeIsNotRoutedThroughAConfiguredProxy, which sets exactly
+		// that pair. (The cost is bounded by PORT_PROBE_TIMEOUT_MS even through a SOCKS handshake
+		// — measured 252 ms against an unroutable proxy, not the seconds an earlier form of this
+		// comment claimed, which were this class's one-time loading.)
 		try (Socket probe = new Socket(java.net.Proxy.NO_PROXY)) {
 			// getByName(LOOPBACK_HOST), not getLoopbackAddress(): the latter is ::1 on a JVM
 			// started with -Djava.net.preferIPv6Addresses, which would probe an address the

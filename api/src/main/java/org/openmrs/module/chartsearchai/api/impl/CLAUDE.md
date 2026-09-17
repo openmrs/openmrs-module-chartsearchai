@@ -29,15 +29,19 @@ which is the root file's "Documenting a decision" rule.
   `requireListenerMayBeServed` after the health reply; the three questions the second
   asks each have their own reason, given in its javadoc.
   **Only those two tie readiness to the child.**
-  The key probes establish only that SOME credential is demanded on the route the chart travels
-  and that ours was not refused — not that this start's key is in force, and not peer identity,
-  which no bearer token can give in that direction. Do not write either probe up as more than
-  that, here, in a decision, or in a comment.
+  The key probes establish less than they look like they do, and `LlamaServerEndpoint`'s class
+  javadoc says exactly what. Do not write either up as more than that — here, in a decision, or in
+  a comment.
   → ADR Decision 103; `LocalLlmServerAuthTest`.
+- **Nothing this module sends to its own subprocess may be proxy-routable**, unconditionally: the
+  port probe takes `Proxy.NO_PROXY` and `LocalLlmEngine.getHttpClient` takes
+  `HttpClient.Builder.NO_PROXY`. `RemoteLlmEngine` must stay proxy-aware, its endpoint being meant
+  to leave the host. No guard can see a client's proxy setting, so this directive covers it.
+  → ADR Decision 103, row 12b; `LocalLlmServerAuthTest.theClientTalkingToTheLocalServerUsesNoProxy`,
+  `theProbeIsNotRoutedThroughAConfiguredProxy`.
 - **`--host 127.0.0.1` and `--no-webui` are load-bearing, not tidiness.** The first stops an
-  inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root. That is not
-  the only route answering an unauthenticated caller — `/health` and `/v1/models` are public by
-  design and readiness depends on it — it is the only one this module can close and does not use.
+  inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root, which is not the
+  only unauthenticated route on the port but is the only one this module can close and does not use.
   → ADR Decision 103, rows 4 and 6; `LocalLlmServerAuthTest`.
 
 ## Its opt-in test suites

@@ -368,8 +368,8 @@ public class LocalLlmEngine implements LlmEngine {
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
 				log.warn("Warmup returned HTTP {}: {}", response.statusCode(),
 						truncate(response.body()));
-				// A 401 here is not a warm-cache miss to shrug off: it means the server is not
-				// accepting this module's key, so every query that follows will fail too.
+				// A 401 here is not a warm-cache miss to shrug off: it says this server is
+				// rejecting the key this start minted, which no re-prefill addresses.
 				rejectIfUnauthorized(response.statusCode());
 				return;
 			}

@@ -83,10 +83,12 @@ final class LlmEndpointTestSupport {
 
 	/**
 	 * The bearer token to present, or null for none. A llama-server this MODULE spawned enforces a
-	 * secret minted per start (issue #445, {@code LlamaServerEndpoint}) which is never logged and
-	 * lives only in the child's environment, so it cannot be recovered and pasted here — these
+	 * secret minted per start (issue #445, {@code LlamaServerEndpoint}) which the module never logs
+	 * and which lives only in the child's environment, so nothing hands it to a test run — these
 	 * suites are for a server the tester started, and this property is how a tester who gave their
-	 * own server a key points the suites at it.
+	 * own server a key points the suites at it. Not that the secret is unreachable: the account
+	 * OpenMRS runs as can read it out of the child's environment, which is why the suite SKIPS on a
+	 * 401 rather than claiming the endpoint cannot be used.
 	 */
 	static String apiKey() {
 		String key = System.getProperty("chartsearchai.test.llm.apiKey");

@@ -113,8 +113,8 @@ final class LlamaServerEndpoint {
 
 	/**
 	 * Puts this start's secret into the child's environment. Called before {@code start()} on the
-	 * builder the engine is about to launch; an inherited {@code LLAMA_API_KEY} is overwritten, so
-	 * the key the child enforces is always the one this endpoint will send.
+	 * builder the engine is about to launch. An inherited {@code LLAMA_API_KEY} is overwritten, so
+	 * the value the child reads is this endpoint's rather than one the JVM was started with.
 	 */
 	void handOverTo(ProcessBuilder builder) {
 		builder.environment().put(API_KEY_ENV, apiKey);

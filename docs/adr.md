@@ -8251,7 +8251,9 @@ pinned: `LocalLlmServerAuthTest.aPortLeftInTimeWaitByThePreviousChildDoesNotFail
 it; a build that does not now fails the start loudly rather than serving charts unauthenticated,
 which is the direction this decision chooses deliberately, and README says so beside the
 operator-binary instructions. The opt-in LLM suites reach a server the tester started, not one this
-module spawned — the per-start secret is never logged and cannot be recovered — so
+module spawned — the module neither logs the per-start secret nor writes it down, and row 10 is
+about OTHER local users rather than about the account OpenMRS runs as, which can read its own
+child's environment — so
 `LlmEndpointTestSupport.isReachable` now asks the completions route rather than only `/health`
 (public, per row 5), which turns what would have been a 401 error per case into a clean skip, and
 `chartsearchai.test.llm.apiKey` points those suites at a keyed server of the tester's own.

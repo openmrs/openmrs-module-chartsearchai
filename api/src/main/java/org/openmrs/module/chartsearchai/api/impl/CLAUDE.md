@@ -40,7 +40,7 @@ which is the root file's "Documenting a decision" rule.
 ## Its opt-in test suites
 
 - **The suites `LlmEndpointTestSupport` serves reach a server the TESTER started.** A server this
-  module spawned enforces a per-start secret that is never logged and cannot be recovered, so
+  module spawned enforces a per-start secret the module never logs or writes down, so
   `isReachable` asks the completions route and not only `/health`, which llama-server serves
   publicly; a keyed endpoint of the tester's own is named by `chartsearchai.test.llm.apiKey`. The
   request shape and the credential live in that one class, never copied into a suite.

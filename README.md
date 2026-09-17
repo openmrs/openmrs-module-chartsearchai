@@ -791,7 +791,7 @@ mvn test -pl api -Dtest="PromptInjectionEvalTest" -Dchartsearchai.prompt.injecti
 
 The prompt-injection suite needs **both** that system property **and** a reachable llama-server (it probes `chartsearchai.llm.serverPort`, overridable with `-Dchartsearchai.prompt.injection.endpoint`). Without one, every case is skipped by a JUnit assumption rather than failing — check the surefire report for skips before reading a green run as a pass.
 
-These suites reach a llama-server **you** started, not one the module spawned: a module-spawned server enforces a secret minted per start that is never logged and cannot be recovered, so its endpoint is reported unreachable and the suite skips. If your own server enforces a key, pass it with `-Dchartsearchai.test.llm.apiKey=<key>`.
+These suites reach a llama-server **you** started, not one the module spawned: a module-spawned server enforces a secret minted per start which the module never logs or writes down, so its endpoint is reported unreachable and the suite skips rather than failing every case on a 401. If your own server enforces a key, pass it with `-Dchartsearchai.test.llm.apiKey=<key>` — and note that the secret is not hidden from the account running OpenMRS, which can read it out of the child's environment (`ps -E`), only from other local users.
 
 ### Adding cases
 

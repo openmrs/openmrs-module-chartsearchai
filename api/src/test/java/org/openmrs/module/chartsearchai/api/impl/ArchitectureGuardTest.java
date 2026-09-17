@@ -482,6 +482,11 @@ public class ArchitectureGuardTest {
 	 * method-wide needle for {@code stopServer} passed with the refusal teardown deleted, because
 	 * the timeout path a few lines below calls it as well.
 	 *
+	 * <p>The slicing took a correction of the same kind: stripping AFTER the slice let one
+	 * unbalanced brace in a comment run the body to the end of the class, where the declarations
+	 * satisfied every needle with the call deleted. It strips first and then requires the slice to
+	 * have closed — {@link #methodBodyWithoutLiterals}.
+	 *
 	 * <p><b>The residue, named rather than claimed away.</b> Text cannot see reachability or
 	 * identity, so two defeats remain and both were demonstrated: a call inside an
 	 * {@code if (false)}-shaped branch satisfies this while never running, and a call on the WRONG
@@ -498,7 +503,8 @@ public class ArchitectureGuardTest {
 		// method -> the calls its body must still contain
 		java.util.Map<String, List<String>> required = new java.util.LinkedHashMap<>();
 		required.put("private void startServer(String modelPath)",
-				java.util.Arrays.asList("requireLoopbackPortFree(", "handOverTo("));
+				java.util.Arrays.asList("requireLoopbackPortFree(", "handOverTo(",
+						"beginServerOutputCapture("));
 		required.put("private void waitForServerReady()",
 				java.util.Arrays.asList("requireListenerMayBeServed("));
 		// The CATCH's own scope, not the method's: waitForServerReady calls stopServer on its
@@ -535,18 +541,27 @@ public class ArchitectureGuardTest {
 	 * found, which the caller treats as a failure.
 	 */
 	private static String methodBodyWithoutLiterals(String source, String signature) {
-		int at = source.indexOf(signature);
+		// Strip FIRST, then slice. endOfBody counts braces over whatever it is given, so slicing
+		// raw source let one unbalanced '{' in a comment run the slice to the end of the class —
+		// measured, and every needle was then satisfied by the DECLARATIONS below, which is the
+		// vacuity this method exists to remove.
+		String stripped = String.join("\n",
+						codeLines(java.util.Arrays.asList(source.split("\n", -1))))
+				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
+				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
+		int at = stripped.indexOf(signature);
 		if (at < 0) {
 			return null;
 		}
-		int open = source.indexOf('{', at + signature.length());
+		int open = stripped.indexOf('{', at + signature.length());
 		if (open < 0) {
 			return null;
 		}
-		String body = source.substring(open, endOfBody(source, open));
-		return String.join("\n", codeLines(java.util.Arrays.asList(body.split("\n", -1))))
-				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
-				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
+		int close = endOfBody(stripped, open);
+		// The slice must have CLOSED: endOfBody returns the input's length when the braces never
+		// balance, which is the runaway above, and a body running to the end of the file is a
+		// failure to slice rather than a body.
+		return close >= stripped.length() ? null : stripped.substring(open, close);
 	}
 
 	/**

@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -1023,15 +1024,17 @@ public class LocalLlmEngine implements LlmEngine {
 	 * <p>It CONNECTS rather than trying to bind, because the engine's question is <em>does a
 	 * connection to the address I am about to dial reach somebody?</em> and a bind answers a
 	 * different one — wrongly in both directions, measured over four socket shapes in
-	 * {@code docs/adr.md} Decision 103 row 11. It is not exhaustive either: a listener whose
-	 * accept backlog is full accepts nothing and reads as free. What catches THAT is not
+	 * {@code docs/adr.md} Decision 103 row 11. Only {@link ConnectException} reads as a free port;
+	 * every other {@link IOException} establishes no refusal and refuses the start, because
+	 * treating one as "nothing listening" is how this check fails OPEN. It is not exhaustive
+	 * either: a listener whose accept backlog is full answers with a timeout — which now refuses
+	 * the start rather than passing it. What catches THAT is not
 	 * {@link #requireListenerMayBeServed} — a listener accepting nothing cannot answer
 	 * {@code /health}, so that gate is never reached — but {@link #waitForServerReady}'s own
 	 * {@code isAlive} throw, when the child loses the bind and exits. Do not weaken that check on
 	 * the strength of the gate below covering it.
 	 */
 	static void requireLoopbackPortFree(int port) {
-		boolean reached;
 		try (Socket probe = new Socket()) {
 			// getByName(LOOPBACK_HOST), not getLoopbackAddress(): the latter is ::1 on a JVM
 			// started with -Djava.net.preferIPv6Addresses, which would probe an address the
@@ -1040,19 +1043,24 @@ public class LocalLlmEngine implements LlmEngine {
 			probe.connect(new InetSocketAddress(
 					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), port),
 					PORT_PROBE_TIMEOUT_MS);
-			// Set INSIDE the try, so that only a refused connection reads as a free port. The
-			// close() the resource block runs after this, and a getByName failure before it, throw
-			// the same IOException — and taking those for "nothing listening" would fail this
-			// check OPEN, which is the one direction it exists to prevent.
-			reached = true;
+		}
+		catch (ConnectException refused) {
+			// The ONE exception that means nothing is listening, and the only one that may read as
+			// a free port — a port whose previous socket is still in TIME_WAIT refuses this way
+			// too, which is what keeps the restart path working. An earlier form caught
+			// IOException here and set a flag; that was a measured no-op, because the catch
+			// reassigned the flag, so a close() or a getByName failure still read as "free".
+			return;
 		}
 		catch (IOException e) {
-			// Nothing accepted the connection, which is what a free port looks like — including a
-			// port whose previous socket is still in TIME_WAIT.
-			reached = false;
-		}
-		if (!reached) {
-			return;
+			// Anything else — a resolution failure, a timeout against a black-hole listener, a
+			// failed close — establishes NO refusal, so it must not be read as a free port. This
+			// is the one direction this check exists to prevent.
+			throw new APIException("Could not establish whether anything is listening on "
+					+ LlamaServerEndpoint.authority(port)
+					+ " (" + e.getClass().getSimpleName() + ": " + e.getMessage()
+					+ "). Refusing to start rather than launch onto a port that may already be"
+					+ " serving another process.", e);
 		}
 		throw new APIException("Something is already listening on "
 				+ LlamaServerEndpoint.authority(port)
@@ -1119,15 +1127,6 @@ public class LocalLlmEngine implements LlmEngine {
 	}
 
 	/**
-	 * Keeps the last {@code RECENT_SERVER_OUTPUT_LINES} lines the child wrote, under the deque's
-	 * OWN lock and never the engine's. That is the whole point: every entry point into this class
-	 * is {@code synchronized}, and the monitor is held unbroken from there through
-	 * {@code startServer} and the whole of {@link #waitForServerReady} — so a ring guarded by the
-	 * engine would block the drain thread on its FIRST line and still be empty when the failure
-	 * message read it. Package-private so that behaviour can be tested with the monitor held, the
-	 * way production holds it.
-	 */
-	/**
 	 * Opens the capture for one server start: a FRESH deque, published as the one
 	 * {@link #lastServerOutput()} reads, and returned so that start's drain thread can close over
 	 * it. Fresh rather than cleared — the predecessor's drain thread is never joined, so a line it
@@ -1141,6 +1140,15 @@ public class LocalLlmEngine implements LlmEngine {
 		return output;
 	}
 
+	/**
+	 * Keeps the last {@code RECENT_SERVER_OUTPUT_LINES} lines the child wrote, under the deque's
+	 * OWN lock and never the engine's. That is the whole point: every entry point into this class
+	 * is {@code synchronized}, and the monitor is held unbroken from there through
+	 * {@code startServer} and the whole of {@link #waitForServerReady} — so a ring guarded by the
+	 * engine would block the drain thread on its FIRST line and still be empty when the failure
+	 * message read it. Package-private so that behaviour can be tested with the monitor held, the
+	 * way production holds it.
+	 */
 	static void rememberServerOutput(java.util.Deque<String> output, String line) {
 		synchronized (output) {
 			output.addLast(line);

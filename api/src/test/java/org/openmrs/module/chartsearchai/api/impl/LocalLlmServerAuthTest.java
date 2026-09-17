@@ -390,7 +390,64 @@ public class LocalLlmServerAuthTest {
 				"never the predecessor's: " + engine.lastServerOutput());
 	}
 
-	// ---- real listeners ----	// ---- real listeners ----
+	@Test
+	public void aListenerRefusingWith403RatherThan401IsStillReadiness() throws IOException {
+		try (KeyDemandingListener listener = KeyDemandingListener.refusingWith403()) {
+			// 403 is a server refusing the credential just as squarely as 401 — a fronting proxy's
+			// answer. Requiring exactly 401 would refuse the start of a server that DOES demand a
+			// credential, which is the opposite of what this gate is for.
+			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(), CLIENT,
+					ProcessHandle.current()::isAlive);
+		}
+	}
+
+	/**
+	 * The statuses {@code refusesCredentials} names, spelled as LITERALS. Both readiness legs and
+	 * three other sites turn on it, and none of them can be driven against a live llama-server
+	 * here — so the members are written out rather than derived, the way
+	 * {@code ReferenceProseFidelityTest} spells the shared terminator set.
+	 */
+	@Test
+	public void aStatusThatIsNotARefusalIsNotTreatedAsOne() {
+		assertTrue(LlamaServerEndpoint.refusesCredentials(401), "401 is a refused credential");
+		assertTrue(LlamaServerEndpoint.refusesCredentials(403),
+				"so is 403 — a build or a fronting proxy refusing that way is still refusing");
+		assertFalse(LlamaServerEndpoint.refusesCredentials(200),
+				"a SERVED request is what readiness refuses the START over, not a refusal");
+		assertFalse(LlamaServerEndpoint.refusesCredentials(404),
+				"a route this build does not serve says nothing about the credential");
+		assertFalse(LlamaServerEndpoint.refusesCredentials(-1),
+				"a probe that could not complete establishes NO refusal — reading it as one would "
+				+ "invert the unauthenticated leg from fail-closed to fail-open, and a listener "
+				+ "the module cannot probe at all would then be served a patient's chart");
+	}
+
+	/**
+	 * The negative control's own direction. A listener that answers nothing at all must REFUSE the
+	 * start, not pass it: {@code unauthenticatedProbeStatus} returns -1 for a probe that could not
+	 * complete, and only {@code refusesCredentials} refusing to name -1 keeps that fail-closed.
+	 */
+	@Test
+	public void aListenerThatCannotBeProbedAtAllIsNotReadiness() throws IOException {
+		int deadPort;
+		try (ServerSocket reserved = new ServerSocket()) {
+			reserved.setReuseAddress(true);
+			reserved.bind(new InetSocketAddress(
+					InetAddress.getByName(LlamaServerEndpoint.LOOPBACK_HOST), 0));
+			deadPort = reserved.getLocalPort();
+		}
+		LlamaServerEndpoint nobodyThere = LlamaServerEndpoint.open(deadPort);
+
+		APIException thrown = assertThrows(APIException.class,
+				() -> LocalLlmEngine.requireListenerMayBeServed(nobodyThere, CLIENT,
+						ProcessHandle.current()::isAlive),
+				"a listener that cannot be probed has not refused anything, so readiness must "
+				+ "refuse the start rather than take silence for a credential check");
+		assertTrue(thrown.getMessage().contains("could not be completed"),
+				"and say that is what happened: " + thrown.getMessage());
+	}
+
+	// ---- real listeners ----
 
 	/**
 	 * A real loopback HTTP listener that demands the endpoint's bearer token, as

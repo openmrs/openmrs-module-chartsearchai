@@ -8248,9 +8248,12 @@ control is possible at all, and row 8 is why it is free.
 and nothing else. Row 7 sets the size of what is left: the check returns and the child binds ~0.14 s
 later, so an impostor must now win that window rather than simply arriving while the port is free.
 (The check connects rather than binding, so it never holds the port against the child — the
-"probe socket closes" phrasing belonged to the bind form this decision replaced. Its own socket
-close is inside the try, and only a REFUSED connection reads as a free port, so a failure to close
-cannot make the check fail open.) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
+"probe socket closes" phrasing belonged to the bind form this decision replaced. Only a
+`ConnectException` reads as a free port; a resolution failure, a timeout against a listener that
+accepts nothing, or a failed close establishes no refusal and refuses the start instead. An earlier
+form of this sentence claimed a flag set inside the `try` achieved that, and a review round proved
+from the bytecode that the `catch` reassigned the flag, so every one of those cases still read as
+"free".) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
 the liveness re-check then turns the adoption into a loud failure unless the re-check happens to run
 inside those 60 ms. The residue is that window, and the option that would close it rather than
 narrow it is an unpredictable ephemeral port handed to the child, which is not taken here because

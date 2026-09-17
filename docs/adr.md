@@ -8220,7 +8220,7 @@ one is present, so these are properties of *a* build and are re-checkable by the
 | 9 | does a lost bind race kill the child? | yes — launched onto an occupied port it exits 1 in ~0.06 s, before touching the model. It says `couldn't bind HTTP server socket` **only when `--log-disable` is absent**; the launch always passes that flag, so what the module can actually read is the exit code. Measured with the no-flag run as its own control |
 | 10 | is an environment safer than an argument vector *on this OS*? | yes — `ps -E` listed 8 `KEY=VALUE` pairs for a process this user owns and none at all for a root-owned one, while `ps -o args=` shows any process's arguments |
 | 11 | does a bind probe answer "is this port occupied"? | no, in both directions. Against a live listener on the WILDCARD address a loopback bind with `SO_REUSEADDR` SUCCEEDED (the probe would call the port free); against a listening port left in `TIME_WAIT` a bind without it was REFUSED (the probe would refuse an ordinary restart). A `connect` was correct on all four shapes — free, loopback-bound, wildcard-bound, `TIME_WAIT` — which is why the check connects |
-| 12 | which failures does the child announce past `--log-disable`? | an unrecognised ARGUMENT, and that alone: `error: invalid argument: …` is printed directly and survives the flag, while a failed bind and a missing model file go through the log system and are suppressed, leaving the backend's startup banner. Which is why the startup-failure message quotes the child at all — that argument shape is what #445's two new flags can provoke — and why it claims no more |
+| 12 | which failures does the child announce past `--log-disable`? | of the three shapes driven, only an unrecognised ARGUMENT: `error: invalid argument: …` is printed directly and survives the flag, while a failed bind and a missing model file go through the log system and are suppressed, leaving the backend's startup banner. Not a claim about every failure — three were measured. Which is why the startup-failure message quotes the child at all (that argument shape is what #445's two new flags can provoke) and why the message says outright that the lines may be the banner rather than the cause |
 | 13 | is `InetAddress.getLoopbackAddress()` the address the engine dials? | not always — under `-Djava.net.preferIPv6Addresses` it is `::1`, and a probe of it reported a real listener on `127.0.0.1` as free while reporting a `::1` listener that can never receive the chart as a conflict. The check resolves `LOOPBACK_HOST` instead, and the tests spell that address independently of the code under test |
 
 **Why the environment and not a key file.** The three ways to hand `llama-server` a key are an
@@ -8244,10 +8244,11 @@ travels on: a future build that reclassified it as public is exactly one whose r
 matters, so failing the start there reports the thing worth failing over. Rows 5 and 8 are why the
 control is possible at all, and row 8 is why it is free.
 
-**What ties readiness to the child, and the residue.** The pre-bind check and the liveness re-check,
-and nothing else. Row 7 sets the size of what is left: the probe socket closes and the child binds
-~0.14 s later, so an impostor must now win that window rather than simply arriving while the port is
-free. Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
+**What ties readiness to the child, and the residue.** The port check and the liveness re-check,
+and nothing else. Row 7 sets the size of what is left: the check returns and the child binds ~0.14 s
+later, so an impostor must now win that window rather than simply arriving while the port is free.
+(The check connects and never holds the port itself, so there is no probe socket to close — that
+phrasing belonged to the bind form this decision replaced.) Row 9 narrows it further — a process that wins it kills the child, which exits in ~0.06 s, and
 the liveness re-check then turns the adoption into a loud failure unless the re-check happens to run
 inside those 60 ms. The residue is that window, and the option that would close it rather than
 narrow it is an unpredictable ephemeral port handed to the child, which is not taken here because
@@ -8274,17 +8275,22 @@ pinned, and the wildcard test reddens if the bind form is restored:
 `aPortAnotherProcessIsListeningOnFailsTheStartLoudly`,
 `aPortLeftInTimeWaitByThePreviousChildDoesNotFailTheStart`.
 
-**What a PERSISTENT refusal costs, and why nothing here memoizes it.** A refusal is only reachable
-after the child has answered `/health`, i.e. after a whole model load, so a build that starts and
-then fails the gate — an operator-supplied binary that ignores `LLAMA_API_KEY` is the case — is
-re-launched and re-refused on every query, and `PrewarmBootstrapService.runSweep` catches per
-patient and walks the whole table. A review round built a bounded per-process memo for this and it
+**What a PERSISTENT refusal costs, and why nothing here memoizes it.** Two refusals cost very
+different things, and conflating them is easy. The PORT check refuses before the child is launched
+and costs ~107 µs, so repeating it per query is free. The READINESS gate is only reachable after the
+child has answered `/health`, i.e. after a whole model load — so a build that starts and then fails
+that gate, an operator-supplied binary ignoring `LLAMA_API_KEY` being the case, is re-launched and
+re-refused on every query. `PrewarmBootstrapService.runSweep` catches per patient and walks the
+whole table, so the sweep pays a discarded load **per patient**, plus up to `stopServer`'s teardown,
+with the engine monitor held throughout — hours for a table of any size, during which every
+clinician query queues behind the patient in flight and then pays its own. A review round built a bounded per-process memo for this and it
 was reverted, for two reasons worth recording rather than rediscovering. It could not be pinned:
 deleting both the memo and the gate that consulted it left the whole suite green, because the only
 thing testable without a subprocess is the cooldown predicate, not that `ensureServerRunning`
-consults it. And it did not actually deliver the claim made for it — measured against this repo's
-own throttle and chart-build costs, a 60-second window covers on the order of 60–110 patients, so a
-sweep pays one discarded load per minute of sweeping rather than one in total.
+consults it. And it did not deliver the claim made for it — measured against this repo's own
+throttle (`DEFAULT_PREWARM_THROTTLE_MS`) and chart-build costs, a 60-second window covers on the
+order of 60–110 patients, so a sweep would still pay one discarded load per minute of sweeping
+rather than one in total.
 
 The condition is global, so the remedy belongs where the sweep is, not where the engine is:
 `runSweep` already has a `cancelRequested` flag it uses to abandon a sweep mid-way, and a start

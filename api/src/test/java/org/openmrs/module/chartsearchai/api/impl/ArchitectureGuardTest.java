@@ -462,6 +462,50 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Every protection #445 adds is CALLED. The functions are pinned by
+	 * {@code LocalLlmServerAuthTest}, which drives each of them directly — and that leaves the
+	 * invocations unpinned: a review round measured that deleting
+	 * {@code requireLoopbackPortFree(serverPort)}, the {@code requireListenerMayBeServed} gate and
+	 * {@code endpoint.handOverTo(pb)} each left the FULL suite green. A dropped call is the whole
+	 * defect back — an unauthenticated child, or a foreign listener adopted — and nothing
+	 * behavioural can see it, because no test in this module can launch the subprocess those lines
+	 * guard.
+	 *
+	 * <p>It reads the SOURCE rather than the class file's constant pool, and that is the second
+	 * attempt: a pool check passed with the call deleted, because three of the four are methods of
+	 * this same class and their names are in the pool from the DECLARATION alone. Only
+	 * {@code handOverTo}, declared elsewhere, reddened. So the lookup is over code lines — comments
+	 * and string literals stripped by {@link #codeLines}, which is what makes commenting a call
+	 * out fail rather than pass. It cannot check the calls are in the right ORDER or on the right
+	 * path; it checks they have not vanished, which is the failure that was measured to be
+	 * invisible. The canary is what stops it passing vacuously on a file it never read.
+	 */
+	@Test
+	public void theLocalServerProtectionsAreAllCalled() throws IOException {
+		List<String> source = getSourceCache().get("LocalLlmEngine.java");
+		assertTrue(source != null && !source.isEmpty(),
+				"expected LocalLlmEngine.java in the source cache — a guard that reads nothing "
+						+ "reports no violations");
+		String code = String.join("\n", codeLines(source));
+
+		assertTrue(code.contains("ensureServerRunning()"),
+				"canary: this file must carry its own calls, or every assertion below passes on a "
+						+ "source this test failed to read");
+
+		List<String> violations = new ArrayList<>();
+		for (String call : java.util.Arrays.asList("requireLoopbackPortFree(serverPort)",
+				"requireListenerMayBeServed(endpoint", "endpoint.handOverTo(",
+				"rememberServerOutput(startOutput")) {
+			if (!code.contains(call)) {
+				violations.add("LocalLlmEngine no longer calls " + call
+						+ " — issue #445's protections are each one line at one call site, and"
+						+ " deleting one restores the defect with no behavioural test able to see it");
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
 	 * And nothing else spells the local server's loopback address, because a hand-built URL is how
 	 * a request comes to bypass {@link LlamaServerEndpoint} without looking like it does — the
 	 * form {@code slotAction} carried before #445. The endpoint class is the one home.
@@ -471,7 +515,9 @@ public class ArchitectureGuardTest {
 		assertNoViolations(scanForPattern(
 				SRC_ROOT,
 				Pattern.compile("\"http://127\\.0\\.0\\.1:"),
-				"LlamaServerEndpoint.java|ArchitectureGuardTest.java",
+				// No production exclusion: LlamaServerEndpoint builds its URLs from LOOPBACK_HOST
+				// and spells this literal nowhere, so excluding it would only weaken the scan.
+				"ArchitectureGuardTest.java",
 				"Should take the URL from LlamaServerEndpoint (completionsUrl/healthUrl/"
 						+ "propsUrl/slotUrl) instead of spelling the loopback address"));
 	}

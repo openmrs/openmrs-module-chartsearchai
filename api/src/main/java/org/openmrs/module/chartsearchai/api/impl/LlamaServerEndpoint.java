@@ -80,6 +80,11 @@ final class LlamaServerEndpoint {
 	 * The host the child is told to bind and the host the engine dials — one spelling, because the
 	 * two must agree and nothing else couples them. Passed as {@code --host} by
 	 * {@link LocalLlmEngine#buildServerCommand} and used by {@link #baseUrl()} here.
+	 *
+	 * <p>It must stay a literal ADDRESS, never a name. The port check resolves it with
+	 * {@code InetAddress.getByName}, which parses a dotted quad in ~100 ns but performs a real
+	 * lookup for a name — measured at 30 s on this host for one that does not resolve, on the
+	 * start path, bounded by nothing.
 	 */
 	static final String LOOPBACK_HOST = "127.0.0.1";
 
@@ -178,8 +183,9 @@ final class LlamaServerEndpoint {
 	 * as the control — they are public by design and answer 200 with no credential.
 	 *
 	 * <p>Fails CLOSED: an I/O error or an interrupt reads as "not refused", because a probe that
-	 * could not establish the refusal has not established it. It returns the STATUS rather than a
-	 * boolean so the caller can say what it actually saw — a timeout ({@code -1}) and a served 200
+	 * could not establish the refusal has not established it — {@link #refusesCredentials} decides
+	 * which codes count. It returns the STATUS rather than a boolean so the caller can say what it
+	 * actually saw — a timeout ({@code -1}) and a served 200
 	 * are both refusals of the start, and telling an operator their server answered a chart request
 	 * unauthenticated when it never answered at all sends them after the wrong thing. Which codes
 	 * COUNT as a refusal is {@link #refusesCredentials}, so both legs agree on it.
@@ -206,7 +212,7 @@ final class LlamaServerEndpoint {
 	 * refuse such a build for the wrong reason.
 	 *
 	 * <p>Unlike its sibling this leg fails OPEN: a probe that could not complete returns -1, which
-	 * is not 401, so it passes. That is what asking "was the key refused" means — an unreachable
+	 * {@link #refusesCredentials} does not name, so it passes. That is what asking "was the key refused" means — an unreachable
 	 * probe establishes no refusal. Readiness as a whole is not fail-open, because
 	 * {@link #unauthenticatedProbeStatus} fails CLOSED on exactly the same condition, so a
 	 * listener that cannot be probed at all is refused there.
@@ -230,7 +236,7 @@ final class LlamaServerEndpoint {
 	/** The status code, or -1 when the probe could not complete. What -1 MEANS is the caller's
 	 *  question and the two callers answer it differently — see each of them, and do not fold the
 	 *  difference in here: {@link #unauthenticatedProbeStatus} requires a 401 so -1 fails, while
-	 *  {@link #doesNotRefuseThisModulesKey} only excludes a 401 so -1 passes. */
+	 *  {@link #doesNotRefuseThisModulesKey} only excludes a refusal so -1 passes. */
 	private int statusOf(HttpClient client, HttpRequest probe, String what) {
 		try {
 			HttpResponse<Void> response = client.send(probe, HttpResponse.BodyHandlers.discarding());

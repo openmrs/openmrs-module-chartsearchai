@@ -62,6 +62,11 @@ public class LocalLlmServerAuthTest {
 
 	private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
+	/** One client for the whole class. Each {@code CLIENT} starts a selector
+	 *  thread and workers that are not reclaimed until GC, and this is the only test class here
+	 *  that opens sockets — six of them left ~20 daemon threads and ~25 descriptors per run. */
+	private static final HttpClient CLIENT = HttpClient.newHttpClient();
+
 	// ---- the secret reaches the child, and only the child ----
 
 	@Test
@@ -154,14 +159,13 @@ public class LocalLlmServerAuthTest {
 	public void everyRequestToTheLocalServerCarriesTheModulesKey() throws IOException {
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
 			LlamaServerEndpoint endpoint = listener.endpoint();
-			HttpClient client = HttpClient.newHttpClient();
 
 			for (String url : List.of(endpoint.completionsUrl(), endpoint.healthUrl(),
 					endpoint.propsUrl(), endpoint.slotUrl("save"))) {
 				HttpRequest request = endpoint.request(url, TIMEOUT).GET().build();
 				int status;
 				try {
-					status = client.send(request, HttpResponse.BodyHandlers.discarding())
+					status = CLIENT.send(request, HttpResponse.BodyHandlers.discarding())
 							.statusCode();
 				}
 				catch (InterruptedException e) {
@@ -253,7 +257,7 @@ public class LocalLlmServerAuthTest {
 	public void aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness() throws IOException {
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
 			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(),
-					HttpClient.newHttpClient(), ProcessHandle.current()::isAlive);
+					CLIENT, ProcessHandle.current()::isAlive);
 		}
 	}
 
@@ -264,7 +268,7 @@ public class LocalLlmServerAuthTest {
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
 			APIException thrown = assertThrows(APIException.class,
 					() -> LocalLlmEngine.requireListenerMayBeServed(
-							listener.endpoint(), HttpClient.newHttpClient(), exitedChild),
+							listener.endpoint(), CLIENT, exitedChild),
 					"a child that lost the bind race exits at once, so a healthy answer beside a "
 					+ "dead child is another process answering — it must fail the start rather "
 					+ "than leave a foreign listener in service");
@@ -279,7 +283,7 @@ public class LocalLlmServerAuthTest {
 		try (KeyDemandingListener listener = KeyDemandingListener.demandingNoKeyAtAll()) {
 			APIException thrown = assertThrows(APIException.class,
 					() -> LocalLlmEngine.requireListenerMayBeServed(
-							listener.endpoint(), HttpClient.newHttpClient(),
+							listener.endpoint(), CLIENT,
 							ProcessHandle.current()::isAlive),
 					"a listener that answers an inference request with no credential is not "
 					+ "enforcing the key this module minted, so it would have taken the chart "
@@ -298,7 +302,7 @@ public class LocalLlmServerAuthTest {
 		try (KeyDemandingListener listener = KeyDemandingListener.refusingEveryKey()) {
 			APIException thrown = assertThrows(APIException.class,
 					() -> LocalLlmEngine.requireListenerMayBeServed(
-							listener.endpoint(), HttpClient.newHttpClient(),
+							listener.endpoint(), CLIENT,
 							ProcessHandle.current()::isAlive),
 					"a server that rejects this start's key must fail the start, not surface as a "
 					+ "401 on a clinician's query");
@@ -315,7 +319,7 @@ public class LocalLlmServerAuthTest {
 			// something that says nothing about its authentication, and the unauthenticated leg
 			// still proves the key is in force.
 			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(),
-					HttpClient.newHttpClient(), ProcessHandle.current()::isAlive);
+					CLIENT, ProcessHandle.current()::isAlive);
 		}
 	}
 
@@ -354,6 +358,29 @@ public class LocalLlmServerAuthTest {
 				+ captured);
 	}
 
+	@Test
+	public void aListenerRefusingWith403RatherThan401IsStillReadiness() throws IOException {
+		try (KeyDemandingListener listener = KeyDemandingListener.refusingWith403()) {
+			// 403 is a server refusing the credential just as squarely as 401 — a fronting proxy's
+			// answer. Requiring exactly 401 would refuse the start of a server that DOES demand a
+			// credential, which is the opposite of what this gate is for.
+			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(), CLIENT,
+					ProcessHandle.current()::isAlive);
+		}
+	}
+
+	@Test
+	public void aStatusThatIsNotARefusalIsNotTreatedAsOne() {
+		assertTrue(LlamaServerEndpoint.refusesCredentials(401), "401 is a refused credential");
+		assertTrue(LlamaServerEndpoint.refusesCredentials(403), "so is 403");
+		assertFalse(LlamaServerEndpoint.refusesCredentials(200),
+				"a SERVED request is the thing readiness refuses the start over, not a refusal");
+		assertFalse(LlamaServerEndpoint.refusesCredentials(-1),
+				"a probe that could not complete establishes no refusal");
+		assertFalse(LlamaServerEndpoint.refusesCredentials(404),
+				"a route this build does not serve says nothing about the credential");
+	}
+
 	// ---- real listeners ----
 
 	/**
@@ -369,6 +396,8 @@ public class LocalLlmServerAuthTest {
 		private final LlamaServerEndpoint endpoint;
 
 		private final List<String> authorized = new ArrayList<>();
+
+		private volatile int refusalStatus = 401;
 
 		private KeyDemandingListener(HttpServer server, LlamaServerEndpoint endpoint) {
 			this.server = server;
@@ -388,6 +417,14 @@ public class LocalLlmServerAuthTest {
 		/** A listener that is up and demands a key but will not accept the one this start minted. */
 		static KeyDemandingListener refusingEveryKey() throws IOException {
 			return start(false, true);
+		}
+
+		/** A listener that refuses a credential with 403 rather than 401 — a fronting proxy's
+		 *  answer, and the shape {@code refusesCredentials} was widened to admit. */
+		static KeyDemandingListener refusingWith403() throws IOException {
+			KeyDemandingListener listener = start(true, true);
+			listener.refusalStatus = 403;
+			return listener;
 		}
 
 		/** A listener that answers everything 200 with no credential — the shape of a naive
@@ -422,7 +459,8 @@ public class LocalLlmServerAuthTest {
 					respond(exchange, 404, "{\"error\":\"not found\"}");
 					return;
 				}
-				respond(exchange, keyed ? 200 : 401, keyed ? "{}" : "{\"error\":\"unauthorized\"}");
+				respond(exchange, keyed ? 200 : listener.refusalStatus,
+						keyed ? "{}" : "{\"error\":\"unauthorized\"}");
 			});
 			server.start();
 			return listener;

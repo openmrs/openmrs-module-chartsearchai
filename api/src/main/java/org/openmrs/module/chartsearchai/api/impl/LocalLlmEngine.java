@@ -145,10 +145,20 @@ public class LocalLlmEngine implements LlmEngine {
 	 * {@code --log-disable} the launch passes. That is the shape #445 introduced, by adding two
 	 * flags an older or operator-supplied build may reject. It does NOT catch a failed bind or a
 	 * missing model file: measured, those go through the log system and {@code --log-disable}
-	 * suppresses them, leaving only the backend's startup banner. Guarded by its own lock — see
+	 * suppresses them, leaving the backend's startup banner instead, which is why the failure
+	 * message says so rather than presenting the banner as a cause. Guarded by its own lock — see
 	 * {@link #rememberServerOutput}.
+	 *
+	 * <p>Replaced per start rather than cleared, and each start's drain thread closes over ITS
+	 * deque: the predecessor's thread is never joined, so a line it had not yet read would
+	 * otherwise land after a clear and be quoted as the new child's.
 	 */
-	private final java.util.Deque<String> recentServerOutput = new java.util.ArrayDeque<>();
+	private java.util.Deque<String> recentServerOutput = new java.util.ArrayDeque<>();
+
+	/** A child this engine gave up on without seeing it reaped — the forcible-destroy and
+	 *  interrupt paths. Kept so the NEXT start can try again rather than leaving an orphan holding
+	 *  the port that nothing in the module has a handle to. */
+	private Process abandonedProcess;
 
 	/** The KV-cache keys whose chart prefix has been loaded into THIS server process's RAM
 	 *  prompt-cache pool (by a warmup or query) since it last started. llama-server's
@@ -621,7 +631,8 @@ public class LocalLlmEngine implements LlmEngine {
 			// answer over a cache write. The inference paths fail loudly on 401 already, so
 			// nothing about a rejected key is silent.
 			log.warn("KV-cache slot {} returned HTTP {}{}: {}", action, response.statusCode(),
-					response.statusCode() == 401 ? " (this module's key was rejected)" : "",
+					LlamaServerEndpoint.refusesCredentials(response.statusCode())
+							? " (this module's key was rejected)" : "",
 					truncate(response.body()));
 			return false;
 		}
@@ -867,18 +878,10 @@ public class LocalLlmEngine implements LlmEngine {
 		cmd.add(modelPath);
 		cmd.add("--port");
 		cmd.add(String.valueOf(port));
-		// Pin the bind to loopback rather than resting on llama.cpp's default (issue #445). The
-		// child inherits the JVM's environment, and --host reads LLAMA_ARG_HOST from it, so a
-		// server-wide variable could otherwise widen the bind to every interface without anything
-		// here saying so. Measured: this flag wins over LLAMA_ARG_HOST=0.0.0.0 in the environment.
+		// Both flags are load-bearing; the rationale is this method's own javadoc, the
+		// measurements are ADR Decision 103 rows 4 and 6, and the rule is the nested CLAUDE.md.
 		cmd.add("--host");
 		cmd.add(LlamaServerEndpoint.LOOPBACK_HOST);
-		// The Web UI is enabled by default and its root is served OUTSIDE the API-key middleware
-		// (measured: GET / returns 200 with no credential). Not the only such route — /health and
-		// /v1/models are public by design too, and readiness relies on it — but the only one this
-		// module can close, and the engine speaks to none of it: it uses the chat-completions,
-		// /health, /props and /slots routes alone. So the surface goes off rather than stay open
-		// for no reader.
 		cmd.add("--no-webui");
 		cmd.add("-ngl");
 		cmd.add("99");
@@ -911,11 +914,13 @@ public class LocalLlmEngine implements LlmEngine {
 		// or crashes, ensureServerRunning restarts it WITHOUT going through stopServer, and a stale
 		// residency record would make a cold query wrongly skip the disk restore and re-prefill.
 		ramResidentKeys.clear();
-		// Same hazard, same reason: the crash path skips stopServer, so without this a startup
-		// failure would quote the DEAD PREDECESSOR's last lines as this child's.
-		synchronized (recentServerOutput) {
-			recentServerOutput.clear();
-		}
+		// A child this engine could not confirm dead still holds the port, and the port check
+		// below would blame it on a stranger. Try once more before probing.
+		reapAbandonedProcess();
+		// A fresh deque rather than a clear: see the field. The predecessor's drain thread keeps
+		// writing into the old one, where nothing reads it.
+		java.util.Deque<String> startOutput = new java.util.ArrayDeque<>();
+		recentServerOutput = startOutput;
 
 		String serverBinaryPath = LlamaServerBinary.resolve();
 		serverPort = getServerPort();
@@ -962,15 +967,17 @@ public class LocalLlmEngine implements LlmEngine {
 			endpoint.handOverTo(pb);
 			serverProcess = pb.start();
 
-			// Drain server output in a daemon thread to prevent buffer blocking
+			// Drain server output in a daemon thread to prevent buffer blocking. The process and
+			// the deque are captured as LOCALS: reading the fields would give a thread outliving
+			// its own child either a stranger's stream or an NPE after stopServer nulled it.
+			Process child = serverProcess;
 			Thread outputDrain = new Thread(() -> {
 				try (BufferedReader reader = new BufferedReader(
-						new InputStreamReader(serverProcess.getInputStream(),
-								StandardCharsets.UTF_8))) {
+						new InputStreamReader(child.getInputStream(), StandardCharsets.UTF_8))) {
 					String line;
 					while ((line = reader.readLine()) != null) {
 						log.debug("llama-server: {}", line);
-						rememberServerOutput(line);
+						rememberServerOutput(startOutput, line);
 					}
 				}
 				catch (IOException e) {
@@ -1005,8 +1012,11 @@ public class LocalLlmEngine implements LlmEngine {
 	 * connection to the address I am about to dial reach somebody?</em> and a bind answers a
 	 * different one — wrongly in both directions, measured over four socket shapes in
 	 * {@code docs/adr.md} Decision 103 row 11. It is not exhaustive either: a listener whose
-	 * accept backlog is full accepts nothing and reads as free, which the liveness leg of
-	 * {@link #requireListenerMayBeServed} then catches when the child loses the bind and exits.
+	 * accept backlog is full accepts nothing and reads as free. What catches THAT is not
+	 * {@link #requireListenerMayBeServed} — a listener accepting nothing cannot answer
+	 * {@code /health}, so that gate is never reached — but {@link #waitForServerReady}'s own
+	 * {@code isAlive} throw, when the child loses the bind and exits. Do not weaken that check on
+	 * the strength of the gate below covering it.
 	 */
 	static void requireLoopbackPortFree(int port) {
 		try (Socket probe = new Socket()) {
@@ -1052,9 +1062,10 @@ public class LocalLlmEngine implements LlmEngine {
 	 *       cannot tell an enforcing server from one that ignored the key and would take the
 	 *       chart from anyone.</li>
 	 *   <li>This start's key must not be REFUSED, so a rejected key surfaces here rather than as
-	 *       a 401 on a clinician's query. Not "accepted": see
-	 *       {@link LlamaServerEndpoint#doesNotRefuseThisModulesKey} for why anything but a 401
-	 *       passes, and why this leg alone is fail-open.</li>
+	 *       a refusal on a clinician's query. Not "accepted": see
+	 *       {@link LlamaServerEndpoint#doesNotRefuseThisModulesKey} for why anything
+	 *       {@link LlamaServerEndpoint#refusesCredentials} does not name passes, and why this leg
+	 *       alone is fail-open.</li>
 	 * </ul>
 	 *
 	 * <p>Package-private and static, taking everything it reads, because llama-server itself cannot
@@ -1095,19 +1106,24 @@ public class LocalLlmEngine implements LlmEngine {
 	 * message read it. Package-private so that behaviour can be tested with the monitor held, the
 	 * way production holds it.
 	 */
-	void rememberServerOutput(String line) {
-		synchronized (recentServerOutput) {
-			recentServerOutput.addLast(line);
-			while (recentServerOutput.size() > RECENT_SERVER_OUTPUT_LINES) {
-				recentServerOutput.removeFirst();
+	static void rememberServerOutput(java.util.Deque<String> output, String line) {
+		synchronized (output) {
+			output.addLast(line);
+			while (output.size() > RECENT_SERVER_OUTPUT_LINES) {
+				output.removeFirst();
 			}
 		}
 	}
 
+	/** Into THIS start's deque, for the drain thread that belongs to it. */
+	void rememberServerOutput(String line) {
+		rememberServerOutput(recentServerOutput, line);
+	}
+
 	String lastServerOutput() {
-		synchronized (recentServerOutput) {
-			return recentServerOutput.isEmpty() ? "(none captured)"
-					: String.join(" | ", recentServerOutput);
+		java.util.Deque<String> output = recentServerOutput;
+		synchronized (output) {
+			return output.isEmpty() ? "(none captured)" : String.join(" | ", output);
 		}
 	}
 
@@ -1118,11 +1134,16 @@ public class LocalLlmEngine implements LlmEngine {
 		while (System.currentTimeMillis() < deadline) {
 			if (!serverProcess.isAlive()) {
 				// With the child's own last words — see the recentServerOutput field for which
-				// failures those actually name and which --log-disable hides.
+				// failures those actually name and which --log-disable hides. The hint is not
+				// decoration: measured, a failed bind and a missing model file leave only the
+				// backend's startup banner here, which reads to an operator as the cause.
 				throw new APIException(
 						"llama-server process exited during startup with code "
 								+ serverProcess.exitValue() + ". Its last output: "
-								+ lastServerOutput());
+								+ lastServerOutput()
+								+ " — note the launch passes --log-disable, which suppresses this "
+								+ "build's own bind and model-loading diagnostics, so those lines "
+								+ "may be its startup banner rather than the cause.");
 			}
 			try {
 				HttpResponse<String> response = getHttpClient().send(
@@ -1151,25 +1172,60 @@ public class LocalLlmEngine implements LlmEngine {
 					}
 				}
 			}
-			catch (IOException | InterruptedException e) {
+			catch (IOException e) {
 				// Server not ready yet
+			}
+			catch (InterruptedException e) {
+				// NOT "not ready yet": swallowing this would clear the cancellation and keep
+				// polling for the rest of the deadline with a child mid-launch. Same handling as
+				// the sleep below, and for the same reason.
+				stopServer();
+				Thread.currentThread().interrupt();
+				throw new APIException("Interrupted while waiting for llama-server to start");
 			}
 			try {
 				Thread.sleep(HEALTH_POLL_INTERVAL_MS);
 			}
 			catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				// stopServer() first, as the timeout path below does: this child never reached
-				// requireListenerMayBeServed, and loadedModelPath is still null — so
+				// stopServer() BEFORE re-setting the flag, and that order is load-bearing:
+				// Process.waitFor throws immediately on an already-interrupted thread, so
+				// re-setting it first would SIGKILL the child and return without ever waiting for
+				// the reap — leaving an mlock'd orphan on the port that nothing here has a handle
+				// to. Measured both orderings. stopServer at all because this child never reached
+				// requireListenerMayBeServed and loadedModelPath is still null, so
 				// serverNeedsRestart would say no restart is needed and the next query would send
 				// the chart to a listener readiness never examined.
 				stopServer();
+				Thread.currentThread().interrupt();
 				throw new APIException("Interrupted while waiting for llama-server to start");
 			}
 		}
 		stopServer();
 		throw new APIException("llama-server did not become healthy within "
 				+ SERVER_STARTUP_TIMEOUT_SECONDS + " seconds");
+	}
+
+	/**
+	 * Gives a child this engine could not confirm dead one more chance to be reaped, so the port
+	 * check that follows is not told a stranger holds the port. Best effort and bounded: if it is
+	 * still alive the check refuses the start, which is the right answer — something IS listening.
+	 */
+	private void reapAbandonedProcess() {
+		if (abandonedProcess == null) {
+			return;
+		}
+		if (abandonedProcess.isAlive()) {
+			abandonedProcess.destroyForcibly();
+			try {
+				abandonedProcess.waitFor(REAP_WAIT_SECONDS, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+		if (!abandonedProcess.isAlive()) {
+			abandonedProcess = null;
+		}
 	}
 
 	private void stopServer() {
@@ -1189,13 +1245,17 @@ public class LocalLlmEngine implements LlmEngine {
 					// taken under the engine monitor, where a clinician's query and a container
 					// shutdown both queue behind it.
 					if (!serverProcess.waitFor(REAP_WAIT_SECONDS, TimeUnit.SECONDS)) {
-						log.warn("llama-server survived being forcibly destroyed; the next start "
-								+ "may find port {} still held", serverPort);
+						log.warn("llama-server survived being forcibly destroyed; keeping its "
+								+ "handle so the next start can try again rather than leave an "
+								+ "orphan holding port {}", serverPort);
+						abandonedProcess = serverProcess;
 					}
 				}
 			}
 			catch (InterruptedException e) {
 				serverProcess.destroyForcibly();
+				// Nothing waited for the reap, so this child is not known to be gone.
+				abandonedProcess = serverProcess;
 				Thread.currentThread().interrupt();
 			}
 			serverProcess = null;
@@ -1207,9 +1267,6 @@ public class LocalLlmEngine implements LlmEngine {
 			// otherwise the next process would wrongly believe a chart is RAM-resident and skip the
 			// disk restore that now actually avoids a re-prefill.
 			ramResidentKeys.clear();
-			synchronized (recentServerOutput) {
-				recentServerOutput.clear();
-			}
 		}
 		// Outside the block above, beside the HttpClient: a start that minted a secret and then
 		// failed to launch leaves an endpoint with no process, and that stamp must clear too.
@@ -1316,7 +1373,8 @@ public class LocalLlmEngine implements LlmEngine {
 	}
 
 	/**
-	 * Turns a 401 from the local server into a named failure rather than a generic HTTP error. Used
+	 * Turns a refused credential — {@link LlamaServerEndpoint#refusesCredentials} — into a named
+	 * failure rather than a generic HTTP error. Used
 	 * by the three INFERENCE branches; {@code slotAction} deliberately does not call it, and the
 	 * comment on its non-2xx branch says why. It means the listener on the port is not
 	 * accepting the key this start minted — either a foreign process holds it, or the launched
@@ -1324,9 +1382,10 @@ public class LocalLlmEngine implements LlmEngine {
 	 * recovers from either.
 	 */
 	private void rejectIfUnauthorized(int statusCode) {
-		if (statusCode == 401) {
-			throw new APIException("The local llama-server rejected this module's key (HTTP 401). "
-					+ "Whatever is listening on " + LlamaServerEndpoint.authority(serverPort)
+		if (LlamaServerEndpoint.refusesCredentials(statusCode)) {
+			throw new APIException("The local llama-server rejected this module's key (HTTP "
+					+ statusCode + "). Whatever is listening on "
+					+ LlamaServerEndpoint.authority(serverPort)
 					+ " is not the server this module authenticated to.");
 		}
 	}

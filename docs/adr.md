@@ -8254,6 +8254,16 @@ backend service, under a tenth of a percent of it. What none of this measures is
 every run read at NVMe speed, and below roughly 0.3 GB/s the read dominates and the tool choice
 stops mattering.
 
+*A refusal that must stop the start is a library behaviour, not a branch at the call site.* The
+entrypoint used to read the library's exit code and branch on it, and the property "a refusal stops
+the start" was then something only a source-reading guard could check. Four reviewers defeated four
+readings of it in turn — a statement inserted between the fetch and the branch, so `$?` was that
+statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
+recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
+next. `fetch_or_exit` ends that class: there is no branch to spell, and what the shell DOES is a
+behaviour a test drives. The pattern is worth naming beyond this decision — what ended it was
+changing the KIND of question, not adding a fifth spelling to the list.
+
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its message. The two failures an operator can act on differently are a transfer that
 stopped short and bytes that are not the artifact, and only the first has a remedy the operator
@@ -8261,10 +8271,12 @@ owns — retry. A single "the digest did not match" would send them looking for 
 cases. The guard was introduced for the ONNX export shape
 [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) records; **pinning
 the revision retired that cause**, and the guard survives for the message alone, which is why its
-diagnostic names a truncated transfer. The order is the size branch of `_mm_verify_file` and the
-`2)` arms in `backend-init.sh` — change one and the other reads false, and
+diagnostic names a truncated transfer. The order is the size branch of `_mm_verify_file`, and the
+message it enables is the caller's diagnostic lines that `fetch_or_exit` prints for that code alone
+— change one and the other reads false.
 `ModelDownloadIntegrityTest.aTruncatedTransferIsRefusedAsAShortFileRatherThanAsASubstitution` is
-what notices.
+what notices the order, and
+`.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript` that the diagnostic is size-only.
 
 **What this does not close.** Two fetches in these same files stay unverified and are out of scope
 for both findings: `Dockerfile.backend` downloads `openmrs.war` from a Maven repository, and

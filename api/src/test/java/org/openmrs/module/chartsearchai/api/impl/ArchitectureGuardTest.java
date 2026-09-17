@@ -405,7 +405,7 @@ public class ArchitectureGuardTest {
 	@Test
 	public void noDirectGetEmbeddingPrefixCalls() throws IOException {
 		List<String> violations = scanForPattern(
-				SRC_ROOT,
+				getSourceCache(),
 				Pattern.compile("getEmbeddingPrefix\\s*\\("),
 				"ChartSearchAiConstants.java|ChartSearchAiUtils.java|ArchitectureGuardTest.java",
 				"Should use buildPrefixedText() instead of getEmbeddingPrefix()");
@@ -431,7 +431,7 @@ public class ArchitectureGuardTest {
 				+ "|Clinical referral: |Clinical order: "
 				+ "|Program enrollment: |Medication dispensed: )\"");
 		List<String> violations = scanForPattern(
-				SRC_ROOT, pattern,
+				getSourceCache(), pattern,
 				"ChartSearchAiConstants.java|ChartSearchAiUtils.java|TestDatasetHelper.java|ArchitectureGuardTest.java",
 				"Should use buildPrefixedText() instead of hardcoded prefix strings");
 		assertNoViolations(violations);
@@ -453,7 +453,7 @@ public class ArchitectureGuardTest {
 	@Test
 	public void everyLocalServerRequestCarriesTheModulesKey() throws IOException {
 		assertNoViolations(scanForPattern(
-				SRC_ROOT,
+				localServerSources(),
 				Pattern.compile("HttpRequest\\s*\\.\\s*newBuilder\\s*\\("),
 				"LlamaServerEndpoint.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
 						+ "|ArchitectureGuardTest.java",
@@ -583,7 +583,7 @@ public class ArchitectureGuardTest {
 		Pattern construction =
 				Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\s*\\(");
 		assertNoViolations(scanForPattern(
-				SRC_ROOT, construction,
+				localServerSources(), construction,
 				"LocalLlmEngine.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
 						+ "|ArchitectureGuardTest.java",
 				"Should reach the local server through LocalLlmEngine.getHttpClient(), which is "
@@ -592,11 +592,14 @@ public class ArchitectureGuardTest {
 		// And LocalLlmEngine itself may build exactly ONE, which is getHttpClient's. Excluding the
 		// file wholesale is what the scan above must do — that method has to construct a client —
 		// and a review round measured that a SECOND construction inside it is then invisible.
+		// Counted over the file's code JOINED, for scanForPattern's reason: fed one line at a time
+		// this missed a construction whose receiver sat on its own line, which was measured to pass
+		// the full api suite while sending the key and the chart through a configured proxy.
 		int built = 0;
-		for (String line : codeLines(getSourceCache().get("LocalLlmEngine.java"))) {
-			if (construction.matcher(line).find()) {
-				built++;
-			}
+		Matcher constructions = construction.matcher(
+				String.join("\n", codeLines(getSourceCache().get("LocalLlmEngine.java"))));
+		while (constructions.find()) {
+			built++;
 		}
 		assertEquals(1, built,
 				"LocalLlmEngine must build exactly one HttpClient — getHttpClient()'s, the only "
@@ -613,7 +616,7 @@ public class ArchitectureGuardTest {
 	@Test
 	public void theLocalServerAddressIsSpelledInOnePlace() throws IOException {
 		assertNoViolations(scanForPattern(
-				SRC_ROOT,
+				localServerSources(),
 				Pattern.compile("\"http://127\\.0\\.0\\.1:"),
 				// No production exclusion: LlamaServerEndpoint builds its URLs from LOOPBACK_HOST
 				// and spells this literal nowhere, so excluding it would only weaken the scan.
@@ -635,7 +638,7 @@ public class ArchitectureGuardTest {
 		Pattern pattern = Pattern.compile(
 				"dot\\s*\\+=\\s*[ab]\\[");
 		List<String> violations = scanForPattern(
-				SRC_ROOT, pattern,
+				getSourceCache(), pattern,
 				"ChartSearchAiConstants.java|ChartSearchAiUtils.java",
 				"Should use ChartSearchAiUtils.cosineSimilarity() "
 				+ "instead of reimplementing the formula");
@@ -886,7 +889,7 @@ public class ArchitectureGuardTest {
 				"(private|static).*(inferResourceType|stripDatasetPrefixAndDate"
 				+ "|DATASET_PREFIXES|DATE_PREFIX_PATTERN)");
 		List<String> violations = scanForPattern(
-				SRC_ROOT, pattern,
+				getSourceCache(), pattern,
 				"TestDatasetHelper.java|ArchitectureGuardTest.java",
 				"Should use TestDatasetHelper instead of duplicating dataset helpers");
 		// Allow the thin delegates in LlmInferenceServiceTest
@@ -1591,6 +1594,9 @@ public class ArchitectureGuardTest {
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */
 	private static java.util.Map<String, List<String>> sourceCache;
 
+	/** {@link #localServerSources}' merge of both trees, built once for the same reason. */
+	private static java.util.Map<String, List<String>> localServerSourceCache;
+
 	/**
 	 * Most rules in this class scan this map, so an EMPTY or WRONG map made all of those
 	 * pass vacuously — a structural guard that reads nothing reports no violations. That was not
@@ -1634,6 +1640,62 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Both module trees, for #445's three rules about the local llama-server — the key on every
+	 * request, the single client, and the single spelling of the loopback address.
+	 *
+	 * <p><b>Those rules are unconditional and the cache above is not.</b>
+	 * {@code api/.../api/impl/CLAUDE.md} says nothing this module sends to its own subprocess may
+	 * be proxy-routable and that no second client be built for it; {@link #getSourceCache} walks
+	 * {@code api/src} alone. Measured: a default-proxy {@code HttpClient} added to
+	 * {@code ChartSearchAiRestController} left the full root build green — and that class is where
+	 * the patient's chart already passes through, so it is the likeliest home for a second client,
+	 * not a remote corner. The two trees are scanned together rather than the rules being narrowed
+	 * to the tree the scanner happened to read.
+	 *
+	 * <p>Keys are prefixed {@code omod/} so that a same-named file in the two modules cannot
+	 * displace the other's entry — which would be a silent loss of coverage, the failure mode this
+	 * whole class is about — and so a violation says which module it is in. An exclusion is matched
+	 * with {@code find}, so it keeps working against a prefixed key.
+	 *
+	 * <p>A second WALKING root owes itself the pair of assertions {@link #getSourceCache} carries,
+	 * for the reason {@code ModuleSourceRoot.apiRoot}'s javadoc gives: a walking caller handed the
+	 * wrong root scans the wrong tree and then reports no violations. Hence the canary is a file
+	 * that exists only in {@code omod}, so a root resolved to the api module fails rather than
+	 * scanning it twice, and the count assertion is on what {@code omod} CONTRIBUTED rather than
+	 * on the merged map being non-empty, which the api cache alone would satisfy.
+	 */
+	private static java.util.Map<String, List<String>> localServerSources() throws IOException {
+		if (localServerSourceCache == null) {
+			java.util.Map<String, List<String>> merged =
+					new java.util.LinkedHashMap<>(getSourceCache());
+			int fromApi = merged.size();
+			Path omodRoot = ModuleSourceRoot.omodRoot();
+			Files.walkFileTree(omodRoot, new SimpleFileVisitor<Path>() {
+				@Override
+				public FileVisitResult visitFile(Path file,
+						BasicFileAttributes attrs) throws IOException {
+					if (file.toString().endsWith(".java")) {
+						merged.put("omod/" + file.getFileName(), Files.readAllLines(file));
+					}
+					return FileVisitResult.CONTINUE;
+				}
+			});
+			org.junit.jupiter.api.Assertions.assertTrue(merged.size() > fromApi,
+					"precondition: the scan of " + omodRoot + " added no .java files to the "
+							+ fromApi + " from the api tree, so every rule reading both trees would "
+							+ "pass vacuously over omod");
+			org.junit.jupiter.api.Assertions.assertTrue(
+					merged.containsKey("omod/ChartSearchAiRestController.java"),
+					"precondition: the scan of " + omodRoot + " did not find "
+							+ "ChartSearchAiRestController.java, so it is reading the wrong tree — a "
+							+ "wrong root scans SOMETHING and these rules then pass on files they "
+							+ "were never written about");
+			localServerSourceCache = merged;
+		}
+		return localServerSourceCache;
+	}
+
+	/**
 	 * The index one past the brace closing the block that opens at {@code openBrace}. Naive by
 	 * design: it counts braces and knows nothing of strings, chars or comments, which is why its
 	 * caller names the two signatures it may be asked about rather than scanning for methods.
@@ -1666,30 +1728,44 @@ public class ArchitectureGuardTest {
 		return line;
 	}
 
-	private static List<String> scanForPattern(Path root, Pattern pattern,
-			String excludeFiles, String message) throws IOException {
+	/**
+	 * Every occurrence of {@code pattern} in {@code sources}, outside the files
+	 * {@code excludeFiles} names, reported as {@code file:line — message} with the offending line.
+	 *
+	 * <p><b>It matches each file's code JOINED, not line by line, and that is the whole point of
+	 * its shape.</b> A pattern written with {@code \s*} between a receiver and its call — which is
+	 * how {@link #onlyOneClientTalksToTheLocalServer} and
+	 * {@link #everyLocalServerRequestCarriesTheModulesKey} are written, precisely so a formatter's
+	 * whitespace cannot defeat them — was fed one line at a time, so the one whitespace character
+	 * that matters, the newline, was the one it could not see. Measured: a second {@code HttpClient}
+	 * built in {@code LocalLlmEngine} with the receiver on its own line, and used for the production
+	 * {@code /health} request, passed the FULL api suite; so did a bare {@code HttpRequest} written
+	 * the same way, which is the more consequential of the two because it sends no credential.
+	 * {@code api/src/main} splits a receiver from its {@code .method()} on the next line often
+	 * enough that this is not a contrived shape.
+	 *
+	 * <p>It reads {@link #codeLines}' stripping rather than skipping lines that LOOK like comments,
+	 * which is what it did before and what a joined scan cannot do anyway — a line-leading
+	 * {@code *} means nothing once the lines are one string. That also drops a trailing
+	 * {@code // …} comment on a code line, which the previous form matched.
+	 */
+	private static List<String> scanForPattern(java.util.Map<String, List<String>> sources,
+			Pattern pattern, String excludeFiles, String message) {
 		List<String> violations = new ArrayList<>();
 		Pattern excludePattern = Pattern.compile(excludeFiles);
 
-		for (java.util.Map.Entry<String, List<String>> entry
-				: getSourceCache().entrySet()) {
+		for (java.util.Map.Entry<String, List<String>> entry : sources.entrySet()) {
 			String fileName = entry.getKey();
 			if (excludePattern.matcher(fileName).find()) {
 				continue;
 			}
-			List<String> lines = entry.getValue();
-			for (int i = 0; i < lines.size(); i++) {
-				String line = lines.get(i);
-				// Skip comments and Javadoc
-				String trimmed = line.trim();
-				if (trimmed.startsWith("//") || trimmed.startsWith("*")
-						|| trimmed.startsWith("/*")) {
-					continue;
-				}
-				if (pattern.matcher(line).find()) {
-					violations.add(fileName + ":" + (i + 1)
-							+ " — " + message + "\n    " + trimmed);
-				}
+			String source = String.join("\n", codeLines(entry.getValue()));
+			String[] lines = source.split("\n", -1);
+			Matcher found = pattern.matcher(source);
+			while (found.find()) {
+				int line = lineOf(source, found.start());
+				violations.add(fileName + ":" + line + " — " + message
+						+ "\n    " + lines[line - 1].trim());
 			}
 		}
 		return violations;

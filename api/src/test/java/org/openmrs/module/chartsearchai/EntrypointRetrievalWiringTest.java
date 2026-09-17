@@ -67,8 +67,8 @@ import org.junit.jupiter.api.io.TempDir;
  */
 public class EntrypointRetrievalWiringTest {
 
-	/** The container entrypoint, repo-relative. */
-	private static final String ENTRYPOINT = "backend-init.sh";
+	/** The container entrypoint, repo-relative — read through {@link EntrypointSource}. */
+	private static final String ENTRYPOINT = EntrypointSource.ENTRYPOINT;
 
 	/**
 	 * The functions the retrieval wiring is composed of, in the order they are pasted into the
@@ -299,7 +299,7 @@ public class EntrypointRetrievalWiringTest {
 		script.add("VOCAB_FILE='" + vocab + "'");
 		List<String> entrypoint = Files.readAllLines(repo(ENTRYPOINT), StandardCharsets.UTF_8);
 		for (String function : WIRING_FUNCTIONS) {
-			script.add(functionText(entrypoint, function));
+			script.add(EntrypointSource.functionText(entrypoint, function));
 		}
 		script.addAll(preamble);
 		script.add("configure_retrieval_gps");
@@ -357,32 +357,6 @@ public class EntrypointRetrievalWiringTest {
 		}
 		throw new IllegalStateException(ENTRYPOINT + " has no `if require_verified …; then` line, so the gate these"
 				+ " cases drive no longer exists");
-	}
-
-	/**
-	 * A shell function's definition, verbatim, read out of {@code lines} by name. Both forms the
-	 * entrypoint uses are read — a one-liner, and a multi-line definition closing at column 0 — and
-	 * anything else throws, because a harness that quietly pasted half a function would fail in a
-	 * way that looks like a finding about the code.
-	 */
-	private static String functionText(List<String> lines, String name) {
-		Pattern opener = Pattern.compile("^" + Pattern.quote(name) + "\\(\\)\\s*\\{.*");
-		for (int i = 0; i < lines.size(); i++) {
-			if (!opener.matcher(lines.get(i)).matches()) {
-				continue;
-			}
-			if (lines.get(i).endsWith("}")) {
-				return lines.get(i);
-			}
-			for (int j = i + 1; j < lines.size(); j++) {
-				if (lines.get(j).equals("}")) {
-					return String.join("\n", lines.subList(i, j + 1));
-				}
-			}
-			throw new IllegalStateException(name + "() in " + ENTRYPOINT + " never closes at column 0");
-		}
-		throw new IllegalStateException(ENTRYPOINT + " defines no " + name + "(), so this harness cannot run the"
-				+ " wiring it is named after");
 	}
 
 	private static Path repo(String relative) {

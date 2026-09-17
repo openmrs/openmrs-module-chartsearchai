@@ -70,7 +70,11 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 # in model-manifest.tsv and refused unless it hashes to the sha256
 # committed beside it — on EVERY start, not only after a fresh download,
 # because /openmrs/data outlives the container. ADR Decision 103 carries
-# why, and what happens to a file that fails.
+# why, and what happens to a file that fails. "On every start" is a claim
+# about where these two calls sit as much as about what they call, so
+# ModelDownloadPinningGuardTest
+# .everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally refuses a
+# test of the file's own presence wrapped around either of them.
 . /usr/local/bin/model-manifest.sh
 
 ONNX_FILE="$QS_DIR/model.onnx"
@@ -161,7 +165,10 @@ _download_llm_file() {
 # need on /openmrs/data is now ~8GB (E4B ~5GB + E2B ~3GB). A weights file
 # already present is no longer skipped: it is re-hashed in the background
 # for the reason the embedder is, and replaced if it is not the artifact the
-# manifest records.
+# manifest records. That is asserted of this function rather than of the
+# library — EntrypointVolumeVerificationTest pastes it in and runs it with
+# the target already there — because the skip it replaces lived HERE, and
+# the library cannot be the site that declines to call it.
 fetch_llm_in_background() {
   artifact_id=$1
   filename=$2

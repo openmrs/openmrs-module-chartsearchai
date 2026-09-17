@@ -8234,6 +8234,31 @@ early whenever the target existed (`backend-init.sh:176-178` at `c430a960`), so 
 work on the weights at all. Removing that early return is the point of this decision, and the
 hashing it adds is net-new work with nothing to overlap.
 
+**So the cost table above is an argument for putting the early return back**, and nothing would have
+noticed. Measured 2026-09-17 against the suite as it then stood, and reproduced independently:
+re-inserting those same three lines at either fetch site — in `fetch_llm_in_background`, or as an
+absence test wrapped around a top-level `fetch_or_exit` — left every api case, `sh -n` and
+`shellcheck -s sh -S warning` green. The guards over these fetches
+asked whether one is NAMED (routed through the library) and POSITIONED (in the current shell, ahead
+of the property write); neither is a question about whether REACHING it is conditioned on the file's
+absence, and the library cannot answer it at all, not being the site that would decline to call it.
+That is the same lesson the subshell family taught, arriving from the other direction: the property
+worth pinning is what the shell DOES. `EntrypointVolumeVerificationTest` pastes
+`fetch_llm_in_background` and `_download_llm_file` out of the entrypoint by name, sources the real
+library, and runs the entrypoint's own calls with the target ALREADY on the volume — once holding the
+recorded artifact, which must be reported ready without a download, and once holding same-length
+bytes no row records, which must be refused and deleted. The embedder's two fetches are top-level
+statements with no function to extract, so that half stays a source channel:
+`ModelDownloadPinningGuardTest.everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally` asserts
+the property positively — every command naming a provisioned artifact sits at nesting depth 0, inside
+no block and no function, so where it is written is when it runs — rather than enumerating the
+spellings of a skip, which is the shape this decision already records being defeated in turn. Its
+nesting walk has to balance to 0 at end of file, which is what makes a construct it cannot parse a
+loud failure instead of a silent zero. The residue is named in both: depth is not reachability, an
+`exit` above these statements would skip them at depth 0, a command that merely NAMES an artifact
+inside a function is reported rather than ignored, and a skip written inside a function the harness
+does not paste is outside both.
+
 The volume is 7.94 GiB across the four artifacts (8,519,952,880 bytes): 0.41 GiB synchronous — the
 embedder, because the global properties it gates are written seconds later — and 7.53 GiB in two
 parallel background subshells. What that costs depends on which of the three tools `file_sha256`
@@ -8397,3 +8422,6 @@ revision has relaxed back to a branch name. Mutate any of those and read the fai
 `EntrypointRetrievalWiringTest` runs `configure_retrieval_gps` itself, taken out of the entrypoint
 by name, against a `mariadb` stand-in whose global-property store persists across starts — the one
 channel that can see what the ledger and `gp_set_if_blank` compose to.
+`EntrypointVolumeVerificationTest` runs the weights fetch the same way, with the target already on
+the volume, which is where "a file already there is verified rather than trusted for its name" now
+lives.

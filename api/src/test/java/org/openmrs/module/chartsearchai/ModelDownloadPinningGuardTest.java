@@ -46,6 +46,13 @@ import org.junit.jupiter.api.Test;
  * named in the right PLACE, because a site that named the library and then renamed the file anyway
  * would satisfy the first alone.
  *
+ * <p><b>Naming and placing a fetch is not the same as REACHING it.</b> Every check here about the
+ * entrypoint once answered only the first two, and a three-line test of the target's own presence in
+ * front of a retained call satisfied both — the early return #444 removed, put back. {@link
+ * #everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally} is the third question, and it is
+ * the entrypoint's LAYOUT half; the weights fetch's own behaviour is
+ * {@link EntrypointVolumeVerificationTest}, which runs it against a target already on the volume.
+ *
  * <p><b>Every scan asserts it found something.</b> A guard that walks looking for violations reports
  * none when it has scanned nothing at all, and passing for that reason is indistinguishable from
  * passing because the code is right. Each check here ends by asserting what it actually read.
@@ -145,6 +152,32 @@ public class ModelDownloadPinningGuardTest {
 	 * would have the same effect.
 	 */
 	private static final Pattern RESTART_KEY = Pattern.compile("^restart(_policy)?\\s*:");
+
+	/**
+	 * The entrypoint's read of the library's ledger — the one command that names an artifact without
+	 * fetching it, so {@link #everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally} excludes
+	 * it. {@code EntrypointRetrievalWiringTest} reads the same line for the artifacts it names.
+	 *
+	 * <p>The WHOLE command has to be the gate. Excluding anything merely STARTING with it would let
+	 * {@code if require_verified …; then fetch_or_exit …; fi} carry a conditional fetch out through
+	 * the exemption, which is the shape of every bypass this class has already been shown.
+	 */
+	private static final Pattern LEDGER_GATE = Pattern
+			.compile("^(?:if )?require_verified(?: [A-Za-z0-9_.-]+)+;?\\s*(?:then)?$");
+
+	/** The shell words that open a block, in command position. {@code elif} closes and reopens one. */
+	private static final Set<String> BLOCK_OPENERS = Set.of("if", "case", "while", "until", "for");
+
+	private static final Set<String> BLOCK_CLOSERS = Set.of("fi", "esac", "done");
+
+	/** A function definition whose body is the lines below it, closing at column 0. */
+	private static final Pattern FUNCTION_OPENER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*\\(\\)\\s*\\{\\s*$");
+
+	/** What separates one command from the next on a line, a {@code case} arm's label included. */
+	private static final Pattern SEGMENT_BREAK = Pattern.compile(";|&&|\\|\\||\\||\\)");
+
+	/** A here-document opener, captured as the word that terminates the body. */
+	private static final Pattern HEREDOC = Pattern.compile("<<-?\\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)");
 
 	private static Path repo(String relative) {
 		return ModuleSourceRoot.repoRoot().resolve(relative);
@@ -523,7 +556,7 @@ public class ModelDownloadPinningGuardTest {
 		Pattern fetch = Pattern.compile("^fetch_(?:and_verify|or_exit)\\s+" + Pattern.quote(artifact) + "\\s.*");
 		Matcher name = Pattern.compile("\\$\\{?([A-Za-z_][A-Za-z0-9_]*)").matcher("");
 		for (int i = 0; i < lines.size(); i++) {
-			String command = logicalCommand(lines, i).trim();
+			String command = EntrypointSource.logicalCommand(lines, i).trim();
 			String[] words = command.split("\\s+");
 			if (command.startsWith("#") || words.length < 3 || !fetch.matcher(command).matches()) {
 				continue;
@@ -543,7 +576,7 @@ public class ModelDownloadPinningGuardTest {
 	private static Set<Integer> linesBehindTheLedger(List<String> lines, String artifact) {
 		Set<Integer> inside = new LinkedHashSet<Integer>();
 		for (int i = 0; i < lines.size(); i++) {
-			String opener = logicalCommand(lines, i).trim();
+			String opener = EntrypointSource.logicalCommand(lines, i).trim();
 			if (!opener.startsWith("if require_verified ")
 					|| !List.of(opener.split("[\\s;]+")).contains(artifact)) {
 				continue;
@@ -681,10 +714,10 @@ public class ModelDownloadPinningGuardTest {
 			// on a continuation line belongs to the command above it, and asking the physical line
 			// would judge the wrong text — or, where the opener carries the fetch and the
 			// continuation the id, judge nothing at all.
-			if (trimmed.startsWith("#") || (i > 0 && lines.get(i - 1).trim().endsWith("\\"))) {
+			if (trimmed.startsWith("#") || EntrypointSource.continuesTheLineAbove(lines, i)) {
 				continue;
 			}
-			String command = logicalCommand(lines, i);
+			String command = EntrypointSource.logicalCommand(lines, i);
 			if (CANNOT_START_WITHOUT.stream().noneMatch(command::contains)) {
 				continue;
 			}
@@ -721,15 +754,145 @@ public class ModelDownloadPinningGuardTest {
 		assertTrue(fetches > 0, "backend-init.sh fetches no must-have artifact; this guard read nothing");
 	}
 
-	/** The logical command starting at {@code from}, continuation lines joined, {@code \\} dropped. */
-	private static String logicalCommand(List<String> lines, int from) {
-		StringBuilder command = new StringBuilder(lines.get(from).trim());
-		int i = from;
-		while (command.length() > 0 && command.charAt(command.length() - 1) == '\\' && i + 1 < lines.size()) {
-			command.setLength(command.length() - 1);
-			command.append(' ').append(lines.get(++i).trim());
+	/**
+	 * Each artifact the entrypoint provisions is fetched by a statement REACHED on every start, not
+	 * by one a test of the file's own presence can skip.
+	 *
+	 * <p><b>This is the guarantee #444 turns on, and nothing else here asks it.</b> The checks above
+	 * ask whether a fetch is NAMED — routed through the library — and POSITIONED — in the current
+	 * shell, ahead of the property write. All of them stay green, with {@code sh -n} and
+	 * {@code shellcheck}, when {@code if [ -f "$target" ]; then return; fi} goes back in: the early
+	 * return ADR Decision 103 says removing is the point of the decision, and the optimisation that
+	 * decision's own cost table invites. {@code /openmrs/data} outlives the container, so a start that
+	 * skips the hash for a file it finds by NAME never verifies the population the fix most needs to
+	 * reach.
+	 *
+	 * <p><b>Asked positively.</b> Enumerating the spellings of a skip is the shape successive reviews
+	 * of this change defeated; what is asserted instead is that every command naming one of these
+	 * artifacts sits at the entrypoint's top level — nesting depth 0, inside no block and inside no
+	 * function — so where it is written is when it runs. The ledger gate is the one command excluded,
+	 * by its own name: it READS what has verified rather than fetching anything.
+	 *
+	 * <p><b>The residue.</b> Depth is not reachability — an {@code exit} or {@code return} placed
+	 * above these statements would skip them at depth 0 — and a skip written INSIDE a function is
+	 * invisible here, which is {@link EntrypointVolumeVerificationTest}'s question: it drives the
+	 * weights fetch with the target already present rather than reading where the call sits. The walk
+	 * is calibrated on the file it reads, having to balance to 0 at end of file, so a construct it
+	 * cannot parse fails it loudly instead of reporting no violation. And the unit is a command that
+	 * NAMES an artifact, so a log line mentioning one from inside a function would be reported here;
+	 * that direction over-reports rather than passing, and an artifact named nowhere outside the
+	 * ledger gate fails the same way.
+	 */
+	@Test
+	public void everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally() throws IOException {
+		List<String> lines = Files.readAllLines(repo(EntrypointSource.ENTRYPOINT), StandardCharsets.UTF_8);
+		int[] depths = nestingDepths(lines);
+
+		List<String> violations = new ArrayList<String>();
+		Map<String, Integer> statements = new LinkedHashMap<String, Integer>();
+		for (String artifact : ENTRYPOINT_ARTIFACTS) {
+			statements.put(artifact, 0);
 		}
-		return command.toString().trim();
+		for (int i = 0; i < lines.size(); i++) {
+			// Whole logical commands, read only from the line that OPENS one — the reason
+			// everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm gives.
+			if (lines.get(i).trim().startsWith("#") || EntrypointSource.continuesTheLineAbove(lines, i)) {
+				continue;
+			}
+			String command = EntrypointSource.logicalCommand(lines, i);
+			if (LEDGER_GATE.matcher(command).matches()) {
+				continue;
+			}
+			for (String artifact : ENTRYPOINT_ARTIFACTS) {
+				if (!command.contains(artifact)) {
+					continue;
+				}
+				statements.put(artifact, statements.get(artifact) + 1);
+				if (depths[i] != 0) {
+					violations.add(EntrypointSource.ENTRYPOINT + " names " + artifact + " at line " + (i + 1)
+							+ " inside a block or a function, so whether it runs depends on something other than"
+							+ " the start happening: " + command);
+				} else if (BLOCK_OPENERS.contains(firstWord(command))) {
+					violations.add(EntrypointSource.ENTRYPOINT + " names " + artifact + " at line " + (i + 1)
+							+ " on a command that is itself a condition, so the fetch runs only when that"
+							+ " condition passes: " + command);
+				}
+			}
+		}
+
+		assertEquals(List.of(), violations, "a model fetch a start could skip");
+		for (Map.Entry<String, Integer> named : statements.entrySet()) {
+			assertTrue(named.getValue() > 0, EntrypointSource.ENTRYPOINT + " carries no statement naming "
+					+ named.getKey() + " outside the ledger gate, so this guard read nothing about an artifact it"
+					+ " is supposed to provision");
+		}
+	}
+
+	/**
+	 * The block-nesting depth at the start of each line of the entrypoint: 0 at top level, one deeper
+	 * inside every {@code if}, {@code case} or loop body, and one deeper inside every function
+	 * definition.
+	 *
+	 * <p>A keyword counts only in COMMAND position — the first word of a segment, segments being what
+	 * {@code ;}, {@code &&}, {@code ||}, {@code |} and a {@code case} arm's {@code )} separate —
+	 * because this script's own message text says {@code done:} and {@code until it completes}, which
+	 * a plain token scan reads as shell. Here-document bodies are skipped for the same reason: they
+	 * carry SQL and Java properties rather than commands.
+	 *
+	 * <p>The walk has to balance to 0 at end of file. That is its calibration: a construct it cannot
+	 * parse then fails it loudly, where a silently wrong depth would report no violation.
+	 */
+	private static int[] nestingDepths(List<String> lines) {
+		int[] depths = new int[lines.size()];
+		int depth = 0;
+		String terminator = null;
+		for (int i = 0; i < lines.size(); i++) {
+			depths[i] = depth;
+			String trimmed = lines.get(i).trim();
+			if (terminator != null) {
+				if (trimmed.equals(terminator)) {
+					terminator = null;
+				}
+				continue;
+			}
+			if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+				continue;
+			}
+			depth += nestingDelta(lines.get(i));
+			assertTrue(depth >= 0, EntrypointSource.ENTRYPOINT + " line " + (i + 1) + " closes a block this guard"
+					+ " never saw opened, so it cannot say which statements are conditional: " + trimmed);
+			Matcher heredoc = HEREDOC.matcher(trimmed);
+			if (heredoc.find()) {
+				terminator = heredoc.group(1);
+			}
+		}
+		assertEquals(0, depth, EntrypointSource.ENTRYPOINT + "'s blocks do not balance as this guard reads them, so"
+				+ " the depths it reported are not the script's");
+		return depths;
+	}
+
+	/** How much one line changes the nesting depth: a function definition, a block, or neither. */
+	private static int nestingDelta(String line) {
+		if (FUNCTION_OPENER.matcher(line).matches()) {
+			return 1;
+		}
+		if (line.equals("}")) {
+			return -1;
+		}
+		int delta = 0;
+		for (String segment : SEGMENT_BREAK.split(line.trim())) {
+			String head = firstWord(segment);
+			if (BLOCK_OPENERS.contains(head)) {
+				delta++;
+			} else if (BLOCK_CLOSERS.contains(head)) {
+				delta--;
+			}
+		}
+		return delta;
+	}
+
+	private static String firstWord(String command) {
+		return command.trim().split("\\s+", 2)[0];
 	}
 
 	/**

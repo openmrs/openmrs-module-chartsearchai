@@ -99,6 +99,38 @@ public class ChartSearchAiAuditWriteFailureLoudnessTest {
 		}
 	}
 
+	/**
+	 * The capture leaves the logger as it found it — no level pinned and, where it installed one, no
+	 * config either.
+	 *
+	 * <p>Here rather than in the api module because {@code LogCaptureRestorationTest}, which pins the
+	 * same property of {@code LogCapture}, cannot see {@link ControllerLog}. What a leftover config
+	 * costs is in that class's javadoc; the short version is that it silently filters this logger out
+	 * of any later capture of the package, and every negative asserted over one then passes on
+	 * nothing but surefire's run order.
+	 *
+	 * <p>It starts from a KNOWN state rather than from whatever surefire ran before it: a sibling
+	 * that had leaked a config would otherwise satisfy the precondition and the leak would go
+	 * unmeasured, which is the same run-order vacuity the leak itself causes. And it asserts the
+	 * config is installed WHILE open, so a close that did nothing cannot pass by having had nothing
+	 * to undo.
+	 */
+	@Test
+	public void aCloseLeavesNoLoggerConfigBehind() {
+		ControllerLog.clearOwnConfig();
+		assertFalse(ControllerLog.hasOwnConfigNow(), "precondition: no config of its own to start with");
+
+		try (ControllerLog capture = new ControllerLog()) {
+			assertTrue(ControllerLog.hasOwnConfigNow(),
+					"an open capture installs one, which is what close has to undo — without this the case "
+							+ "would pass on a close that did nothing");
+		}
+
+		assertFalse(ControllerLog.hasOwnConfigNow(),
+				"a closed capture must leave no config behind; a leftover one filters this logger out of "
+						+ "every later capture of the package, whatever level that capture asks for");
+	}
+
 	/** An audit log service whose persistence fails, as a full disk or a locked table would. */
 	private static final class ThrowingAuditLogService extends StubAuditLogService {
 

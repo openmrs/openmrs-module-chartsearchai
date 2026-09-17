@@ -17,7 +17,11 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.config.Property;
 
 /**
@@ -41,24 +45,39 @@ import org.apache.logging.log4j.core.config.Property;
  * pin different answers to the same question, and this one is used by both a positive assertion
  * (an ERROR is reported) and a negative one (no log line carries the question or the answer).
  *
- * <p>It raises the logger CONFIG rather than the instance, for the reason {@code LogCapture}'s
- * javadoc gives: {@code Logger.setLevel} reaches only the one instance. It restores the prior
- * level on {@link #close()} — a leaked level alters whichever test class surefire runs next in
- * this reused JVM.
+ * <p><b>It raises the logger CONFIG, not the instance, and undoes an INSTALLED config rather than
+ * only a level</b> — both of which it takes from {@code LogCapture}, which had each of them wrong
+ * once. {@code Logger.setLevel} reaches only the one instance, which is why {@link Configurator} is
+ * what raises the level here. And attaching an appender to a logger that has no config of its own
+ * makes log4j2 install one: removing only the appender and the level then leaves that config behind
+ * at its inherited level for the life of the JVM, so a later capture of the PACKAGE is blind to this
+ * logger's events below it and every negative asserted over such a capture passes vacuously,
+ * decided by nothing but which test file surefire ran first. That is issue #439's third review round,
+ * pinned there by {@code LogCaptureRestorationTest} — which cannot see this class, so
+ * {@code ChartSearchAiAuditWriteFailureLoudnessTest.aCloseLeavesNoLoggerConfigBehind} is what keeps
+ * it pinned here.
  */
 final class ControllerLog implements AutoCloseable {
 
 	private final List<LogEvent> events = Collections.synchronizedList(new ArrayList<LogEvent>());
 
+	/** The logger this captures, named rather than located so {@link #close} can undo a config. */
+	static final String LOGGER_NAME = ChartSearchAiRestController.class.getName();
+
 	private final Logger logger;
 
 	private final Level priorLevel;
 
+	private final boolean ownConfigExisted;
+
 	private final AbstractAppender appender;
 
 	ControllerLog() {
-		logger = (Logger) LogManager.getLogger(ChartSearchAiRestController.class);
-		priorLevel = logger.getLevel();
+		Logger target = (Logger) LogManager.getLogger(LOGGER_NAME);
+		priorLevel = target.getLevel();
+		ownConfigExisted = hasOwnConfig(target.getContext().getConfiguration(), LOGGER_NAME);
+		Configurator.setLevel(LOGGER_NAME, Level.DEBUG);
+		logger = (Logger) LogManager.getLogger(LOGGER_NAME);
 		appender = new AbstractAppender("controller-log", null, null, false, Property.EMPTY_ARRAY) {
 
 			@Override
@@ -68,7 +87,32 @@ final class ControllerLog implements AutoCloseable {
 		};
 		appender.start();
 		logger.addAppender(appender);
-		logger.setLevel(Level.DEBUG);
+	}
+
+	/** Whether {@code loggerName} resolves to a config of its OWN, rather than to an ancestor's. */
+	static boolean hasOwnConfig(Configuration configuration, String loggerName) {
+		LoggerConfig config = configuration.getLoggerConfig(loggerName);
+		return config != null && loggerName.equals(config.getName());
+	}
+
+	/** Whether this logger has a config of its own right now — for the assertion about {@link #close}. */
+	static boolean hasOwnConfigNow() {
+		Logger target = (Logger) LogManager.getLogger(LOGGER_NAME);
+		return hasOwnConfig(target.getContext().getConfiguration(), LOGGER_NAME);
+	}
+
+	/**
+	 * Removes this logger's own config if it has one, so a case asserting about {@link #close} starts
+	 * from a known state rather than from whatever surefire ran before it in this JVM.
+	 *
+	 * <p>Only that case should call this. Without it the assertion is decided by run order — a sibling
+	 * that leaked a config satisfies the precondition, and the leak this is all about goes unmeasured.
+	 */
+	static void clearOwnConfig() {
+		Logger target = (Logger) LogManager.getLogger(LOGGER_NAME);
+		LoggerContext context = target.getContext();
+		context.getConfiguration().removeLogger(LOGGER_NAME);
+		context.updateLoggers();
 	}
 
 	/** Whether anything was logged at {@code level} or more severe. */
@@ -139,7 +183,16 @@ final class ControllerLog implements AutoCloseable {
 	@Override
 	public void close() {
 		logger.removeAppender(appender);
+		if (ownConfigExisted) {
+			Configurator.setLevel(LOGGER_NAME, priorLevel);
+		}
+		else {
+			// The config log4j2 installed when the appender was attached, removed rather than left at
+			// its inherited level — see the class javadoc for what leaving it costs a later capture.
+			LoggerContext context = logger.getContext();
+			context.getConfiguration().removeLogger(LOGGER_NAME);
+			context.updateLoggers();
+		}
 		appender.stop();
-		logger.setLevel(priorLevel);
 	}
 }

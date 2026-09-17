@@ -642,10 +642,11 @@ public class ChartSearchAiRestController {
 	 * ungrounded answer (a cache hit returns an already-final answer), the classic {@code done}
 	 * is emitted instead and no {@code grounded} event follows.</p>
 	 *
-	 * <p><b>Either shape owes an audit row on every exit of the try block below, not only on the one
-	 * that reaches its own write site</b> — {@link #auditStreamedQueryIfUnrecorded} in the
-	 * {@code finally} is what owes it, and issue #450 is what a delivered answer with no row cost
-	 * before that. One row per query at most, for any implementation of the consumer contract.</p>
+	 * <p><b>Either shape owes an audit row on every exit of the try block below that got as far as the
+	 * pipeline producing something, not only on the one that reaches its own write site</b> —
+	 * {@link #auditStreamedQueryIfUnrecorded} in the {@code finally} is what owes it and what states
+	 * the gate, and issue #450 is what a delivered answer with no row cost before that. One row per
+	 * query at most, for any implementation of the consumer contract.</p>
 	 *
 	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
 	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
@@ -707,12 +708,15 @@ public class ChartSearchAiRestController {
 				if (!asyncGrounding) {
 					return;
 				}
-				// Before the save and not after it: what this flag stops is a SECOND row, so it has to be
-				// true for every way the attempt can end — saveAuditLog's own swallowed persistence
-				// failure included, which is answered by the ERROR it logs and not by a retry.
-				auditState.auditAttempted = true;
+				// AFTER the save returns, never before it. Everything from the service call onward is
+				// inside saveAuditLog's own catch, so anything that ESCAPES it was thrown before the
+				// insert and means no row exists — and a flag raised ahead of the call would then have the
+				// finally decline, leaving a delivered answer unrecorded, which is this issue's own
+				// defect. A swallowed persistence failure returns normally, so the flag is still raised and
+				// no second row follows it; that failure is answered by the ERROR saveAuditLog logs.
 				auditState.earlyQuestionId = saveAuditLog(user, patient, sanitizedQuestion,
 						ungrounded, System.currentTimeMillis() - startTime);
+				auditState.auditAttempted = true;
 				try {
 					writeSseEvent(out, "done",
 							doneEventJson(ungrounded, auditState.earlyQuestionId));
@@ -770,9 +774,10 @@ public class ChartSearchAiRestController {
 				// The EVENT still goes out, because a client whose done was refused never received one.
 				String questionId = auditState.earlyQuestionId;
 				if (!auditState.auditAttempted) {
-					auditState.auditAttempted = true;
 					questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
 							System.currentTimeMillis() - startTime);
+					// After the save, for the reason the async site above states.
+					auditState.auditAttempted = true;
 				}
 				writeSseEvent(out, "done", doneEventJson(chartAnswer, questionId));
 			} else {
@@ -956,8 +961,11 @@ public class ChartSearchAiRestController {
 		boolean earlyDoneSent;
 
 		/**
-		 * Whether a row has been ATTEMPTED at an ordinary write site. Attempted and not written: see
-		 * {@link #auditStreamedQueryIfUnrecorded} for why that is the useful reading of it.
+		 * Whether a {@link #saveAuditLog} call at an ordinary write site RETURNED. Returned rather than
+		 * succeeded: that method swallows a persistence failure, so this says a row was attempted and
+		 * not that one exists — see {@link #auditStreamedQueryIfUnrecorded} for why that is the useful
+		 * reading. What it must never say is that an attempt which THREW was made, since the throw
+		 * means no row, and the {@code finally} is then the only thing that will write one.
 		 */
 		boolean auditAttempted;
 

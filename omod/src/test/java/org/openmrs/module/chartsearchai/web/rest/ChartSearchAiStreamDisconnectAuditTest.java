@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.web.rest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -165,9 +166,10 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 	}
 
 	/**
-	 * The earliest window of all, and the one no answer token reaches: {@code thinking} is the first
-	 * frame the module writes, so a client that goes away on it has had chart-derived reasoning about
-	 * the patient and nothing else. That is still a disclosure, and the row that records it is owed.
+	 * The earliest window a stock install has, and one no answer token reaches: {@code thinking} is the
+	 * first frame the module writes unless the progressive-reasoning preview is enabled, which ships
+	 * off. A client that goes away on it has had chart-derived reasoning about the patient and nothing
+	 * else. That is still a disclosure, and the row that records it is owed.
 	 *
 	 * <p>It is the {@code reasoning} channel alone that carries the query past the gate here, which is
 	 * why this case exists as well as the token ones: with every fixture streaming a token first, the
@@ -215,18 +217,98 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 	}
 
 	/**
-	 * The citations channel, on its own. No shipped implementation reaches it without streaming a
-	 * token first, so this case models what the INTERFACE permits rather than what either
-	 * implementation does — deliberately, because the controller must not owe its audit row to an
-	 * ordering the interface does not guarantee.
+	 * The citations channel, on its own — a shipped arrangement and not merely one the interface
+	 * permits. {@code LlmResponseParser} fires the token consumer only for a non-empty content chunk
+	 * and {@code LlmProvider} filters it to the {@code answer} field, so a blank answer streams ZERO
+	 * token frames while {@code citationsConsumer} runs unconditionally; the repo treats that case as
+	 * real, pinned by {@code FindingEnumerationRepairTest.aBlankAnswerIsNotRepairedAtAll}. The
+	 * citations of a blank answer still resolve, off the structured array.
 	 */
 	@Test
 	public void theCitationsChannelAloneIsEnoughToAuditTheQuery() {
 		DisconnectingSink gone = streamWith(new CitationsOnlyStub(), 1, false);
 
-		assertTrue(gone.refused >= 1, canary(false));
+		// Not the shared canary: here the references frame LANDS and what the sink refuses is the error
+		// event the catch-all writes afterwards. What this case needs is that no token preceded the
+		// citations, which is what the event list says.
+		assertEquals(Collections.singletonList("references"), SseEvents.types(gone.sink()),
+				"the citations frame must be the only thing that reached the client, or a token channel "
+						+ "could be what audited this");
 		assertEquals(1, audit.saved.size(), "the citations frame alone must leave a row");
 		assertEquals("", audit.saved.get(0).getAnswer());
+	}
+
+	/**
+	 * A save that THREW is not an attempt that succeeded, and the {@code finally} is the only thing
+	 * left to write the row — so the flag each ordinary write site raises goes up AFTER its save
+	 * returns, never before it.
+	 *
+	 * <p>Reached here by a service that streams a token and then returns null, which makes
+	 * {@code saveAuditLog} dereference a null answer and throw before its own {@code try}. Neither
+	 * shipped implementation returns null; this is collaborator misbehaviour, held to the same standard
+	 * as {@link #aSecondUngroundedHandoffWritesNoSecondRow} and for the same reason — a token about
+	 * this patient reached the client, and with the flag raised early the query went unrecorded, which
+	 * is issue #450's own defect reappearing inside its own fix.
+	 */
+	@Test
+	public void aSaveThatThrewLeavesTheFinallyToWriteTheRow() {
+		// One service per shape, because each site is reached by a different misbehaviour: the classic
+		// site audits the RETURNED answer, so a null return is what makes its save throw, and the async
+		// site audits the answer it is HANDED, so a null handoff is what makes that one throw. A single
+		// stub reaches only one of them, and the async site then goes unmeasured.
+		for (ChartSearchService misbehaving : new ChartSearchService[] {
+				new ReturnsNullAfterATokenStub(), new HandsOverNullAfterATokenStub() }) {
+			boolean asyncGrounding = misbehaving instanceof HandsOverNullAfterATokenStub;
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			controller.setChartSearchService(misbehaving);
+
+			controller.streamAnswer(out, StreamingChartSearchStub.PATIENT,
+					StreamingChartSearchStub.QUESTION, USER, asyncGrounding);
+
+			assertEquals(1, audit.saved.size(),
+					"the answer reached the client and the ordinary save threw, so the finally owes the "
+							+ "row; service=" + misbehaving.getClass().getSimpleName());
+			assertEquals(StreamingChartSearchStub.FRAGMENTS[0], audit.saved.get(0).getAnswer(),
+					"and it records what the model had produced");
+			audit.saved.clear();
+		}
+	}
+
+	/**
+	 * The handoff as the FIRST channel to speak, in the classic shape — the one arrangement in which
+	 * {@code recordAnswerOnce} is what opens the gate rather than a token or a frame before it.
+	 */
+	@Test
+	public void theHandoffAloneIsEnoughToAuditTheQuery() {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		controller.setChartSearchService(new HandoffOnlyStub());
+
+		controller.streamAnswer(out, StreamingChartSearchStub.PATIENT,
+				StreamingChartSearchStub.QUESTION, USER, false);
+
+		assertEquals(1, audit.saved.size(), "the handoff alone must leave a row");
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED,
+				audit.saved.get(0).getSearchMode(),
+				"off the answer it handed over, which is the only thing the controller holds here");
+	}
+
+	/**
+	 * An answer whose TEXT is null, handed over and then abandoned. The row records the null, and —
+	 * the point of the case — reading its length for the log line does not throw: this runs in a
+	 * {@code finally} on a request whose own failure has already been handled, so an exception here
+	 * would leave {@code streamAnswer} by a path its caller has no catch for.
+	 */
+	@Test
+	public void aPipelineAnswerWithNoTextIsAuditedWithoutThrowingOutOfTheFinally() {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		controller.setChartSearchService(new NullTextAnswerStub());
+
+		controller.streamAnswer(out, StreamingChartSearchStub.PATIENT,
+				StreamingChartSearchStub.QUESTION, USER, false);
+
+		assertEquals(1, audit.saved.size(), "the query is still recorded");
+		assertNull(audit.saved.get(0).getAnswer(),
+				"the row states the null the producer stated, rather than inventing an empty answer");
 	}
 
 	/**
@@ -411,6 +493,59 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 			}
 			ungroundedAnswerConsumer.accept(answer());
 			return answer();
+		}
+	}
+
+	/** Streams a token and then returns null, so the ordinary save throws rather than swallowing. */
+	private static final class ReturnsNullAfterATokenStub extends StreamingChartSearchStub {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			tokenConsumer.accept(FRAGMENTS[0]);
+			return null;
+		}
+	}
+
+	/** Streams a token and hands over a null answer, so the ASYNC save throws before its own try. */
+	private static final class HandsOverNullAfterATokenStub extends StreamingChartSearchStub {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			tokenConsumer.accept(FRAGMENTS[0]);
+			ungroundedAnswerConsumer.accept(null);
+			return answer();
+		}
+	}
+
+	/** Hands over the finished answer with nothing before it, then abandons the request. */
+	private static final class HandoffOnlyStub extends StreamingChartSearchStub {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			ungroundedAnswerConsumer.accept(answer());
+			throw new RuntimeException("the grounding pass failed");
+		}
+	}
+
+	/** Hands over an answer whose text is null, which a producer is free to do. */
+	private static final class NullTextAnswerStub extends StreamingChartSearchStub {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			ungroundedAnswerConsumer.accept(new ChartAnswer(null, Collections.emptyList()));
+			throw new RuntimeException("the grounding pass failed");
 		}
 	}
 

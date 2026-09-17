@@ -3781,7 +3781,7 @@ Both figures are RELAYED from those two fix passes and are not re-derived here; 
 
 - **A counter on `GET /chartsearchai/drugreferencestatus`**, which #229 offers as the other half of option 1. That endpoint answers about the LOADED DATASET — one lazily-built object, held for the life of the bean — while slice size is per question. A per-request counter there would be mutable state on a Spring singleton, which is the first of the two reasons `CLAUDE.md`'s memoisation rule gives for never holding one on these beans, and it could only ever report an aggregate, which cannot answer "how large was the slice behind THIS answer".
 - **A per-type breakdown in the durable row** — separate counts for entries and findings. Not rejected because it cannot be written: buckets keyed on `mapping.getResourceType()` and admitted by the same classification name no type literal, which is what the controller already does when it puts `referenceGroup(...)` on the wire. Rejected because the row is where the prompt COST is read, and the cost is the group's; the per-kind split already exists on the DEBUG line for whoever can set the level, and two more nullable columns on a table whose history is a history of columns going stale is a poor trade for a number nobody has asked a question of yet.
-- **Editing `chartsearchai-002` rather than adding a changeset**, which the file header's consolidation paragraph used to invite — and naming that invitation here was not enough, because nobody editing `liquibase.xml` reads this file. The header now leads with the rule instead. The header describes the SECOND step of a lifecycle whose first step this file's own history shows: `input_tokens`/`output_tokens` arrived as `chartsearchai-005` in April 2026 and were folded into 002's create-time definition by the consolidation in May. Editing 002 now adds nothing on an instance that has already run it, while the hbm mapping declares the columns immediately — the insert fails, `saveAuditLog` catches and logs, and auditing stops with no error anywhere. Numbered 009 rather than 003 because ids 001 to 006 have existed in this file on the main line and 007/008 exist in unmerged branches. Reusing one is not a silent skip, which is what an earlier draft of this paragraph said: liquibase stores a checksum beside id + author + filename, so an id an instance holds an orphan row for raises `ValidationFailedException` and stops the module starting. Measured on liquibase 4.32.0 — the version `openmrs-api` puts on this module's classpath — against an instance built from the consolidation-era file, which leaves orphan rows for 001 and 003. Loud rather than silent, and worse; the conclusion is the same.
+- **Editing `chartsearchai-002` rather than adding a changeset**, which the file header's consolidation paragraph used to invite — and naming that invitation here was not enough, because nobody editing `liquibase.xml` reads this file. The header now leads with the rule instead. The header describes the SECOND step of a lifecycle whose first step this file's own history shows: `input_tokens`/`output_tokens` arrived as `chartsearchai-005` in April 2026 and were folded into 002's create-time definition by the consolidation in May. Editing 002 now adds nothing on an instance that has already run it, while the hbm mapping declares the columns immediately — the insert fails, `saveAuditLog` catches and logs, and auditing stops. Since issue #450 that log is an ERROR carrying the cause rather than a WARN, which is the only signal available; see Decision 103's second half. Numbered 009 rather than 003 because ids 001 to 006 have existed in this file on the main line and 007/008 exist in unmerged branches. Reusing one is not a silent skip, which is what an earlier draft of this paragraph said: liquibase stores a checksum beside id + author + filename, so an id an instance holds an orphan row for raises `ValidationFailedException` and stops the module starting. Measured on liquibase 4.32.0 — the version `openmrs-api` puts on this module's classpath — against an instance built from the consolidation-era file, which leaves orphan rows for 001 and 003. Loud rather than silent, and worse; the conclusion is the same.
 
 ### Trade-offs
 
@@ -8168,9 +8168,9 @@ and for the whole answer when the reset landed in the window after the last `tok
 the `references` one. Because `checkRateLimit` counts persisted rows, the query was also uncounted;
 that is a consequence and was not the basis of the finding.
 
-The second exit is not a disconnect at all and the ticket does not name it: `LlmInferenceService`
-runs the grounding pass and the fidelity checks after it with no `catch` of its own between the
-ungrounded handoff and its return, so anything thrown there unwinds into the same catch-all with the whole
+The second exit is not a disconnect at all and the ticket does not name it: between the ungrounded
+handoff and its return `LlmInferenceService` runs the fidelity checks and then the grounding pass, with
+no `catch` of its own, so anything thrown there unwinds into the same catch-all with the whole
 answer already delivered.
 
 **Decision.** `auditStreamedQueryIfUnrecorded` runs in the `finally` that already stops the
@@ -8180,13 +8180,21 @@ most**: each ordinary write site flags its attempt before making it, so the fina
 one was already attempted.
 
 That holds for any implementation, not only for one honouring the ungrounded consumer's at-most-once
-contract, and it took two guards a review round found missing. The consumer's own idempotence was
+contract, and it took three guards successive review rounds found missing. **The flag goes up AFTER its
+save returns, never before** — everything from the service call onward sits inside `saveAuditLog`'s own
+`catch`, so anything that ESCAPES it was thrown before the insert and means no row exists; a flag
+raised ahead of the call had the `finally` decline and left a delivered answer unrecorded, which is
+this issue's own defect reappearing inside its own fix. A swallowed persistence failure returns
+normally, so the flag is still raised and no second row follows. The consumer's own idempotence was
 keyed on whether the early `done` had gone OUT, so a second fire after a refused `done` write
 re-entered and saved again; it is now keyed on the consumer having FIRED, which also makes its warning
 reachable in the classic shape, where nothing sets a done flag at all. And the classic write site now
 skips its save where a row was already attempted. Neither shipped implementation can reach either
-shape — both call the consumer once with no surrounding `try` — but "exactly one row" is a
-specification about the TABLE, and the module should not owe it to a collaborator's good behaviour.
+shape: `LlmInferenceService` calls the consumer once, inside a `try` that has a `finally` and no
+`catch`, and `ChartSearchServiceRouter` never calls it at all — it passes the caller's consumer through,
+and on a cache hit deliberately fires nothing. So a `RuntimeException` from the consumer propagates
+through both. But "exactly one row" is a specification about the TABLE, and the module should not owe it
+to a collaborator's good behaviour.
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
 row before streaming and update it afterwards — was not taken: `ChartSearchAiAuditSearchModeTest`
@@ -8223,12 +8231,15 @@ that raises `ChartTooLargeException`, and the preview runs over a focused top-K 
 committed pass runs over the whole chart — so the preview is precisely what succeeds when the full
 chart overflows, and the two are positively correlated rather than merely co-possible. That preview is
 model output about this patient and it reached the client, so the row is owed. The same holds of an
-abandoned `thinking` frame, which is the first frame the module writes at all.
+abandoned `thinking` frame, which is the first frame the module writes on a stock install — the
+preview precedes it wherever `chartsearchai.progressiveReasoning.enabled` is on, and that property
+ships off.
 
 **Its consequence, stated rather than hidden: those queries now consume a rate-limit slot.**
 `checkRateLimit` counts persisted rows against `chartsearchai.rateLimitPerMinute` (default 10), so a
-clinician on an oversized chart, or one reloading impatiently while a CPU install thinks, can throttle
-themselves out having received no answer. That is the intended direction — their being uncounted was
+clinician reloading impatiently while a CPU install thinks can throttle themselves out having received
+no answer. An oversized chart does this only where the preview ran — with progressive reasoning off,
+which is the shipped default, it writes no row and costs no slot, per the gate above. That is the intended direction — their being uncounted was
 the other half of what #450 reports — but an operator seeing 429s after abandoned queries should know
 why. What each such attempt actually consumed is not uniform and is deliberately not averaged here: an
 abandoned `thinking` frame has paid a full prefill on an engine this module serializes, while a chart
@@ -8256,24 +8267,26 @@ rather than a defect.
 **What it costs**, measured 2026-09-17 by driving the real `streamAnswer` from a throwaway omod case
 with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer — at
 200 requests per JVM after 30 warmups, per-request caller-thread allocation read off
-`com.sun.management.ThreadMXBean.getThreadAllocatedBytes` (the instrument issue #446's own
-measurement used), with an A/A control on every run:
+`com.sun.management.ThreadMXBean.getThreadAllocatedBytes`, with an A/A control on every run:
 
 - accumulating the answer costs **+36,992 bytes** per request against the **1.94 MB** the REST layer
   already allocates for that answer, and wall clock sits below an A/A spread of 203 µs on a ~1.2 ms
   request. The same loop already writes 119,772 bytes to the socket for it.
-- firing the ungrounded consumer in the classic shape, where it was a no-op lambda, costs **+32
-  bytes** per request — one capturing lambda instance where a cached empty one used to serve.
+- firing the ungrounded consumer in the classic shape, where it was a no-op lambda, costs **+48
+  bytes** per request — one capturing lambda instance where a cached empty one used to serve. Measured
+  against a stub that fires EVERY channel: one that never fires the consumer reports a far larger delta
+  that is an escape-analysis artifact and not this.
 - the audit INSERT on the disconnect path extends neither the engine's critical section (the consumer
   throws *inside* `LocalLlmEngine`'s `synchronized` method, so the monitor is released before the
   `finally`) nor any client-visible latency (every terminal frame is already written and flushed in
   the `catch`).
 
-**No ceiling on the accumulated text, and that is a decision.** #446 bounds a remote response at
-`MAX_RESPONSE_BYTES`, and `max_tokens` is advisory — which is that issue's own premise. But
-`LlmResponseParser` already accumulates the whole JSON envelope, reasoning and citations included, on
-the same request and through both engines: strictly larger, and bounded by the same #446 ceiling. A cap
-here alone would be cosmetic.
+**No ceiling on the accumulated text, and that is a decision.** `max_tokens` is advisory to the peer
+rather than enforced locally, which is issue #446's own premise — and #446 is OPEN, so nothing bounds a
+response today. That cuts against a cap here rather than for one: `LlmResponseParser` already
+accumulates the whole JSON envelope, reasoning and citations included, on the same request and through
+both engines, so it is strictly larger and equally unbounded. Capping this one would leave the larger
+one uncapped and change no outcome. Whatever ceiling #446 lands should cover both, at the source.
 
 **A residue this decision cannot close from a test, named rather than implied.** The fallback write runs
 in a `finally` reached *because* something threw, and `AuditLogServiceImpl` is class-level
@@ -8287,7 +8300,8 @@ raised it; nothing here refutes or confirms it.
 thing it buys. Publishing api's test classes and depending on them from omod gives the omod suite
 `LogCapture`, which is the repo's instrument for asserting the LEVEL an outcome is reported at. It also
 opens api's whole test classpath — fixtures included — to omod, and prose across both modules states
-the opposite as load-bearing (grep `no api test-jar`), the deciding one being a PRODUCTION javadoc:
+the opposite as load-bearing — `grep -rn "api test-jar" api/src omod/src` reaches both halves,
+where `no api test-jar` alone reaches only api's — the deciding one being a PRODUCTION javadoc:
 `DrugSafetyValidator`'s `StandingChartAlerts` factories are public because `omod/pom.xml` declares
 none. It also made `omod/pom.xml`'s `unpack-dependencies` execution, which filters by neither
 classifier nor scope, ship api's test classes and its Spring and Hibernate test configs inside the
@@ -8295,9 +8309,12 @@ released `.omod` — measured, with the whole suite green and the build exit 0 �
 load-bearing `excludeClassifiers` line that no test could hold. One level assertion does not buy that.
 `ControllerLog` in the omod test package asks the one question those cases need instead.
 
-**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`, over both shapes: the reset after the first
-token, the reset on the `references` frame, the non-`IOException` failure after the handoff (which
-also tells the `finally` from a statement at the tail of the disconnect branch), and the negative
-where a query that produced nothing writes no row. The ERROR is pinned by
+**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`. Over both shapes: the reset after the first
+token, the reset on the `references` frame, and the non-`IOException` failure after the handoff, which
+also tells the `finally` from a statement at the tail of the disconnect branch. Over the classic shape
+alone, each being an arrangement only one shape reaches: the negative where a query that produced
+nothing writes no row, each of the three non-token channels speaking on its own, and the handoff as the
+first channel to speak. And, per site rather than per shape, a save that THREW leaving the `finally` to
+write the row. The ERROR is pinned by
 `ChartSearchAiAuditWriteFailureLoudnessTest`, with the successful write as its control. Mutate each
 guard and read the failures.

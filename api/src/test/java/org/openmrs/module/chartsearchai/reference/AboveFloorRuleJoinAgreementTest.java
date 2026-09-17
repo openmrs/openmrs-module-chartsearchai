@@ -10,6 +10,8 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -187,11 +189,47 @@ public class AboveFloorRuleJoinAgreementTest {
 		List<DrugReference> repeated = new ArrayList<DrugReference>(entries);
 		repeated.add(entries.get(0));
 
-		assertEquals(AboveFloorRules.of(entries, 0).aboveFloorRulesAgainst(entries.get(0), entries.get(1)),
-			AboveFloorRules.of(repeated, 0).aboveFloorRulesAgainst(entries.get(0), entries.get(1)),
+		assertEquals(
+			readable(AboveFloorRules.of(entries, 0).aboveFloorRulesAgainst(entries.get(0), entries.get(1))),
+			readable(AboveFloorRules.of(repeated, 0).aboveFloorRulesAgainst(entries.get(0), entries.get(1))),
 			"a row the caller's list carries twice must relate its rules once, or the join reports the"
 					+ " reference data carrying two rules where it carries one (issue #447)");
 		assertAgrees(repeated, "the excerpt with its first row handed twice");
+	}
+
+	/**
+	 * The join hands back a view a consumer cannot edit. The scan this replaced built a fresh list per
+	 * ask, so sorting or filtering the answer harmed nobody; this list is the join's own and lives for
+	 * the whole arm. {@code pairKeyNames} takes {@code get(0)} off it while
+	 * {@code collectQuestionPairInteraction} hands the same object to {@code bestRule}, so an in-place
+	 * sort at either site would move the partner label the other picks — and that label is the
+	 * {@code unorderedPairKey}, so a chip merges or moves, silently and in one direction.
+	 *
+	 * <p>Asserted because nothing else could see it: with both wraps removed the whole api suite stays
+	 * green, measured. That is what makes them the kind of clause a later edit deletes for free.
+	 */
+	@Test
+	public void theRulesTheJoinHandsBackCannotBeEditedByAConsumer() {
+		List<DrugReference> screened = DrugReferenceTestSupport.ddinterEntries();
+		AboveFloorRules rules = AboveFloorRules.of(screened, 0);
+		List<DrugReference.Interaction> related = null;
+		for (DrugReference subject : screened) {
+			for (DrugReference other : screened) {
+				if (subject != other && !rules.aboveFloorRulesAgainst(subject, other).isEmpty()) {
+					related = rules.aboveFloorRulesAgainst(subject, other);
+				}
+			}
+		}
+		assertNotNull(related, "the excerpt must relate some pair, or this asserts nothing");
+
+		try {
+			related.set(0, null);
+			fail("the join handed back a list a consumer can edit; sorting or filtering it in place would"
+					+ " change what every later reader of the arm is told about a pair (issue #447)");
+		}
+		catch (UnsupportedOperationException expected) {
+			// what an unmodifiable view owes its caller
+		}
 	}
 
 	@Test

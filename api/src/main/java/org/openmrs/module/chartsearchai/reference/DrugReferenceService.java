@@ -1140,10 +1140,10 @@ public class DrugReferenceService {
 	 * 54 records what the overload shape cost the sibling it measured: dropping the argument at a call
 	 * site reinstated the full walk as an <em>overload resolution</em> rather than as a new mention,
 	 * with {@code CoMedicationResolutionPerPassTest} and the whole api suite green. <b>Read that as
-	 * the convention and not as the guarantee here</b>: that mutation does not compile in this pair
-	 * whichever way they are named, because {@code nameIndex()} is an instance method and this body is
-	 * static, and Decision 54's two arities were both static — which is the condition that made it
-	 * bite there.
+	 * the convention and not as the guarantee here</b>: at the call site that matters —
+	 * {@code AboveFloorRules.of}, which is static — dropping the argument does not compile whichever
+	 * way the two are named, because {@code nameIndex()} is an instance method. Decision 54's two
+	 * arities were both static, which is the condition that made it bite there.
 	 *
 	 * @param entries the population to invert; the caller owns the answer, exactly as above
 	 * @return a fresh index over {@code entries}, read back through

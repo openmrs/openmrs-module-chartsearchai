@@ -5974,7 +5974,8 @@ public class DrugSafetyValidator {
 	 * it is naming and so asks between once and N-1 times per drug. So the cost was quadratic in a
 	 * list the QUESTION chooses, times the rules on each row — and while the rule count is bounded by
 	 * the DATA, the row count had no bound but the controller's 1000-character question cap, inside
-	 * which a question can resolve some 400 rows. {@code validate} runs twice per request, the first
+	 * which a question can resolve several hundred rows — Decision 103 carries that number and what
+	 * it is a ceiling OF, since it moves with the knowledge base. {@code validate} runs twice per request, the first
 	 * pass outside the serialised engine lock, so a request's CONTENT set its own CPU cost in the
 	 * shared OpenMRS JVM. {@link DrugSafetyValidator#maxPairChips} cannot be that bound and says so:
 	 * it bounds CHIPS and not WORK, because the cut is defined as "the least severe go" and nothing
@@ -6053,10 +6054,15 @@ public class DrugSafetyValidator {
 		static AboveFloorRules of(List<DrugReference> screened, int floor) {
 			if (screened.size() < 2) {
 				// No pair to relate, so no rule list is read at all — which keeps a one-order chart,
-				// where pairKeyNames' inner loop never ran, at what it cost before. A fresh instance
-				// rather than a shared constant: a static holder on a type this bean's field budget
-				// cannot see is the blind spot ADR Decision 54 names, and one allocation on the
-				// cheapest path is not worth standing in it.
+				// where pairKeyNames' inner loop never ran, at what it cost before.
+				//
+				// A COST shortcut and nothing else: removing it is behaviour-preserving, and nothing
+				// in the suite discriminates it, deliberately. What it saves is one entry's inversion
+				// and one rule-list walk on a chart with a single order, which is not worth a case;
+				// said here so the next maintainer can drop it knowingly rather than discover it is
+				// unpinned. A fresh instance rather than a shared constant: a static holder on a type
+				// this bean's field budget cannot see is the blind spot ADR Decision 54 names, and one
+				// allocation on the cheapest path is not worth standing in it.
 				return new AboveFloorRules(
 						Collections.<DrugReference, Map<DrugReference, List<DrugReference.Interaction>>> emptyMap());
 			}
@@ -6085,8 +6091,10 @@ public class DrugSafetyValidator {
 						// (subject, subject) answered with the subject's own self-naming rules. No
 						// caller asks — the pair loop walks i < j and pairKeyNames skips its own drug
 						// — but a narrowing no caller reaches is one nothing can discriminate, and
-						// this way the join is a faithful materialisation of the predicate rather
-						// than the predicate plus a rule of its own.
+						// this way the join materialises the predicate rather than the predicate plus
+						// a rule of its own. One exception, and it is the shortcut above rather than
+						// this loop: fewer than two screened entries answer empty for every pair,
+						// (subject, subject) included.
 						if (identifies(rule, other)) {
 							rulesFor(bySubject, subject, other).add(rule);
 						}
@@ -6098,15 +6106,22 @@ public class DrugSafetyValidator {
 
 		/**
 		 * @return the screened entries {@code rule} could name, by either leg of
-		 *         {@link DrugSafetyValidator#identifies}, each once — a LinkedHashSet because one
-		 *         rule's token and its ATC code can reach the
-		 *         same entry, and appending it twice would make a pair's rule list say the data
-		 *         carries two rules where it carries one.
+		 *         {@link DrugSafetyValidator#identifies}, each once — a SET because one rule's token
+		 *         and its ATC code can reach the same entry, and appending it twice would make a
+		 *         pair's rule list say the data carries two rules where it carries one.
 		 */
 		private static Set<DrugReference> candidates(DrugReference.Interaction rule,
 				Map<String, List<DrugReference>> byName, Map<String, List<DrugReference>> byAtcCode) {
-			Set<DrugReference> out = new LinkedHashSet<DrugReference>(
-					DrugReferenceService.entriesNamedBy(rule.getToken(), byName));
+			// By IDENTITY, like bySubject above and for its reason: route variants of one substance are
+			// distinct rows that must not merge. They do not merge under equals TODAY — DrugReference
+			// declares none — but this class refuses to rest on that default two methods away, and a
+			// value equality added later (route variants being exactly the rows someone would give
+			// one) would collapse two claimants into one candidate, hand the rule to the first, and
+			// lose the other's chip fail-closed. Iteration order does not matter here: each `other`
+			// gets its own bucket and each bucket is ordered by the rule loop.
+			Set<DrugReference> out = Collections.newSetFromMap(
+					new IdentityHashMap<DrugReference, Boolean>());
+			out.addAll(DrugReferenceService.entriesNamedBy(rule.getToken(), byName));
 			out.addAll(entriesCodedBy(rule.getAtc(), byAtcCode));
 			return out;
 		}
@@ -6124,7 +6139,10 @@ public class DrugSafetyValidator {
 				Map<String, List<DrugReference>> index) {
 			String code = DrugReference.normalizeAtcToken(rawAtc);
 			List<DrugReference> coded = code == null ? null : index.get(code);
-			return coded == null ? Collections.<DrugReference> emptyList() : coded;
+			// Unmodifiable for its counterpart's reason: this list is the index's own and the build is
+			// still iterating `screened` when it is read.
+			return coded == null ? Collections.<DrugReference> emptyList()
+					: Collections.unmodifiableList(coded);
 		}
 
 		/** The ATC counterpart of {@link DrugReferenceService#nameIndexOf}, here rather than there

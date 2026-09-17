@@ -1,13 +1,11 @@
 {
   "version": "1.0",
-  "description": "Test fixture for the question-named PAIR arm (issue #114), parsed by the real JsonDrugReferenceSource. Five shapes the bundled DDInter sample cannot express, each a miniature of a shape the FULL KB carries: (1) route variants of one drug sharing a match token \u2014 DDInter publishes the same rxnorm_name for every variant, so one question word resolves several entries that all pair off the same rule (142 rxnorm_name values are shared by more than one entry across 332 entries of the full KB; see issue #115); (2) one pair joined by TWO rules whose tokens differ, only the second of which names the patient's active order, so 'is this pair already the chart arm's?' cannot be answered from the first rule alone; (3) a rule that identifies its partner only by ATC code, carrying no name token \u2014 the arm the ddinter source never exercises because it always writes a token; (4) a MULTI-WORD rule token one of whose words is another drug's whole name ('ethinyl estradiol' vs the separate Estradiol entry) \u2014 408 of the full KB's 2093 distinct tokens are multi-word and 53 of those name a word that is some other entry's whole name, 'ethinyl estradiol' appearing in 449 entries' rule lists; (5) two route variants joined by a KB row of their own, which is one drug and not a pair \u2014 33 such rows exist in the full KB, all above the default floor, spanning 29 drug words (minoxidil, timolol, lidocaine, atropine, neomycin, paclitaxel ...). (6) TWO entries carrying the SAME ATC code, so the ATC-only rule of shape (3) names both of them \u2014 the shape that tells an index mapping a code to a LIST of entries from one mapping it to a single entry. Without it, keeping only the last entry per code left the whole suite green while dropping an interaction rule fail-closed (issue #447).",
+  "description": "Test fixture for the question-named PAIR arm (issue #114), parsed by the real JsonDrugReferenceSource. Five shapes the bundled DDInter sample cannot express, each a miniature of a shape the FULL KB carries: (1) route variants of one drug sharing a match token — DDInter publishes the same rxnorm_name for every variant, so one question word resolves several entries that all pair off the same rule (142 rxnorm_name values are shared by more than one entry across 332 entries of the full KB; see issue #115); (2) one pair joined by TWO rules whose tokens differ, only the second of which names the patient's active order, so 'is this pair already the chart arm's?' cannot be answered from the first rule alone; (3) a rule that identifies its partner only by ATC code, carrying no name token — the arm the ddinter source never exercises because it always writes a token; (4) a MULTI-WORD rule token one of whose words is another drug's whole name ('ethinyl estradiol' vs the separate Estradiol entry) — 408 of the full KB's 2093 distinct tokens are multi-word and 53 of those name a word that is some other entry's whole name, 'ethinyl estradiol' appearing in 449 entries' rule lists; (5) two route variants joined by a KB row of their own, which is one drug and not a pair — 33 such rows exist in the full KB, all above the default floor, spanning 29 drug words (minoxidil, timolol, lidocaine, atropine, neomycin, paclitaxel ...); (6) TWO entries filed under the SAME ATC code, so the ATC-only rule of shape (3) names both — the shape that tells an index mapping a code to a LIST of entries from one mapping it to a single entry, and without which keeping only the last entry per code left the whole suite green while dropping an interaction rule fail-closed; (7) ONE rule whose two legs reach DIFFERENT entries, its token naming Voxelotor while its ATC code is carried by the Phenprocoumon rows — without it the two legs of identifies are indistinguishable from a name leg with an ATC FALLBACK, which also left the whole suite green (issue #447).",
   "entries": [
     {
       "id": "dexamethasone",
       "name": "Dexamethasone",
-      "aliases": [
-        "dexamethasone"
-      ],
+      "aliases": ["dexamethasone"],
       "interactions": [
         {
           "token": "voxelotor",
@@ -20,10 +18,7 @@
     {
       "id": "dexamethasone-nasal",
       "name": "Dexamethasone (nasal)",
-      "aliases": [
-        "dexamethasone (nasal)",
-        "dexamethasone"
-      ],
+      "aliases": ["dexamethasone (nasal)", "dexamethasone"],
       "interactions": [
         {
           "token": "voxelotor",
@@ -36,9 +31,7 @@
     {
       "id": "voxelotor",
       "name": "Voxelotor",
-      "aliases": [
-        "voxelotor"
-      ],
+      "aliases": ["voxelotor"],
       "interactions": [
         {
           "token": "dexamethasone",
@@ -56,18 +49,13 @@
     {
       "id": "warfarin",
       "name": "Warfarin",
-      "aliases": [
-        "warfarin",
-        "coumadin"
-      ],
+      "aliases": ["warfarin", "coumadin"],
       "source": "Test fixture"
     },
     {
       "id": "ibuprofen",
       "name": "Ibuprofen",
-      "aliases": [
-        "ibuprofen"
-      ],
+      "aliases": ["ibuprofen"],
       "interactions": [
         {
           "token": "coumadin",
@@ -85,14 +73,18 @@
     {
       "id": "levofloxacin",
       "name": "Levofloxacin",
-      "aliases": [
-        "levofloxacin"
-      ],
+      "aliases": ["levofloxacin"],
       "interactions": [
         {
           "token": "ethinyl estradiol",
           "severity": "Moderate",
           "note": "Moderate. RECOMMENDED: The effectiveness of estrogen-containing oral contraceptives may be impaired during coadministration with antibiotics."
+        },
+        {
+          "token": "voxelotor",
+          "atc": "B01AA04",
+          "severity": "Moderate",
+          "note": "Moderate. A rule whose NAME token and whose ATC code reach DIFFERENT entries: the token names Voxelotor, the code is filed on the Phenprocoumon rows."
         }
       ],
       "source": "Test fixture"
@@ -100,25 +92,19 @@
     {
       "id": "ethinyl-estradiol",
       "name": "Ethinyl estradiol",
-      "aliases": [
-        "ethinyl estradiol"
-      ],
+      "aliases": ["ethinyl estradiol"],
       "source": "Test fixture"
     },
     {
       "id": "estradiol",
       "name": "Estradiol",
-      "aliases": [
-        "estradiol"
-      ],
+      "aliases": ["estradiol"],
       "source": "Test fixture"
     },
     {
       "id": "minoxidil",
       "name": "Minoxidil",
-      "aliases": [
-        "minoxidil"
-      ],
+      "aliases": ["minoxidil"],
       "interactions": [
         {
           "token": "minoxidil",
@@ -131,10 +117,7 @@
     {
       "id": "minoxidil-topical",
       "name": "Minoxidil (topical)",
-      "aliases": [
-        "minoxidil (topical)",
-        "minoxidil"
-      ],
+      "aliases": ["minoxidil (topical)", "minoxidil"],
       "interactions": [
         {
           "token": "minoxidil",
@@ -147,9 +130,7 @@
     {
       "id": "paracetamol",
       "name": "Paracetamol",
-      "aliases": [
-        "paracetamol"
-      ],
+      "aliases": ["paracetamol"],
       "interactions": [
         {
           "token": "warfarin",
@@ -163,10 +144,7 @@
       "id": "acetylsalicylic-acid",
       "name": "Acetylsalicylic acid",
       "genericName": "aspirin",
-      "aliases": [
-        "acetylsalicylic acid",
-        "aspirin"
-      ],
+      "aliases": ["acetylsalicylic acid", "aspirin"],
       "interactions": [
         {
           "token": "diclofenac",
@@ -179,9 +157,7 @@
     {
       "id": "diclofenac",
       "name": "Diclofenac",
-      "aliases": [
-        "diclofenac"
-      ],
+      "aliases": ["diclofenac"],
       "interactions": [
         {
           "token": "aspirin",
@@ -194,10 +170,7 @@
     {
       "id": "diclofenac-topical",
       "name": "Diclofenac (topical)",
-      "aliases": [
-        "diclofenac (topical)",
-        "diclofenac"
-      ],
+      "aliases": ["diclofenac (topical)", "diclofenac"],
       "interactions": [
         {
           "token": "aspirin",
@@ -210,14 +183,12 @@
     {
       "id": "miconazole",
       "name": "Miconazole",
-      "aliases": [
-        "miconazole"
-      ],
+      "aliases": ["miconazole"],
       "interactions": [
         {
-          "atc": "B01AA04",
+          "atc": "  b01aa04 ",
           "severity": "Major",
-          "note": "Major. Miconazole may potentiate the anticoagulant effect of coumarin derivatives."
+          "note": "Major. Miconazole may potentiate the anticoagulant effect of coumarin derivatives. Its code is written lower-case and padded deliberately: ddinter writes neither, an operator-authored file may write both, and normalizeAtcToken is what makes them one code."
         }
       ],
       "source": "Test fixture"
@@ -225,24 +196,15 @@
     {
       "id": "phenprocoumon",
       "name": "Phenprocoumon",
-      "aliases": [
-        "phenprocoumon"
-      ],
-      "atcCodes": [
-        "B01AA04"
-      ],
+      "aliases": ["phenprocoumon"],
+      "atcCodes": ["B01AA04"],
       "source": "Test fixture"
     },
     {
       "id": "phenprocoumon-topical",
       "name": "Phenprocoumon (topical)",
-      "aliases": [
-        "phenprocoumon (topical)",
-        "phenprocoumon"
-      ],
-      "atcCodes": [
-        "B01AA04"
-      ],
+      "aliases": ["phenprocoumon (topical)", "phenprocoumon"],
+      "atcCodes": ["B01AA04"],
       "source": "Test fixture"
     }
   ]

@@ -8152,11 +8152,13 @@ and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfigured
 ## Decision 103: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound
 
 Issue #447. The question-pair arm asked "which of `subject`'s above-floor rules name `other`?" by
-scanning `subject`'s whole interaction list, and both pairwise arms ask it once per ORDERED pair —
-twice per unordered pair from `collectQuestionPairInteraction`, and again from `pairKeyNames`, whose
-inner loop runs to the end of every list whenever nothing relates the drug it is naming. So the cost
-was quadratic in a list the QUESTION chooses, times the rules on each row, and the only bound on
-either factor was the controller's `MAX_QUESTION_LENGTH` of 1000 characters. `validate` runs twice per
+scanning `subject`'s whole interaction list. The QUESTION-PAIR arm asks it once per ORDERED pair —
+twice per unordered pair from `collectQuestionPairInteraction` and again from `pairKeyNames`; the
+ACTIVE-ORDER arm reaches it only through `pairKeyNames`, whose inner loop breaks at the first partner
+that relates the drug it is naming and so asks between once and N-1 times per drug. So the cost was
+quadratic in a list the QUESTION chooses, times the rules on each row — and while the rule count is
+bounded by the DATA, the row count had no bound but the controller's `MAX_QUESTION_LENGTH` of 1000
+characters. `validate` runs twice per
 request, the first pass from `DrugReferenceInjector.preAnswerFindings` and therefore outside the
 serialised engine lock, so a request's CONTENT set a superlinear amount of CPU in the shared OpenMRS
 JVM.
@@ -8204,8 +8206,7 @@ of `isNamed`; `DrugSafetyValidator.AboveFloorRules` inverts the rows ONE arm is 
 through `DrugReferenceService.nameIndexOf`, plus an ATC index for `identifies`' second leg, and walks
 each subject's rule list exactly once. The population is the arm's own and deliberately not the loaded
 dataset: inverting all 2283 shipped entries would put a whole-dataset walk on the commonest two-drug
-question. `nameIndexOf` is a distinctly NAMED body rather than an overload of `nameIndex()`, because
-It is named apart from `nameIndex()` rather than overloading it, which is Decision 54's remedy for a
+question. `nameIndexOf` is named apart from `nameIndex()` rather than overloading it, which is Decision 54's remedy for a
 shape that decision measured — there, dropping the argument reinstated a full walk as an overload
 RESOLUTION with the suite green. **That exact mutation does not compile here even under one name**
 (`nameIndex()` is an instance method and the new body is static), so the distinct name is this repo's
@@ -8217,9 +8218,11 @@ signature could have had `pairKeyNames` build its own. What is not a choice is t
 reached from `addActiveOrderPairInteractions` too, so leaving it scanning would have left an
 `N(N-1)`-scan path standing inside the very arm the issue is about — reachable by a question naming
 drugs that relate nothing, where the inner break never fires. #447 filed that sibling arm as "noted,
-not filed"; this change closes its half of the same join as well. **Its cost profile is not merely
-"no worse" — it is strictly better, measured rather than argued**, which is the opposite of what the
-early `break` suggested. On the shipped knowledge base, one screening pass, counting rule-list walks
+not filed"; this change closes its half of the same join as well. **Its cost is better at every chart
+measured and never quadratic** — measured rather than argued, and the opposite of what the early
+`break` suggested. Not "strictly better" at every K: on a two-order chart whose first candidate
+relates, the `break` fired immediately and both forms walk two lists, so the new one pays two index
+builds for nothing. On the shipped knowledge base, one screening pass, counting rule-list walks
 and rule reads through the same instrument: a 43-order chart goes 114 walks / 93,407 reads to 88 /
 64,352, and a 12-order chart whose orders relate nothing — where that `break` never fires — goes 44 /
 13,603 to 14 / 4,144. Timed on the same charts, the screen goes 1,316 ms to 1,099 ms at 157 order rows
@@ -8254,7 +8257,7 @@ here. Not taken in this change: it reduces a CONSTANT whose multiplier this deci
 touches every caller in the module. Its own ticket.
 
 **What this leaves as the dominant cost, measured and not fixed here.** With the join inverted, a
-407-row pass spends about 54 of its 91 ms in `findImpliedByQuery` itself — each distinct alias the
+407-row pass spends about 54 of its ~92 ms in `findImpliedByQuery` itself — each distinct alias the
 text carries costs one whole-dataset `matchesDrugName` walk through `findImpliedSubstances`, memoised
 only in a per-call local and repeated three times per request. Two further terms are outside this
 arm and outside #447: `validate` also resolves `findImpliedByQuery(answer)`, and **nothing caps the

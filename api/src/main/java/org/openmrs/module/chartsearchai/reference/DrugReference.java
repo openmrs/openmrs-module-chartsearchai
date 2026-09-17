@@ -2470,7 +2470,7 @@ public class DrugReference {
 	 * question of a SMALLER population — {@code DrugSafetyValidator.AboveFloorRules} inverts only the
 	 * rows one pairwise arm is screening, through {@link DrugReferenceService#nameIndexOf}, because
 	 * inverting all of a shipped dataset would put a whole-dataset walk on the commonest question.
-	 * Both read it back through the same accessor; neither may read a key out of this set by index.
+	 * Both read it back through the same accessor.
 	 *
 	 * <p>Here rather than at the service, and derived from the same field through the same
 	 * normalisation as the predicate directly above, because the two must answer identically: an index

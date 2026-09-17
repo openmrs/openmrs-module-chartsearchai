@@ -1736,11 +1736,12 @@ public final class DrugReferenceTestSupport {
 	 * @return the canonical prescribing question naming the first {@code count} of {@code drugs} —
 	 *         {@code "Can I give her X and Y?"}.
 	 *
-	 *         <p>Here rather than in each case for {@link #chipLeads}' reason. Two classes assert on
-	 *         the reference ROWS this grammar resolves ({@code CoMedicationResolutionPerPassTest},
-	 *         {@code QuestionPairRuleScanPerPassTest}), so a wording change that stopped
-	 *         {@code QueryScopeRouter} recognising it would otherwise be fixed in one and surface in
-	 *         the other as an unexplained count mismatch rather than as a grammar error.
+	 *         <p>Here rather than in each case for {@link #chipLeads}' reason. Two classes read what
+	 *         this grammar resolves — {@code QuestionPairRuleScanPerPassTest} asserts the reference
+	 *         ROW COUNT per step, {@code CoMedicationResolutionPerPassTest} the dataset sweeps a pass
+	 *         spends — so a wording change that stopped {@code QueryScopeRouter} recognising it would
+	 *         otherwise be fixed in one and surface in the other as an unexplained count mismatch
+	 *         rather than as a grammar error.
 	 */
 	static String questionNaming(List<String> drugs, int count) {
 		StringBuilder question = new StringBuilder("Can I give her ");

@@ -28,14 +28,10 @@ import org.junit.jupiter.api.Test;
  * <p>The arm asked "which of subject's above-floor rules name {@code other}?" by scanning subject's
  * whole interaction list, once per ORDERED pair — twice per unordered pair from
  * {@code collectQuestionPairInteraction} and again from {@code pairKeyNames} — so its cost was
- * quadratic in a number the QUESTION chooses, times the rules on each row, neither bounded by
- * anything but the controller's 1000-character question cap. Measured through the real
- * {@code validate} over the shipped knowledge base on a chart with no active orders, single pass:
- * a question resolving 2 rows cost 8 ms and 4,872 rule reads, one resolving 95 rows cost 1,895 ms
- * and 6,575,839, and one resolving 195 rows cost 7,109 ms — and {@code validate} runs twice per
- * request, the first pass outside the serialised engine lock. The walk count at 95 was 9,142
- * against the 8,930 the pair loop alone predicts, which is what says the scan is where the time is
- * rather than anything the arm does per pair.
+ * quadratic in a number the QUESTION chooses, times the rules on each row, the first bounded by
+ * nothing but the controller's 1000-character question cap. <b>ADR Decision 103 is the one home for
+ * the before/after figures</b>; what belongs here is the shape they have, which is that the walk
+ * count tracked the pair loop's own N(N-1) rather than anything the arm does per pair.
  *
  * <p>So this is a COUNT and not a timing — the instrument shape issue #256 already uses for the
  * co-medication resolution ({@code CoMedicationResolutionPerPassTest}), because a wall-clock
@@ -118,17 +114,6 @@ public class QuestionPairRuleScanPerPassTest {
 		return entries;
 	}
 
-	private static String questionNaming(List<String> drugs, int count) {
-		StringBuilder question = new StringBuilder("Can I give her ");
-		for (int i = 0; i < count; i++) {
-			if (i > 0) {
-				question.append(" and ");
-			}
-			question.append(drugs.get(i));
-		}
-		return question.append("?").toString();
-	}
-
 	/**
 	 * @return the rule-list walks one {@code validate} pass spends at each drug count from 2 up to
 	 *         {@code drugs.size()}, indexed from 0 for the two-drug pass. Asserts on the way that each
@@ -142,7 +127,7 @@ public class QuestionPairRuleScanPerPassTest {
 
 		List<Integer> walks = new ArrayList<Integer>();
 		for (int count = 2; count <= drugs.size(); count++) {
-			String question = questionNaming(drugs, count);
+			String question = DrugReferenceTestSupport.questionNaming(drugs, count);
 			assertEquals(count, service.findImpliedByQuery(question).size(),
 				"the question naming " + count + " drugs must resolve exactly that many reference rows,"
 						+ " or its step is about a route family rather than about this arm's cost: "
@@ -171,7 +156,7 @@ public class QuestionPairRuleScanPerPassTest {
 	}
 
 	@Test
-	public void eachDrugAQuestionNamesCostsTheSameRuleReadingHoweverManyItAlreadyNamed() {
+	public void eachDrugAQuestionNamesCostsTheSameRuleListWalksHoweverManyItAlreadyNamed() {
 		List<Integer> walks = walksByDrugCount(DrugReferenceTestSupport.ddinterEntries(), EXCERPT_DRUGS);
 
 		assertTrue(walks.get(walks.size() - 1) > walks.get(0),
@@ -185,9 +170,14 @@ public class QuestionPairRuleScanPerPassTest {
 	 * most convincingly at the drug count where the cost used to be worst. So the chips the same
 	 * question raises are pinned as text.
 	 *
-	 * <p>Not a duplicate of {@code AboveFloorRuleJoinAgreementTest}, which pins the JOIN's answer for
-	 * every ordered pair: this one runs the whole arm and reads what a clinician is shown, including
-	 * the grouping, the chart-precedence cede, the severity ordering and the cap.
+	 * <p>Measured, so the claim is not wider than the case: narrowing the PAIR LOOP reddens this and
+	 * only this, while the walk counts above stay green. Narrowing the JOIN's own build instead does
+	 * NOT redden it — {@code AboveFloorRuleJoinAgreementTest} and four other classes catch that — so
+	 * read this as covering the loop, with the join covered next door.
+	 *
+	 * <p>Not a duplicate of that class, which pins the join's answer for every ordered pair: this one
+	 * runs the whole arm and reads what a clinician is shown, including the grouping, the
+	 * chart-precedence cede, the severity ordering and the cap.
 	 */
 	@Test
 	public void theEightDrugQuestionStillRaisesTheChipsItRaised() {
@@ -195,15 +185,12 @@ public class QuestionPairRuleScanPerPassTest {
 				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.ddinterEntries());
 		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(service);
 
-		List<String> leads = new ArrayList<String>();
-		for (SafetyWarning warning : validator.validate("",
-			questionNaming(EXCERPT_DRUGS, EXCERPT_DRUGS.size()),
-			DrugReferenceTestSupport.ctx(60, null, null, null, null, null))) {
-			String detail = warning.getDetail();
-			int emDash = detail.indexOf(" \u2014 ");
-			leads.add(warning.getType() + " | " + warning.getSeverity() + " | "
-					+ (emDash < 0 ? detail : detail.substring(0, emDash)));
-		}
+		// Through the shared projection, not a second copy of it: the em dash is SafetyWarning's
+		// rendering rather than a test constant, and chipLeads' own javadoc says why a filter deciding
+		// which chips a case is counting may not drift into two answers.
+		List<String> leads = DrugReferenceTestSupport.chipLeads(validator.validate("",
+			DrugReferenceTestSupport.questionNaming(EXCERPT_DRUGS, EXCERPT_DRUGS.size()),
+			DrugReferenceTestSupport.ctx(60, null, null, null, null, null)));
 
 		assertEquals(EIGHT_DRUG_CHIPS, leads,
 			"the question-pair screen no longer reports what it reported over this dataset; a walk count"
@@ -256,10 +243,10 @@ public class QuestionPairRuleScanPerPassTest {
 			for (int at : scan.literalOffsets("getInteractions")) {
 				assertTrue(!body.contains(at), "\"" + arm.trim() + "\" reads an entry's interaction list"
 						+ " directly, at line " + scan.lineOf(at) + ": " + scan.statementAt(at)
-						+ ". That is the per-pair scan issue #447 removed — a question resolving 195"
-						+ " reference rows cost 7,109 ms of the shared JVM that way against 47 ms"
-						+ " through the pass's own AboveFloorRules. Ask that join instead; it reads"
-						+ " each list once for the whole pass.");
+						+ ". That is the per-pair scan issue #447 removed: it made the arm's cost"
+						+ " quadratic in a row count the QUESTION chooses, which nothing bounds but the"
+						+ " controller's 1000-character cap. Ask the arm's own AboveFloorRules instead;"
+						+ " it reads each list once. ADR Decision 103 carries what the scan cost.");
 			}
 		}
 	}

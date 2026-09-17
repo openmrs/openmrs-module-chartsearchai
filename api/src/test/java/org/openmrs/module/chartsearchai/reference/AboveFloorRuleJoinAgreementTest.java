@@ -71,28 +71,51 @@ public class AboveFloorRuleJoinAgreementTest {
 		return out;
 	}
 
-	private static void assertAgrees(List<DrugReference> screened, String dataset) {
+	/** {@code DrugReference.Interaction} declares no {@code toString}, so an equality failure over the
+	 *  rules themselves reports two lists of identity hashes — unreadable at exactly the moment it
+	 *  matters. Compared through this instead: the fields that say WHICH rule it is. */
+	private static List<String> readable(List<DrugReference.Interaction> rules) {
+		List<String> out = new ArrayList<String>();
+		for (DrugReference.Interaction rule : rules) {
+			out.add(rule.getToken() + "/" + rule.getAtc() + " (" + rule.getSeverity() + ")");
+		}
+		return out;
+	}
+
+	/**
+	 * @return how many of the related rules carried NO name token, so the ATC leg is what found them.
+	 *         Returned rather than asserted here because only one dataset in the tree can carry that
+	 *         shape, and a caller that cannot must not be made to claim it.
+	 */
+	private static int assertAgrees(List<DrugReference> screened, String dataset) {
 		assertTrue(screened.size() >= 2, dataset + " must carry a pair to join, or this says nothing");
 		int joined = 0;
+		int byTheCodeLeg = 0;
 		for (int floor : FLOORS) {
 			AboveFloorRules rules = AboveFloorRules.of(screened, floor);
+			// EVERY ordered pair, (subject, subject) included: the scan this replaced had no
+			// self-exclusion, so the join must not have acquired one.
 			for (DrugReference subject : screened) {
 				for (DrugReference other : screened) {
-					if (subject == other) {
-						continue;
-					}
 					List<DrugReference.Interaction> expected = byPredicate(subject, other, floor);
-					assertEquals(expected, rules.aboveFloorRulesAgainst(subject, other),
+					assertEquals(readable(expected),
+						readable(rules.aboveFloorRulesAgainst(subject, other)),
 						"the per-pass join and DrugSafetyValidator.identifies disagree about which rules"
 								+ " of " + subject.displayLabel() + " name " + other.displayLabel()
 								+ " at floor " + floor + " over " + dataset + "; a join that loses a rule"
 								+ " drops an interaction chip fail-closed, and one that invents a rule"
 								+ " states a relationship the data does not carry (issue #447)");
 					joined += expected.size();
+					for (DrugReference.Interaction rule : expected) {
+						if (rule.getToken() == null || rule.getToken().trim().isEmpty()) {
+							byTheCodeLeg++;
+						}
+					}
 				}
 			}
 		}
 		assertTrue(joined > 0, dataset + " related no pair at any floor, so the agreement is vacuous");
+		return byTheCodeLeg;
 	}
 
 	@Test
@@ -104,8 +127,47 @@ public class AboveFloorRuleJoinAgreementTest {
 	public void theJoinAgreesOverAFixtureCarryingAnAtcOnlyRule() throws IOException {
 		// The ATC leg of identifies is unreachable from either DDInter source, which always writes a
 		// name token, so nothing in the tree asked it of an index before this.
-		assertAgrees(DrugReferenceTestSupport.fixtureEntries(PAIR_FIXTURE),
+		int byTheCodeLeg = assertAgrees(DrugReferenceTestSupport.fixtureEntries(PAIR_FIXTURE),
 			"the question-pair fixture");
+
+		// The premise, asserted rather than assumed: this fixture's name-token rules satisfy "something
+		// was related" on their own, so without this the ATC-only rows could be deleted and the case
+		// would stay green under a javadoc saying it is what covers that leg.
+		assertTrue(byTheCodeLeg > 0, "no rule this fixture related carried a bare ATC code, so the leg"
+				+ " this case exists for was never exercised — the name leg satisfied it alone");
+	}
+
+	/**
+	 * A rule naming its partner by ATC code alone relates EVERY screened row filed under that code,
+	 * not one of them — which is why {@code atcIndexOf} maps a code to a LIST. Until this case existed
+	 * nothing could tell that from a map holding a single entry: keeping only the last row per code
+	 * left the whole api suite green while dropping an interaction rule fail-closed. The shipped
+	 * knowledge base cannot see it either, because {@code ddinter} writes each rule's ATC beside the
+	 * partner's own name token, so the name leg covers for the code leg there.
+	 */
+	@Test
+	public void anAtcOnlyRuleRelatesEveryScreenedRowFiledUnderThatCode() throws IOException {
+		List<DrugReference> screened = DrugReferenceTestSupport.fixtureEntries(PAIR_FIXTURE);
+		DrugReference subject = DrugReferenceTestSupport.row(screened, "Miconazole");
+		List<DrugReference> coded = new ArrayList<DrugReference>();
+		for (DrugReference entry : screened) {
+			if (entry.normalizedAtcCodes().contains("B01AA04")) {
+				coded.add(entry);
+			}
+		}
+
+		assertTrue(coded.size() > 1, "the fixture must file more than one row under the rule's code, or"
+				+ " an index keeping one entry per code would pass this: " + coded.size());
+		AboveFloorRules rules = AboveFloorRules.of(screened, 0);
+		for (DrugReference other : coded) {
+			assertEquals(readable(byPredicate(subject, other, 0)),
+				readable(rules.aboveFloorRulesAgainst(subject, other)),
+				"the ATC-only rule must relate " + other.displayLabel() + " too; an index keeping one"
+						+ " entry per code drops the rest fail-closed (issue #447)");
+			assertTrue(!rules.aboveFloorRulesAgainst(subject, other).isEmpty(),
+				"the arrangement must actually relate " + other.displayLabel() + " by its code, or this"
+						+ " case asserts an agreement about nothing");
+		}
 	}
 
 	/**

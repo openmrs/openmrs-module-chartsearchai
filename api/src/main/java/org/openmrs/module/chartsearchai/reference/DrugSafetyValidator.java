@@ -1436,13 +1436,13 @@ public class DrugSafetyValidator {
 	 * #256's fix went. Do not re-derive the misreading from the cap's name.
 	 *
 	 * <p><b>Read that measurement at the drug count it was taken at, and no further</b> (issue #447).
-	 * This paragraph used to generalise it to "it also does not matter", and a question resolving 195
-	 * reference rows — which 1000 characters of short aliases do — then cost 7,109 ms in a single pass,
-	 * because the work the cap does not bound grew quadratically in a number the QUESTION chooses. What
-	 * closed that is not a bound on this cap's own terms but {@link AboveFloorRules}, which resolves the
-	 * arms' rule join once per pass; the same question now costs 47 ms. So the sentence above stays
-	 * true — the cap bounds chips and not work — and it is no longer a reason to leave the work
-	 * unbounded. → ADR Decision 103.
+	 * This paragraph used to generalise it to "it also does not matter". At the drug counts a
+	 * 1000-character question actually reaches, the work this cap does not bound grew quadratically in
+	 * a number the QUESTION chooses and came to dominate the pass. What closed that is not a bound on
+	 * this cap's own terms but {@link AboveFloorRules}, which resolves each pairwise arm's rule join
+	 * once. So the sentence above stays true — the cap bounds chips and not work — and it is no longer
+	 * a reason to leave the work unbounded. → ADR Decision 103, which carries the before/after table
+	 * and is the one home for its figures.
 	 *
 	 * @return the configured cap, or {@link ChartSearchAiConstants#DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS}
 	 *         when the GP is absent, unparseable or non-positive
@@ -5963,39 +5963,42 @@ public class DrugSafetyValidator {
 
 	/**
 	 * Which above-floor rules of each screened entry name which OTHER screened entry — the join both
-	 * pairwise arms are made of, resolved ONCE per pass instead of once per ordered pair (issue
+	 * pairwise arms are made of, resolved once per ARM instead of once per ordered pair (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/447">#447</a>).
 	 *
 	 * <p><b>The defect it closes.</b> {@link #aboveFloorRulesAgainst} used to answer by scanning
-	 * {@code subject}'s whole interaction list, and both arms ask it once per ORDERED pair — twice per
-	 * unordered pair from {@link DrugSafetyValidator#collectQuestionPairInteraction}, and again from
-	 * {@link DrugSafetyValidator#pairKeyNames}, whose inner loop runs to the end of every list
-	 * whenever nothing relates the drug it is naming. So the cost was quadratic in a list the
-	 * QUESTION chooses, times the rules
-	 * on each row (mean 259 and max 1047 over the shipped knowledge base), and the only bound on
-	 * either factor was the controller's 1000-character question cap. Measured through the real
-	 * {@code validate} over the shipped knowledge base, one pass, on a chart with no active orders: a
-	 * question resolving 2 rows cost 8 ms, one resolving 95 rows 1,895 ms, one resolving 195 rows
-	 * 7,109 ms — and {@code validate} runs twice per request, the first pass outside the serialised
-	 * engine lock, so a request's content set its own CPU cost in the shared OpenMRS JVM.
-	 * {@link DrugSafetyValidator#maxPairChips} cannot be that bound and says so: it bounds CHIPS and
-	 * not WORK, because the cut is defined as "the least severe go" and nothing knows a pair's rating
-	 * until it has been evaluated.
+	 * {@code subject}'s whole interaction list. The QUESTION-PAIR arm asks it once per ORDERED pair —
+	 * twice per unordered pair from {@link DrugSafetyValidator#collectQuestionPairInteraction} and
+	 * again from {@link DrugSafetyValidator#pairKeyNames}; the ACTIVE-ORDER arm reaches it only
+	 * through {@code pairKeyNames}, whose inner loop breaks at the first partner that relates the drug
+	 * it is naming and so asks between once and N-1 times per drug. So the cost was quadratic in a
+	 * list the QUESTION chooses, times the rules on each row — and while the rule count is bounded by
+	 * the DATA, the row count had no bound but the controller's 1000-character question cap, inside
+	 * which a question can resolve some 400 rows. {@code validate} runs twice per request, the first
+	 * pass outside the serialised engine lock, so a request's CONTENT set its own CPU cost in the
+	 * shared OpenMRS JVM. {@link DrugSafetyValidator#maxPairChips} cannot be that bound and says so:
+	 * it bounds CHIPS and not WORK, because the cut is defined as "the least severe go" and nothing
+	 * knows a pair's rating until it has been evaluated.
+	 *
+	 * <p><b>ADR Decision 103 is the one home for what this cost and what it now costs.</b> It carries
+	 * the before/after table, the packing each question used, and what remains the dominant term.
+	 * Nothing here restates a figure from it.
 	 *
 	 * <p><b>Invert, do not scan</b> — the remedy this module already took at issue #339, where
 	 * {@link DrugSafetyValidator#unambiguouslyNames} walked {@code getAll()} per ask:
 	 * {@link DrugReference#nameKeys()} is the precomputed inverse of {@link DrugReference#isNamed},
-	 * and {@code DrugReferenceService}
-	 * inverts a population into it once. Here the population is the handful of rows ONE arm is
-	 * screening rather than the whole dataset, through
-	 * {@link DrugReferenceService#nameIndexOf(Collection)} — inverting all 2283 shipped entries would
-	 * put a whole-dataset walk on the commonest two-drug question. Each subject's rule list is then
-	 * walked EXACTLY ONCE, and each rule asks the two indexes which screened entries it could name.
+	 * and {@code DrugReferenceService} inverts a population into it once. Here the population is the
+	 * handful of rows ONE arm is screening rather than the whole dataset, through
+	 * {@link DrugReferenceService#nameIndexOf(Collection)} — inverting every shipped entry would put a
+	 * whole-dataset walk on the commonest two-drug question, which is the cheapest thing this module
+	 * does. Each subject's rule list is then walked EXACTLY ONCE, and each rule asks the two indexes
+	 * which screened entries it could name. Those indexes are locals of {@link #of} and are discarded
+	 * when it returns; the join itself is the only thing this type holds.
 	 *
 	 * <p><b>The indexes NARROW; {@link DrugSafetyValidator#identifies} still decides.</b> Every
 	 * candidate either index offers is put to that predicate before it is kept, so the definition of
-	 * "this rule names
-	 * that entry" stays where it was and this type cannot come to hold a second, looser one.
+	 * "this rule names that entry" stays where it was and this type cannot come to hold a second,
+	 * looser one.
 	 *
 	 * <p><b>That confirmation covers one direction only, and it is not what holds the other.</b> An
 	 * index admitting an entry the predicate refuses is filtered here; an index LOSING one cannot be,
@@ -6013,15 +6016,14 @@ public class DrugSafetyValidator {
 	 * {@link PairChipExtent}: the rules are appended in the subject's own interaction-list order, and
 	 * a rule whose token AND code both reach one entry is appended once.
 	 *
-	 * <p>A per-pass LOCAL held by the arm that built it, never a field on this bean — CLAUDE.md issue
+	 * <p>A per-ARM local held by the arm that built it, never a field on this bean — CLAUDE.md issue
 	 * #172, and here for both of that rule's reasons: the bean is a Spring singleton, and this map is
-	 * keyed on whatever a request's question happened to resolve.
+	 * keyed on whatever a request's question happened to resolve. Per arm and not per pass: a pass
+	 * running both pairwise arms builds two, over two different populations, so a row that is both a
+	 * question drug and an order drug has its rule list walked once for each. That is the point —
+	 * each says what IT screened and nothing about anything else.
 	 */
 	static final class AboveFloorRules {
-
-		/** What an arm screening fewer than two entries gets: no pair, so nothing was read. */
-		private static final AboveFloorRules NONE = new AboveFloorRules(
-				Collections.<DrugReference, Map<DrugReference, List<DrugReference.Interaction>>> emptyMap());
 
 		/**
 		 * Keyed by IDENTITY, at both levels. {@link DrugReference} declares no {@code equals}, so this
@@ -6050,7 +6052,13 @@ public class DrugSafetyValidator {
 		 */
 		static AboveFloorRules of(List<DrugReference> screened, int floor) {
 			if (screened.size() < 2) {
-				return NONE;
+				// No pair to relate, so no rule list is read at all — which keeps a one-order chart,
+				// where pairKeyNames' inner loop never ran, at what it cost before. A fresh instance
+				// rather than a shared constant: a static holder on a type this bean's field budget
+				// cannot see is the blind spot ADR Decision 54 names, and one allocation on the
+				// cheapest path is not worth standing in it.
+				return new AboveFloorRules(
+						Collections.<DrugReference, Map<DrugReference, List<DrugReference.Interaction>>> emptyMap());
 			}
 			Map<String, List<DrugReference>> byName = DrugReferenceService.nameIndexOf(screened);
 			Map<String, List<DrugReference>> byAtcCode = atcIndexOf(screened);
@@ -6062,10 +6070,10 @@ public class DrugSafetyValidator {
 			// OCCURRENCE would append every rule of a repeated row twice and make the accessor's
 			// "every rule of subject that names other" say the data carries two where it carries one.
 			// A precondition nothing checks is a precondition the next caller breaks.
-			Set<DrugReference> built = Collections.newSetFromMap(
+			Set<DrugReference> walked = Collections.newSetFromMap(
 					new IdentityHashMap<DrugReference, Boolean>());
 			for (DrugReference subject : screened) {
-				if (!built.add(subject)) {
+				if (!walked.add(subject)) {
 					continue;
 				}
 				for (DrugReference.Interaction rule : subject.getInteractions()) {
@@ -6073,7 +6081,13 @@ public class DrugSafetyValidator {
 						continue;
 					}
 					for (DrugReference other : candidates(rule, byName, byAtcCode)) {
-						if (other != subject && identifies(rule, other)) {
+						// No self-exclusion: the scan this replaced had none, so asking it for
+						// (subject, subject) answered with the subject's own self-naming rules. No
+						// caller asks — the pair loop walks i < j and pairKeyNames skips its own drug
+						// — but a narrowing no caller reaches is one nothing can discriminate, and
+						// this way the join is a faithful materialisation of the predicate rather
+						// than the predicate plus a rule of its own.
+						if (identifies(rule, other)) {
 							rulesFor(bySubject, subject, other).add(rule);
 						}
 					}
@@ -6093,12 +6107,24 @@ public class DrugSafetyValidator {
 				Map<String, List<DrugReference>> byName, Map<String, List<DrugReference>> byAtcCode) {
 			Set<DrugReference> out = new LinkedHashSet<DrugReference>(
 					DrugReferenceService.entriesNamedBy(rule.getToken(), byName));
-			String atc = DrugReference.normalizeAtcToken(rule.getAtc());
-			List<DrugReference> coded = atc == null ? null : byAtcCode.get(atc);
-			if (coded != null) {
-				out.addAll(coded);
-			}
+			out.addAll(entriesCodedBy(rule.getAtc(), byAtcCode));
 			return out;
+		}
+
+		/**
+		 * @return every screened entry whose {@link DrugReference#normalizedAtcCodes()} carry
+		 *         {@code rawAtc} — the read-back accessor for {@link #atcIndexOf}, so this leg is read
+		 *         the one way {@link DrugSafetyValidator#identifies} reads it and a key is never taken
+		 *         out of the index by hand. The name leg has had one since issue #339
+		 *         ({@link DrugReferenceService#entriesNamedBy}); this is its counterpart, and without
+		 *         it one method read its two indexes two different ways. Empty for a code that
+		 *         normalises to nothing, which names nothing — {@code identifies}' own answer.
+		 */
+		private static List<DrugReference> entriesCodedBy(String rawAtc,
+				Map<String, List<DrugReference>> index) {
+			String code = DrugReference.normalizeAtcToken(rawAtc);
+			List<DrugReference> coded = code == null ? null : index.get(code);
+			return coded == null ? Collections.<DrugReference> emptyList() : coded;
 		}
 
 		/** The ATC counterpart of {@link DrugReferenceService#nameIndexOf}, here rather than there
@@ -6151,7 +6177,15 @@ public class DrugSafetyValidator {
 				DrugReference other) {
 			Map<DrugReference, List<DrugReference.Interaction>> byOther = bySubject.get(subject);
 			List<DrugReference.Interaction> rules = byOther == null ? null : byOther.get(other);
-			return rules == null ? Collections.<DrugReference.Interaction> emptyList() : rules;
+			// UNMODIFIABLE, for the reason DrugReferenceService.entriesNamedBy gives of the sibling
+			// index and ADR Decision 58 of the order list: the scan this replaced built a fresh list
+			// per ask, so sorting or filtering the answer harmed nobody, while this list is the join's
+			// own and every later reader of the pass is told what a consumer left in it. pairKeyNames
+			// takes get(0) off it and collectQuestionPairInteraction hands the same object to bestRule,
+			// so an in-place sort at either site would move the partner label the other picks — which
+			// is the unorderedPairKey, so a chip merges or moves, silently and in one direction.
+			return rules == null ? Collections.<DrugReference.Interaction> emptyList()
+					: Collections.unmodifiableList(rules);
 		}
 	}
 
@@ -6184,6 +6218,15 @@ public class DrugSafetyValidator {
 	 * aliases, so every real rule still names its partner exactly — and an entry whose aliases omit its
 	 * own name could never be resolved from a question in the first place, {@code findByQuery} reading
 	 * the same list.
+	 *
+	 * <p><b>Package-private for a guard and not for a caller</b> (issue #447). The nested
+	 * {@link AboveFloorRules} reads it as a nestmate and would see it while it was private; what needs
+	 * it visible is {@code AboveFloorRuleJoinAgreementTest}, whose oracle composes this predicate with
+	 * {@link #clearsSeverityFloor} over real parsed rows. An oracle that went through
+	 * {@code AboveFloorRules} would be comparing that type with itself. No production class outside
+	 * this one may call it: the three name questions have their own accessors
+	 * ({@link DrugReference#matchesText}, {@link DrugReference#matchesDrugName},
+	 * {@link DrugReference#isNamed}) and reaching past them is #86/#128/#147's shape.
 	 *
 	 * @return true when {@code rule} names reference entry {@code other}
 	 */

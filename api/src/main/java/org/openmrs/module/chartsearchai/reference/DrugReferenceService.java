@@ -1116,9 +1116,10 @@ public class DrugReferenceService {
 	 * never a field on this bean (CLAUDE.md, issue #172): this map is keyed on the loaded aliases, so
 	 * it is bounded, but the bean is a Spring singleton and an unsynchronised map shared by concurrent
 	 * requests is the first of the two reasons that rule gives. {@code DrugSafetyValidator.CoMedications}
-	 * is the only holder of an index over the WHOLE loaded dataset; since issue #447
-	 * {@code DrugSafetyValidator.AboveFloorRules} holds one over the handful of entries a single arm
-	 * is screening, through {@link #nameIndexOf}.
+	 * is the only holder of an index over the WHOLE loaded dataset. Since issue #447
+	 * {@code DrugSafetyValidator.AboveFloorRules} BUILDS one over the handful of entries a single arm
+	 * is screening, through {@link #nameIndexOf}, and discards it when its factory returns — so it is
+	 * a second reader of this inversion and not a second holder.
 	 *
 	 * @return a fresh index; the caller owns it. Read it back through
 	 *         {@link #entriesNamedBy(String, Map)} rather than by {@code get}, so the token is
@@ -1130,15 +1131,19 @@ public class DrugReferenceService {
 
 	/**
 	 * The same inversion over an arbitrary POPULATION — the body {@link #nameIndex()} is, asked of a
-	 * caller's own entries rather than of the loaded dataset. Issue #447's question-pair arm inverts
-	 * the handful of rows ONE question resolved, where inverting all 2283 shipped entries would put a
-	 * whole-dataset walk on the commonest two-drug question, which costs 8 ms today.
+	 * caller's own entries rather than of the loaded dataset. Issue #447's pairwise arms invert the
+	 * handful of rows ONE arm is screening, where inverting every shipped entry would put a
+	 * whole-dataset walk on the commonest two-drug question, which is the cheapest thing this module
+	 * does — ADR Decision 103 carries what that question costs.
 	 *
 	 * <p><b>A distinct NAME and deliberately not an overload of {@link #nameIndex()}.</b> ADR Decision
-	 * 54 records what the overload shape costs here: dropping the argument at a call site reinstates
-	 * the full walk as an <em>overload resolution</em> rather than as a new mention, and that mutation
-	 * was measured to leave {@code CoMedicationResolutionPerPassTest} and the whole api suite green.
-	 * Under two names it does not compile.
+	 * 54 records what the overload shape cost the sibling it measured: dropping the argument at a call
+	 * site reinstated the full walk as an <em>overload resolution</em> rather than as a new mention,
+	 * with {@code CoMedicationResolutionPerPassTest} and the whole api suite green. <b>Read that as
+	 * the convention and not as the guarantee here</b>: that mutation does not compile in this pair
+	 * whichever way they are named, because {@code nameIndex()} is an instance method and this body is
+	 * static, and Decision 54's two arities were both static — which is the condition that made it
+	 * bite there.
 	 *
 	 * @param entries the population to invert; the caller owns the answer, exactly as above
 	 * @return a fresh index over {@code entries}, read back through

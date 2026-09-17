@@ -166,14 +166,7 @@ public class CoMedicationResolutionPerPassTest {
 	}
 
 	private static String questionNaming(int drugs) {
-		StringBuilder question = new StringBuilder("Can I give her ");
-		for (int i = 0; i < drugs; i++) {
-			if (i > 0) {
-				question.append(" and ");
-			}
-			question.append(IN_PLAY.get(i));
-		}
-		return question.append("?").toString();
+		return DrugReferenceTestSupport.questionNaming(IN_PLAY, drugs);
 	}
 
 	@Test

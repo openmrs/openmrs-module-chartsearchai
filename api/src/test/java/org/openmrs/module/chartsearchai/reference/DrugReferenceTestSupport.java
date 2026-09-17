@@ -1721,6 +1721,27 @@ public final class DrugReferenceTestSupport {
 	 * out twice, and a shared filter cannot drift into two answers about which chips a case is
 	 * counting.
 	 */
+	/**
+	 * @return the canonical prescribing question naming the first {@code count} of {@code drugs} —
+	 *         {@code "Can I give her X and Y?"}.
+	 *
+	 *         <p>Here rather than in each case for {@link #chipLeads}' reason. Two classes assert on
+	 *         the reference ROWS this grammar resolves ({@code CoMedicationResolutionPerPassTest},
+	 *         {@code QuestionPairRuleScanPerPassTest}), so a wording change that stopped
+	 *         {@code QueryScopeRouter} recognising it would otherwise be fixed in one and surface in
+	 *         the other as an unexplained count mismatch rather than as a grammar error.
+	 */
+	static String questionNaming(List<String> drugs, int count) {
+		StringBuilder question = new StringBuilder("Can I give her ");
+		for (int i = 0; i < count; i++) {
+			if (i > 0) {
+				question.append(" and ");
+			}
+			question.append(drugs.get(i));
+		}
+		return question.append("?").toString();
+	}
+
 	static List<String> chipLeads(List<SafetyWarning> warnings) {
 		List<String> leads = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {

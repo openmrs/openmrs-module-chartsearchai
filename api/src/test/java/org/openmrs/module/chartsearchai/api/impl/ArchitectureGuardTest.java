@@ -1628,6 +1628,17 @@ public class ArchitectureGuardTest {
 	 * records for its own scan. And the allow-list is matched against the enclosing DECLARATION
 	 * LINE, so a method whose own signature happens to spell one of the two factory names is
 	 * admitted with them.
+	 *
+	 * <p><b>This rule bounds CONSTRUCTION and nothing else, which leaves two per-marker splitters
+	 * it cannot see.</b> A reviewer wrote both and the suite stayed green on each. One calls the
+	 * allow-listed whole-sentence factory once per marker — the construction is then legitimate,
+	 * because it is that factory's own — and
+	 * {@link #theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter} is the rule that
+	 * reaches it. The other goes through {@code newFragment} as it should but charges a
+	 * {@code FragmentBudget} it made itself, which is bounded per sentence rather than per answer;
+	 * {@link #aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints} is the rule that reaches that
+	 * one. Neither is a widening of this one, because neither is a question about where a
+	 * {@code Sentence} is built.
 	 */
 	@Test
 	public void aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory() throws IOException {
@@ -1671,6 +1682,119 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * The WHOLE-sentence factory {@code newSentence} has exactly ONE call site, and it is
+	 * {@code splitIntoCitedSentences(String, FragmentBudget)} — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/448">#448</a>.
+	 *
+	 * <p><b>Why a second rule rather than a wider allow-list in the first.</b> Its neighbour above
+	 * bounds where a {@code Sentence} is CONSTRUCTED, and {@code newSentence} is deliberately one
+	 * of the two places that may construct one. So a per-marker splitter that CALLS that factory —
+	 * {@code units.add(newSentence(sentence.text.substring(0, marker.end())))}, once per marker —
+	 * satisfies the neighbour while rebuilding the uncharged cumulative-prefix copy #448 removed.
+	 * A reviewer of this change wrote exactly that and the whole suite stayed green. Construction
+	 * cannot tell the two uses apart, because the construction is the same one; the call COUNT can,
+	 * because the factory copies text the answer already holds once per SENTENCE, so one caller is
+	 * all it can have.
+	 *
+	 * <p><b>What this rule does not reach.</b> It counts call SITES in the source text and cannot
+	 * see how often the site it admits RUNS, so rewriting the admitted caller's own loop to iterate
+	 * markers instead of sentences leaves it green; whether THAT is silent is a question for the
+	 * behavioural cases and not for this one, and it has not been measured. A call spelled some
+	 * other way — through a method reference, or a second factory delegating to this one — is out
+	 * of reach for the same reason its neighbour's residue names: this reads source text and
+	 * understands no Java.
+	 */
+	@Test
+	public void theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter() throws IOException {
+		List<String> lines = getSourceCache().get("CitationGroundingVerifier.java");
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: "
+				+ "CitationGroundingVerifier.java was not found by the source scan, so this rule "
+				+ "would pass vacuously");
+		List<String> stripped = codeLines(lines);
+		List<String> callers = new ArrayList<>();
+		List<String> sites = new ArrayList<>();
+		for (int i = 0; i < stripped.size(); i++) {
+			String code = stripped.get(i);
+			String method = enclosingMethodOf(stripped, i);
+			if (method.equals(code)) {
+				// The factory's own declaration line. enclosingMethodOf answers with the line
+				// itself for a declaration, which is how a declaration is told from a call of it.
+				continue;
+			}
+			for (int at = code.indexOf("newSentence("); at >= 0;
+					at = code.indexOf("newSentence(", at + 1)) {
+				callers.add(method.trim());
+				sites.add("line " + (i + 1) + ", in: " + method.trim());
+			}
+		}
+		assertEquals(java.util.Arrays.asList(
+				"private static List<Sentence> splitIntoCitedSentences(String answer, "
+						+ "FragmentBudget budget) {"),
+				callers, "CitationGroundingVerifier.newSentence builds a WHOLE sentence and spends no "
+						+ "split allowance, which is sound only while it is called once per sentence "
+						+ "by the sentence splitter. A second call site — a per-marker splitter "
+						+ "calling it once per MARKER — rebuilds the uncharged quadratic copy of "
+						+ "issue #448 with every behavioural case green, and the construction rule "
+						+ "beside this one cannot see it, because the construction it allow-lists is "
+						+ "this factory's own. An EMPTY list means the needle stopped matching and "
+						+ "this rule had gone vacuous. Found: " + sites);
+	}
+
+	/**
+	 * A {@code FragmentBudget} is CREATED only at the two entry points that own one,
+	 * {@code splitIntoCitedSentences(String)} and {@code splitIntoClauseScopedSentences(String)} —
+	 * everything below them is handed the answer's budget as a parameter. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/448">#448</a>.
+	 *
+	 * <p><b>The slip the two-arg overload exists to prevent.</b> A splitter that goes through the
+	 * allow-listed {@code newFragment} but hands it a budget it made itself is charged against an
+	 * allowance nobody else spends, so its bound is per SENTENCE — S sentences each just under it
+	 * cost S&times;B, the per-sentence cap ADR Decision 103 rejects as no bound at all. Both
+	 * structural rules above stay green on it, because it constructs no {@code Sentence} of its own
+	 * and calls no factory it should not; a reviewer of this change wrote it and the behavioural
+	 * cases stayed green too, since every one of them drives the two splitters that exist.
+	 *
+	 * <p><b>What this rule does not reach.</b> It reads the words {@code new FragmentBudget}, so a
+	 * budget handed out by a helper — a {@code freshBudget()} of its own — is out of reach, the
+	 * same shape of residue its two neighbours record. And what it pins is the METHOD each creation
+	 * sits in, not how often that line runs, so it would admit a creation moved inside a loop in
+	 * one of the two methods it names. In the code as written a per-sentence budget THERE needs a
+	 * SECOND creation — the entry point threads one budget through two calls, so it needs a
+	 * variable — and a second one is reported: measured, by adding
+	 * {@code new FragmentBudget()} to {@code splitIntoClauseScopedSentences}. That is a property of
+	 * the code and not of this rule, so do not rely on it after restructuring either method.
+	 */
+	@Test
+	public void aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints() throws IOException {
+		List<String> lines = getSourceCache().get("CitationGroundingVerifier.java");
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: "
+				+ "CitationGroundingVerifier.java was not found by the source scan, so this rule "
+				+ "would pass vacuously");
+		List<String> stripped = codeLines(lines);
+		List<String> owners = new ArrayList<>();
+		List<String> sites = new ArrayList<>();
+		for (int i = 0; i < stripped.size(); i++) {
+			String code = stripped.get(i);
+			for (int at = code.indexOf("new FragmentBudget("); at >= 0;
+					at = code.indexOf("new FragmentBudget(", at + 1)) {
+				String method = enclosingMethodOf(stripped, i);
+				owners.add(method.trim());
+				sites.add("line " + (i + 1) + ", in: " + method.trim());
+			}
+		}
+		assertEquals(java.util.Arrays.asList(
+				"static List<Sentence> splitIntoCitedSentences(String answer) {",
+				"static List<Sentence> splitIntoClauseScopedSentences(String answer) {"),
+				owners, "one ANSWER gets one split allowance, created at the two entry points that "
+						+ "own one and threaded into everything below them (issue #448). A splitter "
+						+ "that creates its own is bounded per SENTENCE, which ADR Decision 103 "
+						+ "rejects because S sentences each just under the cap still cost S times "
+						+ "it — and it passes both structural rules above and every behavioural "
+						+ "case. An EMPTY list means the needle stopped matching and this rule had "
+						+ "gone vacuous. Found: " + sites);
+	}
+
+	/**
 	 * {@code AnswerCitations.restsOn} answers with a VIEW over the two sets a claim rests on, and
 	 * neither it nor the {@code ClaimSupport} it returns builds their union — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/448">#448</a>.
@@ -1686,21 +1810,44 @@ public class ArchitectureGuardTest {
 	 * <p>Reads TWO BODIES by brace matching rather than the file: {@code restsOn}'s own, and the
 	 * whole of {@code ClaimSupport}. The second is not a widening for its own sake — the view is
 	 * two fields and a membership test, so collapsing them into one set inside the CONSTRUCTOR
-	 * ({@code new HashSet<Integer>(unanchored); union.addAll(own);}) restores the per-reference copy
-	 * with {@code restsOn}'s own body untouched, and it is the obvious edit the first time a caller
+	 * ({@code this.own = new HashSet<Integer>(own);}) restores the per-reference copy with
+	 * {@code restsOn}'s own body untouched, and it is the obvious edit the first time a caller
 	 * wants to ITERATE what a claim rests on rather than test membership. A collection built
 	 * elsewhere in {@code AnswerCitations} — the constructor legitimately builds two — stays out of
-	 * scope, since those are per ANSWER and not per reference. Residue, the same one its neighbour
-	 * above records: a union assembled some other way, by a helper this needle does not name, is
-	 * out of reach; and {@link #endOfBody} counts braces blind to strings and comments, so an
-	 * unbalanced one inside either body moves the region's end.
+	 * scope, since those are per ANSWER and not per reference.
+	 *
+	 * <p><b>It asks what the two bodies DO, not which spellings they avoid.</b> An earlier form
+	 * listed five needles ({@code new HashSet}, {@code new LinkedHashSet}, {@code new TreeSet},
+	 * {@code new ArrayList}, {@code addAll(}); a reviewer then wrote the same defensive copy fully
+	 * qualified, {@code this.own = new java.util.HashSet<Integer>(own);} — an idiom native to this
+	 * file, which carried {@code new java.util.HashSet<Integer>()} at {@code c430a960} — and the
+	 * rule stayed green. So the question is now the positive shape those bodies have: they assign
+	 * fields, construct a {@code ClaimSupport} and test membership, and nothing else. Every
+	 * {@code new} in them must be a {@code ClaimSupport}, whatever the type is spelled like, and
+	 * every CALL must be one of a named few — the second half is what reaches a copy made with no
+	 * {@code new} at all, {@code Set.copyOf(own)} being the one this source level allows.
+	 *
+	 * <p><b>Residue.</b> A union assembled outside both bodies, by a helper this rule never reads,
+	 * is out of reach — the same residue its neighbours record. A legitimate call added inside
+	 * either body reddens this and has to be allow-listed, which is the cost of asking the question
+	 * this way round and is paid deliberately. {@link #endOfBody} counts braces blind to
+	 * strings, so an unbalanced one inside either body moves the region's end; comments cannot,
+	 * because the region is cut from {@link #codeLines} output rather than the raw file.
 	 */
 	@Test
 	public void theCitationsAClaimRestsOnAreAViewAndNotACopy() throws IOException {
-		String source = new String(Files.readAllBytes(SRC_ROOT.resolve(
-				"src/main/java/org/openmrs/module/chartsearchai/api/impl/CitationGroundingVerifier.java")),
-				StandardCharsets.UTF_8);
+		List<String> lines = getSourceCache().get("CitationGroundingVerifier.java");
+		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: "
+				+ "CitationGroundingVerifier.java was not found by the source scan, so this rule "
+				+ "would pass vacuously");
+		// Comments stripped, one entry per source line, so a line number here is the file's own and
+		// a comment that merely NAMES a construction cannot redden the rule.
+		String source = String.join("\n", codeLines(lines));
+		java.util.List<String> mayBeCalled = java.util.Arrays.asList("ClaimSupport", "emptySet",
+				"contains", "if", "for", "while", "switch", "return", "catch", "do", "assert",
+				"synchronized", "this", "super", "new");
 		List<String> built = new ArrayList<>();
+		int constructions = 0;
 		for (String declaration : new String[] { "ClaimSupport restsOn(",
 				"private static final class ClaimSupport" }) {
 			int start = source.indexOf(declaration);
@@ -1716,19 +1863,45 @@ public class ArchitectureGuardTest {
 							+ "others would go unscanned");
 			int open = source.indexOf('{', start);
 			String body = source.substring(open, endOfBody(source, open));
-			for (String constructor : new String[] { "new HashSet", "new LinkedHashSet", "new TreeSet",
-					"new ArrayList", "addAll(" }) {
-				if (body.contains(constructor)) {
-					built.add(declaration + " → " + constructor);
+			Matcher construction = Pattern.compile("\\bnew\\b").matcher(body);
+			while (construction.find()) {
+				// Everything between `new` and whichever of these opens the argument list, the
+				// array bound or the anonymous body — so the TYPE, however it is qualified.
+				int typeEnd = construction.end();
+				while (typeEnd < body.length() && "([{;".indexOf(body.charAt(typeEnd)) < 0) {
+					typeEnd++;
 				}
+				String type = body.substring(construction.end(), typeEnd).trim();
+				if ("ClaimSupport".equals(type)) {
+					constructions++;
+					continue;
+				}
+				built.add("line " + lineOf(source, open + construction.start()) + ", in " + declaration
+						+ ": constructs " + type);
+			}
+			Matcher call = Pattern.compile("\\b(\\w+)\\s*\\(").matcher(body);
+			while (call.find()) {
+				if (mayBeCalled.contains(call.group(1))) {
+					continue;
+				}
+				built.add("line " + lineOf(source, open + call.start()) + ", in " + declaration
+						+ ": calls " + call.group(1) + "(");
 			}
 		}
+		assertTrue(constructions >= 2, "precondition: the scan found " + constructions
+				+ " ClaimSupport constructions across the two bodies. It expects one in restsOn and "
+				+ "one for ClaimSupport.NONE, so a smaller number means the needle has stopped "
+				+ "matching and the rule passes vacuously.");
 		assertEquals(new ArrayList<String>(), built, "AnswerCitations.restsOn must answer with a "
 				+ "ClaimSupport view over the two sets and never build their union — neither in its "
 				+ "own body nor one constructor deeper, inside ClaimSupport: it is called once per "
 				+ "reference and the claim's own set holds one entry per distinct marker in the "
 				+ "answer, so a copy is the reference count times the marker count, live at once "
-				+ "(issue #448). Found: " + built);
+				+ "(issue #448). These two bodies assign fields, construct a ClaimSupport and test "
+				+ "membership, and that is the whole of what they may do; anything else reported "
+				+ "here is either that copy under another spelling or a legitimate addition, and a "
+				+ "legitimate one belongs in this rule's allow-list with a note saying why. "
+				+ "Found: " + built);
 	}
 
 	/**

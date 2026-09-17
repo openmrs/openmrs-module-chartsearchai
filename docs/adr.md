@@ -8329,18 +8329,37 @@ case says the same thing on a fast machine and a loaded one),
 refusal set — replacing it with a list reddens that case and nothing else),
 `.everyFragmentOfOneSentenceSharesItsParentsCitationSetRatherThanCopyingIt`,
 `.aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers`, and
-`ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory`, which covers the
-splitter that does not exist yet, and `.theCitationsAClaimRestsOnAreAViewAndNotACopy`, which covers
-the `restsOn` sink above. What each of those two structural rules reaches that no behavioural case
-does is stated in its own javadoc, and is narrower than either rule as a whole.
+`ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory`,
+`.theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter` and
+`.aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints`, which between them cover the splitter that
+does not exist yet, and `.theCitationsAClaimRestsOnAreAViewAndNotACopy`, which covers the `restsOn`
+sink above. What each of those structural rules reaches that no behavioural case does is stated in
+its own javadoc, along with what it does NOT reach, and each is narrower than its name.
 
-A later reviewer walked through both, and each was tightened onto the construction rather than its
-neighbourhood. The first allow-listed a whole METHOD, `splitIntoCitedSentences(String,
+**Three rounds of clean-context review were spent on those structural rules, and the lesson is about
+the KIND of question a rule asks.** Round two tightened both onto the construction rather than its
+neighbourhood: the first had allow-listed a whole METHOD, `splitIntoCitedSentences(String,
 FragmentBudget)`, because the whole-sentence construction sat there — so an uncharged per-marker
 splitter written into that same method, its natural home since it already holds the budget, passed
-the rule. The whole-sentence construction now has a tiny factory of its own, `newSentence`, and the
-allow-list is the two factories. The second read `restsOn`'s own body only, so collapsing the two
+it. The whole-sentence construction got a tiny factory of its own, `newSentence`, and the allow-list
+became the two factories. The second had read `restsOn`'s own body only, so collapsing the two
 operands into one set inside `ClaimSupport`'s CONSTRUCTOR restored the per-reference copy with the
-rule green; it now reads the `ClaimSupport` body as well. Each mutation is spelled out in the
-javadoc of the rule it targets: applied against the tightened rules, that rule is what reddens while
-`CitationGroundingVerifierTest` stays green, which is the reason both rules are structural.
+rule green; it was widened to read the `ClaimSupport` body too.
+
+Round three defeated both again, and neither defeat was a new hiding place — each was the same
+question answered in a spelling the rule had not enumerated. A per-marker splitter calling the
+allow-listed `newSentence` once per marker constructs nothing the construction rule objects to, and
+one creating a `FragmentBudget` per sentence charges the allow-listed `newFragment` correctly; both
+left the whole suite green. And `this.own = new java.util.HashSet<Integer>(own);` — the fully
+qualified idiom this very file carried at `c430a960` — was invisible to a rule listing five
+unqualified spellings. Adding a sixth needle would have lost the same way again, so the rules
+changed shape instead. The construction rule kept its scope and gave up its claim to cover
+more; the two forms it cannot see became rules asking checkable questions of their own, about CALL
+SITES and about where an allowance is CREATED. The copy rule stopped listing spellings altogether
+and now asks the positive shape: those two bodies assign fields, construct a `ClaimSupport` and test
+membership, so every `new` in them must be a `ClaimSupport` whatever its type is spelled like, and
+every call must be one of a named few — which is what reaches a copy made with no `new` at all,
+`Set.copyOf(own)`. Each mutation is spelled out in the javadoc of the rule that now reddens on it,
+with `CitationGroundingVerifierTest` staying green, which is the reason these rules are structural.
+So is the residue each one keeps: a rule whose javadoc over-claims is worse than no rule, because it
+tells the next maintainer not to look.

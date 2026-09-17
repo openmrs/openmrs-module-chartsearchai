@@ -1451,6 +1451,11 @@ public class CitationGroundingVerifier {
 	 * Charged exactly, as each fragment is built, and never refunded — ADR Decision 103 records why
 	 * a refund puts the copying work back.
 	 *
+	 * <p>One is created at the two answer entry points and nowhere else, and everything below them
+	 * is handed it as a parameter — {@code ArchitectureGuardTest.aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints}.
+	 * A splitter that makes one of its own is bounded per SENTENCE, which is the cap Decision 103
+	 * rejects, and it passes every other rule this change added.
+	 *
 	 * <p>The fragment is built before it is charged, so a sentence whose split is refused has
 	 * materialised one fragment it discards — and a sentence can be refused by each splitter in
 	 * turn, so that is up to two per sentence, each at most its own sentence's length. The
@@ -1926,8 +1931,15 @@ public class CitationGroundingVerifier {
 	 * {@code ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory} name the
 	 * CONSTRUCTION rather than the method it sits in. A per-marker split written inside
 	 * {@link #splitIntoCitedSentences(String, FragmentBudget)} — the natural home for a third one,
-	 * since it already holds the budget — is then reported by that rule rather than admitted by its
-	 * neighbourhood (issue #448, round two of its review).
+	 * since it already holds the budget — constructs a {@code Sentence} outside both factories, so
+	 * that rule reports it rather than admitting it for its neighbourhood (issue #448, round two of
+	 * its review).
+	 *
+	 * <p><b>What that rule cannot see is a per-marker split that CALLS this factory</b>, once per
+	 * marker, instead of constructing one: the construction is then this factory's own and
+	 * legitimate, and only the number of call sites tells the two uses apart. That is a second
+	 * rule, {@code ArchitectureGuardTest.theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter},
+	 * and it is why this method has exactly one caller (issue #448, round three).
 	 *
 	 * <p>It spends no allowance, and that is the difference from {@link #newFragment}: this copies
 	 * text the answer already holds, once per SENTENCE, so the characters it materialises are the

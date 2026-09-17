@@ -8183,15 +8183,21 @@ report that nothing was verified rather than that something was removed, and the
 comment is the authority on which is which.
 
 The manifest is one file rather than one per consumer because the two consumers are one defect: a
-digest written twice is a digest that will be bumped once. That is also why the fix is one PR.
+digest written twice is a digest that will be bumped once. That is also why the fix is one PR — and
+why the two sites now share one `vocab.txt` row. They had been fetching byte-identical bytes from
+two different third-party accounts, which is two pins to remember and one more party to trust for
+nothing.
 
 **Three choices inside it are worth recording.**
 
 *The revision is a Hugging Face commit hash, not an OpenMRS-controlled mirror.* Both findings offer
 either. A mirror is the stronger answer — it removes the third party from the fetch path rather than
 freezing what they served — but it is infrastructure this repository cannot provision, and the
-digest is what actually binds the bytes either way. The manifest's `url` column is the whole of what
-a mirror would change.
+digest is what actually binds the bytes either way. The manifest's `url` column is almost the whole
+of what a mirror would change — the exception is `ModelDownloadPinningGuardTest`, whose row check
+requires a `huggingface.co` `resolve/<40-hex>` url, so moving a row to a mirror means widening that
+check to whatever makes the new url immutable. Better it says so than that a mirror arrives one day
+and the guard reads as a refusal of the idea.
 
 *A file already on the volume is verified, not trusted for its name, and replaced when it fails.*
 `/openmrs/data` outlives the container, so the population this fix most needs to reach —
@@ -8199,7 +8205,13 @@ deployments provisioned before it existed — is exactly the one a download-time
 runs against. A file that fails is
 re-fetched from the pinned revision rather than merely refused, because a stale file and a
 substituted one are indistinguishable on disk and the replacement is bound to the same digest:
-that decides how many restarts recovery takes, not what is accepted.
+that decides how many restarts recovery takes, not what is accepted. **A refusal does cost the
+copy**: the bytes are deleted before the replacement is fetched, so a deployment that cannot reach
+the pinned revision is left with neither file, and for the embedder that means a container which
+refuses to start until it can. That is the fail-closed direction and it is the point — the state
+being removed is one where unverified weights answer clinical questions — but it is a real cost,
+and the refusal's own log lines, naming the expected and the received digest, are what an operator
+is left to report.
 
 The cost is real, and two drafts of this paragraph got it wrong before it was measured — the first
 said the hashing is "paid alongside the download it replaces", which is true only of a first boot,
@@ -8209,35 +8221,46 @@ early whenever the target existed (`backend-init.sh:176-178` at `c430a960`), so 
 work on the weights at all. Removing that early return is the point of this decision, and the
 hashing it adds is net-new work with nothing to overlap.
 
-The volume is 8.52 GB across the four artifacts: 0.44 GB synchronous — the embedder, because the
-global properties it gates are written seconds later — and 8.08 GB in two parallel background
-subshells. What that costs depends on which of the three tools `file_sha256` finds, and the spread
-between them is larger than any other factor here. Measured 2026-09-17 on one Apple M1 Max over a
-1 GB file, warm cache, all three digests compared and identical:
+The volume is 7.94 GiB across the four artifacts (8,519,952,880 bytes): 0.41 GiB synchronous — the
+embedder, because the global properties it gates are written seconds later — and 7.53 GiB in two
+parallel background subshells. What that costs depends on which of the three tools `file_sha256`
+finds, and the spread between them is larger than any other factor here. Measured 2026-09-17 on an
+Apple M1 Max over a warm 1 GiB file, every digest compared and identical, and reproduced
+independently on a second machine of the same class over a real 4.58 GiB GGUF:
 
-| tool | rate | 8.52 GB would take |
+| tool | rate | 7.94 GiB sequentially |
 |---|---|---|
-| `sha256sum` (coreutils) | 1.55 GB/s | ~5.5 s |
-| `openssl dgst -sha256` | 1.67 GB/s | ~5.1 s |
-| `shasum -a 256` (Perl) | 0.30 GB/s | ~28 s |
+| `openssl dgst -sha256` | 1.67 GiB/s | ~4.8 s |
+| `sha256sum` | 1.55 GiB/s | ~5.1 s |
+| `shasum -a 256` (Perl) | 0.30 GiB/s | ~26 s |
 
-That 5x is why `file_sha256` tries the two fast tools first and `shasum` last — an order this
-measurement changed, since it had been second. The backend image is Debian, so it takes the first
-row either way; the order matters on a checkout that has no coreutils. One machine and one file
-size is not a model of anyone else's host — what the numbers are here for is the comparison
-against the budget, and on that they are not close: `docker-compose.yml` gives the backend service a 30-minute `start_period`, which the
-synchronous half uses under a tenth of a percent of. Storage can dominate instead of the CPU, and
-this measurement says nothing about that case: it was taken warm, on NVMe.
+**Both columns are binary units**, which is what the rates were taken in; mixing them with the
+decimal byte count above overstates the projection by 7%. And the projection is an upper bound
+rather than what is paid — the two large artifacts hash in parallel, measured at 3.0-3.2 s wall
+against 4.3 s sequential, with no bandwidth contention at this scale.
+
+That 5x is why `file_sha256` tries the two fast tools first and `shasum` last, an order this
+measurement changed. **The `sha256sum` row was not measured on GNU coreutils**: the machine has
+Apple's `/sbin/sha256sum`, and no container runtime was available to measure the Debian-family
+build that `Dockerfile.backend`'s `eclipse-temurin:21-jre` base provides — which is the row the
+image takes. So that figure is a transfer from a different implementation of the same algorithm and
+is the weakest number here. It does not move the conclusion: even at `shasum`'s rate the
+synchronous half is 1.4 s against the 30-minute `start_period` `docker-compose.yml` gives the
+backend service, under a tenth of a percent of it. What none of this measures is slow storage —
+every run read at NVMe speed, and below roughly 0.3 GB/s the read dominates and the tool choice
+stops mattering.
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its message. The two failures an operator can act on differently are a transfer that
 stopped short and bytes that are not the artifact, and only the first has a remedy the operator
 owns — retry. A single "the digest did not match" would send them looking for an attacker in both
-cases. The guard exists at all because of the external-data ONNX export that once produced a ~1 MB
-file the runtime could open but not execute; pinning the revision is what retired that as a live
-cause, which is why the diagnostic now names a truncated transfer instead of an upstream format
-change. Both the guard and its wording are the size branch of `_mm_verify_file` and the `2)` arms in
-`backend-init.sh`; change one and the other reads false.
+cases. The guard was introduced for the ONNX export shape
+[Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) records; **pinning
+the revision retired that cause**, and the guard survives for the message alone, which is why its
+diagnostic names a truncated transfer. The order is the size branch of `_mm_verify_file` and the
+`2)` arms in `backend-init.sh` — change one and the other reads false, and
+`ModelDownloadIntegrityTest.aTruncatedTransferIsRefusedAsAShortFileRatherThanAsASubstitution` is
+what notices.
 
 **What this does not close.** Two fetches in these same files stay unverified and are out of scope
 for both findings: `Dockerfile.backend` downloads `openmrs.war` from a Maven repository, and

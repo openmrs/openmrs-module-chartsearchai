@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -77,6 +78,9 @@ public class ModelDownloadIntegrityTest {
 
 	/** No such id in the manifest, or an override that arrived without a digest. */
 	private static final int UNRESOLVABLE_ARTIFACT = 4;
+
+	/** The file could not be hashed, so no verdict was reached and it is still on disk. */
+	private static final int HASH_UNAVAILABLE = 5;
 
 	private static final byte[] GOOD_BYTES = "the bytes the maintainers reviewed\n".getBytes(StandardCharsets.UTF_8);
 
@@ -206,20 +210,52 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	/**
-	 * The size shortfall keeps its own exit code because the call sites print different diagnostics
-	 * for it — {@code backend-init.sh} explains the external-data ONNX export that produced a small
-	 * "successful" file once, which a digest mismatch alone would not tell an operator.
+	 * The size is checked before the digest, and the point of the order is the MESSAGE: a transfer
+	 * that stopped short and a substitution are different things to an operator, and only the first
+	 * has a remedy they own. So the case has to be wrong on BOTH counts — an earlier form served
+	 * correct bytes against a wrong expected size, which the digest check would have passed anyway,
+	 * and swapping the two branches of {@code _mm_verify_file} left it green while silently turning
+	 * every truncated transfer into "looks like a substitution".
 	 */
 	@Test
-	public void aFileThatIsNotTheReviewedSizeIsRefusedBeforeItsDigestIsEvenComputed() throws Exception {
-		served = GOOD_BYTES;
+	public void aTruncatedTransferIsRefusedAsAShortFileRatherThanAsASubstitution() throws Exception {
+		served = Arrays.copyOf(GOOD_BYTES, 10); // wrong length AND wrong digest
 		Path target = work.resolve("model.bin");
 
-		Result result = fetchAndVerify(url(), sha256(GOOD_BYTES), GOOD_BYTES.length + 1024, target, "test model");
+		Result result = fetchAndVerify(url(), sha256(GOOD_BYTES), GOOD_BYTES.length, target, "test model");
 
 		assertEquals(SIZE_MISMATCH, result.exit,
-				"a file that is not the committed size must report the size code, not the digest code\n" + result);
-		assertFalse(Files.exists(target), "a wrong-sized file must never reach the target name\n" + result);
+				"a short file must report the size code, not the digest code\n" + result);
+		assertFalse(result.output.contains(sha256(GOOD_BYTES)),
+				"the size refusal must not lead with a digest comparison\n" + result);
+		assertFalse(Files.exists(target), "a short file must never reach the target name\n" + result);
+	}
+
+	/**
+	 * Code 5 — the file could not be hashed at all — is the one refusal that leaves the file where it
+	 * is, and the library's own contract says only codes 1 and 2 promise a deletion. An earlier form
+	 * of {@code fetch_and_verify_url} fell through to the replacement path for every non-zero code,
+	 * so an unhashable file was announced as "Replacing..." while it stayed on disk and stayed
+	 * served — the exact state #444 is about.
+	 */
+	@Test
+	public void aFileThatCannotBeHashedIsReportedAsUnverifiedRatherThanReplaced() throws Exception {
+		Path onlyFetchTools = Files.createDirectories(work.resolve("no-hashing-tool"));
+		for (String tool : List.of("curl", "stat", "rm", "mv")) {
+			Path real = which(tool);
+			assumeTrue(real != null, tool + " is needed to reach the hashing step");
+			Files.createSymbolicLink(onlyFetchTools.resolve(tool), real);
+		}
+		Path target = work.resolve("model.bin");
+		Files.write(target, GOOD_BYTES);
+
+		Result result = library("fetch_and_verify_url '" + url() + "' '" + sha256(GOOD_BYTES) + "' '"
+				+ GOOD_BYTES.length + "' '" + target + "' 'test model'", manifest(), onlyFetchTools);
+
+		assertEquals(HASH_UNAVAILABLE, result.exit, "an unhashable file must report its own code\n" + result);
+		assertTrue(Files.exists(target), "a file that was never hashed must not be deleted\n" + result);
+		assertFalse(result.output.contains("Replacing"),
+				"nothing may announce a replacement for a file that is still there\n" + result);
 	}
 
 	@Test

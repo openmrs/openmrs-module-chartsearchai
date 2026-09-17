@@ -101,7 +101,7 @@ These methods are the ONLY correct entry points for their respective operations.
 
 ## Model files
 
-- **Fetching a model file the module executes**: `fetch_and_verify` in `scripts/model-manifest.sh`, against the pinned revision and sha256 in `model-manifest.tsv` — the ONE place either is written, read by `backend-init.sh` and `build-standalone.yml` alike (#444, #449). Never spell a `huggingface.co` URL at a call site, and never fetch a model beside the library. → ADR Decision 103; `ModelDownloadPinningGuardTest`, `ModelDownloadIntegrityTest`.
+- **Fetching a model the module executes**: `scripts/model-manifest.sh` — `fetch_and_verify` against the pinned revision and sha256 `model-manifest.tsv` records, or `fetch_and_verify_override` on the dispatched path. That manifest is the ONE place either is written (#444, #449). Never spell a `huggingface.co` URL at a call site, nor fetch a model beside the library. → ADR Decision 103; `ModelDownloadPinningGuardTest`, `ModelDownloadIntegrityTest`.
 
 ## Tests and eval
 

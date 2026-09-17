@@ -23,12 +23,12 @@ import java.util.List;
  * ModelDownloadIntegrityTest}, which reconciles each row against what the shell library answers,
  * and {@link ModelDownloadPinningGuardTest}, which checks the rows themselves.
  *
- * <p><b>One reader, because the format now has three parsers and only this one is reconciled
- * against the shell.</b> {@code _mm_field} in {@code scripts/model-manifest.sh} is the production
- * parser; a copy in each suite made three, and a change to the format — a fifth column, a comment
- * convention — could land in two of them and leave the third quietly reading something else. That
- * is the failure {@link ModuleSourceRoot}'s own javadoc records for a guard that reads the wrong
- * thing and reports no violations.
+ * <p><b>One reader, so the format has two parsers rather than three.</b> {@code _mm_field} in
+ * {@code scripts/model-manifest.sh} is the production one; a copy in each suite made three, and a
+ * change to the format — a fifth column, a comment convention — could land in two of them and leave
+ * the third quietly reading something else. Of the two that remain, this one is reconciled against
+ * the shell by {@code ModelDownloadIntegrityTest.everyLookupReturnsTheFieldOnThatArtifactsOwnRow},
+ * which compares every lookup the library answers against the row read here.
  */
 public final class ModelManifest {
 

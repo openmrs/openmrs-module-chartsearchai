@@ -169,6 +169,17 @@ jobs:
           set -eu
           . chartsearchai-backend/scripts/model-manifest.sh
 
+          # A digest with no url of its own would otherwise be accepted and then ignored, and the
+          # build would quietly bundle the manifest's model instead of the one asked for.
+          for pair in "GGUF_MODEL_URL:GGUF_SHA256:gguf" "ONNX_MODEL_URL:ONNX_SHA256:onnx" "VOCAB_URL:VOCAB_SHA256:vocab"; do
+            url_var=${pair%%:*}; rest=${pair#*:}; sha_var=${rest%%:*}; name=${rest#*:}
+            eval "url=\$$url_var"; eval "sha=\$$sha_var"
+            if [ -z "$url" ] && [ -n "$sha" ]; then
+              echo "::error::${name}_sha256 was given without ${name}_model_url, so it would check nothing."
+              exit 1
+            fi
+          done
+
           mkdir -p standalone/target/chartsearchai standalone/target/querystore
 
           if [ -n "$GGUF_MODEL_URL" ]; then
@@ -194,7 +205,7 @@ jobs:
           # that breaks as a single-file download.
           fetch_and_verify embedder-e5-base-v2-onnx \
             standalone/target/querystore/e5_model.onnx "the querystore e5-base-v2 embedder"
-          fetch_and_verify embedder-e5-base-v2-vocab-intfloat \
+          fetch_and_verify embedder-e5-base-v2-vocab \
             standalone/target/querystore/vocab.txt "the querystore e5-base-v2 vocab"
 
           echo "AI model files:"

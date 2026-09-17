@@ -87,7 +87,16 @@ case $? in
     echo "       truncated transfer is the likely cause and a restart is the remedy." >&2
     exit 1
     ;;
-  *) exit 1 ;;
+  4)
+    echo "       The id is not in model-manifest.tsv, so the image is built wrong; a" >&2
+    echo "       restart will not help." >&2
+    exit 1
+    ;;
+  *)
+    echo "       Chart search cannot run without a verified embedder, so this start is" >&2
+    echo "       refused rather than left to fail at the first query." >&2
+    exit 1
+    ;;
 esac
 echo "Embedder ready: $ONNX_FILE ($(file_bytes "$ONNX_FILE") bytes)."
 
@@ -99,7 +108,16 @@ case $? in
     echo "       embeddings as missing tokens fall back to [UNK]." >&2
     exit 1
     ;;
-  *) exit 1 ;;
+  4)
+    echo "       The id is not in model-manifest.tsv, so the image is built wrong; a" >&2
+    echo "       restart will not help." >&2
+    exit 1
+    ;;
+  *)
+    echo "       Chart search cannot run without a verified embedder, so this start is" >&2
+    echo "       refused rather than left to fail at the first query." >&2
+    exit 1
+    ;;
 esac
 echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 
@@ -150,7 +168,11 @@ _download_llm_file() {
     _code=$?
     case $_code in
       1|2) echo "$_label was refused and deleted; restart the backend container to fetch it again from the start." >&2 ;;
-      3)   echo "$_label download failed; restart the backend container to retry (curl -C - resumes from the .partial file)." >&2 ;;
+      3)   if [ -f "$_target.partial" ]; then
+             echo "$_label download failed part-way; restart the backend container to retry (curl -C - resumes from the .partial file)." >&2
+           else
+             echo "$_label could not be fetched at all; restart the backend container to retry." >&2
+           fi ;;
       4)   echo "$_label is not recorded in model-manifest.tsv, so there is nothing to fetch it from; this is a packaging error and a restart will not help." >&2 ;;
       *)   echo "$_label could not be hashed (code $_code), so it is still on disk unverified; restart the backend container to retry." >&2 ;;
     esac
@@ -175,13 +197,10 @@ fetch_llm_in_background() {
   size_hint=$4
   availability_note=$5
   target="$LLM_DIR/$filename"
-  if [ -f "$target" ]; then
-    echo "Verifying $label already on the volume (${size_hint}) in background..."
-  elif [ -f "$target.partial" ]; then
-    echo "Resuming $label download (${size_hint}) in background${availability_note}..."
-  else
-    echo "Starting $label download (${size_hint}) in background${availability_note}..."
-  fi
+  # One framing line. Which of verify / resume / download actually happens is the library's
+  # decision and the library logs it, so testing the file's state here as well would be a second
+  # copy of that logic whose only job is to guess the first one's answer.
+  echo "Providing $label (${size_hint}) in background${availability_note}..."
   _download_llm_file "$artifact_id" "$target" "$label" &
 }
 

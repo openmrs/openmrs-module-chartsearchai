@@ -32,9 +32,7 @@ import org.junit.jupiter.api.Test;
  * {@code model-manifest.tsv}, and spell no Hugging Face URL of their own.
  *
  * <p>Those two sites are the scope both findings draw, and it is narrower than "everything this
- * project downloads": {@code Dockerfile.backend} fetches {@code openmrs.war} from a Maven repository
- * and {@code backend-init.sh} fetches the demo SQL dump, both unverified and both out of scope here.
- * ADR Decision 103 records why.
+ * project downloads" — ADR Decision 103 names what is left out and why.
  *
  * <p><b>This reads the SOURCE, and that is the point.</b> {@link ModelDownloadIntegrityTest} shows
  * that the shared library refuses substituted bytes; it cannot show that the two call sites still
@@ -46,9 +44,9 @@ import org.junit.jupiter.api.Test;
  * named in the right PLACE, because a site that named the library and then renamed the file anyway
  * would satisfy the first alone.
  *
- * <p><b>Every scan asserts it found something.</b> {@link ModuleSourceRoot}'s javadoc records that a
- * walking caller resolving the wrong tree reports no violations and passes; a guard whose whole
- * value is reading the right file owes itself that check.
+ * <p><b>Every scan asserts it found something.</b> A guard that walks looking for violations reports
+ * none when it has scanned nothing at all, and passing for that reason is indistinguishable from
+ * passing because the code is right. Each check here ends by asserting what it actually read.
  */
 public class ModelDownloadPinningGuardTest {
 
@@ -71,15 +69,23 @@ public class ModelDownloadPinningGuardTest {
 
 	/** What the standalone bundle ships. The E2B standby is deliberately not among them. */
 	private static final List<String> BUNDLE_ARTIFACTS = List.of("llm-gemma-4-e4b", "embedder-e5-base-v2-onnx",
-			"embedder-e5-base-v2-vocab-intfloat");
+			"embedder-e5-base-v2-vocab");
 
 	/**
-	 * Where a model lands, as the two files actually spell it. The extensions alone were not enough:
-	 * a review agent added {@code curl -fsSL -o "$ONNX_FILE" ...} and it passed every channel here,
-	 * because the entrypoint refers to its model files by variable and never by name.
+	 * The fetches in these two files that are NOT models, each named by a fragment of its own line.
+	 *
+	 * <p><b>An allow-list, because the deny-list it replaces was defeated twice.</b> Listing where a
+	 * model LANDS cannot work: cycle 1 widened it once for a {@code curl} written with
+	 * {@code $ONNX_FILE}, and a review agent then defeated the widened form in two lines by
+	 * assigning the path to a fresh variable first. Every new variable name is a new bypass, so the
+	 * question has to be asked the other way round — this way a fetch nobody has declared is the
+	 * violation, and adding a legitimate one costs an entry here instead of passing silently.
 	 */
-	private static final List<String> MODEL_SINKS = List.of(".gguf", ".onnx", "vocab.txt", "$LLM_DIR", "$QS_DIR",
-			"$ONNX_FILE", "$VOCAB_FILE", "$target", "$_target", "$_mm_target", "$_mm_partial");
+	private static final List<String> DECLARED_NON_MODEL_FETCHES = List.of(
+			// The demo dataset dump. Out of scope for #444/#449 — ADR Decision 103 says why.
+			"$DEMO_DUMP_URL",
+			// The standalone build polling querystore's own REST endpoints while it bakes the index.
+			"$QS/indexingstatus", "$QS/drift", "/tmp/reindex.json");
 
 	private static Path repo(String relative) {
 		return ModuleSourceRoot.repoRoot().resolve(relative);
@@ -165,9 +171,20 @@ public class ModelDownloadPinningGuardTest {
 	 * README's download instructions are copied by hand by operators, so an unpinned revision there
 	 * hands out the same unverified bytes the two findings are about — the judgement call the
 	 * maintainer's scope note left to the plan, taken.
+	 *
+	 * <p>Pinned is not enough on its own: README also has to name the SAME revision the manifest
+	 * does, or it sends an operator to bytes whose digest the manifest no longer records, one
+	 * sentence after telling them to check what they downloaded against it. A review agent moved the
+	 * manifest's onnx revision and this test stayed green on the 40-hex check alone.
 	 */
 	@Test
-	public void everyHuggingFaceDownloadUrlAnyoneFollowsNamesAnImmutableRevision() throws IOException {
+	public void everyHuggingFaceDownloadUrlAnyoneFollowsNamesAnImmutableRevisionTheManifestAlsoNames()
+			throws IOException {
+		List<String> pinned = new ArrayList<String>();
+		for (String[] row : ModelManifest.rows()) {
+			pinned.add(row[3]);
+		}
+
 		List<String> violations = new ArrayList<String>();
 		int found = 0;
 		// config.xml is here because it tells an operator where to get the served model, and a
@@ -178,13 +195,17 @@ public class ModelDownloadPinningGuardTest {
 			Matcher urls = HF_RESOLVE.matcher(text);
 			while (urls.find()) {
 				found++;
+				String url = urls.group();
 				if (!PINNED_REVISION.matcher(urls.group(2)).matches()) {
-					violations.add(file + ": line " + lineOf(text, urls.start()) + " fetches " + urls.group(1) + " at '"
-							+ urls.group(2) + "', a revision that can change under it");
+					violations.add(file + ": line " + lineOf(text, urls.start()) + " fetches " + urls.group(1)
+							+ " at '" + urls.group(2) + "', a revision that can change under it");
+				} else if (!pinned.contains(url)) {
+					violations.add(file + ": line " + lineOf(text, urls.start())
+							+ " names a pinned url no manifest row carries, so nothing records its digest: " + url);
 				}
 			}
 		}
-		assertEquals(List.of(), violations, "downloads bound to a mutable revision");
+		assertEquals(List.of(), violations, "downloads nobody can check against a committed digest");
 		assertTrue(found > 0, "no download URL was scanned at all, so this guard proved nothing");
 	}
 
@@ -216,29 +237,35 @@ public class ModelDownloadPinningGuardTest {
 
 	/**
 	 * Naming the library is not the same as going through it. A {@code curl} written BESIDE a
-	 * retained {@code fetch_and_verify} call reopens the finding while every other channel here stays
-	 * green — the shape {@code ArchitectureGuardTest}'s own javadoc records as out of reach of a
-	 * call-is-present check. So no fetch in either file may write into a model's directory or under a
-	 * model's extension by itself.
+	 * retained {@code fetch_and_verify} call reopens the finding while every other channel here
+	 * stays green — the shape {@code ArchitectureGuardTest}'s own javadoc records as out of reach of
+	 * a call-is-present check.
+	 *
+	 * <p>So every fetch in these files is either the library's own or declared in
+	 * {@link #DECLARED_NON_MODEL_FETCHES}. A message that merely quotes {@code curl} is not a fetch
+	 * and is skipped, which is what the {@code echo} arms in {@code backend-init.sh} rely on.
 	 */
 	@Test
-	public void noFetchBesideTheLibraryWritesAModelFileOfItsOwn() throws IOException {
+	public void everyFetchOutsideTheLibraryIsOneNobodyCouldMistakeForAModel() throws IOException {
 		List<String> violations = new ArrayList<String>();
 		int scanned = 0;
 		for (String file : List.of("backend-init.sh", ".github/workflows/build-standalone.yml")) {
 			for (String line : codeLines(file)) {
-				if (!line.contains("curl ") && !line.contains("wget ")) {
+				String trimmed = line.trim();
+				if (!trimmed.contains("curl ") && !trimmed.contains("wget ")) {
+					continue;
+				}
+				if (trimmed.startsWith("echo ") || trimmed.startsWith("printf ")) {
 					continue;
 				}
 				scanned++;
-				for (String sink : MODEL_SINKS) {
-					if (line.contains(sink)) {
-						violations.add(file + ": a fetch writes '" + sink + "' itself: " + line.trim());
-					}
+				if (DECLARED_NON_MODEL_FETCHES.stream().noneMatch(trimmed::contains)) {
+					violations.add(file + ": undeclared fetch — if it is not a model, add it to "
+							+ "DECLARED_NON_MODEL_FETCHES; if it is, it belongs in the library: " + trimmed);
 				}
 			}
 		}
-		assertEquals(List.of(), violations, "a model fetched around the digest check");
+		assertEquals(List.of(), violations, "a fetch that could be pulling a model around the digest check");
 		assertTrue(scanned > 0, "no fetch line was scanned at all, so this guard proved nothing");
 	}
 
@@ -336,51 +363,88 @@ public class ModelDownloadPinningGuardTest {
 	}
 
 	/**
-	 * Ordering is only half of #444's refusal. The embedder fetches are followed by a {@code case}
-	 * over the library's exit code, and an arm that fell through instead of exiting would run on to
+	 * Ordering is only half of #444's refusal. Each embedder fetch is followed by a {@code case} over
+	 * the library's exit code, and an arm that fell through instead of exiting would run on to
 	 * {@code configure_retrieval_gps} and point querystore at a file that had just been deleted —
 	 * with the ordering channel above still green, because the fetch would still precede the write.
-	 * So every arm but the success arm has to leave.
 	 *
-	 * <p><b>Scoped to the embedder's refusals, and the LLM's are deliberately not among them.</b> The
-	 * weights are fetched in a background subshell precisely so OpenMRS can come up without them, and
-	 * chart search already reports its own error while the file is absent — exiting there would take
-	 * the container down for a model it is designed to start without. What the two share is that the
+	 * <p><b>Driven from the FETCH, because a form driven from the {@code case} was defeated twice.</b>
+	 * Inserting any statement between the fetch and the {@code case} makes {@code $?} that
+	 * statement's status, so every refusal takes the {@code 0)} arm — and the old scan, which looked
+	 * backwards from each {@code case} for a fetch, then stopped recognising the block and reported
+	 * nothing, its one global "found something" tripwire still satisfied by the other block. So the
+	 * fetch is the anchor: each must be followed IMMEDIATELY by {@code case $? in}, and every arm but
+	 * the success arm must leave.
+	 *
+	 * <p><b>Scoped to the embedder's refusals; the LLM's are deliberately not among them.</b> Those
+	 * weights are fetched in a background subshell so OpenMRS can come up without them, and chart
+	 * search already reports its own error while the file is absent. What the two share is that
 	 * rejected bytes are deleted; only the embedder gates something written seconds later.
 	 */
 	@Test
 	public void everyRefusalOfTheEmbedderStopsTheEntrypoint() throws IOException {
 		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
 		List<String> violations = new ArrayList<String>();
-		int blocks = 0;
+		int fetches = 0;
 
 		for (int i = 0; i < lines.size(); i++) {
-			if (!lines.get(i).trim().equals("case $? in") || !precedingFetchIsTheEmbedder(lines, i)) {
+			String line = lines.get(i).trim();
+			if (!line.startsWith("fetch_and_verify ") || !line.contains("embedder-e5-base-v2")) {
 				continue;
 			}
-			blocks++;
-			String arm = null;
-			StringBuilder armBody = new StringBuilder();
-			for (int j = i + 1; j < lines.size(); j++) {
-				String line = lines.get(j).trim();
-				boolean opensArm = line.matches("^[0-9|*]+\\).*");
-				if (opensArm || line.equals("esac")) {
-					if (arm != null && !arm.startsWith("0") && !leaves(armBody.toString())) {
-						violations.add("backend-init.sh line " + (i + 1) + ": the '" + arm
-								+ "' arm continues past a refused model instead of exiting");
-					}
-					if (line.equals("esac")) {
-						break;
-					}
-					arm = line;
-					armBody.setLength(0);
-				}
-				armBody.append(line).append('\n');
+			fetches++;
+			int next = nextCodeLine(lines, i + 1);
+			if (next < 0 || !lines.get(next).trim().equals("case $? in")) {
+				violations.add("backend-init.sh line " + (i + 1) + ": the embedder fetch is not followed"
+						+ " immediately by `case $? in`, so $? is no longer the library's verdict");
+				continue;
 			}
+			violations.addAll(armsThatDoNotLeave(lines, next));
 		}
 
 		assertEquals(List.of(), violations, "a refusal that does not stop the entrypoint");
-		assertTrue(blocks > 0, "no embedder fetch in backend-init.sh branches on its exit code; this guard read nothing");
+		assertTrue(fetches > 0, "backend-init.sh fetches no embedder; this guard read nothing");
+	}
+
+	/** The index of the next line that is neither blank nor a whole-line comment, or -1. */
+	private static int nextCodeLine(List<String> lines, int from) {
+		for (int i = from; i < lines.size(); i++) {
+			String trimmed = lines.get(i).trim();
+			if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	/**
+	 * Every arm of the {@code case} opening at {@code caseLine} that does not exit, the success arm
+	 * excepted. An arm opener is any line whose first token ends in {@code )} — an earlier form
+	 * matched only digits, pipes and {@code *}, so a glob arm such as {@code [1-9])} was not
+	 * recognised and its body folded into the exempt {@code 0)} arm above it.
+	 */
+	private static List<String> armsThatDoNotLeave(List<String> lines, int caseLine) {
+		List<String> violations = new ArrayList<String>();
+		String arm = null;
+		StringBuilder body = new StringBuilder();
+		for (int i = caseLine + 1; i < lines.size(); i++) {
+			String line = lines.get(i).trim();
+			boolean opensArm = line.matches("^[^\\s#]*\\).*");
+			if (opensArm || line.equals("esac")) {
+				if (arm != null && !arm.startsWith("0") && !leaves(body.toString())) {
+					violations.add("backend-init.sh line " + (caseLine + 1) + ": the '" + arm
+							+ "' arm continues past a refused model instead of exiting");
+				}
+				if (line.equals("esac")) {
+					return violations;
+				}
+				arm = line;
+				body.setLength(0);
+			}
+			body.append(line).append('\n');
+		}
+		violations.add("backend-init.sh line " + (caseLine + 1) + ": this case is never closed by esac");
+		return violations;
 	}
 
 	/**
@@ -407,17 +471,6 @@ public class ModelDownloadPinningGuardTest {
 		return false;
 	}
 
-	/** Whether the nearest fetch above {@code index} is one of the embedder's. */
-	private static boolean precedingFetchIsTheEmbedder(List<String> lines, int index) {
-		for (int i = index - 1; i >= 0; i--) {
-			String line = lines.get(i).trim();
-			if (line.isEmpty() || line.startsWith("#")) {
-				continue;
-			}
-			return line.startsWith("fetch_and_verify ") && line.contains("embedder-e5-base-v2");
-		}
-		return false;
-	}
 
 	/**
 	 * Three files spell these two paths and nothing tied them together: {@code Dockerfile.backend}

@@ -48,8 +48,10 @@ _mm_field() {
 		return 1
 	fi
 	_mm_f_value=''
-	# `=` is an exact comparison on purpose: one id here is a prefix of another, and a pattern
-	# match would hand back a neighbour's digest, which every later check would then pass.
+	# `=` is an exact comparison on purpose: an id that is a prefix of another would otherwise hand
+	# back a neighbour's digest, which every later check would then pass. No committed pair is like
+	# that today, so the rule is pinned by a fixture rather than by the manifest — see
+	# ModelDownloadIntegrityTest.anIdThatIsAPrefixOfAnotherResolvesToItsOwnRowInEitherOrder.
 	while read -r _mm_f_id _mm_f_sha _mm_f_bytes _mm_f_url _mm_f_rest || [ -n "$_mm_f_id" ]; do
 		case "$_mm_f_id" in '' | \#*) continue ;; esac
 		[ "$_mm_f_id" = "$1" ] || continue
@@ -81,7 +83,7 @@ manifest_url() { _mm_field "$1" url; }
 # file_sha256 <file> — the file's sha256 as lowercase hex. Three tools are tried because the fetch
 # sites do not share an environment: the backend image is Debian and has coreutils `sha256sum`, a
 # maintainer's macOS checkout may have only `shasum`, and `openssl` is common on both. The same
-# hedge the neighbouring stat calls in backend-init.sh make, for the same reason.
+# hedge the size guards this replaced used to make between GNU and BSD `stat`, for the same reason.
 #
 # `shasum` is tried LAST rather than second because it is a Perl implementation and measurably
 # slower — ADR Decision 103 records the rates, and the gap is wide enough to matter over multi-GB
@@ -107,14 +109,14 @@ file_bytes() {
 	stat -c %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null || echo 0
 }
 
-# _mm_verify_file <file> <sha256> <bytes> <label> — size first, then digest, deleting the file on
+# _mm_verify_file <file> <sha256> <bytes> <label> [source] — size first, then digest, deleting the file on
 # either failure so no later start resumes it or loads it. Size is checked first only so the caller
 # can say something specific about a short file; the digest is what actually binds the bytes.
 # <bytes> of 0 means the size is not known ahead of time, which is the manually-dispatched build.
 _mm_verify_file() {
 	_mm_vf_size=$(file_bytes "$1")
 	if [ "$3" -gt 0 ] && [ "$_mm_vf_size" -ne "$3" ]; then
-		echo "ERROR: $4 is ${_mm_vf_size} bytes; the reviewed artifact is $3 bytes." >&2
+		echo "ERROR: $4 did not deliver the recorded length: ${_mm_vf_size} bytes, not $3." >&2
 		echo "       Refusing it and deleting $1." >&2
 		rm -f "$1"
 		return 2
@@ -124,7 +126,7 @@ _mm_verify_file() {
 	# on the code rather than on re-checking the disk.
 	_mm_vf_actual=$(file_sha256 "$1") || return 5
 	if [ "$_mm_vf_actual" != "$2" ]; then
-		echo "ERROR: $4 is not the artifact model-manifest.tsv records." >&2
+		echo "ERROR: $4 is not the artifact ${5:-model-manifest.tsv} records." >&2
 		echo "       expected sha256 $2" >&2
 		echo "       received sha256 $_mm_vf_actual" >&2
 		echo "       Refusing it and deleting $1." >&2
@@ -148,19 +150,32 @@ fetch_and_verify_url() {
 	_mm_bytes=$3
 	_mm_target=$4
 	_mm_label=$5
+	# Where the expected digest came from, named in the refusal. The manifest for everything a
+	# push build or the entrypoint fetches; a workflow input for a dispatched override, where
+	# naming the manifest would send an operator to a file it deliberately does not record.
+	_mm_source=${6:-model-manifest.tsv}
 	_mm_partial="$_mm_target.partial"
 
 	# The verification is the condition of an `if` rather than a bare call, because the standalone
 	# workflow runs this under `set -e`: a bare call that failed would end that shell on the spot,
 	# and neither the fall-through below nor any exit code would ever be reached.
 	if [ -f "$_mm_target" ]; then
-		if _mm_verify_file "$_mm_target" "$_mm_expected" "$_mm_bytes" "$_mm_label"; then
+		if _mm_verify_file "$_mm_target" "$_mm_expected" "$_mm_bytes" "$_mm_label" "$_mm_source"; then
 			return 0
+		else
+			# $? has to be read inside the else: after a bare `if ... fi` whose condition failed
+			# it is 0, not the condition's status.
+			_mm_status=$?
+			# Only 1 and 2 deleted the file, and only a deleted file may be replaced. Any other
+			# code means the verdict is unknown and the file is still there — falling through
+			# would claim a deletion that did not happen and go on serving unverified bytes.
+			if [ "$_mm_status" -ne 1 ] && [ "$_mm_status" -ne 2 ]; then
+				return "$_mm_status"
+			fi
 		fi
-		# _mm_verify_file has deleted it; fall through and fetch what the manifest records. The
-		# replacement is bound to the same digest, so this decides how many restarts recovery
-		# takes and nothing about what is accepted — ADR Decision 103. A served copy that fails
-		# too is the refusal.
+		# Fall through and fetch what the manifest records. The replacement is bound to the same
+		# digest, so this decides how many restarts recovery takes and nothing about what is
+		# accepted — ADR Decision 103. A served copy that fails too is the refusal.
 		echo "Replacing $_mm_label from the revision model-manifest.tsv records..."
 	fi
 
@@ -177,7 +192,7 @@ fetch_and_verify_url() {
 		return 3
 	fi
 
-	_mm_verify_file "$_mm_partial" "$_mm_expected" "$_mm_bytes" "$_mm_label" || return $?
+	_mm_verify_file "$_mm_partial" "$_mm_expected" "$_mm_bytes" "$_mm_label" "$_mm_source" || return $?
 
 	mv "$_mm_partial" "$_mm_target" || return 3
 	return 0
@@ -199,7 +214,7 @@ fetch_and_verify_override() {
 		echo "       A model that goes into the bundle needs a digest to check it against." >&2
 		return 4
 	fi
-	fetch_and_verify_url "$1" "$2" 0 "$3" "$4"
+	fetch_and_verify_url "$1" "$2" 0 "$3" "$4" "the $5 input"
 }
 
 # fetch_and_verify <manifest-id> <target> <label> — the same step, with the url, digest and size

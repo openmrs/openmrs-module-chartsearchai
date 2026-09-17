@@ -93,14 +93,12 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	/**
 	 * What the peer may still have got onto the wire after the module stopped reading: twice the
-	 * ceiling, i.e. {@link RemoteLlmEngine#MAX_RESPONSE_BYTES} of slack above it. That slack is
-	 * NOT one socket buffer, and an earlier version of this sentence said it was — measured over
-	 * ten runs, the overshoot above the ceiling ran 0.76 to 1.98 MB, six to fifteen times the
+	 * ceiling, i.e. {@link RemoteLlmEngine#MAX_RESPONSE_BYTES} of slack above it. Measured over
+	 * ten runs, the overshoot above the ceiling ran 0.76 to 1.98 MB — well past the
 	 * {@code net.inet.tcp.sendspace}/{@code recvspace} of 131072 this platform reports, because
-	 * the JDK's {@code HttpServer} and loopback auto-tuning buffer well past it. So the real
-	 * margin is about 2x rather than the 32x that figure would suggest. What keeps the verdict
-	 * unambiguous is the other side: an unbounded read reaches {@link #SAFETY_LIMIT}, twice
-	 * this again.
+	 * the JDK's {@code HttpServer} and loopback auto-tuning buffer beyond it — so read the
+	 * margin here as about 2x and not as a socket buffer. What keeps the verdict unambiguous is
+	 * the other side: an unbounded read reaches {@link #SAFETY_LIMIT}, twice this again.
 	 */
 	private static final long TOLERATED = 2L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
 

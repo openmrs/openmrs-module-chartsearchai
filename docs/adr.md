@@ -7927,6 +7927,8 @@ publishes the same two numbers the log now carries — so a maintainer triaging 
 same `stated`/`named` in both places. The finding's own alternative, the names at DEBUG, was not
 taken: a channel nobody needs is not worth the bytes of PHI it writes.
 
+**Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
+
 **And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
 PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
 captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A

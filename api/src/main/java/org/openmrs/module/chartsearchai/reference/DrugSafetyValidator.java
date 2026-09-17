@@ -6134,6 +6134,11 @@ public class DrugSafetyValidator {
 		 *         ({@link DrugReferenceService#entriesNamedBy}); this is its counterpart, and without
 		 *         it one method read its two indexes two different ways. Empty for a code that
 		 *         normalises to nothing, which names nothing — {@code identifies}' own answer.
+		 *
+		 *         <p>Package-private for the same reason {@link DrugSafetyValidator#identifies} is:
+		 *         {@code AboveFloorRuleJoinAgreementTest} asserts that the list it hands back cannot be
+		 *         edited, which it cannot reach through the join's own accessor. No production caller
+		 *         outside this class exists or should.
 		 */
 		static List<DrugReference> entriesCodedBy(String rawAtc,
 				Map<String, List<DrugReference>> index) {
@@ -6147,7 +6152,8 @@ public class DrugSafetyValidator {
 
 		/** The ATC counterpart of {@link DrugReferenceService#nameIndexOf}, here rather than there
 		 *  because {@link DrugSafetyValidator#identifies}' code leg is this class's question and not
-		 *  the service's. */
+		 *  the service's. Package-private for {@code AboveFloorRuleJoinAgreementTest}, which needs an
+		 *  index to read {@link #entriesCodedBy} against; no production caller outside this class. */
 		static Map<String, List<DrugReference>> atcIndexOf(List<DrugReference> screened) {
 			Map<String, List<DrugReference>> index = new LinkedHashMap<String, List<DrugReference>>();
 			for (DrugReference entry : screened) {

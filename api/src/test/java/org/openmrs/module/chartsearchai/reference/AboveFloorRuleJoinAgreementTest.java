@@ -141,6 +141,13 @@ public class AboveFloorRuleJoinAgreementTest {
 	 * another production class, and any mention in one is that. {@code DrugSafetyValidator}'s own file
 	 * — including the nested {@code AboveFloorRules}, which reaches it as a nestmate — is the one
 	 * permitted home.
+	 *
+	 * <p><b>The needle is the bare {@code identifies(}, and that is deliberate</b>: a same-package
+	 * caller writes it unqualified, so a needle naming the class would miss the shape this forbids.
+	 * The residue is the other direction — an unrelated production method of that name would fail this
+	 * case spuriously. It fails loudly and says which file, so that is a cost paid in legibility
+	 * rather than in silence, which is the trade this repo takes for a rule that would otherwise have
+	 * no enforcement at all.
 	 */
 	@Test
 	public void noProductionClassButTheValidatorItselfCallsTheNamingPredicate() throws IOException {

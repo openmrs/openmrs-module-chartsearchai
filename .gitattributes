@@ -1,0 +1,5 @@
+# The manifest is parsed field-by-field by a POSIX shell (scripts/model-manifest.sh); a CR left on
+# the url column by a CRLF checkout makes every fetch fail with no useful diagnostic. The shell
+# files are sourced and executed, so they need LF for the same reason.
+model-manifest.tsv text eol=lf
+*.sh text eol=lf

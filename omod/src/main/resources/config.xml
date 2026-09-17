@@ -63,7 +63,7 @@
 	<globalProperty>
 		<property>chartsearchai.llm.modelFilePath</property>
 		<defaultValue>chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf</defaultValue>
-		<description>Relative path, including the filename, within the OpenMRS application data directory to the GGUF LLM model file used for inference. Example: chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf (resolves to &lt;application-data-directory&gt;/chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf). The recommended model is Gemma 4 E4B Instruct (Q4_K_M quantization, ~5GB). Download from https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF. Path traversal (e.g. "..") is not allowed.</description>
+		<description>Relative path, including the filename, within the OpenMRS application data directory to the GGUF LLM model file used for inference. Example: chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf (resolves to &lt;application-data-directory&gt;/chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf). The recommended model is Gemma 4 E4B Instruct (Q4_K_M quantization, ~5GB). Download from https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF, and check it against the revision and sha256 recorded for llm-gemma-4-e4b in the module's model-manifest.tsv before pointing this property at it. Path traversal (e.g. "..") is not allowed.</description>
 	</globalProperty>
 
 	<globalProperty>

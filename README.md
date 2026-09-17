@@ -8,7 +8,7 @@ For project background, community discussion, and roadmap, see the [wiki project
 
 The standalone download above includes the backend module, frontend ESM, and the following AI models — ready to run:
 
-- **LLM**: [Gemma 4 E4B Instruct (Q4_K_M)](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) — ~5 GB, the module's default model, for answering clinical questions. (A larger Gemma 4 26B MoE bundle can be built via the workflow's `gguf_model_url` input.)
+- **LLM**: [Gemma 4 E4B Instruct (Q4_K_M)](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) — ~5 GB, the module's default model, for answering clinical questions. (A larger Gemma 4 26B MoE bundle can be built via the workflow's `gguf_model_url` input, which since [#449](https://github.com/openmrs/openmrs-module-chartsearchai/issues/449) requires the matching `gguf_sha256` input alongside it.)
 - **Retrieval + embedding**: the [querystore module](https://github.com/openmrs/openmrs-module-querystore) with [e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) (~440 MB ONNX) — querystore is a required module and owns the retrieval path. chartsearchai no longer ships its own embedder; retrieval and citation grounding both use querystore's model.
 
 > **Before running the download, see [Standalone platform notes](#standalone-platform-notes)** — in particular the **Windows JDK requirement** (the local embedder won't load on an old or Oracle JDK).
@@ -82,7 +82,7 @@ Per-platform setup for the [downloaded standalone](#chart-search-ai-module) (Jav
 - Webservices REST module 2.44.0+
 - RAM for local LLM inference (not required when using a remote LLM):
   - **~6–8GB RAM** for the module's default model — Gemma 4 E4B (~5GB GGUF), as bundled with the standalone download. Suitable for most deployments adding the module to an existing OpenMRS site.
-  - **~24GB+ RAM** for the production-grade Gemma 4 26B MoE (optional; build the standalone bundle with the workflow's `gguf_model_url` input and point `chartsearchai.llm.modelFilePath` at the downloaded filename).
+  - **~24GB+ RAM** for the production-grade Gemma 4 26B MoE (optional; build the standalone bundle with the workflow's `gguf_model_url` and `gguf_sha256` inputs and point `chartsearchai.llm.modelFilePath` at the downloaded filename).
 - The [openmrs-module-querystore](https://github.com/openmrs/openmrs-module-querystore) module — required; it owns all retrieval, indexing, and embedding.
 
 ## Docker
@@ -115,7 +115,13 @@ The `.omod` file is in `omod/target/`.
 
 The module's default `chartsearchai.llm.modelFilePath` points to **Gemma 4 E4B Instruct (Q4_K_M, ~5GB)** — `chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf`. Download it from [unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) if you intend to keep the default.
 
-For production hardware (~24GB+ RAM), upgrade to **Gemma 4 26B MoE Instruct (UD-Q4_K_M, ~17GB)** — the model the standalone download bundles. Available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). After downloading, update `chartsearchai.llm.modelFilePath` to point to the new filename.
+Take it from the revision this project pins rather than from the branch tip, and check what you got:
+
+- GGUF: https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/bfc15c382204943c3a8fff0c750b94ae2364d7a3/gemma-4-E4B-it-Q4_K_M.gguf
+
+[`model-manifest.tsv`](model-manifest.tsv) records that revision and the file's sha256 under the id `llm-gemma-4-e4b` — compare it before pointing the module at it — `sha256sum`, `openssl dgst -sha256` or `shasum -a 256`, whichever your machine has. This is the file the bundled `llama-server` executes and whose output becomes the clinical answer, so a hand download is worth the extra command ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
+
+For production hardware (~24GB+ RAM), upgrade to **Gemma 4 26B MoE Instruct (UD-Q4_K_M, ~17GB)**. The standalone download ships E4B; this is a hand upgrade. Available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). After downloading, update `chartsearchai.llm.modelFilePath` to point to the new filename.
 
 Place whichever `.gguf` you choose inside the OpenMRS application data directory (e.g., `<openmrs-application-data-directory>/chartsearchai/`). Model paths are resolved relative to this directory for security.
 
@@ -129,7 +135,7 @@ Place whichever `.gguf` you choose inside the OpenMRS application data directory
 | Llama 3.3 8B | ~10GB total | `llama3` | [GGUF](https://huggingface.co/bartowski/Llama-3.3-8B-Instruct-GGUF) |
 | Gemma 3 12B | ~12GB total | `gemma` | [GGUF](https://huggingface.co/bartowski/google_gemma-3-12b-it-GGUF) |
 | Mistral Nemo 12B | ~12GB total | `mistral` | [GGUF](https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF) |
-| **Gemma 4 26B MoE** *(standalone bundle, recommended for production)* | ~18–22GB total | `gemma` | [GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF) |
+| **Gemma 4 26B MoE** *(recommended for production; not bundled)* | ~18–22GB total | `gemma` | [GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF) |
 | Gemma 4 31B | ~20–24GB total | `gemma` | [GGUF](https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF) |
 
 To switch models, update `chartsearchai.llm.modelFilePath` — no rebuild needed. The embedded llama-server detects the model's chat template automatically. See [Evaluated models](#evaluated-models) for a full comparison of all models tested, including size trade-offs and licensing.
@@ -143,7 +149,7 @@ To switch models, update `chartsearchai.llm.modelFilePath` — no rebuild needed
 
 Swapping the served model from E4B to E2B cut cold-query latency by ~3× on this CPU-only deployment. The warm number reflects llama.cpp reusing the prompt's KV cache when an identical question is re-issued; diverse production traffic only partially benefits (the chart prefix reuses, the per-question suffix re-prefills). The same KV-cache mechanism also accelerates *different* follow-up questions on the same patient when the chart prefix is stable across calls — see the [Prompt-stability caveat](#querystore-deployment) under Querystore deployment for the measured ~4–7 s follow-up numbers. Quality also diverges on the same prompt: E4B cited 2 `condition` resources, E2B cited 3 `diagnosis` resources with additional metadata in the answer text. A single observation isn't a quality verdict — run the [Evals](#evals) suite before promoting E2B as the served default.
 
-Gemma 4 26B MoE is recommended for production deployments because it follows the system prompt rules (never infer, cite every record, complete enumeration on list queries) reliably without needing reasoning as a safety scaffold. Smaller models work but trade off either safety or list completeness depending on the query. The MoE architecture activates only ~3.8B parameters per token, so per-token speed is comparable to a 4B dense model despite the 26B total size.
+Gemma 4 26B MoE is the recommended upgrade for production deployments — the bundle itself ships E4B — because it follows the system prompt rules (never infer, cite every record, complete enumeration on list queries) reliably without needing reasoning as a safety scaffold. Smaller models work but trade off either safety or list completeness depending on the query. The MoE architecture activates only ~3.8B parameters per token, so per-token speed is comparable to a 4B dense model despite the 26B total size.
 
 ### 3. Download the embedding model *(optional)*
 
@@ -151,8 +157,10 @@ The embedding model belongs to querystore — chartsearchai no longer ships its 
 
 **Querystore-backed retrieval** — the querystore module handles retrieval; the LLM filters the top-K it returns. See [Querystore deployment](#querystore-deployment) below for the global properties this path expects and [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for the model rationale. The LLM is still required (see [step 2](#2-download-the-llm-model-local-mode-only) or use a remote engine). Download `intfloat/e5-base-v2` (~440MB):
 
-- ONNX model: https://huggingface.co/Xenova/e5-base-v2/resolve/main/onnx/model.onnx *(self-contained — see [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this source over the canonical `intfloat/e5-base-v2`)*
-- Vocab: https://huggingface.co/Xenova/e5-base-v2/resolve/main/vocab.txt
+- ONNX model: https://huggingface.co/Xenova/e5-base-v2/resolve/21f8d0e36fdfe76e6a023802dfb293fc6d750ad1/onnx/model.onnx *(self-contained — see [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this source over the canonical `intfloat/e5-base-v2`)*
+- Vocab: https://huggingface.co/Xenova/e5-base-v2/resolve/21f8d0e36fdfe76e6a023802dfb293fc6d750ad1/vocab.txt
+
+Both URLs name an immutable commit rather than `main`, and [`model-manifest.tsv`](model-manifest.tsv) records the sha256 of each — check what you downloaded against it before putting it where the module will load it, the same way. The Docker entrypoint and the standalone build do that check for you; a hand download is the one path where nobody else can ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
 
 Place both at `<openmrs-application-data-directory>/querystore/` and wire the global properties documented in [Querystore deployment](#querystore-deployment) below.
 
@@ -225,7 +233,7 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 **Prompt-stability caveat — only relevant in `fullChart` mode.** In `fullChart` mode the chart bytes do not vary with the question, so the `<system> + <chart>` prompt prefix is stable across consecutive queries and llama-server's KV cache reuses it (question-independent is not time-independent: each `drug_order` record states whether its order is in force, and the patient's current age is computed live, so both move the bytes when the underlying fact changes); that is what the [Warmup](#warmup) endpoint and the disk-persisted KV cache exist to exploit. In the default `queryScoped` mode each question carries its own small slice, so there is no shared prefix to amortize — and none is needed, because a slice prefills in a fraction of the time. Setting `chartsearchai.embedding.preFilter=true` in `fullChart` mode leaves the chart prefix intact (the focus hint is a small trailing payload), so it does not break the reuse.
 
-**Who sets these.** On the Docker path, `backend-init.sh` writes them itself on every start — `chartsearchai.querystore.enabled`, `querystore.embedding.modelFilePath` and `querystore.embedding.vocabFilePath`, pointed at the files it has just provisioned — and only where the property is blank, so a value you set deliberately survives. One exception: when the demo dataset is (re)seeded, `chartsearchai.querystore.enabled` and `querystore.bootstrap.autostart` are asserted outright, because a freshly imported dump brings its own values for both and they describe the dump rather than your server. They used to be a manual step, which meant they existed nowhere but the running instance's database: a `--destroy-volumes` deploy deleted the wiring along with it, and because the demo seed also enables `querystore.bootstrap.autostart`, the next start swept every record of every seeded patient against an unconfigured embedder and logged a stack trace for each one. On any other install you still set them yourself after first start. A follow-up in the querystore module's `config.xml` would make them defaults everywhere; the GPs are already declared there with empty values, which is why they appear in **Admin > Settings** today. See [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this path uses `e5-base-v2`.
+**Who sets these.** On the Docker path, `backend-init.sh` writes them itself on every start — `chartsearchai.querystore.enabled`, `querystore.embedding.modelFilePath` and `querystore.embedding.vocabFilePath`, pointed at the files it has just provisioned — and only where the property is blank, so a value you set deliberately survives. One exception: when the demo dataset is (re)seeded, `chartsearchai.querystore.enabled` and `querystore.bootstrap.autostart` are asserted outright, because a freshly imported dump brings its own values for both and they describe the dump rather than your server. They used to be a manual step, which meant they existed nowhere but the running instance's database: a `--destroy-volumes` deploy deleted the wiring along with it, and because the demo seed also enables `querystore.bootstrap.autostart`, the next start swept every record of every seeded patient against an unconfigured embedder and logged a stack trace for each one. On this path an embedder that does not verify against `model-manifest.tsv` stops the container at the download step — the start is refused rather than left to fail at the first query — so this wiring is never reached and the database keeps whatever the previous start left in it. The wiring carries a gate of its own for a start that does reach it with no verified embedder: it writes neither path and forces `querystore.bootstrap.autostart` off, including where an earlier start's path is still standing in the database, so that sweep cannot run against bytes this start never checked ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)). On any other install you still set them yourself after first start. A follow-up in the querystore module's `config.xml` would make them defaults everywhere; the GPs are already declared there with empty values, which is why they appear in **Admin > Settings** today. See [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this path uses `e5-base-v2`.
 
 #### Retrieval
 
@@ -833,7 +841,7 @@ The following models were evaluated for local inference via the embedded llama-s
 | Mistral Nemo 12B | 12B | ~7GB | ~12GB | 128K tokens | ~4–8 tok/s | mistral |
 | Phi-3-Medium 14B | 14B | ~8GB | ~14GB | 4K tokens | ~3–6 tok/s | phi3 |
 | Qwen 2.5 14B | 14B | ~8GB | ~14GB | 128K tokens | ~3–6 tok/s | chatml |
-| **Gemma 4 26B MoE** *(standalone default)* | 26B (3.8B active) | ~15GB | ~18–22GB | 256K tokens | ~3–6 tok/s | gemma |
+| **Gemma 4 26B MoE** *(hand upgrade for production)* | 26B (3.8B active) | ~15GB | ~18–22GB | 256K tokens | ~3–6 tok/s | gemma |
 | Gemma 3 27B | 27B | ~16.5GB | ~20–24GB | 128K tokens | ~1–2 tok/s | gemma |
 | MedGemma 27B Text | 27B | ~16.5GB | ~20–24GB | 128K tokens | ~1–2 tok/s | gemma |
 | Gemma 4 31B | 31B | ~18GB | ~22–26GB | 256K tokens | ~1–2 tok/s | gemma |

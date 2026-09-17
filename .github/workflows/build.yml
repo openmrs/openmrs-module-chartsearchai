@@ -72,7 +72,9 @@ jobs:
         run: python3 eval/latency/kv_prefill_gate.py --selftest
 
   # backend-init.sh is the demo backend's ENTRYPOINT, and until this job existed nothing in CI
-  # parsed it. Dockerfile.backend only COPYs it, so a syntax error builds a perfectly good image,
+  # parsed it. Since #444 it sources scripts/model-manifest.sh, which is covered here for the same
+  # reason and at the same risk: a syntax error in a sourced file kills the entrypoint just as
+  # surely, and the standalone workflow sources that file too. Dockerfile.backend only COPYs it, so a syntax error builds a perfectly good image,
   # build-docker publishes it, the deploy reports success and the container exits at startup —
   # a green pipeline and a dead demo. `sh -n` is the gate that matters (the script is #!/bin/sh
   # and written for POSIX sh, not bash); shellcheck at -S warning catches the live bugs — unquoted
@@ -80,16 +82,21 @@ jobs:
   # otherwise fail on. Both are clean as of this commit, so a red run here means a new defect,
   # not a pre-existing one.
   entrypoint-lint:
-    name: backend-init.sh lint (the demo entrypoint nothing else parses)
+    name: entrypoint shell lint (the demo entrypoint and the library it sources)
     # Opted out of the daily schedule — see the `schedule:` comment above.
     if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: sh -n (POSIX syntax — a failure here bricks the container at startup)
+      # Separate steps, with `if: always()` on the second, so one run reports both files rather
+      # than stopping at whichever fails first.
+      - name: sh -n backend-init.sh (POSIX syntax — a failure here bricks the container at startup)
         run: sh -n backend-init.sh
+      - name: sh -n scripts/model-manifest.sh (sourced by the entrypoint; a failure is the same brick)
+        if: always()
+        run: sh -n scripts/model-manifest.sh
       - name: shellcheck (warnings and above)
-        run: shellcheck -s sh -S warning backend-init.sh
+        run: shellcheck -s sh -S warning backend-init.sh scripts/model-manifest.sh
 
   # Issue #181. `api/pom.xml` declares querystore-api at 1.0.0-SNAPSHOT, so what this module
   # compiles against is whatever snapshot was published remotely last (CI) or `mvn install`ed

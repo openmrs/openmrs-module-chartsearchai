@@ -108,6 +108,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
+- [Decision 103: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -671,7 +672,7 @@ The module ships two recommended choices, sized for different deployment context
 
 **Gemma 4 E4B Instruct** is the default in `config.xml` (`chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf`) for ordinary module installs. It is part of the Gemma 4 "E" line, which uses Per-Layer Embeddings (PLE) for memory efficiency: ~4.5B effective parameters at runtime, ~2.5GB on disk, ~6–8GB total RAM, ~10–20 tok/s on CPU. The 128K context window holds roughly 6,000 serialized patient records (~15 tokens each), enough for most patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF). Picked because it is the smallest model in the Gemma 4 family that follows the system prompt rules (never infer, cite every record) acceptably without a reasoning channel as a safety scaffold, while staying small enough to download on a slow connection (~2.5GB) and run on a modest server.
 
-**Gemma 4 26B MoE Instruct** is bundled with the standalone build and is the recommended upgrade for production hardware (~24GB+ RAM). It is a Mixture-of-Experts model with 26B total parameters but only ~3.8B activated per token, so per-token speed is comparable to a 4B dense model despite the 26B total size. The 256K context window comfortably holds even the largest patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). Picked because among CPU-viable models it has the strongest instruction following on list-completeness and adversarial-question handling, without depending on reasoning tokens.
+**Gemma 4 26B MoE Instruct** is the recommended upgrade for production hardware (~24GB+ RAM). It is not what the standalone download ships — that bundle carries E4B, the same model `model-manifest.tsv`'s `llm-gemma-4-e4b` row pins for the push build; a 26B bundle can be built by dispatching the standalone workflow with its `gguf_model_url` and `gguf_sha256` inputs. It is a Mixture-of-Experts model with 26B total parameters but only ~3.8B activated per token, so per-token speed is comparable to a 4B dense model despite the 26B total size. The 256K context window comfortably holds even the largest patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). Picked because among CPU-viable models it has the strongest instruction following on list-completeness and adversarial-question handling, without depending on reasoning tokens.
 
 For deployments that prefer medical-domain fine-tuning, **MedGemma 1.5 4B** (released January 2026) is a strong alternative — built on the Gemma 3 architecture and fine-tuned on clinical text, biomedical literature, medical Q&A, and synthetic EHR data, with native support for medical imaging (CT, MRI, histopathology). At 4B parameters with Q4_K_M, it is ~2.5GB on disk and ~6–8GB total RAM. GGUF quantizations are available from [unsloth/medgemma-1.5-4b-it-GGUF](https://huggingface.co/unsloth/medgemma-1.5-4b-it-GGUF). Licensed under the [Health AI Developer Foundations Terms of Use](https://developers.google.com/health-ai-developer-foundations/terms) — requires validation before clinical deployment, more restrictive than the Apache 2.0 licensing of Gemma 4. The original MedGemma 4B remains available from [unsloth/medgemma-4b-it-GGUF](https://huggingface.co/unsloth/medgemma-4b-it-GGUF) and works identically with the module (same chat template and resource requirements).
 
@@ -780,7 +781,7 @@ A server running OpenMRS typically uses 1–2GB for the JVM heap. A 4GB machine 
 
 The module requires sufficient RAM for both the OpenMRS JVM and the LLM model:
 - **Minimum**: ~3–5GB total (1–2GB JVM + ~2–3GB for a Gemma 4 E2B or Gemma 3n E2B model). Usable but with weaker instruction following and reasoning. For 3B models, ~6GB total.
-- **Recommended**: ~6–8GB total for the default Gemma 4 E4B model (or MedGemma 1.5 4B). Upgrade to ~10GB for the 8B model, which provides significantly better general reasoning, or ~24GB+ for the production-grade Gemma 4 26B MoE bundled with the standalone build.
+- **Recommended**: ~6–8GB total for the default Gemma 4 E4B model (or MedGemma 1.5 4B). Upgrade to ~10GB for the 8B model, which provides significantly better general reasoning, or ~24GB+ for the production-grade Gemma 4 26B MoE, which is a hand upgrade rather than what the standalone download ships.
 - The embedding pre-filter (opt-in via `chartsearchai.embedding.preFilter=true`) reduces the number of tokens sent to the LLM, which improves latency on huge patient charts at the cost of potentially omitting records the LLM needs for negative reasoning. The default is full-chart.
 
 ### Decision
@@ -1729,7 +1730,7 @@ Both decisions are correct simultaneously:
 
 ### Source: Xenova mirror, not the canonical repo
 
-Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. `backend-init.sh` carries a 200MB size guard as the second line of defense.
+Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. Since #444 the revision is pinned, which retires this shape as a live cause — [Decision 103](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here) for what the size check still does.
 
 ### Trade-offs
 
@@ -8147,3 +8148,280 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `stated < named` guard in its other state),
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
+
+## Decision 103: A model file is fetched from an immutable revision and refused unless it matches a digest committed here
+
+**Status: Accepted** (September 2026) — implemented, issues
+[#444](https://github.com/openmrs/openmrs-module-chartsearchai/issues/444) (severity HIGH) and
+[#449](https://github.com/openmrs/openmrs-module-chartsearchai/issues/449) (severity MEDIUM), two
+security-scan findings of one defect (CWE-494). It changes no prompt, no chip, no response key and no
+wire format.
+
+**Context.** The module does not ship the files it executes. Two places fetch them, and both fetched
+from the mutable `main` branch of a repository owned by someone outside the OpenMRS organisation:
+
+- `backend-init.sh`, the published backend image's ENTRYPOINT, provisions the GGUF weights that
+  `LocalLlmEngine` serves through the bundled native `llama-server` and the e5 ONNX embedder and
+  vocab whose paths it writes into querystore's global properties;
+- `.github/workflows/build-standalone.yml` bakes the same class of files into the standalone zip the
+  README advertises as the product download.
+
+Nothing bound the received bytes to a version anyone had reviewed — no pinned revision, no digest, no
+signature. The entrypoint `mv`'d whatever curl produced into the filename `config.xml` defaults
+`chartsearchai.llm.modelFilePath` to; the workflow did not even pass `curl -f`, so an HTML error page
+would have been assembled into the bundle as a model. Whoever controlled those repositories at fetch
+time therefore decided what the clinical LLM says about every patient chart, and the module's own
+downstream validators cannot restore that — citation grounding and `DrugSafetyValidator` both operate
+on the model's own text.
+
+**What was taken.** One manifest, `model-manifest.tsv`, records each artifact's pinned Hugging Face
+commit, its sha256 and its exact byte count; one POSIX-sh library, `scripts/model-manifest.sh`, is
+sourced by both fetch sites and is the only thing that downloads a model. Its composed step
+`fetch_and_verify` refuses anything that is not the recorded artifact and returns a distinct code
+per reason, so a caller can add the diagnostic it alone has and can word its own message honestly.
+Some of those codes report a deletion — a digest mismatch, a size mismatch, and the case below
+where a copy already on the volume is deleted and its replacement then cannot be fetched; the rest
+report that nothing was verified rather than that something was removed, and the library's own
+code table is the authority on which is which. Callers word "refused and deleted" off the code and
+never off the disk, so a code that reported a deletion as a plain fetch failure would make every
+caller's message false at once.
+
+The manifest is one file rather than one per consumer because the two consumers are one defect: a
+digest written twice is a digest that will be bumped once. That is also why the fix is one PR — and
+why the two sites now share one `vocab.txt` row. They had been fetching byte-identical bytes from
+two different third-party accounts, which is two pins to remember and one more party to trust for
+nothing.
+
+**Three choices inside it are worth recording.**
+
+*The revision is a Hugging Face commit hash, not an OpenMRS-controlled mirror.* Both findings offer
+either. A mirror is the stronger answer — it removes the third party from the fetch path rather than
+freezing what they served — but it is infrastructure this repository cannot provision, and the
+digest is what actually binds the bytes either way. The manifest's `url` column is almost the whole
+of what a mirror would change — the exception is `ModelDownloadPinningGuardTest`, whose row check
+requires a `huggingface.co` `resolve/<40-hex>` url — in two places, since it also requires README's
+hand-download urls to be byte-equal to a row. Moving a row to a mirror means widening both to
+whatever makes the new url immutable. Better it says so than that a mirror arrives one day and the
+guard reads as a refusal of the idea.
+
+*A file already on the volume is verified, not trusted for its name, and replaced when it fails.*
+`/openmrs/data` outlives the container, so the population this fix most needs to reach —
+deployments provisioned before it existed — is exactly the one a download-time-only check never
+runs against. A file that fails is
+re-fetched from the pinned revision rather than merely refused, because a stale file and a
+substituted one are indistinguishable on disk and the replacement is bound to the same digest:
+that decides how many restarts recovery takes, not what is accepted. **A refusal does cost the
+copy**: the bytes are deleted before the replacement is fetched, so a deployment that cannot reach
+the pinned revision is left with neither file — which is why that outcome has an exit code of its
+own rather than sharing the one whose contract says nothing was deleted, and the message an
+operator gets says the copy is gone
+(`ModelDownloadIntegrityTest.aCopyDeletedForAReplacementThatNeverArrivesIsNotReportedAsAPlainFetchFailure`).
+For the embedder that means a container which
+refuses to start — and stays stopped, because the `backend` service declares no restart policy, which
+`ModelDownloadPinningGuardTest.theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal`
+asserts of this repository's `docker-compose.yml`. The deploy server's compose file is not that one —
+`Dockerfile.backend` repeats the HEALTHCHECK block for exactly that reason — so a policy added there
+is residue no test here can see. That is the fail-closed direction and it is the point — the state
+being removed is one where unverified weights answer clinical questions — but it is a real cost,
+and the refusal's own log lines, naming the expected and the received digest, are what an operator
+is left to report.
+
+The cost is real, and two drafts of this paragraph got it wrong before it was measured — the first
+said the hashing is "paid alongside the download it replaces", which is true only of a first boot,
+and the second attributed a rate to a CPU feature when the measurement had actually varied the
+TOOL. What is true: on a steady-state restart there is no download, because the old code returned
+early whenever the target existed (`backend-init.sh:176-178` at `c430a960`), so a restart did no
+work on the weights at all. Removing that early return is the point of this decision, and the
+hashing it adds is net-new work with nothing to overlap.
+
+**So the cost table above is an argument for putting the early return back**, and nothing would have
+noticed. Measured 2026-09-17 against the suite as it then stood, and reproduced independently:
+re-inserting those same three lines at either fetch site — in `fetch_llm_in_background`, or as an
+absence test wrapped around a top-level `fetch_or_exit` — left every api case, `sh -n` and
+`shellcheck -s sh -S warning` green. The guards over these fetches
+asked whether one is NAMED (routed through the library) and POSITIONED (in the current shell, ahead
+of the property write); neither is a question about whether REACHING it is conditioned on the file's
+absence, and the library cannot answer it at all, not being the site that would decline to call it.
+That is the same lesson the subshell family taught, arriving from the other direction: the property
+worth pinning is what the shell DOES. `EntrypointVolumeVerificationTest` pastes
+`fetch_llm_in_background` and `_download_llm_file` out of the entrypoint by name, sources the real
+library, and runs the entrypoint's own calls with the target ALREADY on the volume — once holding the
+recorded artifact, which must be reported ready without a download, and once holding same-length
+bytes no row records, which must be refused and deleted. The embedder's two fetches are top-level
+statements with no function to extract, so that half stays a source channel:
+`ModelDownloadPinningGuardTest.everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally` asserts
+the property positively — every command naming a provisioned artifact sits at nesting depth 0, inside
+no block and no function, so where it is written is when it runs — rather than enumerating the
+spellings of a skip, which is the shape this decision already records being defeated in turn. Its
+nesting walk has to balance to 0 at end of file, which is what makes a construct it cannot parse a
+loud failure instead of a silent zero. The residue is named in both: depth is not reachability, an
+`exit` above these statements would skip them at depth 0, a command that merely NAMES an artifact
+inside a function is reported rather than ignored, and a skip written inside a function the harness
+does not paste is outside both.
+
+The volume is 7.94 GiB across the four artifacts (8,519,952,880 bytes): 0.41 GiB synchronous — the
+embedder, because the global properties it gates are written seconds later — and 7.53 GiB in two
+parallel background subshells. What that costs depends on which of the three tools `file_sha256`
+finds, and the spread between them is larger than any other factor here. Measured 2026-09-17 on an
+Apple M1 Max over a warm 1 GiB file, every digest compared and identical, and reproduced
+independently on a second machine of the same class over a real 4.58 GiB GGUF:
+
+| tool | rate | 7.94 GiB sequentially |
+|---|---|---|
+| `openssl dgst -sha256` | 1.67 GiB/s | ~4.8 s |
+| `sha256sum` | 1.55 GiB/s | ~5.1 s |
+| `shasum -a 256` (Perl) | 0.30 GiB/s | ~26 s |
+
+**Both columns are binary units**, which is what the rates were taken in; mixing them with the
+decimal byte count above overstates the projection by 7%. And the column is sequential, which is an
+upper bound rather than what is paid: the two large artifacts hash in two background subshells, and
+a run over a pair of files of that size showed no bandwidth contention — the larger file's own rate
+was unchanged, so the wall cost is about the larger of the two rather than their sum.
+
+That 5x is why `file_sha256` tries the two fast tools first and `shasum` last, an order this
+measurement changed. **The `sha256sum` row was not measured on GNU coreutils**: the machine has
+Apple's `/sbin/sha256sum`, and no container runtime was available to measure the Debian-family
+build that `Dockerfile.backend`'s `eclipse-temurin:21-jre` base provides — which is the row the
+image takes. So that figure is a transfer from a different implementation of the same algorithm and
+is the weakest number here. It does not move the conclusion: even at `shasum`'s rate the
+synchronous half is 1.4 s against the 30-minute `start_period` `docker-compose.yml` gives the
+backend service, under a tenth of a percent of it. What none of this measures is slow storage —
+every run read at NVMe speed, and below roughly 0.3 GB/s the read dominates and the tool choice
+stops mattering.
+
+*A refusal that must stop the start is a library behaviour, not a branch at the call site.* The
+entrypoint used to read the library's exit code and branch on it, and the property "a refusal stops
+the start" was then something only a source-reading guard could check. Four readings of it were
+defeated in turn — a statement inserted between the fetch and the branch, so `$?` was that
+statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
+recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
+next. `fetch_or_exit` NARROWS that class rather than closing it: there is no branch to spell, and
+what the shell DOES is a behaviour a test drives. Reviewers then found two further spellings, and
+neither is a misread branch — each is a subshell sitting between the call and the entrypoint's own
+shell. One `&` on the call's last continuation line backgrounds the whole command; a `| tee`
+appended to the same call makes it an element of a pipeline, which POSIX also runs in a subshell.
+Both left every source guard and shellcheck green, and both were reproduced against the real
+library: the refusal printed in full, the script then ran on to the next statement and exited 0.
+The guard now reads the logical command and refuses all three shapes a line can spell — a call
+that is not the command itself, a command substitution being a subshell too; a trailing `&`; and a
+pipe.
+
+**The residue is named rather than claimed away**, and the previous attempt to bound it — "what is
+bounded is the accidental edit" — was itself falsified by the `| tee`, which is about as ordinary
+an edit as there is. What a line-level rule cannot see is a subshell the call's own line does not
+spell: a `fetch_or_exit` inside a shell function that is itself backgrounded or piped, or inside a
+multi-line `( … ) &` group — that last one driven against the real library here, printing the
+refusal and then running on to the next statement, exit 0, exactly as the two closed shapes did.
+Closing it would mean the library detecting its own subshell, for which POSIX sh offers no
+portable test.
+
+The pattern is worth naming beyond this decision. Changing the KIND of question — from parsing a
+shape to driving a behaviour — cut four spellings at once where four successive repairs had each
+bought one. It did not make the property unbreakable: a claim that it had was written here and
+refuted within a cycle, and the narrower claim that replaced it was refuted in the next one.
+
+*A model path is published only for bytes THIS shell verified.* The other half of #444's refusal is
+that the embedding global properties stay unconfigured, and that too was read off the source: a
+guard compared the line of the last embedder fetch against the line of the first
+`configure_retrieval_gps` invocation. A reviewer defeated it by wrapping the two fetches in a
+function defined where they already sat and calling it after the wiring — the verification then ran
+after the global-property write, with every source guard, `sh -n` and shellcheck green. Driven
+against a path-rewritten copy of the real entrypoint, a `mariadb` stub recording every statement and
+a loopback origin serving bytes no row records, that arrangement INSERTed
+`querystore.embedding.modelFilePath` and `querystore.embedding.vocabFilePath` before the embedder was
+refused; the unwrapped entrypoint wrote neither.
+
+So the ordering stopped being a fact about source layout. `fetch_and_verify` records each id that
+verified in the CURRENT shell, and `require_verified` is what `configure_retrieval_gps` asks before
+it writes either path. Re-driven the same way against the fixed entrypoint, the same wrap wrote
+neither path — the paths simply go unwritten, which is the fail-closed direction and the same state
+a refusal produces — while a run serving bytes that DO match the recorded digest wrote both, which
+is what says the gate is not merely refusing everything. The ledger is an ordinary shell variable,
+which settles the subshell family above in the direction that matters: a fetch backgrounded, piped,
+command-substituted, or taken inside a function that is any of those, records nothing the parent
+shell can see, so no path is published even though the `exit` stopped nothing. What it cannot do is
+make the `exit` land, which is why the line-level guard stays.
+
+That positional guard is now a second channel rather than the guarantee, and it asserts the premise
+it rests on: a must-have fetch is a top-level statement of the entrypoint, so where it is written is
+when it runs. The function wrap fails that premise, which is what reddens it.
+
+*A decline turns the bootstrap sweep off itself, rather than by way of the property.* The other half
+of the refusal was written as a consequence of the first: the paths go unwritten, so the safety
+below them — `[ -z "$_model_gp" ]` over a read-back of `querystore.embedding.modelFilePath` — finds
+it blank and switches `querystore.bootstrap.autostart` off. That composition holds on a virgin
+database only. `gp_set_if_blank` leaves a row it finds non-blank standing, deliberately, so a
+deployment past its first good start reads back the path the LAST good start wrote, whatever this
+start did. On the shipped entrypoint the embedder goes through `fetch_or_exit`, whose refusal ends
+the shell before the wiring runs, so what the decline answers is a start that reaches the wiring
+with nothing in the ledger — the swallowed-exit residue above, where a refusal has already deleted
+the file that path names and the `exit` stopped nothing. Measured 2026-09-17 against the
+entrypoint's own wiring functions, a `mariadb` stand-in whose store survives between starts and a
+refusal taken in a background subshell: the pre-fix arm left
+`modelFilePath=querystore/model.onnx bootstrap.autostart=true`, which is the per-record exception
+flood `configure_retrieval_gps` exists to prevent, reached from inside the gate that was supposed to
+close it. So the `else` arm now writes the sweep off on the ledger's verdict, and the blank-path
+test stays for the one case only it can answer — the gate PASSED and the write did not take, which
+`gp_set_if_blank` discards the error of. The two reasons are distinct in the line an operator gets.
+`EntrypointRetrievalWiringTest` drives both arms, that third case, and a verified control; it is a
+third channel because neither of the other two can see a composition — one drives the library with
+no database, the other reads source. The claim that the two halves already composed to one
+fail-closed state was written in the entrypoint's comment and in the guard's own allow-list, and
+believed in both for three review rounds, which is why the correction is recorded here. The prose
+that replaced it then overreached the other way, wherever it was restated: it said a start whose
+embedder is REFUSED reaches this arm, which on the shipped entrypoint it cannot, `fetch_or_exit`
+having ended the shell at the download step. What reaches the arm is a start with nothing in the
+ledger. The code is fail-closed either way; only the wording moved.
+
+
+*The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
+not subsume its message. The two failures an operator can act on differently are a transfer that
+stopped short and bytes that are not the artifact, and only the first has a remedy the operator
+owns — retry. A single "the digest did not match" would send them looking for an attacker in both
+cases. The guard was introduced for the ONNX export shape
+[Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) records; **pinning
+the revision retired that cause**, and the guard survives for the message alone, which is why its
+diagnostic names a truncated transfer. The order is the size branch of `_mm_verify_file`, and the
+message it enables is the caller's diagnostic lines that `fetch_or_exit` prints for that code alone
+— change one and the other reads false.
+`ModelDownloadIntegrityTest.aTruncatedTransferIsRefusedAsAShortFileRatherThanAsASubstitution` is
+what notices the order, and
+`.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript` that the diagnostic is size-only.
+
+**What this does not close.** Two fetches in these same files stay unverified and are out of scope
+for both findings: `Dockerfile.backend` downloads `openmrs.war` from a Maven repository, and
+`backend-init.sh` fetches the demo SQL dump from a GitHub release URL an environment variable can
+override. Neither is a file a native parser executes, and both are separate decisions about who the
+project trusts.
+
+**Moving a pin.** The same recipe [Decision 36](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
+records for the bundled knowledge base: change the revision in the `url` column, re-record `sha256`
+and `bytes` from the new revision, and run the suite. Take the digest from the file itself —
+huggingface.co's `paths-info` API reports a git-lfs object's `oid`, which is its sha256, and the
+`x-linked-etag` header on a HEAD of the pinned URL confirms the same value independently. **Do not
+reach for that header on a file that is not an lfs object.** It is present there too and it is a git
+blob sha1 — 40 hex characters rather than 64, of a different thing — so a small file like `vocab.txt`
+has to be downloaded and hashed. `ModelDownloadPinningGuardTest` requires 64 hex in that column, so
+the confusion reddens the build rather than shipping, but it is the mistake this recipe exists to
+prevent: measured 2026-09-17, `vocab.txt` at the pinned revision returns
+`x-linked-etag: "fb140275c155a9c7c5a3b3e0e77a9e839594a938"`, which is not its sha256.
+
+**Nothing in the suite checks a digest against the Hub**, and nothing can without downloading
+multiple gigabytes in CI: the tests prove the library refuses what does not match the manifest, not
+that the manifest matches upstream. A wrong digest therefore fails closed but fails everywhere — in
+every deployment and every standalone build, on the first fetch — so the first release build after a
+pin move is the check, and it is the one step of this recipe a maintainer cannot skip.
+
+→ `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
+serves substituted bytes, which is the acceptance both findings state; its ledger cases are where
+"the embedder is verified before its path is published" now lives.
+`ModelDownloadPinningGuardTest` reads the source for what no behaviour of the library can show —
+that each site still routes through it, that the rename still follows the verification, that the
+entrypoint still asks `require_verified` before it publishes either embedder path, and that no
+revision has relaxed back to a branch name. Mutate any of those and read the failures.
+`EntrypointRetrievalWiringTest` runs `configure_retrieval_gps` itself, taken out of the entrypoint
+by name, against a `mariadb` stand-in whose global-property store persists across starts — the one
+channel that can see what the ledger and `gp_set_if_blank` compose to.
+`EntrypointVolumeVerificationTest` runs the weights fetch the same way, with the target already on
+the volume, which is where "a file already there is verified rather than trusted for its name" now
+lives.

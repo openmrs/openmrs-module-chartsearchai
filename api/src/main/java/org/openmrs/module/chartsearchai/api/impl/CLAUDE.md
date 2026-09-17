@@ -20,9 +20,8 @@ which is the root file's "Documenting a decision" rule.
   `theLocalServerAddressIsSpelledInOnePlace`.
 - **The secret reaches the child in its ENVIRONMENT, never on its command line.** That is
   `LlamaServerEndpoint.handOverTo`, and `LlamaServerEndpoint.API_KEY_ENV` is the one place the
-  variable is spelled. An argument vector is world-readable, so a key argument would hand the
-  secret to the principal the change locks out. Do not add one to
-  `LocalLlmEngine.buildServerCommand`, and do not assert on one.
+  variable is spelled. Do not add a key argument to `LocalLlmEngine.buildServerCommand`, and do
+  not assert on one.
   → ADR Decision 103, rows 2 and 3.
 - **A listener answering `/health` is not the server until readiness says so.**
   `LocalLlmEngine.requireLoopbackPortFree` runs before the child is launched and
@@ -39,7 +38,8 @@ which is the root file's "Documenting a decision" rule.
   to leave the host. **Build no second client for it** — a guard reads client construction, but
   none can read the proxy setting of one that is built.
   → ADR Decision 103, row 12b; `LocalLlmServerAuthTest.theClientTalkingToTheLocalServerUsesNoProxy`,
-  `theProbeIsNotRoutedThroughAConfiguredProxy`.
+  `theProbeIsNotRoutedThroughAConfiguredProxy`;
+  `ArchitectureGuardTest.onlyOneClientTalksToTheLocalServer`, which reads both modules' source.
 - **`--host 127.0.0.1` and `--no-webui` are load-bearing, not tidiness.** The first stops an
   inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root, which is not the
   only unauthenticated route on the port but is the only one this module can close and does not use.

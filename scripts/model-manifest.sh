@@ -131,6 +131,8 @@ _mm_verify_file() {
 		echo "ERROR: $4 is not the artifact $5 records." >&2
 		echo "       expected sha256 $2" >&2
 		echo "       received sha256 $_mm_vf_actual" >&2
+		echo "       (a partial download resumed from a different revision reads the same way; the" >&2
+		echo "        next start fetches from zero, so report this only if it repeats.)" >&2
 		echo "       Refusing it and deleting $1." >&2
 		rm -f "$1"
 		return 1
@@ -140,8 +142,8 @@ _mm_verify_file() {
 
 # fetch_and_verify_url <url> <sha256> <bytes> <target> <label>
 #
-# The composed step the two wrappers below delegate to, and through them what both fetch sites
-# reach: a file is at <target> when this returns 0, and it is the reviewed artifact. Everything
+# The composed step fetch_and_verify and fetch_and_verify_override delegate to, and through them
+# what both fetch sites reach: a file is at <target> when this returns 0, and it is the reviewed artifact. Everything
 # else returns a code from the table above.
 #
 # A file already at <target> is verified rather than trusted for its name — see the fall-through
@@ -177,7 +179,7 @@ fetch_and_verify_url() {
 		fi
 		# Fall through and fetch what the manifest records — ADR Decision 103 for why replacing
 		# beats refusing here. A served copy that fails too is the refusal.
-		echo "Replacing $_mm_label from the revision $_mm_source records..."
+		echo "Replacing $_mm_label with the artifact $_mm_source records..."
 	fi
 
 	if [ -f "$_mm_partial" ]; then
@@ -232,17 +234,18 @@ fetch_and_verify_override() {
 #
 # For an artifact the module cannot start without — the querystore embedder and its vocab, whose
 # paths configure_retrieval_gps writes into global properties seconds later. Fetches and verifies as
-# fetch_and_verify does, and on ANY refusal prints the caller's diagnostic lines, says what the code
-# means, and EXITS rather than returning.
+# fetch_and_verify does, and on any refusal says what the code means and EXITS rather than
+# returning. The caller's diagnostic lines are the SIZE message and are printed for code 2 alone —
+# ADR Decision 103 for why the size refusal has a message of its own.
 #
-# Exiting here rather than leaving the caller to branch is the point. A caller that branched had to
-# spell the branch correctly, and every spelling of it turned out to be a way to get it wrong: a
-# statement between the fetch and the branch made `$?` that statement's status; an arm that printed
-# the word "exit" without running it; a glob arm nothing recognised; a pattern list `0|2)` that
-# folded the refusal into the success case. All four shipped past a source-reading guard that had
-# been repaired for the previous one, and each repair is what made the next reachable. There is no
-# branch to spell now, and the property is a behaviour a
-# test can drive — ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript.
+# The exit leaves the shell this runs IN. Backgrounding the call, or taking it in a command
+# substitution, therefore does not stop the caller; the guard named below refuses the first shape
+# and nothing catches a call wrapped in a function that is itself backgrounded.
+#
+# Exiting here rather than leaving the caller to branch narrows the ways of getting it wrong: there
+# is no branch to spell, and what the shell DOES is a behaviour a test drives —
+# ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript. ADR
+# Decision 103 lists the spellings that defeated the branch this replaced, and what is left.
 fetch_or_exit() {
 	_mm_oe_id=$1
 	_mm_oe_target=$2
@@ -254,6 +257,8 @@ fetch_or_exit() {
 		_mm_oe_code=$?
 	fi
 
+	echo "       Chart search cannot run without a verified copy of this file, so the start is" >&2
+	echo "       refused rather than left to fail at the first query." >&2
 	case $_mm_oe_code in
 		2)
 			for _mm_oe_line in "$@"; do
@@ -262,14 +267,10 @@ fetch_or_exit() {
 			;;
 		4)
 			# Code 4 is any failure to RESOLVE the artifact — a missing row, and also a manifest
-			# that is not there at all, which the line above this one will have said. Both mean
-			# the image is built wrong rather than that a fetch went badly.
-			echo "       The artifact could not be resolved from $MODEL_MANIFEST_FILE, so the image" >&2
-			echo "       is built wrong and a restart will not help." >&2
-			;;
-		*)
-			echo "       Chart search cannot run without a verified copy of this file, so the start" >&2
-			echo "       is refused rather than left to fail at the first query." >&2
+			# that is not there at all. Both mean the image is built wrong rather than that a
+			# fetch went badly, so a restart is not the remedy.
+			echo "       It could not be resolved from $MODEL_MANIFEST_FILE — no such row, or no" >&2
+			echo "       manifest in the image — so a restart will not help." >&2
 			;;
 	esac
 	exit "$_mm_oe_code"

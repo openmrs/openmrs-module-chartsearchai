@@ -72,6 +72,17 @@ public class ModelDownloadPinningGuardTest {
 			"embedder-e5-base-v2-vocab");
 
 	/**
+	 * The artifacts the module cannot start without, so a refusal of one must stop the start. The
+	 * LLM weights are deliberately NOT among them — they are fetched in the background so OpenMRS
+	 * can come up without them, and the comment above {@code _download_llm_file} says why.
+	 *
+	 * <p>Declared rather than matched by substring, so adding a third must-have artifact costs an
+	 * entry here instead of passing unnoticed.
+	 */
+	private static final List<String> CANNOT_START_WITHOUT = List.of("embedder-e5-base-v2-onnx",
+			"embedder-e5-base-v2-vocab");
+
+	/**
 	 * The fetches in these two files that are NOT models, each named by a fragment of its own line.
 	 *
 	 * <p><b>An allow-list, because the deny-list it replaces was defeated twice.</b> Listing where a
@@ -196,7 +207,9 @@ public class ModelDownloadPinningGuardTest {
 				found++;
 				// A markdown link or a sentence ends the URL with punctuation the greedy path
 				// capture swallows; stripping it stops the guard blaming the manifest for prose.
-				String url = urls.group().replaceAll("[)\\].,*_]+$", "");
+				// Strip what prose and markdown put on the end, and the download query string the
+				// Hub's own copy button adds; none of them change which bytes the URL names.
+				String url = urls.group().replaceAll("\\?download=true$", "").replaceAll("[)\\].,*_]+$", "");
 				if (!PINNED_REVISION.matcher(urls.group(2)).matches()) {
 					violations.add(file + ": line " + lineOf(text, urls.start()) + " fetches " + urls.group(1)
 							+ " at '" + urls.group(2) + "', a revision that can change under it");
@@ -368,41 +381,68 @@ public class ModelDownloadPinningGuardTest {
 
 	/**
 	 * Each artifact the module cannot start without is fetched through {@code fetch_or_exit}, the
-	 * form that leaves rather than returning.
+	 * form that leaves rather than returning — and the call is not backgrounded, because an
+	 * {@code exit} in a background subshell stops nothing.
 	 *
-	 * <p><b>This is all that is left of a check that was defeated four times.</b> While the
-	 * entrypoint branched on the library's status itself, the property "a refusal stops the start"
-	 * could only be read out of the source, and each reading was defeated one more way — a statement
-	 * inserted between the fetch and the branch, an arm that printed the word "exit", a glob arm the
-	 * scan did not recognise, a pattern list {@code 0|2)} that folded the refusal into the success
-	 * case. The branch is now inside the library, where it is a BEHAVIOUR
+	 * <p><b>This narrows a property that was defeated five times; it does not close it.</b> While
+	 * the entrypoint branched on the library's status itself, four readings of the source were
+	 * defeated in turn (ADR Decision 103 lists them) and each repair made the next reachable.
+	 * Moving the branch into the library made the refusal a BEHAVIOUR that
 	 * {@code ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript}
-	 * drives. What is left for source to say is which form each call site asked for, and that is one
-	 * token rather than a shape.
+	 * drives — and two reviewers then found the fifth: one {@code &} on the last continuation line
+	 * backgrounds the whole command, so the exit runs in a subshell and the start continues to the
+	 * global-property write, with both source guards and shellcheck green.
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> This checks the call: the right form,
+	 * and not backgrounded. A {@code fetch_or_exit} wrapped in a shell FUNCTION that is itself
+	 * backgrounded evades any line-level rule, and closing that would mean the library detecting
+	 * its own subshell. What is bounded is the accidental edit — which is the shape all five
+	 * defeats had.
 	 */
 	@Test
 	public void everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm() throws IOException {
+		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
 		List<String> violations = new ArrayList<String>();
 		int fetches = 0;
-		for (String line : codeLines("backend-init.sh")) {
-			String trimmed = line.trim();
-			if (!trimmed.contains("embedder-e5-base-v2")) {
+
+		for (int i = 0; i < lines.size(); i++) {
+			String trimmed = lines.get(i).trim();
+			if (trimmed.startsWith("#") || CANNOT_START_WITHOUT.stream().noneMatch(trimmed::contains)) {
+				continue;
+			}
+			// A line that only TALKS about the artifact is not a fetch. The sibling guard skips
+			// these for the same reason; without it an `echo` naming an id failed this test with a
+			// message that was false about the line it named.
+			if (trimmed.startsWith("echo ") || trimmed.startsWith("printf ")) {
 				continue;
 			}
 			fetches++;
 			if (!trimmed.startsWith("fetch_or_exit ")) {
-				violations.add("backend-init.sh fetches an embedder without the exiting form, so a refusal"
-						+ " would leave the start running on to the global-property write: " + trimmed);
+				violations.add("backend-init.sh fetches an artifact the module cannot start without through a"
+						+ " form that returns instead of exiting, so a refusal would leave the start running on"
+						+ " to the global-property write: " + trimmed);
+				continue;
+			}
+			String last = lastLineOfCommand(lines, i);
+			if (last.endsWith("&") && !last.endsWith("&&")) {
+				violations.add("backend-init.sh backgrounds a fetch_or_exit call, so its exit runs in a"
+						+ " subshell and stops nothing: " + last);
 			}
 		}
-		assertEquals(List.of(), violations, "an embedder fetched through a form that returns instead of exiting");
-		assertTrue(fetches > 0, "backend-init.sh fetches no embedder; this guard read nothing");
+
+		assertEquals(List.of(), violations, "a refusal that would not stop the start");
+		assertTrue(fetches > 0, "backend-init.sh fetches no must-have artifact; this guard read nothing");
 	}
 
-
-
-
-
+	/** The last physical line of the logical command starting at {@code from}, following {@code \\}. */
+	private static String lastLineOfCommand(List<String> lines, int from) {
+		String line = lines.get(from).trim();
+		int i = from;
+		while (line.endsWith("\\") && i + 1 < lines.size()) {
+			line = lines.get(++i).trim();
+		}
+		return line;
+	}
 
 	/**
 	 * Three files spell these two paths and nothing tied them together: {@code Dockerfile.backend}
@@ -417,6 +457,36 @@ public class ModelDownloadPinningGuardTest {
 	 * {@code entrypoint-lint} comment is written against, and neither {@code sh -n} nor shellcheck
 	 * can see it: both are happy with a {@code .} of an absolute path that does not exist.
 	 */
+	/**
+	 * Every digest the standalone build reads is paired with its url by the library's rule. The rule
+	 * itself is driven by
+	 * {@code ModelDownloadIntegrityTest.aDigestInputWithNoUrlOfItsOwnStopsTheBuildAndNamesBothInputs};
+	 * what source has to say is that the workflow still ASKS it, for each digest it accepts. Deleting
+	 * one of the three calls left that behavioural case green, which is the two-channel gap this
+	 * class exists for.
+	 */
+	@Test
+	public void everyDigestTheStandaloneBuildAcceptsIsPairedWithItsUrlByTheLibrarysRule() throws IOException {
+		List<String> code = codeLines(".github/workflows/build-standalone.yml");
+		List<String> digests = new ArrayList<String>();
+		for (String line : code) {
+			Matcher env = Pattern.compile("^([A-Z_]*SHA256):").matcher(line.trim());
+			if (env.find()) {
+				digests.add(env.group(1));
+			}
+		}
+		assertFalse(digests.isEmpty(), "the workflow declares no digest input; this guard read nothing");
+
+		List<String> violations = new ArrayList<String>();
+		for (String digest : digests) {
+			if (code.stream().noneMatch(l -> l.contains("require_url_for_digest") && l.contains("$" + digest))) {
+				violations.add(digest + " is read by the step but never passed to require_url_for_digest, so a"
+						+ " digest given without its url would be accepted and then ignored");
+			}
+		}
+		assertEquals(List.of(), violations, "a digest input nothing pairs with a url");
+	}
+
 	@Test
 	public void theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem() throws IOException {
 		String sourced = soleMatch("backend-init.sh", "^\\.\\s+(\\S*model-manifest\\.sh)\\s*$",

@@ -76,10 +76,9 @@ public class ModelDownloadIntegrityTest {
 
 	private static final int DOWNLOAD_FAILED = 3;
 
-	/** No such id in the manifest, or an override that arrived without a digest. */
+	/** The library's code table is the one home for what each of these means. */
 	private static final int UNRESOLVABLE_ARTIFACT = 4;
 
-	/** The file could not be hashed, so no verdict was reached and it is still on disk. */
 	private static final int HASH_UNAVAILABLE = 5;
 
 	private static final byte[] GOOD_BYTES = "the bytes the maintainers reviewed\n".getBytes(StandardCharsets.UTF_8);
@@ -608,10 +607,6 @@ public class ModelDownloadIntegrityTest {
 		return ModelManifest.path();
 	}
 
-	private static Path libraryPath() {
-		return ModuleSourceRoot.repoRoot().resolve("scripts/model-manifest.sh");
-	}
-
 	private Result fetchAndVerify(String url, String sha256, long bytes, Path target, String label) throws Exception {
 		return library("fetch_and_verify_url '" + url + "' '" + sha256 + "' '" + bytes + "' '" + target + "' '" + label
 				+ "'");
@@ -643,7 +638,7 @@ public class ModelDownloadIntegrityTest {
 
 	private Result library(String call, Path manifestFile, Path onlyPathEntry) throws Exception {
 		Path script = work.resolve("drive-" + System.nanoTime() + ".sh");
-		Files.write(script, (". '" + libraryPath() + "'\n" + call + "\n").getBytes(StandardCharsets.UTF_8));
+		Files.write(script, (". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'\n" + call + "\n").getBytes(StandardCharsets.UTF_8));
 
 		ProcessBuilder builder = new ProcessBuilder("/bin/sh", script.toString());
 		builder.environment().put("MODEL_MANIFEST_FILE", manifestFile.toString());

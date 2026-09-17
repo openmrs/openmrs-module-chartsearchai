@@ -88,11 +88,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Separate steps rather than `a && b`, so a failure in the first still lets the second run
-      # and one job reports both files.
+      # Separate steps, with `if: always()` on the second, so one run reports both files rather
+      # than stopping at whichever fails first.
       - name: sh -n backend-init.sh (POSIX syntax — a failure here bricks the container at startup)
         run: sh -n backend-init.sh
       - name: sh -n scripts/model-manifest.sh (sourced by the entrypoint; a failure is the same brick)
+        if: always()
         run: sh -n scripts/model-manifest.sh
       - name: shellcheck (warnings and above)
         run: shellcheck -s sh -S warning backend-init.sh scripts/model-manifest.sh

@@ -1729,7 +1729,7 @@ Both decisions are correct simultaneously:
 
 ### Source: Xenova mirror, not the canonical repo
 
-Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. Since #444 the revision is pinned, which retires this shape as a live cause; the size check `backend-init.sh` still runs survives for the diagnostic above rather than for the detection — [Decision 103](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here) is canonical for that.
+Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. Since #444 the revision is pinned, which retires this shape as a live cause — [Decision 103](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here) for what the size check still does.
 
 ### Trade-offs
 
@@ -8260,9 +8260,19 @@ the start" was then something only a source-reading guard could check. Four read
 defeated in turn — a statement inserted between the fetch and the branch, so `$?` was that
 statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
 recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
-next. `fetch_or_exit` ends that class: there is no branch to spell, and what the shell DOES is a
-behaviour a test drives. The pattern is worth naming beyond this decision — what ended it was
-changing the KIND of question, not adding a fifth spelling to the list.
+next. `fetch_or_exit` NARROWS that class rather than closing it: there is no branch to spell, and
+what the shell DOES is a behaviour a test drives. Two reviewers then found the fifth spelling — one
+`&` on the call's last continuation line backgrounds the whole command, so the `exit` runs in a
+subshell and the start continues, with both source guards and shellcheck green. The guard now
+refuses that shape too, and **the residue is named rather than claimed away**: a `fetch_or_exit`
+wrapped in a function that is itself backgrounded evades any line-level rule, and closing it would
+mean the library detecting its own subshell. What is bounded is the accidental edit, which is the
+shape all five defeats had.
+
+The pattern is worth naming beyond this decision. Changing the KIND of question — from parsing a
+shape to driving a behaviour — cut four spellings at once where four successive repairs had each
+bought one. It did not make the property unbreakable, and a claim that it had was written here and
+refuted within a cycle.
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its message. The two failures an operator can act on differently are a transfer that

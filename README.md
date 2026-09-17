@@ -119,9 +119,9 @@ Take it from the revision this project pins rather than from the branch tip, and
 
 - GGUF: https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/bfc15c382204943c3a8fff0c750b94ae2364d7a3/gemma-4-E4B-it-Q4_K_M.gguf
 
-[`model-manifest.tsv`](model-manifest.tsv) records that revision and the file's sha256 under the id `llm-gemma-4-e4b` — compare it (`sha256sum gemma-4-E4B-it-Q4_K_M.gguf`, or `shasum -a 256` where coreutils is absent) before pointing the module at it. This is the file the bundled `llama-server` executes and whose output becomes the clinical answer, so a hand download is worth the extra command ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
+[`model-manifest.tsv`](model-manifest.tsv) records that revision and the file's sha256 under the id `llm-gemma-4-e4b` — compare it before pointing the module at it — `sha256sum`, `openssl dgst -sha256` or `shasum -a 256`, whichever your machine has. This is the file the bundled `llama-server` executes and whose output becomes the clinical answer, so a hand download is worth the extra command ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
 
-For production hardware (~24GB+ RAM), upgrade to **Gemma 4 26B MoE Instruct (UD-Q4_K_M, ~17GB)** — the model the standalone download bundles. Available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). After downloading, update `chartsearchai.llm.modelFilePath` to point to the new filename.
+For production hardware (~24GB+ RAM), upgrade to **Gemma 4 26B MoE Instruct (UD-Q4_K_M, ~17GB)**. The standalone download ships E4B; this is a hand upgrade. Available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). After downloading, update `chartsearchai.llm.modelFilePath` to point to the new filename.
 
 Place whichever `.gguf` you choose inside the OpenMRS application data directory (e.g., `<openmrs-application-data-directory>/chartsearchai/`). Model paths are resolved relative to this directory for security.
 
@@ -160,7 +160,7 @@ The embedding model belongs to querystore — chartsearchai no longer ships its 
 - ONNX model: https://huggingface.co/Xenova/e5-base-v2/resolve/21f8d0e36fdfe76e6a023802dfb293fc6d750ad1/onnx/model.onnx *(self-contained — see [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this source over the canonical `intfloat/e5-base-v2`)*
 - Vocab: https://huggingface.co/Xenova/e5-base-v2/resolve/21f8d0e36fdfe76e6a023802dfb293fc6d750ad1/vocab.txt
 
-Both URLs name an immutable commit rather than `main`, and [`model-manifest.tsv`](model-manifest.tsv) records the sha256 of each — check what you downloaded against it (`sha256sum model.onnx`, or `shasum -a 256` where coreutils is absent) before putting it where the module will load it. The Docker entrypoint and the standalone build do that check for you; a hand download is the one path where nobody else can ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
+Both URLs name an immutable commit rather than `main`, and [`model-manifest.tsv`](model-manifest.tsv) records the sha256 of each — check what you downloaded against it before putting it where the module will load it, the same way. The Docker entrypoint and the standalone build do that check for you; a hand download is the one path where nobody else can ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
 
 Place both at `<openmrs-application-data-directory>/querystore/` and wire the global properties documented in [Querystore deployment](#querystore-deployment) below.
 
@@ -841,7 +841,7 @@ The following models were evaluated for local inference via the embedded llama-s
 | Mistral Nemo 12B | 12B | ~7GB | ~12GB | 128K tokens | ~4–8 tok/s | mistral |
 | Phi-3-Medium 14B | 14B | ~8GB | ~14GB | 4K tokens | ~3–6 tok/s | phi3 |
 | Qwen 2.5 14B | 14B | ~8GB | ~14GB | 128K tokens | ~3–6 tok/s | chatml |
-| **Gemma 4 26B MoE** *(standalone default)* | 26B (3.8B active) | ~15GB | ~18–22GB | 256K tokens | ~3–6 tok/s | gemma |
+| **Gemma 4 26B MoE** *(hand upgrade for production)* | 26B (3.8B active) | ~15GB | ~18–22GB | 256K tokens | ~3–6 tok/s | gemma |
 | Gemma 3 27B | 27B | ~16.5GB | ~20–24GB | 128K tokens | ~1–2 tok/s | gemma |
 | MedGemma 27B Text | 27B | ~16.5GB | ~20–24GB | 128K tokens | ~1–2 tok/s | gemma |
 | Gemma 4 31B | 31B | ~18GB | ~22–26GB | 256K tokens | ~1–2 tok/s | gemma |

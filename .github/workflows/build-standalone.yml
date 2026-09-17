@@ -169,8 +169,7 @@ jobs:
           set -eu
           . chartsearchai-backend/scripts/model-manifest.sh
 
-          # Each input name is spelled, not composed: vocab's url input is `vocab_url`, not
-          # `vocab_model_url`. The rule itself lives in the library so a test can drive it.
+          # See require_url_for_digest; the input names are spelled rather than composed.
           require_url_for_digest "$GGUF_MODEL_URL" "$GGUF_SHA256" gguf_model_url gguf_sha256
           require_url_for_digest "$ONNX_MODEL_URL" "$ONNX_SHA256" onnx_model_url onnx_sha256
           require_url_for_digest "$VOCAB_URL" "$VOCAB_SHA256" vocab_url vocab_sha256

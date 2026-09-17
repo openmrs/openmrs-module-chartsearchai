@@ -141,7 +141,7 @@ _download_llm_file() {
            else
              echo "$_label could not be fetched at all; restart the backend container to retry." >&2
            fi ;;
-      4)   echo "$_label is not recorded in model-manifest.tsv, so there is nothing to fetch it from; this is a packaging error and a restart will not help." >&2 ;;
+      4)   echo "$_label could not be resolved from model-manifest.tsv — no such row, or no manifest in the image — so this is a packaging error and a restart will not help." >&2 ;;
       *)   echo "$_label could not be hashed (code $_code), so it is still on disk unverified; restart the backend container to retry." >&2 ;;
     esac
   fi

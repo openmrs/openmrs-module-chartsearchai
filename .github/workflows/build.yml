@@ -72,9 +72,9 @@ jobs:
         run: python3 eval/latency/kv_prefill_gate.py --selftest
 
   # backend-init.sh is the demo backend's ENTRYPOINT, and until this job existed nothing in CI
-  # parsed it. Since #444 it sources scripts/model-manifest.sh, which is covered here for exactly
-  # the same reason and at the same risk: a syntax error in a sourced file kills the entrypoint the
-  # same way, and the standalone workflow sources it too. Dockerfile.backend only COPYs it, so a syntax error builds a perfectly good image,
+  # parsed it. Since #444 it sources scripts/model-manifest.sh, which is covered here for the same
+  # reason and at the same risk: a syntax error in a sourced file kills the entrypoint just as
+  # surely, and the standalone workflow sources that file too. Dockerfile.backend only COPYs it, so a syntax error builds a perfectly good image,
   # build-docker publishes it, the deploy reports success and the container exits at startup —
   # a green pipeline and a dead demo. `sh -n` is the gate that matters (the script is #!/bin/sh
   # and written for POSIX sh, not bash); shellcheck at -S warning catches the live bugs — unquoted
@@ -88,8 +88,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: sh -n (POSIX syntax — a failure here bricks the container at startup)
-        run: sh -n backend-init.sh && sh -n scripts/model-manifest.sh
+      # Separate steps rather than `a && b`, so a failure in the first still lets the second run
+      # and one job reports both files.
+      - name: sh -n backend-init.sh (POSIX syntax — a failure here bricks the container at startup)
+        run: sh -n backend-init.sh
+      - name: sh -n scripts/model-manifest.sh (sourced by the entrypoint; a failure is the same brick)
+        run: sh -n scripts/model-manifest.sh
       - name: shellcheck (warnings and above)
         run: shellcheck -s sh -S warning backend-init.sh scripts/model-manifest.sh
 

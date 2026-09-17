@@ -1729,7 +1729,7 @@ Both decisions are correct simultaneously:
 
 ### Source: Xenova mirror, not the canonical repo
 
-Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. `backend-init.sh` refuses any file that is not the exact byte count and sha256 `model-manifest.tsv` records for the pinned revision, which rules that shape out ahead of the digest and keeps the diagnostic above as the message it prints ([Decision 103](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
+Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. Since #444 the revision is pinned, which retires this shape as a live cause; the size check `backend-init.sh` still runs survives for the diagnostic above rather than for the detection — [Decision 103](#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here) is canonical for that.
 
 ### Trade-offs
 
@@ -8195,9 +8195,10 @@ either. A mirror is the stronger answer — it removes the third party from the 
 freezing what they served — but it is infrastructure this repository cannot provision, and the
 digest is what actually binds the bytes either way. The manifest's `url` column is almost the whole
 of what a mirror would change — the exception is `ModelDownloadPinningGuardTest`, whose row check
-requires a `huggingface.co` `resolve/<40-hex>` url, so moving a row to a mirror means widening that
-check to whatever makes the new url immutable. Better it says so than that a mirror arrives one day
-and the guard reads as a refusal of the idea.
+requires a `huggingface.co` `resolve/<40-hex>` url — in two places, since it also requires README's
+hand-download urls to be byte-equal to a row. Moving a row to a mirror means widening both to
+whatever makes the new url immutable. Better it says so than that a mirror arrives one day and the
+guard reads as a refusal of the idea.
 
 *A file already on the volume is verified, not trusted for its name, and replaced when it fails.*
 `/openmrs/data` outlives the container, so the population this fix most needs to reach —
@@ -8208,7 +8209,9 @@ substituted one are indistinguishable on disk and the replacement is bound to th
 that decides how many restarts recovery takes, not what is accepted. **A refusal does cost the
 copy**: the bytes are deleted before the replacement is fetched, so a deployment that cannot reach
 the pinned revision is left with neither file, and for the embedder that means a container which
-refuses to start until it can. That is the fail-closed direction and it is the point — the state
+refuses to start — and stays stopped, because the `backend` service carries no `restart:` key, as
+`ModelDownloadPinningGuardTest.theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem`
+records. That is the fail-closed direction and it is the point — the state
 being removed is one where unverified weights answer clinical questions — but it is a real cost,
 and the refusal's own log lines, naming the expected and the received digest, are what an operator
 is left to report.
@@ -8235,9 +8238,10 @@ independently on a second machine of the same class over a real 4.58 GiB GGUF:
 | `shasum -a 256` (Perl) | 0.30 GiB/s | ~26 s |
 
 **Both columns are binary units**, which is what the rates were taken in; mixing them with the
-decimal byte count above overstates the projection by 7%. And the projection is an upper bound
-rather than what is paid — the two large artifacts hash in parallel, measured at 3.0-3.2 s wall
-against 4.3 s sequential, with no bandwidth contention at this scale.
+decimal byte count above overstates the projection by 7%. And the column is sequential, which is an
+upper bound rather than what is paid: the two large artifacts hash in two background subshells, and
+a run over a pair of files of that size showed no bandwidth contention — the larger file's own rate
+was unchanged, so the wall cost is about the larger of the two rather than their sum.
 
 That 5x is why `file_sha256` tries the two fast tools first and `shasum` last, an order this
 measurement changed. **The `sha256sum` row was not measured on GNU coreutils**: the machine has
@@ -8279,6 +8283,12 @@ has to be downloaded and hashed. `ModelDownloadPinningGuardTest` requires 64 hex
 the confusion reddens the build rather than shipping, but it is the mistake this recipe exists to
 prevent: measured 2026-09-17, `vocab.txt` at the pinned revision returns
 `x-linked-etag: "fb140275c155a9c7c5a3b3e0e77a9e839594a938"`, which is not its sha256.
+
+**Nothing in the suite checks a digest against the Hub**, and nothing can without downloading
+multiple gigabytes in CI: the tests prove the library refuses what does not match the manifest, not
+that the manifest matches upstream. A wrong digest therefore fails closed but fails everywhere — in
+every deployment and every standalone build, on the first fetch — so the first release build after a
+pin move is the check, and it is the one step of this recipe a maintainer cannot skip.
 
 → `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
 serves substituted bytes, which is the acceptance both findings state.

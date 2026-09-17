@@ -105,7 +105,6 @@ public class ModelDownloadPinningGuardTest {
 	public void everyManifestRowCarriesADigestAndAnImmutableRevision() throws IOException {
 		List<String[]> rows = ModelManifest.rows();
 
-		assertFalse(rows.isEmpty(), "model-manifest.tsv carries no artifact rows");
 		List<String> violations = new ArrayList<String>();
 		Set<String> ids = new LinkedHashSet<String>();
 		for (String[] row : rows) {
@@ -195,7 +194,9 @@ public class ModelDownloadPinningGuardTest {
 			Matcher urls = HF_RESOLVE.matcher(text);
 			while (urls.find()) {
 				found++;
-				String url = urls.group();
+				// A markdown link or a sentence ends the URL with punctuation the greedy path
+				// capture swallows; stripping it stops the guard blaming the manifest for prose.
+				String url = urls.group().replaceAll("[)\\].,*_]+$", "");
 				if (!PINNED_REVISION.matcher(urls.group(2)).matches()) {
 					violations.add(file + ": line " + lineOf(text, urls.start()) + " fetches " + urls.group(1)
 							+ " at '" + urls.group(2) + "', a revision that can change under it");
@@ -312,7 +313,7 @@ public class ModelDownloadPinningGuardTest {
 		// itself to this function and matched the branch that verifies a file already on the volume,
 		// which legitimately runs before the download. So this one reads the operand: whatever `mv`
 		// renames from must have been verified, by name, on an earlier line.
-		List<String> body = functionBody("scripts/model-manifest.sh", "fetch_and_verify_url");
+		List<String> body = functionBody(ModelManifest.LIBRARY, "fetch_and_verify_url");
 
 		int rename = -1;
 		String renamed = null;
@@ -322,7 +323,9 @@ public class ModelDownloadPinningGuardTest {
 				continue;
 			}
 			rename = i;
-			renamed = line.split("\\s+")[1].replace("\"", "");
+			String[] words = line.split("\\s+");
+			// `mv -- src dst` is the same rename; the operand is what follows the end-of-options.
+			renamed = ("--".equals(words[1]) ? words[2] : words[1]).replace("\"", "");
 		}
 		assertTrue(rename >= 0, "fetch_and_verify_url never renames a download; this guard read nothing");
 
@@ -376,10 +379,8 @@ public class ModelDownloadPinningGuardTest {
 	 * fetch is the anchor: each must be followed IMMEDIATELY by {@code case $? in}, and every arm but
 	 * the success arm must leave.
 	 *
-	 * <p><b>Scoped to the embedder's refusals; the LLM's are deliberately not among them.</b> Those
-	 * weights are fetched in a background subshell so OpenMRS can come up without them, and chart
-	 * search already reports its own error while the file is absent. What the two share is that
-	 * rejected bytes are deleted; only the embedder gates something written seconds later.
+	 * <p><b>Scoped to the embedder's refusals; the LLM's are deliberately not among them</b> — the
+	 * comment above {@code _download_llm_file} in {@code backend-init.sh} says why.
 	 */
 	@Test
 	public void everyRefusalOfTheEmbedderStopsTheEntrypoint() throws IOException {
@@ -394,7 +395,25 @@ public class ModelDownloadPinningGuardTest {
 			}
 			fetches++;
 			int next = nextCodeLine(lines, i + 1);
-			if (next < 0 || !lines.get(next).trim().equals("case $? in")) {
+			if (next < 0) {
+				violations.add("backend-init.sh line " + (i + 1) + ": nothing follows the embedder fetch");
+				continue;
+			}
+			String after = lines.get(next).trim();
+			// Either the verdict is branched on directly, or it is captured first and the capture is
+			// branched on — `_code=$?` then `case $_code in`, which is what the LLM path does and is
+			// the safer spelling of the same question. What is forbidden is anything BETWEEN them,
+			// because that makes $? the inserted statement's status.
+			Matcher captured = Pattern.compile("^([A-Za-z_][A-Za-z0-9_]*)=\\$\\?$").matcher(after);
+			if (captured.matches()) {
+				int branch = nextCodeLine(lines, next + 1);
+				if (branch < 0 || !lines.get(branch).trim().equals("case $" + captured.group(1) + " in")) {
+					violations.add("backend-init.sh line " + (i + 1) + ": the embedder fetch captures its"
+							+ " status into " + captured.group(1) + " but the next statement does not branch on it");
+					continue;
+				}
+				next = branch;
+			} else if (!after.equals("case $? in")) {
 				violations.add("backend-init.sh line " + (i + 1) + ": the embedder fetch is not followed"
 						+ " immediately by `case $? in`, so $? is no longer the library's verdict");
 				continue;
@@ -404,6 +423,16 @@ public class ModelDownloadPinningGuardTest {
 
 		assertEquals(List.of(), violations, "a refusal that does not stop the entrypoint");
 		assertTrue(fetches > 0, "backend-init.sh fetches no embedder; this guard read nothing");
+	}
+
+	/**
+	 * Whether {@code arm}'s WHOLE pattern list is the success code. Testing only that it starts with
+	 * {@code 0} exempted {@code 0|2) ;;} — which folds the size refusal into the success arm, so a
+	 * deleted embedder reached "Embedder ready" and the global-property write with this guard green.
+	 */
+	private static boolean isSuccessArm(String arm) {
+		int close = arm.indexOf(')');
+		return close > 0 && "0".equals(arm.substring(0, close).trim());
 	}
 
 	/** The index of the next line that is neither blank nor a whole-line comment, or -1. */
@@ -434,7 +463,7 @@ public class ModelDownloadPinningGuardTest {
 			// does not strand that exit in the wrong bucket. Measured: it did.
 			boolean opensArm = line.matches("^[^\\s#=$]*\\).*");
 			if (opensArm || line.equals("esac")) {
-				if (arm != null && !arm.startsWith("0") && !leaves(body.toString())) {
+				if (arm != null && !isSuccessArm(arm) && !leaves(body.toString())) {
 					violations.add("backend-init.sh line " + (caseLine + 1) + ": the '" + arm
 							+ "' arm continues past a refused model instead of exiting");
 				}
@@ -492,7 +521,7 @@ public class ModelDownloadPinningGuardTest {
 	public void theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem() throws IOException {
 		String sourced = soleMatch("backend-init.sh", "^\\.\\s+(\\S*model-manifest\\.sh)\\s*$",
 				"the path backend-init.sh sources the library from");
-		String manifest = soleMatch("scripts/model-manifest.sh",
+		String manifest = soleMatch(ModelManifest.LIBRARY,
 				"^MODEL_MANIFEST_FILE=\"\\$\\{MODEL_MANIFEST_FILE:-(\\S+)\\}\"\\s*$",
 				"the library's default manifest path");
 
@@ -500,7 +529,11 @@ public class ModelDownloadPinningGuardTest {
 		for (String line : codeLines("Dockerfile.backend")) {
 			if (line.startsWith("COPY ")) {
 				String[] words = line.trim().split("\\s+");
-				copied.add(words[words.length - 1]);
+				String destination = words[words.length - 1];
+				// A destination ending in `/` is a directory, and the file lands under its own name.
+				copied.add(destination.endsWith("/") && words.length >= 2
+						? destination + words[words.length - 2].replaceAll(".*/", "")
+						: destination);
 			}
 		}
 

@@ -240,12 +240,8 @@ public class ModelDownloadIntegrityTest {
 	 */
 	@Test
 	public void aFileThatCannotBeHashedIsReportedAsUnverifiedRatherThanReplaced() throws Exception {
-		Path onlyFetchTools = Files.createDirectories(work.resolve("no-hashing-tool"));
-		for (String tool : List.of("curl", "stat", "rm", "mv")) {
-			Path real = which(tool);
-			assumeTrue(real != null, tool + " is needed to reach the hashing step");
-			Files.createSymbolicLink(onlyFetchTools.resolve(tool), real);
-		}
+		Path onlyFetchTools = pathWith("no-hashing-tool", List.of("curl", "stat", "rm", "mv"));
+		assumeTrue(which("stat") != null, "stat is needed to reach the hashing step");
 		Path target = work.resolve("model.bin");
 		Files.write(target, GOOD_BYTES);
 
@@ -350,17 +346,12 @@ public class ModelDownloadIntegrityTest {
 		List<String> exercised = new ArrayList<String>();
 
 		for (String tool : List.of("sha256sum", "openssl", "shasum")) {
-			Path real = which(tool);
-			if (real == null) {
+			if (which(tool) == null) {
 				continue;
 			}
-			Path only = Files.createDirectories(work.resolve("only-" + tool));
-			Path link = only.resolve(tool);
-			if (!Files.exists(link)) {
-				Files.createSymbolicLink(link, real);
-			}
+			Path only = pathWith("only-" + tool, List.of(tool));
 
-			Result result = libraryWithPath("file_sha256 '" + file + "'", only);
+			Result result = library("file_sha256 '" + file + "'", manifest(), only);
 
 			assertEquals(0, result.exit, "file_sha256 failed with only " + tool + " on PATH\n" + result);
 			assertEquals(sha256(GOOD_BYTES), result.output.trim(),
@@ -380,6 +371,113 @@ public class ModelDownloadIntegrityTest {
 		String out = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8).trim();
 		process.waitFor(30, TimeUnit.SECONDS);
 		return process.exitValue() == 0 && !out.isEmpty() ? Paths.get(out) : null;
+	}
+
+	/**
+	 * A resume that cannot succeed must not be retried forever. {@code curl -C -} exits 33 when the
+	 * origin answers a {@code Range} request with a whole 200 — which a caching proxy in front of the
+	 * container will do — and nothing else in the path deletes the {@code .partial}, so the next
+	 * start made the same impossible request. For the embedder that is a container which stops and,
+	 * with no restart policy, stays stopped.
+	 *
+	 * <p>The server here does not honour {@code Range}, which is what makes the case reachable.
+	 */
+	@Test
+	public void aResumeThatCannotSucceedDiscardsThePartialInsteadOfRetryingForever() throws Exception {
+		served = GOOD_BYTES;
+		Path target = work.resolve("model.bin");
+		Path partial = work.resolve("model.bin.partial");
+		Files.write(partial, Arrays.copyOf(GOOD_BYTES, 12));
+
+		Result result = fetchAndVerify(url(), sha256(GOOD_BYTES), GOOD_BYTES.length, target, "test model");
+
+		assertFalse(Files.exists(partial) && Files.size(partial) == 12,
+				"a partial that could not be resumed must not be left for the next attempt to retry\n" + result);
+		if (result.exit != OK) {
+			assertEquals(DOWNLOAD_FAILED, result.exit, "a failed resume is a failed fetch\n" + result);
+			assertFalse(Files.exists(partial), "the unusable partial must be discarded\n" + result);
+		}
+	}
+
+	/**
+	 * A file that cannot be MEASURED is as unverified as one that cannot be hashed, and must be left
+	 * alone rather than deleted. Answering 0 for a missing {@code stat} instead deleted correct files
+	 * and refetched them forever, reporting them as 0 bytes.
+	 */
+	@Test
+	public void aFileThatCannotBeMeasuredIsLeftAloneRatherThanRefusedAsShort() throws Exception {
+		Path noStat = pathWith("no-stat", List.of("curl", "rm", "mv", "sha256sum", "openssl", "shasum"));
+		Path target = work.resolve("model.bin");
+		Files.write(target, GOOD_BYTES);
+
+		Result result = library("fetch_and_verify_url '" + url() + "' '" + sha256(GOOD_BYTES) + "' '"
+				+ GOOD_BYTES.length + "' '" + target + "' 'test model'", manifest(), noStat);
+
+		assertEquals(HASH_UNAVAILABLE, result.exit, "an unmeasurable file must not be refused as short\n" + result);
+		assertTrue(Files.exists(target), "a file that was never measured must not be deleted\n" + result);
+	}
+
+	/**
+	 * The refusal names where the expected digest came from, because on the dispatched path it did
+	 * not come from the manifest and sending an operator there would send them to a file the manifest
+	 * deliberately does not record.
+	 */
+	@Test
+	public void anOverriddenUrlsRefusalNamesTheInputItsDigestCameFromAndNotTheManifest() throws Exception {
+		served = SUBSTITUTED_BYTES;
+		Path target = work.resolve("model.bin");
+
+		Result result = library("fetch_and_verify_override '" + url() + "' '" + sha256(GOOD_BYTES) + "' '" + target
+				+ "' 'the dispatched model' gguf_sha256", manifest());
+
+		assertEquals(DIGEST_MISMATCH, result.exit, "a substituted override must be refused\n" + result);
+		assertTrue(result.output.contains("gguf_sha256"),
+				"the refusal must name the input the digest came from\n" + result);
+		assertFalse(result.output.contains("model-manifest.tsv"),
+				"the refusal must not send an operator to a file the manifest does not record\n" + result);
+	}
+
+	/**
+	 * A digest input with no url of its own would be accepted and then ignored, and the build would
+	 * bundle the manifest's model under a digest that does match it — #449's own shape inverted. The
+	 * rule is in the library rather than the workflow because the input names have to be spelled:
+	 * an inline version composed {@code vocab_model_url}, which is not an input that exists.
+	 */
+	@Test
+	public void aDigestInputWithNoUrlOfItsOwnStopsTheBuildAndNamesBothInputs() throws Exception {
+		Result orphan = library("require_url_for_digest '' 'abc' vocab_url vocab_sha256");
+
+		assertEquals(UNRESOLVABLE_ARTIFACT, orphan.exit, "a digest with no url must stop the build\n" + orphan);
+		assertTrue(orphan.output.contains("vocab_url") && orphan.output.contains("vocab_sha256"),
+				"the refusal must name both inputs as the dispatch form spells them\n" + orphan);
+
+		assertEquals(0, library("require_url_for_digest '' '' vocab_url vocab_sha256").exit,
+				"neither given is a push build and must pass");
+		assertEquals(0, library("require_url_for_digest 'http://x' 'abc' vocab_url vocab_sha256").exit,
+				"both given is the supported dispatch and must pass");
+	}
+
+	/**
+	 * Decision 103 publishes a measured 5x spread as the REASON for the fallback order, and the
+	 * agreement case above cannot see the order at all — it drives one tool at a time. This one puts
+	 * the slow tool on PATH beside a fast one and asserts the slow one is not what runs.
+	 */
+	@Test
+	public void theSlowestHashingToolIsOnlyReachedWhenNothingFasterIsThere() throws Exception {
+		assumeTrue(which("sha256sum") != null && which("shasum") != null, "needs both tools to compare");
+		Path both = pathWith("both-tools", List.of("sha256sum"));
+		Path marker = work.resolve("shasum-was-used");
+		Files.write(both.resolve("shasum"), ("#!/bin/sh\ntouch '" + marker + "'\nexec " + which("shasum")
+				+ " \"$@\"\n").getBytes(StandardCharsets.UTF_8));
+		both.resolve("shasum").toFile().setExecutable(true);
+		Path file = work.resolve("hashed.bin");
+		Files.write(file, GOOD_BYTES);
+
+		Result result = library("file_sha256 '" + file + "'", manifest(), both);
+
+		assertEquals(sha256(GOOD_BYTES), result.output.trim(), "the digest must still be right\n" + result);
+		assertFalse(Files.exists(marker),
+				"shasum ran while a faster tool was on PATH, so the measured order is not the one taken\n" + result);
 	}
 
 	// ---- the manifest is the one committed record ----------------------------------------------
@@ -473,8 +571,20 @@ public class ModelDownloadIntegrityTest {
 		return library(call, manifest());
 	}
 
-	private Result libraryWithPath(String call, Path onlyPathEntry) throws Exception {
-		return library(call, manifest(), onlyPathEntry);
+	/**
+	 * A directory holding symlinks to exactly the named tools, for driving the library with a PATH
+	 * that can reach nothing else. A tool this machine does not have is skipped, and the caller says
+	 * what it needs.
+	 */
+	private Path pathWith(String name, List<String> tools) throws Exception {
+		Path only = Files.createDirectories(work.resolve("path-" + name));
+		for (String tool : tools) {
+			Path real = which(tool);
+			if (real != null && !Files.exists(only.resolve(tool))) {
+				Files.createSymbolicLink(only.resolve(tool), real);
+			}
+		}
+		return only;
 	}
 
 	private Result library(String call, Path manifestFile) throws Exception {

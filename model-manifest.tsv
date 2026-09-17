@@ -2,10 +2,11 @@
 # maintainers reviewed. Issues #444 and #449; the reasoning, and the recipe for moving a pin, are
 # ADR Decision 103.
 #
-# This is the ONE place a model download URL or digest is written. Both fetch sites read it —
+# This is the one place either fetch site takes a model's URL or digest FROM. Both read it —
 # backend-init.sh (the published backend image's ENTRYPOINT) and .github/workflows/build-standalone.yml
 # (the release pipeline behind the README's download link) — through scripts/model-manifest.sh.
-# Spelling a huggingface.co URL at either site instead reddens ModelDownloadPinningGuardTest.
+# Spelling a huggingface.co URL at either site instead reddens ModelDownloadPinningGuardTest, which
+# also requires README's two hand-download URLs to be byte-equal to a row here, so they cannot drift.
 #
 # Columns, whitespace separated: id, sha256, bytes, url.
 #

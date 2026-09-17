@@ -169,16 +169,11 @@ jobs:
           set -eu
           . chartsearchai-backend/scripts/model-manifest.sh
 
-          # A digest with no url of its own would otherwise be accepted and then ignored, and the
-          # build would quietly bundle the manifest's model instead of the one asked for.
-          for pair in "GGUF_MODEL_URL:GGUF_SHA256:gguf" "ONNX_MODEL_URL:ONNX_SHA256:onnx" "VOCAB_URL:VOCAB_SHA256:vocab"; do
-            url_var=${pair%%:*}; rest=${pair#*:}; sha_var=${rest%%:*}; name=${rest#*:}
-            eval "url=\$$url_var"; eval "sha=\$$sha_var"
-            if [ -z "$url" ] && [ -n "$sha" ]; then
-              echo "::error::${name}_sha256 was given without ${name}_model_url, so it would check nothing."
-              exit 1
-            fi
-          done
+          # Each input name is spelled, not composed: vocab's url input is `vocab_url`, not
+          # `vocab_model_url`. The rule itself lives in the library so a test can drive it.
+          require_url_for_digest "$GGUF_MODEL_URL" "$GGUF_SHA256" gguf_model_url gguf_sha256
+          require_url_for_digest "$ONNX_MODEL_URL" "$ONNX_SHA256" onnx_model_url onnx_sha256
+          require_url_for_digest "$VOCAB_URL" "$VOCAB_SHA256" vocab_url vocab_sha256
 
           mkdir -p standalone/target/chartsearchai standalone/target/querystore
 

@@ -35,6 +35,9 @@ public final class ModelManifest {
 	private ModelManifest() {
 	}
 
+	/** The shell library both fetch sites source, repo-relative — spelled once for its readers. */
+	public static final String LIBRARY = "scripts/model-manifest.sh";
+
 	public static Path path() {
 		return ModuleSourceRoot.repoRoot().resolve("model-manifest.tsv");
 	}

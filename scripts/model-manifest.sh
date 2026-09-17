@@ -2,13 +2,10 @@
 #
 # Fetch a model file and refuse it unless it is the artifact model-manifest.tsv records.
 #
-# Issues #444 and #449 are one defect with two consumers: backend-init.sh provisions the models a
-# deployed container executes, and .github/workflows/build-standalone.yml bakes them into the
-# download the README advertises. Both fetched from a mutable third-party branch and bound the
-# received bytes to nothing, so whoever controlled those repositories at fetch time decided what the
-# clinical LLM says about every patient chart. This library is what both now call instead, so the
-# pinned revision and the expected digest exist once, in one file, rather than once per consumer.
-# The reasoning is ADR Decision 103.
+# Issues #444 and #449 are one defect with two consumers, and this library is what both now call,
+# so the pinned revision and the expected digest exist once rather than once per consumer. ADR
+# Decision 103 has the reasoning and names the consumers; the Callers list below is the current
+# roster.
 #
 # POSIX sh, because backend-init.sh is `#!/bin/sh` and runs under dash in the backend image. In
 # particular: no `local`, so every variable here is prefixed `_mm_` to stay clear of the sourcing
@@ -32,7 +29,7 @@ MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model
 #   3  the fetch or the placement failed, so nothing was verified and nothing was deleted
 #      (a non-2xx response is here, because curl runs with -f)
 #   4  the artifact could not be resolved: no such id in the manifest, or an override with no digest
-#   5  the file could not be hashed at all, and is still on disk
+#   5  the file could not be measured or hashed at all, and is still on disk
 #
 # 1 and 2 are the only codes that promise a deletion, and the callers' wording leans on that.
 
@@ -44,7 +41,7 @@ MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model
 # carry. Nothing here needs what awk would give.
 _mm_field() {
 	if [ ! -f "$MODEL_MANIFEST_FILE" ]; then
-		echo "model-manifest: no manifest at $MODEL_MANIFEST_FILE" >&2
+		echo "ERROR: no manifest at $MODEL_MANIFEST_FILE." >&2
 		return 1
 	fi
 	_mm_f_value=''
@@ -68,7 +65,7 @@ _mm_field() {
 	done < "$MODEL_MANIFEST_FILE"
 
 	if [ -z "$_mm_f_value" ]; then
-		echo "model-manifest: no artifact '$1' in $MODEL_MANIFEST_FILE" >&2
+		echo "ERROR: no artifact '$1' in $MODEL_MANIFEST_FILE." >&2
 		return 1
 	fi
 	printf '%s\n' "$_mm_f_value"
@@ -99,22 +96,27 @@ file_sha256() {
 		_mm_sum=$(shasum -a 256 "$1") || return 1
 		printf '%s\n' "${_mm_sum%% *}"
 	else
-		echo "model-manifest: no sha256 tool available (looked for sha256sum, openssl, shasum)." >&2
+		echo "ERROR: no sha256 tool available (looked for sha256sum, openssl, shasum)." >&2
 		return 1
 	fi
 }
 
-# file_bytes <file> — GNU stat, then BSD stat, then 0 for a file that is not there.
+# file_bytes <file> — GNU stat, then BSD stat. Fails rather than answering 0, because 0 is a
+# measurement and "I have no stat" is not: answering it deleted correct files and re-fetched them
+# forever, reporting them as 0 bytes.
 file_bytes() {
-	stat -c %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null || echo 0
+	stat -c %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null
 }
 
-# _mm_verify_file <file> <sha256> <bytes> <label> [source] — size first, then digest, deleting the file on
+# _mm_verify_file <file> <sha256> <bytes> <label> <source> — size first, then digest, deleting the file on
 # either failure so no later start resumes it or loads it. Size is checked first only so the caller
 # can say something specific about a short file; the digest is what actually binds the bytes.
 # <bytes> of 0 means the size is not known ahead of time, which is the manually-dispatched build.
 _mm_verify_file() {
-	_mm_vf_size=$(file_bytes "$1")
+	if ! _mm_vf_size=$(file_bytes "$1"); then
+		echo "ERROR: $4 could not be measured, so it has not been verified either way." >&2
+		return 5
+	fi
 	if [ "$3" -gt 0 ] && [ "$_mm_vf_size" -ne "$3" ]; then
 		echo "ERROR: $4 did not deliver the recorded length: ${_mm_vf_size} bytes, not $3." >&2
 		echo "       Refusing it and deleting $1." >&2
@@ -126,7 +128,7 @@ _mm_verify_file() {
 	# on the code rather than on re-checking the disk.
 	_mm_vf_actual=$(file_sha256 "$1") || return 5
 	if [ "$_mm_vf_actual" != "$2" ]; then
-		echo "ERROR: $4 is not the artifact ${5:-model-manifest.tsv} records." >&2
+		echo "ERROR: $4 is not the artifact $5 records." >&2
 		echo "       expected sha256 $2" >&2
 		echo "       received sha256 $_mm_vf_actual" >&2
 		echo "       Refusing it and deleting $1." >&2
@@ -173,22 +175,31 @@ fetch_and_verify_url() {
 				return "$_mm_status"
 			fi
 		fi
-		# Fall through and fetch what the manifest records. The replacement is bound to the same
-		# digest, so this decides how many restarts recovery takes and nothing about what is
-		# accepted — ADR Decision 103. A served copy that fails too is the refusal.
-		echo "Replacing $_mm_label from the revision model-manifest.tsv records..."
+		# Fall through and fetch what the manifest records — ADR Decision 103 for why replacing
+		# beats refusing here. A served copy that fails too is the refusal.
+		echo "Replacing $_mm_label from the revision $_mm_source records..."
 	fi
 
 	if [ -f "$_mm_partial" ]; then
 		echo "Resuming $_mm_label download..."
+		_mm_resumed=yes
 	else
 		echo "Downloading $_mm_label..."
+		_mm_resumed=no
 	fi
 	# -f so a non-2xx response is a failure rather than an HTML error page renamed into place;
 	# -C - to resume a .partial across a container restart; --speed-time/--speed-limit to abort a
 	# connection Hugging Face has stalled without closing, rather than hanging the container start.
 	if ! curl -fsSL -C - --speed-time 60 --speed-limit 1024 -o "$_mm_partial" "$_mm_url"; then
 		echo "ERROR: $_mm_label could not be downloaded from $_mm_url." >&2
+		if [ "$_mm_resumed" = yes ]; then
+			# A failed resume can fail forever, and nothing else deletes the partial: curl exits
+			# 33 when the origin answers a Range request with a whole 200, which a caching proxy
+			# in front of the container will do. Start from zero next time instead of retrying a
+			# request that cannot succeed.
+			echo "       Discarding the partial download so the next attempt starts from zero." >&2
+			rm -f "$_mm_partial"
+		fi
 		return 3
 	fi
 
@@ -215,6 +226,21 @@ fetch_and_verify_override() {
 		return 4
 	fi
 	fetch_and_verify_url "$1" "$2" 0 "$3" "$4" "the $5 input"
+}
+
+# require_url_for_digest <url> <sha256> <url-input-name> <digest-input-name>
+#
+# The mirror of fetch_and_verify_override's refusal: a digest with no url of its own would be
+# accepted and then ignored, and the build would quietly bundle the manifest's model instead of the
+# one that was asked for. Here rather than in the workflow because the input names have to be
+# spelled rather than composed — `vocab_url` is not `vocab_model_url`, and an inline version got
+# that wrong with nothing able to notice.
+require_url_for_digest() {
+	if [ -z "$1" ] && [ -n "$2" ]; then
+		echo "ERROR: $4 was given without $3, so it would check nothing." >&2
+		return 4
+	fi
+	return 0
 }
 
 # fetch_and_verify <manifest-id> <target> <label> — the same step, with the url, digest and size

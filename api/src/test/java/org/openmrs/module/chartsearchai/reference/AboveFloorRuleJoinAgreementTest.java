@@ -19,12 +19,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ModuleSourceRoot;
@@ -67,6 +67,11 @@ public class AboveFloorRuleJoinAgreementTest {
 	 * differently from the scan would be invisible at the shipped default alone.
 	 */
 	private static final int[] FLOORS = { 0, 1, 2, 3, 4 };
+
+	/** Members {@code DrugSafetyValidator} widened for this class's oracles and for nothing else.
+	 *  Each is spelled with its opening parenthesis so a mention in prose does not trip the scan. */
+	private static final List<String> RESERVED_TO_THE_VALIDATOR = Arrays.asList(
+			"identifies(", "entriesCodedBy(", "atcIndexOf(");
 
 	/** What the scan {@link AboveFloorRules} replaced returned: every rule of {@code subject} that
 	 *  clears {@code floor} and names {@code other}, in the subject's own dataset order. */
@@ -148,6 +153,11 @@ public class AboveFloorRuleJoinAgreementTest {
 	 * case spuriously. It fails loudly and says which file, so that is a cost paid in legibility
 	 * rather than in silence, which is the trade this repo takes for a rule that would otherwise have
 	 * no enforcement at all.
+	 *
+	 * <p>{@code AboveFloorRules.entriesCodedBy} and {@code atcIndexOf} are held to the same rule, and
+	 * for the same reason: both were widened for this class and both say in their javadoc that no
+	 * production caller outside {@code DrugSafetyValidator} exists or should. A rule stated in three
+	 * places and enforced in one is the shape this case exists to close.
 	 */
 	@Test
 	public void noProductionClassButTheValidatorItselfCallsTheNamingPredicate() throws IOException {
@@ -160,8 +170,10 @@ public class AboveFloorRuleJoinAgreementTest {
 					continue;
 				}
 				String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-				if (text.contains("identifies(")) {
-					callers.add(root.relativize(file).toString());
+				for (String reserved : RESERVED_TO_THE_VALIDATOR) {
+					if (text.contains(reserved)) {
+						callers.add(root.relativize(file) + " calls " + reserved);
+					}
 				}
 			}
 		}
@@ -170,9 +182,10 @@ public class AboveFloorRuleJoinAgreementTest {
 				+ "DrugSafetyValidator.java")), "this guard must be reading the real source root, or it "
 						+ "forbids nothing by scanning nothing: " + root);
 		assertEquals(Collections.<String> emptyList(), callers,
-			"DrugSafetyValidator.identifies is package-private for this class's oracle alone (issue"
-					+ " #447), and its javadoc says no production class outside it may call it — ask"
-					+ " DrugReference.matchesText, matchesDrugName or isNamed instead, per #86/#128/#147");
+			"these members are package-private for this class's oracles alone (issue #447), and each"
+					+ " says in its own javadoc that no production class outside DrugSafetyValidator may"
+					+ " call it — for a naming question ask DrugReference.matchesText, matchesDrugName or"
+					+ " isNamed instead, per #86/#128/#147");
 	}
 
 	@Test

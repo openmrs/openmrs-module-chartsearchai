@@ -8180,7 +8180,9 @@ arms. `N` is what `findImpliedByQuery` resolved:
 
 The chips were identical at every cell, before and after (1 at N=2, 10 — the cap — at every other),
 and a separate 117-cell sweep — 4 datasets (the excerpt, the two question-pair fixtures, the shipped
-KB) x charts of 0, 1, 2, 3, 8, 20 and 43 active orders x question and answer shapes — found every
+KB) against charts of 0, 1, 2, 3, 8, 20 and 43 active orders and a range of question and answer
+shapes, NOT a full cross product (117 is not a multiple of either factor; each dataset was driven with
+the shapes it can express) — found every
 declared `SafetyWarning` field, every `PairChipExtent` and every WARN line byte-identical across the
 two heads: 1,382 chips, 110 extents, 32 WARN lines. That probe is calibrated in both directions —
 dropping the ATC leg of `candidates` moves 18 of its lines, and handing the screening arm an empty
@@ -8242,9 +8244,14 @@ screened entries admit no pair, so nothing is read at all.
 *Cap the number of question-resolved rows the arm screens, and state the truncation in
 `PairChipExtent`* — #447's own first suggestion. Refused on this decision's own measurement: at the
 largest question the controller admits — the 407-row row of the table, not the 195-row one — the pass
-now costs about 92 ms against 3 ms for an ordinary two-drug question. A cap would still save most of
-that 92 ms, so the refusal is not that it buys nothing — it is that ~90 ms on the most adversarial
-question the controller admits is not worth a narrower safety screen. It would also cost a wire change that is not merely additive. `PairChipExtent.getFound()` is defined as how many candidate pairs the
+now costs about 92 ms against 3 ms for an ordinary two-drug question. **A cap would save part of that
+and not most of it**: the rows have to be RESOLVED before a cap can drop any, so it cannot touch the
+~54 ms the dominant-cost paragraph below attributes to `findImpliedByQuery`, and what is left for it
+to save is the arm's own share. So the refusal is not that a cap buys nothing measurable — the first
+wording of this sentence said that and was wrong, and the second priced it at nearly the whole pass
+and was wrong the other way. It is that the arm's share of one adversarial question is not worth a
+narrower safety screen. It would also cost a wire change
+that is not merely additive. `PairChipExtent.getFound()` is defined as how many candidate pairs the
 arm ENUMERATED, and `found == 0` asserts that an arm ran and the data related none of them; screening
 a subset makes that count a measurement of a population the arm chose, which a client cannot tell from
 a complete screen without a third number — the class of statement Decisions 60, 65, 69 and 71 price.

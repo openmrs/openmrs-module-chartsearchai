@@ -39,6 +39,13 @@ import org.junit.jupiter.api.Test;
  * method, while ALL the work a chart-less pass does — the drug-in-play arms and the pairwise ones
  * together — came to 30 ms of that 490, which is the upper bound on the arms the issue blamed.
  *
+ * <p><b>Read that at the TEN drugs in play it was taken at, and no further</b> (issue #447). Above
+ * that count the pairwise arms did dominate, because their rule reading was quadratic in a row count
+ * the QUESTION chooses: a question resolving several hundred rows — which the controller's
+ * 1000-character cap admits — cost seconds per pass until {@code DrugSafetyValidator.AboveFloorRules}
+ * inverted that join. ADR Decision 103 carries the measurement; what survives here is the sentence
+ * above about THIS issue's ten-drug cell, not a general ranking of the arms.
+ *
  * <p><b>What these cases count, and why that is the honest unit.</b> A timing assertion would be flaky
  * and machine-shaped. The repeat's own cost is full walks of the loaded dataset — what
  * {@code orderPartners}' javadoc calls "the repeated full scans" — and a walk begins with a call to
@@ -166,14 +173,7 @@ public class CoMedicationResolutionPerPassTest {
 	}
 
 	private static String questionNaming(int drugs) {
-		StringBuilder question = new StringBuilder("Can I give her ");
-		for (int i = 0; i < drugs; i++) {
-			if (i > 0) {
-				question.append(" and ");
-			}
-			question.append(IN_PLAY.get(i));
-		}
-		return question.append("?").toString();
+		return DrugReferenceTestSupport.questionNaming(IN_PLAY, drugs);
 	}
 
 	@Test

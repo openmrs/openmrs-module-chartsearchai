@@ -54,6 +54,27 @@ public class QuestionPairRuleScanPerPassTest {
 	private static final List<String> EXCERPT_DRUGS = Arrays.asList("warfarin", "simvastatin",
 			"clarithromycin", "amiodarone", "digoxin", "fluconazole", "sertraline", "tramadol");
 
+	/**
+	 * Every chip the eight-drug excerpt question raises, in order, as {@code type | severity | lead} —
+	 * the lead being the detail up to its em dash, which is the half naming the two drugs. The
+	 * mechanism prose is deliberately not pinned: it is the dataset's and another case's business.
+	 *
+	 * <p>Here because the walk counts above are a COST assertion, and a cost assertion is satisfied by
+	 * an arm that screens less. Ten is {@code maxPairChips}, so this also says the screen is still
+	 * reaching its cap at this drug count rather than running out of pairs.
+	 */
+	private static final List<String> EIGHT_DRUG_CHIPS = Arrays.asList(
+			"interaction | Major | Sertraline interacts with Tramadol, also named in the question",
+			"interaction | Major | Sertraline interacts with Amiodarone, also named in the question",
+			"interaction | Major | Simvastatin interacts with Clarithromycin, also named in the question",
+			"interaction | Major | Simvastatin interacts with Fluconazole, also named in the question",
+			"interaction | Major | Simvastatin interacts with Amiodarone, also named in the question",
+			"interaction | Major | Tramadol interacts with Amiodarone, also named in the question",
+			"interaction | Major | Warfarin interacts with Clarithromycin, also named in the question",
+			"interaction | Major | Warfarin interacts with Fluconazole, also named in the question",
+			"interaction | Major | Warfarin interacts with Amiodarone, also named in the question",
+			"interaction | Major | Clarithromycin interacts with Digoxin, also named in the question");
+
 	/** Drugs no rule of any other relates, so {@code pairKeyNames}' break never fires — the shape the
 	 *  excerpt cannot express, its 120 links being all 120 pairs its 16 drugs admit. */
 	private static final String UNRELATED_FIXTURE = "chartsearchai-test/drug-reference-unrelated-pairs.json";
@@ -156,6 +177,38 @@ public class QuestionPairRuleScanPerPassTest {
 		assertTrue(walks.get(walks.size() - 1) > walks.get(0),
 			"the added drugs must reach the arm at all, or the invariant below is vacuous: " + walks);
 		assertEachAddedDrugCostsTheSame(walks, "the excerpt relates to the others");
+	}
+
+	/**
+	 * And that the arm still reports what it reported. The counts above say each added drug costs the
+	 * same rule reading; an arm that screened FEWER PAIRS would satisfy that too, and would satisfy it
+	 * most convincingly at the drug count where the cost used to be worst. So the chips the same
+	 * question raises are pinned as text.
+	 *
+	 * <p>Not a duplicate of {@code AboveFloorRuleJoinAgreementTest}, which pins the JOIN's answer for
+	 * every ordered pair: this one runs the whole arm and reads what a clinician is shown, including
+	 * the grouping, the chart-precedence cede, the severity ordering and the cap.
+	 */
+	@Test
+	public void theEightDrugQuestionStillRaisesTheChipsItRaised() {
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.ddinterEntries());
+		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(service);
+
+		List<String> leads = new ArrayList<String>();
+		for (SafetyWarning warning : validator.validate("",
+			questionNaming(EXCERPT_DRUGS, EXCERPT_DRUGS.size()),
+			DrugReferenceTestSupport.ctx(60, null, null, null, null, null))) {
+			String detail = warning.getDetail();
+			int emDash = detail.indexOf(" \u2014 ");
+			leads.add(warning.getType() + " | " + warning.getSeverity() + " | "
+					+ (emDash < 0 ? detail : detail.substring(0, emDash)));
+		}
+
+		assertEquals(EIGHT_DRUG_CHIPS, leads,
+			"the question-pair screen no longer reports what it reported over this dataset; a walk count"
+					+ " that stopped growing because the arm screens FEWER PAIRS would pass the cases"
+					+ " above and fail here (issue #447)");
 	}
 
 	/**

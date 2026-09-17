@@ -108,6 +108,30 @@ public class AboveFloorRuleJoinAgreementTest {
 			"the question-pair fixture");
 	}
 
+	/**
+	 * A screened list carrying one row TWICE still relates that row's rules once. The scan this join
+	 * replaced read a subject's list once per ASK, so it could not double anything; building per
+	 * OCCURRENCE would append every rule of a repeated row twice, and the accessor would then say the
+	 * data carries two rules where it carries one — which {@code bestRule} and {@code pairKeyNames}
+	 * would swallow, since one takes the strongest and the other the first.
+	 *
+	 * <p>Not reachable from production today — both arms hand a list built from a set — and asserted
+	 * anyway, because the old shape could not break this way and a precondition nothing checks is one
+	 * the next caller breaks.
+	 */
+	@Test
+	public void aScreenedRowHandedTwiceRelatesItsRulesOnce() {
+		List<DrugReference> entries = DrugReferenceTestSupport.ddinterEntries();
+		List<DrugReference> repeated = new ArrayList<DrugReference>(entries);
+		repeated.add(entries.get(0));
+
+		assertEquals(AboveFloorRules.of(entries, 0).aboveFloorRulesAgainst(entries.get(0), entries.get(1)),
+			AboveFloorRules.of(repeated, 0).aboveFloorRulesAgainst(entries.get(0), entries.get(1)),
+			"a row the caller's list carries twice must relate its rules once, or the join reports the"
+					+ " reference data carrying two rules where it carries one (issue #447)");
+		assertAgrees(repeated, "the excerpt with its first row handed twice");
+	}
+
 	@Test
 	public void theJoinAgreesOverTheRowsARouteVariantQuestionResolvesFromTheShippedKnowledgeBase() {
 		// The shipped knowledge base, not the excerpt: a token named by MORE THAN ONE entry is the only

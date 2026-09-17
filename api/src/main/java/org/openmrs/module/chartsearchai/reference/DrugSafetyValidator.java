@@ -6056,7 +6056,18 @@ public class DrugSafetyValidator {
 			Map<String, List<DrugReference>> byAtcCode = atcIndexOf(screened);
 			Map<DrugReference, Map<DrugReference, List<DrugReference.Interaction>>> bySubject =
 					new IdentityHashMap<DrugReference, Map<DrugReference, List<DrugReference.Interaction>>>();
+			// Each ROW once, however many times the caller's list carries it. Both production callers
+			// hand a list built from a set, so this cannot fire today — but the scan this replaced read
+			// a subject's list once per ASK and so could not double anything, while building per
+			// OCCURRENCE would append every rule of a repeated row twice and make the accessor's
+			// "every rule of subject that names other" say the data carries two where it carries one.
+			// A precondition nothing checks is a precondition the next caller breaks.
+			Set<DrugReference> built = Collections.newSetFromMap(
+					new IdentityHashMap<DrugReference, Boolean>());
 			for (DrugReference subject : screened) {
+				if (!built.add(subject)) {
+					continue;
+				}
 				for (DrugReference.Interaction rule : subject.getInteractions()) {
 					if (!clearsSeverityFloor(rule, floor)) {
 						continue;

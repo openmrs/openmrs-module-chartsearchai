@@ -3708,7 +3708,7 @@ The A/Vietnam typo row's own `(h5n1)` sits MID-name and `TRAILING_QUALIFIER` is 
 
 ### Measured
 
-Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates on **both** sides — the baseline is the same methods unmutated, driven by the same harness through reflection into the real private `bestRulePerPartner`, `aboveFloorRulesAgainst`, `bestRule` and `outranks` rather than a re-expression of any of them.
+Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates on **both** sides — the baseline is the same methods unmutated, driven by the same harness through reflection into the real private `bestRulePerPartner`, `aboveFloorRulesAgainst`, `bestRule` and `outranks` rather than a re-expression of any of them. (Since Decision 103 that second symbol is `DrugSafetyValidator.AboveFloorRules.aboveFloorRulesAgainst`, an accessor over a per-pass join rather than a private static taking a floor; the measurement stands, the reflection recipe needs rewriting for it.)
 
 | | |
 |---|---|
@@ -3725,7 +3725,7 @@ Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates
 | … which SUBSTANCE owns the sentence changed | **4**, all in the question-pair arm |
 | api suite | 1587 api + 87 omod, 0 failures |
 
-**What a "group" is, so those two can be re-derived.** For the drug-in-play arm it is one entry of what `bestRulePerPartner` returns — one (substance family, partner) collapse — driven by invoking that real private method per multi-row family over a `PatientClinicalContext` carrying that family's own partner tokens as active orders, at floor 0. For the question-pair arm it is one (substance, substance) clinical pair among the pairs the four corrected rows' substances take part in, folded by that arm's own entry-pair walk over the union of the two families' rows in dataset order, through the real `aboveFloorRulesAgainst`, `bestRule` and `outranks`. Both bases are the whole shipped KB; the question-pair one is scoped to those four substances because `outranks`' route step reads only the two rows' `namesNoRoute()` and no other row's answer moves.
+**What a "group" is, so those two can be re-derived.** For the drug-in-play arm it is one entry of what `bestRulePerPartner` returns — one (substance family, partner) collapse — driven by invoking that real private method per multi-row family over a `PatientClinicalContext` carrying that family's own partner tokens as active orders, at floor 0. For the question-pair arm it is one (substance, substance) clinical pair among the pairs the four corrected rows' substances take part in, folded by that arm's own entry-pair walk over the union of the two families' rows in dataset order, through the real `aboveFloorRulesAgainst` (see the note above on where that symbol now lives), `bestRule` and `outranks`. Both bases are the whole shipped KB; the question-pair one is scoped to those four substances because `outranks`' route step reads only the two rows' `namesNoRoute()` and no other row's answer moves.
 
 **State which reading a qualification count is on.** 10 → 9 and 10 → 11 count different things and the correction is exactly what makes them diverge: before it, "answers `!namesNoRoute()`" and "carries a trailing parenthetical" were the same predicate. Quoting either without its unit is unreadable afterwards.
 

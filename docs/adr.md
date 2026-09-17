@@ -8188,14 +8188,21 @@ at-most-once contract. That consumer's idempotence is keyed on its having FIRED 
 early `done` having gone out, which also makes its warning reachable in the classic shape; and the
 classic write site skips its save where a row was already attempted. Neither shipped implementation can
 reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
-`ChartSearchServiceRouter` never calls it, passing the caller's through — but "exactly one row" is a
-specification about the TABLE, and the module should not owe it to a collaborator's good behaviour.
+`ChartSearchServiceRouter` never calls it, passing the caller's through — but a second call is a
+second ROW, `saveAuditLog` building a fresh one each time, and the module should not owe the table's
+shape to a collaborator's good behaviour.
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
-row before streaming and update it afterwards — was not taken: `ChartSearchAiAuditSearchModeTest`
-and `ChartSearchAiAuditReferenceSliceTest` each assert that a streaming query writes **exactly one**
-row, in both shapes, and a pre-persist design writes two. Changing those assertions is changing the
-specification. So the row is written once, at the end, from the best answer the controller holds:
+row before streaming and update it afterwards — was not taken, and what stands against it is a
+second write per query and a specification change rather than a second row.
+`ChartSearchAiAuditSearchModeTest` and `ChartSearchAiAuditReferenceSliceTest` each pin **one
+`saveAuditLog` call** per streaming query, in both shapes, which a pre-persist design reddens by
+calling it twice — but their subject is the call and not the table, so neither of them says what such
+a design would leave in it. That one call is one row today is a property of `saveAuditLog`, which
+builds a fresh row on every call; a design that instead updated the row its first call had persisted
+would be rewriting that method's "the only place a row is built" shape, and re-specifying both
+suites. Neither was re-decided here. So the row is written once, at the end, from the best answer the
+controller holds:
 
 - the pipeline's own `ChartAnswer` where the ungrounded consumer has handed one over — which is why
   that consumer now fires in BOTH shapes rather than being wired to a no-op in the classic one. Its
@@ -8211,10 +8218,15 @@ specification. So the row is written once, at the end, from the best answer the 
 oversight.** The handoff comes after the `references` frame, so both disconnect windows the ticket
 describes fall here — and so does a third it does not describe, a cached answer, which the router
 hands over in one token call and never surfaces through the consumer. Such a row can therefore hold
-the answer in FULL under `unknown`: read the mode, not the length of the answer. Closing the residue
-would need a new signal on the `searchStreaming` interface carrying the mode ahead of the answer, and
-the mode is a property of the chart that was assembled, which is the producer-states-it discipline
-`ChartAnswer.getSearchMode()` exists for.
+the answer in FULL under `unknown`, so the length of the answer does not say which way a row was
+filed. **Nor does anything on a row filed the FIRST way say that its stream came apart**: it carries
+the pipeline's own mode and reference count, which is what
+`ChartSearchAiStreamDisconnectAuditTest.aFailureAfterTheAnswerIsCompleteAuditsThePipelinesOwnAnswer`
+asserts, and is the same row a completed query leaves. `unknown` is therefore a subset of "this query
+did not finish" and not a test for it; the README's audit-log section says that to a client.
+Closing the residue would need a new signal on the `searchStreaming` interface carrying the mode
+ahead of the answer, and the mode is a property of the chart that was assembled, which is the
+producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.
 
 **The gate.** The row is owed once the pipeline has spoken on any of the consumer channels, which is
 the REST layer's only signal that inference produced something. A query that failed before any of
@@ -8240,12 +8252,13 @@ write failed and when the row got no id — which is the argument `LogCapture`'s
 issue #149.
 
 Making the failure *fail closed* was not taken. It is mechanically available on the blocking
-`/search` handler, which persists before returning the answer, and not available on the streaming
-one, where the row is written after delivery and the one-row-per-query specification above rules out
-the pre-persist design that would make it available. A compliance switch that silently does not apply
-to the endpoint the frontend uses by default is worse than no switch, and which way to resolve that —
-pre-persist and re-specify the one-row assertions, or accept the asymmetry — is a policy call rather
-than a defect.
+`/search` handler, which persists before returning the answer. On the streaming one the row is
+written after delivery, so nothing is there to fail closed ON — reaching it means pre-persisting,
+which is the design above, at the cost of a second write per query and of re-specifying the two
+suites named there. Nothing here shows that this endpoint CANNOT fail closed; what it shows is what
+doing so would cost. A compliance switch that silently does not apply to the endpoint the frontend
+uses by default is worse than no switch, and which way to resolve that — pre-persist and re-specify,
+or accept the asymmetry — is a policy call rather than a defect.
 
 **What it costs**, measured 2026-09-17 by driving the real `streamAnswer` from a throwaway omod case
 with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer —

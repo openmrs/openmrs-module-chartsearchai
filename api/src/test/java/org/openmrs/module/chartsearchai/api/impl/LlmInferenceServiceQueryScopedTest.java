@@ -269,10 +269,14 @@ public class LlmInferenceServiceQueryScopedTest {
 
 	@Test
 	public void searchStreaming_shouldLabelTheUngroundedAndFinalAnswersIdentically() {
-		// The streaming path persists ONE audit row from ONE of two ChartAnswers, depending on
-		// whether async grounding is active — the ungrounded one handed to the consumer, or the
-		// returned one. Two audit-write sites disagreeing is half of what #178 was, so the two
-		// answers must carry the same label by construction, not by two matching derivations.
+		// The streaming path persists ONE audit row per query, and the two answers this service
+		// labels are the two it can be built from at an ordinary write site — the ungrounded one
+		// handed to the consumer, or the returned one, depending on whether async grounding is
+		// active. (A stream that reached neither site is audited from the ungrounded one where the
+		// consumer had handed it over, and otherwise from a stand-in the controller builds off the
+		// streamed text, which carries no label at all — ADR Decision 103 is canonical for that.)
+		// Two audit-write sites disagreeing is half of what #178 was, so the two answers must carry
+		// the same label by construction, not by two matching derivations.
 		service.queryScoped = true;
 		service.progressiveEnabled = false;
 		strategy.returnScopedChart = true;

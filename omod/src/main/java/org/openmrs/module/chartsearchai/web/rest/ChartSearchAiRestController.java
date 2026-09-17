@@ -699,9 +699,9 @@ public class ChartSearchAiRestController {
 					// Interface contract is at-most-once; stay idempotent anyway. Keyed on this consumer
 					// having FIRED, not on the done event having gone out: a duplicate done would corrupt
 					// every client's completion handling, and a second fire after a REFUSED done write
-					// would otherwise re-enter and write a second audit row, which the one-row-per-query
-					// specification the audit suites pin does not allow. It reaches the classic shape too,
-					// where nothing sets a done flag at all.
+					// would otherwise re-enter and write a second audit row — a second row, saveAuditLog
+					// building a fresh one per call, and a second call past the one the audit suites pin.
+					// It reaches the classic shape too, where nothing sets a done flag at all.
 					log.warn("Ungrounded-answer consumer fired more than once; ignoring");
 					return;
 				}
@@ -886,8 +886,8 @@ public class ChartSearchAiRestController {
 	 * records off the five consumer channels: a query that failed before any of them spoke is left
 	 * unaudited, because nothing was disclosed and that traffic is the only signal the REST layer
 	 * has. Which failures that does and does not cover, what the row states where the pipeline never
-	 * surfaced an answer, what it costs, and the pre-persist alternative the one-row-per-query
-	 * specification rules out: ADR Decision 103, which is canonical for all of it.
+	 * surfaced an answer, what it costs, and the pre-persist alternative that was not taken and what
+	 * taking it would cost: ADR Decision 103, which is canonical for all of it.
 	 *
 	 * @param state what this request's consumers recorded as the stream ran
 	 */

@@ -364,9 +364,9 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 	 * refused, and a service that swallows the {@code RuntimeException} that failure raises and fires
 	 * the consumer again. Neither shipped implementation does that — {@code LlmInferenceService} and
 	 * {@code ChartSearchServiceRouter} each call the consumer once with no surrounding try — so this
-	 * pins a guard rather than fixing an observed defect. It is worth pinning anyway: the audit
-	 * suites' "exactly one row" is a specification about the TABLE, and the module should not owe it
-	 * to a collaborator's good behaviour.
+	 * pins a guard rather than fixing an observed defect. It is worth pinning anyway: a second call is
+	 * a second ROW, {@code saveAuditLog} building a fresh one each time, and the module should not owe
+	 * the table's shape to a collaborator's good behaviour.
 	 */
 	@Test
 	public void aSecondUngroundedHandoffWritesNoSecondRow() {

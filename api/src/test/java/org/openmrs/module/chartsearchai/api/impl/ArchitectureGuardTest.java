@@ -484,9 +484,11 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p><b>It also asks that each {@code response.body()} sit behind a named bounded reader, and
 	 * that half is DEFENCE IN DEPTH rather than the answer.</b> As the answer it failed: a rule
-	 * matching the reader's name in front of the call was defeated by a line wrap, a renamed
-	 * local, a helper in another file, the exempt file hosting the read, a same-named production
-	 * method ({@code LlmResponseParser.parseStreamingResponse} satisfies "preceded by
+	 * matching the reader's name in front of the call was defeated six ways. Reading the file
+	 * dense and walking the whole tree closed two of them, measured — a wrapped read and a
+	 * helper in another file both redden now. The other four do not close: a renamed reference,
+	 * the exempt file hosting the read, a same-named production method
+	 * ({@code LlmResponseParser.parseStreamingResponse} satisfies "preceded by
 	 * {@code parseStreamingResponse(}" while removing the ceiling), and a ceiling left in place
 	 * with its limit set to {@code Long.MAX_VALUE}, which no text match of any kind can see.
 	 * {@link RemoteLlmEngineResponseSizeBoundTest} catches every one of those, by driving each
@@ -498,8 +500,9 @@ public class ArchitectureGuardTest {
 	 * <p><b>Residue.</b> A buffering reader spelled in a way this list does not carry passes,
 	 * and so does a new read reached through a reference named anything but {@code response};
 	 * the behavioural suite is what catches those, on every path that suite drives. A new read
-	 * that is BOTH differently named AND on an undriven path is covered by neither. The scan is keyed on the simple file name, so two
-	 * production classes sharing one would leave a file unread — there are none today — and it
+	 * that is BOTH differently named AND on a path nobody drives is covered by neither. The
+	 * scan is keyed on the simple file name, so two production classes sharing one would leave
+	 * a file unread — there are none today — and it
 	 * walks {@code api} only, which is where every HTTP client in this module lives.</p>
 	 */
 	@Test

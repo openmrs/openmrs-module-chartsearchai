@@ -47,9 +47,9 @@ public class RemoteLlmEngine implements LlmEngine {
 	/**
 	 * What one output token is allowed to cost on the wire. An ALLOWANCE and not a measurement, and
 	 * the two terms it covers are not alike. The answer itself is recorded: a completion at
-	 * {@link ChartSearchAiConstants#DEFAULT_LLM_MAX_OUTPUT_TOKENS} is "roughly 16 kB" (the
-	 * <em>What it costs</em> sections of ADR Decisions 76 and 78 both state it), i.e. about four
-	 * bytes a token. The rest is
+	 * {@link ChartSearchAiConstants#DEFAULT_LLM_MAX_OUTPUT_TOKENS} is about 16 kB — the
+	 * <em>What it costs</em> sections of ADR Decisions 76 and 78 each state that size against
+	 * this same constant — i.e. about four bytes a token. The rest is
 	 * server-sent-event framing — in the worst conformant case every token arrives as its own event
 	 * carrying a whole chunk object and its {@code data: } prefix — and nothing in this repository
 	 * measures that against a real provider, so it is set far above any shape one could take. Its

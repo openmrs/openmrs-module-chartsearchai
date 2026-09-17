@@ -61,8 +61,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * {@code APIException} says only that the call ended; the bytes the server managed to write before
  * the client stopped reading are what says the heap was bounded, and an oversized body can raise an
  * exception for the wrong reason (a truncated JSON body fails to parse). So every case about an
- * OVERSIZED peer asserts the peer's write total first; the positive controls assert content
- * instead, which is their whole point. The flood handlers stop themselves at
+ * OVERSIZED peer asserts the peer's write total first. Of the positive controls only the
+ * at-the-ceiling one asserts a write total, and it asserts EQUALITY, because the fixture has to
+ * sit ON the boundary for that case to be about the boundary; the rest assert content. The flood handlers stop themselves at
  * {@link #SAFETY_LIMIT}, well above the ceiling, so an absent bound fails the assertion rather
  * than running until the JVM dies.
  *
@@ -85,11 +86,11 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	 * What the peer may still get onto the wire after the module stops reading its ERROR body at
 	 * {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES}. Nothing like that ceiling, and the gap is the
 	 * instrument's rather than the module's: the JDK's {@code HttpServer} and macOS loopback
-	 * auto-tuning together absorbed ~0.7 MB before the server's write saw the broken pipe, far
-	 * past the socket slack {@link #TOLERATED} describes. So this measures what a socket can
-	 * swallow and not what the module read — the module read {@code MAX_ERROR_BODY_BYTES} — and
-	 * what it discriminates is
-	 * a ceiling raised to megabytes, which is the mutation that matters.
+	 * auto-tuning together absorbed 0.5 to 0.7 MB before the server's write saw the broken pipe,
+	 * many times the {@code net.inet.tcp.sendspace}/{@code recvspace} of 131072 this platform
+	 * reports. So this measures what a socket can swallow and not what the module read — the
+	 * module read {@code MAX_ERROR_BODY_BYTES} — and what it discriminates is a ceiling raised
+	 * to megabytes, which is the mutation that matters.
 	 */
 	private static final long ERROR_BODY_BUDGET = 2L * 1024 * 1024;
 
@@ -268,9 +269,10 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	/**
 	 * The same flood on the STREAMING route's non-2xx branch, which {@code inferStreaming} reads
-	 * by its own path. Without this the only thing standing behind that branch is a source
-	 * guard, and a review measured that reverting it to {@code readAllBytes()} reddened no
-	 * behavioural case at all — the case below drives {@code infer}, which is a different read.
+	 * by its own path. Without this the only thing standing behind that branch was a source
+	 * guard: a review measured that reverting it to {@code readAllBytes()} reddened no
+	 * behavioural case at all, because the case ABOVE shares the {@code /flood-error} peer but
+	 * drives {@code infer}, which is a different read.
 	 */
 	@Test
 	public void anOversizedErrorBodyOnTheStreamingRouteIsTruncatedToo() {
@@ -287,10 +289,12 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	}
 
 	/**
-	 * The batch-grounding entry point, {@code infer} with a caller-supplied
-	 * {@code response_format}. It is a fourth way into the same read, and a review measured that
-	 * an unbounded read added on THIS overload alone passed every other case here — an undriven
-	 * path is the one thing a behavioural suite cannot cover by being strict elsewhere.
+	 * The batch-grounding entry point: {@code infer} with a caller-supplied
+	 * {@code response_format}. It is the SAME read — the three-argument {@code infer} delegates
+	 * here with a {@code null} format — so an unconditional unbounded read reddens this and the
+	 * non-streaming flood case together, measured. What it pins alone is a read CONDITIONAL on
+	 * the grounding path, measured passing every other case here, and the grounding REQUEST
+	 * shape against a real peer, which nothing else drives.
 	 */
 	@Test
 	public void theResponseFormatOverloadIsBoundedLikeTheOthers() {

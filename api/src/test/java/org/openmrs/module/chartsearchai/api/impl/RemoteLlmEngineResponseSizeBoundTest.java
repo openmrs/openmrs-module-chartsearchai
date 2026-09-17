@@ -25,6 +25,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -91,11 +93,14 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	/**
 	 * What the peer may still have got onto the wire after the module stopped reading: twice the
-	 * ceiling, i.e. {@link RemoteLlmEngine#MAX_RESPONSE_BYTES} of slack above it. Far more than a
-	 * socket needs — {@code net.inet.tcp.sendspace} and {@code recvspace} are 131072 each on this
-	 * platform — and deliberately so: the assertion is "something stopped the read", not a
-	 * measurement of how much the kernel buffers. An unbounded read reaches
-	 * {@link #SAFETY_LIMIT}, twice this again.
+	 * ceiling, i.e. {@link RemoteLlmEngine#MAX_RESPONSE_BYTES} of slack above it. That slack is
+	 * NOT one socket buffer, and an earlier version of this sentence said it was — measured over
+	 * ten runs, the overshoot above the ceiling ran 0.76 to 1.98 MB, six to fifteen times the
+	 * {@code net.inet.tcp.sendspace}/{@code recvspace} of 131072 this platform reports, because
+	 * the JDK's {@code HttpServer} and loopback auto-tuning buffer well past it. So the real
+	 * margin is about 2x rather than the 32x that figure would suggest. What keeps the verdict
+	 * unambiguous is the other side: an unbounded read reaches {@link #SAFETY_LIMIT}, twice
+	 * this again.
 	 */
 	private static final long TOLERATED = 2L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
 
@@ -259,6 +264,44 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 								+ "ships org.openmrs at WARN. Logged: " + logged);
 			}
 		}
+	}
+
+	/**
+	 * The same flood on the STREAMING route's non-2xx branch, which {@code inferStreaming} reads
+	 * by its own path. Without this the only thing standing behind that branch is a source
+	 * guard, and a review measured that reverting it to {@code readAllBytes()} reddened no
+	 * behavioural case at all — the case below drives {@code infer}, which is a different read.
+	 */
+	@Test
+	public void anOversizedErrorBodyOnTheStreamingRouteIsTruncatedToo() {
+		pointEngineAt("/flood-error");
+
+		APIException raised = callAndCatch(() -> engine.inferStreaming("system", "user", 60,
+				token -> { }));
+
+		assertPeerWasCutOffAt("the streaming route's error body", ERROR_BODY_BUDGET,
+				RemoteLlmEngine.MAX_ERROR_BODY_BYTES);
+		assertNotNull(raised, "a 500 from the endpoint is still a failed call");
+		assertTrue(raised.getMessage() != null && raised.getMessage().contains("500"),
+				"the status code survives on this route too. Got: " + raised.getMessage());
+	}
+
+	/**
+	 * The batch-grounding entry point, {@code infer} with a caller-supplied
+	 * {@code response_format}. It is a fourth way into the same read, and a review measured that
+	 * an unbounded read added on THIS overload alone passed every other case here — an undriven
+	 * path is the one thing a behavioural suite cannot cover by being strict elsewhere.
+	 */
+	@Test
+	public void theResponseFormatOverloadIsBoundedLikeTheOthers() {
+		pointEngineAt("/flood-body");
+
+		APIException raised = callAndCatch(() -> engine.infer("system", "user", 60,
+				new ObjectMapper().createObjectNode()));
+
+		assertWroteNoMoreThanTheCeiling("the batch-grounding body");
+		assertNotNull(raised, "the grounding path must end the call too, not the heap");
+		assertCeilingFailureIsReportable(raised);
 	}
 
 	/**

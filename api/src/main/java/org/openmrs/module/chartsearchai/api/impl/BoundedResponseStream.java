@@ -124,8 +124,9 @@ final class BoundedResponseStream extends FilterInputStream {
 	public long skip(long n) throws IOException {
 		// Same shape and same resolution as read(byte[],int,int): narrow only, and let an
 		// unusable ceiling stop clamping rather than stop the skip. Computed the other way this
-		// returned 0 forever at a limit near Long.MAX_VALUE — measured, and the mirror of the
-		// live-lock read() had.
+		// returned 0 forever at a limit near Long.MAX_VALUE — measured. The ARITHMETIC mirrors
+		// read()'s live-lock; the consequence does not, since a skip of 0 is a legal answer and
+		// InputStream.skipNBytes falls back to read() on one.
 		long room = limit - delivered + 1;
 		long skipped = in.skip(Math.max(0L, (room > 0 && room < n) ? room : n));
 		if (skipped > 0) {

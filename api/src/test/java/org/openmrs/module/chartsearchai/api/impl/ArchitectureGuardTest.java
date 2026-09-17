@@ -458,50 +458,50 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The spellings that hand a whole buffered body back, and the star imports that would let one
-	 * be written without its class name. A SET because the gap is always what nobody thought of:
-	 * the first version named {@code BodyHandlers.ofString} alone and {@code ofByteArray} passed
-	 * it; the second was defeated by {@code BodySubscribers.ofString} in a lambda handler and by
-	 * a wildcard static import, both measured buffering a whole 5 MB body with the guard green.
-	 * Declared before the rule's own javadoc deliberately — inserted after it, it takes that
-	 * javadoc for itself and leaves the rule undocumented, which is what happened once here.
+	 * Body readers that reach the whole response without passing a ceiling, and the wildcard
+	 * imports that would let one be written without its class name. A SET because the gap is
+	 * always what nobody thought of: the first version named {@code BodyHandlers.ofString} alone
+	 * and {@code ofByteArray} passed it; the second was defeated by {@code BodySubscribers.ofString}
+	 * in a lambda handler and by a wildcard static import, both measured buffering a whole 5 MB
+	 * body with this rule green.
+	 *
+	 * <p>Declared BEFORE the rule's own javadoc deliberately. Inserted after it, a second doc
+	 * comment takes that javadoc for itself and leaves the rule undocumented — which is what
+	 * happened here once, silently, through a compile and a green suite.</p>
 	 */
 	private static final List<String> BUFFERING_BODY_READERS = java.util.Arrays.asList(
 			"BodyHandlers.ofString", "BodyHandlers.ofByteArray", "BodyHandlers.ofFile",
-			"BodyHandlers.ofByteArrayConsumer", "BodySubscribers.ofString",
-			"BodySubscribers.ofByteArray", "BodyHandlers.*", "BodySubscribers.*");
+			"BodyHandlers.ofByteArrayConsumer", "BodyHandlers.ofLines",
+			"BodySubscribers.ofString", "BodySubscribers.ofByteArray", "BodySubscribers.ofLines",
+			"BodyHandlers.*", "BodySubscribers.*");
 
 	/**
 	 * Issue #446: the endpoint {@code chartsearchai.llm.remote.endpointUrl} names is an untrusted
-	 * network peer, so every read of its response body passes a ceiling —
-	 * {@code RemoteLlmEngine.readBoundedBody} and {@code parseStreamingResponse} for the two that
-	 * may abort, {@code readTruncatedErrorBody} for the non-2xx body that truncates instead. A
-	 * further reader, or one of {@link #BUFFERING_BODY_READERS} handing back the whole body
-	 * before anything can count it, is how the bound is lost — and it is lost FAIL-OPEN, with
-	 * every other test still green, which is why this is a guard rather than a comment.
+	 * network peer, so no read of its response body may reach the whole of it without passing a
+	 * ceiling. This asks the NAME question only — does a production source spell a reader that
+	 * buffers the lot — over the file's code with comments stripped and whitespace removed,
+	 * because per line a wrapped {@code BodyHandlers\n.ofString(} was measured passing silently.
 	 *
-	 * <p>{@code LocalLlmEngine} is exempt by name and deliberately: its peer is this module's own
-	 * subprocess at a hardcoded {@code 127.0.0.1} and never an address an operator supplies, so
-	 * the threat this bounds does not reach it. Naming it here is what makes that exclusion
-	 * reviewable rather than merely absent.</p>
+	 * <p><b>It deliberately does NOT ask whether each {@code response.body()} reaches a bounded
+	 * reader, and that is a correction rather than an omission.</b> A rule that did, by matching
+	 * the reader's name in front of the call, was defeated six times in five review rounds — by a
+	 * line wrap, by a renamed local, by a helper in another file, by the exempt file hosting the
+	 * read, by a same-named production method ({@code LlmResponseParser.parseStreamingResponse}
+	 * satisfies "preceded by {@code parseStreamingResponse(}" while removing the ceiling), and by
+	 * a ceiling left in place with its limit set to {@code Long.MAX_VALUE}, which no text match of
+	 * any kind can see. That is a call-graph and behaviour question wearing a text match's
+	 * clothing, and the answer is not a seventh spelling. {@link RemoteLlmEngineResponseSizeBoundTest}
+	 * answers it instead, by driving every entry point against a real hostile peer — it reddens on
+	 * all six — and this rule is kept only for the part a name genuinely decides.</p>
 	 *
-	 * <p><b>It reads the file with its whitespace removed, and that is the whole method.</b> Per
-	 * line it was defeated twice and false-positived once, each measured: a wrapped
-	 * {@code BodyHandlers\n.ofString(} passed; a wrap between {@code response} and
-	 * {@code .body()} passed; and the CORRECT call wrapped as {@code readBoundedBody(\n
-	 * response.body())} was reported as a violation. Dense, the lookbehind sees the reader that
-	 * is really in front of the call, so all three come out right. The cost is that a violation
-	 * names the file and not the line.</p>
-	 *
-	 * <p><b>Residue, named rather than left to be discovered.</b> A body reached through a
-	 * differently-named reference ({@code r.body()}) is invisible — both halves match a spelling,
-	 * not a call — and a rename that leaves even one {@code response.body()} behind still
-	 * satisfies the canary. The scan is keyed on the simple file name, so two production classes
-	 * sharing one would leave a file unread; there are none today. And it walks {@code api} only,
-	 * which is where every HTTP client in this module lives.</p>
+	 * <p><b>Residue.</b> A buffering reader spelled in a way this list does not carry passes; the
+	 * behavioural suite is what catches it, on every path that suite drives. A new entry point
+	 * nobody drives is covered by neither. The scan is keyed on the simple file name, so two
+	 * production classes sharing one would leave a file unread — there are none today — and it
+	 * walks {@code api} only, which is where every HTTP client in this module lives.</p>
 	 */
 	@Test
-	public void everyRemoteResponseBodyIsReadUnderACeiling() throws IOException {
+	public void noProductionSourceBuffersAWholeRemoteResponse() throws IOException {
 		// Scoped to PRODUCTION sources by its own walk: getSourceCache() covers src/test too,
 		// where LlmEndpointTestSupport legitimately reads a body it asked a live endpoint for.
 		Path main = SRC_ROOT.resolve("src/main/java");
@@ -509,8 +509,6 @@ public class ArchitectureGuardTest {
 				"precondition: no production source tree under " + SRC_ROOT + ", so this rule "
 						+ "would scan nothing and report no violations — it fails instead");
 
-		Pattern unbounded = Pattern.compile("(?<!readBoundedBody\\()(?<!readTruncatedErrorBody\\()"
-				+ "(?<!parseStreamingResponse\\()response\\.body\\(\\)");
 		List<String> violations = new ArrayList<>();
 		List<String> scanned = new ArrayList<>();
 		java.util.Map<String, String> dense = new java.util.LinkedHashMap<>();
@@ -521,7 +519,9 @@ public class ArchitectureGuardTest {
 				if (file.toString().endsWith(".java")) {
 					// Read HERE rather than fetched back out of getSourceCache(), which is keyed
 					// on the simple name over src/test as well: this rule is about production,
-					// and a cache hit is not a promise about which tree it came from.
+					// and a cache hit is not a promise about which tree it came from. Comments
+					// are stripped by the shared codeLines() — hand-rolled here, this rule was
+					// measured reddening on an ordinary trailing comment that named a reader.
 					scanned.add(file.getFileName().toString());
 					dense.put(file.getFileName().toString(),
 							String.join("", codeLines(Files.readAllLines(file,
@@ -537,36 +537,23 @@ public class ArchitectureGuardTest {
 				"precondition: RemoteLlmEngine.java was not among the " + scanned.size()
 						+ " production sources walked, so this rule is looking at the wrong tree");
 
-		int remoteBodyReads = 0;
 		for (java.util.Map.Entry<String, String> source : dense.entrySet()) {
-			String name = source.getKey();
-			if ("LocalLlmEngine.java".equals(name)) {
+			if ("LocalLlmEngine.java".equals(source.getKey())) {
+				// Exempt deliberately: its peer is this module's own subprocess at a hardcoded
+				// 127.0.0.1, never an address an operator supplies, so #446's threat does not
+				// reach it. Named here so the exclusion is reviewable rather than merely absent.
 				continue;
 			}
-			String code = source.getValue();
-			Matcher reads = Pattern.compile("response\\.body\\(\\)").matcher(code);
-			while (reads.find()) {
-				remoteBodyReads++;
-			}
-			if (unbounded.matcher(code).find()) {
-				violations.add(name + " — a remote response body must be read through "
-						+ "readBoundedBody, parseStreamingResponse or readTruncatedErrorBody "
-						+ "(issue #446)");
-			}
 			for (String buffering : BUFFERING_BODY_READERS) {
-				if (code.contains(buffering)) {
-					violations.add(name + " — " + buffering + " reaches the whole response body "
-							+ "without passing the ceiling; read an InputStream under one "
-							+ "instead (issue #446)");
+				if (source.getValue().contains(buffering)) {
+					violations.add(source.getKey() + " — " + buffering + " reaches the whole "
+							+ "response body without passing the ceiling. Read an InputStream "
+							+ "under one instead (issue #446); if this peer is NOT an "
+							+ "operator-configurable address, exempt the file in this rule and "
+							+ "say why, as LocalLlmEngine.java is.");
 				}
 			}
 		}
-
-		// Every check above passes on an empty discovery, which is how a source guard goes quiet
-		// — so prove the subject is still in reach before believing any of them.
-		assertTrue(remoteBodyReads > 0,
-				"no remote response-body read was found at all outside LocalLlmEngine: the scan "
-						+ "has lost its subject, so its clean result says nothing");
 		assertNoViolations(violations);
 	}
 

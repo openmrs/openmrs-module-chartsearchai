@@ -115,6 +115,8 @@ The `.omod` file is in `omod/target/`.
 
 The module's default `chartsearchai.llm.modelFilePath` points to **Gemma 4 E4B Instruct (Q4_K_M, ~5GB)** — `chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf`. Download it from [unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) if you intend to keep the default.
 
+[`model-manifest.tsv`](model-manifest.tsv) records the exact revision and sha256 of the copy this project ships and tests against, under the id `llm-gemma-4-e4b` — take the file from that revision and check it (`sha256sum gemma-4-E4B-it-Q4_K_M.gguf`) before pointing the module at it. This is the file the bundled `llama-server` executes and whose output becomes the clinical answer, so a hand download is worth the extra command ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
+
 For production hardware (~24GB+ RAM), upgrade to **Gemma 4 26B MoE Instruct (UD-Q4_K_M, ~17GB)** — the model the standalone download bundles. Available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). After downloading, update `chartsearchai.llm.modelFilePath` to point to the new filename.
 
 Place whichever `.gguf` you choose inside the OpenMRS application data directory (e.g., `<openmrs-application-data-directory>/chartsearchai/`). Model paths are resolved relative to this directory for security.

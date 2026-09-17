@@ -8195,10 +8195,22 @@ container, so the population this fix most needs to reach — deployments provis
 existed — is exactly the one a download-time-only check never runs against. A file that fails is
 re-fetched from the pinned revision rather than merely refused, because a stale file and a
 substituted one are indistinguishable on disk and the replacement is bound to the same digest:
-that decides how many restarts recovery takes, not what is accepted. The cost is hashing
-~8 GB on every container start; it is paid in the background alongside the download it replaces, and
-the embedder's two files are hashed synchronously because the global properties they gate are
-written seconds later.
+that decides how many restarts recovery takes, not what is accepted.
+
+The cost is real and was measured rather than estimated, because the earlier draft of this
+paragraph guessed and guessed wrong — it said the hashing is "paid alongside the download it
+replaces", which is true only of a first boot. On a steady-state restart there is no download: the
+old code returned early whenever the target existed, so a restart did no work on the weights at
+all, and removing that early return is the whole point of this decision. All four artifacts are
+8.52 GB, of which 0.44 GB is synchronous (the embedder, because the global properties it gates are
+written seconds later) and 8.08 GB is two parallel background subshells. Measured on an Apple M1
+Max, 2026-09-17: **5.17 s for all four at 1.69 GB/s** with the ARMv8 SHA extension, and **23.4 s at
+0.364 GB/s** with it disabled — the second being the honest figure for a deploy host without SHA-NI.
+Cold page cache added 0.1 s on NVMe; on 150 MB/s storage the read dominates at ~57 s whatever the
+CPU does. Against the budget, `docker-compose.yml` gives the backend service a 30-minute
+`start_period`, so the synchronous half is under a tenth of a percent of it. Which column a given
+host is in is decided by its ISA, which `record_cpu_breadcrumb` already records into
+`chartsearchai.demo.cpuInfo`.
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
 not subsume its diagnostic: a ~1 MB "successful" ONNX file means the upstream export moved to

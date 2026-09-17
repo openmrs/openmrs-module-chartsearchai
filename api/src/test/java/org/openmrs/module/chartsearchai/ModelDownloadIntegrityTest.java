@@ -75,7 +75,8 @@ public class ModelDownloadIntegrityTest {
 
 	private static final int DOWNLOAD_FAILED = 3;
 
-	private static final int MANIFEST_LOOKUP_FAILED = 4;
+	/** No such id in the manifest, or an override that arrived without a digest. */
+	private static final int UNRESOLVABLE_ARTIFACT = 4;
 
 	private static final byte[] GOOD_BYTES = "the bytes the maintainers reviewed\n".getBytes(StandardCharsets.UTF_8);
 
@@ -161,10 +162,9 @@ public class ModelDownloadIntegrityTest {
 	 * provisioned before this check existed, or one whose volume was written to directly, holds a file
 	 * the entrypoint would otherwise skip over on the strength of its name alone.
 	 *
-	 * <p>It is replaced rather than merely refused because a file left behind by an older upstream
-	 * revision and a substituted one are indistinguishable here, and the replacement is bound to the
-	 * same digest — so this decides how many restarts recovery takes, not what is accepted. The case
-	 * below is what "not accepted" looks like.
+	 * <p>It is replaced rather than merely refused — ADR Decision 103 gives the reasoning. The case
+	 * below is what "not accepted" looks like, and the two together are what say the replacement is
+	 * not a way past the check.
 	 */
 	@Test
 	public void aFileAlreadyOnTheVolumeThatDoesNotMatchIsReplacedByTheReviewedArtifact() throws Exception {
@@ -247,7 +247,7 @@ public class ModelDownloadIntegrityTest {
 		Result result = library("fetch_and_verify_override '" + url() + "' '' '" + target + "' 'the dispatched model'"
 				+ " gguf_sha256");
 
-		assertEquals(MANIFEST_LOOKUP_FAILED, result.exit, "an override with no digest must be refused\n" + result);
+		assertEquals(UNRESOLVABLE_ARTIFACT, result.exit, "an override with no digest must be refused\n" + result);
 		assertFalse(Files.exists(target), "an unverifiable override must not be fetched at all\n" + result);
 		assertTrue(result.output.contains("gguf_sha256"),
 				"the refusal must name the input the operator has to supply\n" + result);
@@ -266,6 +266,37 @@ public class ModelDownloadIntegrityTest {
 				"the placed file must be the bytes that were served");
 	}
 
+	/**
+	 * {@code fetch_and_verify} is the form the call sites use — {@code backend-init.sh} for all four
+	 * of its artifacts, and the standalone build for everything a push build fetches — and every
+	 * other case here drives the url form one level below it. Two fresh review agents independently
+	 * showed what that left open: with the id form's delegation mutated, or its whole body replaced
+	 * by a bare undigested {@code curl}, the suite stayed green. The second of those IS the defect
+	 * both findings report, restored in four lines.
+	 */
+	@Test
+	public void fetchingByIdPlacesTheRowsArtifactAndRefusesASubstitution() throws Exception {
+		Path fixture = work.resolve("manifest-by-id.tsv");
+		Files.write(fixture, ("probe-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url() + "\n")
+				.getBytes(StandardCharsets.UTF_8));
+		Path target = work.resolve("model.bin");
+
+		served = GOOD_BYTES;
+		Result accepted = library("fetch_and_verify probe-artifact '" + target + "' 'the probe artifact'", fixture);
+
+		assertEquals(OK, accepted.exit, "the row's own artifact must be accepted\n" + accepted);
+		assertEquals(sha256(GOOD_BYTES), sha256(Files.readAllBytes(target)),
+				"the id form must place the bytes the row's url served\n" + accepted);
+
+		served = SUBSTITUTED_BYTES;
+		Files.delete(target);
+		Result refused = library("fetch_and_verify probe-artifact '" + target + "' 'the probe artifact'", fixture);
+
+		assertEquals(DIGEST_MISMATCH, refused.exit, "a substitution must be refused through the id form too\n"
+				+ refused);
+		assertFalse(Files.exists(target), "refused bytes must never reach the target name\n" + refused);
+	}
+
 	// ---- the manifest is the one committed record ----------------------------------------------
 
 	/**
@@ -277,7 +308,7 @@ public class ModelDownloadIntegrityTest {
 	 */
 	@Test
 	public void everyLookupReturnsTheFieldOnThatArtifactsOwnRow() throws Exception {
-		List<String[]> rows = manifestRows();
+		List<String[]> rows = ModelManifest.rows();
 
 		for (String[] row : rows) {
 			String id = row[0];
@@ -297,7 +328,7 @@ public class ModelDownloadIntegrityTest {
 
 		Result result = library("fetch_and_verify no-such-artifact '" + target + "' 'a model nobody recorded'");
 
-		assertEquals(MANIFEST_LOOKUP_FAILED, result.exit, "an unrecorded artifact must not be fetched\n" + result);
+		assertEquals(UNRESOLVABLE_ARTIFACT, result.exit, "an unrecorded artifact must not be fetched\n" + result);
 		assertFalse(Files.exists(target), "an unrecorded artifact must leave no file behind\n" + result);
 	}
 
@@ -340,21 +371,8 @@ public class ModelDownloadIntegrityTest {
 
 	// ---- driving the real library ---------------------------------------------------------------
 
-	/** The manifest's artifact rows, read independently of the library the cases drive. */
-	private static List<String[]> manifestRows() throws IOException {
-		List<String[]> rows = new ArrayList<String[]>();
-		for (String line : Files.readAllLines(manifest(), StandardCharsets.UTF_8)) {
-			String trimmed = line.trim();
-			if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
-				rows.add(trimmed.split("\\s+"));
-			}
-		}
-		assertFalse(rows.isEmpty(), "the manifest at " + manifest() + " carries no artifact rows");
-		return rows;
-	}
-
 	private static Path manifest() {
-		return ModuleSourceRoot.repoRoot().resolve("model-manifest.tsv");
+		return ModelManifest.path();
 	}
 
 	private static Path libraryPath() {

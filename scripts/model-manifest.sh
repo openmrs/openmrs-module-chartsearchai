@@ -29,15 +29,19 @@ MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model
 #   0  the file is present and is the reviewed artifact
 #   1  digest mismatch — the file has been deleted
 #   2  size mismatch — the file has been deleted, and the caller has a better diagnostic than we do
-#   3  the download itself failed (including any non-2xx response, because curl runs with -f)
-#   4  the manifest does not carry the requested id
+#   3  the fetch or the placement failed, so nothing was verified and nothing was deleted
+#      (a non-2xx response is here, because curl runs with -f)
+#   4  the artifact could not be resolved: no such id in the manifest, or an override with no digest
+#   5  the file could not be hashed at all, and is still on disk
+#
+# 1 and 2 are the only codes that promise a deletion, and the callers' wording leans on that.
 
 # _mm_field <id> <sha256|bytes|url> — one field of the manifest row named by <id>, or a failure
 # naming the id.
 #
-# Read with the shell's own `read` rather than awk or cut. backend-init.sh depends on curl, sed,
-# grep and stat and on no text processor beyond them, and a five-row lookup is not worth making the
-# container entrypoint's tool list longer than it was.
+# Read with the shell's own `read` rather than awk or cut, which the entrypoint does not already
+# use: a lookup over a handful of rows is not worth adding a tool to what the container has to
+# carry. Nothing here needs what awk would give.
 _mm_field() {
 	if [ ! -f "$MODEL_MANIFEST_FILE" ]; then
 		echo "model-manifest: no manifest at $MODEL_MANIFEST_FILE" >&2
@@ -112,7 +116,9 @@ _mm_verify_file() {
 		return 2
 	fi
 
-	_mm_vf_actual=$(file_sha256 "$1") || return 1
+	# 5, not 1: nothing has been deleted, and the callers' "refused and deleted" wording is keyed
+	# on the code rather than on re-checking the disk.
+	_mm_vf_actual=$(file_sha256 "$1") || return 5
 	if [ "$_mm_vf_actual" != "$2" ]; then
 		echo "ERROR: $4 is not the artifact model-manifest.tsv records." >&2
 		echo "       expected sha256 $2" >&2
@@ -126,12 +132,12 @@ _mm_verify_file() {
 
 # fetch_and_verify_url <url> <sha256> <bytes> <target> <label>
 #
-# The composed step both fetch sites call: a file is at <target> when this returns 0, and it is the
-# reviewed artifact. Everything else deletes what it rejected and returns a code above.
+# The composed step the two wrappers below delegate to, and through them what both fetch sites
+# reach: a file is at <target> when this returns 0, and it is the reviewed artifact. Everything
+# else returns a code from the table above.
 #
-# A file already at <target> is verified rather than trusted for its name. That is the case a fresh
-# download cannot reach and the one #444 is largely about: /openmrs/data outlives the container, so
-# a deployment provisioned before this check existed is carrying whatever it was served then.
+# A file already at <target> is verified rather than trusted for its name — see the fall-through
+# below, and ADR Decision 103 for why.
 fetch_and_verify_url() {
 	_mm_url=$1
 	_mm_expected=$2
@@ -147,12 +153,10 @@ fetch_and_verify_url() {
 		if _mm_verify_file "$_mm_target" "$_mm_expected" "$_mm_bytes" "$_mm_label"; then
 			return 0
 		fi
-		# _mm_verify_file has deleted it, and we fall through to fetch the artifact the manifest
-		# records. A file left by an older revision and a substituted one are indistinguishable
-		# here, and refusing outright would cost a deployment one failed start before the next one
-		# downloaded the right bytes anyway — the replacement is bound to the same digest, so this
-		# changes how many restarts it takes and nothing about what is accepted. A served copy
-		# that fails too is the refusal.
+		# _mm_verify_file has deleted it; fall through and fetch what the manifest records. The
+		# replacement is bound to the same digest, so this decides how many restarts recovery
+		# takes and nothing about what is accepted — ADR Decision 103. A served copy that fails
+		# too is the refusal.
 		echo "Replacing $_mm_label from the revision model-manifest.tsv records..."
 	fi
 
@@ -195,8 +199,8 @@ fetch_and_verify_override() {
 }
 
 # fetch_and_verify <manifest-id> <target> <label> — the same step, with the url, digest and size
-# taken from the manifest. This is the form both fetch sites use; the url form above is for the
-# manually-dispatched standalone build, where the operator supplies a url and its digest.
+# taken from the manifest. This is the form the entrypoint uses for all four of its artifacts and
+# the standalone build uses for everything a push build fetches.
 fetch_and_verify() {
 	_mm_fv_url=$(manifest_url "$1") || return 4
 	_mm_fv_sha=$(manifest_sha256 "$1") || return 4

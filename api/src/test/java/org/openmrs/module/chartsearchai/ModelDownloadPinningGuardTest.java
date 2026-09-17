@@ -73,8 +73,13 @@ public class ModelDownloadPinningGuardTest {
 	private static final List<String> BUNDLE_ARTIFACTS = List.of("llm-gemma-4-e4b", "embedder-e5-base-v2-onnx",
 			"embedder-e5-base-v2-vocab-intfloat");
 
-	/** Where a model lands. A fetch naming one of these has bypassed the digest check. */
-	private static final List<String> MODEL_SINKS = List.of(".gguf", ".onnx", "vocab.txt", "$LLM_DIR", "$QS_DIR");
+	/**
+	 * Where a model lands, as the two files actually spell it. The extensions alone were not enough:
+	 * a review agent added {@code curl -fsSL -o "$ONNX_FILE" ...} and it passed every channel here,
+	 * because the entrypoint refers to its model files by variable and never by name.
+	 */
+	private static final List<String> MODEL_SINKS = List.of(".gguf", ".onnx", "vocab.txt", "$LLM_DIR", "$QS_DIR",
+			"$ONNX_FILE", "$VOCAB_FILE", "$target", "$_target", "$_mm_target", "$_mm_partial");
 
 	private static Path repo(String relative) {
 		return ModuleSourceRoot.repoRoot().resolve(relative);
@@ -92,7 +97,7 @@ public class ModelDownloadPinningGuardTest {
 
 	@Test
 	public void everyManifestRowCarriesADigestAndAnImmutableRevision() throws IOException {
-		List<String[]> rows = manifestRows();
+		List<String[]> rows = ModelManifest.rows();
 
 		assertFalse(rows.isEmpty(), "model-manifest.tsv carries no artifact rows");
 		List<String> violations = new ArrayList<String>();
@@ -125,7 +130,7 @@ public class ModelDownloadPinningGuardTest {
 	@Test
 	public void everyManifestRowIsFetchedBySomeCallSiteAndEveryCallSiteNamesOnlyRowsThatExist() throws IOException {
 		Set<String> declared = new LinkedHashSet<String>();
-		for (String[] row : manifestRows()) {
+		for (String[] row : ModelManifest.rows()) {
 			declared.add(row[0]);
 		}
 		Set<String> fetched = new LinkedHashSet<String>(ENTRYPOINT_ARTIFACTS);
@@ -165,8 +170,10 @@ public class ModelDownloadPinningGuardTest {
 	public void everyHuggingFaceDownloadUrlAnyoneFollowsNamesAnImmutableRevision() throws IOException {
 		List<String> violations = new ArrayList<String>();
 		int found = 0;
+		// config.xml is here because it tells an operator where to get the served model, and a
+		// `resolve/` URL is one edit away from appearing in that description.
 		for (String file : List.of("backend-init.sh", ".github/workflows/build-standalone.yml", "README.md",
-				"model-manifest.tsv")) {
+				"model-manifest.tsv", "omod/src/main/resources/config.xml")) {
 			String text = read(file);
 			Matcher urls = HF_RESOLVE.matcher(text);
 			while (urls.find()) {
@@ -248,7 +255,9 @@ public class ModelDownloadPinningGuardTest {
 		int lastEmbedderFetch = -1;
 		for (int i = 0; i < lines.size(); i++) {
 			String line = lines.get(i);
-			if (line.startsWith("configure_retrieval_gps") && !line.contains("()")) {
+			if (wiring < 0 && line.startsWith("configure_retrieval_gps") && !line.contains("()")) {
+				// The FIRST invocation. Taking the last let a second, earlier one be added with the
+				// fetches still ordered after it.
 				wiring = i;
 			}
 			if (line.trim().startsWith("fetch_and_verify ") && line.contains("embedder-e5-base-v2")) {
@@ -356,7 +365,7 @@ public class ModelDownloadPinningGuardTest {
 				String line = lines.get(j).trim();
 				boolean opensArm = line.matches("^[0-9|*]+\\).*");
 				if (opensArm || line.equals("esac")) {
-					if (arm != null && !arm.startsWith("0") && !armBody.toString().contains("exit")) {
+					if (arm != null && !arm.startsWith("0") && !leaves(armBody.toString())) {
 						violations.add("backend-init.sh line " + (i + 1) + ": the '" + arm
 								+ "' arm continues past a refused model instead of exiting");
 					}
@@ -374,6 +383,30 @@ public class ModelDownloadPinningGuardTest {
 		assertTrue(blocks > 0, "no embedder fetch in backend-init.sh branches on its exit code; this guard read nothing");
 	}
 
+	/**
+	 * Whether an arm's body actually exits, rather than merely containing the word somewhere. A
+	 * review agent defeated the substring form by rewording a diagnostic to end "the container will
+	 * not exit" and deleting the real {@code exit 1} beneath it: green, with a size-refused ONNX
+	 * falling through to "Embedder ready" and on to the global-property write.
+	 */
+	private static boolean leaves(String armBody) {
+		boolean firstLine = true;
+		for (String line : armBody.split("\n")) {
+			// The opening line carries the pattern — `*) exit 1 ;;` — so drop everything through
+			// its `)` before looking for a statement.
+			if (firstLine && line.indexOf(')') >= 0) {
+				line = line.substring(line.indexOf(')') + 1);
+			}
+			firstLine = false;
+			for (String statement : line.split(";")) {
+				if (statement.trim().matches("^exit\\b.*")) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	/** Whether the nearest fetch above {@code index} is one of the embedder's. */
 	private static boolean precedingFetchIsTheEmbedder(List<String> lines, int index) {
 		for (int i = index - 1; i >= 0; i--) {
@@ -386,14 +419,53 @@ public class ModelDownloadPinningGuardTest {
 		return false;
 	}
 
+	/**
+	 * Three files spell these two paths and nothing tied them together: {@code Dockerfile.backend}
+	 * chooses where they land, {@code backend-init.sh} sources one by absolute literal, and the
+	 * library defaults the other by absolute literal. A substring check on the FILENAME survives any
+	 * destination — a review agent moved both COPY targets to {@code /opt/wrong/} and the guard
+	 * stayed green.
+	 *
+	 * <p>The consequence is not subtle. Sourcing a file that is not there exits a POSIX shell, so
+	 * PID 1 dies before {@code exec}ing the server, and the backend service carries no {@code
+	 * restart:} key — the container stops and stays stopped. That is the failure {@code build.yml}'s
+	 * {@code entrypoint-lint} comment is written against, and neither {@code sh -n} nor shellcheck
+	 * can see it: both are happy with a {@code .} of an absolute path that does not exist.
+	 */
 	@Test
-	public void theImageCarriesBothTheLibraryAndTheManifestTheEntrypointReads() throws IOException {
-		String dockerfile = read("Dockerfile.backend");
+	public void theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem() throws IOException {
+		String sourced = soleMatch("backend-init.sh", "^\\.\\s+(\\S*model-manifest\\.sh)\\s*$",
+				"the path backend-init.sh sources the library from");
+		String manifest = soleMatch("scripts/model-manifest.sh",
+				"^MODEL_MANIFEST_FILE=\"\\$\\{MODEL_MANIFEST_FILE:-(\\S+)\\}\"\\s*$",
+				"the library's default manifest path");
 
-		assertTrue(dockerfile.contains("model-manifest.sh"),
-				"Dockerfile.backend does not COPY scripts/model-manifest.sh, so the entrypoint cannot source it");
-		assertTrue(dockerfile.contains("model-manifest.tsv"),
-				"Dockerfile.backend does not COPY model-manifest.tsv, so the entrypoint has no digests to check");
+		List<String> copied = new ArrayList<String>();
+		for (String line : codeLines("Dockerfile.backend")) {
+			if (line.startsWith("COPY ")) {
+				String[] words = line.trim().split("\\s+");
+				copied.add(words[words.length - 1]);
+			}
+		}
+
+		assertTrue(copied.contains(sourced), "backend-init.sh sources " + sourced
+				+ ", which Dockerfile.backend never COPYs there; the container would exit at startup. COPY destinations: "
+				+ copied);
+		assertTrue(copied.contains(manifest), "the library reads its digests from " + manifest
+				+ ", which Dockerfile.backend never COPYs there; every fetch would fail to resolve. COPY destinations: "
+				+ copied);
+	}
+
+	/** The one capture of {@code pattern} in {@code relative}, or a failure saying what was sought. */
+	private static String soleMatch(String relative, String pattern, String what) throws IOException {
+		List<String> found = new ArrayList<String>();
+		Matcher matcher = Pattern.compile(pattern, Pattern.MULTILINE).matcher(read(relative));
+		while (matcher.find()) {
+			found.add(matcher.group(1));
+		}
+		assertEquals(1, found.size(), "expected exactly one line in " + relative + " giving " + what + ", found "
+				+ found);
+		return found.get(0);
 	}
 
 	/** Every line of the file that is not blank and not wholly a comment, in order. */
@@ -407,18 +479,6 @@ public class ModelDownloadPinningGuardTest {
 		}
 		assertFalse(lines.isEmpty(), relative + " has no code lines, so every check over it would pass vacuously");
 		return lines;
-	}
-
-	private static List<String[]> manifestRows() throws IOException {
-		List<String[]> rows = new ArrayList<String[]>();
-		for (String line : Files.readAllLines(repo("model-manifest.tsv"), StandardCharsets.UTF_8)) {
-			String trimmed = line.trim();
-			if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-				continue;
-			}
-			rows.add(trimmed.split("\\s+"));
-		}
-		return rows;
 	}
 
 	private static int lineOf(String text, int offset) {

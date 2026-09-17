@@ -68,13 +68,9 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 #
 # Every model file below is fetched from the immutable revision recorded
 # in model-manifest.tsv and refused unless it hashes to the sha256
-# committed beside it. That happens on EVERY start, not only after a
-# fresh download: /openmrs/data outlives the container, so a volume
-# provisioned before this check existed is carrying whatever the mutable
-# `main` branch served at the time. Such a file is re-fetched from the
-# pinned revision rather than only deleted, so recovery costs no extra
-# restart; bytes that fail on the fresh copy too are the refusal. See
-# ADR Decision 103.
+# committed beside it — on EVERY start, not only after a fresh download,
+# because /openmrs/data outlives the container. ADR Decision 103 carries
+# why, and what happens to a file that fails.
 . /usr/local/bin/model-manifest.sh
 
 ONNX_FILE="$QS_DIR/model.onnx"
@@ -87,8 +83,8 @@ case $? in
     echo "       A graph-only ONNX file from an external-data export is ~1MB and the" >&2
     echo "       runtime fails late, at first inference, with a misleading \"Not a" >&2
     echo "       directory\" error reading a sidecar weights file that is not there." >&2
-    echo "       If the pinned revision now serves that shape, the manifest entry must" >&2
-    echo "       move to a revision that does not." >&2
+    echo "       The revision is pinned, so it cannot have changed shape upstream: a" >&2
+    echo "       truncated transfer is the likely cause and a restart is the remedy." >&2
     exit 1
     ;;
   *) exit 1 ;;
@@ -121,11 +117,14 @@ echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 # E4B holds the benign/malignant distinction, keeps citations focused on
 # clinically-relevant records, and fits in ~5GB of memory.
 #
-# Background the download and resume on container restart via `curl -C -`
-# so OpenMRS can become healthy without waiting for the transfer; deploy
-# health-poll loops time out at ~5min, but the actual download can take
-# longer on slow networks. Chart search queries return errors until the
-# .partial file is renamed to its final name.
+# Background the work and resume on container restart via `curl -C -` so
+# OpenMRS can become healthy without waiting for it. On a volume whose
+# weights already verify, that work is the hash alone and nothing is
+# downloaded or renamed; on a fresh or failing one it is the transfer,
+# which can take far longer than the deploy's health budget allows
+# (docker-compose.yml gives the backend a 30m start_period). Chart search
+# queries return errors for as long as no verified file is in place —
+# including the window after a file that WAS serving is refused.
 # Inner worker: fetches and verifies, or verifies what is already on the
 # volume. Receives all required values as positional args so each
 # backgrounded invocation has its own argument snapshot — reading globals
@@ -148,9 +147,11 @@ _download_llm_file() {
     # $? is the condition's status here. Which message is honest depends on it: a refusal has
     # already deleted the file, so there is nothing for curl -C - to resume from and saying
     # otherwise would send an operator looking for a .partial that is not there.
-    case $? in
+    _code=$?
+    case $_code in
       1|2) echo "$_label was refused and deleted; restart the backend container to fetch it again from the start." >&2 ;;
-      *)   echo "$_label download failed; restart the backend container to retry (curl -C - resumes from the .partial file)." >&2 ;;
+      3)   echo "$_label download failed; restart the backend container to retry (curl -C - resumes from the .partial file)." >&2 ;;
+      *)   echo "$_label could not be verified (code $_code); it has been left where it is. Restart the backend container to retry." >&2 ;;
     esac
   fi
 }

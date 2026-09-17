@@ -65,8 +65,9 @@ import com.sun.net.httpserver.HttpServer;
  * @see ModelDownloadPinningGuardTest for the structural half — that each call site still routes
  *      through this library and still pins its revision, which no behaviour of this library can show
  * @see EntrypointRetrievalWiringTest for what the entrypoint composes the ledger INTO: the global
- *      properties a start leaves behind when its embedder did not verify, which needs a database
- *      that remembers an earlier start and so is neither this suite's question nor the guard's
+ *      properties left behind by a start that reaches the wiring having verified no embedder, which
+ *      needs a database that remembers an earlier start and so is neither this suite's question nor
+ *      the guard's
  */
 public class ModelDownloadIntegrityTest {
 

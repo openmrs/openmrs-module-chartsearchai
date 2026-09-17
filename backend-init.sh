@@ -568,7 +568,10 @@ configure_retrieval_gps() {
   # nothing checked. A decline also turns the sweep off below, and says so HERE rather than
   # leaving it to the blank-path test: gp_set_if_blank deliberately leaves an already-written row
   # standing, so on every deployment past its first good start that property is non-blank whatever
-  # this start did, and the refusal that just DELETED the file it names would go unanswered.
+  # this start did, and nothing else here would answer it. The embedder's own fetches above exit on
+  # a refusal, so a start that gets here with nothing in the ledger is one whose verification is
+  # absent from this shell's ledger rather than one refused in it — a fetch taken in a subshell,
+  # for instance, which swallows the exit as well as the ledger entry. ADR Decision 103.
   if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
     gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
     gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"

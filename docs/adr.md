@@ -8324,8 +8324,11 @@ of the refusal was written as a consequence of the first: the paths go unwritten
 below them — `[ -z "$_model_gp" ]` over a read-back of `querystore.embedding.modelFilePath` — finds
 it blank and switches `querystore.bootstrap.autostart` off. That composition holds on a virgin
 database only. `gp_set_if_blank` leaves a row it finds non-blank standing, deliberately, so a
-deployment past its first good start reads back the path the LAST good start wrote — while this
-start's refusal has just deleted the file that path names. Measured 2026-09-17 against the
+deployment past its first good start reads back the path the LAST good start wrote, whatever this
+start did. On the shipped entrypoint the embedder goes through `fetch_or_exit`, whose refusal ends
+the shell before the wiring runs, so what the decline answers is a start that reaches the wiring
+with nothing in the ledger — the swallowed-exit residue above, where a refusal has already deleted
+the file that path names and the `exit` stopped nothing. Measured 2026-09-17 against the
 entrypoint's own wiring functions, a `mariadb` stand-in whose store survives between starts and a
 refusal taken in a background subshell: the pre-fix arm left
 `modelFilePath=querystore/model.onnx bootstrap.autostart=true`, which is the per-record exception
@@ -8337,7 +8340,11 @@ test stays for the one case only it can answer — the gate PASSED and the write
 third channel because neither of the other two can see a composition — one drives the library with
 no database, the other reads source. The claim that the two halves already composed to one
 fail-closed state was written in the entrypoint's comment and in the guard's own allow-list, and
-believed in both for three review rounds, which is why the correction is recorded here.
+believed in both for three review rounds, which is why the correction is recorded here. The prose
+that replaced it then overreached the other way, wherever it was restated: it said a start whose
+embedder is REFUSED reaches this arm, which on the shipped entrypoint it cannot, `fetch_or_exit`
+having ended the shell at the download step. What reaches the arm is a start with nothing in the
+ledger. The code is fail-closed either way; only the wording moved.
 
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does

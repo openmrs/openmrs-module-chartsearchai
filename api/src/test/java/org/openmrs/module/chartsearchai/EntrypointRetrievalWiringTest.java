@@ -33,18 +33,21 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * What {@code backend-init.sh}'s {@code configure_retrieval_gps} leaves in the database when the
- * embedder did not verify — the composition {@link ModelDownloadIntegrityTest}'s ledger cases and
- * {@link ModelDownloadPinningGuardTest}'s source checks each see only one half of.
+ * start it runs in has verified no embedder — the composition {@link ModelDownloadIntegrityTest}'s
+ * ledger cases and {@link ModelDownloadPinningGuardTest}'s source checks each see only one half of.
  *
  * <p><b>Why a third channel exists.</b> The ledger answers what THIS shell verified and
  * {@code gp_set_if_blank} preserves a row an earlier start wrote; both are right on their own, and
- * the state they compose to was not. A start whose embedder is refused deletes the file and
- * publishes no path, but the row from the last good start still names that now-absent file — so a
- * safety keyed on reading the property back finds it non-blank and leaves
- * {@code querystore.bootstrap.autostart} on, which is the per-record exception flood that function's
- * own comment exists to prevent and measures the cost of. Neither existing channel can see that:
- * one drives the library without a database, the other reads source. Only running the wiring
- * against a store that REMEMBERS an earlier start does.
+ * the state they compose to was not. On the shipped entrypoint the embedder goes through
+ * {@code fetch_or_exit}, whose refusal ends the shell before this wiring runs, so what the gate's
+ * decline answers is a start that reaches the wiring with nothing in the ledger — the swallowed-exit
+ * residue ADR Decision 103 names, a fetch taken in a subshell, which the refusal cases below
+ * construct deliberately. Such a start has deleted the file and publishes no path, but the row from the last
+ * good start still names that now-absent file — so a safety keyed on reading the property back finds
+ * it non-blank and leaves {@code querystore.bootstrap.autostart} on, which is the per-record
+ * exception flood that function's own comment exists to prevent and measures the cost of. Neither
+ * existing channel can see that: one drives the library without a database, the other reads source.
+ * Only running the wiring against a store that REMEMBERS an earlier start does.
  *
  * <p><b>It runs the entrypoint's own functions, not a retelling of them.</b> Each function below is
  * taken verbatim out of {@code backend-init.sh} by name — a definition that moves or changes shape

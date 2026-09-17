@@ -372,9 +372,11 @@ public class ModelDownloadPinningGuardTest {
 	 * global property only behind {@code require_verified} naming that artifact, so what decides it is
 	 * what the running shell DID rather than where a fetch is written. Rearranging the entrypoint then
 	 * leaves the paths unwritten — the fail-closed direction — instead of pointing querystore at
-	 * bytes this start never checked, and the same decline turns the bootstrap sweep off so a
-	 * deployment whose embedder was refused cannot sweep against a file that is not there. What
-	 * that composes to in a database that remembers an earlier start is
+	 * bytes this start never checked, and the same decline turns the bootstrap sweep off, so a start
+	 * that reaches the wiring with nothing in the ledger cannot leave the sweep enabled over a path
+	 * nothing checked — the embedder's own fetches exit on a refusal, so such a start is one whose
+	 * verification is absent from this shell's ledger rather than one refused in it. What that
+	 * composes to in a database that remembers an earlier start is
 	 * {@link EntrypointRetrievalWiringTest}'s question, not this one's; source cannot answer it.
 	 *
 	 * <p><b>Two questions, and the second is asked the other way round.</b> The first ties a write to

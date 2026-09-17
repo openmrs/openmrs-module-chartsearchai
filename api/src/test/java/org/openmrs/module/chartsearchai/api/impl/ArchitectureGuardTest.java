@@ -405,7 +405,7 @@ public class ArchitectureGuardTest {
 	@Test
 	public void noDirectGetEmbeddingPrefixCalls() throws IOException {
 		List<String> violations = scanForPattern(
-				SRC_ROOT,
+				getSourceCache(),
 				Pattern.compile("getEmbeddingPrefix\\s*\\("),
 				"ChartSearchAiConstants.java|ChartSearchAiUtils.java|ArchitectureGuardTest.java",
 				"Should use buildPrefixedText() instead of getEmbeddingPrefix()");
@@ -431,10 +431,263 @@ public class ArchitectureGuardTest {
 				+ "|Clinical referral: |Clinical order: "
 				+ "|Program enrollment: |Medication dispensed: )\"");
 		List<String> violations = scanForPattern(
-				SRC_ROOT, pattern,
+				getSourceCache(), pattern,
 				"ChartSearchAiConstants.java|ChartSearchAiUtils.java|TestDatasetHelper.java|ArchitectureGuardTest.java",
 				"Should use buildPrefixedText() instead of hardcoded prefix strings");
 		assertNoViolations(violations);
+	}
+
+	/**
+	 * Every request to the spawned llama-server is built by {@link LlamaServerEndpoint}, which is
+	 * the only thing that attaches this start's key (issue #445). Before that class existed the
+	 * engine hand-assembled the loopback URL at five call sites and sent no credential at all, so
+	 * there was nowhere authentication COULD be added once and five places to forget it. A sixth
+	 * hand-rolled call site would be unauthenticated and silent — nothing about it fails a test
+	 * that reads behaviour — which is why this reads the source instead.
+	 *
+	 * <p>Scanned tree-wide minus the legitimate homes, the shape
+	 * {@link #noDirectGetEmbeddingPrefixCalls} uses. {@code RemoteLlmEngine} builds requests to the
+	 * operator's OWN configured endpoint, which this rule says nothing about, and
+	 * {@code LlmEndpointTestSupport} is the opt-in suites' client for a hand-started server.
+	 */
+	@Test
+	public void everyLocalServerRequestCarriesTheModulesKey() throws IOException {
+		assertNoViolations(scanForPattern(
+				localServerSources(),
+				Pattern.compile("HttpRequest\\s*\\.\\s*newBuilder\\s*\\("),
+				"LlamaServerEndpoint.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
+						+ "|ArchitectureGuardTest.java",
+				"Should build the request through LlamaServerEndpoint.request(), which attaches "
+						+ "the per-start key, instead of a bare HttpRequest.newBuilder()"));
+	}
+
+	/**
+	 * The launch path still CALLS each protection #445 adds. The functions are pinned by
+	 * {@code LocalLlmServerAuthTest}, which drives each directly; the invocations are what this
+	 * covers, and they were measured invisible — deleting {@code requireLoopbackPortFree}, the
+	 * {@code requireListenerMayBeServed} gate, {@code handOverTo} or the {@code stopServer} that
+	 * makes a refusal stick each left the FULL suite green, because no test in this module can
+	 * launch the subprocess those lines guard.
+	 *
+	 * <p>It is the THIRD shape this check has taken, and the two it replaced are why it is scoped
+	 * to a method body with literals stripped. A constant-pool check passed with the call deleted:
+	 * three of the four are methods of this same class, so their names are in the pool from the
+	 * DECLARATION alone. A class-wide source search then passed on a {@code log.debug} that merely
+	 * SPELLED the call, and reddened on a rename of a local that changed nothing. Slicing each
+	 * method's own body makes an occurrence a call rather than a declaration; stripping literals
+	 * makes a mention insufficient; and matching the name and its open paren alone makes an
+	 * argument rename a non-event.
+	 *
+	 * <p>One scope is a CATCH rather than a method, and that too is a measured correction: a
+	 * method-wide needle for {@code stopServer} passed with the refusal teardown deleted, because
+	 * the timeout path a few lines below calls it as well.
+	 *
+	 * <p>The slicing took a correction of the same kind: stripping AFTER the slice let one
+	 * unbalanced brace in a comment run the body to the end of the class, where the declarations
+	 * satisfied every needle with the call deleted. It strips first and then requires the slice to
+	 * have closed — {@link #methodBodyWithoutLiterals}.
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> Text cannot see reachability or
+	 * identity, so two defeats remain and both were demonstrated: a call inside an
+	 * {@code if (false)}-shaped branch satisfies this while never running, and a call on the WRONG
+	 * receiver — {@code handOverTo} handed a throwaway {@code ProcessBuilder}, or the readiness
+	 * refusal caught and logged — satisfies it while restoring the defect. Nothing static closes
+	 * those; only launching the subprocess would, which is exactly what this module cannot do in a
+	 * test. So read this as "the line has not vanished from the method that must run it", and no
+	 * more.
+	 */
+	@Test
+	public void theLaunchPathStillCallsEachProtection() throws IOException {
+		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
+
+		// method -> the calls its body must still contain
+		java.util.Map<String, List<String>> required = new java.util.LinkedHashMap<>();
+		required.put("private void startServer(String modelPath)",
+				java.util.Arrays.asList("requireLoopbackPortFree(", "handOverTo(",
+						"beginServerOutputCapture("));
+		required.put("private void waitForServerReady()",
+				java.util.Arrays.asList("requireListenerMayBeServed("));
+		// The CATCH's own scope, not the method's: waitForServerReady calls stopServer on its
+		// timeout path too, so a method-wide needle was satisfied with the refusal teardown
+		// deleted — measured. This is what makes a refusal stick, and its own comment says why.
+		required.put("catch (APIException refused)",
+				java.util.Arrays.asList("stopServer("));
+
+		List<String> violations = new ArrayList<>();
+		for (java.util.Map.Entry<String, List<String>> entry : required.entrySet()) {
+			String body = methodBodyWithoutLiterals(source, entry.getKey());
+			assertTrue(body != null && !body.isEmpty(),
+					"could not slice the body of " + entry.getKey()
+							+ " out of LocalLlmEngine.java — a guard that reads nothing reports no"
+							+ " violations, so this is a failure and not a pass");
+			for (String call : entry.getValue()) {
+				if (!body.contains(call)) {
+					violations.add(entry.getKey() + " no longer calls " + call
+							+ ") — issue #445's protections are one line each at one call site, and"
+							+ " dropping one restores the defect with nothing behavioural able to"
+							+ " see it");
+				}
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
+	 * The body of the method whose declaration is {@code signature}, with comments and string and
+	 * character literals blanked. Literals go because a class-wide version of
+	 * {@link #theLaunchPathStillCallsEachProtection} was satisfied by a log line that merely
+	 * spelled a call; the body slice goes because a name that also has a declaration in the file is
+	 * otherwise present whether or not anything invokes it. Returns null when the signature is not
+	 * found, which the caller treats as a failure.
+	 */
+	private static String methodBodyWithoutLiterals(String source, String signature) {
+		// Strip FIRST, then slice. endOfBody counts braces over whatever it is given, so slicing
+		// raw source let one unbalanced '{' in a comment run the slice to the end of the class —
+		// measured, and every needle was then satisfied by the DECLARATIONS below, which is the
+		// vacuity this method exists to remove.
+		String stripped = String.join("\n",
+						codeLines(java.util.Arrays.asList(source.split("\n", -1))))
+				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
+				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
+		int at = stripped.indexOf(signature);
+		if (at < 0) {
+			return null;
+		}
+		int open = stripped.indexOf('{', at + signature.length());
+		if (open < 0) {
+			return null;
+		}
+		int close = endOfBody(stripped, open);
+		// The slice must have CLOSED: endOfBody returns the input's length when the braces never
+		// balance, which is the runaway above, and a body running to the end of the file is a
+		// failure to slice rather than a body.
+		return close >= stripped.length() ? null : stripped.substring(open, close);
+	}
+
+	/**
+	 * Only ONE client talks to the local server, so only one place decides that it is not
+	 * proxy-routable. A review round measured the residue: a SECOND
+	 * {@code HttpClient.newBuilder()} built without {@code .proxy(...)} and used for the
+	 * production {@code /health} request passed a full {@code clean install} with every guard
+	 * silent, because {@link #everyLocalServerRequestCarriesTheModulesKey} reads request
+	 * construction and nothing read client construction. A proxied client sends this module's own
+	 * key, and its patients' charts, wherever the proxy points — see
+	 * {@code LocalLlmEngine.getHttpClient}.
+	 *
+	 * <p>{@code RemoteLlmEngine} is excluded because its endpoint is the operator's own and is
+	 * MEANT to leave the host, and {@code LlmEndpointTestSupport} because it is the opt-in suites'
+	 * client for a server the tester started.
+	 */
+	@Test
+	public void onlyOneClientTalksToTheLocalServer() throws IOException {
+		Pattern construction =
+				Pattern.compile("HttpClient\\s*\\.\\s*(newBuilder|newHttpClient)\\s*\\(");
+		assertNoViolations(scanForPattern(
+				localServerSources(), construction,
+				"LocalLlmEngine.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
+						+ "|ArchitectureGuardTest.java",
+				"Should reach the local server through LocalLlmEngine.getHttpClient(), which is "
+						+ "built with NO_PROXY, instead of constructing another HttpClient"));
+
+		// And LocalLlmEngine itself may build exactly ONE, which is getHttpClient's. Excluding the
+		// file wholesale is what the scan above must do — that method has to construct a client —
+		// and a review round measured that a SECOND construction inside it is then invisible.
+		// Counted over the file's code JOINED, for scanForPattern's reason: fed one line at a time
+		// this missed a construction whose receiver sat on its own line, which was measured to pass
+		// the full api suite while sending the key and the chart through a configured proxy.
+		int built = 0;
+		Matcher constructions = construction.matcher(
+				String.join("\n", codeLines(getSourceCache().get("LocalLlmEngine.java"))));
+		while (constructions.find()) {
+			built++;
+		}
+		assertEquals(1, built,
+				"LocalLlmEngine must build exactly one HttpClient — getHttpClient()'s, the only "
+						+ "one carrying NO_PROXY. A second would send this module's key and its "
+						+ "patients' charts wherever a configured proxy points, and the scan above "
+						+ "cannot see it because this file is its legitimate home");
+	}
+
+	/**
+	 * And nothing else spells the local server's loopback address, because a hand-built URL is how
+	 * a request comes to bypass {@link LlamaServerEndpoint} without looking like it does — the
+	 * form {@code slotAction} carried before #445. The endpoint class is the one home.
+	 */
+	@Test
+	public void theLocalServerAddressIsSpelledInOnePlace() throws IOException {
+		assertNoViolations(scanForPattern(
+				localServerSources(),
+				Pattern.compile("\"http://127\\.0\\.0\\.1:"),
+				// No production exclusion: LlamaServerEndpoint builds its URLs from LOOPBACK_HOST
+				// and spells this literal nowhere, so excluding it would only weaken the scan.
+				"ArchitectureGuardTest.java",
+				"Should take the URL from LlamaServerEndpoint (completionsUrl/healthUrl/"
+						+ "propsUrl/slotUrl) instead of spelling the loopback address"));
+	}
+
+	/**
+	 * And no DIALECT reaches an HTTP client or request around the two rules above. Both are written
+	 * against the RECEIVER text — {@code HttpClient.} and {@code HttpRequest.} — and a review round
+	 * measured two ways to write the same code without it, each of which left the full api suite
+	 * green: a static import ({@code import static java.net.http.HttpClient.newHttpClient;}, then a
+	 * bare {@code newHttpClient()}), and the legacy {@code HttpURLConnection} stack reached through
+	 * {@code new URL(…).openConnection()}, which spells neither type name NOR an address and so is
+	 * not covered by the loopback rule either. Both send no credential and honour the default
+	 * {@code ProxySelector}, which is the pair of defects #445 exists to close.
+	 *
+	 * <p>It is a SEPARATE rule rather than an alternation bolted onto those two, because a bare
+	 * {@code newBuilder(} is ambiguous by name — {@code HttpClient} and {@code HttpRequest} both
+	 * declare one — so neither of their messages could tell a reader what they had actually done.
+	 * This one names the dialect instead.
+	 *
+	 * <p><b>Its exclusions are NARROWER than theirs, and deliberately so.</b>
+	 * {@code RemoteLlmEngine} addresses the operator's own endpoint and
+	 * {@code LlmEndpointTestSupport} is the opt-in suites' client, so both may write these shapes;
+	 * {@code LlamaServerEndpoint} may not, and is NOT excluded. It is the one home for a
+	 * local-server REQUEST, which is why the rule beside this one exempts it — but it builds no
+	 * client at all, receiving one as a parameter precisely so that
+	 * {@code LocalLlmEngine.getHttpClient}'s remains the only one. A review round measured what
+	 * borrowing the other rule's list cost: a static-imported {@code newHttpClient()} written in
+	 * that file passed every rule, in the very file the client rule refuses to exempt.
+	 *
+	 * <p>Calibrated before it was written, which a scan for a shape nothing writes needs: with the
+	 * exclusions disabled the pattern found exactly one occurrence over both trees at the commit
+	 * that added it — this rule's own violation message, a string literal, which {@link #codeLines}
+	 * keeps by design — so it REPORTS none, and each alternative below reddens it in both trees.
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> No text rule can enumerate every way
+	 * to open a socket, and three more were measured to pass this one: a hand-written
+	 * {@code java.net.Socket} speaking HTTP (which cannot be banned here — the port probe in
+	 * {@code LocalLlmEngine} legitimately opens one), a third-party client already on both modules'
+	 * compile classpath through {@code openmrs-api}, and reflection onto the JDK factory. What this
+	 * rule does is make the two SHORTEST ways to write the defect fail the build; it does not make
+	 * the defect unwriteable.
+	 *
+	 * <p>Its false positives all fail CLOSED, and there are two kinds. The three receiver-form
+	 * alternatives — {@code openConnection}, {@code openStream} and the {@code HttpURLConnection}
+	 * type — carry no lookbehind, because those calls are always made on a receiver, so each also
+	 * reports on a receiver that is not a URL; that costs a rename. And because the scan joins
+	 * lines, a receiver whose DOT ends the line reports too, which costs a reformat rather than a
+	 * rename and is the one such positive this file itself can produce, its two compliant
+	 * {@code HttpRequest.newBuilder()} calls being the reason it may not be excluded from the
+	 * lookbehind-guarded alternatives either.
+	 */
+	@Test
+	public void noDialectReachesTheLocalServerAroundThoseRules() throws IOException {
+		assertNoViolations(scanForPattern(
+				localServerSources(),
+				// A bare factory call, so not preceded by a dot (a receiver the rules above read)
+				// or a word character (some other method whose name ends in one of these).
+				Pattern.compile("(?<![.\\w])(newHttpClient|newBuilder)\\s*\\("
+						+ "|\\bHttpURLConnection\\b|\\bopenConnection\\s*\\("
+						// openStream() IS openConnection().getInputStream(), and is enough on its
+						// own for an unkeyed GET of the local server's /health.
+						+ "|\\bopenStream\\s*\\("),
+				"RemoteLlmEngine.java|LlmEndpointTestSupport.java|ArchitectureGuardTest.java",
+				"Should reach the local server through LlamaServerEndpoint.request() and "
+						+ "LocalLlmEngine.getHttpClient(), instead of a statically imported factory "
+						+ "or the HttpURLConnection stack — both of which carry no credential and "
+						+ "honour the default ProxySelector"));
 	}
 
 	/**
@@ -450,7 +703,7 @@ public class ArchitectureGuardTest {
 		Pattern pattern = Pattern.compile(
 				"dot\\s*\\+=\\s*[ab]\\[");
 		List<String> violations = scanForPattern(
-				SRC_ROOT, pattern,
+				getSourceCache(), pattern,
 				"ChartSearchAiConstants.java|ChartSearchAiUtils.java",
 				"Should use ChartSearchAiUtils.cosineSimilarity() "
 				+ "instead of reimplementing the formula");
@@ -701,7 +954,7 @@ public class ArchitectureGuardTest {
 				"(private|static).*(inferResourceType|stripDatasetPrefixAndDate"
 				+ "|DATASET_PREFIXES|DATE_PREFIX_PATTERN)");
 		List<String> violations = scanForPattern(
-				SRC_ROOT, pattern,
+				getSourceCache(), pattern,
 				"TestDatasetHelper.java|ArchitectureGuardTest.java",
 				"Should use TestDatasetHelper instead of duplicating dataset helpers");
 		// Allow the thin delegates in LlmInferenceServiceTest
@@ -1406,6 +1659,9 @@ public class ArchitectureGuardTest {
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */
 	private static java.util.Map<String, List<String>> sourceCache;
 
+	/** {@link #localServerSources}' merge of both trees, built once for the same reason. */
+	private static java.util.Map<String, List<String>> localServerSourceCache;
+
 	/**
 	 * Most rules in this class scan this map, so an EMPTY or WRONG map made all of those
 	 * pass vacuously — a structural guard that reads nothing reports no violations. That was not
@@ -1449,6 +1705,62 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Both module trees, for #445's three rules about the local llama-server — the key on every
+	 * request, the single client, and the single spelling of the loopback address.
+	 *
+	 * <p><b>Those rules are unconditional and the cache above is not.</b>
+	 * {@code api/.../api/impl/CLAUDE.md} says nothing this module sends to its own subprocess may
+	 * be proxy-routable and that no second client be built for it; {@link #getSourceCache} walks
+	 * {@code api/src} alone. Measured: a default-proxy {@code HttpClient} added to
+	 * {@code ChartSearchAiRestController} left the full root build green — and that class is where
+	 * the patient's chart already passes through, so it is the likeliest home for a second client,
+	 * not a remote corner. The two trees are scanned together rather than the rules being narrowed
+	 * to the tree the scanner happened to read.
+	 *
+	 * <p>Keys are prefixed {@code omod/} so that a same-named file in the two modules cannot
+	 * displace the other's entry — which would be a silent loss of coverage, the failure mode this
+	 * whole class is about — and so a violation says which module it is in. An exclusion is matched
+	 * with {@code find}, so it keeps working against a prefixed key.
+	 *
+	 * <p>A second WALKING root owes itself the pair of assertions {@link #getSourceCache} carries,
+	 * for the reason {@code ModuleSourceRoot.apiRoot}'s javadoc gives: a walking caller handed the
+	 * wrong root scans the wrong tree and then reports no violations. Hence the canary is a file
+	 * that exists only in {@code omod}, so a root resolved to the api module fails rather than
+	 * scanning it twice, and the count assertion is on what {@code omod} CONTRIBUTED rather than
+	 * on the merged map being non-empty, which the api cache alone would satisfy.
+	 */
+	private static java.util.Map<String, List<String>> localServerSources() throws IOException {
+		if (localServerSourceCache == null) {
+			java.util.Map<String, List<String>> merged =
+					new java.util.LinkedHashMap<>(getSourceCache());
+			int fromApi = merged.size();
+			Path omodRoot = ModuleSourceRoot.omodRoot();
+			Files.walkFileTree(omodRoot, new SimpleFileVisitor<Path>() {
+				@Override
+				public FileVisitResult visitFile(Path file,
+						BasicFileAttributes attrs) throws IOException {
+					if (file.toString().endsWith(".java")) {
+						merged.put("omod/" + file.getFileName(), Files.readAllLines(file));
+					}
+					return FileVisitResult.CONTINUE;
+				}
+			});
+			org.junit.jupiter.api.Assertions.assertTrue(merged.size() > fromApi,
+					"precondition: the scan of " + omodRoot + " added no .java files to the "
+							+ fromApi + " from the api tree, so every rule reading both trees would "
+							+ "pass vacuously over omod");
+			org.junit.jupiter.api.Assertions.assertTrue(
+					merged.containsKey("omod/ChartSearchAiRestController.java"),
+					"precondition: the scan of " + omodRoot + " did not find "
+							+ "ChartSearchAiRestController.java, so it is reading the wrong tree — a "
+							+ "wrong root scans SOMETHING and these rules then pass on files they "
+							+ "were never written about");
+			localServerSourceCache = merged;
+		}
+		return localServerSourceCache;
+	}
+
+	/**
 	 * The index one past the brace closing the block that opens at {@code openBrace}. Naive by
 	 * design: it counts braces and knows nothing of strings, chars or comments, which is why its
 	 * caller names the two signatures it may be asked about rather than scanning for methods.
@@ -1481,30 +1793,44 @@ public class ArchitectureGuardTest {
 		return line;
 	}
 
-	private static List<String> scanForPattern(Path root, Pattern pattern,
-			String excludeFiles, String message) throws IOException {
+	/**
+	 * Every occurrence of {@code pattern} in {@code sources}, outside the files
+	 * {@code excludeFiles} names, reported as {@code file:line — message} with the offending line.
+	 *
+	 * <p><b>It matches each file's code JOINED, not line by line, and that is the whole point of
+	 * its shape.</b> A pattern written with {@code \s*} between a receiver and its call — which is
+	 * how {@link #onlyOneClientTalksToTheLocalServer} and
+	 * {@link #everyLocalServerRequestCarriesTheModulesKey} are written, precisely so a formatter's
+	 * whitespace cannot defeat them — was fed one line at a time, so the one whitespace character
+	 * that matters, the newline, was the one it could not see. Measured: a second {@code HttpClient}
+	 * built in {@code LocalLlmEngine} with the receiver on its own line, and used for the production
+	 * {@code /health} request, passed the FULL api suite; so did a bare {@code HttpRequest} written
+	 * the same way, which is the more consequential of the two because it sends no credential.
+	 * {@code api/src/main} splits a receiver from its {@code .method()} on the next line often
+	 * enough that this is not a contrived shape.
+	 *
+	 * <p>It reads {@link #codeLines}' stripping rather than skipping lines that LOOK like comments,
+	 * which is what it did before and what a joined scan cannot do anyway — a line-leading
+	 * {@code *} means nothing once the lines are one string. That also drops a trailing
+	 * {@code // …} comment on a code line, which the previous form matched.
+	 */
+	private static List<String> scanForPattern(java.util.Map<String, List<String>> sources,
+			Pattern pattern, String excludeFiles, String message) {
 		List<String> violations = new ArrayList<>();
 		Pattern excludePattern = Pattern.compile(excludeFiles);
 
-		for (java.util.Map.Entry<String, List<String>> entry
-				: getSourceCache().entrySet()) {
+		for (java.util.Map.Entry<String, List<String>> entry : sources.entrySet()) {
 			String fileName = entry.getKey();
 			if (excludePattern.matcher(fileName).find()) {
 				continue;
 			}
-			List<String> lines = entry.getValue();
-			for (int i = 0; i < lines.size(); i++) {
-				String line = lines.get(i);
-				// Skip comments and Javadoc
-				String trimmed = line.trim();
-				if (trimmed.startsWith("//") || trimmed.startsWith("*")
-						|| trimmed.startsWith("/*")) {
-					continue;
-				}
-				if (pattern.matcher(line).find()) {
-					violations.add(fileName + ":" + (i + 1)
-							+ " — " + message + "\n    " + trimmed);
-				}
+			String source = String.join("\n", codeLines(entry.getValue()));
+			String[] lines = source.split("\n", -1);
+			Matcher found = pattern.matcher(source);
+			while (found.find()) {
+				int line = lineOf(source, found.start());
+				violations.add(fileName + ":" + line + " — " + message
+						+ "\n    " + lines[line - 1].trim());
 			}
 		}
 		return violations;

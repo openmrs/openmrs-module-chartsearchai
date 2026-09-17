@@ -63,57 +63,46 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 # (graph file + separate `model.onnx_data` weights sidecar). Downloading
 # only the graph file produces a tiny "successful" file that the ONNX
 # runtime can open but cannot execute — the bug shape that broke the
-# previous L6-v2 download. The size guard below is the second line of
-# defense against any future upstream format change.
+# previous L6-v2 download. Since #444 the pinned revision and digest rule
+# that out ahead of the size check, which stays for its diagnostic.
+#
+# Every model file below is fetched from the immutable revision recorded
+# in model-manifest.tsv and refused unless it hashes to the sha256
+# committed beside it. That happens on EVERY start, not only after a
+# fresh download: /openmrs/data outlives the container, so a volume
+# provisioned before this check existed is carrying whatever the mutable
+# `main` branch served at the time. See ADR Decision 103.
+. /usr/local/bin/model-manifest.sh
+
 ONNX_FILE="$QS_DIR/model.onnx"
 VOCAB_FILE="$QS_DIR/vocab.txt"
-HF_EMBED="https://huggingface.co/Xenova/e5-base-v2/resolve/main"
-ONNX_MIN_BYTES=200000000  # ~200MB; well under e5's ~440MB self-contained size
-VOCAB_MIN_BYTES=200000    # ~200KB; well under e5's ~230KB vocab.txt
 
-if [ ! -f "$ONNX_FILE" ]; then
-  echo "Downloading e5-base-v2 ONNX model (~440MB)..."
-  # --speed-time/--speed-limit abort a stalled connection after 60s rather
-  # than hanging the container start indefinitely; a partial file then
-  # trips the size guard below, which rm's it so the next start retries
-  # from zero.
-  curl -fsSL --speed-time 60 --speed-limit 1024 -o "$ONNX_FILE" "$HF_EMBED/onnx/model.onnx"
-fi
+fetch_and_verify embedder-e5-base-v2-onnx "$ONNX_FILE" "e5-base-v2 ONNX embedder (~440MB)"
+case $? in
+  0) ;;
+  2)
+    echo "       A graph-only ONNX file from an external-data export is ~1MB and the" >&2
+    echo "       runtime fails late, at first inference, with a misleading \"Not a" >&2
+    echo "       directory\" error reading a sidecar weights file that is not there." >&2
+    echo "       If the pinned revision now serves that shape, the manifest entry must" >&2
+    echo "       move to a revision that does not." >&2
+    exit 1
+    ;;
+  *) exit 1 ;;
+esac
+echo "Embedder ready: $ONNX_FILE ($(file_bytes "$ONNX_FILE") bytes)."
 
-# Size guard. A graph-only ONNX file from an external-data export is
-# ~1MB and the runtime fails late, at first inference, with a misleading
-# "Not a directory" error trying to read a sidecar weights file that
-# doesn't exist next to the graph. Catch that at download time.
-ONNX_BYTES=$(stat -c %s "$ONNX_FILE" 2>/dev/null || stat -f %z "$ONNX_FILE" 2>/dev/null || echo 0)
-if [ "$ONNX_BYTES" -lt "$ONNX_MIN_BYTES" ]; then
-  echo "ERROR: $ONNX_FILE is only ${ONNX_BYTES} bytes (expected at least ${ONNX_MIN_BYTES})." >&2
-  echo "       The HuggingFace ONNX export likely changed shape upstream." >&2
-  echo "       Remove $ONNX_FILE and re-run; if the file is still small," >&2
-  echo "       the source repo's onnx/model.onnx is now external-data format" >&2
-  echo "       and the sidecar (model.onnx_data) must be staged alongside it." >&2
-  rm -f "$ONNX_FILE"
-  exit 1
-fi
-echo "Embedder ready: $ONNX_FILE (${ONNX_BYTES} bytes)."
-
-if [ ! -f "$VOCAB_FILE" ]; then
-  echo "Downloading e5-base-v2 vocab..."
-  curl -fsSL --speed-time 60 --speed-limit 1024 -o "$VOCAB_FILE" "$HF_EMBED/vocab.txt"
-fi
-
-# Vocab size guard, parallel to the ONNX one. e5-base-v2's WordPiece vocab
-# is ~230KB. A short or empty vocab would either fail tokenizer init or,
-# worse, silently degrade embeddings as missing tokens fall back to [UNK]
-# — both modes are easier to diagnose at startup than at first query.
-VOCAB_BYTES=$(stat -c %s "$VOCAB_FILE" 2>/dev/null || stat -f %z "$VOCAB_FILE" 2>/dev/null || echo 0)
-if [ "$VOCAB_BYTES" -lt "$VOCAB_MIN_BYTES" ]; then
-  echo "ERROR: $VOCAB_FILE is only ${VOCAB_BYTES} bytes (expected at least ${VOCAB_MIN_BYTES})." >&2
-  echo "       Truncated vocab fails tokenizer init or silently degrades to [UNK] fallbacks." >&2
-  echo "       Remove the file and re-run; if it stays small, the upstream export changed." >&2
-  rm -f "$VOCAB_FILE"
-  exit 1
-fi
-echo "Vocab ready: $VOCAB_FILE (${VOCAB_BYTES} bytes)."
+fetch_and_verify embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab"
+case $? in
+  0) ;;
+  2)
+    echo "       A truncated vocab fails tokenizer init or, worse, silently degrades" >&2
+    echo "       embeddings as missing tokens fall back to [UNK]." >&2
+    exit 1
+    ;;
+  *) exit 1 ;;
+esac
+echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 
 # ---- LLM: Gemma 4 E4B Instruct, Q4_K_M -------------------------------------
 # Chosen over Gemma 4 E2B, Gemma 4 26B-MoE, and Llama-3.2-3B as the
@@ -134,54 +123,61 @@ echo "Vocab ready: $VOCAB_FILE (${VOCAB_BYTES} bytes)."
 # health-poll loops time out at ~5min, but the actual download can take
 # longer on slow networks. Chart search queries return errors until the
 # .partial file is renamed to its final name.
-# Inner worker: actually performs the download and the .partial→final
-# rename. Receives all required values as positional args so each
+# Inner worker: fetches and verifies, or verifies what is already on the
+# volume. Receives all required values as positional args so each
 # backgrounded invocation has its own argument snapshot — reading globals
 # from a backgrounded subshell would race with the parent shell's next
-# fetch_llm_in_background call overwriting them.
+# fetch_llm_in_background call overwriting them. fetch_and_verify keeps the
+# same discipline, and prefixes every variable of its own with _mm_.
+#
+# A refusal here does not stop the container the way the embedder's does:
+# the weights are fetched in the background precisely so OpenMRS can come up
+# without them, and chart search already reports its own error while the
+# file is absent. What matters is that rejected bytes are deleted rather
+# than left under the name config.xml points modelFilePath at.
 _download_llm_file() {
-  _url=$1
-  _partial=$2
-  _target=$3
-  _label=$4
-  # --speed-time/--speed-limit aborts if avg throughput stays under 1 KB/s
-  # for 60s, so a stalled TCP connection (Hugging Face hangs the socket
-  # without closing it) doesn't leave curl waiting on a dead peer
-  # indefinitely. On the next container start (operator-initiated under
-  # the default restart=no policy), curl -C - resumes from .partial.
-  if curl -fsSL -C - --speed-time 60 --speed-limit 1024 -o "$_partial" "$_url"; then
-    mv "$_partial" "$_target"
-    echo "$_label downloaded: $_target"
+  _id=$1
+  _target=$2
+  _label=$3
+  if fetch_and_verify "$_id" "$_target" "$_label"; then
+    echo "$_label ready: $_target"
   else
-    echo "$_label download failed; restart the backend container to retry (curl -C - resumes from the .partial file)."
+    # $? is the condition's status here. Which message is honest depends on it: a refusal has
+    # already deleted the file, so there is nothing for curl -C - to resume from and saying
+    # otherwise would send an operator looking for a .partial that is not there.
+    case $? in
+      1|2) echo "$_label was refused and deleted; restart the backend container to fetch it again from the start." >&2 ;;
+      *)   echo "$_label download failed; restart the backend container to retry (curl -C - resumes from the .partial file)." >&2 ;;
+    esac
   fi
 }
 
 # Helper: emit the start/resume log line and background the actual
-# download. $1 url, $2 filename (under $LLM_DIR), $3 human label, $4 size
-# hint, $5 availability-note fragment appended to the log line — callers
-# pass the served-vs-standby wording so the helper itself doesn't encode
-# which model is currently active.
+# download. $1 manifest id, $2 filename (under $LLM_DIR), $3 human label,
+# $4 size hint, $5 availability-note fragment appended to the log line —
+# callers pass the served-vs-standby wording so the helper itself doesn't
+# encode which model is currently active.
 #
 # Each invocation backgrounds, so two calls run in parallel — total volume
-# need on /openmrs/data is now ~8GB (E4B ~5GB + E2B ~3GB).
+# need on /openmrs/data is now ~8GB (E4B ~5GB + E2B ~3GB). A weights file
+# already present is no longer skipped: it is re-hashed in the background
+# for the reason the embedder is, and deleted if it is not the artifact the
+# manifest records.
 fetch_llm_in_background() {
-  url=$1
+  artifact_id=$1
   filename=$2
   label=$3
   size_hint=$4
   availability_note=$5
   target="$LLM_DIR/$filename"
-  partial="$target.partial"
   if [ -f "$target" ]; then
-    return
-  fi
-  if [ -f "$partial" ]; then
+    echo "Verifying $label already on the volume (${size_hint}) in background..."
+  elif [ -f "$target.partial" ]; then
     echo "Resuming $label download (${size_hint}) in background${availability_note}..."
   else
     echo "Starting $label download (${size_hint}) in background${availability_note}..."
   fi
-  _download_llm_file "$url" "$partial" "$target" "$label" &
+  _download_llm_file "$artifact_id" "$target" "$label" &
 }
 
 # E4B is the default served model (config.xml defaults
@@ -190,14 +186,14 @@ fetch_llm_in_background() {
 # flipping the GP between the two filenames and waiting for llama-server's
 # idle-restart to pick up the new weights — no redeploy required.
 fetch_llm_in_background \
-  "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf" \
+  llm-gemma-4-e4b \
   "gemma-4-E4B-it-Q4_K_M.gguf" \
   "Gemma 4 E4B Q4_K_M" \
   "~5GB" \
   "; chart search will be unavailable until it completes"
 
 fetch_llm_in_background \
-  "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf" \
+  llm-gemma-4-e2b \
   "gemma-4-E2B-it-Q4_K_M.gguf" \
   "Gemma 4 E2B Q4_K_M" \
   "~3GB" \

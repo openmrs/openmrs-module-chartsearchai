@@ -23,18 +23,36 @@ on:
         required: false
         default: 'openmrs-emr3'
         type: string
+      # Overriding any of these three builds a bundle from a file model-manifest.tsv does not
+      # record, so the matching *_sha256 input is required with it and the build fails without one
+      # (#449). Left empty — every push build — the artifact and its digest come from the manifest.
       gguf_model_url:
-        description: 'Download URL for the GGUF model file'
+        description: 'Download URL for the GGUF model file (empty = the manifest entry)'
         required: false
-        default: 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf'
+        default: ''
+        type: string
+      gguf_sha256:
+        description: 'sha256 of gguf_model_url, required when it is set'
+        required: false
+        default: ''
         type: string
       onnx_model_url:
         description: 'Download URL for the ONNX model file'
         required: false
         default: ''   # MiniLM is only used by the non-default chartsearchai.embedding.preFilter pipeline; not bundled
         type: string
+      onnx_sha256:
+        description: 'sha256 of onnx_model_url, required when it is set'
+        required: false
+        default: ''
+        type: string
       vocab_url:
         description: 'Download URL for the vocab.txt file'
+        required: false
+        default: ''
+        type: string
+      vocab_sha256:
+        description: 'sha256 of vocab_url, required when it is set'
         required: false
         default: ''
         type: string
@@ -47,9 +65,12 @@ env:
   REFAPP_VERSION: ${{ inputs.refapp_version || '3.7.1' }}
   OPENMRS_VERSION: ${{ inputs.openmrs_version || '2.9.0-SNAPSHOT' }}
   STANDALONE_BRANCH: ${{ inputs.standalone_branch || 'openmrs-emr3' }}
-  GGUF_MODEL_URL: ${{ inputs.gguf_model_url || 'https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf' }}
+  GGUF_MODEL_URL: ${{ inputs.gguf_model_url || '' }}
+  GGUF_SHA256: ${{ inputs.gguf_sha256 || '' }}
   ONNX_MODEL_URL: ${{ inputs.onnx_model_url || '' }}
+  ONNX_SHA256: ${{ inputs.onnx_sha256 || '' }}
   VOCAB_URL: ${{ inputs.vocab_url || '' }}
+  VOCAB_SHA256: ${{ inputs.vocab_sha256 || '' }}
 
 jobs:
   build-standalone:
@@ -132,41 +153,58 @@ jobs:
           yarn install
           yarn build
 
-      # Download AI model files if URLs are provided
+      # Download the AI model files that go into the bundle, each bound to the digest committed in
+      # model-manifest.tsv (#449). Every failure below — a non-2xx response, a wrong size, a digest
+      # that does not match — exits this step non-zero, which is well before the assembly descriptor
+      # is patched and before the artifact is uploaded, so an unverified file cannot reach the
+      # download the README advertises. ADR Decision 103.
       - name: Download AI model files
+        env:
+          MODEL_MANIFEST_FILE: ${{ github.workspace }}/chartsearchai-backend/model-manifest.tsv
         run: |
-          mkdir -p standalone/target/chartsearchai
+          set -eu
+          . chartsearchai-backend/scripts/model-manifest.sh
+
+          mkdir -p standalone/target/chartsearchai standalone/target/querystore
+
+          # An operator-dispatched build may name its own file — a larger Gemma, say — but it must
+          # bring that file's digest with it. Nothing goes into the assembly unverified.
+          fetch_override() {
+            if [ -z "$2" ]; then
+              echo "::error::$1 was set without $3; a bundled model needs a digest to check it against."
+              exit 1
+            fi
+            fetch_and_verify_url "$1" "$2" 0 "$4" "$5"
+          }
 
           if [ -n "$GGUF_MODEL_URL" ]; then
-            echo "Downloading GGUF model..."
-            curl -L -o "standalone/target/chartsearchai/$(basename "$GGUF_MODEL_URL")" \
-              "$GGUF_MODEL_URL"
+            fetch_override "$GGUF_MODEL_URL" "$GGUF_SHA256" gguf_sha256 \
+              "standalone/target/chartsearchai/$(basename "$GGUF_MODEL_URL")" "the dispatched GGUF model"
+          else
+            fetch_and_verify llm-gemma-4-e4b \
+              standalone/target/chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf "the Gemma 4 E4B GGUF model"
           fi
 
           if [ -n "$ONNX_MODEL_URL" ]; then
-            echo "Downloading ONNX model..."
-            curl -L -o standalone/target/chartsearchai/model.onnx \
-              "$ONNX_MODEL_URL"
+            fetch_override "$ONNX_MODEL_URL" "$ONNX_SHA256" onnx_sha256 \
+              standalone/target/chartsearchai/model.onnx "the dispatched ONNX model"
           fi
 
           if [ -n "$VOCAB_URL" ]; then
-            echo "Downloading vocab file..."
-            curl -L -o standalone/target/chartsearchai/vocab.txt \
-              "$VOCAB_URL"
+            fetch_override "$VOCAB_URL" "$VOCAB_SHA256" vocab_sha256 \
+              standalone/target/chartsearchai/vocab.txt "the dispatched vocab file"
           fi
 
           # querystore embedding model: e5-base-v2 (ADR Decision 22). The Xenova mirror ships a
           # self-contained ONNX export; the canonical intfloat onnx/ uses external-data format
           # that breaks as a single-file download.
-          mkdir -p standalone/target/querystore
-          echo "Downloading querystore e5-base-v2 embedding model..."
-          curl -L -o standalone/target/querystore/e5_model.onnx \
-            "https://huggingface.co/Xenova/e5-base-v2/resolve/main/onnx/model.onnx"
-          curl -L -o standalone/target/querystore/vocab.txt \
-            "https://huggingface.co/intfloat/e5-base-v2/resolve/main/vocab.txt"
+          fetch_and_verify embedder-e5-base-v2-onnx \
+            standalone/target/querystore/e5_model.onnx "the querystore e5-base-v2 embedder"
+          fetch_and_verify embedder-e5-base-v2-vocab-intfloat \
+            standalone/target/querystore/vocab.txt "the querystore e5-base-v2 vocab"
 
           echo "AI model files:"
-          ls -lh standalone/target/chartsearchai/ standalone/target/querystore/ || echo "No model files downloaded"
+          ls -lh standalone/target/chartsearchai/ standalone/target/querystore/
 
       # Patch the standalone build to include chartsearchai
       - name: Configure standalone build for chartsearchai

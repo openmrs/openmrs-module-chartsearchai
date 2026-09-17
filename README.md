@@ -8,7 +8,7 @@ For project background, community discussion, and roadmap, see the [wiki project
 
 The standalone download above includes the backend module, frontend ESM, and the following AI models — ready to run:
 
-- **LLM**: [Gemma 4 E4B Instruct (Q4_K_M)](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) — ~5 GB, the module's default model, for answering clinical questions. (A larger Gemma 4 26B MoE bundle can be built via the workflow's `gguf_model_url` input.)
+- **LLM**: [Gemma 4 E4B Instruct (Q4_K_M)](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) — ~5 GB, the module's default model, for answering clinical questions. (A larger Gemma 4 26B MoE bundle can be built via the workflow's `gguf_model_url` input, which since [#449](https://github.com/openmrs/openmrs-module-chartsearchai/issues/449) requires the matching `gguf_sha256` input alongside it.)
 - **Retrieval + embedding**: the [querystore module](https://github.com/openmrs/openmrs-module-querystore) with [e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) (~440 MB ONNX) — querystore is a required module and owns the retrieval path. chartsearchai no longer ships its own embedder; retrieval and citation grounding both use querystore's model.
 
 > **Before running the download, see [Standalone platform notes](#standalone-platform-notes)** — in particular the **Windows JDK requirement** (the local embedder won't load on an old or Oracle JDK).
@@ -151,8 +151,10 @@ The embedding model belongs to querystore — chartsearchai no longer ships its 
 
 **Querystore-backed retrieval** — the querystore module handles retrieval; the LLM filters the top-K it returns. See [Querystore deployment](#querystore-deployment) below for the global properties this path expects and [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for the model rationale. The LLM is still required (see [step 2](#2-download-the-llm-model-local-mode-only) or use a remote engine). Download `intfloat/e5-base-v2` (~440MB):
 
-- ONNX model: https://huggingface.co/Xenova/e5-base-v2/resolve/main/onnx/model.onnx *(self-contained — see [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this source over the canonical `intfloat/e5-base-v2`)*
-- Vocab: https://huggingface.co/Xenova/e5-base-v2/resolve/main/vocab.txt
+- ONNX model: https://huggingface.co/Xenova/e5-base-v2/resolve/21f8d0e36fdfe76e6a023802dfb293fc6d750ad1/onnx/model.onnx *(self-contained — see [ADR Decision 22](docs/adr.md#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) for why this source over the canonical `intfloat/e5-base-v2`)*
+- Vocab: https://huggingface.co/Xenova/e5-base-v2/resolve/21f8d0e36fdfe76e6a023802dfb293fc6d750ad1/vocab.txt
+
+Both URLs name an immutable commit rather than `main`, and [`model-manifest.tsv`](model-manifest.tsv) records the sha256 of each — check what you downloaded against it (`sha256sum model.onnx`) before putting it where the module will load it. The Docker entrypoint and the standalone build do that check for you; a hand download is the one path where nobody else can ([ADR Decision 103](docs/adr.md#decision-103-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)).
 
 Place both at `<openmrs-application-data-directory>/querystore/` and wire the global properties documented in [Querystore deployment](#querystore-deployment) below.
 

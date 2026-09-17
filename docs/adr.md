@@ -8147,3 +8147,77 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `stated < named` guard in its other state),
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
+
+## Decision 103: A model file is fetched from an immutable revision and refused unless it matches a digest committed here
+
+**Status: Accepted** (September 2026) — implemented, issues
+[#444](https://github.com/openmrs/openmrs-module-chartsearchai/issues/444) (severity HIGH) and
+[#449](https://github.com/openmrs/openmrs-module-chartsearchai/issues/449) (severity MEDIUM), two
+security-scan findings of one defect (CWE-494). It changes no prompt, no chip, no response key and no
+wire format.
+
+**Context.** The module does not ship the files it executes. Two places fetch them, and both fetched
+from the mutable `main` branch of a repository owned by someone outside the OpenMRS organisation:
+
+- `backend-init.sh`, the published backend image's ENTRYPOINT, provisions the GGUF weights that
+  `LocalLlmEngine` serves through the bundled native `llama-server` and the e5 ONNX embedder and
+  vocab whose paths it writes into querystore's global properties;
+- `.github/workflows/build-standalone.yml` bakes the same class of files into the standalone zip the
+  README advertises as the product download.
+
+Nothing bound the received bytes to a version anyone had reviewed — no pinned revision, no digest, no
+signature. The entrypoint `mv`'d whatever curl produced into the filename `config.xml` defaults
+`chartsearchai.llm.modelFilePath` to; the workflow did not even pass `curl -f`, so an HTML error page
+would have been assembled into the bundle as a model. Whoever controlled those repositories at fetch
+time therefore decided what the clinical LLM says about every patient chart, and the module's own
+downstream validators cannot restore that — citation grounding and `DrugSafetyValidator` both operate
+on the model's own text.
+
+**What was taken.** One manifest, `model-manifest.tsv`, records each artifact's pinned Hugging Face
+commit, its sha256 and its exact byte count; one POSIX-sh library, `scripts/model-manifest.sh`, is
+sourced by both fetch sites and is the only thing that downloads a model. Its composed step
+`fetch_and_verify` refuses anything that is not the recorded artifact, deletes it, and returns a
+distinct code per reason so a caller can add the diagnostic it alone has.
+
+The manifest is one file rather than one per consumer because the two consumers are one defect: a
+digest written twice is a digest that will be bumped once. That is also why the fix is one PR.
+
+**Three choices inside it are worth recording.**
+
+*The revision is a Hugging Face commit hash, not an OpenMRS-controlled mirror.* Both findings offer
+either. A mirror is the stronger answer — it removes the third party from the fetch path rather than
+freezing what they served — but it is infrastructure this repository cannot provision, and the
+digest is what actually binds the bytes either way. The manifest's `url` column is the whole of what
+a mirror would change.
+
+*A file already on the volume is verified, not trusted for its name.* `/openmrs/data` outlives the
+container, so the population this fix most needs to reach — deployments provisioned before it
+existed — is exactly the one a download-time-only check never runs against. The cost is hashing
+~8 GB on every container start; it is paid in the background alongside the download it replaces, and
+the embedder's two files are hashed synchronously because the global properties they gate are
+written seconds later.
+
+*The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
+not subsume its diagnostic: a ~1 MB "successful" ONNX file means the upstream export moved to
+external-data format, which is a specific and previously-hit failure with a specific remedy, and
+"the digest did not match" would send an operator looking for an attacker instead.
+
+**What this does not close.** Two fetches in these same files stay unverified and are out of scope
+for both findings: `Dockerfile.backend` downloads `openmrs.war` from a Maven repository, and
+`backend-init.sh` fetches the demo SQL dump from a GitHub release URL an environment variable can
+override. Neither is a file a native parser executes, and both are separate decisions about who the
+project trusts.
+
+**Moving a pin.** The same recipe [Decision 36](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
+records for the bundled knowledge base: change the revision in the `url` column, re-record `sha256`
+and `bytes` from the new revision, and run the suite. Take the digest from the file itself —
+huggingface.co's `paths-info` API reports a git-lfs object's `oid`, which is its sha256, and the
+`x-linked-etag` header on a HEAD of the pinned URL is an independent confirmation of the same value;
+a file that is not an lfs object has neither, and must be downloaded and hashed.
+
+→ `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
+serves substituted bytes, which is the acceptance both findings state.
+`ModelDownloadPinningGuardTest` reads the source for what no behaviour of the library can show —
+that each site still routes through it, that the rename still follows the verification, that the
+embedder is still verified before anything writes its path into a global property, and that no
+revision has relaxed back to a branch name. Mutate any of those and read the failures.

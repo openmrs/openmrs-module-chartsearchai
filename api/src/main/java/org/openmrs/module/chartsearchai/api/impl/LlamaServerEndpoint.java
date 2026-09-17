@@ -42,14 +42,14 @@ import org.slf4j.LoggerFactory;
  * {@code llama-server} accepts the key three ways — {@code --api-key KEY}, {@code --api-key-file
  * FNAME}, and the {@code LLAMA_API_KEY} environment variable — and the command-line form is the one
  * that must not be used: an argument vector is world-readable through {@code ps}, so it would hand
- * the key to the very principal this change exists to lock out. A process's environment is readable
- * only by its owner (on Linux {@code /proc/<pid>/environ} is mode 0400; on macOS {@code ps -E}
- * requires root), which is the same protection class as an owner-only key file with no file to
- * write, chmod, or clean up on a failure path. See {@code docs/adr.md} Decision 103 for the
- * measurements behind each of those three claims.
+ * the key to the very principal this change exists to lock out. A process's environment is not
+ * exposed the same way — measured, {@code ps -E} lists the variables of a process this user owns
+ * and none for a process owned by another — which is the same protection class as an owner-only key
+ * file, with no file to write, restrict, or clean up on a failure path. See {@code docs/adr.md}
+ * Decision 103 for the measurement behind each of those claims.
  *
  * <p><b>A bearer token authenticates the CLIENT to the server and never the server to the
- * client.</b> {@link #rejectsUnauthenticatedCalls} and {@link #acceptsThisModulesKey} therefore
+ * client.</b> {@link #rejectsUnauthenticatedCalls} and {@link #doesNotRefuseThisModulesKey} therefore
  * establish that the listener is enforcing THIS start's key — which catches a build that ignored
  * the environment variable — and not that the listener is the child the engine spawned. What ties
  * readiness to the child is {@link LocalLlmEngine#requireLoopbackPortFree} plus the liveness
@@ -192,7 +192,7 @@ final class LlamaServerEndpoint {
 	 * {@link #rejectsUnauthenticatedCalls} fails CLOSED on exactly the same condition, so a
 	 * listener that cannot be probed at all is refused there.
 	 */
-	boolean acceptsThisModulesKey(HttpClient client) {
+	boolean doesNotRefuseThisModulesKey(HttpClient client) {
 		HttpRequest probe = request(propsUrl(), PROBE_TIMEOUT).GET().build();
 		return statusOf(client, probe, "authenticated-probe") != 401;
 	}

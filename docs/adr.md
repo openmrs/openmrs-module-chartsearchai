@@ -8185,7 +8185,9 @@ is the only thing that builds a request to it.
 beside the five — an unauthenticated request is silent, so no behavioural test would notice it.
 
 Readiness now requires, after a healthy `/health`, that the child is *still alive*, that an
-*unauthenticated* inference call is *refused*, and that this start's key is *accepted*; and
+*unauthenticated* inference call is *refused*, and that this start's key is *not refused* — the
+weaker of the two, deliberately, because a build that does not serve the route the second leg asks
+answers 404, which says nothing about the key; and
 `requireLoopbackPortFree` refuses to launch onto a port something already holds, so the
 no-race path — bind while the port is free — fails loudly instead of being adopted.
 
@@ -8202,15 +8204,16 @@ one is present, so these are properties of *a* build and are re-checkable by the
 | 5 | which routes are public? | `/health` and `/v1/models` answer 200 with no credential; `/props` and `GET /slots` answer 401 |
 | 6 | is the Web UI a surface? | yes — at its default, `GET /` answers 200 with no credential; hence `--no-webui` |
 | 7 | how long is the bind window? | a prober attempting `bind` every 5 ms first failed **0.138 s** after exec, launching an 8.0 GB model at `-c 32768`; the port is taken long before the model is loaded |
-| 8 | does the probe cost inference? | no — the key middleware answers before the body is validated, so an unauthenticated `POST` of `{}` is 401 rather than 400 |
+| 8 | does the probe cost inference? | no — the key middleware answers before the body is validated, so even an unauthenticated `POST` of `{}` is 401 rather than 400. The probe nonetheless sends a VALID one-token body carrying no patient text, so that a build validating in the other order is refused only for what it does with the credential |
 | 9 | does a lost bind race kill the child? | yes — launched onto an occupied port it exits 1 in ~0.06 s with `couldn't bind HTTP server socket`, before touching the model |
+| 10 | is an environment safer than an argument vector *on this OS*? | yes — `ps -E` listed 8 `KEY=VALUE` pairs for a process this user owns and none at all for a root-owned one, while `ps -o args=` shows any process's arguments |
 
 **Why the environment and not a key file.** The three ways to hand `llama-server` a key are an
 argument, a file, and an environment variable. Row 2 rules out the argument: it would publish the
 secret to the very principal the change exists to lock out. The file form works (and is readable
 once, at parse time, so it could be deleted after startup), but row 3 shows the environment gives
-the same enforcement with the same protection class — a process's environment is readable only by
-its owner — while deleting a whole lifecycle: a directory that must exist and be writable, a POSIX
+the same enforcement with the same protection class — row 10, an environment is not exposed to
+another user the way an argument vector is — while deleting a whole lifecycle: a directory that must exist and be writable, a POSIX
 `chmod` with a non-POSIX fallback, a decision about what to do when neither can restrict the file,
 and a delete on every failure path. The simpler mechanism was taken because it is not weaker, not
 because it is simpler.

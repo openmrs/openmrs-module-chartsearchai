@@ -1001,8 +1001,10 @@ public class LocalLlmEngine implements LlmEngine {
 	 *       {@link LlamaServerEndpoint#rejectsUnauthenticatedCalls}: without this the module
 	 *       cannot tell an enforcing server from one that ignored the key and would take the
 	 *       chart from anyone.</li>
-	 *   <li>This start's key must be ACCEPTED, so a rejected key surfaces here rather than as a
-	 *       401 on a clinician's query.</li>
+	 *   <li>This start's key must not be REFUSED, so a rejected key surfaces here rather than as
+	 *       a 401 on a clinician's query. Not "accepted": see
+	 *       {@link LlamaServerEndpoint#doesNotRefuseThisModulesKey} for why anything but a 401
+	 *       passes, and why this leg alone is fail-open.</li>
 	 * </ul>
 	 *
 	 * <p>Package-private and static, taking everything it reads, because llama-server itself cannot
@@ -1024,7 +1026,7 @@ public class LocalLlmEngine implements LlmEngine {
 					+ " accepted an unauthenticated inference request, so it is not enforcing the "
 					+ "key this module minted for it. Refusing to send it a patient's chart.");
 		}
-		if (!endpoint.acceptsThisModulesKey(client)) {
+		if (!endpoint.doesNotRefuseThisModulesKey(client)) {
 			throw new APIException("The listener on 127.0.0.1:" + endpoint.port()
 					+ " rejected this module's own key. Refusing to serve it.");
 		}

@@ -6135,7 +6135,7 @@ public class DrugSafetyValidator {
 		 *         it one method read its two indexes two different ways. Empty for a code that
 		 *         normalises to nothing, which names nothing — {@code identifies}' own answer.
 		 */
-		private static List<DrugReference> entriesCodedBy(String rawAtc,
+		static List<DrugReference> entriesCodedBy(String rawAtc,
 				Map<String, List<DrugReference>> index) {
 			String code = DrugReference.normalizeAtcToken(rawAtc);
 			List<DrugReference> coded = code == null ? null : index.get(code);
@@ -6148,7 +6148,7 @@ public class DrugSafetyValidator {
 		/** The ATC counterpart of {@link DrugReferenceService#nameIndexOf}, here rather than there
 		 *  because {@link DrugSafetyValidator#identifies}' code leg is this class's question and not
 		 *  the service's. */
-		private static Map<String, List<DrugReference>> atcIndexOf(List<DrugReference> screened) {
+		static Map<String, List<DrugReference>> atcIndexOf(List<DrugReference> screened) {
 			Map<String, List<DrugReference>> index = new LinkedHashMap<String, List<DrugReference>>();
 			for (DrugReference entry : screened) {
 				for (String code : entry.normalizedAtcCodes()) {
@@ -6187,9 +6187,8 @@ public class DrugSafetyValidator {
 		 *         them, so the chart arm's one-chip-per-rule behaviour is deliberately not extended
 		 *         here), while the chart-precedence check has to see them all — see
 		 *         {@link DrugSafetyValidator#coveredByActiveOrderArm}. Empty too for an entry this was
-		 *         not built over, which no caller asks and which is the honest answer if one ever
-		 *         does: this says what
-		 *         it screened and nothing about anything else.
+		 *         not built over, which no caller asks and which is the honest answer if one ever does:
+		 *         this says what it screened and nothing about anything else.
 		 */
 		List<DrugReference.Interaction> aboveFloorRulesAgainst(DrugReference subject,
 				DrugReference other) {

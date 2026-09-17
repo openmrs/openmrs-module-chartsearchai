@@ -15,10 +15,19 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator.AboveFloorRules;
 
 /**
@@ -118,6 +127,45 @@ public class AboveFloorRuleJoinAgreementTest {
 		}
 		assertTrue(joined > 0, dataset + " related no pair at any floor, so the agreement is vacuous");
 		return byTheCodeLeg;
+	}
+
+	/**
+	 * And that the widening the oracle above needed did not become a production surface. Issue #447
+	 * made {@link DrugSafetyValidator#identifies} package-private so this class could compose it with
+	 * {@code clearsSeverityFloor} independently of the type under test; its javadoc then states that no
+	 * production class outside {@code DrugSafetyValidator} may call it, because the three name
+	 * questions have their own accessors and reaching past them is #86/#128/#147's shape. A rule
+	 * stated and not enforced is one the next caller breaks, so it is read off the source here.
+	 *
+	 * <p>Over {@code api/src/main} and by FILE rather than by body: what is forbidden is a caller in
+	 * another production class, and any mention in one is that. {@code DrugSafetyValidator}'s own file
+	 * — including the nested {@code AboveFloorRules}, which reaches it as a nestmate — is the one
+	 * permitted home.
+	 */
+	@Test
+	public void noProductionClassButTheValidatorItselfCallsTheNamingPredicate() throws IOException {
+		List<String> callers = new ArrayList<String>();
+		Path root = ModuleSourceRoot.apiRoot().resolve("src/main/java");
+		try (Stream<Path> sources = Files.walk(root)) {
+			for (Path file : sources.filter(f -> f.toString().endsWith(".java")).collect(
+				Collectors.toList())) {
+				if (file.getFileName().toString().equals("DrugSafetyValidator.java")) {
+					continue;
+				}
+				String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+				if (text.contains("identifies(")) {
+					callers.add(root.relativize(file).toString());
+				}
+			}
+		}
+
+		assertTrue(Files.exists(root.resolve("org/openmrs/module/chartsearchai/reference/"
+				+ "DrugSafetyValidator.java")), "this guard must be reading the real source root, or it "
+						+ "forbids nothing by scanning nothing: " + root);
+		assertEquals(Collections.<String> emptyList(), callers,
+			"DrugSafetyValidator.identifies is package-private for this class's oracle alone (issue"
+					+ " #447), and its javadoc says no production class outside it may call it — ask"
+					+ " DrugReference.matchesText, matchesDrugName or isNamed instead, per #86/#128/#147");
 	}
 
 	@Test
@@ -226,6 +274,30 @@ public class AboveFloorRuleJoinAgreementTest {
 			related.set(0, null);
 			fail("the join handed back a list a consumer can edit; sorting or filtering it in place would"
 					+ " change what every later reader of the arm is told about a pair (issue #447)");
+		}
+		catch (UnsupportedOperationException expected) {
+			// what an unmodifiable view owes its caller
+		}
+	}
+
+	/**
+	 * And the same of the ATC index's own accessor, which has the same hazard for the same reason —
+	 * its answer is the index's list, and {@code of} is still iterating the screened rows when it is
+	 * read. Asserted separately because the case above reads only the JOIN's accessor: with this wrap
+	 * removed and that one kept, the whole api suite stayed green, measured.
+	 */
+	@Test
+	public void theEntriesAnAtcCodeReachesCannotBeEditedByAConsumer() throws IOException {
+		List<DrugReference> screened = DrugReferenceTestSupport.fixtureEntries(PAIR_FIXTURE);
+		Map<String, List<DrugReference>> index = AboveFloorRules.atcIndexOf(screened);
+		List<DrugReference> coded = AboveFloorRules.entriesCodedBy("b01aa04", index);
+
+		assertTrue(coded.size() > 1, "the fixture must file more than one row under that code, or this"
+				+ " asserts nothing: " + coded.size());
+		try {
+			coded.set(0, null);
+			fail("entriesCodedBy handed back a list a consumer can edit; the join is still building over"
+					+ " these rows when it is read (issue #447)");
 		}
 		catch (UnsupportedOperationException expected) {
 			// what an unmodifiable view owes its caller

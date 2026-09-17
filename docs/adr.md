@@ -108,6 +108,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
+- [Decision 103: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound](#decision-103-the-pairwise-arms-resolve-their-rule-join-once-per-pass-and-the-chip-cap-is-still-not-the-bound)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -8178,9 +8179,13 @@ arms. `N` is what `findImpliedByQuery` resolved:
 | 999 chars, marginal-coverage greedy | 407 | 19,236 ms | 92 ms |
 
 The chips were identical at every cell, before and after (1 at N=2, 10 — the cap — at every other),
-and a separate 48-cell sweep over {excerpt, shipped KB} x {8, 20, 43, 8-unrelated active orders} x 7
-question shapes found every chip field and every withheld-pair WARN line byte-identical across the two
-heads.
+and a separate 117-cell sweep — 4 datasets (the excerpt, the two question-pair fixtures, the shipped
+KB) x charts of 0, 1, 2, 3, 8, 20 and 43 active orders x question and answer shapes — found every
+declared `SafetyWarning` field, every `PairChipExtent` and every WARN line byte-identical across the
+two heads: 1,382 chips, 110 extents, 32 WARN lines. That probe is calibrated in both directions —
+dropping the ATC leg of `candidates` moves 18 of its lines, and handing the screening arm an empty
+join moves its 43-order cell from `found=382` to `391` — so a zero-diff from it is evidence rather
+than silence.
 
 **Read the *after* column as an order of magnitude, not as a ranking.** Each is one pass after a
 warm-up; re-measured warmed and repeated, one cell moved between 93 ms and 181 ms, which is wider than
@@ -8189,8 +8194,10 @@ the gap between the 95-row and 195-row cells. That gap is noise, not an inversio
 **The last row is why the fourth is not the worst case.** 195 was the ceiling of ONE packer — aliases
 of 3 to 12 characters, scored independently by rows-per-character and packed greedily. Scoring by
 MARGINAL coverage instead, recomputing each pick against what is already covered, resolves 407 rows in
-999 characters; widening the alias filter past that adds nothing (2-20 and 2-40 both reach 408), so
-~408 is close to the true ceiling for this knowledge base and this cap.
+999 characters, and widening the alias filter past that added nothing to that packer (2-20 and 2-40
+both reached 408). **Read 407 as a floor under the ceiling and not as the ceiling**: an independent
+packer with a slightly different alias filter reached 375 — the same order, not the same number — and
+nothing here shows no packer does better.
 
 **The attribution is structural, not a quotient.** The same harness wrapped every entry's interaction
 list, through the public `DrugReference.setInteractions`, in a delegate holding the same elements in
@@ -8235,9 +8242,9 @@ screened entries admit no pair, so nothing is read at all.
 *Cap the number of question-resolved rows the arm screens, and state the truncation in
 `PairChipExtent`* — #447's own first suggestion. Refused on this decision's own measurement: at the
 largest question the controller admits — the 407-row row of the table, not the 195-row one — the pass
-now costs about 92 ms against 3 ms for an ordinary two-drug question, so a cap buys nothing measurable
-and costs a narrower safety screen. It would also cost a wire change
-that is not merely additive. `PairChipExtent.getFound()` is defined as how many candidate pairs the
+now costs about 92 ms against 3 ms for an ordinary two-drug question. A cap would still save most of
+that 92 ms, so the refusal is not that it buys nothing — it is that ~90 ms on the most adversarial
+question the controller admits is not worth a narrower safety screen. It would also cost a wire change that is not merely additive. `PairChipExtent.getFound()` is defined as how many candidate pairs the
 arm ENUMERATED, and `found == 0` asserts that an arm ran and the data related none of them; screening
 a subset makes that count a measurement of a population the arm chose, which a client cannot tell from
 a complete screen without a third number — the class of statement Decisions 60, 65, 69 and 71 price.
@@ -8267,6 +8274,12 @@ ACTIVE ORDERS, half of it in `recordsANameOf` reached from `activeOrdersOtherTha
 same per-pair rescan shape standing on the chart side; a 43-order chart sits near 60 ms, so it is a
 follow-up rather than an emergency. None of the three is question-content-quadratic, which is what
 #447 filed.
+
+**A trade, recorded rather than defended.** The join RETAINS every above-floor `(subject, other)`
+rule list for the arm's lifetime, where the scan discarded each one per ask — CPU for memory. It is
+bounded by the pairs the arm's own population relates, and no figure is published for it because none
+was measured beyond "fine at the largest question tried"; a maintainer who needs one should measure
+rather than trust this sentence.
 
 **One residue, stated rather than closed.** The `identifies` confirmation that every indexed candidate
 is put through is not load-bearing today — the indexes are exact, and removing it leaves the whole api

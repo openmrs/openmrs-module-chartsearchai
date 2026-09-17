@@ -216,11 +216,13 @@ public class QuestionPairRuleScanPerPassTest {
 	}
 
 	/**
-	 * And that no future arm re-introduces the scan. The counts above are what the arms do over the
-	 * arrangements these cases build; a NEW read of an entry's rule list inside one of them — a
-	 * condition, a tie-break, a second pass over the pair — would reinstate the per-pair walk in a
-	 * shape no fixture here exercises, which is the residue ADR Decision 54 records for the sibling
-	 * invariant it added at issue #256.
+	 * And that no future arm grows a rule read of its OWN. <b>This is not what would have caught issue
+	 * #447</b> — that scan lived in a private static helper rather than in an arm's body, and this case
+	 * passes against the pre-change code, measured. The walk counts above are what fail there. What
+	 * this adds is the shape those counts cannot see: a NEW read of an entry's rule list inside one of
+	 * these three bodies — a condition, a tie-break, a second pass over the pair — would reinstate a
+	 * per-pair walk in an arrangement no fixture here exercises, which is the residue ADR Decision 54
+	 * records for the sibling invariant it added at issue #256.
 	 *
 	 * <p>Scoped to each arm's own BODY and not to a name at class scope: {@code DrugSafetyValidator}
 	 * reads {@link DrugReference#getInteractions} legitimately elsewhere — {@code bestRulePerPartner}

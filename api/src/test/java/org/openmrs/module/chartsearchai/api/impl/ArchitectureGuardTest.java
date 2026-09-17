@@ -482,21 +482,23 @@ public class ArchitectureGuardTest {
 	 * buffers the lot — over the file's code with comments stripped and whitespace removed,
 	 * because per line a wrapped {@code BodyHandlers\n.ofString(} was measured passing silently.
 	 *
-	 * <p><b>It deliberately does NOT ask whether each {@code response.body()} reaches a bounded
-	 * reader, and that is a correction rather than an omission.</b> A rule that did, by matching
-	 * the reader's name in front of the call, was defeated six times in five review rounds — by a
-	 * line wrap, by a renamed local, by a helper in another file, by the exempt file hosting the
-	 * read, by a same-named production method ({@code LlmResponseParser.parseStreamingResponse}
-	 * satisfies "preceded by {@code parseStreamingResponse(}" while removing the ceiling), and by
-	 * a ceiling left in place with its limit set to {@code Long.MAX_VALUE}, which no text match of
-	 * any kind can see. That is a call-graph and behaviour question wearing a text match's
-	 * clothing, and the answer is not a seventh spelling. {@link RemoteLlmEngineResponseSizeBoundTest}
-	 * answers it instead, by driving every entry point against a real hostile peer — it reddens on
-	 * all six — and this rule is kept only for the part a name genuinely decides.</p>
+	 * <p><b>It also asks that each {@code response.body()} sit behind a named bounded reader, and
+	 * that half is DEFENCE IN DEPTH rather than the answer.</b> As the answer it failed: a rule
+	 * matching the reader's name in front of the call was defeated by a line wrap, a renamed
+	 * local, a helper in another file, the exempt file hosting the read, a same-named production
+	 * method ({@code LlmResponseParser.parseStreamingResponse} satisfies "preceded by
+	 * {@code parseStreamingResponse(}" while removing the ceiling), and a ceiling left in place
+	 * with its limit set to {@code Long.MAX_VALUE}, which no text match of any kind can see.
+	 * {@link RemoteLlmEngineResponseSizeBoundTest} catches every one of those, by driving each
+	 * entry point against a real hostile peer — measured, one at a time. What it cannot catch is
+	 * a read on a path it does not drive, and that is the one thing this half adds: a NEW read
+	 * site, spelled plainly, before any test exists for it. Read it as "a new read must sit
+	 * behind a named reader", never as an answer to where the bytes actually go.</p>
 	 *
-	 * <p><b>Residue.</b> A buffering reader spelled in a way this list does not carry passes; the
-	 * behavioural suite is what catches it, on every path that suite drives. A new entry point
-	 * nobody drives is covered by neither. The scan is keyed on the simple file name, so two
+	 * <p><b>Residue.</b> A buffering reader spelled in a way this list does not carry passes,
+	 * and so does a new read reached through a reference named anything but {@code response};
+	 * the behavioural suite is what catches those, on every path that suite drives. A new read
+	 * that is BOTH differently named AND on an undriven path is covered by neither. The scan is keyed on the simple file name, so two
 	 * production classes sharing one would leave a file unread — there are none today — and it
 	 * walks {@code api} only, which is where every HTTP client in this module lives.</p>
 	 */
@@ -509,6 +511,8 @@ public class ArchitectureGuardTest {
 				"precondition: no production source tree under " + SRC_ROOT + ", so this rule "
 						+ "would scan nothing and report no violations — it fails instead");
 
+		Pattern unbounded = Pattern.compile("(?<!readBoundedBody\\()(?<!readTruncatedErrorBody\\()"
+				+ "(?<!parseStreamingResponse\\()response\\.body\\(\\)");
 		List<String> violations = new ArrayList<>();
 		List<String> scanned = new ArrayList<>();
 		java.util.Map<String, String> dense = new java.util.LinkedHashMap<>();
@@ -543,6 +547,12 @@ public class ArchitectureGuardTest {
 				// 127.0.0.1, never an address an operator supplies, so #446's threat does not
 				// reach it. Named here so the exclusion is reviewable rather than merely absent.
 				continue;
+			}
+			if (unbounded.matcher(source.getValue()).find()) {
+				violations.add(source.getKey() + " — a remote response body must be read through "
+						+ "readBoundedBody, parseStreamingResponse or readTruncatedErrorBody "
+						+ "(issue #446). If this peer is NOT an operator-configurable address, "
+						+ "exempt the file in this rule and say why, as LocalLlmEngine.java is.");
 			}
 			for (String buffering : BUFFERING_BODY_READERS) {
 				if (source.getValue().contains(buffering)) {

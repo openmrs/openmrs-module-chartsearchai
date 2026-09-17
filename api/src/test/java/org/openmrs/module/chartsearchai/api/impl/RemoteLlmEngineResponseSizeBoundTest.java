@@ -60,9 +60,11 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p><b>The load-bearing assertion is the byte count, not the exception.</b> A thrown
  * {@code APIException} says only that the call ended; the bytes the server managed to write before
  * the client stopped reading are what says the heap was bounded, and an oversized body can raise an
- * exception for the wrong reason (a truncated JSON body fails to parse). So every case asserts the
- * peer's write total first. The handlers stop themselves at {@link #SAFETY_LIMIT}, well above the
- * ceiling, so an absent bound fails the assertion rather than running until the JVM dies.
+ * exception for the wrong reason (a truncated JSON body fails to parse). So every case about an
+ * OVERSIZED peer asserts the peer's write total first; the positive controls assert content
+ * instead, which is their whole point. The flood handlers stop themselves at
+ * {@link #SAFETY_LIMIT}, well above the ceiling, so an absent bound fails the assertion rather
+ * than running until the JVM dies.
  *
  * <p>The composed {@code LlmInferenceService.search} path is deliberately not used: every existing
  * suite that drives it stubs the model out at {@code LlmProvider} — see

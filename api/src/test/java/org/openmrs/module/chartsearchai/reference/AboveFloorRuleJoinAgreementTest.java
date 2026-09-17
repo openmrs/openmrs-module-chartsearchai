@@ -69,7 +69,11 @@ public class AboveFloorRuleJoinAgreementTest {
 	private static final int[] FLOORS = { 0, 1, 2, 3, 4 };
 
 	/** Members {@code DrugSafetyValidator} widened for this class's oracles and for nothing else.
-	 *  Each is spelled with its opening parenthesis so a mention in prose does not trip the scan. */
+	 *  Each carries its opening parenthesis so the ordinary English verb "identifies" does not trip
+	 *  the scan; that is all it buys, since the other two are not words. A javadoc MENTION in a
+	 *  production file does trip it, by design — the scan reads raw bytes and the case's own javadoc
+	 *  says why any mention in a production class is the thing forbidden. Measured: a probe class
+	 *  naming all three in prose alone reddens it three times. */
 	private static final List<String> RESERVED_TO_THE_VALIDATOR = Arrays.asList(
 			"identifies(", "entriesCodedBy(", "atcIndexOf(");
 
@@ -160,7 +164,7 @@ public class AboveFloorRuleJoinAgreementTest {
 	 * places and enforced in one is the shape this case exists to close.
 	 */
 	@Test
-	public void noProductionClassButTheValidatorItselfCallsTheNamingPredicate() throws IOException {
+	public void noProductionClassOutsideTheValidatorCallsWhatWasWidenedForTheseOracles() throws IOException {
 		List<String> callers = new ArrayList<String>();
 		Path root = ModuleSourceRoot.apiRoot().resolve("src/main/java");
 		try (Stream<Path> sources = Files.walk(root)) {

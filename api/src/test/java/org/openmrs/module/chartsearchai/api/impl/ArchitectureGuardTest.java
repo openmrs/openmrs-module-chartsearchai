@@ -626,6 +626,43 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * And no DIALECT reaches an HTTP client or request around the two rules above. Both are written
+	 * against the RECEIVER text — {@code HttpClient.} and {@code HttpRequest.} — and a review round
+	 * measured two ways to write the same code without it, each of which left the full api suite
+	 * green: a static import ({@code import static java.net.http.HttpClient.newHttpClient;}, then a
+	 * bare {@code newHttpClient()}), and the legacy {@code HttpURLConnection} stack reached through
+	 * {@code new URL(…).openConnection()}, which spells neither type name NOR an address and so is
+	 * not covered by the loopback rule either. Both send no credential and honour the default
+	 * {@code ProxySelector}, which is the pair of defects #445 exists to close.
+	 *
+	 * <p>It is a SEPARATE rule rather than an alternation bolted onto those two, because a bare
+	 * {@code newBuilder(} is ambiguous by name — {@code HttpClient} and {@code HttpRequest} both
+	 * declare one — so neither of their messages could tell a reader what they had actually done.
+	 * This one names the dialect instead. Its exclusions are theirs: the endpoint class is the one
+	 * home for a local-server request, {@code RemoteLlmEngine} addresses the operator's own
+	 * endpoint, and {@code LlmEndpointTestSupport} is the opt-in suites' client.
+	 *
+	 * <p>Calibrated before it was written, which a scan for a shape nothing writes needs: the
+	 * pattern found ZERO occurrences over both trees at the commit that added it, and each of the
+	 * three shapes above reddens it.
+	 */
+	@Test
+	public void noDialectReachesTheLocalServerAroundThoseRules() throws IOException {
+		assertNoViolations(scanForPattern(
+				localServerSources(),
+				// A bare factory call, so not preceded by a dot (a receiver the rules above read)
+				// or a word character (some other method whose name ends in one of these).
+				Pattern.compile("(?<![.\\w])(newHttpClient|newBuilder)\\s*\\("
+						+ "|\\bHttpURLConnection\\b|\\bopenConnection\\s*\\("),
+				"LlamaServerEndpoint.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
+						+ "|ArchitectureGuardTest.java",
+				"Should reach the local server through LlamaServerEndpoint.request() and "
+						+ "LocalLlmEngine.getHttpClient(), instead of a statically imported factory "
+						+ "or the HttpURLConnection stack — both of which carry no credential and "
+						+ "honour the default ProxySelector"));
+	}
+
+	/**
 	 * No file should reimplement cosine similarity. The canonical
 	 * implementation is in ChartSearchAiUtils.cosineSimilarity().
 	 * Reimplementations typically contain {@code dot +=} and

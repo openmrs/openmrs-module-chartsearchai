@@ -276,11 +276,15 @@ public class LocalLlmServerAuthTest {
 	 * must refuse the start.
 	 *
 	 * <p>The queue is SATURATED by connecting until a connect of the probe's own shape fails,
-	 * rather than by assuming {@code listen(1)} admits one. That depth is an OS parameter: Linux
-	 * compares {@code sk_ack_backlog > sk_max_ack_backlog}, so it admits backlog+1, and a review
-	 * round measured that hard-coding one filler flips this test onto the branch it is not about —
-	 * it went red accusing production of reporting "already listening". CI is Linux, so the
-	 * one-filler form would have reddened there.
+	 * rather than by assuming {@code listen(1)} admits one, because that depth is an OS parameter.
+	 * macOS admits exactly one, measured 100 times; Linux compares
+	 * {@code sk_ack_backlog > sk_max_ack_backlog} and so admits backlog+1, dropping the overflow
+	 * SYN silently rather than refusing it. So on Linux — which CI runs — a hard-coded single
+	 * filler would leave the queue NOT full, the probe would connect, and this test would redden
+	 * accusing production of reporting "already listening": the branch it is not about. That red
+	 * is DERIVED from the kernel predicate quoted above and from the macOS count, not observed
+	 * here; the one-filler form is green on this host, which is exactly why the loop is not
+	 * optional.
 	 */
 	@Test
 	public void aPortHeldByAListenerThatAcceptsNothingFailsTheStart() throws IOException {

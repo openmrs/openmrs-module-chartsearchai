@@ -32,6 +32,14 @@
 		</dependency>
 
 		<dependency>
+			<groupId>${project.parent.groupId}</groupId>
+			<artifactId>${project.parent.artifactId}-api</artifactId>
+			<version>${project.parent.version}</version>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
 			<groupId>org.openmrs.api</groupId>
 			<artifactId>openmrs-api</artifactId>
 			<type>test-jar</type>
@@ -169,6 +177,14 @@
 						<configuration>
 							<includeGroupIds>${project.parent.groupId}</includeGroupIds>
 							<includeArtifactIds>${project.parent.artifactId}-api</includeArtifactIds>
+							<!--
+								The api module also publishes a `tests`-classified artifact, which this module
+								depends on at test scope so its tests can use LogCapture (issue #450). It has the
+								same groupId and artifactId as the one being unpacked, and this goal filters by
+								neither classifier nor scope by default — so without this exclusion every api TEST
+								class would be unpacked into target/classes and shipped inside the .omod.
+							-->
+							<excludeClassifiers>tests</excludeClassifiers>
 							<excludeTransitive>true</excludeTransitive>
 							<includes>**/*</includes>
 							<outputDirectory>${project.build.directory}/classes</outputDirectory>

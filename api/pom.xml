@@ -62,5 +62,29 @@
 				<filtering>true</filtering>
 			</testResource>
 		</testResources>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<!--
+						Publishes this module's test classes as a `tests`-classified artifact, so omod's own
+						tests can use LogCapture — the one instrument in this repo that asserts the LEVEL an
+						outcome is reported at, which several api tests already depend on and which an omod
+						copy would duplicate at 400 lines of accumulated special cases (issue #450).
+
+						omod's dependency on it is test-scoped, and omod's unpack-dependencies execution
+						excludes this classifier explicitly — see the comment there. Without that exclusion
+						these test classes would land in the shipped .omod.
+					-->
+					<execution>
+						<id>Publish test classes for omod tests</id>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
 	</build>
 </project>

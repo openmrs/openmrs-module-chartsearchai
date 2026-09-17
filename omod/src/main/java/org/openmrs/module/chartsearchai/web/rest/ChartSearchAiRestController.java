@@ -668,9 +668,12 @@ public class ChartSearchAiRestController {
 	void streamAnswer(final OutputStream out, Patient patient, String sanitizedQuestion, User user,
 			boolean asyncGrounding, long keepAliveIntervalMillis) {
 		final SseKeepAlive keepAlive = SseKeepAlive.start(out, keepAliveIntervalMillis);
+		// Above the try, both of them, because the finally has to reach them: that is where this
+		// method's own audit guarantee lives (issue #450), and a row written from there needs the clock
+		// the answer was timed against as much as it needs the state the consumers recorded.
+		long startTime = System.currentTimeMillis();
+		final StreamAuditState auditState = new StreamAuditState();
 		try {
-			long startTime = System.currentTimeMillis();
-
 			// Carries the early-done state from the consumer (fired mid-call) to the post-return
 			// code: [0] = the saved questionId (null if audit failed), and whether done was sent
 			// is tracked by earlyDoneSent. Single-element arrays because the consumer lambda needs
@@ -678,32 +681,46 @@ public class ChartSearchAiRestController {
 			final String[] earlyQuestionId = new String[1];
 			final boolean[] earlyDoneSent = new boolean[1];
 
-			// Async grounding: the moment the (not yet grounding-verified) answer exists, persist
-			// the audit row and emit "done" — the user's perceived completion no longer waits out
-			// the grounding tail. The audit's responseTimeMs deliberately measures to THIS point
-			// (what the user experienced); the [timing] service log still carries groundMs.
-			// Serialization + write failures unwind like any mid-stream disconnect, via the same
-			// RuntimeException(IOException) shape writeSseEventOrThrow uses.
-			Consumer<ChartAnswer> ungroundedConsumer = !asyncGrounding ? ungrounded -> { }
-					: ungrounded -> {
-						if (earlyDoneSent[0]) {
-							// Interface contract is at-most-once; stay idempotent anyway — a
-							// duplicate done would corrupt every client's completion handling.
-							log.warn("Ungrounded-answer consumer fired more than once; ignoring");
-							return;
-						}
-						earlyQuestionId[0] = saveAuditLog(user, patient, sanitizedQuestion,
-								ungrounded, System.currentTimeMillis() - startTime);
-						try {
-							writeSseEvent(out, "done",
-									doneEventJson(ungrounded, earlyQuestionId[0]));
-						}
-						catch (IOException e) {
-							log.debug("Client disconnected during streaming (done)");
-							throw new RuntimeException("Client disconnected", e);
-						}
-						earlyDoneSent[0] = true;
-					};
+			// It fires in BOTH shapes, and that is not only the async one's business: the consumer's
+			// own contract is "the answer is complete", so this is where the classic shape learns the
+			// pipeline's own answer — search mode, reference slice, citations and all. Without that
+			// capture, a failure in the grounding / fidelity tail, which LlmInferenceService runs with no
+			// catch of its own, would reach the finally below holding nothing but the streamed text and
+			// file a row stating no mode and no slice for a query whose pipeline had resolved both
+			// (issue #450). Which answer each ORDINARY site audits is unchanged.
+			//
+			// Async grounding only, from the early-return below: the moment the (not yet
+			// grounding-verified) answer exists, persist the audit row and emit "done" — the user's
+			// perceived completion no longer waits out the grounding tail. The audit's responseTimeMs
+			// deliberately measures to THIS point (what the user experienced); the [timing] service log
+			// still carries groundMs. Serialization + write failures unwind like any mid-stream
+			// disconnect, via the same RuntimeException(IOException) shape writeSseEventOrThrow uses.
+			Consumer<ChartAnswer> ungroundedConsumer = ungrounded -> {
+				if (earlyDoneSent[0]) {
+					// Interface contract is at-most-once; stay idempotent anyway — a
+					// duplicate done would corrupt every client's completion handling.
+					log.warn("Ungrounded-answer consumer fired more than once; ignoring");
+					return;
+				}
+				auditState.recordAnswer(ungrounded);
+				if (!asyncGrounding) {
+					return;
+				}
+				// Before the save and not after it: what this flag stops is a SECOND row, so it has to be
+				// true for every way the attempt can end — saveAuditLog's own swallowed persistence
+				// failure included, which is answered by the ERROR it logs and not by a retry.
+				auditState.auditAttempted = true;
+				earlyQuestionId[0] = saveAuditLog(user, patient, sanitizedQuestion,
+						ungrounded, System.currentTimeMillis() - startTime);
+				try {
+					writeSseEvent(out, "done", doneEventJson(ungrounded, earlyQuestionId[0]));
+				}
+				catch (IOException e) {
+					log.debug("Client disconnected during streaming (done)");
+					throw new RuntimeException("Client disconnected", e);
+				}
+				earlyDoneSent[0] = true;
+			};
 
 			// Five consumers, four of them events on the wire (the fifth is ungroundedConsumer above,
 			// which becomes an early "done"): "token" carries the answer; "thinking" carries the committed full-chart
@@ -721,15 +738,28 @@ public class ChartSearchAiRestController {
 			// writeSseEvent inside its own try, which is the distinction that method's javadoc draws.
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 					patient, sanitizedQuestion,
-					token -> writeSseEventOrThrow(out, "token", token),
-					reasoning -> writeSseEventOrThrow(out, "thinking", reasoning),
-					citations -> sendReferencesEvent(out, citations),
+					token -> {
+						auditState.recordToken(token);
+						writeSseEventOrThrow(out, "token", token);
+					},
+					reasoning -> {
+						auditState.recordOutput();
+						writeSseEventOrThrow(out, "thinking", reasoning);
+					},
+					citations -> {
+						auditState.recordOutput();
+						sendReferencesEvent(out, citations);
+					},
 					ungroundedConsumer,
-					preliminary -> writeSseEventOrThrow(out, "preliminary", preliminary));
+					preliminary -> {
+						auditState.recordOutput();
+						writeSseEventOrThrow(out, "preliminary", preliminary);
+					});
 
 			if (!earlyDoneSent[0]) {
 				// Classic shape: async off, or the service returned an already-final answer (cache
 				// hit) without surfacing an ungrounded stage — audit and emit the single done.
+				auditState.auditAttempted = true;
 				String questionId = saveAuditLog(user, patient, sanitizedQuestion, chartAnswer,
 						System.currentTimeMillis() - startTime);
 				writeSseEvent(out, "done", doneEventJson(chartAnswer, questionId));
@@ -797,6 +827,10 @@ public class ChartSearchAiRestController {
 			// SseKeepAlive's stopped flag closes — shutdownNow alone cannot, since interrupting a
 			// thread parked on a monitor does nothing.
 			keepAlive.stop();
+			// And this method's audit guarantee, over the same set of exits and for the same reason the
+			// comment above gives about them (issue #450).
+			auditStreamedQueryIfUnrecorded(user, patient, sanitizedQuestion, auditState,
+					System.currentTimeMillis() - startTime);
 		}
 
 		try {
@@ -808,18 +842,124 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
+	 * The audit row for a streaming query whose stream ended before either ordinary write site was
+	 * reached — issue #450, and the whole of this method's subject.
+	 *
+	 * <p>Called from {@link #streamAnswer}'s {@code finally}, so it covers every exit of that try
+	 * block rather than one of them: the mid-stream disconnect, where a refused frame becomes the
+	 * {@code RuntimeException(IOException)} the catch-all reads as a benign client hang-up, and the
+	 * tail after the ungrounded handoff, which {@code LlmInferenceService} runs with no catch of its
+	 * own. Before this, the row was a statement on the success path, so either exit left a delivered
+	 * answer with no record of who asked what about whom — and, since {@code checkRateLimit} counts
+	 * persisted rows, uncounted by the limiter as well.
+	 *
+	 * <p><b>Two things it does not reach, named rather than implied.</b> {@code SseKeepAlive.start}
+	 * runs ABOVE that try, so a failure there still escapes the whole request with no row, which is
+	 * the state {@code ChartSearchAiStreamKeepAliveTest} already records. And a query whose chart was
+	 * built and whose inference then produced nothing at all is deliberately left unaudited: nothing
+	 * was disclosed, and what the REST layer can observe is exactly the consumer traffic
+	 * {@link StreamAuditState} records.
+	 *
+	 * <p>It writes THROUGH {@link #saveAuditLog}, never building a row itself, which is that method's
+	 * rule; and it writes at most one, because each ordinary site flags its attempt before making it.
+	 * A swallowed persistence failure there is therefore not retried into a second row — it is
+	 * answered by the ERROR that method logs.
+	 *
+	 * <p>The reasoning, the row this files where the pipeline never surfaced an answer, and the
+	 * pre-persist alternative the one-row-per-query specification rules out: ADR Decision 103.
+	 *
+	 * @param state what this request's consumers recorded as the stream ran
+	 */
+	private void auditStreamedQueryIfUnrecorded(User user, Patient patient, String question,
+			StreamAuditState state, long responseTimeMs) {
+		if (state.auditAttempted || !state.produced) {
+			return;
+		}
+		ChartAnswer answer = state.pipelineAnswer != null ? state.pipelineAnswer
+				: new ChartAnswer(state.answerSoFar.toString(),
+						Collections.<RecordReference> emptyList());
+		// One count and the patient id. The question and the answer are the two things this row exists
+		// to keep OUT of the log and in the table (issue #439). The length is read defensively because
+		// this runs in a finally: an NPE here would leave streamAnswer by a path its caller has no catch
+		// for, on a request whose own failure has already been handled.
+		String answerText = answer.getAnswer() == null ? "" : answer.getAnswer();
+		log.warn("Streaming query for patient [id={}] ended before its audit row was written;"
+				+ " auditing {} characters of answer the pipeline had produced",
+				patient.getPatientId(), answerText.length());
+		saveAuditLog(user, patient, question, answer, responseTimeMs);
+	}
+
+	/**
+	 * What one streaming request's consumers record for {@link #auditStreamedQueryIfUnrecorded} — one
+	 * object rather than three more single-element arrays, which is all the effectively-final capture
+	 * a lambda needs.
+	 *
+	 * <p>It does not absorb the early-done state beside it: {@code earlyQuestionId} and
+	 * {@code earlyDoneSent} carry what the async shape's own {@code done} needs, and moving them here
+	 * would put that shape's at-most-once guard on a different object from the flag it guards.
+	 *
+	 * <p>Unsynchronized, and that is not an oversight of the kind {@code SseKeepAlive} is careful
+	 * about: every consumer is called synchronously by the service on the REQUEST thread, and the
+	 * {@code finally} that reads this runs on that same thread. The keep-alive's own thread shares
+	 * {@code out} and never this.
+	 */
+	private static final class StreamAuditState {
+
+		/**
+		 * The answer as the model emitted it, appended BEFORE each frame is written — so a fragment
+		 * whose write the client refused is still on the record. Over-recording is the safe direction
+		 * for an audit trail; the alternative drops the last thing the model said about the patient on
+		 * every disconnect, which is the fragment the caller stopped to read.
+		 */
+		final StringBuilder answerSoFar = new StringBuilder();
+
+		/**
+		 * The pipeline's own answer, once it has handed one over — a better row than
+		 * {@link #answerSoFar} can build, since it states the search mode, the reference slice and the
+		 * citations the pipeline resolved and a hand-built one states none of them. Null until the
+		 * ungrounded handoff, which is after the {@code references} frame, so the two disconnect
+		 * windows the ticket describes both file the hand-built shape.
+		 */
+		ChartAnswer pipelineAnswer;
+
+		/** Whether the pipeline produced anything for this query — the gate on auditing it at all. */
+		boolean produced;
+
+		/**
+		 * Whether a row has been ATTEMPTED at an ordinary write site. Attempted and not written: see
+		 * {@link #auditStreamedQueryIfUnrecorded} for why that is the useful reading of it.
+		 */
+		boolean auditAttempted;
+
+		void recordToken(String token) {
+			answerSoFar.append(token);
+			produced = true;
+		}
+
+		void recordOutput() {
+			produced = true;
+		}
+
+		void recordAnswer(ChartAnswer answer) {
+			pipelineAnswer = answer;
+			produced = true;
+		}
+	}
+
+	/**
 	 * Persists the audit row for one answer and returns its id as the client-facing
 	 * {@code questionId}, or {@code null} when the save failed — audit failures are logged and never
 	 * break the response, exactly as before the async-grounding split.
 	 *
-	 * <p><b>The only place a row is built.</b> All three write sites go through here: the blocking
-	 * {@code /search} handler, the streaming classic post-return path, and the streaming async
-	 * early-{@code done} path. Before issue #178 the blocking site had its own copy of these
-	 * setters, and the one expression that differed between the copies — how each derived
-	 * {@code searchMode} — is the whole of that issue. The mode now travels on the answer, which left
-	 * two identical copies; keeping them as copies would leave the next column added to this table
-	 * present in one row shape and silently absent from the other, which is the same defect wearing
-	 * a different field's name.
+	 * <p><b>The only place a row is built.</b> All four write sites go through here: the blocking
+	 * {@code /search} handler, the streaming classic post-return path, the streaming async
+	 * early-{@code done} path, and {@link #auditStreamedQueryIfUnrecorded}, which is the one that
+	 * runs when a stream ended before any of the other three could (issue #450). Before issue #178
+	 * the blocking site had its own copy of these setters, and the one expression that differed
+	 * between the copies — how each derived {@code searchMode} — is the whole of that issue. The mode
+	 * now travels on the answer, which left two identical copies; keeping them as copies would leave
+	 * the next column added to this table present in one row shape and silently absent from the
+	 * other, which is the same defect wearing a different field's name.
 	 *
 	 * <p>The mode is read off {@code answer}, never re-derived here, so the row states what the
 	 * pipeline actually did rather than what a global property says at write time.
@@ -852,7 +992,10 @@ public class ChartSearchAiRestController {
 			auditLogService.saveAuditLog(auditLog);
 		}
 		catch (Exception e) {
-			log.warn("Failed to save audit log", e);
+			// ERROR and not WARN: this is an unrecorded access to a patient's chart, and the answer
+			// has been delivered either way, so the level is the only signal an operator gets that the
+			// compliance trail has a hole in it (issue #450). Nothing here retries or fails the response.
+			log.error("Failed to save audit log", e);
 		}
 		return auditLog.getAuditLogId() != null ? String.valueOf(auditLog.getAuditLogId()) : null;
 	}

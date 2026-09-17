@@ -8147,3 +8147,89 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `stated < named` guard in its other state),
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
+
+## Decision 103: The audit row for a streaming query is written on every exit of the request, not only the one where the client stayed
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#450](https://github.com/openmrs/openmrs-module-chartsearchai/issues/450), a security-scan finding
+(CWE-778, severity MEDIUM). It changes no prompt, no chip and no response key; the wire gains
+nothing and the `chartsearchai_audit_log` table gains no column.
+
+**Context.** The row `saveAuditLog` writes is the module's only record of who asked what about whom,
+and on the streaming endpoint it was a statement on the success path: at the tail of
+`streamAnswer`'s try block in the classic shape, and inside the ungrounded consumer in the async
+one. The four streamed channels — `token`, `thinking`, `preliminary`, `references` — write through
+`writeSseEventOrThrow`, which turns an `IOException` into a `RuntimeException`; that unwinds out of
+`searchStreaming` past both of those sites into the catch-all, whose `e.getCause() instanceof
+IOException` test reads it as a benign client hang-up and returns at DEBUG. So a user holding *AI
+Query Patient Data* could read a streamed answer about any patient and then reset the socket, and
+nothing recorded the query — deterministically, for any prefix of the answer they chose to stop at,
+and for the whole answer when the reset landed in the window after the last `token` frame and before
+the `references` one. Because `checkRateLimit` counts persisted rows, the query was also uncounted;
+that is a consequence and was not the basis of the finding.
+
+The second exit is not a disconnect at all and the ticket does not name it: `LlmInferenceService`
+runs the grounding pass and the fidelity checks after it with no `catch` of its own between the
+ungrounded handoff and its return, so anything thrown there unwinds into the same catch-all with the whole
+answer already delivered.
+
+**Decision.** `auditStreamedQueryIfUnrecorded` runs in the `finally` that already stops the
+keep-alive timer, so the row is owed on every exit of that try block rather than on one of them. It
+writes **through** `saveAuditLog`, which stays the only place a row is built, and **at most one**:
+each ordinary write site flags its attempt before making it, so the finally adds nothing where one
+was already attempted.
+
+**What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
+row before streaming and update it afterwards — was not taken: `ChartSearchAiAuditSearchModeTest`
+and `ChartSearchAiAuditReferenceSliceTest` each assert that a streaming query writes **exactly one**
+row, in both shapes, and a pre-persist design writes two. Changing those assertions is changing the
+specification. So the row is written once, at the end, from the best answer the controller holds:
+
+- the pipeline's own `ChartAnswer` where the ungrounded consumer has handed one over — which is why
+  that consumer now fires in BOTH shapes rather than being wired to a no-op in the classic one. Its
+  contract already says it fires on the live inference path regardless of whether grounding is
+  enabled, and the answer it carries states the search mode, the reference slice and the citations.
+  Filing `unknown` and two nulls with that object in scope would state "the producer stated no
+  measurement" where the producer stated both.
+- otherwise the answer text the model had produced, accumulated by the token consumer **before** each
+  frame is written. Both disconnect windows the ticket describes fall here, because the handoff is
+  after the `references` frame — so those rows do state `unknown` and no slice. That is a residue,
+  not an oversight: closing it would need a new signal on the `searchStreaming` interface carrying
+  the mode ahead of the answer, and the mode is a property of the chart that was assembled, which is
+  the producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.
+
+Appending before the write, rather than after, means a fragment whose write the client refused is on
+the record. Over-recording by one fragment is the safe direction for an audit trail; the alternative
+drops the last thing the model said about the patient on every disconnect, which is the fragment the
+caller stopped to read.
+
+**What it does not reach**, named rather than implied. `SseKeepAlive.start` runs above that try, so a
+failure there still escapes the whole request with no row — already-recorded state, see
+`ChartSearchAiStreamKeepAliveTest`. And a query whose chart was built and whose inference then
+produced nothing at all is left unaudited, because nothing was disclosed and the consumer traffic is
+the only signal the REST layer has; a gate that fired regardless would start auditing, and
+rate-limiting, the too-large-chart and misconfiguration paths, which the ticket does not ask for.
+
+**The second recommendation, and the half of it that was declined.** `saveAuditLog` swallowed every
+persistence failure at WARN, which on a default OpenMRS install sits among ordinary operational
+noise; an access to PHI that went unrecorded is not that, so it reports at ERROR with the cause
+attached. The level is the whole of the observable difference — the method returns null both when
+the write failed and when the row got no id — which is the argument `LogCapture`'s javadoc makes
+about issue #149, and it is why that instrument is now published to the omod module rather than
+asserted by reading source text.
+
+Making the failure *fail closed* was not taken. It is mechanically available on the blocking
+`/search` handler, which persists before returning the answer, and not available on the streaming
+one, where the row is written after delivery and the one-row-per-query specification above rules out
+the pre-persist design that would make it available. A compliance switch that silently does not
+apply to the endpoint the frontend uses by default is worse than no switch, and which way to resolve
+that — pre-persist and re-specify the one-row assertions, or accept the asymmetry — is a policy call
+rather than a defect.
+
+**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`, over both shapes: the reset after the first
+token, the reset on the `references` frame, the non-`IOException` failure after the handoff (which
+also tells the `finally` from a statement at the tail of the disconnect branch), and the negative
+where a query that produced nothing writes no row. The ERROR is pinned by
+`ChartSearchAiAuditWriteFailureLoudnessTest`, with the successful write as its control. Mutate each
+guard and read the failures; the one-row-per-query flag is held by the two pre-existing audit-row
+suites rather than by either new file.

@@ -8179,9 +8179,12 @@ commit, its sha256 and its exact byte count; one POSIX-sh library, `scripts/mode
 sourced by both fetch sites and is the only thing that downloads a model. Its composed step
 `fetch_and_verify` refuses anything that is not the recorded artifact and returns a distinct code
 per reason, so a caller can add the diagnostic it alone has and can word its own message honestly.
-Two of those codes — a digest mismatch and a size mismatch — also delete the file; the others
+Some of those codes report a deletion — a digest mismatch, a size mismatch, and the case below
+where a copy already on the volume is deleted and its replacement then cannot be fetched; the rest
 report that nothing was verified rather than that something was removed, and the library's own
-comment is the authority on which is which.
+code table is the authority on which is which. Callers word "refused and deleted" off the code and
+never off the disk, so a code that reported a deletion as a plain fetch failure would make every
+caller's message false at once.
 
 The manifest is one file rather than one per consumer because the two consumers are one defect: a
 digest written twice is a digest that will be bumped once. That is also why the fix is one PR — and
@@ -8209,7 +8212,11 @@ re-fetched from the pinned revision rather than merely refused, because a stale 
 substituted one are indistinguishable on disk and the replacement is bound to the same digest:
 that decides how many restarts recovery takes, not what is accepted. **A refusal does cost the
 copy**: the bytes are deleted before the replacement is fetched, so a deployment that cannot reach
-the pinned revision is left with neither file, and for the embedder that means a container which
+the pinned revision is left with neither file — which is why that outcome has an exit code of its
+own rather than sharing the one whose contract says nothing was deleted, and the message an
+operator gets says the copy is gone
+(`ModelDownloadIntegrityTest.aCopyDeletedForAReplacementThatNeverArrivesIsNotReportedAsAPlainFetchFailure`).
+For the embedder that means a container which
 refuses to start — and stays stopped, because the `backend` service carries no `restart:` key, as
 `ModelDownloadPinningGuardTest.theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem`
 records. That is the fail-closed direction and it is the point — the state

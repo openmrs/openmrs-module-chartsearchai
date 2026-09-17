@@ -130,9 +130,12 @@ _download_llm_file() {
   if fetch_and_verify "$_id" "$_target" "$_label"; then
     echo "$_label ready: $_target"
   else
-    # $? is the condition's status here. Which message is honest depends on it: a refusal has
-    # already deleted the file, so there is nothing for curl -C - to resume from and saying
-    # otherwise would send an operator looking for a .partial that is not there.
+    # $? is the condition's status here. Which message is honest depends on it, and the library's
+    # code table is what says which is which: a refusal has already deleted the file, so there is
+    # nothing for curl -C - to resume from and saying otherwise would send an operator looking for
+    # a .partial that is not there. Code 6 is the one that also has to report a LOSS — a copy that
+    # was on the volume is gone and no replacement arrived — so it may not fall into 3's wording,
+    # which promises the opposite, nor into the catch-all's, which says the file is still there.
     _code=$?
     case $_code in
       1|2) echo "$_label was refused and deleted; restart the backend container to fetch it again from the start." >&2 ;;
@@ -142,6 +145,7 @@ _download_llm_file() {
              echo "$_label could not be fetched at all; restart the backend container to retry." >&2
            fi ;;
       4)   echo "$_label could not be resolved from model-manifest.tsv — no such row, or no manifest in the image — so this is a packaging error and a restart will not help." >&2 ;;
+      6)   echo "$_label was refused and deleted, and the pinned revision could not then be reached to replace it, so the volume no longer holds a copy of it; restart the backend container to retry the download." >&2 ;;
       *)   echo "$_label could not be hashed (code $_code), so it is still on disk unverified; restart the backend container to retry." >&2 ;;
     esac
   fi

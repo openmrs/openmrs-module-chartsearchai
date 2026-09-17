@@ -82,6 +82,12 @@ public class ModelDownloadIntegrityTest {
 
 	private static final int HASH_UNAVAILABLE = 5;
 
+	/**
+	 * The copy already at the target was refused and deleted, and its replacement could then not be
+	 * fetched or placed — so the deployment is left with nothing at that name.
+	 */
+	private static final int REPLACEMENT_UNFETCHABLE = 6;
+
 	private static final byte[] GOOD_BYTES = "the bytes the maintainers reviewed\n".getBytes(StandardCharsets.UTF_8);
 
 	/**
@@ -197,6 +203,31 @@ public class ModelDownloadIntegrityTest {
 				"the refused replacement must be deleted too\n" + result);
 	}
 
+	/**
+	 * <b>The replace path costs the deployment the copy it had, and the code has to say so.</b> The
+	 * file on the volume is deleted before the replacement is fetched, so an origin that cannot then
+	 * be reached leaves nothing at that name at all. Reporting that as {@link #DOWNLOAD_FAILED}
+	 * would be the one code whose contract promises that nothing was deleted, and the entrypoint
+	 * words its message off the code rather than off the disk — an operator whose weights had just
+	 * been removed from under a running deployment would be told only that a download failed.
+	 *
+	 * <p>{@link #anErrorPageIsRefusedRatherThanRenamedIntoPlace} is the control: the same failing
+	 * origin with nothing at the target stays {@link #DOWNLOAD_FAILED}, so this is not a code that
+	 * has swallowed the plain fetch failure.
+	 */
+	@Test
+	public void aCopyDeletedForAReplacementThatNeverArrivesIsNotReportedAsAPlainFetchFailure() throws Exception {
+		status = 404;
+		Path target = work.resolve("model.bin");
+		Files.write(target, SUBSTITUTED_BYTES);
+
+		Result result = fetchAndVerify(url(), sha256(GOOD_BYTES), GOOD_BYTES.length, target, "test model");
+
+		assertFalse(Files.exists(target), "a copy that does not match must be deleted\n" + result);
+		assertEquals(REPLACEMENT_UNFETCHABLE, result.exit, "a fetch that failed AFTER the copy on the volume was"
+				+ " deleted must not report the code whose contract says nothing was deleted\n" + result);
+	}
+
 	@Test
 	public void aFileAlreadyOnTheVolumeThatMatchesIsKeptAndNotRefetched() throws Exception {
 		status = 500; // any fetch at all would fail the case
@@ -233,7 +264,8 @@ public class ModelDownloadIntegrityTest {
 
 	/**
 	 * Code 5 — the file could not be hashed at all — is the one refusal that leaves the file where it
-	 * is, and the library's own contract says only codes 1 and 2 promise a deletion. An earlier form
+	 * is; the library's code table is the authority on which codes promise a deletion, and this is
+	 * not one of them. An earlier form
 	 * of {@code fetch_and_verify_url} fell through to the replacement path for every non-zero code,
 	 * so an unhashable file was announced as "Replacing..." while it stayed on disk and stayed
 	 * served — the exact state #444 is about.
@@ -678,15 +710,32 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	/**
-	 * One committed id is a prefix of another, so a lookup that matched loosely would hand back a
-	 * neighbour's digest and every later check would pass against the wrong artifact. The committed
-	 * manifest cannot show this on its own: with the rows in their current order a prefix match
-	 * happens to reach the right row anyway, so a mutation loosening the comparison left
-	 * {@link #everyLookupReturnsTheFieldOnThatArtifactsOwnRow} green. This asks the question the
-	 * committed order cannot — both orders, so neither can be the one that passes by luck.
+	 * A lookup that matched an id loosely would hand back a neighbour's digest, and every later check
+	 * would then pass against the wrong artifact. <b>No committed id is a prefix of another, so the
+	 * committed manifest cannot ask this question at all</b>: loosening the comparison to a prefix
+	 * match changes no committed lookup and leaves
+	 * {@link #everyLookupReturnsTheFieldOnThatArtifactsOwnRow} green. The fixture below is therefore
+	 * the only thing that reddens for that mutation — read as redundant with the manifest and
+	 * deleted, the rule would have no test at all. The library's comment on the {@code =} comparison
+	 * says the same and points back here. Both row orders are asked, so neither can be the one that
+	 * passes by luck.
+	 *
+	 * <p>That premise is ASSERTED below rather than only stated. It was true and then written down,
+	 * and then a row carrying the one prefix pair was collapsed away and the sentence saying so
+	 * stayed — which is how a maintainer comes to believe the committed data already exercises this.
 	 */
 	@Test
 	public void anIdThatIsAPrefixOfAnotherResolvesToItsOwnRowInEitherOrder() throws Exception {
+		List<String[]> committed = ModelManifest.rows();
+		for (String[] row : committed) {
+			for (String[] other : committed) {
+				assertFalse(!row[0].equals(other[0]) && other[0].startsWith(row[0]),
+						"'" + row[0] + "' is now a prefix of '" + other[0] + "', so the committed manifest DOES"
+								+ " exercise the exact comparison; say so in the javadoc above rather than"
+								+ " leaving it claiming the opposite");
+			}
+		}
+
 		String shortRow = "shared-prefix " + "a".repeat(64) + " 10 " + pinnedUrl("short");
 		String longRow = "shared-prefix-more " + "b".repeat(64) + " 20 " + pinnedUrl("long");
 

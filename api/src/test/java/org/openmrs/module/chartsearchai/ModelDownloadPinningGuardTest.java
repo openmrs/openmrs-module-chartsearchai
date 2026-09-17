@@ -107,6 +107,33 @@ public class ModelDownloadPinningGuardTest {
 			// The standalone build polling querystore's own REST endpoints while it bakes the index.
 			"$QS/indexingstatus", "$QS/drift", "/tmp/reindex.json");
 
+	/**
+	 * The global properties {@code backend-init.sh} writes that carry no model file's path, spelled
+	 * as they are at their write sites.
+	 *
+	 * <p><b>An allow-list, for the reason {@link #DECLARED_NON_MODEL_FETCHES} is one.</b> Asking
+	 * which writes LOOK like a model path is the question a variable alias walks past. Asked the
+	 * other way round, an undeclared property write outside the ledger's gate is the violation, so a
+	 * new wiring property costs an entry here instead of publishing unchecked bytes' path silently.
+	 */
+	private static final List<String> DECLARED_NON_MODEL_PROPERTIES = List.of(
+			// The retrieval switch. It names no file, and maybe_seed_demo_data asserts it outright
+			// because a freshly imported dump brings its own value for it.
+			"chartsearchai.querystore.enabled",
+			// The bootstrap sweep, which configure_retrieval_gps turns OFF when no embedder path
+			// was published — the fail-closed half of the same gate.
+			"querystore.bootstrap.autostart",
+			// The demo seed's own bookkeeping and the CPU breadcrumb.
+			"chartsearchai.demo.seedStatus", "chartsearchai.demo.seededDataset", "chartsearchai.demo.cpuInfo");
+
+	/**
+	 * A global property name written as a literal: dot-separated segments in single quotes, which
+	 * {@code '$1'}, {@code 'true'} and {@code '$DEMO_SEED_TAG'} are not. A write whose property is
+	 * none of these is a write this guard cannot name, and that is reported rather than skipped.
+	 */
+	private static final Pattern QUOTED_PROPERTY = Pattern
+			.compile("'([A-Za-z][A-Za-z0-9]*(?:\\.[A-Za-z0-9]+)+)'");
+
 	private static Path repo(String relative) {
 		return ModuleSourceRoot.repoRoot().resolve(relative);
 	}
@@ -346,11 +373,28 @@ public class ModelDownloadPinningGuardTest {
 	 * autostart safety in that same function then turns the sweep off — instead of pointing
 	 * querystore at bytes this start never checked.
 	 *
-	 * <p>The write is tied to the artifact by the VARIABLE the fetch targets, not by a list of
-	 * property names: {@code $ONNX_FILE} is what {@code fetch_or_exit embedder-e5-base-v2-onnx} writes
-	 * and what the property's value is built from, so renaming a property or adding a third one cannot
-	 * slip past. What {@code require_verified} then answers is
-	 * {@code ModelDownloadIntegrityTest}'s question, driven against the real library.
+	 * <p><b>Two questions, and the second is asked the other way round.</b> The first ties a write to
+	 * an ARTIFACT by the VARIABLE the fetch targets: {@code $ONNX_FILE} is what
+	 * {@code fetch_or_exit embedder-e5-base-v2-onnx} writes and what the property's value is built
+	 * from. That reading alone is one intermediate assignment wide — copy {@code $ONNX_FILE} into a
+	 * fresh name on one line and publish a third {@code querystore.embedding.*} property from that
+	 * name on the next, and the write itself mentions no fetch target at all, which is the same
+	 * alias that defeated the fetch deny-list {@link #DECLARED_NON_MODEL_FETCHES} replaced. So the
+	 * second question inverts
+	 * it: EVERY global-property write in the entrypoint must sit behind the ledger's gate unless the
+	 * property is declared in {@link #DECLARED_NON_MODEL_PROPERTIES} as carrying no model path, and
+	 * a write whose property name is not a literal this guard can read is itself a violation. A new
+	 * path property then costs an entry there, which is the point at which someone asks whether it
+	 * is a model's.
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> Both questions read THIS file, and only
+	 * for the two write forms it uses: a statement assembled from fragments so that no line spells
+	 * {@code INSERT INTO global_property}, or a property set from outside this file entirely, is
+	 * outside both. And the artifact tie is asked only for
+	 * {@link #CANNOT_START_WITHOUT}, so a third must-have artifact's path sitting behind the ledger
+	 * entry for a DIFFERENT one satisfies the inverted question. What {@code require_verified}
+	 * answers at runtime is {@code ModelDownloadIntegrityTest}'s question, driven against the real
+	 * library.
 	 */
 	@Test
 	public void noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger() throws IOException {
@@ -358,11 +402,13 @@ public class ModelDownloadPinningGuardTest {
 
 		List<String> violations = new ArrayList<String>();
 		int writes = 0;
+		Set<Integer> behindAnyLedger = new LinkedHashSet<Integer>();
 		for (String artifact : CANNOT_START_WITHOUT) {
 			String variable = fetchTargetVariable(lines, artifact);
 			assertTrue(variable != null, "no fetch of " + artifact + " in backend-init.sh names a target variable,"
 					+ " so this guard cannot tell which property carries its path");
 			Set<Integer> behindTheLedger = linesBehindTheLedger(lines, artifact);
+			behindAnyLedger.addAll(behindTheLedger);
 			for (int i = 0; i < lines.size(); i++) {
 				String line = lines.get(i);
 				if (line.trim().startsWith("#") || !line.contains(variable)) {
@@ -380,9 +426,61 @@ public class ModelDownloadPinningGuardTest {
 			}
 		}
 
+		// The inverted question. Which property a write NAMES, rather than which variable it reads,
+		// so an intermediate assignment changes nothing about the answer.
+		int gated = 0;
+		int declaredWrites = 0;
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			if (line.trim().startsWith("#") || !writesAGlobalProperty(lines, i)) {
+				continue;
+			}
+			List<String> named = new ArrayList<String>();
+			Matcher property = QUOTED_PROPERTY.matcher(line);
+			while (property.find()) {
+				named.add(property.group(1));
+			}
+			if (named.isEmpty()) {
+				violations.add("backend-init.sh line " + (i + 1) + " writes a global property this guard cannot"
+						+ " name, so it cannot say whether it is a model's path; spell the property as a"
+						+ " literal: " + line.trim());
+				continue;
+			}
+			for (String name : named) {
+				if (behindAnyLedger.contains(i)) {
+					gated++;
+				} else if (DECLARED_NON_MODEL_PROPERTIES.contains(name)) {
+					declaredWrites++;
+				} else {
+					violations.add("backend-init.sh line " + (i + 1) + " writes " + name + " outside the"
+							+ " require_verified gate and it is not declared as carrying no model path: "
+							+ line.trim());
+				}
+			}
+		}
+
 		assertEquals(List.of(), violations, "a model path published without the library's verdict on its bytes");
 		assertTrue(writes >= CANNOT_START_WITHOUT.size(), "backend-init.sh publishes no must-have artifact's path at"
 				+ " all; this guard read nothing");
+		assertTrue(gated >= CANNOT_START_WITHOUT.size(), "no global-property write in backend-init.sh sits behind"
+				+ " the ledger's gate; the inverted question read nothing");
+		assertTrue(declaredWrites > 0, "no declared non-model property is written either, so the allow-list this"
+				+ " question rests on is never exercised");
+	}
+
+	/**
+	 * Whether line {@code index} of {@code backend-init.sh} WRITES a global property. Both spellings
+	 * the entrypoint uses count — the {@code gp_set_if_blank} helper and raw seed SQL — while a read
+	 * ({@code gp_value}, the seed's {@code global_property} dump, the schema probe) does not. The
+	 * helper's own statement is excluded by the function it sits in: it writes whatever it is handed,
+	 * and its callers are the sites with a property name to read.
+	 */
+	private static boolean writesAGlobalProperty(List<String> lines, int index) {
+		String line = lines.get(index);
+		if (line.contains("INSERT INTO global_property") || line.contains("UPDATE global_property")) {
+			return !"gp_set_if_blank".equals(enclosingFunction(lines, index));
+		}
+		return line.contains("gp_set_if_blank") && !line.contains("gp_set_if_blank()");
 	}
 
 	/**

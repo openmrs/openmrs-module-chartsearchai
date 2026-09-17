@@ -35,12 +35,19 @@ MODEL_MANIFEST_VERIFIED=''
 #   0  the file is present and is the reviewed artifact
 #   1  digest mismatch — the file has been deleted
 #   2  size mismatch — the file has been deleted, and the caller has a better diagnostic than we do
-#   3  the fetch or the placement failed, so nothing was verified and nothing was deleted
-#      (a non-2xx response is here, because curl runs with -f)
-#   4  the artifact could not be resolved: no such id in the manifest, or an override with no digest
+#   3  the fetch or the placement failed with nothing at the target to begin with, so nothing was
+#      verified and nothing was deleted (a non-2xx response is here, because curl runs with -f)
+#   4  the artifact could not be resolved, so nothing was fetched: no such id in the manifest, no
+#      manifest to read it from, an override with no digest, or — require_url_for_digest — a
+#      digest with no url of its own
 #   5  the file could not be measured or hashed at all, and is still on disk
+#   6  a copy already at the target was refused and DELETED, and its replacement could then not be
+#      fetched or placed, so there is now nothing at that name
 #
-# 1 and 2 are the only codes that promise a deletion, and the callers' wording leans on that.
+# 1, 2 and 6 are the codes that promise a deletion, and the callers' wording leans on that. 6 is
+# the one that also says the deployment LOST something it had: a copy was at this target, it was
+# not the recorded artifact, and the pinned revision could then not be reached to replace it. That
+# is the fact a "restart and retry" message has to carry, and it is why it is not code 3.
 
 # _mm_field <id> <sha256|bytes|url> — one field of the manifest row named by <id>, or a failure
 # naming the id.
@@ -168,6 +175,11 @@ fetch_and_verify_url() {
 	# naming the manifest would send an operator to a file it deliberately does not record.
 	_mm_source=${6:-model-manifest.tsv}
 	_mm_partial="$_mm_target.partial"
+	# The code to report if no file ends up at the target: 3 while there was nothing there to lose,
+	# and 6 once a copy that WAS there has been deleted to make room for a replacement. Carried as a
+	# variable rather than re-tested on the disk at each exit, because "is the target missing" is
+	# also true of the ordinary first fetch and cannot tell the two apart.
+	_mm_gone=3
 
 	# The verification is the condition of an `if` rather than a bare call, because the standalone
 	# workflow runs this under `set -e`: a bare call that failed would end that shell on the spot,
@@ -188,6 +200,11 @@ fetch_and_verify_url() {
 		fi
 		# Fall through and fetch what the manifest records — ADR Decision 103 for why replacing
 		# beats refusing here. A served copy that fails too is the refusal.
+		#
+		# The copy that was here is already deleted at this point, so from here on a failure to
+		# fetch or place is code 6 rather than 3: the deployment has lost a file, which is the one
+		# thing a "restart and retry" message must not leave out.
+		_mm_gone=6
 		echo "Replacing $_mm_label with the artifact $_mm_source records..."
 	fi
 
@@ -211,12 +228,12 @@ fetch_and_verify_url() {
 			echo "       Discarding the partial download so the next attempt starts from zero." >&2
 			rm -f "$_mm_partial"
 		fi
-		return 3
+		return "$_mm_gone"
 	fi
 
 	_mm_verify_file "$_mm_partial" "$_mm_expected" "$_mm_bytes" "$_mm_label" "$_mm_source" || return $?
 
-	mv "$_mm_partial" "$_mm_target" || return 3
+	mv "$_mm_partial" "$_mm_target" || return "$_mm_gone"
 	return 0
 }
 
@@ -283,6 +300,14 @@ fetch_or_exit() {
 			# fetch went badly, so a restart is not the remedy.
 			echo "       It could not be resolved from $MODEL_MANIFEST_FILE — no such row, or no" >&2
 			echo "       manifest in the image — so a restart will not help." >&2
+			;;
+		6)
+			# The one refusal that also costs the volume the copy it had. Said here because the
+			# lines above read as "we declined to start on bytes we could not check", which omits
+			# the fact that decides whether a restart can recover anything.
+			echo "       The copy that was on the volume was refused and deleted, and the pinned" >&2
+			echo "       revision could not then be reached to replace it, so there is no copy of" >&2
+			echo "       this file left. A restart retries the download." >&2
 			;;
 	esac
 	exit "$_mm_oe_code"

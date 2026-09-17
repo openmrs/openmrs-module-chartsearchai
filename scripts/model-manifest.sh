@@ -140,9 +140,9 @@ fetch_and_verify_url() {
 	_mm_label=$5
 	_mm_partial="$_mm_target.partial"
 
-	# Written as a condition rather than as a bare call followed by `return $?` so the status is
-	# propagated the same way under `set -e`, which the standalone workflow runs this under: a bare
-	# call that failed would kill that shell before the code could be returned or branched on.
+	# The verification is the condition of an `if` rather than a bare call, because the standalone
+	# workflow runs this under `set -e`: a bare call that failed would end that shell on the spot,
+	# and neither the fall-through below nor any exit code would ever be reached.
 	if [ -f "$_mm_target" ]; then
 		if _mm_verify_file "$_mm_target" "$_mm_expected" "$_mm_bytes" "$_mm_label"; then
 			return 0

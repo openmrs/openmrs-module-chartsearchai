@@ -175,6 +175,25 @@ fetch_and_verify_url() {
 	return 0
 }
 
+# fetch_and_verify_override <url> <sha256> <target> <label> <digest-input-name>
+#
+# The manually-dispatched standalone build, where an operator names a file the manifest does not
+# record — a larger Gemma, say. They must bring that file's digest with it: without one there is
+# nothing to check the bytes against, which is the whole of what #449 reports, so this refuses
+# rather than falling back to fetching it unverified. The size is unknown, hence 0.
+#
+# Here rather than inline in the workflow because this is the one branch in that step with a
+# decision in it, and shell embedded in a YAML `run:` block is parsed by nothing in CI and
+# reachable by no test.
+fetch_and_verify_override() {
+	if [ -z "$2" ]; then
+		echo "ERROR: $4 was requested from $1, but no $5 was given." >&2
+		echo "       A model that goes into the bundle needs a digest to check it against." >&2
+		return 4
+	fi
+	fetch_and_verify_url "$1" "$2" 0 "$3" "$4"
+}
+
 # fetch_and_verify <manifest-id> <target> <label> — the same step, with the url, digest and size
 # taken from the manifest. This is the form both fetch sites use; the url form above is for the
 # manually-dispatched standalone build, where the operator supplies a url and its digest.

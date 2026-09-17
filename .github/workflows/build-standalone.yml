@@ -167,32 +167,22 @@ jobs:
 
           mkdir -p standalone/target/chartsearchai standalone/target/querystore
 
-          # An operator-dispatched build may name its own file — a larger Gemma, say — but it must
-          # bring that file's digest with it. Nothing goes into the assembly unverified.
-          fetch_override() {
-            if [ -z "$2" ]; then
-              echo "::error::$1 was set without $3; a bundled model needs a digest to check it against."
-              exit 1
-            fi
-            fetch_and_verify_url "$1" "$2" 0 "$4" "$5"
-          }
-
           if [ -n "$GGUF_MODEL_URL" ]; then
-            fetch_override "$GGUF_MODEL_URL" "$GGUF_SHA256" gguf_sha256 \
-              "standalone/target/chartsearchai/$(basename "$GGUF_MODEL_URL")" "the dispatched GGUF model"
+            fetch_and_verify_override "$GGUF_MODEL_URL" "$GGUF_SHA256" \
+              "standalone/target/chartsearchai/$(basename "$GGUF_MODEL_URL")" "the dispatched GGUF model" gguf_sha256
           else
             fetch_and_verify llm-gemma-4-e4b \
               standalone/target/chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf "the Gemma 4 E4B GGUF model"
           fi
 
           if [ -n "$ONNX_MODEL_URL" ]; then
-            fetch_override "$ONNX_MODEL_URL" "$ONNX_SHA256" onnx_sha256 \
-              standalone/target/chartsearchai/model.onnx "the dispatched ONNX model"
+            fetch_and_verify_override "$ONNX_MODEL_URL" "$ONNX_SHA256" \
+              standalone/target/chartsearchai/model.onnx "the dispatched ONNX model" onnx_sha256
           fi
 
           if [ -n "$VOCAB_URL" ]; then
-            fetch_override "$VOCAB_URL" "$VOCAB_SHA256" vocab_sha256 \
-              standalone/target/chartsearchai/vocab.txt "the dispatched vocab file"
+            fetch_and_verify_override "$VOCAB_URL" "$VOCAB_SHA256" \
+              standalone/target/chartsearchai/vocab.txt "the dispatched vocab file" vocab_sha256
           fi
 
           # querystore embedding model: e5-base-v2 (ADR Decision 22). The Xenova mirror ships a

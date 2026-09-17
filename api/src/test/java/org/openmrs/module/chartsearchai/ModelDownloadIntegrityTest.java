@@ -74,6 +74,8 @@ public class ModelDownloadIntegrityTest {
 
 	private static final int DOWNLOAD_FAILED = 3;
 
+	private static final int MANIFEST_LOOKUP_FAILED = 4;
+
 	private static final byte[] GOOD_BYTES = "the bytes the maintainers reviewed\n".getBytes(StandardCharsets.UTF_8);
 
 	/**
@@ -228,6 +230,39 @@ public class ModelDownloadIntegrityTest {
 
 		assertEquals(DOWNLOAD_FAILED, result.exit, "a non-2xx response must fail the fetch, not be accepted\n" + result);
 		assertFalse(Files.exists(target), "a non-2xx response must never reach the target name\n" + result);
+	}
+
+	/**
+	 * The manually-dispatched standalone build is the one path where the url is not the manifest's,
+	 * so it is the one path where a digest can be missing. #449's criterion is that every bundled
+	 * model is checked against a digest, which means the absence of one has to stop the build rather
+	 * than fall back to fetching it unverified.
+	 */
+	@Test
+	public void anOverriddenUrlWithNoDigestIsRefusedRatherThanFetchedUnverified() throws Exception {
+		served = GOOD_BYTES;
+		Path target = work.resolve("model.bin");
+
+		Result result = library("fetch_and_verify_override '" + url() + "' '' '" + target + "' 'the dispatched model'"
+				+ " gguf_sha256");
+
+		assertEquals(MANIFEST_LOOKUP_FAILED, result.exit, "an override with no digest must be refused\n" + result);
+		assertFalse(Files.exists(target), "an unverifiable override must not be fetched at all\n" + result);
+		assertTrue(result.output.contains("gguf_sha256"),
+				"the refusal must name the input the operator has to supply\n" + result);
+	}
+
+	@Test
+	public void anOverriddenUrlWithItsDigestIsFetchedAndPlaced() throws Exception {
+		served = GOOD_BYTES;
+		Path target = work.resolve("model.bin");
+
+		Result result = library("fetch_and_verify_override '" + url() + "' '" + sha256(GOOD_BYTES) + "' '" + target
+				+ "' 'the dispatched model' gguf_sha256");
+
+		assertEquals(OK, result.exit, "an override carrying its digest must be accepted\n" + result);
+		assertEquals(sha256(GOOD_BYTES), sha256(Files.readAllBytes(target)),
+				"the placed file must be the bytes that were served");
 	}
 
 	// ---- the manifest is the one committed record ----------------------------------------------

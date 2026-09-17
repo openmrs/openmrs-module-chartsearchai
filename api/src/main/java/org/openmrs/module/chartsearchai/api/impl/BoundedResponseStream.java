@@ -26,7 +26,11 @@ import java.io.InputStream;
  * than needing three counters: {@code BufferedReader.readLine()} cannot buffer a line the
  * stream never yielded, an SSE chunk cannot exceed what the line carried, and the parser's
  * accumulated text cannot exceed the chunks. A peer sending one endless line and a peer
- * sending endless short ones are the same peer here.</p>
+ * sending endless short ones are the same peer here — pinned by
+ * {@code RemoteLlmEngineResponseSizeBoundTest}'s
+ * {@code oneEndlessLineIsCutOffEvenThoughTheParserNeverSeesAChunk} and
+ * {@code endlessLinesCarryingNoContentAtAllAreStillCountedAgainstTheCeiling}, which are the
+ * two shapes a ceiling counted on the parser's accumulated text lets through.</p>
  *
  * <p>Closing this closes the underlying body, which is what cancels the exchange and stops the peer
  * — so the caller that reads through it must close it on the failure path too. Every caller does,

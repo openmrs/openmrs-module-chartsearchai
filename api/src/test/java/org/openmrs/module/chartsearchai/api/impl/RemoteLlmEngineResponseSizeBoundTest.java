@@ -63,9 +63,19 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * exception for the wrong reason (a truncated JSON body fails to parse). So every case about an
  * OVERSIZED peer asserts the peer's write total first. Of the positive controls only the
  * at-the-ceiling one asserts a write total, and it asserts EQUALITY, because the fixture has to
- * sit ON the boundary for that case to be about the boundary; the rest assert content. The flood handlers stop themselves at
+ * sit ON the boundary for that case to be about the boundary; the rest assert content. Every
+ * handler that repeats until the client stops reading stops itself at
  * {@link #SAFETY_LIMIT}, well above the ceiling, so an absent bound fails the assertion rather
  * than running until the JVM dies.
+ *
+ * <p><b>Two of the streaming cases are about WHERE the ceiling is counted</b>, not merely
+ * that there is one: a peer whose first line never ends
+ * ({@link #oneEndlessLineIsCutOffEvenThoughTheParserNeverSeesAChunk}) and a peer whose
+ * endless lines the parser discards unread
+ * ({@link #endlessLinesCarryingNoContentAtAllAreStillCountedAgainstTheCeiling}) are bounded
+ * only if the count is on the STREAM; both pass a ceiling on the parser's accumulated text
+ * that is no bound at all. That is the ticket's "per line, per chunk and cumulative" asked
+ * of the peer rather than of the counters. Each case's own javadoc says what it pins.
  *
  * <p>The composed {@code LlmInferenceService.search} path is deliberately not used: every existing
  * suite that drives it stubs the model out at {@code LlmProvider} — see
@@ -114,6 +124,13 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	private static final String COMPLETION_SUFFIX = "\"}}]}";
 
+	/**
+	 * The opening of one SSE content chunk, shared so that the endless-line peer below is
+	 * visibly {@link #floodStream}'s chunk minus the newline that ends it.
+	 */
+	private static final String SSE_CONTENT_PREFIX =
+			"data: {\"choices\":[{\"delta\":{\"content\":\"";
+
 	private HttpServer server;
 
 	private final AtomicLong written = new AtomicLong();
@@ -124,6 +141,8 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	public void startPeer() throws IOException {
 		server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
 		server.createContext("/flood-stream", this::floodStream);
+		server.createContext("/endless-line", this::endlessLine);
+		server.createContext("/endless-short-lines", this::endlessShortLines);
 		server.createContext("/flood-body", exchange -> floodBody(exchange, 200));
 		server.createContext("/flood-error", exchange -> floodBody(exchange, 500));
 		server.createContext("/ordinary-body", this::ordinaryBody);
@@ -150,6 +169,49 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 		assertWroteNoMoreThanTheCeiling("the streamed answer");
 		assertNotNull(raised, "a peer that never stops streaming must end the call, not the heap");
+		assertCeilingFailureIsReportable(raised);
+	}
+
+	/**
+	 * The shape the ticket names for its per-LINE counter: one {@code data:} line that never
+	 * ends. {@code /flood-stream} cannot stand in for it, because every chunk that peer sends is
+	 * newline-terminated and parses — so a ceiling expressed on the text the PARSER has
+	 * accumulated passes that case while leaving this one unbounded, and here nothing downstream
+	 * of {@code BufferedReader.readLine()} sees a byte until the line ends, which it never does.
+	 * What this pins is that the count is on the STREAM: the peer is cut off whether or not a
+	 * line ever completes.
+	 */
+	@Test
+	public void oneEndlessLineIsCutOffEvenThoughTheParserNeverSeesAChunk() {
+		pointEngineAt("/endless-line");
+
+		APIException raised = callAndCatch(() -> engine.inferStreaming("system", "user", 60,
+				token -> { }));
+
+		assertWroteNoMoreThanTheCeiling("the endless line");
+		assertNotNull(raised, "a peer whose first line never ends must end the call, not the heap");
+		assertCeilingFailureIsReportable(raised);
+	}
+
+	/**
+	 * The same invariant approached from the other side: endless SHORT lines, none of them a
+	 * {@code data:} line. The parser discards every one, so nothing it accumulates grows at all
+	 * — a ceiling on the assembled answer never counts a byte of this peer — while
+	 * {@code /flood-stream}, whose every line carries content, counts the same under either
+	 * ceiling and so cannot tell them apart. Counting on the stream counts these lines like any
+	 * others, which is what {@code BoundedResponseStream}'s class javadoc means by one endless
+	 * line and endless short ones being the same peer.
+	 */
+	@Test
+	public void endlessLinesCarryingNoContentAtAllAreStillCountedAgainstTheCeiling() {
+		pointEngineAt("/endless-short-lines");
+
+		APIException raised = callAndCatch(() -> engine.inferStreaming("system", "user", 60,
+				token -> { }));
+
+		assertWroteNoMoreThanTheCeiling("the run of short lines");
+		assertNotNull(raised,
+				"a peer sending lines the parser discards must still end the call, not the heap");
 		assertCeilingFailureIsReportable(raised);
 	}
 
@@ -406,9 +468,30 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	/** An SSE stream that never reaches {@code [DONE]} — one content chunk after another. */
 	private void floodStream(HttpExchange exchange) throws IOException {
-		byte[] chunk = ("data: {\"choices\":[{\"delta\":{\"content\":\""
-				+ "x".repeat(1024) + "\"}}]}\n\n").getBytes(StandardCharsets.UTF_8);
+		byte[] chunk = (SSE_CONTENT_PREFIX + "x".repeat(1024) + "\"}}]}\n\n")
+				.getBytes(StandardCharsets.UTF_8);
 		respond(exchange, 200, "text/event-stream", chunk);
+	}
+
+	/**
+	 * An SSE stream that opens a content chunk and then never emits the newline that would end
+	 * its line: {@link #SSE_CONTENT_PREFIX}, then filler, and no line ever completed.
+	 */
+	private void endlessLine(HttpExchange exchange) throws IOException {
+		byte[] opening = SSE_CONTENT_PREFIX.getBytes(StandardCharsets.UTF_8);
+		byte[] filler = "x".repeat(4096).getBytes(StandardCharsets.UTF_8);
+		respond(exchange, 200, "text/event-stream", opening, filler);
+	}
+
+	/**
+	 * An endless run of two-byte lines that are not {@code data:} lines, so the parser reads
+	 * each one and discards it. Written 4096 bytes at a time, the size {@link #floodBody}'s
+	 * filler uses: how much the peer puts in one write is its own business, and what reaches
+	 * {@code BufferedReader.readLine()} either way is a two-byte line.
+	 */
+	private void endlessShortLines(HttpExchange exchange) throws IOException {
+		respond(exchange, 200, "text/event-stream",
+				"a\n".repeat(2048).getBytes(StandardCharsets.UTF_8));
 	}
 
 	/** A single JSON body that never ends — a plausible completion envelope, then filler. */

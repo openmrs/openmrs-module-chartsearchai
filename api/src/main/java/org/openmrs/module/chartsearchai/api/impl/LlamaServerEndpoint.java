@@ -27,9 +27,11 @@ import org.slf4j.LoggerFactory;
  * {@link LocalLlmEngine} spawns: it owns the loopback URL for every endpoint the module calls and
  * the per-server-start secret that both sides of the channel share.
  *
- * <p><b>Why it exists (issue #445).</b> The engine previously assembled
- * {@code http://127.0.0.1:<port>/...} at five call sites and sent no credential, so the local
- * server accepted anything that could open a TCP connection to the port. On the rated topology —
+ * <p><b>Why it exists (issue #445).</b> The engine previously built its own {@link HttpRequest} at
+ * each of five call sites and sent no credential with any of them, so the local server accepted
+ * anything that could open a TCP connection to the port. A shared {@code getCompletionsUrl} helper
+ * already existed, which is the point: one place for the URL is not one place for the REQUEST, and
+ * it is the request that carries the credential. On the rated topology —
  * the {@code .omod} installed on an existing OpenMRS host — an unprivileged local OS user holds no
  * database or OpenMRS credential yet can reach that port, and could therefore run free inference
  * and call the {@code /slots} save/restore/erase endpoints on a patient's persisted KV cache. With
@@ -49,12 +51,16 @@ import org.slf4j.LoggerFactory;
  * Decision 103 for the measurement behind each of those claims.
  *
  * <p><b>A bearer token authenticates the CLIENT to the server and never the server to the
- * client.</b> {@link #rejectsUnauthenticatedCalls} and {@link #doesNotRefuseThisModulesKey} therefore
- * establish that the listener is enforcing THIS start's key — which catches a build that ignored
- * the environment variable — and not that the listener is the child the engine spawned. What ties
+ * client.</b> Between them {@link #rejectsUnauthenticatedCalls} and
+ * {@link #doesNotRefuseThisModulesKey} establish exactly this much: SOME credential is demanded on
+ * the route the chart travels, and ours was not actively refused. That is enough to catch a build
+ * that ignored the environment variable, which is what they are for. It is NOT "the listener is
+ * enforcing this start's key" — a listener that refuses unauthenticated calls and serves no
+ * {@code /props} passes both legs while accepting the key nowhere — and it is not "the listener is
+ * the child the engine spawned", which no bearer token can establish in this direction. What ties
  * readiness to the child is {@link LocalLlmEngine#requireLoopbackPortFree} plus the liveness
- * re-check in {@link LocalLlmEngine#requireHealthyListenerIsTheSpawnedChild}. Do not write these
- * two probes up as peer authentication.
+ * re-check in {@link LocalLlmEngine#requireListenerMayBeServed}. Do not write these two probes up
+ * as peer authentication.
  *
  * <p>One instance per server start, discarded with the process it was minted for, so a secret is
  * never reused across two children.
@@ -69,6 +75,13 @@ final class LlamaServerEndpoint {
 	 * overrides any value the JVM itself inherited.
 	 */
 	static final String API_KEY_ENV = "LLAMA_API_KEY";
+
+	/**
+	 * The host the child is told to bind and the host the engine dials — one spelling, because the
+	 * two must agree and nothing else couples them. Passed as {@code --host} by
+	 * {@link LocalLlmEngine#buildServerCommand} and used by {@link #baseUrl()} here.
+	 */
+	static final String LOOPBACK_HOST = "127.0.0.1";
 
 	/** How long each readiness probe may take. Both are loopback, and neither spends inference on
 	 *  a server that authenticates — the unauthenticated one is refused before its body is read,
@@ -169,9 +182,12 @@ final class LlamaServerEndpoint {
 	 * as the control — they are public by design and answer 200 with no credential.
 	 *
 	 * <p>Fails CLOSED: an I/O error or an interrupt reads as "not refused", because a probe that
-	 * could not establish the refusal has not established it.
+	 * could not establish the refusal has not established it. It returns the STATUS rather than a
+	 * boolean so the caller can say what it actually saw — a timeout ({@code -1}) and a served 200
+	 * are both refusals of the start, and telling an operator their server answered a chart request
+	 * unauthenticated when it never answered at all sends them after the wrong thing.
 	 */
-	boolean rejectsUnauthenticatedCalls(HttpClient client) {
+	int unauthenticatedProbeStatus(HttpClient client) {
 		HttpRequest probe = HttpRequest.newBuilder()
 				.uri(URI.create(completionsUrl()))
 				.timeout(PROBE_TIMEOUT)
@@ -179,7 +195,7 @@ final class LlamaServerEndpoint {
 				.POST(HttpRequest.BodyPublishers.ofString(PROBE_COMPLETION_BODY,
 						StandardCharsets.UTF_8))
 				.build();
-		return statusOf(client, probe, "unauthenticated-probe") == 401;
+		return statusOf(client, probe, "unauthenticated-probe");
 	}
 
 	/**
@@ -222,8 +238,13 @@ final class LlamaServerEndpoint {
 		}
 	}
 
+	/** {@code host:port}, for the operator-facing messages that name where the engine is looking. */
+	String authority() {
+		return LOOPBACK_HOST + ":" + port;
+	}
+
 	private String baseUrl() {
-		return "http://127.0.0.1:" + port;
+		return "http://" + authority();
 	}
 
 }

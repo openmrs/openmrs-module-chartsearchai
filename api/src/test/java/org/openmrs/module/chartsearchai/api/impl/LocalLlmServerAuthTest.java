@@ -66,28 +66,36 @@ public class LocalLlmServerAuthTest {
 
 	@Test
 	public void theSecretReachesTheChildInItsEnvironmentAndNeverOnItsCommandLine() {
-		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(18085);
-		ProcessBuilder builder = new ProcessBuilder("/bin/llama-server");
+		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(9999);
+		ProcessBuilder builder = new ProcessBuilder(LocalLlmEngine.buildServerCommand(
+				"/bin/llama-server", "/data/model.gguf", 9999, 32768, "/var/kvcache"));
 
 		endpoint.handOverTo(builder);
 		String secret = builder.environment().get(LlamaServerEndpoint.API_KEY_ENV);
 
 		assertTrue(secret != null && !secret.isEmpty(),
 				"the child must be handed a key in its environment: a process's environment is "
-				+ "readable only by its owner, so an unprivileged local user cannot learn it");
-		List<String> command = LocalLlmEngine.buildServerCommand(
-				"/bin/llama-server", "/data/model.gguf", 18085, 32768, "/var/kvcache");
-		for (String argument : command) {
+				+ "not exposed to another user the way an argument vector is, so an unprivileged "
+				+ "local user cannot learn it");
+
+		// The list that actually becomes the child's argv is the BUILDER's, not what
+		// buildServerCommand returned — a static that never receives the key and so could not
+		// leak it. Asserting on the builder is what makes a key argument added at the assembly
+		// point (the one regression that would re-publish the secret to ps) visible here.
+		for (String argument : builder.command()) {
 			assertFalse(argument.contains(secret),
-					"the key must never appear on the command line — an argument vector is "
-					+ "world-readable through ps, which would hand it to the very local "
-					+ "principal this change locks out; found in: " + argument);
+					"the key must never reach the child's argument vector, which is readable by "
+					+ "any local user through ps — that would hand it to the very principal this "
+					+ "change locks out; found in: " + argument);
 		}
+		assertFalse(String.join(" ", builder.command()).contains("--api-key"),
+				"no key argument may be assembled onto the command line at all: llama-server "
+				+ "reads " + LlamaServerEndpoint.API_KEY_ENV + " from the environment instead");
 	}
 
 	@Test
 	public void handingTheKeyOverOverwritesOneTheJvmInherited() {
-		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(18085);
+		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(9999);
 		ProcessBuilder builder = new ProcessBuilder("/bin/llama-server");
 		builder.environment().put(LlamaServerEndpoint.API_KEY_ENV, "inherited-from-the-jvm");
 
@@ -104,8 +112,8 @@ public class LocalLlmServerAuthTest {
 		ProcessBuilder first = new ProcessBuilder("/bin/llama-server");
 		ProcessBuilder second = new ProcessBuilder("/bin/llama-server");
 
-		LlamaServerEndpoint.open(18085).handOverTo(first);
-		LlamaServerEndpoint.open(18085).handOverTo(second);
+		LlamaServerEndpoint.open(9999).handOverTo(first);
+		LlamaServerEndpoint.open(9999).handOverTo(second);
 
 		assertNotEquals(first.environment().get(LlamaServerEndpoint.API_KEY_ENV),
 				second.environment().get(LlamaServerEndpoint.API_KEY_ENV),
@@ -118,7 +126,7 @@ public class LocalLlmServerAuthTest {
 	@Test
 	public void theServerCommandPinsTheBindToLoopback() {
 		List<String> cmd = LocalLlmEngine.buildServerCommand(
-				"/bin/llama-server", "/data/model.gguf", 18085, 32768);
+				"/bin/llama-server", "/data/model.gguf", 9999, 32768);
 
 		int idx = cmd.indexOf("--host");
 		assertTrue(idx >= 0, "--host must be explicit: --host also reads LLAMA_ARG_HOST from the "
@@ -131,12 +139,13 @@ public class LocalLlmServerAuthTest {
 	@Test
 	public void theServerCommandServesNoWebUi() {
 		List<String> cmd = LocalLlmEngine.buildServerCommand(
-				"/bin/llama-server", "/data/model.gguf", 18085, 32768);
+				"/bin/llama-server", "/data/model.gguf", 9999, 32768);
 
 		assertTrue(cmd.contains("--no-webui"),
 				"the Web UI is enabled by default and its root is served outside the API-key "
-				+ "middleware, so it is the one route on this port that answers an "
-				+ "unauthenticated caller; nothing in this module renders it");
+				+ "middleware; it is not the only route answering an unauthenticated caller "
+				+ "(/health and /v1/models are public by design) but it is the only one this "
+				+ "module can close and does not use");
 	}
 
 	// ---- every request carries the key ----
@@ -187,6 +196,23 @@ public class LocalLlmServerAuthTest {
 	}
 
 	@Test
+	public void aPortHeldByAWildcardBoundListenerAlsoFailsTheStart() throws IOException {
+		try (ServerSocket squatter = new ServerSocket()) {
+			squatter.setReuseAddress(true);
+			// Bound to ALL interfaces, which is how a daemon holding this port normally binds —
+			// and the shape a bind probe reports as FREE, because SO_REUSEADDR grants a
+			// specific-address bind over a wildcard holder.
+			squatter.bind(new InetSocketAddress("0.0.0.0", 0));
+			int squatted = squatter.getLocalPort();
+
+			assertThrows(APIException.class,
+					() -> LocalLlmEngine.requireLoopbackPortFree(squatted),
+					"a listener on the wildcard address holds this port for loopback traffic too, "
+					+ "so the start must be refused just as loudly as for a loopback-bound one");
+		}
+	}
+
+	@Test
 	public void aFreePortDoesNotFailTheStart() throws IOException {
 		int free;
 		try (ServerSocket probe = new ServerSocket()) {
@@ -201,13 +227,11 @@ public class LocalLlmServerAuthTest {
 	@Test
 	public void aPortLeftInTimeWaitByThePreviousChildDoesNotFailTheStart() throws IOException {
 		int recentlyClosed = portLeftInTimeWait();
-		Assumptions.assumeTrue(recentlyClosed > 0,
-				"could not leave a loopback port in TIME_WAIT on this host");
 
 		// The restart path (stopServer then startServer back to back) and the crash path (restart
-		// without stopServer at all) both leave the previous child's socket lingering. The check
-		// must be no stricter than the child's own bind, which sets SO_REUSEADDR too, or it
-		// refuses starts that would have succeeded.
+		// without stopServer at all) both leave the previous child's socket lingering. Nothing
+		// accepts a connection on it, so the start must proceed — a check that refused here would
+		// refuse the ordinary restart and blame the module's own dead child.
 		LocalLlmEngine.requireLoopbackPortFree(recentlyClosed);
 	}
 
@@ -223,7 +247,7 @@ public class LocalLlmServerAuthTest {
 	@Test
 	public void aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness() throws IOException {
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
-			LocalLlmEngine.requireHealthyListenerIsTheSpawnedChild(listener.endpoint(),
+			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(),
 					HttpClient.newHttpClient(), ProcessHandle.current()::isAlive);
 		}
 	}
@@ -234,7 +258,7 @@ public class LocalLlmServerAuthTest {
 
 		try (KeyDemandingListener listener = KeyDemandingListener.start()) {
 			APIException thrown = assertThrows(APIException.class,
-					() -> LocalLlmEngine.requireHealthyListenerIsTheSpawnedChild(
+					() -> LocalLlmEngine.requireListenerMayBeServed(
 							listener.endpoint(), HttpClient.newHttpClient(), exitedChild),
 					"a child that lost the bind race exits at once, so a healthy answer beside a "
 					+ "dead child is another process answering — it must fail the start rather "
@@ -247,16 +271,20 @@ public class LocalLlmServerAuthTest {
 	@Test
 	public void aListenerThatServesAnUnauthenticatedInferenceCallIsNotReadiness()
 			throws IOException {
-		try (PermissiveListener listener = PermissiveListener.start()) {
+		try (KeyDemandingListener listener = KeyDemandingListener.demandingNoKeyAtAll()) {
 			APIException thrown = assertThrows(APIException.class,
-					() -> LocalLlmEngine.requireHealthyListenerIsTheSpawnedChild(
+					() -> LocalLlmEngine.requireListenerMayBeServed(
 							listener.endpoint(), HttpClient.newHttpClient(),
 							ProcessHandle.current()::isAlive),
 					"a listener that answers an inference request with no credential is not "
 					+ "enforcing the key this module minted, so it would have taken the chart "
 					+ "from anyone — and there is no way to tell it from an impostor");
-			assertTrue(thrown.getMessage().contains("unauthenticated"),
-					"the failure must name what was not refused: " + thrown.getMessage());
+			assertTrue(thrown.getMessage().contains("no credential")
+					&& thrown.getMessage().contains("HTTP 200"),
+					"the failure must name what was not refused AND what the listener actually "
+					+ "answered — a timeout and a served 200 are both refusals of the start, and "
+					+ "telling an operator their server served a chart request when it never "
+					+ "answered sends them after the wrong thing: " + thrown.getMessage());
 		}
 	}
 
@@ -264,7 +292,7 @@ public class LocalLlmServerAuthTest {
 	public void aListenerThatRejectsThisModulesOwnKeyIsNotReadiness() throws IOException {
 		try (KeyDemandingListener listener = KeyDemandingListener.refusingEveryKey()) {
 			APIException thrown = assertThrows(APIException.class,
-					() -> LocalLlmEngine.requireHealthyListenerIsTheSpawnedChild(
+					() -> LocalLlmEngine.requireListenerMayBeServed(
 							listener.endpoint(), HttpClient.newHttpClient(),
 							ProcessHandle.current()::isAlive),
 					"a server that rejects this start's key must fail the start, not surface as a "
@@ -281,9 +309,24 @@ public class LocalLlmServerAuthTest {
 			// that route — must not fail the start. Requiring 200 there would refuse a build for
 			// something that says nothing about its authentication, and the unauthenticated leg
 			// still proves the key is in force.
-			LocalLlmEngine.requireHealthyListenerIsTheSpawnedChild(listener.endpoint(),
+			LocalLlmEngine.requireListenerMayBeServed(listener.endpoint(),
 					HttpClient.newHttpClient(), ProcessHandle.current()::isAlive);
 		}
+	}
+
+	@Test
+	public void aRefusedStartIsNotRelaunchedUntilItsCooldownElapses() {
+		long now = 1_000_000L;
+		long refusedUntil = now + 60_000L;
+
+		assertTrue(LocalLlmEngine.withinStartRefusalCooldown(refusedUntil, now),
+				"a refusal is only reached after a whole model load, so the next query must fail "
+				+ "fast rather than pay that load again to be refused for the same reason");
+		assertFalse(LocalLlmEngine.withinStartRefusalCooldown(refusedUntil, refusedUntil + 1),
+				"the memo is bounded, so fixing the binary does not also require restarting "
+				+ "OpenMRS");
+		assertFalse(LocalLlmEngine.withinStartRefusalCooldown(0L, now),
+				"nothing remembered must never block a start");
 	}
 
 	// ---- real listeners ----
@@ -322,8 +365,19 @@ public class LocalLlmServerAuthTest {
 			return start(false, true);
 		}
 
+		/** A listener that answers everything 200 with no credential — the shape of a naive
+		 *  impostor, and of a build that ignored {@link LlamaServerEndpoint#API_KEY_ENV}. */
+		static KeyDemandingListener demandingNoKeyAtAll() throws IOException {
+			return start(true, true, false);
+		}
+
 		private static KeyDemandingListener start(boolean acceptTheModulesKey, boolean servesProps)
 				throws IOException {
+			return start(acceptTheModulesKey, servesProps, true);
+		}
+
+		private static KeyDemandingListener start(boolean acceptTheModulesKey, boolean servesProps,
+				boolean demandsAKey) throws IOException {
 			HttpServer server = HttpServer.create(
 					new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
 			LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(server.getAddress().getPort());
@@ -331,7 +385,7 @@ public class LocalLlmServerAuthTest {
 			String expected = expectedBearer(endpoint);
 			server.createContext("/", exchange -> {
 				String presented = exchange.getRequestHeaders().getFirst("Authorization");
-				boolean keyed = acceptTheModulesKey && expected.equals(presented);
+				boolean keyed = !demandsAKey || (acceptTheModulesKey && expected.equals(presented));
 				if (keyed) {
 					listener.authorized.add(exchange.getRequestURI().getPath());
 				}
@@ -355,43 +409,6 @@ public class LocalLlmServerAuthTest {
 
 		int authorizedRequests() {
 			return authorized.size();
-		}
-
-		@Override
-		public void close() {
-			server.stop(0);
-		}
-	}
-
-	/**
-	 * A real loopback listener that answers everything 200 with no credential — the shape a naive
-	 * impostor takes, and the shape a {@code llama-server} build that ignored
-	 * {@link LlamaServerEndpoint#API_KEY_ENV} would also take.
-	 */
-	private static final class PermissiveListener implements AutoCloseable {
-
-		private final HttpServer server;
-
-		private final LlamaServerEndpoint endpoint;
-
-		private PermissiveListener(HttpServer server, LlamaServerEndpoint endpoint) {
-			this.server = server;
-			this.endpoint = endpoint;
-		}
-
-		static PermissiveListener start() throws IOException {
-			HttpServer server = HttpServer.create(
-					new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-			server.createContext("/", exchange -> respond(exchange, 200,
-					exchange.getRequestURI().getPath().equals("/health")
-							? "{\"status\":\"ok\"}" : "{}"));
-			server.start();
-			return new PermissiveListener(server,
-					LlamaServerEndpoint.open(server.getAddress().getPort()));
-		}
-
-		LlamaServerEndpoint endpoint() {
-			return endpoint;
 		}
 
 		@Override
@@ -452,27 +469,26 @@ public class LocalLlmServerAuthTest {
 	}
 
 	/**
-	 * A loopback port whose socket the OS is holding after a close — the state the previous
-	 * llama-server child leaves behind on the restart and crash paths. Produced by connecting to a
-	 * listener and closing the CLIENT side first, which puts the client's own local port into
-	 * {@code TIME_WAIT}. Returns -1 where the host does not leave one, so the caller can skip.
+	 * A loopback LISTENING port whose socket the OS is still holding after the listener closed —
+	 * the state the previous llama-server child leaves behind on the restart and crash paths.
+	 * Built the way a restart actually produces it: a connection is accepted ON that port and the
+	 * SERVER side is closed first, which is what puts the listening port's own socket into
+	 * {@code TIME_WAIT}. (Closing the CLIENT first instead leaves the client's ephemeral port in
+	 * TIME_WAIT, which is a different port and not the shape this check meets.)
 	 */
 	private static int portLeftInTimeWait() throws IOException {
+		int port;
 		try (ServerSocket acceptor = new ServerSocket()) {
 			acceptor.setReuseAddress(true);
 			acceptor.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+			port = acceptor.getLocalPort();
 			try (java.net.Socket client = new java.net.Socket()) {
-				client.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(),
-						acceptor.getLocalPort()));
-				int local = client.getLocalPort();
-				try (java.net.Socket accepted = acceptor.accept()) {
-					// The CLIENT side closes first, which is what puts its local port into
-					// TIME_WAIT; try-with-resources closes the accepted side after.
-					client.close();
-					return local;
-				}
+				client.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+				java.net.Socket accepted = acceptor.accept();
+				accepted.close();
 			}
 		}
+		return port;
 	}
 
 }

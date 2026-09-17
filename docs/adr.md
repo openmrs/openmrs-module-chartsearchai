@@ -4457,6 +4457,16 @@ production code. The savings on offer are overhead, not evidence.
 1173, 1192, 1347/1350, 1585) because every one had gone stale against a suite that held about 1596 `@Test` methods when this was written (2026-08-31). Where a measurement's force depends on a denominator, state the
 denominator *and* the date, here rather than in `CLAUDE.md`.
 
+**A cost recomputed from published rates, published beside the cost the system recorded**
+(displaced by #445's trim, which needed the root file's last bytes to name the nested
+`api/src/main/java/org/openmrs/module/chartsearchai/api/impl/CLAUDE.md`; the rule it illustrates
+stays in `CLAUDE.md`, shortened, pointing at #243). Measured 2026-09-02 against the pipeline's own
+transcripts: a cost derived from published per-token rates was printed beside the value the
+sessions themselves record, and the gap between the two was then stated as a share of the DERIVED
+base rather than of the recorded one — so the same error #243 records for the knowledge base had
+reached a measurement of the pipeline. Quote the figure the system already recorded; where a figure
+must be derived, say what produced it and what it is a share of.
+
 ## Decision 64: A finding states which of this patient's own orders each substance it names was resolved from
 
 **Status: Accepted** (September 2026) — implemented, issue [#349](https://github.com/openmrs/openmrs-module-chartsearchai/issues/349).
@@ -8155,9 +8165,11 @@ and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfigured
 (CWE-306, severity HIGH). It changes no prompt, no chip, no response key and no wire format.
 
 **Context.** `LocalLlmEngine` spawned `llama-server` with `--port` and `--slot-save-path` and no
-credential at all, then addressed it by port at five call sites — `postForResult`, `inferStreaming`,
-`warmup`, `slotAction` and the readiness poll — each assembling `http://127.0.0.1:<port>/...` for
-itself. Two consequences, and the topology decides which matters. In the Docker distro Tomcat and
+credential at all, then built its own request at five call sites — `postForResult`,
+`inferStreaming`, `warmup`, `slotAction` and the readiness poll. A shared `getCompletionsUrl`
+helper already existed and three of the five used it; the loopback address was spelled three times,
+not five. That distinction is the whole lesson: one place for the URL is not one place for the
+REQUEST, and the request is what carries a credential. Two consequences, and the topology decides which matters. In the Docker distro Tomcat and
 its child are alone in the backend container's namespace, so no distinct principal exists; on the
 standalone workstation the documented `admin/Admin123` on `localhost:8081` already holds the same
 data by a sanctioned path. The rated position is the `.omod` installed on an existing OpenMRS site,
@@ -8207,6 +8219,7 @@ one is present, so these are properties of *a* build and are re-checkable by the
 | 8 | does the probe cost inference? | no — the key middleware answers before the body is validated, so even an unauthenticated `POST` of `{}` is 401 rather than 400. The probe nonetheless sends a VALID one-token body carrying no patient text, so that a build validating in the other order is refused only for what it does with the credential |
 | 9 | does a lost bind race kill the child? | yes — launched onto an occupied port it exits 1 in ~0.06 s with `couldn't bind HTTP server socket`, before touching the model |
 | 10 | is an environment safer than an argument vector *on this OS*? | yes — `ps -E` listed 8 `KEY=VALUE` pairs for a process this user owns and none at all for a root-owned one, while `ps -o args=` shows any process's arguments |
+| 11 | does a bind probe answer "is this port occupied"? | no, in both directions. Against a live listener on the WILDCARD address a loopback bind with `SO_REUSEADDR` SUCCEEDED (the probe would call the port free); against a listening port left in `TIME_WAIT` a bind without it was REFUSED (the probe would refuse an ordinary restart). A `connect` was correct on all four shapes — free, loopback-bound, wildcard-bound, `TIME_WAIT` — which is why the check connects |
 
 **Why the environment and not a key file.** The three ways to hand `llama-server` a key are an
 argument, a file, and an environment variable. Row 2 rules out the argument: it would publish the
@@ -8238,14 +8251,33 @@ inside those 60 ms. The residue is that window, and the option that would close 
 narrow it is an unpredictable ephemeral port handed to the child, which is not taken here because
 `chartsearchai.llm.serverPort` is a documented, operator-configured contract.
 
-**Why `setReuseAddress(true)` on the probe.** The check must be no stricter than the child's own
-bind, which sets it. `ensureServerRunning` calls `stopServer` and `startServer` back to back on any
-model, context or KV-directory change, and the crash path restarts without `stopServer` at all, so a
-socket lingering from the previous child is the normal state on a restart rather than an oddity.
-With reuse off, the probe refused starts the child would have completed; with it on, a bind is still
-refused against a live listener, which is the only case the check exists to catch. Both halves are
-pinned: `LocalLlmServerAuthTest.aPortLeftInTimeWaitByThePreviousChildDoesNotFailTheStart` and
-`aPortAnotherProcessIsListeningOnFailsTheStartLoudly`.
+**Why the port check CONNECTS rather than binds, and how that was got wrong first.** The check's
+first form bound a probe socket with `SO_REUSEADDR` and read a refused bind as "occupied". Two
+review agents, working independently, measured that this answers a different question than the one
+the engine has — *can I bind here?* rather than *does traffic to the address I am about to dial
+reach somebody?* — and gets it wrong in both directions (row 11). It missed a listener bound to the
+WILDCARD address, which is how a daemon holding a port normally binds, so the commonest shape of
+conflict was reported as a free port; and its tolerance of the previous child's lingering socket
+rested on a platform-specific `SO_REUSEADDR` grant that the shipped test did not actually pin,
+because the fixture produced a client-side `TIME_WAIT` port rather than the listening-port shape a
+restart leaves.
+
+Connecting answers the engine's own question and disposes of both problems at once: a wildcard
+listener accepts the connection and is caught, and a socket in `TIME_WAIT` accepts nothing, so the
+restart path — `ensureServerRunning` calls `stopServer` and `startServer` back to back on any model,
+context or KV-directory change, and the crash path restarts without `stopServer` at all — needs no
+socket option to be tolerated, and the platform-dependent reasoning goes with it. Both shapes are
+pinned, and the wildcard test reddens if the bind form is restored:
+`LocalLlmServerAuthTest.aPortHeldByAWildcardBoundListenerAlsoFailsTheStart`,
+`aPortAnotherProcessIsListeningOnFailsTheStartLoudly`,
+`aPortLeftInTimeWaitByThePreviousChildDoesNotFailTheStart`.
+
+**Why a refused start is remembered.** A refusal cannot be reached before the child has answered
+`/health` — i.e. after a whole model load, row 7's territory — so retrying it per query spends that
+load again to learn nothing, and `PrewarmBootstrapService` drives one attempt per patient, which
+turns a sweep over a key-ignoring binary into one discarded model load per patient. The refusal is
+therefore remembered for `START_REFUSAL_COOLDOWN_SECONDS`, and bounded rather than permanent so
+that fixing the binary does not also require restarting OpenMRS.
 
 **Consequences.** An operator-supplied `llama-server` must support the environment key and enforce
 it; a build that does not now fails the start loudly rather than serving charts unauthenticated,

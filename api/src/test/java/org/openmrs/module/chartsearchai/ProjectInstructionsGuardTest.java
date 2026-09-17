@@ -182,9 +182,10 @@ public class ProjectInstructionsGuardTest {
 		Map<Path, Integer> m = new LinkedHashMap<>();
 		m.put(ROOT_INSTRUCTIONS, 25_000);
 		m.put(REFERENCE_INSTRUCTIONS, 76_000);
-		// The local-LLM subprocess rules (#445), set at the split a little under a tenth above what
-		// the file measured — room for a rule or two, not for a section, the principle above.
-		m.put(LOCAL_LLM_INSTRUCTIONS, 3_600);
+		// The local-LLM subprocess rules (#445). The principle above asks for headroom of roughly a
+		// tenth; a first draft of this entry said it had that and did not, so the number is now
+		// derived rather than asserted — read the file's size and add a tenth.
+		m.put(LOCAL_LLM_INSTRUCTIONS, 4_100);
 		return m;
 	}
 

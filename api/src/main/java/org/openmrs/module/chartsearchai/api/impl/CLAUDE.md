@@ -11,9 +11,11 @@ which is the root file's "Documenting a decision" rule.
   `completionsUrl`, `healthUrl`, `propsUrl`, `slotUrl`.
   **Nothing else may spell the loopback address or call `HttpRequest.newBuilder` for it** (#445).
   Before that class
-  five call sites assembled the URL each, which is why there was nowhere authentication could be
-  added once. An unauthenticated request is SILENT — no behavioural test notices one — so the rule
-  is pinned by reading the source. `RemoteLlmEngine` addresses the operator's own configured
+  five call sites each built their own request. A shared URL helper already existed, and that is
+  the point: one place for the URL is not one place for the REQUEST, and the request is what
+  carries the credential — so satisfying "do not spell the address" by adding another URL helper
+  while hand-rolling the builder is exactly the hole. An unauthenticated request is SILENT — no
+  behavioural test notices one — so the rule is pinned by reading the source. `RemoteLlmEngine` addresses the operator's own configured
   endpoint and this rule says nothing about it.
   → ADR Decision 103; `ArchitectureGuardTest.everyLocalServerRequestCarriesTheModulesKey`,
   `theLocalServerAddressIsSpelledInOnePlace`.
@@ -25,16 +27,18 @@ which is the root file's "Documenting a decision" rule.
   → ADR Decision 103, rows 2 and 3.
 - **A listener answering `/health` is not the server until readiness says so.**
   `LocalLlmEngine.requireLoopbackPortFree` runs before the child is launched and
-  `requireHealthyListenerIsTheSpawnedChild` after the health reply; the three questions the second
+  `requireListenerMayBeServed` after the health reply; the three questions the second
   asks each have their own reason, given in its javadoc.
   **Only those two tie readiness to the child.**
-  The key probes establish that the key is in force, and a bearer token authenticates the
-  CLIENT to the server and never the server to the client, so do not write either probe up as peer
-  authentication — here, in a decision, or in a comment.
+  The key probes establish only that SOME credential is demanded on the route the chart travels
+  and that ours was not refused — not that this start's key is in force, and not peer identity,
+  which no bearer token can give in that direction. Do not write either probe up as more than
+  that, here, in a decision, or in a comment.
   → ADR Decision 103; `LocalLlmServerAuthTest`.
 - **`--host 127.0.0.1` and `--no-webui` are load-bearing, not tidiness.** The first stops an
-  inherited `LLAMA_ARG_HOST` widening the bind; the second closes the one route on the port that
-  answers an unauthenticated caller.
+  inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root. That is not
+  the only route answering an unauthenticated caller — `/health` and `/v1/models` are public by
+  design and readiness depends on it — it is the only one this module can close and does not use.
   → ADR Decision 103, rows 4 and 6; `LocalLlmServerAuthTest`.
 
 ## Its opt-in test suites

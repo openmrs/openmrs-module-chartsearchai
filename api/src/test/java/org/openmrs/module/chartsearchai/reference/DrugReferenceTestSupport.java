@@ -1721,6 +1721,17 @@ public final class DrugReferenceTestSupport {
 	 * out twice, and a shared filter cannot drift into two answers about which chips a case is
 	 * counting.
 	 */
+	static List<String> chipLeads(List<SafetyWarning> warnings) {
+		List<String> leads = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			String detail = warning.getDetail();
+			int dash = detail.indexOf(" — ");
+			leads.add(warning.getType() + " | " + warning.getSeverity() + " | "
+					+ (dash < 0 ? detail : detail.substring(0, dash)));
+		}
+		return leads;
+	}
+
 	/**
 	 * @return the canonical prescribing question naming the first {@code count} of {@code drugs} —
 	 *         {@code "Can I give her X and Y?"}.
@@ -1740,17 +1751,6 @@ public final class DrugReferenceTestSupport {
 			question.append(drugs.get(i));
 		}
 		return question.append("?").toString();
-	}
-
-	static List<String> chipLeads(List<SafetyWarning> warnings) {
-		List<String> leads = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			String detail = warning.getDetail();
-			int dash = detail.indexOf(" — ");
-			leads.add(warning.getType() + " | " + warning.getSeverity() + " | "
-					+ (dash < 0 ? detail : detail.substring(0, dash)));
-		}
-		return leads;
 	}
 
 	/**

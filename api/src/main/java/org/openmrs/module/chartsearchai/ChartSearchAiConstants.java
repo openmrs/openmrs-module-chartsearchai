@@ -123,10 +123,17 @@ public class ChartSearchAiConstants {
 	/**
 	 * Written when an answer states no mode. The column is {@code not-null}, so something must be
 	 * written; it is deliberately none of the three real modes, because a row that silently claims a
-	 * mode nobody resolved is the defect #178 fixed rather than a tidier version of it. Unreachable
-	 * from the in-tree pipeline, which labels every answer it builds — it exists for an alternative
-	 * {@code ChartSearchService}, and mirrors {@code QueryStoreChartBuilder.MODE_UNKNOWN}, which
-	 * buckets the dispatch it cannot honestly label the same way.
+	 * mode nobody resolved is the defect #178 fixed rather than a tidier version of it. It also serves
+	 * an alternative {@code ChartSearchService}, and mirrors {@code QueryStoreChartBuilder.MODE_UNKNOWN},
+	 * which buckets the dispatch it cannot honestly label the same way.
+	 *
+	 * <p><b>Reachable from the in-tree pipeline since issue #450</b>, where this javadoc said it was
+	 * not: a streaming query whose stream ended before the pipeline surfaced an answer is audited from
+	 * the answer text alone, and no answer means no mode. On an install whose service is this module's
+	 * own, that is what the value means on a row — "this query did not finish" rather than a fourth
+	 * chart-assembly mode; README's audit-log section says so to a client, and ADR Decision 105 is
+	 * canonical for when it is written. On an install running the alternative service above, it keeps
+	 * the older meaning, and nothing on the row tells the two apart.
 	 */
 	public static final String SEARCH_MODE_UNKNOWN = "unknown";
 

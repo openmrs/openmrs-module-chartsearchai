@@ -1285,8 +1285,13 @@ public class ArchitectureGuardTest {
 	 * answer was built through a constructor that CANNOT state one.
 	 *
 	 * <p><b>The rest of the residue, named rather than claimed away.</b> It reads api's output only, because omod
-	 * is not compiled when api's tests run — no {@code omod/src/main} class constructs an answer
-	 * today, and one that did would be invisible here. It excludes {@code ChartAnswer} itself, whose
+	 * is not compiled when api's tests run, so an {@code omod/src/main} class that built an answer
+	 * would be invisible here. Since issue #450 exactly one does:
+	 * {@code ChartSearchAiRestController.auditStreamedQueryIfUnrecorded} builds a stand-in answer for
+	 * a stream that ended before the pipeline surfaced one, through the two-arg constructor and so
+	 * with no coverage stated. It reaches nothing but that class's own {@code saveAuditLog}, which
+	 * reads the answer text, the references, the slice, the mode and the token counts and never the
+	 * coverage — so this is a gap in the guard's REACH and not in the rule. It excludes {@code ChartAnswer} itself, whose
 	 * telescoping constructors legitimately name every arity. And a class that builds an answer
 	 * through a factory rather than a constructor is outside it, and so is one built REFLECTIVELY —
 	 * {@code ChartAnswer.class.getConstructor(...).newInstance(...)} names no descriptor in the

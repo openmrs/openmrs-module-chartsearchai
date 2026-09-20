@@ -112,6 +112,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 104: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound](#decision-104-the-pairwise-arms-resolve-their-rule-join-once-per-pass-and-the-chip-cap-is-still-not-the-bound)
 - [Decision 105: A streaming query that reached inference is audited however the stream ends](#decision-105-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends)
 - [Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
+- [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -4460,6 +4461,16 @@ production code. The savings on offer are overhead, not evidence.
 **A note on suite-size denominators.** The trimmed file drops the quoted totals (1058, 1171,
 1173, 1192, 1347/1350, 1585) because every one had gone stale against a suite that held about 1596 `@Test` methods when this was written (2026-08-31). Where a measurement's force depends on a denominator, state the
 denominator *and* the date, here rather than in `CLAUDE.md`.
+
+**A cost recomputed from published rates, published beside the cost the system recorded**
+(displaced by #445's trim, which needed the root file's last bytes to name the nested
+`api/src/main/java/org/openmrs/module/chartsearchai/api/impl/CLAUDE.md`; the rule it illustrates
+stays in `CLAUDE.md`, shortened, pointing at #243). Measured 2026-09-02 against the pipeline's own
+transcripts: a cost derived from published per-token rates was printed beside the value the
+sessions themselves record, and the gap between the two was then stated as a share of the DERIVED
+base rather than of the recorded one — so the same error #243 records for the knowledge base had
+reached a measurement of the pipeline. Quote the figure the system already recorded; where a figure
+must be derived, say what produced it and what it is a share of.
 
 ## Decision 64: A finding states which of this patient's own orders each substance it names was resolved from
 
@@ -8959,3 +8970,205 @@ channel that can see what the ledger and `gp_set_if_blank` compose to.
 `EntrypointVolumeVerificationTest` runs the weights fetch the same way, with the target already on
 the volume, which is where "a file already there is verified rather than trusted for its name" now
 lives.
+
+## Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#445](https://github.com/openmrs/openmrs-module-chartsearchai/issues/445), a security-scan finding
+(CWE-306, severity HIGH). It changes no prompt, no chip, no response key and no wire format.
+
+**Context.** `LocalLlmEngine` spawned `llama-server` with `--port` and `--slot-save-path` and no
+credential at all, then built its own request at five call sites — `postForResult`,
+`inferStreaming`, `warmup`, `slotAction` and the readiness poll. A shared `getCompletionsUrl`
+helper already existed and three of the five used it; the loopback address was spelled three times,
+not five. That distinction is the whole lesson: one place for the URL is not one place for the
+REQUEST, and the request is what carries a credential. Two consequences, and the topology decides which matters. In the Docker distro Tomcat and
+its child are alone in the backend container's namespace, so no distinct principal exists; on the
+standalone workstation the documented `admin/Admin123` on `localhost:8081` already holds the same
+data by a sanctioned path. The rated position is the `.omod` installed on an existing OpenMRS site,
+where an unprivileged local OS user or a co-located compromised service holds no database or
+OpenMRS credential and yet could reach the port.
+
+First, *while the server ran*, that principal could run free inference and call
+`/slots/0?action=save|restore|erase` — the endpoints this module's own KV persistence depends on —
+against a patient's `<uuid>-<sha256>.bin` entry. Second, and worse, *while it did not*: the server
+starts lazily on the first query and unloads after `chartsearchai.llm.idleTimeoutMinutes`, so the
+port is unbound at Tomcat boot and after every idle period. A process that bound it then, and
+answered `{"status":"ok"}` on `/health`, was ADOPTED — `waitForServerReady` accepted any 200 from
+whoever replied and checked the child's liveness only *before* the probe — and thereafter received
+the system prompt and the serialized chart of every patient queried, returning whatever answer it
+liked for the pipeline to render to a clinician.
+
+**Decision.** The secret, and the readiness proof, are separate mechanisms for separate halves of
+the finding, and neither substitutes for the other.
+
+`LlamaServerEndpoint` is the one place that addresses and authenticates the server: it mints a
+256-bit `SecureRandom` secret per server start, owns the URL for every route the module calls, and
+is the only thing that builds a request to it.
+`ArchitectureGuardTest.everyLocalServerRequestCarriesTheModulesKey` and
+`theLocalServerAddressIsSpelledInOnePlace` are what keep a sixth call site from being hand-rolled
+beside the five — an unauthenticated request is silent, so no behavioural test would notice it.
+
+Readiness now requires, after a healthy `/health`, that the child is *still alive*, that an
+*unauthenticated* inference call is *refused*, that this start's key is *not refused* — the
+weaker of the two, deliberately, because a build that does not serve the route the second leg asks
+answers 404, which says nothing about the key — and, last, that the child is *still alive once its
+bind attempt has been decided*, `CHILD_BIND_SETTLE_MS` after the start began. That fourth leg is
+the one that ties the listener to the child, and the residue section below is where the arithmetic
+of it sits. And `requireLoopbackPortFree` refuses to launch onto a port something already holds, so
+the no-race path — bind while the port is free — fails loudly instead of being adopted.
+
+**What was measured, on the bundled binary (it reports `version: 1 (4eac5b4)`; the natives module
+pins no llama.cpp version, and `LlamaServerBinary.resolve` reuses an operator-supplied binary where
+one is present, so these are properties of *a* build and are re-checkable by the same probes).**
+
+| # | question | measured |
+|---|---|---|
+| 1 | is a key enforced? | `POST /v1/chat/completions` and `POST /slots/0?action=save`: 401 with no bearer, 401 with a wrong bearer, 200 with the right one |
+| 2 | may the key go on the command line? | no — an argument vector is world-readable; with the key supplied out of band, `ps -ww -o args=` on the child contains no occurrence of it |
+| 3 | does the environment work? | yes — `LLAMA_API_KEY` alone, with no `--api-key`/`--api-key-file` argument, gives exactly row 1's behaviour |
+| 4 | does `--host` beat the inherited environment? | yes — `--host 127.0.0.1` with `LLAMA_ARG_HOST=0.0.0.0` set: `lsof` showed the listener on `127.0.0.1` |
+| 5 | which routes are public? | `/health` and `/v1/models` answer 200 with no credential; `/props` and `GET /slots` answer 401 |
+| 6 | is the Web UI a surface? | yes — at its default, `GET /` answers 200 with no credential; hence `--no-webui` |
+| 7 | how long is the bind window? | a prober attempting `bind` every 5 ms first failed **0.138 s** after exec, launching an 8.0 GB model at `-c 32768`; the port is taken long before the model is loaded |
+| 8 | does the probe cost inference? | no — the key middleware answers before the body is validated, so even an unauthenticated `POST` of `{}` is 401 rather than 400. The probe nonetheless sends a VALID one-token body carrying no patient text, so that a build validating in the other order is refused only for what it does with the credential |
+| 9 | does a lost bind race kill the child? | yes — launched onto an occupied port it exits 1 in ~0.06 s, before touching the model. It says `couldn't bind HTTP server socket` **only when `--log-disable` is absent**; the launch always passes that flag, so what the module can actually read is the exit code. Measured with the no-flag run as its own control |
+| 10 | is an environment safer than an argument vector *on this OS*? | yes — `ps -E` listed 8 `KEY=VALUE` pairs for a process this user owns and none at all for a root-owned one, while `ps -o args=` shows any process's arguments |
+| 11 | does a bind probe answer "is this port occupied"? | no, in both directions. Against a live listener on the WILDCARD address a loopback bind with `SO_REUSEADDR` SUCCEEDED (the probe would call the port free); against a listening port left in `TIME_WAIT` a bind without it was REFUSED (the probe would refuse an ordinary restart). A `connect` was correct on all four shapes — free, loopback-bound, wildcard-bound, `TIME_WAIT` — which is why the check connects |
+| 12 | which failures does the child announce past `--log-disable`? | of the three shapes driven, only an unrecognised ARGUMENT: `error: invalid argument: …` is printed directly and survives the flag, while a failed bind and a missing model file go through the log system and are suppressed, leaving the backend's startup banner. Not a claim about every failure — three were measured. Which is why the startup-failure message quotes the child at all (that argument shape is what #445's two new flags can provoke) and why the message says outright that the lines may be the banner rather than the cause |
+| 12b | may this module's traffic to its own subprocess be proxied? | no, and it was: with `http.proxyHost` set and `http.nonProxyHosts` emptied, the production `/health` request reached the PROXY rather than the server, carrying `Authorization: Bearer <this start's secret>` — with a no-proxy control in the same run showing it reaching the server and the proxy seeing nothing. And it needs no unusual deployment: the stock default selector does exclude loopback, so the property route requires a deployment that empties `http.nonProxyHosts` — but a second configuration was measured to need no property at all, `ProxySelector.setDefault` installed in-process, which any co-deployed library, servlet filter or APM agent in the same JVM can do — with an ordering qualifier that is part of the claim: a client built with no `.proxy(...)` captures `ProxySelector.getDefault()` at CONSTRUCTION, so a selector installed before the first inference builds the cached client is consulted and one installed after it is not. Measured on JDK 21.0.6 by a three-case probe counting `select` calls against a real loopback listener — selector installed before the build, 1 call even after the default is restored; installed after the build, 0; the production no-proxy shape, 0. The conclusion is unaffected, an agent installed at JVM start preceding the first inference either way. Both were closed in all four configurations tried, and the client and the port probe are pinned to no-proxy unconditionally: there is no deployment in which a loopback subprocess should be reached through one |
+| 13 | is `InetAddress.getLoopbackAddress()` the address the engine dials? | not always — under `-Djava.net.preferIPv6Addresses` it is `::1`, and a probe of it reported a real listener on `127.0.0.1` as free while reporting a `::1` listener that can never receive the chart as a conflict. The check resolves `LOOPBACK_HOST` instead, and the tests spell that address independently of the code under test |
+
+**Why the environment and not a key file.** The three ways to hand `llama-server` a key are an
+argument, a file, and an environment variable. Row 2 rules out the argument: it would publish the
+secret to the very principal the change exists to lock out. The file form works (and is readable
+once, at parse time, so it could be deleted after startup), but row 3 shows the environment gives
+the same enforcement with the same protection class — row 10, an environment is not exposed to
+another user the way an argument vector is — while deleting a whole lifecycle: a directory that must exist and be writable, a POSIX
+`chmod` with a non-POSIX fallback, a decision about what to do when neither can restrict the file,
+and a delete on every failure path. The simpler mechanism was taken because it is not weaker, not
+because it is simpler.
+
+**Why the unauthenticated probe is on the completions route, and what it does NOT prove.** A bearer
+token authenticates the CLIENT to the server and never the server to the client: the probe hands
+the secret to whatever is on the port, so a hostile listener can answer 401 unauthenticated and 200
+keyed and pass both legs at will. What the negative control catches is a *build that ignored the
+environment variable* — the case where this module would go on shipping charts to an unauthenticated
+server with nothing saying so. It asks `/v1/chat/completions` rather than a cheaper protected route
+(row 5 offers `/props`, which the authenticated leg uses) because that is the route the chart
+travels on: a future build that reclassified it as public is exactly one whose reclassification
+matters, so failing the start there reports the thing worth failing over. Rows 5 and 8 are why the
+control is possible at all, and row 8 is why it is free.
+
+**What ties readiness to the child, and the residue.** The port check and the liveness asked after
+the child's bind window, and nothing else. Row 7 sizes that window: the check returns and the child
+binds ~0.138 s later, so an impostor has to win those milliseconds rather than simply arrive while
+the port is free — and then has to survive the leg below, which asks the child about it.
+(The check connects rather than binding, so it never holds the port against the child — the
+"probe socket closes" phrasing belonged to the bind form this decision replaced. Only a
+`ConnectException` reads as a free port; a resolution failure, or a timeout against a listener that
+accepts nothing, establishes no refusal and refuses the start instead. That last shape — a saturated
+accept backlog — is the one reachable on a healthy host, so it is what
+`LocalLlmServerAuthTest.aPortHeldByAListenerThatAcceptsNothingFailsTheStart` drives the branch
+through, saturating the queue rather than assuming `listen(1)` admits one connection: Linux compares
+`sk_ack_backlog > sk_max_ack_backlog` and admits backlog+1, and a review round measured that a
+one-filler fixture flips onto the wrong branch. An earlier form of this decision claimed a flag set inside the `try` made every
+non-`ConnectException` case refuse the start, and a review round proved from the bytecode that the
+`catch` reassigned that flag, so every one of those cases still read as "free". A later form added "a failed close" to the list, which a second
+round measured wrong in the ordering that matters: when the connect is refused and the close then
+fails, the `ConnectException` handler wins and the close failure is suppressed — the right answer,
+since the port is free, but not that branch.) Row 9 is what closes that window rather than narrowing it: a process that wins the bind kills the
+child, which exits in ~0.06 s, so the child's own liveness answers the question a bearer token
+cannot — a child alive once its bind attempt has been decided HOLDS the port, and only one process
+can hold it, so the listener that answered is that child.
+
+A first form of this leg read liveness at the first healthy `/health` reply and claimed exactly
+that, and a review round measured it backwards. `waitForServerReady` polls with no initial sleep, so
+the first reply lands a few milliseconds after `pb.start()` — inside the 0.138 s of row 7, while the
+doomed child is alive and has not yet tried for the port. An impostor answering `{"status":"ok"}`,
+401 unauthenticated and 200 to any bearer therefore passed all three legs in the steady state, and
+was handed the prompt and the chart; only a run slow enough to outlast the child's whole
+bind-and-die — the cold first start — refused it. The written record was worse than the code. The
+PR body called the window one in which the *start fails* rather than one in which a foreign
+listener is *served* — once per port-free window, repeatable on every relaunch. This section put
+the two windows in the wrong order instead, allowing that the re-check might run inside row 9's
+60 ms exit: it ran inside the PRE-BIND window of row 7, which comes first and lasts longer, so the
+exit window was never reached.
+
+So the leg is now asked LAST and not before `CHILD_BIND_SETTLE_MS` has passed since readiness began
+(≈ `pb.start()`, one thread construction earlier): 0.5 s, about two and a half times row 7's bind
+plus row 9's exit. It is counted from the launch rather than from the reply, which is what keeps it
+off the ordinary start path — `/health` answers `ok` only once the model is loaded, seconds later,
+by which point the window has passed and nothing is spent. Measured by
+`LocalLlmServerAuthTest.aHealthyReplyLongAfterTheBindWindowIsAdoptedWithoutWaitingFurther`, which
+is where that figure comes from: 2 ms for the gate's two warm loopback probes and no wait. The
+alternative considered — sleeping past the bind latency before the FIRST poll — was not taken: it
+delays every poll on the grid including the report an ordinary failure reaches first, and it still
+accepts the first healthy reply, so nothing observes the child a second time.
+
+Two residues, named rather than claimed away. The leg rests on the child being DEAD by the end of
+the window, so a host on which the bind outcome is not decided inside it — exec stalled under I/O
+contention past half a second — leaves the old adoption available; and an operator-supplied build
+that logs a failed bind and keeps running is not covered at all, row 9 being a property of the
+bundled one. The option that would close both rather than bound them is an unpredictable ephemeral
+port handed to the child, which is not taken here because `chartsearchai.llm.serverPort` is a
+documented, operator-configured contract. And the positive control stands: a listener that demands
+the key beside a child that holds the port is accepted without being identified, which is all this
+design can ask — `LocalLlmServerAuthTest.aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness`
+is that case, and `aHealthyReplyInsideTheChildsBindWindowIsRefusedRatherThanAdopted` is the one the
+fourth leg refuses.
+
+**Why the port check CONNECTS rather than binds, and how that was got wrong first.** The check's
+first form bound a probe socket with `SO_REUSEADDR` and read a refused bind as "occupied". Two
+review agents, working independently, measured that this answers a different question than the one
+the engine has — *can I bind here?* rather than *does traffic to the address I am about to dial
+reach somebody?* — and gets it wrong in both directions (row 11). It missed a listener bound to the
+WILDCARD address, which is how a daemon holding a port normally binds, so the commonest shape of
+conflict was reported as a free port; and its tolerance of the previous child's lingering socket
+rested on a platform-specific `SO_REUSEADDR` grant that the shipped test did not actually pin,
+because the fixture produced a client-side `TIME_WAIT` port rather than the listening-port shape a
+restart leaves.
+
+Connecting answers the engine's own question and disposes of both problems at once: a wildcard
+listener accepts the connection and is caught, and a socket in `TIME_WAIT` accepts nothing, so the
+restart path — `ensureServerRunning` calls `stopServer` and `startServer` back to back on any model,
+context or KV-directory change, and the crash path restarts without `stopServer` at all — needs no
+socket option to be tolerated, and the platform-dependent reasoning goes with it. Both shapes are
+pinned, and the wildcard test reddens if the bind form is restored:
+`LocalLlmServerAuthTest.aPortHeldByAWildcardBoundListenerAlsoFailsTheStart`,
+`aPortAnotherProcessIsListeningOnFailsTheStartLoudly`,
+`aPortLeftInTimeWaitByThePreviousChildDoesNotFailTheStart`.
+
+**What a PERSISTENT refusal costs, and why nothing here memoizes it.** Two refusals cost very
+different things, and conflating them is easy. The PORT check refuses before the child is launched
+and costs ~107 µs, so repeating it per query is free. The READINESS gate is only reachable after the
+child has answered `/health`, i.e. after a whole model load — so a build that starts and then fails
+that gate, an operator-supplied binary ignoring `LLAMA_API_KEY` being the case, is re-launched and
+re-refused on every query. `PrewarmBootstrapService.runSweep` catches per patient and walks the
+whole table, so the sweep pays a discarded load **per patient**, plus up to `stopServer`'s teardown,
+with the engine monitor held throughout — hours for a table of any size, during which every
+clinician query queues behind the patient in flight and then pays its own. A review round built a bounded per-process memo for this and it
+was reverted, for two reasons worth recording rather than rediscovering. It could not be pinned:
+deleting both the memo and the gate that consulted it left the whole suite green, because the only
+thing testable without a subprocess is the cooldown predicate, not that `ensureServerRunning`
+consults it. And it did not deliver the claim made for it — measured against this repo's own
+throttle (`DEFAULT_PREWARM_THROTTLE_MS`) and chart-build costs, a 60-second window covers on the
+order of 60–110 patients, so a sweep would still pay one discarded load per minute of sweeping
+rather than one in total.
+
+The condition is global, so the remedy belongs where the sweep is, not where the engine is:
+`runSweep` already has a `cancelRequested` flag it uses to abandon a sweep mid-way, and a start
+refusal is exactly the kind of thing it should abandon on. That is left undone deliberately and is
+not part of #445 — what #445 owes is that the module refuse such a build rather than serve charts
+to it, which it does, loudly, every time.
+
+**Consequences.** An operator-supplied `llama-server` must support the environment key and enforce
+it; a build that does not now fails the start loudly rather than serving charts unauthenticated,
+which is the direction this decision chooses deliberately, and README says so beside the
+operator-binary instructions. The opt-in LLM suites reach a server the tester started, not one this
+module spawned — the module neither logs the per-start secret nor writes it down, and row 10 is
+about OTHER local users rather than about the account OpenMRS runs as, which can read its own
+child's environment — so
+`LlmEndpointTestSupport.isReachable` now asks the completions route rather than only `/health`
+(public, per row 5), which turns what would have been a 401 error per case into a clean skip, and
+`chartsearchai.test.llm.apiKey` points those suites at a keyed server of the tester's own.

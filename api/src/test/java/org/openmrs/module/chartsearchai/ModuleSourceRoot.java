@@ -14,7 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Locates the {@code api} module root for the structural guards — the tests that read production
+ * Locates a module root for the structural guards — the tests that read production
  * SOURCE rather than production behaviour, because what they pin cannot be observed at runtime.
  *
  * <p>Extracted when {@code EndedOrderAnswerRuleTest} became the THIRD class to need this walk, the
@@ -38,20 +38,6 @@ public final class ModuleSourceRoot {
 	private ModuleSourceRoot() {
 	}
 
-	/**
-	 * The {@code api} module root: the working directory when surefire set it to the module (the
-	 * normal case), else the nearest ancestor that looks like the module, else {@code api/} beneath
-	 * one. Falls back to the working directory rather than returning null.
-	 *
-	 * <p><strong>That fallback is not a safety net, and the callers differ in whether they can
-	 * tell.</strong> A caller that resolves a NAMED file under this root and asserts it exists
-	 * fails loudly on a wrong answer. A caller that WALKS the root does not: it scans nothing, or
-	 * the wrong tree, and reports no violations. Measured — forcing this method to an unrelated
-	 * directory USED TO leave {@code ArchitectureGuardTest} entirely green while the two
-	 * file-resolving callers went red. It no longer does: that class asserts its own scan is
-	 * non-empty and found a file it expects, and the same mutation now reddens it. A new WALKING
-	 * caller owes itself the same check, because nothing here can give it one.
-	 */
 	/**
 	 * @return the repository root — the directory holding {@code CLAUDE.md}, the project
 	 *         instructions, and {@code docs/}. Resolved by walking up from the working
@@ -78,6 +64,20 @@ public final class ModuleSourceRoot {
 						+ "walking up from " + Paths.get("").toAbsolutePath());
 	}
 
+	/**
+	 * The {@code api} module root: the working directory when surefire set it to the module (the
+	 * normal case), else the nearest ancestor that looks like the module, else {@code api/} beneath
+	 * one. Falls back to the working directory rather than returning null.
+	 *
+	 * <p><strong>That fallback is not a safety net, and the callers differ in whether they can
+	 * tell.</strong> A caller that resolves a NAMED file under this root and asserts it exists
+	 * fails loudly on a wrong answer. A caller that WALKS the root does not: it scans nothing, or
+	 * the wrong tree, and reports no violations. Measured — forcing this method to an unrelated
+	 * directory USED TO leave {@code ArchitectureGuardTest} entirely green while the two
+	 * file-resolving callers went red. It no longer does: that class asserts its own scan is
+	 * non-empty and found a file it expects, and the same mutation now reddens it. A new WALKING
+	 * caller owes itself the same check, because nothing here can give it one.
+	 */
 	public static Path apiRoot() {
 		Path current = Paths.get("").toAbsolutePath();
 		while (current != null) {
@@ -92,5 +92,22 @@ public final class ModuleSourceRoot {
 			current = current.getParent();
 		}
 		return Paths.get("").toAbsolutePath();
+	}
+
+	/**
+	 * The {@code omod} module root, for a guard whose rule binds both modules.
+	 *
+	 * <p><strong>Unlike {@link #apiRoot} it throws rather than falling back</strong>, which that
+	 * method's javadoc explains is what a WALKING caller needs: a root that silently answers the
+	 * working directory hands a walking guard an empty or wrong tree and the guard then reports no
+	 * violations. It is resolved from {@link #repoRoot}, which throws for the same reason.
+	 */
+	public static Path omodRoot() {
+		Path omod = repoRoot().resolve("omod");
+		if (!Files.isDirectory(omod.resolve("src/main/java"))) {
+			throw new IllegalStateException(
+					"Could not locate the omod module (expected src/main/java beneath " + omod + ")");
+		}
+		return omod;
 	}
 }

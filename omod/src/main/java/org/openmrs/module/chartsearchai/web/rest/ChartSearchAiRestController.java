@@ -887,7 +887,7 @@ public class ChartSearchAiRestController {
 	 * unaudited, because nothing was disclosed and that traffic is the only signal the REST layer
 	 * has. Which failures that does and does not cover, what the row states where the pipeline never
 	 * surfaced an answer, what it costs, and the pre-persist alternative that was not taken and what
-	 * taking it would cost: ADR Decision 103, which is canonical for all of it.
+	 * taking it would cost: ADR Decision 105, which is canonical for all of it.
 	 *
 	 * @param state what this request's consumers recorded as the stream ran
 	 */

@@ -131,7 +131,7 @@ public class ChartSearchAiConstants {
 	 * not: a streaming query whose stream ended before the pipeline surfaced an answer is audited from
 	 * the answer text alone, and no answer means no mode. On an install whose service is this module's
 	 * own, that is what the value means on a row — "this query did not finish" rather than a fourth
-	 * chart-assembly mode; README's audit-log section says so to a client, and ADR Decision 103 is
+	 * chart-assembly mode; README's audit-log section says so to a client, and ADR Decision 105 is
 	 * canonical for when it is written. On an install running the alternative service above, it keeps
 	 * the older meaning, and nothing on the row tells the two apart.
 	 */

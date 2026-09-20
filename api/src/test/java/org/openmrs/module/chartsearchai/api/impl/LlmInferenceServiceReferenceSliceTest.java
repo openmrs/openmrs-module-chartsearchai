@@ -60,7 +60,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * builds that row from — the ungrounded one or the returned one, depending on whether async
  * grounding is active — so the two must agree. (A stream that reached neither site can be audited
  * from a stand-in the REST layer builds off the streamed text, which states no slice at all; ADR
- * Decision 103 is canonical for that.) Identity rather than equality is what pins the mechanism:
+ * Decision 105 is canonical for that.) Identity rather than equality is what pins the mechanism:
  * two independent derivations over one chart are equal, so an equality check on the numbers stays
  * green under a second resolution at the ungrounded site — measured — and would state a guard that
  * is not there.

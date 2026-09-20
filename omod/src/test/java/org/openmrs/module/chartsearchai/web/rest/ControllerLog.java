@@ -34,7 +34,7 @@ import org.apache.logging.log4j.core.config.Property;
  * on it — which was tried and reverted on this change: it opens api's whole test classpath to
  * omod, and prose in both modules states the opposite as a load-bearing fact. The one that decides
  * is a PRODUCTION javadoc: {@code DrugSafetyValidator}'s {@code StandingChartAlerts} factories are
- * public because {@code omod/pom.xml} declares no api test-jar. ADR Decision 103 names the rest. One
+ * public because {@code omod/pom.xml} declares no api test-jar. ADR Decision 105 names the rest. One
  * level assertion does not buy that. So this asks the one question those cases need, over one
  * logger, and claims to be no general instrument — {@code LogCapture} is that, and its javadoc is
  * where the reasoning about levels as the only observable lives.

@@ -37,7 +37,7 @@ import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
  *
  * <p>The row used to be a statement on the success path, so a user holding <em>AI Query Patient
  * Data</em> could read a streamed answer about any patient, reset the socket, and leave no record of
- * who asked what about whom. ADR Decision 103 is canonical for why that happened and for what the
+ * who asked what about whom. ADR Decision 105 is canonical for why that happened and for what the
  * fix files; these cases are what pins it.
  *
  * <p>They drive {@code streamAnswer} — the production entry point the package's other STREAMING
@@ -196,7 +196,7 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 	 * chart, so the preview is precisely what succeeds when the full chart overflows — the two are
 	 * positively correlated, not merely co-possible.
 	 *
-	 * <p>So this query IS audited, and ADR Decision 103 says so: the preview is model output about
+	 * <p>So this query IS audited, and ADR Decision 105 says so: the preview is model output about
 	 * this patient and it reached the client. It also consumes a rate-limit slot, which is the
 	 * consequence that decision names rather than hides.
 	 */

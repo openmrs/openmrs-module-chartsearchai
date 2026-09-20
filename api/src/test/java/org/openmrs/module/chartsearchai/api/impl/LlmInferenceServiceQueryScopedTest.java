@@ -274,7 +274,7 @@ public class LlmInferenceServiceQueryScopedTest {
 		// handed to the consumer, or the returned one, depending on whether async grounding is
 		// active. (A stream that reached neither site is audited from the ungrounded one where the
 		// consumer had handed it over, and otherwise from a stand-in the controller builds off the
-		// streamed text, which carries no label at all — ADR Decision 103 is canonical for that.)
+		// streamed text, which carries no label at all — ADR Decision 105 is canonical for that.)
 		// Two audit-write sites disagreeing is half of what #178 was, so the two answers must carry
 		// the same label by construction, not by two matching derivations.
 		service.queryScoped = true;

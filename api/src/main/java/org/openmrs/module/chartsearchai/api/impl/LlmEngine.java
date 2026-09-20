@@ -54,8 +54,12 @@ public interface LlmEngine {
 	 * <p>{@link LocalLlmEngine} and {@link RemoteLlmEngine} both spend this on a JDK
 	 * {@code HttpRequest.timeout()}, which stops applying once the inference server's response
 	 * headers arrive; the token stream is then read lazily out of
-	 * {@code BodyHandlers.ofInputStream()} and is bounded by nothing. So {@code timeoutSeconds} caps
-	 * the wait for the FIRST output and not the call. Measured 2026-08-20 against a local
+	 * {@code BodyHandlers.ofInputStream()}, which the timeout does not reach. So
+	 * {@code timeoutSeconds} caps the wait for the FIRST output and not the call. How LONG that
+	 * stream may run is bounded for neither engine. How MUCH it may deliver is bounded for
+	 * {@link RemoteLlmEngine} only, whose peer is an administrator-configured network address and
+	 * therefore untrusted (issue #446); {@link LocalLlmEngine}'s peer is this module's own
+	 * subprocess and its stream is bounded in neither dimension. Measured 2026-08-20 against a local
 	 * {@code llama-server} on CPU ({@code -ngl 0}, Llama-3.2-3B-Q4_K_M): a cold prefill raised
 	 * {@code HttpTimeoutException} at 2.0s and at 8.0s against timeouts of exactly those lengths,
 	 * while a cache-warm request under a 20s timeout returned headers at 117ms and then streamed for

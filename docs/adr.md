@@ -108,7 +108,9 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
-- [Decision 103: A streaming query that reached inference is audited however the stream ends](#decision-103-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends)
+- [Decision 103: Per-marker claim splitting spends one allowance per ANSWER, and a fragment shares its parent's citation set](#decision-103-per-marker-claim-splitting-spends-one-allowance-per-answer-and-a-fragment-shares-its-parents-citation-set)
+- [Decision 104: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound](#decision-104-the-pairwise-arms-resolve-their-rule-join-once-per-pass-and-the-chip-cap-is-still-not-the-bound)
+- [Decision 105: A streaming query that reached inference is audited however the stream ends](#decision-105-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -1869,7 +1871,7 @@ Two refinements make the verdict match what the citation actually claims:
 - **Ground against the rendered chart line (date + body), not the bare record text** — the model sees dated chart lines, so the verifier compares against the same surface.
 - **Clause-scoping (`chartsearchai.grounding.clauseScoped`, default `false`, sentence-scoped)** — in a sentence citing multiple records, each citation is checked against the cumulative answer prefix *up to and including its own `[N]` marker* rather than the whole compound sentence. This flags a citation that supports its own clause but not a *later* clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not back the "provisional diagnosis" clause that [91] supports. The prefix keeps the sentence subject (which normally precedes the first marker), so it still flags family-history/negation flips in later clauses. It is left off by default because per-pair Tier-2 batching is not yet fully independent (shortening an earlier cite's statement can flip a later cite's verdict — tracked separately).
 
-- **Enumerating sentences are split per item regardless of that flag** ([#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)) — where a sentence announces a list with a colon before its first marker, each citation is checked against the preamble plus its OWN item, not the whole sentence and not the cumulative prefix. Both of the scopings above ask the wrong-sized question of a list: the whole sentence makes each record answer for a conjunction naming the others, and the cumulative prefix still names items 1..*k*−1, so only the first citation is ever asked about its own claim. Measured live, a correct three-allergen answer had every chart citation published `grounded=false`, which a client renders as *Unsupported*. This is not gated on `clauseScoped` because the claim is **mis-identified** rather than wide-scoped, and the defect bites on the shipped default. It also does not inherit that flag's reason for being off: these fragments are Tier-2 verified one pair per call, so the batching-independence problem above does not arise — at a measured ~0.5s per additional citation, bounded by `GROUNDING_ENTAILMENT_MAX_CHECKS`. Keyed on the colon, and the colon alone is deliberately not enough — the items must be name-shaped too, since the split is sound only while the preamble holds the SUBJECT. An item carrying its own subject (a pronoun, or a finite verb of clinical assertion) or running past a length backstop keeps whole-sentence scoping; measured through the production splitter over TWO corpora — the 7452 names the shipped KB publishes and the 1194 distinct condition/diagnosis/allergen forms on the demo database — the grammar test refuses none of either, and the length backstop refuses 93 and 24 respectively. Sweep BOTH before changing the grammar set: the drug KB alone would have cleared "patient", which the clinical corpus showed refuses "Patient died" and "Smear positive, new tuberculosis patient", and family terms were measured and rejected against both (13 refusals, 6 on "child"). A comma-only enumeration has no recoverable preamble/first-item boundary (in "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes"), and guessing it short strips the subject the prefix rule exists to retain — so that case is left unsplit. What being unsplit costs it is bounded by the compound-claim rule below: it stays mis-scoped, but the module no longer publishes the conjunction's refusal as each citation's own verdict.
+- **Enumerating sentences are split per item regardless of that flag** ([#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)) — where a sentence announces a list with a colon before its first marker, each citation is checked against the preamble plus its OWN item, not the whole sentence and not the cumulative prefix. Both of the scopings above ask the wrong-sized question of a list: the whole sentence makes each record answer for a conjunction naming the others, and the cumulative prefix still names items 1..*k*−1, so only the first citation is ever asked about its own claim. Measured live, a correct three-allergen answer had every chart citation published `grounded=false`, which a client renders as *Unsupported*. This is not gated on `clauseScoped` because the claim is **mis-identified** rather than wide-scoped, and the defect bites on the shipped default. It also does not inherit that flag's reason for being off: these fragments are Tier-2 verified one pair per call, so the batching-independence problem above does not arise — at a measured ~0.5s per additional citation, bounded by `GROUNDING_ENTAILMENT_MAX_CHECKS`. Keyed on the colon, and the colon alone is deliberately not enough — the items must be name-shaped too, since the split is sound only while the preamble holds the SUBJECT. An item carrying its own subject (a pronoun, or a finite verb of clinical assertion) or running past a length backstop keeps whole-sentence scoping; measured through the production splitter over TWO corpora — the 7452 names the shipped KB publishes and the 1194 distinct condition/diagnosis/allergen forms on the demo database — the grammar test refuses none of either, and the length backstop refuses 93 and 24 respectively. Sweep BOTH before changing the grammar set: the drug KB alone would have cleared "patient", which the clinical corpus showed refuses "Patient died" and "Smear positive, new tuberculosis patient", and family terms were measured and rejected against both (13 refusals, 6 on "child"). A comma-only enumeration has no recoverable preamble/first-item boundary (in "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes"), and guessing it short strips the subject the prefix rule exists to retain — so that case is left unsplit. What being unsplit costs it is bounded by the compound-claim rule below: it stays mis-scoped, but the module no longer publishes the conjunction's refusal as each citation's own verdict. Since [Decision 103](#decision-103-per-marker-claim-splitting-spends-one-allowance-per-answer-and-a-fragment-shares-its-parents-citation-set) this split, and the clause-scoped one above, are bounded by a per-answer allowance; a sentence past it is graded whole.
 
 ### Cost shaping
 
@@ -3613,7 +3615,7 @@ Two alternatives were weighed and are not this.
 
 ## Decision 54: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever
 
-**Status: Accepted** (August 2026) — implemented, issue [#256](https://github.com/openmrs/openmrs-module-chartsearchai/issues/256).
+**Status: Accepted** (August 2026) — implemented, issue [#256](https://github.com/openmrs/openmrs-module-chartsearchai/issues/256). **Amended by Decision 103**, which keeps this decision's 'the cap bounds chips and not work' and refutes the generalisation beside it: the pairwise arms' cost was measured here at TEN drugs in play, and at the drug counts a 1000-character question actually reaches it dominated the pass.
 
 ### Context
 
@@ -3709,7 +3711,7 @@ The A/Vietnam typo row's own `(h5n1)` sits MID-name and `TRAILING_QUALIFIER` is 
 
 ### Measured
 
-Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates on **both** sides — the baseline is the same methods unmutated, driven by the same harness through reflection into the real private `bestRulePerPartner`, `aboveFloorRulesAgainst`, `bestRule` and `outranks` rather than a re-expression of any of them.
+Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates on **both** sides — the baseline is the same methods unmutated, driven by the same harness through reflection into the real private `bestRulePerPartner`, `aboveFloorRulesAgainst`, `bestRule` and `outranks` rather than a re-expression of any of them. (Since Decision 103 that second symbol is `DrugSafetyValidator.AboveFloorRules.aboveFloorRulesAgainst`, an accessor over a per-pass join rather than a private static taking a floor; the measurement stands, the reflection recipe needs rewriting for it.)
 
 | | |
 |---|---|
@@ -3726,7 +3728,7 @@ Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates
 | … which SUBSTANCE owns the sentence changed | **4**, all in the question-pair arm |
 | api suite | 1587 api + 87 omod, 0 failures |
 
-**What a "group" is, so those two can be re-derived.** For the drug-in-play arm it is one entry of what `bestRulePerPartner` returns — one (substance family, partner) collapse — driven by invoking that real private method per multi-row family over a `PatientClinicalContext` carrying that family's own partner tokens as active orders, at floor 0. For the question-pair arm it is one (substance, substance) clinical pair among the pairs the four corrected rows' substances take part in, folded by that arm's own entry-pair walk over the union of the two families' rows in dataset order, through the real `aboveFloorRulesAgainst`, `bestRule` and `outranks`. Both bases are the whole shipped KB; the question-pair one is scoped to those four substances because `outranks`' route step reads only the two rows' `namesNoRoute()` and no other row's answer moves.
+**What a "group" is, so those two can be re-derived.** For the drug-in-play arm it is one entry of what `bestRulePerPartner` returns — one (substance family, partner) collapse — driven by invoking that real private method per multi-row family over a `PatientClinicalContext` carrying that family's own partner tokens as active orders, at floor 0. For the question-pair arm it is one (substance, substance) clinical pair among the pairs the four corrected rows' substances take part in, folded by that arm's own entry-pair walk over the union of the two families' rows in dataset order, through the real `aboveFloorRulesAgainst` (see the note above on where that symbol now lives), `bestRule` and `outranks`. Both bases are the whole shipped KB; the question-pair one is scoped to those four substances because `outranks`' route step reads only the two rows' `namesNoRoute()` and no other row's answer moves.
 
 **State which reading a qualification count is on.** 10 → 9 and 10 → 11 count different things and the correction is exactly what makes them diverge: before it, "answers `!namesNoRoute()`" and "carries a trailing parenthetical" were the same predicate. Quoting either without its unit is unreadable afterwards.
 
@@ -5255,7 +5257,8 @@ Decision 60 put `interactionPairs` on the wire so a truncated interaction screen
 
 The third row published a complete screen of nothing beside fifteen interaction chips, two of them Major — the ticket said one, and the verification of this branch re-ran that exact patient and question and found `Warfarin x Ibuprofen` and `Warfarin x Diclofenac` both rated Major by the shipped knowledge base. A client rendering the field as `README` tells it to — "10 of 18 shown" — showed *"0 of 0 interaction pairs"* directly above a Major finding.
 
-**The cause is not the field's scope; it is a false measurement.** `addQuestionPairInteractions` cedes a pair to the drug-in-play arm wherever any ABOVE-FLOOR rule joining it names one of the patient's active orders (`coveredByActiveOrderArm`, which is handed `aboveFloorRulesAgainst`'s output and nothing else), because a chip stating a fact about her own medication is the stronger statement — `collectQuestionPairInteraction` records the pair in `chartOwned` and collects no candidate for it. Where that took every pair the arm related, `found` was empty and the arm returned `PairChipExtent.of(0, 0)`. Two things followed. The value asserts what Decision 60 defines it to assert — *an arm ran and the reference data related none of the pairs it enumerated* — and pairs had been related, so it was false. And once Decision 65 added its fallback, being non-null satisfied that gate (`pairExtent == null && questionDrugScreened && hasActiveMedicationRecords`), so the arm that had actually reported those pairs was silenced by the arm that reported none — a property of the code this fix changes (`eb81eed3`) rather than of the build row 3 was recorded on.
+**The cause is not the field's scope; it is a false measurement.** `addQuestionPairInteractions` cedes a pair to the drug-in-play arm wherever any ABOVE-FLOOR rule joining it names one of the patient's active orders (`coveredByActiveOrderArm`, which is handed `aboveFloorRulesAgainst`'s output and nothing else — see
+Decision 103 for where that symbol now lives), because a chip stating a fact about her own medication is the stronger statement — `collectQuestionPairInteraction` records the pair in `chartOwned` and collects no candidate for it. Where that took every pair the arm related, `found` was empty and the arm returned `PairChipExtent.of(0, 0)`. Two things followed. The value asserts what Decision 60 defines it to assert — *an arm ran and the reference data related none of the pairs it enumerated* — and pairs had been related, so it was false. And once Decision 65 added its fallback, being non-null satisfied that gate (`pairExtent == null && questionDrugScreened && hasActiveMedicationRecords`), so the arm that had actually reported those pairs was silenced by the arm that reported none — a property of the code this fix changes (`eb81eed3`) rather than of the build row 3 was recorded on.
 
 Reproduced at the api level over the DDInter excerpt through the real `validate`: `"Can I give her warfarin and ibuprofen?"` on a chart carrying Ibuprofen 400mg and Aspirin 81mg stated `found=0, reported=0` beside three Major chips, every one of them the chart arm's.
 
@@ -7927,6 +7930,8 @@ publishes the same two numbers the log now carries — so a maintainer triaging 
 same `stated`/`named` in both places. The finding's own alternative, the names at DEBUG, was not
 taken: a channel nobody needs is not worth the bytes of PHI it writes.
 
+**Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
+
 **And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
 PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
 captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A
@@ -8149,7 +8154,372 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
 
-## Decision 103: A streaming query that reached inference is audited however the stream ends
+## Decision 103: Per-marker claim splitting spends one allowance per ANSWER, and a fragment shares its parent's citation set
+
+**Status: Accepted** (September 2026) — implemented, issue [#448](https://github.com/openmrs/openmrs-module-chartsearchai/issues/448), a security-scan finding (CWE-407, severity MEDIUM). It changes no prompt, no reference list, no chip and no response key. What it changes is what splitting a marker-dense or very long answer costs; nothing in the shipped fixture corpus is split differently by it.
+
+**Context.** Both of `CitationGroundingVerifier`'s splitters build one claim fragment per inline
+`[N]` marker, and each fragment's length is of the order of its sentence's own:
+`splitIntoClauseScopedSentences` copies the cumulative prefix `text.substring(0, marker.end())`, and
+`splitEnumeration` builds `preamble + " " + item`, where the preamble is everything up to the colon
+nearest the first marker. A sentence of length L with M markers therefore cost about M×L characters,
+and nothing bounded either: `SENTENCE_BOUNDARY` splits on a terminator followed by whitespace or on a
+newline, so a one-line answer is one sentence of the whole answer's length, and `INLINE_CITATION`
+accepts any marker whether or not the index resolves. With the remote engine the answer's length is
+the endpoint's choice — `RemoteLlmEngine` buffers the body whole and `max_tokens` is a request to a
+peer, not a constraint on it — so a hostile or intercepted endpoint could turn the module's
+grounding into an `OutOfMemoryError` in the Tomcat JVM hosting the whole OpenMRS instance. That
+consequence is the scan finding's (issue #448, 2026-09-15, CWE-407, MEDIUM) and is not an incident
+this project observed; what this branch measured is the cost curve, below. An `OutOfMemoryError` is
+an `Error`, so none of the verifier's `RuntimeException` handlers catch it.
+
+**The issue names one sink; there are two.** The ticket states that "the sentence-scoped default
+splitter (splitIntoCitedSentences / splitEnumeration) is linear per sentence and does not have this
+property". It is not. `splitEnumeration`'s per-item guards test the marker-stripped ITEM — non-empty,
+within `MAX_ENUMERATION_ITEM_WORDS`, no `CLAUSE_MARKER` — and never the preamble, so
+`<filler>: a [1], b [2], …` hands every item the whole filler. It runs in BOTH scoping modes, so that
+sink is reachable with `chartsearchai.grounding.clauseScoped` left at its default false, which the
+ticket's conditions exclude. `CitationGroundingVerifierTest.enumerationSplitOfALongPreambleStaysLinearInTheAnswerLength`
+is the measurement.
+
+**Decision.** One `FragmentBudget` per answer, `MAX_SPLIT_FRAGMENT_CHARS` characters of fragment
+text, threaded through both splitters by `splitIntoClauseScopedSentences` so neither can spend a full
+allowance of its own. `newFragment` is the one place a fragment is built and charges before
+building; a refusal is all-or-nothing for that sentence, which is then graded whole — the
+sentence-scoped unit the issue's fix criteria names as an acceptable fallback. And a fragment SHARES
+its parent's `sourceCitedIndexes` instance rather than copying it.
+
+**Why the set sharing is part of this decision and not a tidy-up.** `sourceCitedIndexes` holds one
+entry per distinct marker in the parent sentence, and the old fragment constructor did
+`this.sourceCitedIndexes.addAll(sourceCitedIndexes)`. A character allowance alone would have
+reported itself satisfied while the exhaustion stayed reachable: the number of fragments a character
+allowance admits does not fall as the answer grows, so a megabyte-scale answer still builds hundreds
+of fragments each copying a set of a hundred thousand boxed integers. Nothing mutates either set
+after construction, so both are now stored rather than copied and both callers hand over something
+unmodifiable.
+
+**Alternatives rejected.**
+
+*Offsets into the sentence instead of substring copies* — the first remedy the issue's own fix
+criteria offers. It does not reach `splitEnumeration` at all, whose fragment is a concatenation and
+not a substring of anything, and for the clause sink it moves the M copies from peak heap to
+allocation churn without removing them: the M fragments are still built. Rejected on that second
+half — the fragments are built either way — and not on the embedding cost, which is a separate,
+pre-existing and still-open question this decision states under *What is NOT in this change*
+rather than characterising twice.
+
+*A per-sentence cap.* An answer of S sentences each just under a cap of B still costs S×B, which
+grows with the answer — the opposite of the bound the criterion asks for.
+`theSplitAllowanceIsSpentPerANSWERAndNotPerSENTENCE` fails a per-sentence cap at the same value.
+
+*Refunding an abandoned split.* Exact accounting, and it puts the copying work back: every sentence
+of a hostile answer could spend the whole allowance in turn. Not refunding only makes the guard
+stricter for the sentences after one that overspent, which is the conservative direction.
+
+*An allowance proportional to the answer length.* Linear by construction and useless as a bound:
+sixteen times a 20 MB answer is 320 MB of fragments.
+
+**What the fallback costs, which is real.** A refused enumeration split re-enters the mis-scoping
+issue #278 fixed — measured live then as `grounded=false` on all three citations of a correct,
+fully-cited allergy list, which a client renders as *Unsupported*. Since #302 that is a withheld
+verdict under entailment, but with entailment disabled the whole-sentence cosine verdict is
+published and the *Unsupported* rendering returns. What a refused CLAUSE split costs depends on the
+sentence, and the larger case is the ordinary one: where claim text separates two of its markers the
+whole sentence is a `compoundClaim()`, so under entailment every citation of it publishes no verdict
+at all (#302) — driven through the real `verify()` in clause-scoped mode, with the same prose shape
+short enough to split as the control, by
+`CitationGroundingVerifierTest.aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers`.
+Only where the markers are separated by nothing
+but list punctuation is it a co-citation, still graded, losing `isolate` and so co-batched for
+Tier-2 again — the coupling `Sentence.isolate` exists to prevent. Both are paid only by an answer
+whose splitting has already exceeded the allowance, and the alternative there is heap exhaustion for
+every user of the instance.
+
+**Bounding the splitter was not enough, and that is the part worth reading.** The first round of
+this change bounded the splitter and disclosed two consumer-side index-set copies as residue,
+reasoning that both were linear in the answer and so within the criterion. Two independent clean-context
+reviewers refuted that, each by measurement, and both sinks are now closed here.
+
+- `AnswerCitations`' constructor unioned each claim unit's `sourceCitedIndexes` into `anchored`
+  once per FRAGMENT. Because this change makes every fragment of a sentence SHARE one set of one
+  entry per distinct marker, that is the fragment count times the marker count — both of which are
+  the marker count. It is the answer-quadratic shape the issue is about, surviving in the consumer
+  after the splitter was bounded, and invisible to an allowance counted in characters. Measured
+  through the real `verify()` on enumerated answers: 254 ms at 5,000 markers, 879 at 10,000, 3,557
+  at 20,000 — four times the work for twice the answer. Closed by unioning each DISTINCT set once,
+  by identity: 25 / 18 / 30 ms across the same three sizes.
+- `AnswerCitations.restsOn` built a fresh `HashSet` per reference holding the claim's
+  `sourceCitedIndexes`, retained in `Tier1Result` for the length of the pass, so R copies of a
+  marker-count-sized set were live at once. R is bounded by the chart's cited records and not by the
+  answer, so it IS linear — and linear was not the property that mattered: with the copy restored as a
+  compiled mutant and the heap swept, a 910 KB clause-scoped answer carrying 113,494 distinct
+  markers at ten cited records completes at every heap from 256 MB down to 64 MB after this change
+  and runs out of memory between 96 MB and 80 MB before it (JDK 21; the pom targets 11) — with the
+  splitter's own WARN already in the log saying the split had been refused. An earlier draft of
+  this decision recorded that threshold as 256 MB, which a second reviewer could not reproduce and
+  which overstated it about threefold. Closed by `ClaimSupport`,
+  a membership view over the two operands rather than their union; both are unmodifiable, so
+  nothing is copied. `restsOnReferenceMaterial` now iterates the reference-group indexes, bounded by
+  the chart, instead of the claim's citations, bounded by the answer.
+
+The lesson generalises past this change: bounding a producer moves the question to every consumer
+that holds one structure per unit the producer emits, and a budget counted in one currency
+(characters) says nothing about the others (set entries, retained copies).
+
+**Sizing, and what the measurement is a bound OF.** The allowance bounds fragment TEXT, and the
+heap a split holds is a multiple of that once each fragment's `Sentence`, `String` and singleton set
+are counted — a reviewer of this change measured 186–192 bytes retained per fragment, against a
+cheapest-fragment ceiling of about 84,000 of them, so the characters are the smaller half of the
+number. Size a change to the constant against the characters and then measure; do not read the
+characters as the heap. An answer from this module's own local engine is capped at
+`ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS` tokens, on the order of 16 KB of text, and
+splitting one of that length whose every sentence carried ten markers costs about 8e4 characters —
+roughly a twelfth of the allowance, and the same figure whether that length is spread over ten
+sentences or a hundred. Measured 2026-09-17 by driving the production splitters over the 52 captured
+answers under `eval/drift-metric/fixtures`, 37 of which carry inline markers: the largest split
+either splitter CHARGES for is 474 characters, on a 346-character answer. An earlier draft quoted
+648 on a 654-character answer, which is the sum of every returned unit's text on an answer no
+sentence of which was split at all — the answer's own length, and not a spend. Even corrected this
+is a FLOOR and not a calibration: the corpus is short probe answers and cannot tell this value from
+one a hundred times smaller, so lowering it needs a corpus that can.
+
+What is deliberately NOT claimed is that only a remote endpoint can be refused. The cost is the
+marker count times the sentence length, so length alone does not bound it. Measured 2026-09-17 by
+driving `splitIntoClauseScopedSentences` over one-line answers of the shape `x [1] [2] …`, binary
+searching for the smallest the allowance refuses: **594 markers, 3,457 characters** — refused, with
+593 markers and 3,451 characters still split into 593 clauses. That is well inside what the local
+engine can produce, so a refusal is not a remote-endpoint-only event. It is the rule working rather
+than a gap in it: such a sentence has no clause worth grading, and grading it whole is the right
+reading of it.
+
+**What is NOT in this change.** The issue's recommended-fix item 2 asks for a length ceiling on the
+extracted answer before the validators run. That is a different layer from issue
+[#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which binds the
+transport, and a behaviour-visible decision of its own — it fails a clinician's request outright,
+at a value and under a global property nobody has chosen yet. It also does not close this defect and
+this defect does not wait on it: the issue's own words are that "this code should be linear
+regardless of what the transport enforces".
+
+**This decision is not a claim that the grounding path is bounded end to end**, and one neighbouring
+sink is stated precisely because it is still reachable. `verify()` caches one embedding vector per
+SENTENCE, uncapped, and `selectClaim` fills it for every candidate. A reviewer of this change
+reproduced `OutOfMemoryError` inside `verify()` on a 1.95 MB answer of ordinary short sentences
+under a 256 MB heap, after 68,014 embed calls — and at `c430a960`, before this change, at the same
+size, so it is neither introduced nor closed here. Two corrections to how an earlier draft of this
+decision described it, both from that reviewer's measurements: it is not only the GUESSED branch,
+since ten properly inline-cited references over a 1.6 MB answer drove 64,010 embeds and peaked at
+209 MB; and "linear, therefore within the criterion" is the wrong test, because the failure mode is
+reached at a size the issue's own threat model produces. Capping it decides which sentences get a
+verdict, which is a grounding-quality question and not this one; the answer-length ceiling of
+recommended-fix item 2 closes it without that cost, which is a second reason this PR states item
+2's absence rather than passing over it. The Tier-2 statement `entailsBatch` posts is unbounded in
+the same way, and the refused-split shape escapes it only where `compoundClaim()` fires. A refused
+CO-CITATION does not: driving the real `verify()` with entailment on and clause scope on over
+`<400,000 characters of filler> [1], [2], [3]` returns one unit, `compoundClaim=false`, three
+published `true` verdicts and three 400,003-character statements posted to the judge. The module
+manufactures that shape itself, from `[5/12/15]` via `normalizeSlashCitations`, so this is not an
+exotic reading of it. Also item 2's territory, and stated here so the next reader does not take the
+refusal as a guard against it.
+
+→ `CitationGroundingVerifierTest.theAnswersMarkersAreUnionedOncePerDISTINCTSetAndNotOncePerFragment`
+(asserted as a RATIO — four times the markers may cost four times the work and not sixteen — so the
+case says the same thing on a fast machine and a loaded one),
+`.oneAllowanceIsSharedBySplittingBOTHShapesOfOneAnswer`,
+`.clauseScopedSplitOfADenseOneLineAnswerStaysLinearInTheAnswerLength`,
+`.enumerationSplitOfALongPreambleStaysLinearInTheAnswerLength`,
+`.theSplitAllowanceIsSpentPerANSWERAndNotPerSENTENCE`,
+`.aRefusedSplitIsReportedAtWARNWithoutQuotingTheAnswer`,
+`.aRefusedSplitIsReportedOncePerANSWERAndNotOncePerSentence`,
+`.aSentenceBOTHSplittersRefuseIsOneSentenceInTheReport` (the one case that pins the identity-keyed
+refusal set — replacing it with a list reddens that case and nothing else),
+`.everyFragmentOfOneSentenceSharesItsParentsCitationSetRatherThanCopyingIt`,
+`.aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers`, and
+`ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory`,
+`.theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter` and
+`.aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints`, which between them cover the splitter that
+does not exist yet, and `.theCitationsAClaimRestsOnAreAViewAndNotACopy`, which covers the `restsOn`
+sink above. What each of those structural rules reaches that no behavioural case does is stated in
+its own javadoc, along with what it does NOT reach, and each is narrower than its name.
+
+**Three rounds of clean-context review were spent on those structural rules, and the lesson is about
+the KIND of question a rule asks.** Round two tightened both onto the construction rather than its
+neighbourhood: the first had allow-listed a whole METHOD, `splitIntoCitedSentences(String,
+FragmentBudget)`, because the whole-sentence construction sat there — so an uncharged per-marker
+splitter written into that same method, its natural home since it already holds the budget, passed
+it. The whole-sentence construction got a tiny factory of its own, `newSentence`, and the allow-list
+became the two factories. The second had read `restsOn`'s own body only, so collapsing the two
+operands into one set inside `ClaimSupport`'s CONSTRUCTOR restored the per-reference copy with the
+rule green; it was widened to read the `ClaimSupport` body too.
+
+Round three defeated both again, and neither defeat was a new hiding place — each was the same
+question answered in a spelling the rule had not enumerated. A per-marker splitter calling the
+allow-listed `newSentence` once per marker constructs nothing the construction rule objects to, and
+one creating a `FragmentBudget` per sentence charges the allow-listed `newFragment` correctly; both
+left the whole suite green. And `this.own = new java.util.HashSet<Integer>(own);` — the fully
+qualified idiom this very file carried at `c430a960` — was invisible to a rule listing five
+unqualified spellings. Adding a sixth needle would have lost the same way again, so the rules
+changed shape instead. The construction rule kept its scope and gave up its claim to cover
+more; the two forms it cannot see became rules asking checkable questions of their own, about CALL
+SITES and about where an allowance is CREATED. The copy rule stopped listing spellings altogether
+and now asks the positive shape: those two bodies assign fields, construct a `ClaimSupport` and test
+membership, so every `new` in them must be a `ClaimSupport` whatever its type is spelled like, and
+every call must be one of a named few — which is what reaches a copy made with no `new` at all,
+`Set.copyOf(own)`. Each mutation is spelled out in the javadoc of the rule that now reddens on it,
+with `CitationGroundingVerifierTest` staying green, which is the reason these rules are structural.
+So is the residue each one keeps: a rule whose javadoc over-claims is worse than no rule, because it
+tells the next maintainer not to look.
+
+## Decision 104: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound
+
+Issue #447. The question-pair arm asked "which of `subject`'s above-floor rules name `other`?" by
+scanning `subject`'s whole interaction list. The QUESTION-PAIR arm asks it once per ORDERED pair —
+twice per unordered pair from `collectQuestionPairInteraction` and again from `pairKeyNames`; the
+ACTIVE-ORDER arm reaches it only through `pairKeyNames`, whose inner loop breaks at the first partner
+that relates the drug it is naming and so asks between once and N-1 times per drug. So the cost was
+quadratic in a list the QUESTION chooses, times the rules on each row — and while the rule count is
+bounded by the DATA, the row count had no bound but the controller's `MAX_QUESTION_LENGTH` of 1000
+characters. `validate` runs twice per
+request, the first pass from `DrugReferenceInjector.preAnswerFindings` and therefore outside the
+serialised engine lock, so a request's CONTENT set a superlinear amount of CPU in the shared OpenMRS
+JVM.
+
+Measured on this branch by driving the real `validate` over the shipped knowledge base (2283 entries,
+590,312 links) on a chart with NO active orders, one pass, after a warm-up call — so these are the
+arms' cost with nothing else the chart could contribute, not a share of a realistic pass; Decision 54's
+43-order table is the baseline for that, and its chart-less column bounds rather than measures these
+arms. `N` is what `findImpliedByQuery` resolved:
+
+| question | N | before | after |
+|---|---|---|---|
+| "Does warfarin interact with aspirin?" | 2 | 8 ms | 3 ms |
+| 194 chars, highest-rule-count short names | 18 | 78 ms | 15 ms |
+| 997 chars, same packing | 95 | 1,844 ms | 55 ms |
+| 998 chars, aliases scored independently by rows-per-character | 195 | 7,109 ms | 47 ms |
+| 999 chars, marginal-coverage greedy | 407 | 19,236 ms | 92 ms |
+
+The chips were identical at every cell, before and after (1 at N=2, 10 — the cap — at every other),
+and a separate 117-cell sweep — 4 datasets (the excerpt, the two question-pair fixtures, the shipped
+KB) against charts of 0, 1, 2, 3, 8, 20 and 43 active orders and a range of question and answer
+shapes, NOT a full cross product (117 is not a multiple of either factor; each dataset was driven with
+the shapes it can express) — found every
+declared `SafetyWarning` field, every `PairChipExtent` and every WARN line byte-identical across the
+two heads: 1,382 chips, 110 extents, 32 WARN lines. That probe is calibrated in both directions —
+dropping the ATC leg of `candidates` moves 18 of its lines, and handing the screening arm an empty
+join moves its 43-order cell from `found=382` to `391` — so a zero-diff from it is evidence rather
+than silence.
+
+**Read the *after* column as an order of magnitude, not as a ranking.** Each is one pass after a
+warm-up; re-measured warmed and repeated, one cell moved between 93 ms and 181 ms, which is wider than
+the gap between the 95-row and 195-row cells. That gap is noise, not an inversion.
+
+**The last row is why the fourth is not the worst case.** 195 was the ceiling of ONE packer — aliases
+of 3 to 12 characters, scored independently by rows-per-character and packed greedily. Scoring by
+MARGINAL coverage instead, recomputing each pick against what is already covered, resolves 407 rows in
+999 characters, and widening the alias filter past that added nothing to that packer (2-20 and 2-40
+both reached 408). **Read 407 as a floor under the ceiling and not as the ceiling**: an independent
+packer with a slightly different alias filter reached 375 — the same order, not the same number — and
+nothing here shows no packer does better.
+
+**The attribution is structural, not a quotient.** The same harness wrapped every entry's interaction
+list, through the public `DrugReference.setInteractions`, in a delegate holding the same elements in
+the same order and counting the times production asked it for an iterator. At N=95 that was 9,142
+walks against the 8,930 the pair loop alone predicts, and 6,575,839 rule reads; after the change, 190
+walks — exactly twice N, this arm's one plus `bestRulePerPartner`'s — and 136,562 reads. Dividing the
+pass time by the reads would only restate the total it came from, so no per-read figure is recorded
+here.
+
+**The fix is to invert, not to scan** — the remedy this module already took at #339, where
+`unambiguouslyNames` walked `getAll()` per ask. `DrugReference.nameKeys()` is the precomputed inverse
+of `isNamed`; `DrugSafetyValidator.AboveFloorRules` inverts the rows ONE arm is screening into it,
+through `DrugReferenceService.nameIndexOf`, plus an ATC index for `identifies`' second leg, and walks
+each subject's rule list exactly once. The population is the arm's own and deliberately not the loaded
+dataset: inverting all 2283 shipped entries would put a whole-dataset walk on the commonest two-drug
+question. `nameIndexOf` is named apart from `nameIndex()` rather than overloading it, which is Decision 54's remedy for a
+shape that decision measured — there, dropping the argument reinstated a full walk as an overload
+RESOLUTION with the suite green. **That exact mutation does not compile here even under one name**
+(`nameIndex()` is an instance method and the new body is static), so the distinct name is this repo's
+convention for the hazard rather than the only thing standing against it; Decision 54's two arities
+were both static, which is the condition that made it bite there.
+
+**Both callers of `pairKeyNames` are served, and that is a choice rather than a consequence.** The
+signature could have had `pairKeyNames` build its own. What is not a choice is that the join is
+reached from `addActiveOrderPairInteractions` too, so leaving it scanning would have left an
+`N(N-1)`-scan path standing inside the very arm the issue is about — reachable by a question naming
+drugs that relate nothing, where the inner break never fires. #447 filed that sibling arm as "noted,
+not filed"; this change closes its half of the same join as well. **Its cost is better at every chart
+measured and never quadratic** — measured rather than argued, and the opposite of what the early
+`break` suggested. Not "strictly better" at every K: on a two-order chart whose first candidate
+relates, the `break` fired immediately and both forms walk two lists, so the new one pays two index
+builds for nothing. On the shipped knowledge base, one screening pass, counting rule-list walks
+and rule reads through the same instrument: a 43-order chart goes 114 walks / 93,407 reads to 88 /
+64,352, and a 12-order chart whose orders relate nothing — where that `break` never fires — goes 44 /
+13,603 to 14 / 4,144. Timed on the same charts, the screen goes 1,316 ms to 1,099 ms at 157 order rows
+and 101 ms to 63 ms at 45. The `break` was not saving what it appeared to, because the old code still
+walked each candidate's whole list per ask and the reverse-direction asks dominate. Fewer than two
+screened entries admit no pair, so nothing is read at all.
+
+**Alternatives rejected.**
+
+*Cap the number of question-resolved rows the arm screens, and state the truncation in
+`PairChipExtent`* — #447's own first suggestion. Refused on this decision's own measurement: at the
+largest question the controller admits — the 407-row row of the table, not the 195-row one — the pass
+now costs about 92 ms against 3 ms for an ordinary two-drug question. **A cap would save part of that
+and not most of it**: the rows have to be RESOLVED before a cap can drop any, so it cannot touch the
+~54 ms the dominant-cost paragraph below attributes to `findImpliedByQuery`, and what is left for it
+to save is the arm's own share. So the refusal is not that a cap buys nothing measurable — the first
+wording of this sentence said that and was wrong, and the second priced it at nearly the whole pass
+and was wrong the other way. It is that the arm's share of one adversarial question is not worth a
+narrower safety screen. It would also cost a wire change
+that is not merely additive. `PairChipExtent.getFound()` is defined as how many candidate pairs the
+arm ENUMERATED, and `found == 0` asserts that an arm ran and the data related none of them; screening
+a subset makes that count a measurement of a population the arm chose, which a client cannot tell from
+a complete screen without a third number — the class of statement Decisions 60, 65, 69 and 71 price.
+This is NOT the refusal #131 and #256 record: those refuse stopping enumeration AT THE CHIP CAP,
+because the cut is "the least severe go" and an early stop changes WHICH pairs are dropped. That is a
+different lever and its argument does not transfer.
+
+*Count in-flight requests per user toward the rate limit* — #447's third criterion, and outside the
+arm its title and first evidence item scope it to. The issue itself files that half as "Amplifier
+only" and records its sibling finding as rejected. Left open; what changed is the size of what a
+parallel request multiplies — 2.7x smaller at the commonest two-drug question and 209x at the 407-row
+one, per the table above.
+
+*Rewrite `DrugReference.isNamed` as `nameKeys.contains(normalizeName(token))`* — equivalent by
+construction, and it would retire the per-alias re-normalisation for every caller rather than only
+here. Not taken in this change: it reduces a CONSTANT whose multiplier this decision removes, and it
+touches every caller in the module. Its own ticket.
+
+**What this leaves as the dominant cost, measured and not fixed here.** With the join inverted, a
+407-row pass spends about 54 of its ~92 ms in `findImpliedByQuery` itself — each distinct alias the
+text carries costs one whole-dataset `matchesDrugName` walk through `findImpliedSubstances`, memoised
+only in a per-call local and repeated three times per request. Two further terms are outside this
+arm and outside #447: `validate` also resolves `findImpliedByQuery(answer)`, and **nothing caps the
+answer** the way `MAX_QUESTION_LENGTH` caps the question — a 15,190-character answer resolves 2,060
+rows and costs 1,207 ms per pass, roughly linear. And the screening arm remains about O(K^2.3) in
+ACTIVE ORDERS, half of it in `recordsANameOf` reached from `activeOrdersOtherThan`, which is this
+same per-pair rescan shape standing on the chart side; a 43-order chart sits near 60 ms, so it is a
+follow-up rather than an emergency. None of the three is question-content-quadratic, which is what
+#447 filed.
+
+**A trade, recorded rather than defended.** The join RETAINS every above-floor `(subject, other)`
+rule list for the arm's lifetime, where the scan discarded each one per ask — CPU for memory. It is
+bounded by the pairs the arm's own population relates, and no figure is published for it because none
+was measured beyond "fine at the largest question tried"; a maintainer who needs one should measure
+rather than trust this sentence.
+
+**One residue, stated rather than closed.** The `identifies` confirmation that every indexed candidate
+is put through is not load-bearing today — the indexes are exact, and removing it leaves the whole api
+suite green, measured. It guards the too-WIDE direction only; nothing about the shape guarantees the
+too-NARROW one, and a lost candidate drops an interaction chip fail-closed, so that direction is asked
+of real data at every floor and every ordered pair instead.
+
+→ `AboveFloorRuleJoinAgreementTest` (the join's ANSWER, over the excerpt, over a fixture carrying an
+ATC-only rule — the leg nothing in the tree covered — and over the rows a route-variant question
+resolves from the shipped KB), `QuestionPairRuleScanPerPassTest` (what each added drug COSTS, and a
+body-scoped source guard against a future arm reading a rule list of its own),
+`NameIndexAgreesWithIsNamedTest.theIndexAgreesOverAProperSubsetOfADatasetRatherThanReachingPastIt`.
+
+## Decision 105: A streaming query that reached inference is audited however the stream ends
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#450](https://github.com/openmrs/openmrs-module-chartsearchai/issues/450), a security-scan finding

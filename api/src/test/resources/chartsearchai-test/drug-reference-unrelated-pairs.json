@@ -1,0 +1,206 @@
+{
+  "version": "1.0",
+  "description": "Test fixture for issue #447: eight drugs no rule of any other relates. The pinned DDInter excerpt cannot express this shape \u2014 its 16 drugs carry all 120 interaction pairs they admit, so pairKeyNames' inner break always fires on the first candidate and the arm's worst rule-reading shape is unreachable there. Every rule here names an 'outsidazine' the fixture does not carry, so pairKeyNames runs its inner loop to the end for every drug and reads every other drug's whole rule list. The names are deliberately unlike one another: none is a substring of another, so each resolves exactly one row and a step in the drug count is a step in this arm's own cost rather than a route family arriving.",
+  "entries": [
+    {
+      "id": "alfazine",
+      "name": "Alfazine",
+      "aliases": [
+        "alfazine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "betazine",
+      "name": "Betazine",
+      "aliases": [
+        "betazine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "gammazine",
+      "name": "Gammazine",
+      "aliases": [
+        "gammazine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "deltazine",
+      "name": "Deltazine",
+      "aliases": [
+        "deltazine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "epsilzine",
+      "name": "Epsilzine",
+      "aliases": [
+        "epsilzine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "zetazine",
+      "name": "Zetazine",
+      "aliases": [
+        "zetazine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "iotazine",
+      "name": "Iotazine",
+      "aliases": [
+        "iotazine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "kappazine",
+      "name": "Kappazine",
+      "aliases": [
+        "kappazine"
+      ],
+      "interactions": [
+        {
+          "token": "outsidazine-1",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-2",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        },
+        {
+          "token": "outsidazine-3",
+          "severity": "Major",
+          "note": "Major. A rule naming a substance this fixture does not carry, so no drug here relates another."
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

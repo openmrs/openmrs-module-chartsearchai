@@ -8,7 +8,8 @@
 // beside it) in the frontend image shadowed the assembled one and the browser
 // never imported the ESM. Nothing in the deploy workflow could have said so.
 //
-// Why a browser rather than curl, and why HEADED. Three measurements, 2026-08-25:
+// Why a browser rather than curl, why HEADED, and where it may navigate. Three measurements on
+// 2026-08-25, and a fourth on 2026-09-20:
 //
 //   1. The instance is behind Cloudflare, which answers a plain request with
 //      403 and a managed challenge — on every path tried
@@ -27,6 +28,23 @@
 //      CORRECT plain importmap while both compressed siblings were stale.
 //      Every browser asks for br and gzip; so does fetch() here.
 //
+//   4. The browser must not NAVIGATE to an HTML document. Measured 2026-09-20, the day this
+//      gate reported nothing but refusals over a deployment that was healthy: Cloudflare
+//      injects its JS-detection probe (/cdn-cgi/challenge-platform/.../jsd/main.js) into HTML
+//      responses. Loading /openmrs/spa/login pulled it in, the browser posted its fingerprint
+//      at t+1.59s, and from t+1.61s every request out of that browsing context answered 403
+//      with `cf-mitigated: challenge` — the static files read here included. That is why the
+//      failed run's FIRST attempt reported only the entry bundle: the fixed reads are issued
+//      together and beat the verdict, while the entry's URL is not known until the importmap
+//      has been parsed, so it is always the read that lands after them. Navigating to a
+//      non-HTML path instead — the importmap — pulled ZERO /cdn-cgi/ requests; after it, 60
+//      sequential reads in one session and 40 parallel in another all returned 200. This gate
+//      does not even do that, because nginx's 404 page IS html: navigating to a real path
+//      would arm the probe on exactly the broken deployments it exists to describe. It fulfils
+//      its own document instead — see ORIGIN_DOC. And the verdict attaches to the CONTEXT
+//      rather than to the address, a context opened seconds later from the same machine having
+//      read the deployment fine, which is why runAttempts gives every attempt one of its own.
+//
 // A second failure class, measured 2026-09-15 and the reason for the sha stamp below. A green
 // build and a green deploy left the served ESM directory holding files from TWO builds — the
 // numbered chunks from the current one, the ENTRY bundle the importmap names from a build 11
@@ -42,7 +60,9 @@
 // Usage: xvfb-run -a node assert-spa-serves-chartsearchai.mjs [baseUrl]
 
 // Imported inside the run block, not here, so the self-test beside this file can drive `probe`,
-// `readHead`, `entryUrlFrom` and `problemsWith` without playwright installed at all.
+// `readHead`, `entryUrlFrom`, `problemsWith`, `pollSchedule` and `runAttempts` — the attempt loop
+// included, which is where the context-per-attempt rule lives — without playwright installed at
+// all.
 
 const BASE = (process.argv[2] || 'https://chartsearchai.openmrs.org').replace(/\/+$/, '');
 const ESM = '@openmrs/esm-chartsearchai-app';
@@ -51,6 +71,16 @@ const ROUTES = '/openmrs/spa/routes.registry.json';
 // Written by Dockerfile.frontend from `git rev-parse HEAD` of the ESM clone, so the deployment
 // can be asked WHICH commit it is serving rather than only whether a file exists.
 const ESM_SHA = '/openmrs/spa/chartsearchai-esm.sha';
+
+// The document the gate reads from. It needs a same-origin browsing context and nothing else —
+// every check below is a fetch() out of one — and it gets that WITHOUT asking the deployment for
+// a page: the navigation is intercepted and fulfilled in the browser, so no request for this URL
+// is ever sent and the path need not exist. Measurement 4 is why it may not be a page the
+// deployment serves: any HTML it answered with would carry Cloudflare's JS-detection probe, and
+// nginx's 404 page is HTML, so a deployment broken in the way this gate is FOR would be the one
+// that blinded it.
+const ORIGIN_DOC = `${BASE}/__chartsearchai-gate-origin`;
+const ORIGIN_DOC_BODY = '<!doctype html><title>chartsearchai deploy gate</title>';
 
 // The ESM's main tip, resolved by deploy.yml. Reported, never failed on — and that is a
 // deliberate demotion, not laziness. Nothing rebuilds the frontend image when the ESM repo
@@ -86,6 +116,31 @@ const DELAY_MS = positiveNumber('GATE_DELAY_MS', 30_000);
 const CHALLENGE_MS = positiveNumber('GATE_CHALLENGE_MS', 60_000);
 const POLL_MS = positiveNumber('GATE_POLL_MS', 2_000);
 
+/**
+ * The waits between the reads of one challenged path: `pollMs`, doubling, capped at a quarter of
+ * the deadline so the window is filled rather than abandoned a third of the way into it.
+ *
+ * It exists so that the COUNT of reads a challenge costs is a property of this code rather than
+ * of how long the deadline happens to be. Fixed-interval polling spent the whole deadline at
+ * `pollMs`, and the gate ran one of those per path per attempt, for every attempt — a request
+ * storm aimed at a host that had already said it would not answer. What the deadline goes on
+ * bounding is the wall clock, which a schedule cannot; both are checked in the loops below.
+ *
+ * Terminates because `cap >= pollMs > 0`, so every iteration adds at least `pollMs` to the total.
+ */
+const pollSchedule = (challengeMs, pollMs) => {
+  const cap = Math.max(pollMs, Math.floor(challengeMs / 4));
+  const waits = [];
+  let total = 0;
+  for (let d = pollMs; total + d <= challengeMs; d = Math.min(d * 2, cap)) {
+    waits.push(d);
+    total += d;
+  }
+  return waits;
+};
+
+const POLL_WAITS = pollSchedule(CHALLENGE_MS, POLL_MS);
+
 // Every read gets a unique URL, and UNIQUENESS is the point rather than mere presence: a
 // constant buster is one URL an edge can cache forever, which is the failure the busting exists
 // to prevent. Date.now() alone is not enough — it is millisecond-resolution, and two reads in
@@ -108,14 +163,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * Reads the files that decide whether the ESM is loaded at all, and the stamp saying which
  * commit built it.
  *
+ * The navigation exists only to get a same-origin browsing context for the reads below; nothing
+ * this gate checks needs the SPA to run, and the document it lands on is one the gate fulfils
+ * itself — see ORIGIN_DOC. The handler must FULFIL and never continue: letting the request
+ * through is the whole defect.
+ *
  * The Cloudflare challenge is waited out by polling for a response that is not
  * a 403, rather than by sleeping a fixed interval — a fixed sleep either
- * over-waits on every healthy run or reports the challenge as an outage.
+ * over-waits on every healthy run or reports the challenge as an outage. The poll BACKS OFF, so
+ * what bounds the reads it spends is the schedule, not the deadline.
  */
 async function probe(page, paths) {
-  await page.goto(`${BASE}/openmrs/spa/login`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.route(ORIGIN_DOC, (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: ORIGIN_DOC_BODY }));
+  await page.goto(ORIGIN_DOC, { waitUntil: 'domcontentloaded', timeout: 120_000 });
   return page.evaluate(
-    async ({ paths, challengeMs, pollMs, bustSeed }) => {
+    async ({ paths, challengeMs, waits, bustSeed }) => {
       let n = bustSeed;
       const read = async (path) => {
         const deadline = Date.now() + challengeMs;
@@ -125,16 +188,19 @@ async function probe(page, paths) {
         // location the stamp falls into — so the realistic failure is a stale ENTRY reading NEWER
         // than it is, i.e. a false RED. Either way the comparison must not be made against an edge
         // copy, which is what the cache-status check below is for.
-        for (;;) {
+        for (let i = 0; ; i++) {
           // Per ATTEMPT, not per read: a challenged read used to re-fetch one identical URL.
           const bust = `${path}${path.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
           try {
             const r = await fetch(bust, { cache: 'no-store' });
-            if (r.status !== 403 || Date.now() > deadline) {
+            if (r.status !== 403 || i >= waits.length || Date.now() > deadline) {
               return {
                 status: r.status,
                 encoding: r.headers.get('content-encoding'),
                 lastModified: r.headers.get('last-modified'),
+                // Cloudflare's own word for "I refused this client", carried so the verdict can
+                // say whether a 403 is about the deployment at all.
+                mitigated: r.headers.get('cf-mitigated'),
                 // So a comparison made against a CACHED stamp is visible in the output rather
                 // than only in its conclusion.
                 cache: r.headers.get('cf-cache-status'),
@@ -143,7 +209,7 @@ async function probe(page, paths) {
               };
             }
           } catch (e) {
-            if (Date.now() > deadline) {
+            if (i >= waits.length || Date.now() > deadline) {
               // Same record shape and the same one-line trim as readAssetHeaders': these drifted,
               // and a multi-line fetch error then wrapped across the one-line `attempt N/M:` output
               // while `lastModified` came back undefined here and null everywhere else.
@@ -151,6 +217,7 @@ async function probe(page, paths) {
                 status: 0,
                 encoding: null,
                 lastModified: null,
+                mitigated: null,
                 cache: null,
                 age: null,
                 body: '',
@@ -158,7 +225,7 @@ async function probe(page, paths) {
               };
             }
           }
-          await new Promise((resolve) => setTimeout(resolve, pollMs));
+          await new Promise((resolve) => setTimeout(resolve, waits[i]));
         }
       };
       // Concurrent, not serial. Each read waits out its OWN challenge deadline, so three serial
@@ -170,7 +237,7 @@ async function probe(page, paths) {
       await Promise.all(Object.entries(paths).map(async ([key, path]) => { out[key] = await read(path); }));
       return out;
     },
-    { paths, challengeMs: CHALLENGE_MS, pollMs: POLL_MS, bustSeed: (reads += 100) },
+    { paths, challengeMs: CHALLENGE_MS, waits: POLL_WAITS, bustSeed: (reads += 100) },
   );
 }
 
@@ -180,7 +247,7 @@ async function probe(page, paths) {
  */
 async function readHead(page, url) {
   return page.evaluate(
-    async ({ u, challengeMs, pollMs, bustSeed }) => {
+    async ({ u, challengeMs, waits, bustSeed }) => {
       let n = bustSeed;
       // `cache: 'no-store'` is a BROWSER-cache directive and sends no request header, so an edge
       // cache may still answer. The entry is a `.js`, which is in Cloudflare's default cacheable
@@ -191,19 +258,20 @@ async function readHead(page, url) {
       // this one asset reads as "the importmap names a file that is not served", which is a
       // different and much more alarming failure than the one that happened.
       const deadline = Date.now() + challengeMs;
-      for (;;) {
+      for (let i = 0; ; i++) {
         // Inside the loop, as in probe. Above it, a challenged read re-fetched ONE identical
         // URL for the whole poll — an edge-cached 403 would then be polled to the deadline and
         // returned as "could not be read at all", i.e. RED on a healthy deployment, and on the
         // more cacheable side of the comparison at that.
-  const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
+        const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
         try {
           const r = await fetch(bust, { cache: 'no-store' });
-          if (r.status !== 403 || Date.now() > deadline) {
+          if (r.status !== 403 || i >= waits.length || Date.now() > deadline) {
             return {
               url: u,
               status: r.status,
               lastModified: r.headers.get('last-modified'),
+              mitigated: r.headers.get('cf-mitigated'),
               // The entry is the MORE cacheable side of the comparison (a default-cacheable
               // `.js`), so leaving it without cache visibility would blind the output on the
               // likelier half.
@@ -212,14 +280,14 @@ async function readHead(page, url) {
             };
           }
         } catch (e) {
-          if (Date.now() > deadline) {
-            return { url: u, status: 0, lastModified: null, cache: null, age: null, error: e.message.split('\n')[0] };
+          if (i >= waits.length || Date.now() > deadline) {
+            return { url: u, status: 0, lastModified: null, mitigated: null, cache: null, age: null, error: e.message.split('\n')[0] };
           }
         }
-        await new Promise((resolve) => setTimeout(resolve, pollMs));
+        await new Promise((resolve) => setTimeout(resolve, waits[i]));
       }
     },
-    { u: url, challengeMs: CHALLENGE_MS, pollMs: POLL_MS, bustSeed: (reads += 100) },
+    { u: url, challengeMs: CHALLENGE_MS, waits: POLL_WAITS, bustSeed: (reads += 100) },
   );
 }
 
@@ -250,9 +318,15 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   const problems = [];
   const warnings = [];
   const enc = (r) => `content-encoding: ${r.encoding ?? 'none'}`;
+  // Appended to every status so a refused run says who refused it. On 2026-09-20 this gate
+  // printed round after round of bare `returned HTTP 403`, then an epilogue about Docker Hub,
+  // over a deployment that was serving the right files the whole time.
+  const mitigation = (r) => (r.mitigated ? ` (cf-mitigated: ${r.mitigated})` : '');
 
   if (importmap.status !== 200) {
-    problems.push(`${IMPORTMAP} returned HTTP ${importmap.status}${importmap.error ? ` (${importmap.error})` : ''}`);
+    problems.push(
+      `${IMPORTMAP} returned HTTP ${importmap.status}${importmap.error ? ` (${importmap.error})` : ''}${mitigation(importmap)}`,
+    );
   } else {
     let names;
     try {
@@ -266,7 +340,7 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   }
 
   if (routes.status !== 200) {
-    problems.push(`${ROUTES} returned HTTP ${routes.status}${routes.error ? ` (${routes.error})` : ''}`);
+    problems.push(`${ROUTES} returned HTTP ${routes.status}${routes.error ? ` (${routes.error})` : ''}${mitigation(routes)}`);
   } else if (!routes.body.includes('chartsearchai')) {
     problems.push(`${ROUTES} names no chartsearchai route (${enc(routes)})`);
   }
@@ -280,7 +354,7 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   // never loaded. Asserting that a named file exists cannot see this; asserting provenance can.
   if (esmSha.status !== 200) {
     problems.push(
-      `${ESM_SHA} returned HTTP ${esmSha.status}${esmSha.error ? ` (${esmSha.error})` : ''}` +
+      `${ESM_SHA} returned HTTP ${esmSha.status}${esmSha.error ? ` (${esmSha.error})` : ''}${mitigation(esmSha)}` +
         ' — an image built before this stamp existed, so its age cannot be checked',
     );
   } else {
@@ -396,7 +470,7 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   if (entryHead && entryHead.status !== 200) {
     const unreachable = entryHead.status === 403 || entryHead.status === 0;
     problems.push(
-      `${entryHead.url} returned HTTP ${entryHead.status}${entryHead.error ? ` (${entryHead.error})` : ''}` +
+      `${entryHead.url} returned HTTP ${entryHead.status}${entryHead.error ? ` (${entryHead.error})` : ''}${mitigation(entryHead)}` +
         (unreachable
           ? ' — could not be read at all (challenge or network), so nothing about it was checked'
           : ' — the importmap names a file that is not served'),
@@ -418,7 +492,76 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
 /** The gate's verdict. Named and exported so a test can pin it; see problemsWith. */
 export const isHealthy = (problems) => problems.length === 0;
 
-export { entryUrlFrom, problemsWith, probe, readHead };
+/**
+ * Runs the attempts, each in a browsing context of its own, and returns the verdict without
+ * printing it — the caller owns the output, including the `OK: ` line deploy.yml greps for.
+ *
+ * A context per attempt, not a page held across all of them. Cloudflare's mitigation attaches to
+ * the browsing context: once this browser had failed the JS-detection probe, every read out of
+ * that context was refused for as long as it lived, so attempts sharing one page were copies of
+ * the same refusal and the loop was decoration. A fresh context is the one thing that recovers
+ * from it — measured 2026-09-20, header measurement 4.
+ *
+ * `newSession` returns `{ page, close }`. It is a parameter rather than a browser handle so the
+ * self-test can drive this loop, which is where the context-per-attempt rule lives.
+ */
+async function runAttempts(newSession, { attempts, delayMs, wait = sleep, log = console.log }) {
+  let problems = ['the gate never completed a probe'];
+  // The newest attempt's problems replace the older ones, so a transient error on the LAST
+  // attempt would bury a real finding from the first and send the reader down the wrong
+  // paragraph of the epilogue. Both are kept and both are printed.
+  let firstProblems = null;
+  let lastDiagnostics = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let warnings = [];
+    // Opened inside the try: a context that fails to OPEN is the same transient the loop exists
+    // for, and outside it the whole gate would die on one bad attempt instead of retrying.
+    let session = null;
+    try {
+      session = await newSession();
+      const probed = await probe(session.page, { importmap: IMPORTMAP, routes: ROUTES, esmSha: ESM_SHA });
+      const entry = probed.importmap.status === 200 ? entryUrlFrom(probed.importmap.body) : null;
+      // Only a same-origin path is readable; a foreign or missing specifier is reported by
+      // problemsWith instead of fetched.
+      const entryHead = typeof entry === 'string' ? await readHead(session.page, entry) : null;
+      ({ problems, warnings } = problemsWith(probed, entryHead));
+      lastDiagnostics = {
+        sha: (probed.esmSha.body || '').trim().slice(0, 12) || null,
+        stampAt: probed.esmSha.lastModified,
+        stampCache: probed.esmSha.cache,
+        entry: entryHead && entryHead.url,
+        entryAt: entryHead && entryHead.lastModified,
+        // Whether the comparison actually ran, asserted rather than inferred from a caller
+        // invariant — the success line says it ran, and must not say so on trust.
+        provenanceCompared: Boolean(
+          entryHead &&
+            entryHead.status === 200 &&
+            Number.isFinite(Date.parse(entryHead.lastModified ?? '')) &&
+            Number.isFinite(Date.parse(probed.esmSha.lastModified ?? '')),
+        ),
+      };
+    } catch (e) {
+      problems = [`probe failed: ${e.message.split('\n')[0]}`];
+    } finally {
+      // Reported, never fatal: a context this attempt is finished with failing to close must not
+      // turn a healthy verdict red, and must not be silent either.
+      try {
+        if (session) await session.close();
+      } catch (e) {
+        log(`note: closing attempt ${attempt}'s browsing context failed: ${e.message.split('\n')[0]}`);
+      }
+    }
+    if (firstProblems === null && problems.length) firstProblems = problems;
+    for (const w of warnings) log(`note: ${w}`);
+    if (isHealthy(problems)) return { ok: true, attempt, problems, firstProblems, served: lastDiagnostics };
+    log(`attempt ${attempt}/${attempts}: ${problems.join('; ')}`);
+    if (attempt < attempts) await wait(delayMs);
+  }
+  return { ok: false, attempt: attempts, problems, firstProblems, served: lastDiagnostics };
+}
+
+export { entryUrlFrom, problemsWith, probe, readHead, pollSchedule, runAttempts };
 
 // realpathSync, because `import.meta.url` is realpath-resolved by the loader while `process.argv[1]`
 // is only path-resolved: any symlink appearing literally in the invocation path made these differ,
@@ -451,70 +594,37 @@ if (invokedDirectly) {
 const { chromium } = await import('playwright');
 const browser = await chromium.launch({ headless: false });
 try {
-  const page = await browser.newPage();
-  let problems = ['the gate never completed a probe'];
-  // The newest attempt's problems replace the older ones, so a transient error on the LAST
-  // attempt would bury a real finding from the first and send the reader down the wrong
-  // paragraph of the epilogue. Both are kept and both are printed.
-  let firstProblems = null;
-  let lastDiagnostics = null;
+  const newSession = async () => {
+    const context = await browser.newContext();
+    return { page: await context.newPage(), close: () => context.close() };
+  };
+  const { ok, attempt, problems, firstProblems, served } = await runAttempts(newSession, {
+    attempts: ATTEMPTS,
+    delayMs: DELAY_MS,
+  });
 
-  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
-    let warnings = [];
-    let served = null;
-    try {
-      const probed = await probe(page, { importmap: IMPORTMAP, routes: ROUTES, esmSha: ESM_SHA });
-      const entry = probed.importmap.status === 200 ? entryUrlFrom(probed.importmap.body) : null;
-      // Only a same-origin path is readable; a foreign or missing specifier is reported by
-      // problemsWith instead of fetched.
-      const entryHead = typeof entry === 'string' ? await readHead(page, entry) : null;
-      ({ problems, warnings } = problemsWith(probed, entryHead));
-      served = {
-        sha: (probed.esmSha.body || '').trim().slice(0, 12) || null,
-        stampAt: probed.esmSha.lastModified,
-        stampCache: probed.esmSha.cache,
-        entry: entryHead && entryHead.url,
-        entryAt: entryHead && entryHead.lastModified,
-        // Whether the comparison actually ran, asserted rather than inferred from a caller
-        // invariant — the success line below says it ran, and must not say so on trust.
-        provenanceCompared: Boolean(
-          entryHead &&
-            entryHead.status === 200 &&
-            Number.isFinite(Date.parse(entryHead.lastModified ?? '')) &&
-            Number.isFinite(Date.parse(probed.esmSha.lastModified ?? '')),
-        ),
-      };
-      lastDiagnostics = served;
-    } catch (e) {
-      problems = [`probe failed: ${e.message.split('\n')[0]}`];
+  if (ok) {
+    // The whole premise here is that a green gate was once trusted wrongly, so say what was
+    // actually established rather than only that it passed.
+    // The `OK: ` prefix is a CONTRACT: deploy.yml greps for it so that a step exiting 0 without
+    // reaching a verdict is red. Rewording this line disarms that check silently.
+    console.log(`OK: ${BASE} serves ${ESM} (attempt ${attempt})`);
+    if (served) {
+      console.log(
+        `  ESM commit served: ${served.sha ?? 'unknown'} (stamp ${served.stampAt ?? 'no Last-Modified'}` +
+          `${served.stampCache ? `, cf-cache-status: ${served.stampCache}` : ''})`,
+      );
+      console.log(`  entry bundle: ${served.entry ?? 'not read'} (${served.entryAt ?? 'no Last-Modified'})`);
+      console.log(`  ESM tip comparison: ${EXPECTED_SHA ? 'compared' : 'NOT resolved, so not compared'}`);
+      console.log(
+        served.provenanceCompared
+          ? '  checked: the entry does not pre-date this build.'
+          : '  NOT checked: the provenance comparison did not run (see above).',
+      );
+      console.log('  NOT checked: the directions this gate cannot see — enumerated in the failure');
+      console.log('  epilogue below, and worth reading before treating this OK as "all is well".');
     }
-    if (firstProblems === null && problems.length) firstProblems = problems;
-    for (const w of warnings) console.log(`note: ${w}`);
-    if (isHealthy(problems)) {
-      // The whole premise here is that a green gate was once trusted wrongly, so say what was
-      // actually established rather than only that it passed.
-      // The `OK: ` prefix is a CONTRACT: deploy.yml greps for it so that a step exiting 0 without
-      // reaching a verdict is red. Rewording this line disarms that check silently.
-      console.log(`OK: ${BASE} serves ${ESM} (attempt ${attempt})`);
-      if (served) {
-        console.log(
-          `  ESM commit served: ${served.sha ?? 'unknown'} (stamp ${served.stampAt ?? 'no Last-Modified'}` +
-            `${served.stampCache ? `, cf-cache-status: ${served.stampCache}` : ''})`,
-        );
-        console.log(`  entry bundle: ${served.entry ?? 'not read'} (${served.entryAt ?? 'no Last-Modified'})`);
-        console.log(`  ESM tip comparison: ${EXPECTED_SHA ? 'compared' : 'NOT resolved, so not compared'}`);
-        console.log(
-          served.provenanceCompared
-            ? '  checked: the entry does not pre-date this build.'
-            : '  NOT checked: the provenance comparison did not run (see above).',
-        );
-        console.log('  NOT checked: the directions this gate cannot see — enumerated in the failure');
-        console.log('  epilogue below, and worth reading before treating this OK as "all is well".');
-      }
-      process.exit(0);
-    }
-    console.log(`attempt ${attempt}/${ATTEMPTS}: ${problems.join('; ')}`);
-    if (attempt < ATTEMPTS) await sleep(DELAY_MS);
+    process.exit(0);
   }
 
   console.error(`\nFAILED: ${BASE} does not load ${ESM}.`);
@@ -524,19 +634,26 @@ try {
     console.error('  diagnosis if what remains above looks transient:');
     for (const p of firstProblems) console.error(`  - ${p}`);
   }
-  if (lastDiagnostics) {
+  if (served) {
     console.error(
-      `\n  Served ESM commit: ${lastDiagnostics.sha ?? 'unknown'}` +
-        ` (stamp ${lastDiagnostics.stampAt ?? 'no Last-Modified'}` +
-        `${lastDiagnostics.stampCache ? `, cf-cache-status: ${lastDiagnostics.stampCache}` : ''})`,
+      `\n  Served ESM commit: ${served.sha ?? 'unknown'}` +
+        ` (stamp ${served.stampAt ?? 'no Last-Modified'}` +
+        `${served.stampCache ? `, cf-cache-status: ${served.stampCache}` : ''})`,
     );
     console.error(
-      `  Entry bundle: ${lastDiagnostics.entry ?? 'not read'} (${lastDiagnostics.entryAt ?? 'no Last-Modified'})`,
+      `  Entry bundle: ${served.entry ?? 'not read'} (${served.entryAt ?? 'no Last-Modified'})`,
     );
     console.error(`  ESM tip comparison: ${EXPECTED_SHA ? 'compared' : 'NOT resolved, so not compared'}`);
   }
   console.error(
     [
+      '',
+      'A 403 on every path above is Cloudflare refusing this client, not a deployment',
+      'fault — the messages carry `cf-mitigated` when that is what happened, and nothing',
+      'on the host explains it. Header measurement 4 has the mechanism: any HTML this',
+      'browser loads from the zone arms a JS-detection probe, and failing it refuses every',
+      'later read out of that browsing context. This gate fulfils its own document to stay',
+      'clear of that, so a refusal here means something else armed it.',
       '',
       'The backend module can be installed and healthy and this still fails: the',
       'icon is drawn by the ESM, so an importmap that does not name it means the',

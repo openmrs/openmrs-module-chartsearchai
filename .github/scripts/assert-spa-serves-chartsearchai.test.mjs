@@ -126,7 +126,7 @@ check('an absent specifier is null', gate.entryUrlFrom('{"imports":{}}') === nul
 check('unparseable json is null', gate.entryUrlFrom('not json') === null);
 
 // ---- probe / readHead: the real fetch paths ------------------------------------------------
-const page = { goto: async () => {}, evaluate: async (fn, arg) => fn(arg) };
+const page = { route: async () => {}, goto: async () => {}, evaluate: async (fn, arg) => fn(arg) };
 {
   const seen = [];
   globalThis.fetch = async (u) => {
@@ -311,6 +311,207 @@ check('isHealthy is false for any problem', gate.isHealthy([]) === true && gate.
     'a challenged probe re-polls at a DIFFERENT url each time',
     probed.length > 2 && new Set(probed).size === probed.length,
     `${probed.length} polls, ${new Set(probed).size} distinct`,
+  );
+}
+
+
+// ---- the gate's own traffic: what invites a challenge, and what survives one -----------------
+//
+// Measured against the live deployment on 2026-09-20, the day the gate reported nothing but
+// refusals over a deployment that was healthy. Cloudflare injects its JS-detection probe
+// (`/cdn-cgi/challenge-platform/.../jsd/main.js`) into HTML DOCUMENTS. Navigating to
+// `/openmrs/spa/login` pulled it in, the browser posted its fingerprint 1.59s later, and from
+// 1.61s every request out of that browsing context — the static files this gate reads included —
+// answered `403` with `cf-mitigated: challenge`. The fixed reads are issued together and beat
+// that verdict; the entry bundle cannot be, because its URL is only known once the importmap has
+// been parsed. So that run's first attempt reported only the entry as unreadable and every later
+// one reported the rest, which is exactly what it printed. Navigating to a non-HTML path instead
+// made ZERO `/cdn-cgi/` requests — 60 sequential reads in one session and 40 parallel in another
+// all returned 200 — and the gate goes further and fulfils its own document, because the 404 page
+// nginx answers a missing path with is itself HTML (`content-type: text/html`, measured the same
+// day).
+{
+  const routed = [];
+  const handled = [];
+  let navigated = null;
+  const navPage = {
+    route: async (u, handler) => {
+      routed.push(u);
+      await handler({
+        fulfill: async (r) => handled.push(['fulfill', r]),
+        continue: async () => handled.push(['continue']),
+        abort: async () => handled.push(['abort']),
+      });
+    },
+    goto: async (u) => { navigated = u; },
+    evaluate: async (fn, arg) => fn(arg),
+  };
+  globalThis.fetch = async () => ({ status: 200, text: async () => '{}', headers: { get: () => null } });
+  await gate.probe(navPage, { importmap: '/openmrs/spa/importmap.json' });
+  check(
+    'probe navigates to a document it intercepts, not to one the deployment serves',
+    navigated !== null && routed.includes(navigated),
+    `navigated ${navigated}, routed ${routed.join(',')}`,
+  );
+  check(
+    'that navigation is FULFILLED, never continued — letting it through is the defect',
+    handled.length === 1 && handled[0][0] === 'fulfill' && /^text\/html/.test(handled[0][1].contentType),
+    JSON.stringify(handled),
+  );
+  check(
+    'and the document it fulfils is same-origin with the deployment, or the reads are cross-origin',
+    navigated !== null && new URL(navigated).origin === 'https://chartsearchai.openmrs.org',
+    String(navigated),
+  );
+}
+{
+  // The poll re-fetched every `pollMs` for the whole deadline, so a challenged read spent the
+  // window re-asking one question, every read did that per attempt, and every attempt repeated
+  // it. The schedule bounds the COUNT, which the code decides; the deadline goes on bounding the
+  // wall clock, which it does not.
+  const waits = gate.pollSchedule(60_000, 2_000);
+  check('the poll backs off instead of re-fetching at a fixed interval', waits.length > 1 && waits[1] > waits[0], waits.join(','));
+  check('the poll fits inside the deadline it is bounded by', waits.reduce((a, b) => a + b, 0) <= 60_000, waits.join(','));
+  check('a deadline shorter than one interval polls nothing', gate.pollSchedule(1, 2_000).length === 0);
+  let n = 0;
+  globalThis.fetch = async () => {
+    n++;
+    return { status: 403, text: async () => '', headers: { get: () => null } };
+  };
+  await gate.readHead(page, '/openmrs/spa/x/app.js');
+  const bound = gate.pollSchedule(Number(process.env.GATE_CHALLENGE_MS), Number(process.env.GATE_POLL_MS)).length + 1;
+  check('an unrelenting challenge is read a bounded number of times', n === bound, `${n} reads against a bound of ${bound}`);
+  // And an UNchallenged probe costs one read per path. The traffic a healthy run makes is the
+  // half of this that no deadline bounds at all.
+  n = 0;
+  globalThis.fetch = async () => {
+    n++;
+    return { status: 200, text: async () => '{}', headers: { get: () => null } };
+  };
+  await gate.probe(page, { importmap: '/a.json', routes: '/b.json', esmSha: '/c.sha' });
+  check('a probe that is not challenged reads each path exactly once', n === 3, `${n} reads for 3 paths`);
+}
+
+{
+  // A refused run must name its refuser. The 2026-09-20 failure printed round after round of
+  // bare `returned HTTP 403`, then an epilogue about Docker Hub, over a deployment serving the
+  // right files — because nothing carried the one header saying the read never reached it.
+  const { problems } = gate.problemsWith(
+    { importmap: res('', null, 403, { mitigated: 'challenge' }), routes, esmSha: res(SHA) },
+    entryHead(),
+  );
+  check(
+    'a Cloudflare refusal says so instead of reading as a deployment fault',
+    has(problems, 'returned HTTP 403 (cf-mitigated: challenge)'),
+    problems.join('; '),
+  );
+  globalThis.fetch = async () => ({
+    status: 403,
+    text: async () => '',
+    headers: { get: (h) => (h === 'cf-mitigated' ? 'challenge' : null) },
+  });
+  const head = await gate.readHead(page, '/openmrs/spa/x/app.js');
+  check('readHead carries cf-mitigated out of the response', head.mitigated === 'challenge', JSON.stringify(head));
+  const probed = await gate.probe(page, { a: '/openmrs/spa/x/app.js' });
+  check('probe carries cf-mitigated out of the response', probed.a.mitigated === 'challenge', JSON.stringify(probed.a));
+}
+
+// ---- one browsing context per attempt --------------------------------------------------------
+//
+// Cloudflare's verdict attaches to the CONTEXT, not to the address: a context opened after the
+// flagged one read the same deployment fine, from the same machine, seconds later. The gate held
+// ONE page for every attempt, so once flagged it re-ran the same refusal to the end of the loop
+// and reported the last. A context per attempt is what makes the retry loop a retry and not a
+// repeat.
+{
+  const opened = [];
+  let closed = 0;
+  const newSession = async () => {
+    const session = {
+      page: { route: async () => {}, goto: async () => {}, evaluate: async (fn, arg) => fn(arg) },
+      close: async () => { closed++; },
+    };
+    opened.push(session);
+    return session;
+  };
+  globalThis.fetch = async () => ({ status: 403, text: async () => '', headers: { get: () => null } });
+  const run = await gate.runAttempts(newSession, { attempts: 3, delayMs: 0, log: () => {} });
+  check('every attempt gets its own browsing context', opened.length === 3 && closed === 3, `${opened.length} opened, ${closed} closed`);
+  check('no two attempts share a page', new Set(opened.map((s) => s.page)).size === opened.length);
+  check('a run that reads nothing reports failure', run.ok === false && run.problems.length > 0, JSON.stringify(run.problems));
+}
+// What a deployment with nothing wrong with it answers, so the cases below differ only in what
+// happens to the CONTEXT.
+const healthyFetch = async (u) => {
+  const path = u.split('?')[0];
+  const body = path.endsWith('/importmap.json')
+    ? JSON.stringify({ imports: { '@openmrs/esm-chartsearchai-app': './x/app.js' } })
+    : path.endsWith('/routes.registry.json')
+      ? '{"chartsearchai":true}'
+      : path.endsWith('.sha')
+        ? SHA
+        : '';
+  return { status: 200, text: async () => body, headers: { get: (h) => (h === 'last-modified' ? STAMP : null) } };
+};
+{
+  const opened = [];
+  let closed = 0;
+  const newSession = async () => {
+    const session = {
+      page: { route: async () => {}, goto: async () => {}, evaluate: async (fn, arg) => fn(arg) },
+      close: async () => { closed++; },
+    };
+    opened.push(session);
+    return session;
+  };
+  globalThis.fetch = healthyFetch;
+  const run = await gate.runAttempts(newSession, { attempts: 10, delayMs: 0, log: () => {} });
+  check('a healthy deployment passes on the first attempt', run.ok === true && run.attempt === 1, JSON.stringify(run.problems));
+  check('a healthy run opens exactly one context', opened.length === 1 && closed === 1, `${opened.length} opened, ${closed} closed`);
+  check(
+    'the healthy run carries out what it read, so the OK line is not written on trust',
+    run.served && run.served.sha === SHA.slice(0, 12) && run.served.provenanceCompared === true,
+    JSON.stringify(run.served),
+  );
+}
+{
+  // A context that fails to OPEN is the same transient the loop exists for. Opened outside the
+  // try it took the whole gate down with it on the first bad attempt.
+  let opens = 0;
+  let closed = 0;
+  const newSession = async () => {
+    opens++;
+    if (opens === 1) throw new Error('browser.newContext: Target closed\nsecond line');
+    return {
+      page: { route: async () => {}, goto: async () => {}, evaluate: async (fn, arg) => fn(arg) },
+      close: async () => { closed++; },
+    };
+  };
+  globalThis.fetch = healthyFetch;
+  const run = await gate.runAttempts(newSession, { attempts: 3, delayMs: 0, log: () => {} });
+  check('a context that fails to open is retried, not fatal', run.ok === true && run.attempt === 2, JSON.stringify(run.problems));
+  check('a context that never opened is not closed', closed === 1, `${closed} closed`);
+}
+{
+  // Closed even when the attempt throws: a run of failing attempts must not leak a context per
+  // attempt, and the message stays one line for the same reason every other record here trims it.
+  let closed = 0;
+  const newSession = async () => ({
+    page: {
+      route: async () => {},
+      goto: async () => {
+        throw new Error('net::ERR_ABORTED\nsecond line');
+      },
+      evaluate: async (fn, arg) => fn(arg),
+    },
+    close: async () => { closed++; },
+  });
+  const run = await gate.runAttempts(newSession, { attempts: 2, delayMs: 0, log: () => {} });
+  check('a context is closed even when the attempt throws', closed === 2, `${closed} closed`);
+  check(
+    'a failed navigation is reported on one line',
+    has(run.problems, 'probe failed') && !run.problems.join('').includes('second line'),
+    JSON.stringify(run.problems),
   );
 }
 

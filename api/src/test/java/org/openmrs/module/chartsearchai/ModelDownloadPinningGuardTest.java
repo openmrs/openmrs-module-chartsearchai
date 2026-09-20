@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
  * {@code model-manifest.tsv}, and spell no Hugging Face URL of their own.
  *
  * <p>Those two sites are the scope both findings draw, and it is narrower than "everything this
- * project downloads" — ADR Decision 103 names what is left out and why.
+ * project downloads" — ADR Decision 106 names what is left out and why.
  *
  * <p><b>This reads the SOURCE, and that is the point.</b> {@link ModelDownloadIntegrityTest} shows
  * that the shared library refuses substituted bytes; it cannot show that the two call sites still
@@ -109,7 +109,7 @@ public class ModelDownloadPinningGuardTest {
 	 * violation, and adding a legitimate one costs an entry here instead of passing silently.
 	 */
 	private static final List<String> DECLARED_NON_MODEL_FETCHES = List.of(
-			// The demo dataset dump. Out of scope for #444/#449 — ADR Decision 103 says why.
+			// The demo dataset dump. Out of scope for #444/#449 — ADR Decision 106 says why.
 			"$DEMO_DUMP_URL",
 			// The standalone build polling querystore's own REST endpoints while it bakes the index.
 			"$QS/indexingstatus", "$QS/drift", "/tmp/reindex.json");
@@ -678,7 +678,7 @@ public class ModelDownloadPinningGuardTest {
 	 *
 	 * <p><b>This narrows a property successive reviews have defeated; it does not close it.</b>
 	 * While the entrypoint branched on the library's status itself, four readings of the source
-	 * were defeated in turn (ADR Decision 103 lists them) and each repair made the next reachable.
+	 * were defeated in turn (ADR Decision 106 lists them) and each repair made the next reachable.
 	 * Moving the branch into the library made the refusal a BEHAVIOUR that
 	 * {@code ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript}
 	 * drives — and reviewers then found two more spellings of the same subshell, each with both
@@ -762,7 +762,7 @@ public class ModelDownloadPinningGuardTest {
 	 * ask whether a fetch is NAMED — routed through the library — and POSITIONED — in the current
 	 * shell, ahead of the property write. All of them stay green, with {@code sh -n} and
 	 * {@code shellcheck}, when {@code if [ -f "$target" ]; then return; fi} goes back in: the early
-	 * return ADR Decision 103 says removing is the point of the decision, and the optimisation that
+	 * return ADR Decision 106 says removing is the point of the decision, and the optimisation that
 	 * decision's own cost table invites. {@code /openmrs/data} outlives the container, so a start that
 	 * skips the hash for a file it finds by NAME never verifies the population the fix most needs to
 	 * reach.
@@ -1059,7 +1059,7 @@ public class ModelDownloadPinningGuardTest {
 				+ " the key");
 		assertFalse(withAPolicy.contains("backend"), "the backend service declares a restart policy, so a model file"
 				+ " the entrypoint refuses would be refused again on every restart rather than leaving the container"
-				+ " stopped (#444, ADR Decision 103). Services declaring one: " + withAPolicy);
+				+ " stopped (#444, ADR Decision 106). Services declaring one: " + withAPolicy);
 	}
 
 	/**

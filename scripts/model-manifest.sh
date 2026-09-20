@@ -4,7 +4,7 @@
 #
 # Issues #444 and #449 are one defect with two consumers, and this library is what both now call,
 # so the pinned revision and the expected digest exist once rather than once per consumer. ADR
-# Decision 103 has the reasoning and names the consumers; the Callers list below is the current
+# Decision 106 has the reasoning and names the consumers; the Callers list below is the current
 # roster.
 #
 # POSIX sh, because backend-init.sh is `#!/bin/sh` and runs under dash in the backend image. In
@@ -102,7 +102,7 @@ manifest_url() { _mm_field "$1" url; }
 # hedge the size guards this replaced used to make between GNU and BSD `stat`, for the same reason.
 #
 # `shasum` is tried LAST rather than second because it is a Perl implementation and measurably
-# slower — ADR Decision 103 records the rates, and the gap is wide enough to matter over multi-GB
+# slower — ADR Decision 106 records the rates, and the gap is wide enough to matter over multi-GB
 # weights. Its digest agrees with the other two; only its speed differs.
 file_sha256() {
 	if command -v sha256sum >/dev/null 2>&1; then
@@ -166,7 +166,7 @@ _mm_verify_file() {
 # else returns a code from the table above.
 #
 # A file already at <target> is verified rather than trusted for its name — see the fall-through
-# below, and ADR Decision 103 for why.
+# below, and ADR Decision 106 for why.
 fetch_and_verify_url() {
 	_mm_url=$1
 	_mm_expected=$2
@@ -201,7 +201,7 @@ fetch_and_verify_url() {
 				return "$_mm_status"
 			fi
 		fi
-		# Fall through and fetch what the manifest records — ADR Decision 103 for why replacing
+		# Fall through and fetch what the manifest records — ADR Decision 106 for why replacing
 		# beats refusing here. A served copy that fails too is the refusal.
 		#
 		# The copy that was here is already deleted at this point, so from here on a failure to
@@ -265,7 +265,7 @@ fetch_and_verify_override() {
 # paths configure_retrieval_gps writes into global properties seconds later. Fetches and verifies as
 # fetch_and_verify does, and on any refusal says what the code means and EXITS rather than
 # returning. The caller's diagnostic lines are the SIZE message and are printed for code 2 alone —
-# ADR Decision 103 for why the size refusal has a message of its own.
+# ADR Decision 106 for why the size refusal has a message of its own.
 #
 # The exit leaves the shell this runs IN, so any subshell between here and the entrypoint's own
 # shell swallows it: backgrounding the call with `&`, taking it in a command substitution, and
@@ -277,7 +277,7 @@ fetch_and_verify_override() {
 # Exiting here rather than leaving the caller to branch narrows the ways of getting it wrong: there
 # is no branch to spell, and what the shell DOES is a behaviour a test drives —
 # ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript. ADR
-# Decision 103 lists the spellings that defeated the branch this replaced, and what is left.
+# Decision 106 lists the spellings that defeated the branch this replaced, and what is left.
 fetch_or_exit() {
 	_mm_oe_id=$1
 	_mm_oe_target=$2
@@ -360,7 +360,7 @@ fetch_and_verify() {
 #
 # 0 or 1, and 1 is NOT a code from the table above: nothing was fetched, so nothing was refused or
 # deleted. Naming no artifact is itself a failure — a call that lost its arguments would otherwise
-# answer yes to everything. → ADR Decision 103; ModelDownloadIntegrityTest's ledger cases.
+# answer yes to everything. → ADR Decision 106; ModelDownloadIntegrityTest's ledger cases.
 require_verified() {
 	if [ "$#" -eq 0 ]; then
 		echo "ERROR: require_verified was asked about no artifact at all." >&2

@@ -41,7 +41,7 @@ import org.junit.jupiter.api.io.TempDir;
  * the state they compose to was not. On the shipped entrypoint the embedder goes through
  * {@code fetch_or_exit}, whose refusal ends the shell before this wiring runs, so what the gate's
  * decline answers is a start that reaches the wiring with nothing in the ledger — the swallowed-exit
- * residue ADR Decision 103 names, a fetch taken in a subshell, which the refusal cases below
+ * residue ADR Decision 106 names, a fetch taken in a subshell, which the refusal cases below
  * construct deliberately. Such a start has deleted the file and publishes no path, but the row from the last
  * good start still names that now-absent file — so a safety keyed on reading the property back finds
  * it non-blank and leaves {@code querystore.bootstrap.autostart} on, which is the per-record
@@ -155,7 +155,7 @@ public class EntrypointRetrievalWiringTest {
 	/**
 	 * <b>The returning deployment.</b> One good start wrote the path; this start's embedder is
 	 * refused and its file deleted, in a subshell so the {@code exit} never reaches the entrypoint's
-	 * shell — the residue ADR Decision 103 names as what the ledger, not the line-level guard,
+	 * shell — the residue ADR Decision 106 names as what the ledger, not the line-level guard,
 	 * covers. The property still names the deleted file, so a safety that reads it back sees nothing
 	 * wrong; the sweep has to go off on the gate's verdict instead.
 	 */

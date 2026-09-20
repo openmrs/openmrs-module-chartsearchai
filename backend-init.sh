@@ -69,7 +69,7 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 # Every model file below is fetched from the immutable revision recorded
 # in model-manifest.tsv and refused unless it hashes to the sha256
 # committed beside it — on EVERY start, not only after a fresh download,
-# because /openmrs/data outlives the container. ADR Decision 103 carries
+# because /openmrs/data outlives the container. ADR Decision 106 carries
 # why, and what happens to a file that fails. "On every start" is a claim
 # about where these two calls sit as much as about what they call, so
 # ModelDownloadPinningGuardTest
@@ -578,7 +578,7 @@ configure_retrieval_gps() {
   # this start did, and nothing else here would answer it. The embedder's own fetches above exit on
   # a refusal, so a start that gets here with nothing in the ledger is one whose verification is
   # absent from this shell's ledger rather than one refused in it — a fetch taken in a subshell,
-  # for instance, which swallows the exit as well as the ledger entry. ADR Decision 103.
+  # for instance, which swallows the exit as well as the ledger entry. ADR Decision 106.
   if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
     gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
     gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"

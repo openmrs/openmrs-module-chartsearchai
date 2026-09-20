@@ -175,7 +175,7 @@ public class ModelDownloadIntegrityTest {
 	 * provisioned before this check existed, or one whose volume was written to directly, holds a file
 	 * the entrypoint would otherwise skip over on the strength of its name alone.
 	 *
-	 * <p>It is replaced rather than merely refused — ADR Decision 103 gives the reasoning. The case
+	 * <p>It is replaced rather than merely refused — ADR Decision 106 gives the reasoning. The case
 	 * below is what "not accepted" looks like, and the two together are what say the replacement is
 	 * not a way past the check.
 	 */
@@ -495,7 +495,7 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	/**
-	 * Decision 103 publishes a measured 5x spread as the REASON for the fallback order, and the
+	 * Decision 106 publishes a measured 5x spread as the REASON for the fallback order, and the
 	 * agreement case above cannot see the order at all — it drives one tool at a time. This one puts
 	 * the slow tool on PATH beside a fast one and asserts the slow one is not what runs.
 	 */

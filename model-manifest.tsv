@@ -1,6 +1,6 @@
 # The model files this project downloads and then executes, each bound to the exact bytes the
 # maintainers reviewed. Issues #444 and #449; the reasoning, and the recipe for moving a pin, are
-# ADR Decision 103.
+# ADR Decision 106.
 #
 # This is the one place either fetch site takes a model's URL or digest FROM. Both read it —
 # backend-init.sh (the published backend image's ENTRYPOINT) and .github/workflows/build-standalone.yml
@@ -12,7 +12,7 @@
 #
 # The revision in every url is an immutable Hugging Face commit hash, never a branch name.
 #
-# Recorded 2026-09-17 against the live Hub. ADR Decision 103's "Moving a pin" says how to take a
+# Recorded 2026-09-17 against the live Hub. ADR Decision 106's "Moving a pin" says how to take a
 # digest, and why the obvious header is the wrong one for a small file.
 
 llm-gemma-4-e4b	85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87	4977171584	https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/bfc15c382204943c3a8fff0c750b94ae2364d7a3/gemma-4-E4B-it-Q4_K_M.gguf

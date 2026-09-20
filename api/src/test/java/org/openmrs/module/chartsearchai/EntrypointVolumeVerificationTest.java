@@ -35,7 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * A weights file ALREADY on the volume still reaches the library's verification — the guarantee
  * #444 turns on, because {@code /openmrs/data} outlives the container and the deployments this fix
- * most needs to reach are the ones provisioned before it existed. ADR Decision 103 records that
+ * most needs to reach are the ones provisioned before it existed. ADR Decision 106 records that
  * removing {@code backend-init.sh}'s "the target exists, so return" early exit is the point of the
  * decision; this is what says it is still gone.
  *
@@ -120,7 +120,7 @@ public class EntrypointVolumeVerificationTest {
 
 			assertTrue(run.output.contains(call.label + " ready: " + target), "the weights already on the volume"
 					+ " never reached the library's verification, so a file is being trusted for its name — which"
-					+ " is the whole of what ADR Decision 103 removed\n" + run);
+					+ " is the whole of what ADR Decision 106 removed\n" + run);
 			assertTrue(Files.exists(target), "the verification deleted bytes that match the recorded digest\n" + run);
 			assertArrayEquals(RECORDED_BYTES, Files.readAllBytes(target),
 					"the bytes on the volume were replaced although they were the recorded artifact\n" + run);

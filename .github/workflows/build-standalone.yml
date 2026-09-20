@@ -161,7 +161,7 @@ jobs:
       # model-manifest.tsv (#449). Every failure below — a non-2xx response, a wrong size, a digest
       # that does not match — exits this step non-zero, which is well before the assembly descriptor
       # is patched and before the artifact is uploaded, so an unverified file cannot reach the
-      # download the README advertises. ADR Decision 103.
+      # download the README advertises. ADR Decision 106.
       - name: Download AI model files
         env:
           MODEL_MANIFEST_FILE: ${{ github.workspace }}/chartsearchai-backend/model-manifest.tsv

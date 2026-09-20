@@ -1441,7 +1441,7 @@ public class DrugSafetyValidator {
 	 * a number the QUESTION chooses and came to dominate the pass. What closed that is not a bound on
 	 * this cap's own terms but {@link AboveFloorRules}, which resolves each pairwise arm's rule join
 	 * once. So the sentence above stays true — the cap bounds chips and not work — and it is no longer
-	 * a reason to leave the work unbounded. → ADR Decision 103, which carries the before/after table
+	 * a reason to leave the work unbounded. → ADR Decision 104, which carries the before/after table
 	 * and is the one home for its figures.
 	 *
 	 * @return the configured cap, or {@link ChartSearchAiConstants#DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS}
@@ -5974,14 +5974,14 @@ public class DrugSafetyValidator {
 	 * it is naming and so asks between once and N-1 times per drug. So the cost was quadratic in a
 	 * list the QUESTION chooses, times the rules on each row — and while the rule count is bounded by
 	 * the DATA, the row count had no bound but the controller's 1000-character question cap, inside
-	 * which a question can resolve several hundred rows — Decision 103 carries that number and what
+	 * which a question can resolve several hundred rows — Decision 104 carries that number and what
 	 * it is a ceiling OF, since it moves with the knowledge base. {@code validate} runs twice per request, the first
 	 * pass outside the serialised engine lock, so a request's CONTENT set its own CPU cost in the
 	 * shared OpenMRS JVM. {@link DrugSafetyValidator#maxPairChips} cannot be that bound and says so:
 	 * it bounds CHIPS and not WORK, because the cut is defined as "the least severe go" and nothing
 	 * knows a pair's rating until it has been evaluated.
 	 *
-	 * <p><b>ADR Decision 103 is the one home for what this cost and what it now costs.</b> It carries
+	 * <p><b>ADR Decision 104 is the one home for what this cost and what it now costs.</b> It carries
 	 * the before/after table, the packing each question used, and what remains the dominant term.
 	 * Nothing here restates a figure from it.
 	 *

@@ -1134,7 +1134,7 @@ public class DrugReferenceService {
 	 * caller's own entries rather than of the loaded dataset. Issue #447's pairwise arms invert the
 	 * handful of rows ONE arm is screening, where inverting every shipped entry would put a
 	 * whole-dataset walk on the commonest two-drug question, which is the cheapest thing this module
-	 * does — ADR Decision 103 carries what that question costs.
+	 * does — ADR Decision 104 carries what that question costs.
 	 *
 	 * <p><b>A distinct NAME and deliberately not an overload of {@link #nameIndex()}.</b> ADR Decision
 	 * 54 records what the overload shape cost the sibling it measured: dropping the argument at a call

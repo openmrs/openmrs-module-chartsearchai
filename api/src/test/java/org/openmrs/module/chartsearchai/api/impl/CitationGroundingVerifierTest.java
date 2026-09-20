@@ -11,7 +11,10 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
@@ -23,10 +26,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.CitationGroundingVerifier.TextEmbedder;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -2729,5 +2734,390 @@ public class CitationGroundingVerifierTest {
 
 		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
 				"nothing cleared the floor, so the citation is not grounded — and no failure is claimed");
+	}
+
+	/**
+	 * Issue #448: a one-line answer dense with {@code [N]} markers made the clause-scoped splitter
+	 * copy the cumulative prefix once per marker, so the characters it materialised grew as the
+	 * marker count times the sentence length — quadratic in an answer whose length a remote endpoint
+	 * chooses. The property, not a magnitude: what the splitter hands back is bounded by the answer
+	 * plus the per-answer allowance, whatever the shape of the answer.
+	 *
+	 * <p>The markers are DISTINCT deliberately. {@link ChartSearchAiUtils#citedIndexes} returns a
+	 * SET, so a repeated index collapses to one element and
+	 * {@link CitationGroundingVerifier#splitIntoClauseScopedSentences}'s single-citation guard
+	 * returns the sentence whole — which is what this case asserts of the FIXED code, so a repeated
+	 * index would make it pass before the change.
+	 */
+	@Test
+	public void clauseScopedSplitOfADenseOneLineAnswerStaysLinearInTheAnswerLength() {
+		String answer = denseOneLineAnswer(1000);
+
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoClauseScopedSentences(answer);
+
+		assertTrue(totalFragmentChars(clauses) <= answer.length()
+				+ CitationGroundingVerifier.MAX_SPLIT_FRAGMENT_CHARS,
+				"splitting one answer may materialise at most the answer plus the allowance; it "
+						+ "materialised " + totalFragmentChars(clauses) + " characters for an answer "
+						+ "of " + answer.length());
+		assertEquals(1, clauses.size(),
+				"and having refused the split it grades the sentence whole, which is the "
+						+ "sentence-scoped unit");
+		assertEquals(answer, clauses.get(0).text, "unchanged, not truncated");
+	}
+
+	/**
+	 * The same defect in the splitter that runs in BOTH scoping modes, so it is reachable with
+	 * {@code chartsearchai.grounding.clauseScoped} left at its default false. Issue #448's body says
+	 * of this path "the sentence-scoped default splitter (splitIntoCitedSentences /
+	 * splitEnumeration) is linear per sentence and does not have this property"; this case is the
+	 * measurement that says otherwise. {@link CitationGroundingVerifier#splitEnumeration} gives every
+	 * item the whole preamble, and the preamble is the text up to the colon nearest the first marker
+	 * — unbounded. Its per-item guards test the marker-stripped ITEM, never the preamble.
+	 */
+	@Test
+	public void enumerationSplitOfALongPreambleStaysLinearInTheAnswerLength() {
+		String answer = longPreambleEnumeration(5000, 200);
+
+		List<CitationGroundingVerifier.Sentence> items = CitationGroundingVerifier
+				.splitIntoCitedSentences(answer);
+
+		assertTrue(totalFragmentChars(items) <= answer.length()
+				+ CitationGroundingVerifier.MAX_SPLIT_FRAGMENT_CHARS,
+				"splitting one answer may materialise at most the answer plus the allowance; it "
+						+ "materialised " + totalFragmentChars(items) + " characters for an answer of "
+						+ answer.length());
+		assertEquals(1, items.size(), "the refused enumeration is graded as one sentence");
+		assertEquals(answer, items.get(0).text, "unchanged, not truncated");
+	}
+
+	/**
+	 * The allowance is spent per ANSWER. Thirty sentences, each cheap enough to split on its own,
+	 * together cost more than the allowance — so a cap applied per sentence at the same value would
+	 * split every one of them and leave the total unbounded by the answer length. Only the aggregate
+	 * property is pinned: a per-sentence cap at a SMALLER value would also satisfy this, and the
+	 * criterion issue #448 states is the aggregate one.
+	 */
+	@Test
+	public void theSplitAllowanceIsSpentPerANSWERAndNotPerSENTENCE() {
+		String answer = manyAffordableSentences(30, 60);
+
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoClauseScopedSentences(answer);
+
+		assertTrue(totalFragmentChars(clauses) <= answer.length()
+				+ CitationGroundingVerifier.MAX_SPLIT_FRAGMENT_CHARS,
+				"thirty individually affordable sentences may not together exceed the allowance; "
+						+ "they materialised " + totalFragmentChars(clauses) + " characters for an "
+						+ "answer of " + answer.length());
+		assertTrue(clauses.size() > 30,
+				"the early sentences must still be split — a bound that refuses everything is not "
+						+ "the fix, it is the feature turned off");
+	}
+
+	/**
+	 * A refused split changes how every citation of that sentence is graded — it loses its clause,
+	 * and with it the isolation that keeps its Tier-2 verdict out of the shared batch — so it may
+	 * not be silent. The level is the observable: the returned list is a legitimate list either way.
+	 * The line carries numbers only, because a grounding log line that quoted the answer would write
+	 * the patient's own clinical text into the default server log (issue #439).
+	 */
+	@Test
+	public void aRefusedSplitIsReportedAtWARNWithoutQuotingTheAnswer() {
+		String answer = denseOneLineAnswer(1000);
+
+		try (LogCapture capture = LogCapture.on(CitationGroundingVerifier.class.getName())) {
+			CitationGroundingVerifier.splitIntoClauseScopedSentences(answer);
+
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"a refused split must be reported. Captured: " + capture.describeAll());
+			for (String message : capture.messagesAt(Level.WARN)) {
+				assertFalse(message.contains("[1]") || message.contains("filler"),
+						"the line may carry counts and lengths, never the answer's own text: "
+								+ message);
+			}
+		}
+	}
+
+	/**
+	 * A fragment carries its parent's citations by SHARING that set, never by copying it. The set
+	 * holds one entry per distinct marker in the parent sentence, so a copy per fragment costs the
+	 * marker count squared in set entries even when the fragments' TEXT is bounded — which would
+	 * leave issue #448's exhaustion reachable behind a character allowance that reports itself
+	 * satisfied. Sharing is safe because both sets are unmodifiable, which the second assertion
+	 * pins.
+	 */
+	@Test
+	public void everyFragmentOfOneSentenceSharesItsParentsCitationSetRatherThanCopyingIt() {
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoClauseScopedSentences("A condition [1] and a diagnosis [2].");
+
+		assertEquals(2, clauses.size());
+		assertSame(clauses.get(0).sourceCitedIndexes, clauses.get(1).sourceCitedIndexes,
+				"both clauses rest on the SAME set instance, not on two copies of it");
+		assertThrows(UnsupportedOperationException.class,
+				() -> clauses.get(0).sourceCitedIndexes.add(Integer.valueOf(9)),
+				"a shared set must be unmodifiable, or one fragment could rewrite its siblings");
+	}
+
+	/**
+	 * Once the allowance is gone every later multi-citation sentence is refused too, and the input
+	 * that gets there is by definition long — so the report is ONE line per answer and not one per
+	 * sentence. A log flood is the second half of the availability defect issue #448 is about: the
+	 * answer is attacker-length, and a line per sentence writes it to disk that many times over.
+	 */
+	@Test
+	public void aRefusedSplitIsReportedOncePerANSWERAndNotOncePerSentence() {
+		String answer = manyAffordableSentences(30, 60);
+
+		try (LogCapture capture = LogCapture.on(CitationGroundingVerifier.class.getName())) {
+			List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+					.splitIntoClauseScopedSentences(answer);
+
+			int refused = 0;
+			for (CitationGroundingVerifier.Sentence clause : clauses) {
+				if (clause.citedIndexes.size() > 1) {
+					refused++;
+				}
+			}
+			assertTrue(refused > 1, "premise: more than one sentence must have been refused, or "
+					+ "one line and one refusal would be the same measurement. Refused: " + refused);
+			assertEquals(1, capture.messagesAt(Level.WARN).size(),
+					"one line for the answer, whatever it cost. Captured: " + capture.describeAll());
+			assertTrue(capture.hasMessageAt(Level.WARN, refused + " sentence(s)"),
+					"and it states the ANSWER's total, not the first refusal's own numbers — the "
+							+ "figure a maintainer sizes the incident by. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/**
+	 * Bounding the SPLITTER left the same quadratic standing in its consumer: {@code AnswerCitations}
+	 * unioned each claim unit's source citations into {@code anchored} once per FRAGMENT, and since
+	 * issue #448 makes every fragment of a sentence share one set of one entry per distinct marker,
+	 * that is the fragment count times the marker count — both of which are the marker count. It is
+	 * invisible to an allowance counted in characters, which is why the allowance's own cases cannot
+	 * see it: measured through this same {@code verify()} call, 254 ms at 5,000 markers, 879 at
+	 * 10,000 and 3,557 at 20,000, four times the work for twice the answer.
+	 *
+	 * <p><strong>Asserted as a RATIO, not as a wall-clock bound</strong>, so the case says the same
+	 * thing on a fast machine and a loaded one: four times the markers is four times the work if the
+	 * pass is linear and sixteen if it is quadratic, and the threshold sits between. Each size is
+	 * measured twice and the lower reading kept, after a discarded warm-up, because what JIT and a
+	 * co-tenant build add is noise in one direction only.
+	 *
+	 * <p>The premise is asserted rather than assumed: both answers must really be SPLIT. If either
+	 * crossed the allowance it would come back as one whole sentence, there would be no fragment
+	 * count to multiply, and this case would pass without having run the thing it is about.
+	 */
+	@Test
+	public void theAnswersMarkersAreUnionedOncePerDISTINCTSetAndNotOncePerFragment() {
+		String small = sharedPreambleEnumeration(10000);
+		String large = sharedPreambleEnumeration(40000);
+		assertTrue(CitationGroundingVerifier.splitIntoCitedSentences(small).size() > 9000
+				&& CitationGroundingVerifier.splitIntoCitedSentences(large).size() > 36000,
+				"premise: both answers must be split per item, or there is no fragment count to "
+						+ "multiply and this case measures nothing");
+
+		groundingMillis(small); // warm-up, discarded
+
+		long smallest = Math.min(groundingMillis(small), groundingMillis(small));
+		long largest = Math.min(groundingMillis(large), groundingMillis(large));
+
+		assertTrue(largest <= 8 * Math.max(smallest, 1L),
+				"four times the markers may cost about four times the work, not sixteen: "
+						+ smallest + " ms at 10,000 markers against " + largest + " ms at 40,000");
+	}
+
+	/** Grounds {@code answer} against ten cited records through the real verifier, in milliseconds. */
+	private long groundingMillis(String answer) {
+		List<RecordReference> references = new ArrayList<RecordReference>();
+		List<RecordMapping> mappings = new ArrayList<RecordMapping>();
+		for (int index = 1; index <= 10; index++) {
+			references.add(reference(index));
+			mappings.add(mapping(index, "record " + index));
+		}
+		long start = System.nanoTime();
+		verifier.verify(answer, references, mappings, FLOOR, TIER1_ONLY);
+		return (System.nanoTime() - start) / 1000000L;
+	}
+
+	/** An enumeration of {@code markers} one-word items behind a two-character preamble — the shape
+	 *  that buys the most fragments per character of the answer's split allowance. */
+	private static String sharedPreambleEnumeration(int markers) {
+		StringBuilder answer = new StringBuilder("x:");
+		for (int index = 1; index <= markers; index++) {
+			answer.append(index == 1 ? " a [" : ", a [").append(index).append(']');
+		}
+		return answer.toString();
+	}
+
+	/**
+	 * ONE allowance for the answer, spent across BOTH splitters — not one each. The enumeration pass
+	 * runs to completion inside {@code splitIntoCitedSentences} before the first clause is built, so
+	 * an answer whose enumerations spend nearly all of it must leave the compound sentence after
+	 * them unsplit. Give each pass its own {@code FragmentBudget} and the bound doubles silently,
+	 * which is what this case refuses: no other case here mixes the two shapes, so the threading is
+	 * otherwise free to be undone with the suite green.
+	 */
+	@Test
+	public void oneAllowanceIsSharedBySplittingBOTHShapesOfOneAnswer() {
+		StringBuilder answer = new StringBuilder();
+		for (int word = 0; word < 250; word++) {
+			answer.append("zzz ");
+		}
+		answer.append(':');
+		for (int index = 1; index <= 950; index++) {
+			answer.append(index == 1 ? " a [" : ", a [").append(index).append(']');
+		}
+		answer.append(". ");
+		int compoundStart = answer.length();
+		for (int word = 0; word < 12500; word++) {
+			answer.append("word ");
+		}
+		answer.append("[1] and a further finding [2].");
+		String compound = answer.substring(compoundStart);
+
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoClauseScopedSentences(answer.toString());
+
+		assertTrue(clauses.size() > 900,
+				"premise: the enumeration itself must have been split, or it spent nothing and the "
+						+ "compound after it would be unsplit for the wrong reason. Units: "
+						+ clauses.size());
+		assertEquals(compound, clauses.get(clauses.size() - 1).text,
+				"the enumeration spent the answer's allowance, so the compound sentence after it is "
+						+ "graded whole — with an allowance of its own it would have been split");
+	}
+
+	/**
+	 * What a refused clause split actually costs the ordinary case, asserted rather than reasoned.
+	 * A sentence whose markers are separated by claim text is a {@link
+	 * CitationGroundingVerifier.Sentence#compoundClaim()} once it is graded whole, so under
+	 * entailment its citations publish NO verdict — the #302 withholding, which is a larger loss
+	 * than the co-batching the co-citation shape suffers. ADR Decision 103 says so; this is the case
+	 * that makes it a measurement.
+	 *
+	 * <p>Both halves are driven in CLAUSE-SCOPED mode, through the six-argument
+	 * {@code verify}: the five-argument one is sentence-scoped, where no clause split is attempted
+	 * at all, so the refusal would not be in the causal path and the {@code null} asserted below
+	 * would be the plain #302 withholding of an unsplit compound. The affordable half is the
+	 * control that says so — the same prose shape, short enough to split, publishes verdicts.
+	 */
+	@Test
+	public void aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers() {
+		String affordable = compoundProse(2);
+		String refused = compoundProse(1200);
+
+		assertEquals(2, CitationGroundingVerifier.splitIntoClauseScopedSentences(affordable).size(),
+				"control premise: the short one is split into its two clauses");
+		assertEquals(1, CitationGroundingVerifier.splitIntoClauseScopedSentences(refused).size(),
+				"premise: the long one's split is refused, so it is graded whole");
+
+		List<RecordReference> control = verifier.verify(affordable,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "a condition"), mapping(2, "a finding")), FLOOR, TIER2_ON,
+				true);
+		assertNotNull(control.get(0).getGrounded(),
+				"control: a clause-scoped fragment is its own claim, so a verdict is PUBLISHED for "
+						+ "it — whichever way it falls. That is what the refused case below loses, "
+						+ "and without this row the null there could be any other withholding");
+
+		List<RecordReference> result = verifier.verify(refused,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "a condition"), mapping(2, "a finding")), FLOOR, TIER2_ON,
+				true);
+		assertNull(result.get(0).getGrounded(),
+				"the refused sentence is a compound claim, so the refusal costs the verdict itself "
+						+ "and not merely its isolation");
+		assertNull(result.get(1).getGrounded(), "and the same for its co-citation");
+	}
+
+	/** One sentence carrying {@code markers} markers with claim text between each pair, so that
+	 *  graded whole it is a compound claim. */
+	private static String compoundProse(int markers) {
+		StringBuilder prose = new StringBuilder("The patient has a condition");
+		for (int index = 1; index <= markers; index++) {
+			prose.append(" [").append(index).append("] and a further recorded finding");
+		}
+		return prose.toString();
+	}
+
+	/**
+	 * One sentence graded whole is ONE sentence in the report, however many splitters refused it.
+	 * An enumeration the allowance turns down is handed on whole and then offered to the
+	 * clause-scoped rule, which turns it down too — so counting refusals rather than sentences
+	 * states twice the truth of exactly the answer a maintainer is triaging.
+	 */
+	@Test
+	public void aSentenceBOTHSplittersRefuseIsOneSentenceInTheReport() {
+		StringBuilder answer = new StringBuilder();
+		while (answer.length() < CitationGroundingVerifier.MAX_SPLIT_FRAGMENT_CHARS + 100000L) {
+			answer.append("zzzzzzzzzz ");
+		}
+		answer.append(": a [1], a [2]");
+		String text = answer.toString();
+
+		try (LogCapture capture = LogCapture.on(CitationGroundingVerifier.class.getName())) {
+			List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+					.splitIntoClauseScopedSentences(text);
+
+			assertEquals(1, clauses.size(),
+					"premise: one sentence, refused by the enumeration rule and then by the "
+							+ "clause rule");
+			assertTrue(capture.hasMessageAt(Level.WARN, "1 sentence(s)"),
+					"one sentence graded whole is one in the report, not two. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/** One line, no sentence terminator and no colon, with {@code markers} DISTINCT markers. */
+	private static String denseOneLineAnswer(int markers) {
+		StringBuilder answer = new StringBuilder("x");
+		for (int index = 1; index <= markers; index++) {
+			answer.append(" [").append(index).append(']');
+		}
+		return answer.toString();
+	}
+
+	/** One sentence whose list-introducing colon is preceded by {@code fillerWords} words, so every
+	 *  enumerated item is handed the whole preamble. */
+	private static String longPreambleEnumeration(int fillerWords, int items) {
+		StringBuilder answer = new StringBuilder();
+		for (int word = 0; word < fillerWords; word++) {
+			answer.append("z ");
+		}
+		answer.append(':');
+		for (int index = 1; index <= items; index++) {
+			answer.append(index == 1 ? " a [" : ", a [").append(index).append(']');
+		}
+		return answer.toString();
+	}
+
+	/** {@code sentences} sentences, each with {@code markers} distinct markers and enough filler to
+	 *  make its own split cost a small fraction of the allowance. */
+	private static String manyAffordableSentences(int sentences, int markers) {
+		StringBuilder filler = new StringBuilder();
+		for (int word = 0; word < 200; word++) {
+			filler.append("filler ");
+		}
+		StringBuilder answer = new StringBuilder();
+		for (int sentence = 0; sentence < sentences; sentence++) {
+			answer.append(filler);
+			for (int index = 1; index <= markers; index++) {
+				answer.append(" [").append(index).append(']');
+			}
+			answer.append(". ");
+		}
+		return answer.toString();
+	}
+
+	private static long totalFragmentChars(List<CitationGroundingVerifier.Sentence> fragments) {
+		long total = 0;
+		for (CitationGroundingVerifier.Sentence fragment : fragments) {
+			total += fragment.text.length();
+		}
+		return total;
 	}
 }

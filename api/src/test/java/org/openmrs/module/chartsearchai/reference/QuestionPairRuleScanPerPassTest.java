@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * whole interaction list, once per ORDERED pair — twice per unordered pair from
  * {@code collectQuestionPairInteraction} and again from {@code pairKeyNames} — so its cost was
  * quadratic in a number the QUESTION chooses, times the rules on each row, the first bounded by
- * nothing but the controller's 1000-character question cap. <b>ADR Decision 103 is the one home for
+ * nothing but the controller's 1000-character question cap. <b>ADR Decision 104 is the one home for
  * the before/after figures</b>; what belongs here is the shape they have, which is that the walk
  * count tracked the pair loop's own N(N-1) rather than anything the arm does per pair.
  *
@@ -256,7 +256,7 @@ public class QuestionPairRuleScanPerPassTest {
 						+ " quadratic in a row count the arm does not choose — the QUESTION's for the"
 						+ " question-pair arm, the CHART's for the screen — and nothing bounds the first"
 						+ " but the controller's 1000-character cap. Ask the arm's own AboveFloorRules"
-						+ " instead; it reads each list once. ADR Decision 103 carries what it cost.");
+						+ " instead; it reads each list once. ADR Decision 104 carries what it cost.");
 			}
 		}
 	}

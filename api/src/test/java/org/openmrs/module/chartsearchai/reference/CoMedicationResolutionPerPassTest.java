@@ -43,7 +43,7 @@ import org.junit.jupiter.api.Test;
  * that count the pairwise arms did dominate, because their rule reading was quadratic in a row count
  * the QUESTION chooses: a question resolving several hundred rows — which the controller's
  * 1000-character cap admits — cost seconds per pass until {@code DrugSafetyValidator.AboveFloorRules}
- * inverted that join. ADR Decision 103 carries the measurement; what survives here is the sentence
+ * inverted that join. ADR Decision 104 carries the measurement; what survives here is the sentence
  * above about THIS issue's ten-drug cell, not a general ranking of the arms.
  *
  * <p><b>What these cases count, and why that is the honest unit.</b> A timing assertion would be flaky

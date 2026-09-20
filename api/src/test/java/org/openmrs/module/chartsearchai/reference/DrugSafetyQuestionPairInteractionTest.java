@@ -265,7 +265,8 @@ public class DrugSafetyQuestionPairInteractionTest {
 		DrugReferenceService fixture = pairFixtureService();
 		DrugReference levofloxacin = fixture.findByQuery("levofloxacin").get(0);
 		assertEquals("ethinyl estradiol", levofloxacin.getInteractions().get(0).getToken(),
-				"precondition: the only rule must be against ethinyl estradiol, a different drug");
+				"precondition: the FIRST rule must be against ethinyl estradiol, a different drug — this"
+						+ " entry carries a second rule since issue #447, which this case does not read");
 
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixture).validate(
 				"The records do not address this combination.",

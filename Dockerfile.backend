@@ -68,6 +68,10 @@ COPY --from=core-war /openmrs.war /openmrs/distribution/openmrs_core/openmrs.war
 COPY --from=chartsearchai-builder /build/omod/target/chartsearchai-*.omod /openmrs/distribution/openmrs_modules/
 COPY --from=querystore-builder /build/omod/target/querystore-*.omod /openmrs/distribution/openmrs_modules/
 COPY --chmod=755 backend-init.sh /usr/local/bin/backend-init.sh
+# The entrypoint sources the library and reads the digests from the manifest; without both in the
+# image it cannot tell the reviewed model files from substituted ones (#444). ADR Decision 106.
+COPY --chmod=644 scripts/model-manifest.sh /usr/local/bin/model-manifest.sh
+COPY --chmod=644 model-manifest.tsv /usr/local/share/chartsearchai/model-manifest.tsv
 
 RUN mkdir -p /openmrs/data && chown -R 1001:1001 /openmrs /usr/local/tomcat
 

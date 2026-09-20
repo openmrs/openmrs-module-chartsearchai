@@ -113,7 +113,7 @@ public class LocalLlmEngine implements LlmEngine {
 	 * {@code 127.0.0.1:<port>}, so a child still alive past this point is the listener answering
 	 * there; a child that lost the port is gone by it.
 	 *
-	 * <p>{@code docs/adr.md} Decision 103 row 7 measured the bind 0.138 s after exec — before the
+	 * <p>{@code docs/adr.md} Decision 107 row 7 measured the bind 0.138 s after exec — before the
 	 * model is touched — and row 9 the exit ~0.06 s after losing it, so this is about two and a
 	 * half times what a doomed child needs to announce itself by dying. A host slow enough to
 	 * exceed it is the residue, which that decision names rather than claims away.
@@ -853,7 +853,7 @@ public class LocalLlmEngine implements LlmEngine {
 	 *       {@code LLAMA_ARG_HOST} from the environment the child inherits from this JVM; the
 	 *       second closes the Web UI root. It is not the only route that answers a caller with no
 	 *       credential — {@code /health} and {@code /v1/models} are public by design, which is
-	 *       measured in ADR Decision 103 row 5 and which the readiness probe depends on — it is
+	 *       measured in ADR Decision 107 row 5 and which the readiness probe depends on — it is
 	 *       the only one this module can close, and it needs none of it. Both flags are pinned in
 	 *       {@code LocalLlmServerAuthTest}; read the nested {@code CLAUDE.md} in this package
 	 *       before changing either.</li>
@@ -917,7 +917,7 @@ public class LocalLlmEngine implements LlmEngine {
 		cmd.add("--port");
 		cmd.add(String.valueOf(port));
 		// Both flags are load-bearing; the rationale is this method's own javadoc, the
-		// measurements are ADR Decision 103 rows 4 and 6, and the rule is the nested CLAUDE.md.
+		// measurements are ADR Decision 107 rows 4 and 6, and the rule is the nested CLAUDE.md.
 		cmd.add("--host");
 		cmd.add(LlamaServerEndpoint.LOOPBACK_HOST);
 		cmd.add("--no-webui");
@@ -1046,7 +1046,7 @@ public class LocalLlmEngine implements LlmEngine {
 	 * <p>It CONNECTS rather than trying to bind, because the engine's question is <em>does a
 	 * connection to the address I am about to dial reach somebody?</em> and a bind answers a
 	 * different one — wrongly in both directions, measured over four socket shapes in
-	 * {@code docs/adr.md} Decision 103 row 11. Only {@link ConnectException} reads as a free port;
+	 * {@code docs/adr.md} Decision 107 row 11. Only {@link ConnectException} reads as a free port;
 	 * every other {@link IOException} establishes no refusal and refuses the start, because
 	 * treating one as "nothing listening" is how this check fails OPEN — including a listener whose
 	 * accept backlog is full, which answers with a timeout and is refused HERE rather than passed
@@ -1131,7 +1131,7 @@ public class LocalLlmEngine implements LlmEngine {
 	 *       the listener so that a child already gone is reported as that rather than as whatever
 	 *       the probes then say about a stranger. On its own this leg establishes nothing about
 	 *       who holds the port: {@link #waitForServerReady} sends its first health request a few
-	 *       milliseconds after {@code pb.start()}, and Decision 103 row 7 measured the child's
+	 *       milliseconds after {@code pb.start()}, and Decision 107 row 7 measured the child's
 	 *       bind 0.138 s after exec — so at a reply that early the child is alive and has not yet
 	 *       tried for the port, whoever is answering.</li>
 	 *   <li>An unauthenticated call must be REFUSED. See

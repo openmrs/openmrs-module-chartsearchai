@@ -59,7 +59,7 @@ import org.openmrs.api.APIException;
  * composed path — publish, write, read — rather than any one of them alone.
  *
  * <p>The figures those entry points were designed against were measured on the bundled binary and
- * are recorded in {@code docs/adr.md} Decision 103, not here.
+ * are recorded in {@code docs/adr.md} Decision 107, not here.
  */
 public class LocalLlmServerAuthTest {
 
@@ -452,7 +452,7 @@ public class LocalLlmServerAuthTest {
 	 * {@link #aHealthyReplyInsideTheChildsBindWindowIsRefusedRatherThanAdopted}. What is left is a
 	 * mimic that takes the port WITHOUT the child noticing — a host slow enough that the window
 	 * closes before the child has tried, or a build that survives a failed bind — and
-	 * {@code docs/adr.md} Decision 103 states that rather than claiming otherwise.
+	 * {@code docs/adr.md} Decision 107 states that rather than claiming otherwise.
 	 */
 	@Test
 	public void aHealthyListenerEnforcingTheKeyBesideALiveChildIsReadiness() throws Exception {
@@ -675,7 +675,7 @@ public class LocalLlmServerAuthTest {
 					+ "is the whole case: a gate that reads liveness only here cannot tell this "
 					+ "impostor from the server");
 			// 250 ms is a LITERAL and not derived from the production constant: it is past the
-			// 0.138 s bind and the ~0.06 s exit Decision 103 rows 7 and 9 measured, so it is when
+			// 0.138 s bind and the ~0.06 s exit Decision 107 rows 7 and 9 measured, so it is when
 			// a child that lost this port really stops being alive. Deriving it from the constant
 			// would let the constant be set to zero and leave this green.
 			losesTheBind.schedule(child::destroyForcibly, 250,

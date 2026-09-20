@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -572,7 +573,8 @@ public class CitationGroundingVerifier {
 	 * checked against the answer text up to and including its own {@code [N]} marker, not the whole
 	 * compound sentence (see {@link #splitIntoClauseScopedSentences}). Independently of this flag, an
 	 * ENUMERATING sentence is split per item (#278) — so a split fragment is not evidence that
-	 * {@code clauseScoped} was set. Those split citations are each
+	 * {@code clauseScoped} was set. Both splits are bounded by the answer's split allowance,
+	 * {@link #MAX_SPLIT_FRAGMENT_CHARS}, past which the sentence is graded whole. Those split citations are each
 	 * Tier-2 verified in their OWN entailment call rather than co-batched: batched entailment is not
 	 * per-pair independent, so co-batching a compound sentence's citations (whose clause statements
 	 * overlap) lets the LLM couple their verdicts. Every other citation is still confirmed in the one
@@ -1064,10 +1066,11 @@ public class CitationGroundingVerifier {
 		 *
 		 * <p><b>Since issue #305 that is not true of every member.</b> A citation the MODULE attached
 		 * carries no marker either, so it lands here — and it was offered in support of nothing at
-		 * all, rather than of the answer as a whole. It is unioned into every claim's
-		 * {@link #restsOn} anyway, and that is inert rather than right: the only reader,
-		 * {@link CitationGroundingVerifier#restsOnReferenceMaterial}, tests membership in
-		 * {@code demoteOnlyIndexes}, and an attached index is always chart-group — the derivation
+		 * all, rather than of the answer as a whole. It joins every claim's {@link #restsOn} anyway,
+		 * and that is inert rather than right: the only reader,
+		 * {@link CitationGroundingVerifier#restsOnReferenceMaterial}, asks only whether some
+		 * {@code demoteOnlyIndexes} member is among them, and an attached index is always
+		 * chart-group — the derivation
 		 * resolves allergy and condition uuids, and the {@code safety_finding} mappings are appended
 		 * after the injector's uuid index is built, so a finding can never attach a finding. Stated
 		 * because the #284 widening rests on the sentence above, and it is now weaker than it reads:
@@ -1077,17 +1080,29 @@ public class CitationGroundingVerifier {
 		final Set<Integer> unanchored;
 
 		AnswerCitations(List<Sentence> sentences, List<RecordReference> references) {
-			anchored = new HashSet<Integer>();
+			// Once per DISTINCT set, by identity, and not once per sentence. Since issue #448 every
+			// fragment of a sentence SHARES that sentence's set rather than copying it, so the
+			// sentences of one split all present the same instance — and unioning it per fragment
+			// would cost the fragment count times the marker count, both of which are the marker
+			// count. That is the answer-quadratic shape #448 is about, surviving in the consumer
+			// after the splitter was bounded, and invisible to an allowance counted in characters.
+			Set<Integer> merged = new HashSet<Integer>();
+			Set<Set<Integer>> unioned = Collections
+					.newSetFromMap(new IdentityHashMap<Set<Integer>, Boolean>());
 			for (Sentence sentence : sentences) {
-				anchored.addAll(sentence.sourceCitedIndexes);
+				if (unioned.add(sentence.sourceCitedIndexes)) {
+					merged.addAll(sentence.sourceCitedIndexes);
+				}
 			}
-			unanchored = new HashSet<Integer>();
+			anchored = Collections.unmodifiableSet(merged);
+			Set<Integer> unmarked = new HashSet<Integer>();
 			for (RecordReference reference : references) {
 				Integer index = Integer.valueOf(reference.getIndex());
 				if (!anchored.contains(index)) {
-					unanchored.add(index);
+					unmarked.add(index);
 				}
 			}
+			unanchored = Collections.unmodifiableSet(unmarked);
 		}
 
 		/**
@@ -1095,11 +1110,43 @@ public class CitationGroundingVerifier {
 		 * citations — or, where the pairing was GUESSED because nothing anchored this record, every
 		 * anchored citation, since the statement was then chosen out of the whole answer. The
 		 * unanchored citations join either case, for the reason above.
+		 *
+		 * <p>A VIEW over those two sets and never a copy of them, because this is called once per
+		 * reference and the claim's own set holds one entry per distinct marker in its sentence —
+		 * so a copy is the reference count times the marker count, retained in
+		 * {@link Tier1Result#claimRestsOn} for the length of the pass — so a marker-dense answer at
+		 * a handful of cited records exhausted the heap through this method while the splitter's own
+		 * allowance had already refused the split and logged that it had. ADR Decision 103 carries
+		 * the heap sweep that bounds it. Both operands are unmodifiable, so sharing them is safe.
 		 */
-		Set<Integer> restsOn(Sentence claim, boolean guessed) {
-			Set<Integer> restsOn = new HashSet<Integer>(unanchored);
-			restsOn.addAll(guessed ? anchored : claim.sourceCitedIndexes);
-			return restsOn;
+		ClaimSupport restsOn(Sentence claim, boolean guessed) {
+			return new ClaimSupport(unanchored, guessed ? anchored : claim.sourceCitedIndexes);
+		}
+	}
+
+	/**
+	 * The citations one selected statement rests on, as a membership question over the two sets that
+	 * answer it rather than as their union — see {@link AnswerCitations#restsOn} for why the union is
+	 * not materialised, and {@link Tier1Result#claimRestsOn} for what reads it.
+	 */
+	private static final class ClaimSupport {
+
+		/** What a reference with no selected claim sentence rests on: nothing. */
+		static final ClaimSupport NONE = new ClaimSupport(Collections.<Integer> emptySet(),
+				Collections.<Integer> emptySet());
+
+		private final Set<Integer> unanchored;
+
+		/** The claim's own citations, or every anchored citation where the pairing was guessed. */
+		private final Set<Integer> own;
+
+		ClaimSupport(Set<Integer> unanchored, Set<Integer> own) {
+			this.unanchored = unanchored;
+			this.own = own;
+		}
+
+		boolean contains(Integer index) {
+			return own.contains(index) || unanchored.contains(index);
 		}
 	}
 
@@ -1112,10 +1159,13 @@ public class CitationGroundingVerifier {
 	 * {@link ChartSearchAiUtils#isGroundingDemoteOnly} — never a resource type compared here, which
 	 * is the mistake #122 exists to stop being made a second time.
 	 */
-	private static boolean restsOnReferenceMaterial(Set<Integer> claimRestsOn,
+	private static boolean restsOnReferenceMaterial(ClaimSupport claimRestsOn,
 			Set<Integer> demoteOnlyIndexes) {
-		for (Integer cited : claimRestsOn) {
-			if (demoteOnlyIndexes.contains(cited)) {
+		// Iterates the reference-group indexes and not the claim's citations: the first is bounded by
+		// the chart's cited records, the second by the answer's markers, which a remote endpoint
+		// chooses. Same answer, and the loop no longer grows with the answer (#448).
+		for (Integer demoteOnly : demoteOnlyIndexes) {
+			if (claimRestsOn.contains(demoteOnly)) {
 				return true;
 			}
 		}
@@ -1229,13 +1279,13 @@ public class CitationGroundingVerifier {
 				// indexing on -1, which would throw into the catch below and report an embedding
 				// failure for an arithmetic edge — turning this branch's FALSE into a null.
 				return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText,
-						bestIsolate, false, -1, false, Collections.<Integer> emptySet());
+						bestIsolate, false, -1, false, ClaimSupport.NONE);
 			}
 			// claimRestsOn is recorded on this path too, though nothing reads it here: the
 			// composite-claim rule fires only on a Tier-2 negative and this is the Tier-1-only path.
-			// Populated anyway so the field means the same thing wherever a claim was selected — an
-			// empty set is "no claim", not "a claim that rests on nothing", and the difference is
-			// fail-OPEN if the rule's gate ever widens.
+			// Populated anyway so the field means the same thing wherever a claim was selected —
+			// ClaimSupport.NONE is "no claim", not "a claim that rests on nothing", and the
+			// difference is fail-OPEN if the rule's gate ever widens.
 			return new Tier1Result(Boolean.valueOf(best >= floor), bestSentence, recordText, bestIsolate,
 					false, bestIdx, false, citations.restsOn(sentences.get(bestIdx), !anyInlineCite));
 		}
@@ -1312,10 +1362,10 @@ public class CitationGroundingVerifier {
 		 *  {@link Sentence#sourceCitedIndexes} — or every ANCHORED citation in the answer where the
 		 *  pairing was GUESSED (see {@link #selectClaim}) — and, on either branch, the answer's
 		 *  UNANCHORED citations, which belong to no statement and therefore to all. See
-		 *  {@link AnswerCitations#restsOn}, which is the only thing that builds this. Empty where no
-		 *  claim sentence was selected. Read by the composite-claim rule in Pass 2 of
+		 *  {@link AnswerCitations#restsOn}, which is the only thing that builds this. Supports nothing
+		 *  where no claim sentence was selected. Read by the composite-claim rule in Pass 2 of
 		 *  {@link #verify}. */
-		final Set<Integer> claimRestsOn;
+		final ClaimSupport claimRestsOn;
 
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate) {
 			this(verdict, bestSentence, recordText, isolate, false, -1, false);
@@ -1324,12 +1374,12 @@ public class CitationGroundingVerifier {
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate,
 				boolean compoundClaim, int bestSentenceIdx, boolean deferred) {
 			this(verdict, bestSentence, recordText, isolate, compoundClaim, bestSentenceIdx, deferred,
-					Collections.<Integer> emptySet());
+					ClaimSupport.NONE);
 		}
 
 		Tier1Result(Boolean verdict, String bestSentence, String recordText, boolean isolate,
 				boolean compoundClaim, int bestSentenceIdx, boolean deferred,
-				Set<Integer> claimRestsOn) {
+				ClaimSupport claimRestsOn) {
 			this.verdict = verdict;
 			this.bestSentence = bestSentence;
 			this.recordText = recordText;
@@ -1362,15 +1412,142 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
+	 * The characters one answer's PER-MARKER splitting may materialise, across both splitters
+	 * together — {@link FragmentBudget} spends it, and a sentence it cannot pay for is graded whole.
+	 *
+	 * <p>Both splitters build one fragment per inline {@code [N]} marker whose length is of the
+	 * order of its sentence's own, so a sentence of length L with M markers costs about
+	 * M&times;L characters, and neither M nor L is bounded: {@code SENTENCE_BOUNDARY} reads a
+	 * one-line answer as a single sentence of the whole answer's length, and with the remote engine
+	 * the answer's length is the endpoint's choice. The allowance is spent per ANSWER rather than
+	 * per sentence, which is what makes the total linear in the answer length. Why it is a fixed
+	 * constant, which alternatives were rejected and what the sizing measured: ADR Decision 103,
+	 * issue #448.
+	 *
+	 * <p><strong>What the value is a bound OF.</strong> Fragment TEXT, and the heap a split holds is
+	 * a small multiple of that once each fragment's own {@code Sentence}, {@code String} and
+	 * singleton set are counted — so size a change to it against the characters and then measure,
+	 * rather than reading the characters as the heap. Splitting a 16&nbsp;KB answer (this module's own local engine is capped
+	 * at {@link ChartSearchAiConstants#DEFAULT_LLM_MAX_OUTPUT_TOKENS} tokens, on that order) whose
+	 * every sentence carried ten markers costs about 8e4, a twelfth of it.
+	 *
+	 * <p><strong>What crosses it is markers times sentence length, not length alone.</strong> Two
+	 * figures, both measured 2026-09-17 by driving {@link #splitIntoClauseScopedSentences}. A degenerate
+	 * one-line answer of 3,457 characters carrying 594 distinct markers is refused, the smallest of
+	 * that shape which is — 593 markers, 3,451 characters, still split into 593 clauses. And over
+	 * the 52 captured answers under {@code eval/drift-metric/fixtures}, 37 of which carry markers,
+	 * the largest split either splitter CHARGES for is 474 characters, on a 346-character answer.
+	 * Those two points are what is recorded, rather than a rule about which answers reach the
+	 * allowance: successive drafts of such a rule were each refuted by the next measurement, so
+	 * measure the shape in front of you instead. What follows from the arithmetic alone is enough: a
+	 * refusal is not a remote-endpoint-only event, and on the degenerate shape it is the rule
+	 * working rather than a gap in it, since such a sentence has no clause worth grading.
+	 */
+	static final long MAX_SPLIT_FRAGMENT_CHARS = 1_000_000L;
+
+	/**
+	 * One answer's running allowance over {@link #MAX_SPLIT_FRAGMENT_CHARS}, spent by
+	 * {@link #newFragment} and shared by both splitters so neither can spend a full one of its own.
+	 * Charged exactly, as each fragment is built, and never refunded — ADR Decision 103 records why
+	 * a refund puts the copying work back.
+	 *
+	 * <p>One is created at the two answer entry points and nowhere else, and everything below them
+	 * is handed it as a parameter — {@code ArchitectureGuardTest.aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints}.
+	 * A splitter that makes one of its own is bounded per SENTENCE, which is the cap Decision 103
+	 * rejects, and it passes every other rule this change added.
+	 *
+	 * <p>The fragment is built before it is charged, so a sentence whose split is refused has
+	 * materialised one fragment it discards — and a sentence can be refused by each splitter in
+	 * turn, so that is up to two per sentence, each at most its own sentence's length. The
+	 * characters one answer materialises are therefore bounded by
+	 * {@link #MAX_SPLIT_FRAGMENT_CHARS} plus about twice the answer: a constant plus O(answer),
+	 * which is the linearity issue #448 asks for.
+	 */
+	private static final class FragmentBudget {
+
+		private long remaining = MAX_SPLIT_FRAGMENT_CHARS;
+
+		/**
+		 * Sentences graded whole because this answer could not pay to split them, by IDENTITY —
+		 * because both splitters can refuse the SAME sentence in turn (an enumeration refused by
+		 * {@link #splitEnumeration} is handed on whole and offered to {@link #splitIntoClauses}),
+		 * and it is one sentence graded whole either way. Counting the refusals rather than the
+		 * sentences reported up to twice the truth.
+		 */
+		private final Set<Sentence> refusedSentences = Collections
+				.newSetFromMap(new IdentityHashMap<Sentence, Boolean>());
+
+		/** Deducts {@code chars} and answers true, or answers false having deducted nothing. */
+		boolean charge(long chars) {
+			if (chars > remaining) {
+				return false;
+			}
+			remaining -= chars;
+			return true;
+		}
+
+		void refused(Sentence sentence) {
+			refusedSentences.add(sentence);
+		}
+
+		/**
+		 * Says how many sentences of this answer were graded whole — once, for the whole answer, and
+		 * only where it happened. An answer that crosses the allowance refuses on most of the
+		 * sentences after it, so a line per refusal would write the attacker's own answer length into
+		 * the log that many times over; and the count a maintainer needs is the answer's total, not
+		 * the first sentence's.
+		 *
+		 * <p>Counts only, never the sentence: a grounding line that quoted it would write the
+		 * patient's own clinical text into the default server log, which is the rule issue #439
+		 * established for this class of message.
+		 *
+		 * <p><strong>WARN and not the INFO its neighbours use.</strong> The cap and withholding lines
+		 * above report deliberate behaviour "nothing here is the operator's to fix". This one is the
+		 * opposite: what produces an answer this long is the configured LLM endpoint, and whether
+		 * that endpoint is merely misbehaving or hostile is the operator's to find out.
+		 */
+		void report() {
+			if (refusedSentences.isEmpty()) {
+				return;
+			}
+			log.warn("Citation grounding: per-marker claim splitting refused for {} sentence(s) of "
+					+ "this answer — one answer may materialise {} characters of claim fragments and "
+					+ "this one asked for more, so those sentences are graded whole rather than split "
+					+ "per citation.",
+					Integer.valueOf(refusedSentences.size()),
+					Long.valueOf(MAX_SPLIT_FRAGMENT_CHARS));
+		}
+	}
+
+	/**
 	 * Splits the answer into sentences, recording for each the set of {@code [N]}
 	 * indices it cites inline. Returns an empty list for null/blank answers.
 	 *
 	 * <p>A sentence that ENUMERATES its citations is split per item by
 	 * {@link #splitEnumeration} — in BOTH scoping modes, because an enumeration's claim is
-	 * mis-identified rather than merely wide-scoped (issue #278). Every other sentence is returned
+	 * mis-identified rather than merely wide-scoped (issue #278), and in both subject to the
+	 * answer's split allowance, {@link #MAX_SPLIT_FRAGMENT_CHARS}. Every other sentence is returned
 	 * whole, so sentence-scope keeps handing a compound sentence's citations one shared statement.
 	 */
 	static List<Sentence> splitIntoCitedSentences(String answer) {
+		FragmentBudget budget = new FragmentBudget();
+		List<Sentence> sentences = splitIntoCitedSentences(answer, budget);
+		budget.report();
+		return sentences;
+	}
+
+	/**
+	 * The same split against a caller's allowance, so {@link #splitIntoClauseScopedSentences} spends
+	 * ONE {@link FragmentBudget} over both the enumeration pass and its own clauses.
+	 *
+	 * <p>Consequence worth naming: that whole enumeration pass runs before the first clause is
+	 * built, so enumeration spending has priority over clause spending rather than competing with
+	 * it. An answer whose enumerations exhaust the allowance leaves every later sentence
+	 * clause-unsplit. The alternative — an allowance per PASS — is not the per-sentence cap the
+	 * constant's javadoc rejects, which grows with the answer; it is a silently doubled one, which
+	 * is what {@code oneAllowanceIsSharedBySplittingBOTHShapesOfOneAnswer} refuses.
+	 */
+	private static List<Sentence> splitIntoCitedSentences(String answer, FragmentBudget budget) {
 		List<Sentence> sentences = new ArrayList<Sentence>();
 		if (answer == null || answer.trim().isEmpty()) {
 			return sentences;
@@ -1379,8 +1556,8 @@ public class CitationGroundingVerifier {
 			if (raw.trim().isEmpty()) {
 				continue;
 			}
-			Sentence sentence = new Sentence(raw, ChartSearchAiUtils.citedIndexes(raw), false);
-			List<Sentence> items = splitEnumeration(sentence);
+			Sentence sentence = newSentence(raw);
+			List<Sentence> items = splitEnumeration(sentence, budget);
 			if (items != null) {
 				sentences.addAll(items);
 			} else {
@@ -1545,7 +1722,9 @@ public class CitationGroundingVerifier {
 	 * consume, so an emptiness check on the raw item is unreachable. A colon followed immediately by
 	 * a citation ("allergies: [1], Ketoconazole [2]") is not a list of NAMED items, so reading it as
 	 * one is a misread — falling back beats handing that citation a preamble-only claim that asserts
-	 * nothing.
+	 * nothing. It returns {@code null} for one reason that is not about the sentence's SHAPE at all:
+	 * the answer's split allowance cannot pay for the items ({@link #MAX_SPLIT_FRAGMENT_CHARS}), the
+	 * same fallback reached for a different question.
 	 * Each returned item is flagged {@link Sentence#isolate}: the items share a preamble, so
 	 * co-batching them would let the not-per-pair-independent LLM couple their verdicts.
 	 *
@@ -1561,7 +1740,7 @@ public class CitationGroundingVerifier {
 	 * honest verdict beats a fast wrong one. Note what is NOT claimed — no before/after of the same
 	 * question was measured, because the comparison above is between two shapes within one build.
 	 */
-	private static List<Sentence> splitEnumeration(Sentence sentence) {
+	private static List<Sentence> splitEnumeration(Sentence sentence, FragmentBudget budget) {
 		if (sentence.citedIndexes.size() <= 1) {
 			return null;
 		}
@@ -1591,9 +1770,14 @@ public class CitationGroundingVerifier {
 					|| CLAUSE_MARKER.matcher(named).find()) {
 				return null;
 			}
-			items.add(new Sentence(preamble + " " + item,
-					Collections.singleton(Integer.valueOf(marker.group(1))), true,
-					sentence.sourceCitedIndexes));
+			Sentence built = newFragment(budget, preamble + " " + item,
+					Collections.singleton(Integer.valueOf(marker.group(1))),
+					sentence.sourceCitedIndexes);
+			if (built == null) {
+				budget.refused(sentence);
+				return null;
+			}
+			items.add(built);
 			itemStart = marker.end();
 		}
 		return items;
@@ -1653,7 +1837,11 @@ public class CitationGroundingVerifier {
 	 * own {@code [N]} marker, not the whole compound sentence. An ENUMERATING sentence never reaches
 	 * this rule — {@link #splitIntoCitedSentences} has already split it per item, in either mode, so
 	 * every fragment arriving here cites exactly one record and passes through unchanged (#278). The
-	 * cumulative prefix below therefore governs the compound sentences that are NOT enumerations. This grounds a citation that supports
+	 * one exception is an enumeration whose split the answer's allowance refused
+	 * ({@link #MAX_SPLIT_FRAGMENT_CHARS}): it arrives whole, cites more than one record, and is
+	 * offered to the cumulative prefix like any other compound sentence. The cumulative prefix below
+	 * governs every compound sentence that reaches it — the ones that are not enumerations, and the
+	 * enumerations whose own split the allowance turned down. This grounds a citation that supports
 	 * its own clause but not a later clause cited by a different record — e.g. "Hearing Loss was
 	 * noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an
 	 * active condition) does not support the "provisional diagnosis" clause that [91] backs. The
@@ -1668,20 +1856,102 @@ public class CitationGroundingVerifier {
 	 * the (not per-pair-independent) batched LLM verdict.
 	 */
 	static List<Sentence> splitIntoClauseScopedSentences(String answer) {
+		FragmentBudget budget = new FragmentBudget();
 		List<Sentence> clauses = new ArrayList<Sentence>();
-		for (Sentence sentence : splitIntoCitedSentences(answer)) {
+		for (Sentence sentence : splitIntoCitedSentences(answer, budget)) {
 			if (sentence.citedIndexes.size() <= 1) {
 				clauses.add(sentence);
 				continue;
 			}
-			Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence.text);
-			while (marker.find()) {
-				Integer idx = Integer.valueOf(marker.group(1));
-				clauses.add(new Sentence(sentence.text.substring(0, marker.end()),
-						Collections.singleton(idx), true, sentence.sourceCitedIndexes));
+			List<Sentence> split = splitIntoClauses(sentence, budget);
+			if (split == null) {
+				clauses.add(sentence);
+			} else {
+				clauses.addAll(split);
 			}
 		}
+		budget.report();
 		return clauses;
+	}
+
+	/**
+	 * One cumulative-prefix clause per marker, or {@code null} when the answer's split allowance
+	 * cannot pay for them — see {@link #MAX_SPLIT_FRAGMENT_CHARS} for why one exists.
+	 *
+	 * <p><strong>All-or-nothing.</strong> A half-split sentence would attribute some of its markers
+	 * and silently drop the rest, so a refusal discards the clauses already built and the caller
+	 * grades the sentence whole. That is the sentence-scoped unit, and it is a real loss whose shape
+	 * depends on the sentence. Where claim text separates two of its markers the whole sentence is a
+	 * {@link Sentence#compoundClaim()}, so under entailment every citation of it publishes NO
+	 * verdict (#302) — a larger loss than the co-batching, and the ordinary prose case. Where only
+	 * separators stand between the markers it is a co-citation, still graded, and what it loses is
+	 * {@code isolate}: its citations are co-batched for Tier-2 again, the coupling
+	 * {@link Sentence#isolate} exists to prevent. What either buys is that the alternative is not a
+	 * better verdict but heap exhaustion for every user of the OpenMRS instance.
+	 */
+	private static List<Sentence> splitIntoClauses(Sentence sentence, FragmentBudget budget) {
+		List<Sentence> clauses = new ArrayList<Sentence>();
+		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence.text);
+		while (marker.find()) {
+			Integer idx = Integer.valueOf(marker.group(1));
+			Sentence clause = newFragment(budget, sentence.text.substring(0, marker.end()),
+					Collections.singleton(idx), sentence.sourceCitedIndexes);
+			if (clause == null) {
+				budget.refused(sentence);
+				return null;
+			}
+			clauses.add(clause);
+		}
+		return clauses;
+	}
+
+	/**
+	 * The ONE place a per-citation FRAGMENT is built, so the allowance issue #448 added cannot be
+	 * forgotten at one splitter and charged at the other — and so a third splitter cannot reopen the
+	 * defect by constructing one directly. Answers {@code null} when the answer's allowance is
+	 * spent; the caller then keeps its sentence whole.
+	 *
+	 * <p>{@code sourceCitedIndexes} is the PARENT's set, passed through and shared rather than
+	 * copied: it holds one entry per distinct marker in that sentence, so copying it per fragment
+	 * would cost the marker count SQUARED in set entries — quadratic again, and invisible to an
+	 * allowance counted in characters.
+	 */
+	private static Sentence newFragment(FragmentBudget budget, String text,
+			Set<Integer> citedIndexes, Set<Integer> sourceCitedIndexes) {
+		if (!budget.charge(text.length())) {
+			return null;
+		}
+		return new Sentence(text, citedIndexes, true, sourceCitedIndexes);
+	}
+
+	/**
+	 * The one place a WHOLE sentence unit is built, beside {@link #newFragment} and deliberately
+	 * apart from the splitter that calls it: the two constructions are not interchangeable, and
+	 * keeping each in a factory of its own is what lets
+	 * {@code ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory} name the
+	 * CONSTRUCTION rather than the method it sits in. A per-marker split written inside
+	 * {@link #splitIntoCitedSentences(String, FragmentBudget)} — the natural home for a third one,
+	 * since it already holds the budget — constructs a {@code Sentence} outside both factories, so
+	 * that rule reports it rather than admitting it for its neighbourhood (issue #448, round two of
+	 * its review).
+	 *
+	 * <p><b>What that rule cannot see is a per-marker split that CALLS this factory</b>, once per
+	 * marker, instead of constructing one: the construction is then this factory's own and
+	 * legitimate, and only the number of call sites tells the two uses apart. That is a second
+	 * rule, {@code ArchitectureGuardTest.theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter},
+	 * and it is why this method has exactly one caller (issue #448, round three).
+	 *
+	 * <p>It spends no allowance, and that is the difference from {@link #newFragment}: this copies
+	 * text the answer already holds, once per SENTENCE, so the characters it materialises are the
+	 * answer's own length. A fragment is one per MARKER and is the copy that multiplies.
+	 *
+	 * <p>The unit is its own source, so its {@code sourceCitedIndexes} is its own
+	 * {@code citedIndexes} — unmodifiable here, because {@link Sentence} stores both sets rather
+	 * than copying them.
+	 */
+	private static Sentence newSentence(String text) {
+		return new Sentence(text,
+				Collections.unmodifiableSet(ChartSearchAiUtils.citedIndexes(text)), false);
 	}
 
 	/**
@@ -1697,7 +1967,7 @@ public class CitationGroundingVerifier {
 
 		final String text;
 
-		final java.util.Set<Integer> citedIndexes = new java.util.HashSet<Integer>();
+		final java.util.Set<Integer> citedIndexes;
 
 		/**
 		 * Every citation of the SENTENCE this unit was split from — identical to
@@ -1712,7 +1982,7 @@ public class CitationGroundingVerifier {
 		 * EARLIER markers and an enumeration item's contains only its own, so re-parsing would give
 		 * two different wrong answers.
 		 */
-		final java.util.Set<Integer> sourceCitedIndexes = new java.util.HashSet<Integer>();
+		final java.util.Set<Integer> sourceCitedIndexes;
 
 		/**
 		 * True when this is a per-citation FRAGMENT of a multi-citation sentence, so its citation must
@@ -1721,28 +1991,45 @@ public class CitationGroundingVerifier {
 		 * per-pair-independent) batched LLM verdict. Two splitters produce such fragments: clause
 		 * scope, whose cumulative prefixes overlap by length, and enumeration splitting, whose items
 		 * share a preamble — the latter in EITHER mode, so this is not a clause-scope-only flag.
-		 * False for a whole sentence, which is what both modes keep for a single-citation sentence and
-		 * what sentence-scope keeps for a non-enumerating compound.
+		 * False for a whole sentence, which is what both modes keep for a single-citation sentence,
+		 * what sentence-scope keeps for a non-enumerating compound, and what EITHER mode keeps for a
+		 * compound whose split the answer's allowance refused
+		 * ({@link CitationGroundingVerifier#MAX_SPLIT_FRAGMENT_CHARS}). What that last one costs
+		 * depends on the sentence, and {@link CitationGroundingVerifier#splitIntoClauses} says how.
 		 */
 		final boolean isolate;
 
 		/** Whole-sentence constructor: the unit is its own source, so {@link #sourceCitedIndexes}
-		 *  mirrors {@code citedIndexes}. */
+		 *  is the same instance as {@code citedIndexes}, which the caller has made unmodifiable. A
+		 *  whole sentence reaches it through {@link CitationGroundingVerifier#newSentence}, as a
+		 *  fragment reaches the constructor below through
+		 *  {@link CitationGroundingVerifier#newFragment}. */
 		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate) {
 			this(text, citedIndexes, isolate, citedIndexes);
 		}
 
-		/** Fragment constructor: text, an explicit cited-index set, whether the fragment must be
-		 *  Tier-2 verified in isolation, and the citations of the sentence it was split from. Used by
-		 *  BOTH splitters — clause-scoped splitting, whose text may contain earlier markers while
-		 *  being attributed to one citation only, and enumeration splitting, whose text is a preamble
-		 *  plus one item. */
+		/**
+		 * Fragment constructor: text, an explicit cited-index set, whether the fragment must be
+		 * Tier-2 verified in isolation, and the citations of the sentence it was split from. Every
+		 * FRAGMENT reaches it through {@link CitationGroundingVerifier#newFragment}, which serves
+		 * both splitters — clause-scoped splitting, whose text may contain earlier markers while
+		 * being attributed to one citation only, and enumeration splitting, whose text is a preamble
+		 * plus one item. The whole-sentence constructor above delegates here too, which is why the
+		 * immutability requirement below is stated of both callers and not of fragments alone.
+		 *
+		 * <p><strong>Both sets are STORED, not copied, so both must already be immutable.</strong>
+		 * Every fragment of one sentence therefore shares that sentence's
+		 * {@code sourceCitedIndexes} instance. That is not a micro-optimisation: the set holds one
+		 * entry per distinct marker in the parent, so a copy per fragment is quadratic in the marker
+		 * count, which is the shape issue #448 is about. Nothing mutates either set after
+		 * construction, and both callers hand over something unmodifiable.
+		 */
 		Sentence(String text, java.util.Set<Integer> citedIndexes, boolean isolate,
 				java.util.Set<Integer> sourceCitedIndexes) {
 			this.text = text;
-			this.citedIndexes.addAll(citedIndexes);
+			this.citedIndexes = citedIndexes;
 			this.isolate = isolate;
-			this.sourceCitedIndexes.addAll(sourceCitedIndexes);
+			this.sourceCitedIndexes = sourceCitedIndexes;
 		}
 
 		boolean cites(int index) {

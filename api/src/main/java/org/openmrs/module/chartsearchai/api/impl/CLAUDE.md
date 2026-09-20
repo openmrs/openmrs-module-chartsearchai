@@ -16,13 +16,13 @@ which is the root file's "Documenting a decision" rule.
   only, so a bare `"127.0.0.1"` elsewhere is invisible to it and this directive is what covers
   that. `RemoteLlmEngine` addresses the operator's own configured endpoint and this rule says
   nothing about it.
-  → ADR Decision 103; `ArchitectureGuardTest.everyLocalServerRequestCarriesTheModulesKey`,
+  → ADR Decision 107; `ArchitectureGuardTest.everyLocalServerRequestCarriesTheModulesKey`,
   `theLocalServerAddressIsSpelledInOnePlace`.
 - **The secret reaches the child in its ENVIRONMENT, never on its command line.** That is
   `LlamaServerEndpoint.handOverTo`, and `LlamaServerEndpoint.API_KEY_ENV` is the one place the
   variable is spelled. Do not add a key argument to `LocalLlmEngine.buildServerCommand`, and do
   not assert on one.
-  → ADR Decision 103, rows 2 and 3.
+  → ADR Decision 107, rows 2 and 3.
 - **A listener answering `/health` is not the server until readiness says so.**
   `LocalLlmEngine.requireLoopbackPortFree` runs before the child is launched and
   `requireListenerMayBeServed` after the health reply; the four questions the second
@@ -33,18 +33,18 @@ which is the root file's "Documenting a decision" rule.
   The key probes establish less than they look like they do, and `LlamaServerEndpoint`'s class
   javadoc says exactly what. Do not write either up as more than that — here, in a decision, or in
   a comment.
-  → ADR Decision 103; `LocalLlmServerAuthTest`.
+  → ADR Decision 107; `LocalLlmServerAuthTest`.
 - **Nothing this module sends to its own subprocess may be proxy-routable**, unconditionally: the
   port probe takes `Proxy.NO_PROXY` and `LocalLlmEngine.getHttpClient` takes
   `HttpClient.Builder.NO_PROXY`. `RemoteLlmEngine` must stay proxy-aware, its endpoint being meant
   to leave the host. **Build no second client for it** — a guard reads client construction, but
   none can read the proxy setting of one that is built.
-  → ADR Decision 103, row 12b; `LocalLlmServerAuthTest.theClientTalkingToTheLocalServerUsesNoProxy`,
+  → ADR Decision 107, row 12b; `LocalLlmServerAuthTest.theClientTalkingToTheLocalServerUsesNoProxy`,
   `theProbeIsNotRoutedThroughAConfiguredProxy`;
   `ArchitectureGuardTest.onlyOneClientTalksToTheLocalServer`, which reads both modules' source.
 - **`--host 127.0.0.1` and `--no-webui` are load-bearing, not tidiness.** The first stops an
   inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root.
-  → ADR Decision 103, rows 4 and 6; `LocalLlmServerAuthTest`.
+  → ADR Decision 107, rows 4 and 6; `LocalLlmServerAuthTest`.
 
 ## Its opt-in test suites
 
@@ -53,4 +53,4 @@ which is the root file's "Documenting a decision" rule.
   `isReachable` asks the completions route and not only `/health`, which llama-server serves
   publicly; a keyed endpoint of the tester's own is named by `chartsearchai.test.llm.apiKey`. The
   request shape and the credential live in that one class, never copied into a suite.
-  → ADR Decision 103; `LlmEndpointTestSupport`.
+  → ADR Decision 107; `LlmEndpointTestSupport`.

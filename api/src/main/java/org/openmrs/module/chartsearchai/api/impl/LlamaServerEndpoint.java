@@ -49,8 +49,8 @@ import org.slf4j.LoggerFactory;
  * user owns and none for a process owned by another — which is the same protection class as an
  * owner-only key file, with no file to write, restrict, or clean up on a failure path. The rated
  * topology is a Linux OpenMRS host rather than the machine that measurement was taken on; ADR
- * Decision 103 row 10 carries it with that qualifier. See {@code docs/adr.md}
- * Decision 103 for the measurement behind each of those claims.
+ * Decision 107 row 10 carries it with that qualifier. See {@code docs/adr.md}
+ * Decision 107 for the measurement behind each of those claims.
  *
  * <p><b>A bearer token authenticates the CLIENT to the server and never the server to the
  * client.</b> Between them {@link #unauthenticatedProbeStatus} and
@@ -65,7 +65,7 @@ import org.slf4j.LoggerFactory;
  * decided — and it is the TIMING of that question, not the asking of it, that carries the weight:
  * a child alive by then holds the port, which only one process can, so the listener that answered
  * is that child. Liveness read at the first healthy reply establishes none of that, the reply
- * arriving milliseconds after the launch and the bind 0.138 s after it (Decision 103 row 7). Do
+ * arriving milliseconds after the launch and the bind 0.138 s after it (Decision 107 row 7). Do
  * not write these two probes up as peer authentication.
  *
  * <p>One instance per server start, discarded with the process it was minted for, so a secret is

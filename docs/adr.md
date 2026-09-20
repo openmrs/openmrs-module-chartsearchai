@@ -108,7 +108,11 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 100: An order the answer leaves unnamed is named by the module, not by asking the model again](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again)
 - [Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF](#decision-101-the-sse-framing-ends-a-payload-line-wherever-a-client-would-not-only-at-lf)
 - [Decision 102: A diagnostic log line carries the patient's id and the counts, never the names of that patient's medications](#decision-102-a-diagnostic-log-line-carries-the-patients-id-and-the-counts-never-the-names-of-that-patients-medications)
-- [Decision 103: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-103-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
+- [Decision 103: Per-marker claim splitting spends one allowance per ANSWER, and a fragment shares its parent's citation set](#decision-103-per-marker-claim-splitting-spends-one-allowance-per-answer-and-a-fragment-shares-its-parents-citation-set)
+- [Decision 104: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound](#decision-104-the-pairwise-arms-resolve-their-rule-join-once-per-pass-and-the-chip-cap-is-still-not-the-bound)
+- [Decision 105: A streaming query that reached inference is audited however the stream ends](#decision-105-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends)
+- [Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
+- [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -672,7 +676,7 @@ The module ships two recommended choices, sized for different deployment context
 
 **Gemma 4 E4B Instruct** is the default in `config.xml` (`chartsearchai/gemma-4-E4B-it-Q4_K_M.gguf`) for ordinary module installs. It is part of the Gemma 4 "E" line, which uses Per-Layer Embeddings (PLE) for memory efficiency: ~4.5B effective parameters at runtime, ~2.5GB on disk, ~6–8GB total RAM, ~10–20 tok/s on CPU. The 128K context window holds roughly 6,000 serialized patient records (~15 tokens each), enough for most patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-E4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF). Picked because it is the smallest model in the Gemma 4 family that follows the system prompt rules (never infer, cite every record) acceptably without a reasoning channel as a safety scaffold, while staying small enough to download on a slow connection (~2.5GB) and run on a modest server.
 
-**Gemma 4 26B MoE Instruct** is bundled with the standalone build and is the recommended upgrade for production hardware (~24GB+ RAM). It is a Mixture-of-Experts model with 26B total parameters but only ~3.8B activated per token, so per-token speed is comparable to a 4B dense model despite the 26B total size. The 256K context window comfortably holds even the largest patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). Picked because among CPU-viable models it has the strongest instruction following on list-completeness and adversarial-question handling, without depending on reasoning tokens.
+**Gemma 4 26B MoE Instruct** is the recommended upgrade for production hardware (~24GB+ RAM). It is not what the standalone download ships — that bundle carries E4B, the same model `model-manifest.tsv`'s `llm-gemma-4-e4b` row pins for the push build; a 26B bundle can be built by dispatching the standalone workflow with its `gguf_model_url` and `gguf_sha256` inputs. It is a Mixture-of-Experts model with 26B total parameters but only ~3.8B activated per token, so per-token speed is comparable to a 4B dense model despite the 26B total size. The 256K context window comfortably holds even the largest patient charts. Apache 2.0 licensed. GGUF quantizations are available from [unsloth/gemma-4-26B-A4B-it-GGUF](https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF). Picked because among CPU-viable models it has the strongest instruction following on list-completeness and adversarial-question handling, without depending on reasoning tokens.
 
 For deployments that prefer medical-domain fine-tuning, **MedGemma 1.5 4B** (released January 2026) is a strong alternative — built on the Gemma 3 architecture and fine-tuned on clinical text, biomedical literature, medical Q&A, and synthetic EHR data, with native support for medical imaging (CT, MRI, histopathology). At 4B parameters with Q4_K_M, it is ~2.5GB on disk and ~6–8GB total RAM. GGUF quantizations are available from [unsloth/medgemma-1.5-4b-it-GGUF](https://huggingface.co/unsloth/medgemma-1.5-4b-it-GGUF). Licensed under the [Health AI Developer Foundations Terms of Use](https://developers.google.com/health-ai-developer-foundations/terms) — requires validation before clinical deployment, more restrictive than the Apache 2.0 licensing of Gemma 4. The original MedGemma 4B remains available from [unsloth/medgemma-4b-it-GGUF](https://huggingface.co/unsloth/medgemma-4b-it-GGUF) and works identically with the module (same chat template and resource requirements).
 
@@ -781,7 +785,7 @@ A server running OpenMRS typically uses 1–2GB for the JVM heap. A 4GB machine 
 
 The module requires sufficient RAM for both the OpenMRS JVM and the LLM model:
 - **Minimum**: ~3–5GB total (1–2GB JVM + ~2–3GB for a Gemma 4 E2B or Gemma 3n E2B model). Usable but with weaker instruction following and reasoning. For 3B models, ~6GB total.
-- **Recommended**: ~6–8GB total for the default Gemma 4 E4B model (or MedGemma 1.5 4B). Upgrade to ~10GB for the 8B model, which provides significantly better general reasoning, or ~24GB+ for the production-grade Gemma 4 26B MoE bundled with the standalone build.
+- **Recommended**: ~6–8GB total for the default Gemma 4 E4B model (or MedGemma 1.5 4B). Upgrade to ~10GB for the 8B model, which provides significantly better general reasoning, or ~24GB+ for the production-grade Gemma 4 26B MoE, which is a hand upgrade rather than what the standalone download ships.
 - The embedding pre-filter (opt-in via `chartsearchai.embedding.preFilter=true`) reduces the number of tokens sent to the LLM, which improves latency on huge patient charts at the cost of potentially omitting records the LLM needs for negative reasoning. The default is full-chart.
 
 ### Decision
@@ -1730,7 +1734,7 @@ Both decisions are correct simultaneously:
 
 ### Source: Xenova mirror, not the canonical repo
 
-Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. `backend-init.sh` carries a 200MB size guard as the second line of defense.
+Download via `Xenova/e5-base-v2`, which ships a self-contained ONNX export (~440MB). The canonical `intfloat/e5-base-v2/onnx/` directory uses external-data format (a graph file plus a separate `model.onnx_data` weights sidecar). Downloading only the graph produces a ~1MB "successful" file that the ONNX runtime opens but cannot execute, failing late at first inference with a misleading "Not a directory" error — the bug class that caused an earlier `all-MiniLM-L6-v2` provisioning path to silently break when its upstream export format changed. Since #444 the revision is pinned, which retires this shape as a live cause — [Decision 106](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here) for what the size check still does.
 
 ### Trade-offs
 
@@ -1869,7 +1873,7 @@ Two refinements make the verdict match what the citation actually claims:
 - **Ground against the rendered chart line (date + body), not the bare record text** — the model sees dated chart lines, so the verifier compares against the same surface.
 - **Clause-scoping (`chartsearchai.grounding.clauseScoped`, default `false`, sentence-scoped)** — in a sentence citing multiple records, each citation is checked against the cumulative answer prefix *up to and including its own `[N]` marker* rather than the whole compound sentence. This flags a citation that supports its own clause but not a *later* clause cited by a different record — e.g. "Hearing Loss was noted as a condition [89] and diagnosed as a provisional condition [91]", where [89] (an active condition) does not back the "provisional diagnosis" clause that [91] supports. The prefix keeps the sentence subject (which normally precedes the first marker), so it still flags family-history/negation flips in later clauses. It is left off by default because per-pair Tier-2 batching is not yet fully independent (shortening an earlier cite's statement can flip a later cite's verdict — tracked separately).
 
-- **Enumerating sentences are split per item regardless of that flag** ([#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)) — where a sentence announces a list with a colon before its first marker, each citation is checked against the preamble plus its OWN item, not the whole sentence and not the cumulative prefix. Both of the scopings above ask the wrong-sized question of a list: the whole sentence makes each record answer for a conjunction naming the others, and the cumulative prefix still names items 1..*k*−1, so only the first citation is ever asked about its own claim. Measured live, a correct three-allergen answer had every chart citation published `grounded=false`, which a client renders as *Unsupported*. This is not gated on `clauseScoped` because the claim is **mis-identified** rather than wide-scoped, and the defect bites on the shipped default. It also does not inherit that flag's reason for being off: these fragments are Tier-2 verified one pair per call, so the batching-independence problem above does not arise — at a measured ~0.5s per additional citation, bounded by `GROUNDING_ENTAILMENT_MAX_CHECKS`. Keyed on the colon, and the colon alone is deliberately not enough — the items must be name-shaped too, since the split is sound only while the preamble holds the SUBJECT. An item carrying its own subject (a pronoun, or a finite verb of clinical assertion) or running past a length backstop keeps whole-sentence scoping; measured through the production splitter over TWO corpora — the 7452 names the shipped KB publishes and the 1194 distinct condition/diagnosis/allergen forms on the demo database — the grammar test refuses none of either, and the length backstop refuses 93 and 24 respectively. Sweep BOTH before changing the grammar set: the drug KB alone would have cleared "patient", which the clinical corpus showed refuses "Patient died" and "Smear positive, new tuberculosis patient", and family terms were measured and rejected against both (13 refusals, 6 on "child"). A comma-only enumeration has no recoverable preamble/first-item boundary (in "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes"), and guessing it short strips the subject the prefix rule exists to retain — so that case is left unsplit. What being unsplit costs it is bounded by the compound-claim rule below: it stays mis-scoped, but the module no longer publishes the conjunction's refusal as each citation's own verdict.
+- **Enumerating sentences are split per item regardless of that flag** ([#278](https://github.com/openmrs/openmrs-module-chartsearchai/issues/278)) — where a sentence announces a list with a colon before its first marker, each citation is checked against the preamble plus its OWN item, not the whole sentence and not the cumulative prefix. Both of the scopings above ask the wrong-sized question of a list: the whole sentence makes each record answer for a conjunction naming the others, and the cumulative prefix still names items 1..*k*−1, so only the first citation is ever asked about its own claim. Measured live, a correct three-allergen answer had every chart citation published `grounded=false`, which a client renders as *Unsupported*. This is not gated on `clauseScoped` because the claim is **mis-identified** rather than wide-scoped, and the defect bites on the shipped default. It also does not inherit that flag's reason for being off: these fragments are Tier-2 verified one pair per call, so the batching-independence problem above does not arise — at a measured ~0.5s per additional citation, bounded by `GROUNDING_ENTAILMENT_MAX_CHECKS`. Keyed on the colon, and the colon alone is deliberately not enough — the items must be name-shaped too, since the split is sound only while the preamble holds the SUBJECT. An item carrying its own subject (a pronoun, or a finite verb of clinical assertion) or running past a length backstop keeps whole-sentence scoping; measured through the production splitter over TWO corpora — the 7452 names the shipped KB publishes and the 1194 distinct condition/diagnosis/allergen forms on the demo database — the grammar test refuses none of either, and the length backstop refuses 93 and 24 respectively. Sweep BOTH before changing the grammar set: the drug KB alone would have cleared "patient", which the clinical corpus showed refuses "Patient died" and "Smear positive, new tuberculosis patient", and family terms were measured and rejected against both (13 refusals, 6 on "child"). A comma-only enumeration has no recoverable preamble/first-item boundary (in "Has diabetes [1] and hypertension [2]" the preamble could be "Has" or "Has diabetes"), and guessing it short strips the subject the prefix rule exists to retain — so that case is left unsplit. What being unsplit costs it is bounded by the compound-claim rule below: it stays mis-scoped, but the module no longer publishes the conjunction's refusal as each citation's own verdict. Since [Decision 103](#decision-103-per-marker-claim-splitting-spends-one-allowance-per-answer-and-a-fragment-shares-its-parents-citation-set) this split, and the clause-scoped one above, are bounded by a per-answer allowance; a sentence past it is graded whole.
 
 ### Cost shaping
 
@@ -3613,7 +3617,7 @@ Two alternatives were weighed and are not this.
 
 ## Decision 54: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever
 
-**Status: Accepted** (August 2026) — implemented, issue [#256](https://github.com/openmrs/openmrs-module-chartsearchai/issues/256).
+**Status: Accepted** (August 2026) — implemented, issue [#256](https://github.com/openmrs/openmrs-module-chartsearchai/issues/256). **Amended by Decision 103**, which keeps this decision's 'the cap bounds chips and not work' and refutes the generalisation beside it: the pairwise arms' cost was measured here at TEN drugs in play, and at the drug counts a 1000-character question actually reaches it dominated the pass.
 
 ### Context
 
@@ -3709,7 +3713,7 @@ The A/Vietnam typo row's own `(h5n1)` sits MID-name and `TRAILING_QUALIFIER` is 
 
 ### Measured
 
-Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates on **both** sides — the baseline is the same methods unmutated, driven by the same harness through reflection into the real private `bestRulePerPartner`, `aboveFloorRulesAgainst`, `bestRule` and `outranks` rather than a re-expression of any of them.
+Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates on **both** sides — the baseline is the same methods unmutated, driven by the same harness through reflection into the real private `bestRulePerPartner`, `aboveFloorRulesAgainst`, `bestRule` and `outranks` rather than a re-expression of any of them. (Since Decision 103 that second symbol is `DrugSafetyValidator.AboveFloorRules.aboveFloorRulesAgainst`, an accessor over a per-pass join rather than a private static taking a floor; the measurement stands, the reflection recipe needs rewriting for it.)
 
 | | |
 |---|---|
@@ -3726,7 +3730,7 @@ Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates
 | … which SUBSTANCE owns the sentence changed | **4**, all in the question-pair arm |
 | api suite | 1587 api + 87 omod, 0 failures |
 
-**What a "group" is, so those two can be re-derived.** For the drug-in-play arm it is one entry of what `bestRulePerPartner` returns — one (substance family, partner) collapse — driven by invoking that real private method per multi-row family over a `PatientClinicalContext` carrying that family's own partner tokens as active orders, at floor 0. For the question-pair arm it is one (substance, substance) clinical pair among the pairs the four corrected rows' substances take part in, folded by that arm's own entry-pair walk over the union of the two families' rows in dataset order, through the real `aboveFloorRulesAgainst`, `bestRule` and `outranks`. Both bases are the whole shipped KB; the question-pair one is scoped to those four substances because `outranks`' route step reads only the two rows' `namesNoRoute()` and no other row's answer moves.
+**What a "group" is, so those two can be re-derived.** For the drug-in-play arm it is one entry of what `bestRulePerPartner` returns — one (substance family, partner) collapse — driven by invoking that real private method per multi-row family over a `PatientClinicalContext` carrying that family's own partner tokens as active orders, at floor 0. For the question-pair arm it is one (substance, substance) clinical pair among the pairs the four corrected rows' substances take part in, folded by that arm's own entry-pair walk over the union of the two families' rows in dataset order, through the real `aboveFloorRulesAgainst` (see the note above on where that symbol now lives), `bestRule` and `outranks`. Both bases are the whole shipped KB; the question-pair one is scoped to those four substances because `outranks`' route step reads only the two rows' `namesNoRoute()` and no other row's answer moves.
 
 **State which reading a qualification count is on.** 10 → 9 and 10 → 11 count different things and the correction is exactly what makes them diverge: before it, "answers `!namesNoRoute()`" and "carries a trailing parenthetical" were the same predicate. Quoting either without its unit is unreadable afterwards.
 
@@ -3782,7 +3786,7 @@ Both figures are RELAYED from those two fix passes and are not re-derived here; 
 
 - **A counter on `GET /chartsearchai/drugreferencestatus`**, which #229 offers as the other half of option 1. That endpoint answers about the LOADED DATASET — one lazily-built object, held for the life of the bean — while slice size is per question. A per-request counter there would be mutable state on a Spring singleton, which is the first of the two reasons `CLAUDE.md`'s memoisation rule gives for never holding one on these beans, and it could only ever report an aggregate, which cannot answer "how large was the slice behind THIS answer".
 - **A per-type breakdown in the durable row** — separate counts for entries and findings. Not rejected because it cannot be written: buckets keyed on `mapping.getResourceType()` and admitted by the same classification name no type literal, which is what the controller already does when it puts `referenceGroup(...)` on the wire. Rejected because the row is where the prompt COST is read, and the cost is the group's; the per-kind split already exists on the DEBUG line for whoever can set the level, and two more nullable columns on a table whose history is a history of columns going stale is a poor trade for a number nobody has asked a question of yet.
-- **Editing `chartsearchai-002` rather than adding a changeset**, which the file header's consolidation paragraph used to invite — and naming that invitation here was not enough, because nobody editing `liquibase.xml` reads this file. The header now leads with the rule instead. The header describes the SECOND step of a lifecycle whose first step this file's own history shows: `input_tokens`/`output_tokens` arrived as `chartsearchai-005` in April 2026 and were folded into 002's create-time definition by the consolidation in May. Editing 002 now adds nothing on an instance that has already run it, while the hbm mapping declares the columns immediately — the insert fails, `saveAuditLog` catches and logs, and auditing stops with no error anywhere. Numbered 009 rather than 003 because ids 001 to 006 have existed in this file on the main line and 007/008 exist in unmerged branches. Reusing one is not a silent skip, which is what an earlier draft of this paragraph said: liquibase stores a checksum beside id + author + filename, so an id an instance holds an orphan row for raises `ValidationFailedException` and stops the module starting. Measured on liquibase 4.32.0 — the version `openmrs-api` puts on this module's classpath — against an instance built from the consolidation-era file, which leaves orphan rows for 001 and 003. Loud rather than silent, and worse; the conclusion is the same.
+- **Editing `chartsearchai-002` rather than adding a changeset**, which the file header's consolidation paragraph used to invite — and naming that invitation here was not enough, because nobody editing `liquibase.xml` reads this file. The header now leads with the rule instead. The header describes the SECOND step of a lifecycle whose first step this file's own history shows: `input_tokens`/`output_tokens` arrived as `chartsearchai-005` in April 2026 and were folded into 002's create-time definition by the consolidation in May. Editing 002 now adds nothing on an instance that has already run it, while the hbm mapping declares the columns immediately — the insert fails, `saveAuditLog` catches and logs, and auditing stops. Since issue #450 that log is an ERROR carrying the cause rather than a WARN, which is the only signal available; see Decision 103's second half. Numbered 009 rather than 003 because ids 001 to 006 have existed in this file on the main line and 007/008 exist in unmerged branches. Reusing one is not a silent skip, which is what an earlier draft of this paragraph said: liquibase stores a checksum beside id + author + filename, so an id an instance holds an orphan row for raises `ValidationFailedException` and stops the module starting. Measured on liquibase 4.32.0 — the version `openmrs-api` puts on this module's classpath — against an instance built from the consolidation-era file, which leaves orphan rows for 001 and 003. Loud rather than silent, and worse; the conclusion is the same.
 
 ### Trade-offs
 
@@ -5265,7 +5269,8 @@ Decision 60 put `interactionPairs` on the wire so a truncated interaction screen
 
 The third row published a complete screen of nothing beside fifteen interaction chips, two of them Major — the ticket said one, and the verification of this branch re-ran that exact patient and question and found `Warfarin x Ibuprofen` and `Warfarin x Diclofenac` both rated Major by the shipped knowledge base. A client rendering the field as `README` tells it to — "10 of 18 shown" — showed *"0 of 0 interaction pairs"* directly above a Major finding.
 
-**The cause is not the field's scope; it is a false measurement.** `addQuestionPairInteractions` cedes a pair to the drug-in-play arm wherever any ABOVE-FLOOR rule joining it names one of the patient's active orders (`coveredByActiveOrderArm`, which is handed `aboveFloorRulesAgainst`'s output and nothing else), because a chip stating a fact about her own medication is the stronger statement — `collectQuestionPairInteraction` records the pair in `chartOwned` and collects no candidate for it. Where that took every pair the arm related, `found` was empty and the arm returned `PairChipExtent.of(0, 0)`. Two things followed. The value asserts what Decision 60 defines it to assert — *an arm ran and the reference data related none of the pairs it enumerated* — and pairs had been related, so it was false. And once Decision 65 added its fallback, being non-null satisfied that gate (`pairExtent == null && questionDrugScreened && hasActiveMedicationRecords`), so the arm that had actually reported those pairs was silenced by the arm that reported none — a property of the code this fix changes (`eb81eed3`) rather than of the build row 3 was recorded on.
+**The cause is not the field's scope; it is a false measurement.** `addQuestionPairInteractions` cedes a pair to the drug-in-play arm wherever any ABOVE-FLOOR rule joining it names one of the patient's active orders (`coveredByActiveOrderArm`, which is handed `aboveFloorRulesAgainst`'s output and nothing else — see
+Decision 103 for where that symbol now lives), because a chip stating a fact about her own medication is the stronger statement — `collectQuestionPairInteraction` records the pair in `chartOwned` and collects no candidate for it. Where that took every pair the arm related, `found` was empty and the arm returned `PairChipExtent.of(0, 0)`. Two things followed. The value asserts what Decision 60 defines it to assert — *an arm ran and the reference data related none of the pairs it enumerated* — and pairs had been related, so it was false. And once Decision 65 added its fallback, being non-null satisfied that gate (`pairExtent == null && questionDrugScreened && hasActiveMedicationRecords`), so the arm that had actually reported those pairs was silenced by the arm that reported none — a property of the code this fix changes (`eb81eed3`) rather than of the build row 3 was recorded on.
 
 Reproduced at the api level over the DDInter excerpt through the real `validate`: `"Can I give her warfarin and ibuprofen?"` on a chart carrying Ibuprofen 400mg and Aspirin 81mg stated `found=0, reported=0` beside three Major chips, every one of them the chart arm's.
 
@@ -7937,6 +7942,8 @@ publishes the same two numbers the log now carries — so a maintainer triaging 
 same `stated`/`named` in both places. The finding's own alternative, the names at DEBUG, was not
 taken: a channel nobody needs is not worth the bytes of PHI it writes.
 
+**Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
+
 **And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
 PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
 captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A
@@ -8159,7 +8166,812 @@ answer naming every order reports no shortfall at all, which is what asks the re
 `ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`
 and `PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug`.
 
-## Decision 103: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret
+## Decision 103: Per-marker claim splitting spends one allowance per ANSWER, and a fragment shares its parent's citation set
+
+**Status: Accepted** (September 2026) — implemented, issue [#448](https://github.com/openmrs/openmrs-module-chartsearchai/issues/448), a security-scan finding (CWE-407, severity MEDIUM). It changes no prompt, no reference list, no chip and no response key. What it changes is what splitting a marker-dense or very long answer costs; nothing in the shipped fixture corpus is split differently by it.
+
+**Context.** Both of `CitationGroundingVerifier`'s splitters build one claim fragment per inline
+`[N]` marker, and each fragment's length is of the order of its sentence's own:
+`splitIntoClauseScopedSentences` copies the cumulative prefix `text.substring(0, marker.end())`, and
+`splitEnumeration` builds `preamble + " " + item`, where the preamble is everything up to the colon
+nearest the first marker. A sentence of length L with M markers therefore cost about M×L characters,
+and nothing bounded either: `SENTENCE_BOUNDARY` splits on a terminator followed by whitespace or on a
+newline, so a one-line answer is one sentence of the whole answer's length, and `INLINE_CITATION`
+accepts any marker whether or not the index resolves. With the remote engine the answer's length is
+the endpoint's choice — `RemoteLlmEngine` buffers the body whole and `max_tokens` is a request to a
+peer, not a constraint on it — so a hostile or intercepted endpoint could turn the module's
+grounding into an `OutOfMemoryError` in the Tomcat JVM hosting the whole OpenMRS instance. That
+consequence is the scan finding's (issue #448, 2026-09-15, CWE-407, MEDIUM) and is not an incident
+this project observed; what this branch measured is the cost curve, below. An `OutOfMemoryError` is
+an `Error`, so none of the verifier's `RuntimeException` handlers catch it.
+
+**The issue names one sink; there are two.** The ticket states that "the sentence-scoped default
+splitter (splitIntoCitedSentences / splitEnumeration) is linear per sentence and does not have this
+property". It is not. `splitEnumeration`'s per-item guards test the marker-stripped ITEM — non-empty,
+within `MAX_ENUMERATION_ITEM_WORDS`, no `CLAUSE_MARKER` — and never the preamble, so
+`<filler>: a [1], b [2], …` hands every item the whole filler. It runs in BOTH scoping modes, so that
+sink is reachable with `chartsearchai.grounding.clauseScoped` left at its default false, which the
+ticket's conditions exclude. `CitationGroundingVerifierTest.enumerationSplitOfALongPreambleStaysLinearInTheAnswerLength`
+is the measurement.
+
+**Decision.** One `FragmentBudget` per answer, `MAX_SPLIT_FRAGMENT_CHARS` characters of fragment
+text, threaded through both splitters by `splitIntoClauseScopedSentences` so neither can spend a full
+allowance of its own. `newFragment` is the one place a fragment is built and charges before
+building; a refusal is all-or-nothing for that sentence, which is then graded whole — the
+sentence-scoped unit the issue's fix criteria names as an acceptable fallback. And a fragment SHARES
+its parent's `sourceCitedIndexes` instance rather than copying it.
+
+**Why the set sharing is part of this decision and not a tidy-up.** `sourceCitedIndexes` holds one
+entry per distinct marker in the parent sentence, and the old fragment constructor did
+`this.sourceCitedIndexes.addAll(sourceCitedIndexes)`. A character allowance alone would have
+reported itself satisfied while the exhaustion stayed reachable: the number of fragments a character
+allowance admits does not fall as the answer grows, so a megabyte-scale answer still builds hundreds
+of fragments each copying a set of a hundred thousand boxed integers. Nothing mutates either set
+after construction, so both are now stored rather than copied and both callers hand over something
+unmodifiable.
+
+**Alternatives rejected.**
+
+*Offsets into the sentence instead of substring copies* — the first remedy the issue's own fix
+criteria offers. It does not reach `splitEnumeration` at all, whose fragment is a concatenation and
+not a substring of anything, and for the clause sink it moves the M copies from peak heap to
+allocation churn without removing them: the M fragments are still built. Rejected on that second
+half — the fragments are built either way — and not on the embedding cost, which is a separate,
+pre-existing and still-open question this decision states under *What is NOT in this change*
+rather than characterising twice.
+
+*A per-sentence cap.* An answer of S sentences each just under a cap of B still costs S×B, which
+grows with the answer — the opposite of the bound the criterion asks for.
+`theSplitAllowanceIsSpentPerANSWERAndNotPerSENTENCE` fails a per-sentence cap at the same value.
+
+*Refunding an abandoned split.* Exact accounting, and it puts the copying work back: every sentence
+of a hostile answer could spend the whole allowance in turn. Not refunding only makes the guard
+stricter for the sentences after one that overspent, which is the conservative direction.
+
+*An allowance proportional to the answer length.* Linear by construction and useless as a bound:
+sixteen times a 20 MB answer is 320 MB of fragments.
+
+**What the fallback costs, which is real.** A refused enumeration split re-enters the mis-scoping
+issue #278 fixed — measured live then as `grounded=false` on all three citations of a correct,
+fully-cited allergy list, which a client renders as *Unsupported*. Since #302 that is a withheld
+verdict under entailment, but with entailment disabled the whole-sentence cosine verdict is
+published and the *Unsupported* rendering returns. What a refused CLAUSE split costs depends on the
+sentence, and the larger case is the ordinary one: where claim text separates two of its markers the
+whole sentence is a `compoundClaim()`, so under entailment every citation of it publishes no verdict
+at all (#302) — driven through the real `verify()` in clause-scoped mode, with the same prose shape
+short enough to split as the control, by
+`CitationGroundingVerifierTest.aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers`.
+Only where the markers are separated by nothing
+but list punctuation is it a co-citation, still graded, losing `isolate` and so co-batched for
+Tier-2 again — the coupling `Sentence.isolate` exists to prevent. Both are paid only by an answer
+whose splitting has already exceeded the allowance, and the alternative there is heap exhaustion for
+every user of the instance.
+
+**Bounding the splitter was not enough, and that is the part worth reading.** The first round of
+this change bounded the splitter and disclosed two consumer-side index-set copies as residue,
+reasoning that both were linear in the answer and so within the criterion. Two independent clean-context
+reviewers refuted that, each by measurement, and both sinks are now closed here.
+
+- `AnswerCitations`' constructor unioned each claim unit's `sourceCitedIndexes` into `anchored`
+  once per FRAGMENT. Because this change makes every fragment of a sentence SHARE one set of one
+  entry per distinct marker, that is the fragment count times the marker count — both of which are
+  the marker count. It is the answer-quadratic shape the issue is about, surviving in the consumer
+  after the splitter was bounded, and invisible to an allowance counted in characters. Measured
+  through the real `verify()` on enumerated answers: 254 ms at 5,000 markers, 879 at 10,000, 3,557
+  at 20,000 — four times the work for twice the answer. Closed by unioning each DISTINCT set once,
+  by identity: 25 / 18 / 30 ms across the same three sizes.
+- `AnswerCitations.restsOn` built a fresh `HashSet` per reference holding the claim's
+  `sourceCitedIndexes`, retained in `Tier1Result` for the length of the pass, so R copies of a
+  marker-count-sized set were live at once. R is bounded by the chart's cited records and not by the
+  answer, so it IS linear — and linear was not the property that mattered: with the copy restored as a
+  compiled mutant and the heap swept, a 910 KB clause-scoped answer carrying 113,494 distinct
+  markers at ten cited records completes at every heap from 256 MB down to 64 MB after this change
+  and runs out of memory between 96 MB and 80 MB before it (JDK 21; the pom targets 11) — with the
+  splitter's own WARN already in the log saying the split had been refused. An earlier draft of
+  this decision recorded that threshold as 256 MB, which a second reviewer could not reproduce and
+  which overstated it about threefold. Closed by `ClaimSupport`,
+  a membership view over the two operands rather than their union; both are unmodifiable, so
+  nothing is copied. `restsOnReferenceMaterial` now iterates the reference-group indexes, bounded by
+  the chart, instead of the claim's citations, bounded by the answer.
+
+The lesson generalises past this change: bounding a producer moves the question to every consumer
+that holds one structure per unit the producer emits, and a budget counted in one currency
+(characters) says nothing about the others (set entries, retained copies).
+
+**Sizing, and what the measurement is a bound OF.** The allowance bounds fragment TEXT, and the
+heap a split holds is a multiple of that once each fragment's `Sentence`, `String` and singleton set
+are counted — a reviewer of this change measured 186–192 bytes retained per fragment, against a
+cheapest-fragment ceiling of about 84,000 of them, so the characters are the smaller half of the
+number. Size a change to the constant against the characters and then measure; do not read the
+characters as the heap. An answer from this module's own local engine is capped at
+`ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS` tokens, on the order of 16 KB of text, and
+splitting one of that length whose every sentence carried ten markers costs about 8e4 characters —
+roughly a twelfth of the allowance, and the same figure whether that length is spread over ten
+sentences or a hundred. Measured 2026-09-17 by driving the production splitters over the 52 captured
+answers under `eval/drift-metric/fixtures`, 37 of which carry inline markers: the largest split
+either splitter CHARGES for is 474 characters, on a 346-character answer. An earlier draft quoted
+648 on a 654-character answer, which is the sum of every returned unit's text on an answer no
+sentence of which was split at all — the answer's own length, and not a spend. Even corrected this
+is a FLOOR and not a calibration: the corpus is short probe answers and cannot tell this value from
+one a hundred times smaller, so lowering it needs a corpus that can.
+
+What is deliberately NOT claimed is that only a remote endpoint can be refused. The cost is the
+marker count times the sentence length, so length alone does not bound it. Measured 2026-09-17 by
+driving `splitIntoClauseScopedSentences` over one-line answers of the shape `x [1] [2] …`, binary
+searching for the smallest the allowance refuses: **594 markers, 3,457 characters** — refused, with
+593 markers and 3,451 characters still split into 593 clauses. That is well inside what the local
+engine can produce, so a refusal is not a remote-endpoint-only event. It is the rule working rather
+than a gap in it: such a sentence has no clause worth grading, and grading it whole is the right
+reading of it.
+
+**What is NOT in this change.** The issue's recommended-fix item 2 asks for a length ceiling on the
+extracted answer before the validators run. That is a different layer from issue
+[#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which binds the
+transport, and a behaviour-visible decision of its own — it fails a clinician's request outright,
+at a value and under a global property nobody has chosen yet. It also does not close this defect and
+this defect does not wait on it: the issue's own words are that "this code should be linear
+regardless of what the transport enforces".
+
+**This decision is not a claim that the grounding path is bounded end to end**, and one neighbouring
+sink is stated precisely because it is still reachable. `verify()` caches one embedding vector per
+SENTENCE, uncapped, and `selectClaim` fills it for every candidate. A reviewer of this change
+reproduced `OutOfMemoryError` inside `verify()` on a 1.95 MB answer of ordinary short sentences
+under a 256 MB heap, after 68,014 embed calls — and at `c430a960`, before this change, at the same
+size, so it is neither introduced nor closed here. Two corrections to how an earlier draft of this
+decision described it, both from that reviewer's measurements: it is not only the GUESSED branch,
+since ten properly inline-cited references over a 1.6 MB answer drove 64,010 embeds and peaked at
+209 MB; and "linear, therefore within the criterion" is the wrong test, because the failure mode is
+reached at a size the issue's own threat model produces. Capping it decides which sentences get a
+verdict, which is a grounding-quality question and not this one; the answer-length ceiling of
+recommended-fix item 2 closes it without that cost, which is a second reason this PR states item
+2's absence rather than passing over it. The Tier-2 statement `entailsBatch` posts is unbounded in
+the same way, and the refused-split shape escapes it only where `compoundClaim()` fires. A refused
+CO-CITATION does not: driving the real `verify()` with entailment on and clause scope on over
+`<400,000 characters of filler> [1], [2], [3]` returns one unit, `compoundClaim=false`, three
+published `true` verdicts and three 400,003-character statements posted to the judge. The module
+manufactures that shape itself, from `[5/12/15]` via `normalizeSlashCitations`, so this is not an
+exotic reading of it. Also item 2's territory, and stated here so the next reader does not take the
+refusal as a guard against it.
+
+→ `CitationGroundingVerifierTest.theAnswersMarkersAreUnionedOncePerDISTINCTSetAndNotOncePerFragment`
+(asserted as a RATIO — four times the markers may cost four times the work and not sixteen — so the
+case says the same thing on a fast machine and a loaded one),
+`.oneAllowanceIsSharedBySplittingBOTHShapesOfOneAnswer`,
+`.clauseScopedSplitOfADenseOneLineAnswerStaysLinearInTheAnswerLength`,
+`.enumerationSplitOfALongPreambleStaysLinearInTheAnswerLength`,
+`.theSplitAllowanceIsSpentPerANSWERAndNotPerSENTENCE`,
+`.aRefusedSplitIsReportedAtWARNWithoutQuotingTheAnswer`,
+`.aRefusedSplitIsReportedOncePerANSWERAndNotOncePerSentence`,
+`.aSentenceBOTHSplittersRefuseIsOneSentenceInTheReport` (the one case that pins the identity-keyed
+refusal set — replacing it with a list reddens that case and nothing else),
+`.everyFragmentOfOneSentenceSharesItsParentsCitationSetRatherThanCopyingIt`,
+`.aRefusedClauseSplitWithdrawsTheVerdictWhereClaimTextSeparatesItsMarkers`, and
+`ArchitectureGuardTest.aClaimFragmentIsBuiltOnlyThroughTheBudgetChargedFactory`,
+`.theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter` and
+`.aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints`, which between them cover the splitter that
+does not exist yet, and `.theCitationsAClaimRestsOnAreAViewAndNotACopy`, which covers the `restsOn`
+sink above. What each of those structural rules reaches that no behavioural case does is stated in
+its own javadoc, along with what it does NOT reach, and each is narrower than its name.
+
+**Three rounds of clean-context review were spent on those structural rules, and the lesson is about
+the KIND of question a rule asks.** Round two tightened both onto the construction rather than its
+neighbourhood: the first had allow-listed a whole METHOD, `splitIntoCitedSentences(String,
+FragmentBudget)`, because the whole-sentence construction sat there — so an uncharged per-marker
+splitter written into that same method, its natural home since it already holds the budget, passed
+it. The whole-sentence construction got a tiny factory of its own, `newSentence`, and the allow-list
+became the two factories. The second had read `restsOn`'s own body only, so collapsing the two
+operands into one set inside `ClaimSupport`'s CONSTRUCTOR restored the per-reference copy with the
+rule green; it was widened to read the `ClaimSupport` body too.
+
+Round three defeated both again, and neither defeat was a new hiding place — each was the same
+question answered in a spelling the rule had not enumerated. A per-marker splitter calling the
+allow-listed `newSentence` once per marker constructs nothing the construction rule objects to, and
+one creating a `FragmentBudget` per sentence charges the allow-listed `newFragment` correctly; both
+left the whole suite green. And `this.own = new java.util.HashSet<Integer>(own);` — the fully
+qualified idiom this very file carried at `c430a960` — was invisible to a rule listing five
+unqualified spellings. Adding a sixth needle would have lost the same way again, so the rules
+changed shape instead. The construction rule kept its scope and gave up its claim to cover
+more; the two forms it cannot see became rules asking checkable questions of their own, about CALL
+SITES and about where an allowance is CREATED. The copy rule stopped listing spellings altogether
+and now asks the positive shape: those two bodies assign fields, construct a `ClaimSupport` and test
+membership, so every `new` in them must be a `ClaimSupport` whatever its type is spelled like, and
+every call must be one of a named few — which is what reaches a copy made with no `new` at all,
+`Set.copyOf(own)`. Each mutation is spelled out in the javadoc of the rule that now reddens on it,
+with `CitationGroundingVerifierTest` staying green, which is the reason these rules are structural.
+So is the residue each one keeps: a rule whose javadoc over-claims is worse than no rule, because it
+tells the next maintainer not to look.
+
+## Decision 104: The pairwise arms resolve their rule join once per pass, and the chip cap is still not the bound
+
+Issue #447. The question-pair arm asked "which of `subject`'s above-floor rules name `other`?" by
+scanning `subject`'s whole interaction list. The QUESTION-PAIR arm asks it once per ORDERED pair —
+twice per unordered pair from `collectQuestionPairInteraction` and again from `pairKeyNames`; the
+ACTIVE-ORDER arm reaches it only through `pairKeyNames`, whose inner loop breaks at the first partner
+that relates the drug it is naming and so asks between once and N-1 times per drug. So the cost was
+quadratic in a list the QUESTION chooses, times the rules on each row — and while the rule count is
+bounded by the DATA, the row count had no bound but the controller's `MAX_QUESTION_LENGTH` of 1000
+characters. `validate` runs twice per
+request, the first pass from `DrugReferenceInjector.preAnswerFindings` and therefore outside the
+serialised engine lock, so a request's CONTENT set a superlinear amount of CPU in the shared OpenMRS
+JVM.
+
+Measured on this branch by driving the real `validate` over the shipped knowledge base (2283 entries,
+590,312 links) on a chart with NO active orders, one pass, after a warm-up call — so these are the
+arms' cost with nothing else the chart could contribute, not a share of a realistic pass; Decision 54's
+43-order table is the baseline for that, and its chart-less column bounds rather than measures these
+arms. `N` is what `findImpliedByQuery` resolved:
+
+| question | N | before | after |
+|---|---|---|---|
+| "Does warfarin interact with aspirin?" | 2 | 8 ms | 3 ms |
+| 194 chars, highest-rule-count short names | 18 | 78 ms | 15 ms |
+| 997 chars, same packing | 95 | 1,844 ms | 55 ms |
+| 998 chars, aliases scored independently by rows-per-character | 195 | 7,109 ms | 47 ms |
+| 999 chars, marginal-coverage greedy | 407 | 19,236 ms | 92 ms |
+
+The chips were identical at every cell, before and after (1 at N=2, 10 — the cap — at every other),
+and a separate 117-cell sweep — 4 datasets (the excerpt, the two question-pair fixtures, the shipped
+KB) against charts of 0, 1, 2, 3, 8, 20 and 43 active orders and a range of question and answer
+shapes, NOT a full cross product (117 is not a multiple of either factor; each dataset was driven with
+the shapes it can express) — found every
+declared `SafetyWarning` field, every `PairChipExtent` and every WARN line byte-identical across the
+two heads: 1,382 chips, 110 extents, 32 WARN lines. That probe is calibrated in both directions —
+dropping the ATC leg of `candidates` moves 18 of its lines, and handing the screening arm an empty
+join moves its 43-order cell from `found=382` to `391` — so a zero-diff from it is evidence rather
+than silence.
+
+**Read the *after* column as an order of magnitude, not as a ranking.** Each is one pass after a
+warm-up; re-measured warmed and repeated, one cell moved between 93 ms and 181 ms, which is wider than
+the gap between the 95-row and 195-row cells. That gap is noise, not an inversion.
+
+**The last row is why the fourth is not the worst case.** 195 was the ceiling of ONE packer — aliases
+of 3 to 12 characters, scored independently by rows-per-character and packed greedily. Scoring by
+MARGINAL coverage instead, recomputing each pick against what is already covered, resolves 407 rows in
+999 characters, and widening the alias filter past that added nothing to that packer (2-20 and 2-40
+both reached 408). **Read 407 as a floor under the ceiling and not as the ceiling**: an independent
+packer with a slightly different alias filter reached 375 — the same order, not the same number — and
+nothing here shows no packer does better.
+
+**The attribution is structural, not a quotient.** The same harness wrapped every entry's interaction
+list, through the public `DrugReference.setInteractions`, in a delegate holding the same elements in
+the same order and counting the times production asked it for an iterator. At N=95 that was 9,142
+walks against the 8,930 the pair loop alone predicts, and 6,575,839 rule reads; after the change, 190
+walks — exactly twice N, this arm's one plus `bestRulePerPartner`'s — and 136,562 reads. Dividing the
+pass time by the reads would only restate the total it came from, so no per-read figure is recorded
+here.
+
+**The fix is to invert, not to scan** — the remedy this module already took at #339, where
+`unambiguouslyNames` walked `getAll()` per ask. `DrugReference.nameKeys()` is the precomputed inverse
+of `isNamed`; `DrugSafetyValidator.AboveFloorRules` inverts the rows ONE arm is screening into it,
+through `DrugReferenceService.nameIndexOf`, plus an ATC index for `identifies`' second leg, and walks
+each subject's rule list exactly once. The population is the arm's own and deliberately not the loaded
+dataset: inverting all 2283 shipped entries would put a whole-dataset walk on the commonest two-drug
+question. `nameIndexOf` is named apart from `nameIndex()` rather than overloading it, which is Decision 54's remedy for a
+shape that decision measured — there, dropping the argument reinstated a full walk as an overload
+RESOLUTION with the suite green. **That exact mutation does not compile here even under one name**
+(`nameIndex()` is an instance method and the new body is static), so the distinct name is this repo's
+convention for the hazard rather than the only thing standing against it; Decision 54's two arities
+were both static, which is the condition that made it bite there.
+
+**Both callers of `pairKeyNames` are served, and that is a choice rather than a consequence.** The
+signature could have had `pairKeyNames` build its own. What is not a choice is that the join is
+reached from `addActiveOrderPairInteractions` too, so leaving it scanning would have left an
+`N(N-1)`-scan path standing inside the very arm the issue is about — reachable by a question naming
+drugs that relate nothing, where the inner break never fires. #447 filed that sibling arm as "noted,
+not filed"; this change closes its half of the same join as well. **Its cost is better at every chart
+measured and never quadratic** — measured rather than argued, and the opposite of what the early
+`break` suggested. Not "strictly better" at every K: on a two-order chart whose first candidate
+relates, the `break` fired immediately and both forms walk two lists, so the new one pays two index
+builds for nothing. On the shipped knowledge base, one screening pass, counting rule-list walks
+and rule reads through the same instrument: a 43-order chart goes 114 walks / 93,407 reads to 88 /
+64,352, and a 12-order chart whose orders relate nothing — where that `break` never fires — goes 44 /
+13,603 to 14 / 4,144. Timed on the same charts, the screen goes 1,316 ms to 1,099 ms at 157 order rows
+and 101 ms to 63 ms at 45. The `break` was not saving what it appeared to, because the old code still
+walked each candidate's whole list per ask and the reverse-direction asks dominate. Fewer than two
+screened entries admit no pair, so nothing is read at all.
+
+**Alternatives rejected.**
+
+*Cap the number of question-resolved rows the arm screens, and state the truncation in
+`PairChipExtent`* — #447's own first suggestion. Refused on this decision's own measurement: at the
+largest question the controller admits — the 407-row row of the table, not the 195-row one — the pass
+now costs about 92 ms against 3 ms for an ordinary two-drug question. **A cap would save part of that
+and not most of it**: the rows have to be RESOLVED before a cap can drop any, so it cannot touch the
+~54 ms the dominant-cost paragraph below attributes to `findImpliedByQuery`, and what is left for it
+to save is the arm's own share. So the refusal is not that a cap buys nothing measurable — the first
+wording of this sentence said that and was wrong, and the second priced it at nearly the whole pass
+and was wrong the other way. It is that the arm's share of one adversarial question is not worth a
+narrower safety screen. It would also cost a wire change
+that is not merely additive. `PairChipExtent.getFound()` is defined as how many candidate pairs the
+arm ENUMERATED, and `found == 0` asserts that an arm ran and the data related none of them; screening
+a subset makes that count a measurement of a population the arm chose, which a client cannot tell from
+a complete screen without a third number — the class of statement Decisions 60, 65, 69 and 71 price.
+This is NOT the refusal #131 and #256 record: those refuse stopping enumeration AT THE CHIP CAP,
+because the cut is "the least severe go" and an early stop changes WHICH pairs are dropped. That is a
+different lever and its argument does not transfer.
+
+*Count in-flight requests per user toward the rate limit* — #447's third criterion, and outside the
+arm its title and first evidence item scope it to. The issue itself files that half as "Amplifier
+only" and records its sibling finding as rejected. Left open; what changed is the size of what a
+parallel request multiplies — 2.7x smaller at the commonest two-drug question and 209x at the 407-row
+one, per the table above.
+
+*Rewrite `DrugReference.isNamed` as `nameKeys.contains(normalizeName(token))`* — equivalent by
+construction, and it would retire the per-alias re-normalisation for every caller rather than only
+here. Not taken in this change: it reduces a CONSTANT whose multiplier this decision removes, and it
+touches every caller in the module. Its own ticket.
+
+**What this leaves as the dominant cost, measured and not fixed here.** With the join inverted, a
+407-row pass spends about 54 of its ~92 ms in `findImpliedByQuery` itself — each distinct alias the
+text carries costs one whole-dataset `matchesDrugName` walk through `findImpliedSubstances`, memoised
+only in a per-call local and repeated three times per request. Two further terms are outside this
+arm and outside #447: `validate` also resolves `findImpliedByQuery(answer)`, and **nothing caps the
+answer** the way `MAX_QUESTION_LENGTH` caps the question — a 15,190-character answer resolves 2,060
+rows and costs 1,207 ms per pass, roughly linear. And the screening arm remains about O(K^2.3) in
+ACTIVE ORDERS, half of it in `recordsANameOf` reached from `activeOrdersOtherThan`, which is this
+same per-pair rescan shape standing on the chart side; a 43-order chart sits near 60 ms, so it is a
+follow-up rather than an emergency. None of the three is question-content-quadratic, which is what
+#447 filed.
+
+**A trade, recorded rather than defended.** The join RETAINS every above-floor `(subject, other)`
+rule list for the arm's lifetime, where the scan discarded each one per ask — CPU for memory. It is
+bounded by the pairs the arm's own population relates, and no figure is published for it because none
+was measured beyond "fine at the largest question tried"; a maintainer who needs one should measure
+rather than trust this sentence.
+
+**One residue, stated rather than closed.** The `identifies` confirmation that every indexed candidate
+is put through is not load-bearing today — the indexes are exact, and removing it leaves the whole api
+suite green, measured. It guards the too-WIDE direction only; nothing about the shape guarantees the
+too-NARROW one, and a lost candidate drops an interaction chip fail-closed, so that direction is asked
+of real data at every floor and every ordered pair instead.
+
+→ `AboveFloorRuleJoinAgreementTest` (the join's ANSWER, over the excerpt, over a fixture carrying an
+ATC-only rule — the leg nothing in the tree covered — and over the rows a route-variant question
+resolves from the shipped KB), `QuestionPairRuleScanPerPassTest` (what each added drug COSTS, and a
+body-scoped source guard against a future arm reading a rule list of its own),
+`NameIndexAgreesWithIsNamedTest.theIndexAgreesOverAProperSubsetOfADatasetRatherThanReachingPastIt`.
+
+## Decision 105: A streaming query that reached inference is audited however the stream ends
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#450](https://github.com/openmrs/openmrs-module-chartsearchai/issues/450), a security-scan finding
+(CWE-778, severity MEDIUM). It changes no prompt, no chip and no response key; the wire gains
+nothing and the `chartsearchai_audit_log` table gains no column.
+
+**Context.** The row `saveAuditLog` writes is the module's only record of who asked what about whom,
+and on the streaming endpoint it was a statement on the success path: at the tail of
+`streamAnswer`'s try block in the classic shape, and inside the ungrounded consumer in the async
+one. The four streamed channels — `token`, `thinking`, `preliminary`, `references` — write through
+`writeSseEventOrThrow`, which turns an `IOException` into a `RuntimeException`; that unwinds out of
+`searchStreaming` past both of those sites into the catch-all, whose `e.getCause() instanceof
+IOException` test reads it as a benign client hang-up and returns at DEBUG. So a user holding *AI
+Query Patient Data* could read a streamed answer about any patient and then reset the socket, and
+nothing recorded the query. Because `checkRateLimit` counts persisted rows, it was also uncounted;
+the ticket calls that a secondary effect and so does this.
+
+A second exit the ticket does not name reaches the same catch-all: between the ungrounded handoff
+and its return, `LlmInferenceService` runs the fidelity checks and then the grounding pass with no
+`catch` of its own, so anything thrown there unwinds with the whole answer already delivered.
+
+**Decision.** `auditStreamedQueryIfUnrecorded` runs in the `finally` that already stops the
+keep-alive timer, so the row is owed on every exit of that try block that got as far as the pipeline
+producing something. It writes **through** `saveAuditLog`, which stays the only place a row is built,
+and one row per query at most.
+
+**The flag each write site raises goes up AFTER its save returns, never before.** Everything from
+the service call onward sits inside `saveAuditLog`'s own `catch`, and nothing after that `catch` can
+throw — so anything that ESCAPES the method was thrown before the insert and means no row exists. A
+flag raised ahead of the call had the `finally` decline, leaving a delivered answer unrecorded, which
+is this issue's own defect reappearing inside its own fix. A swallowed persistence failure returns
+normally, so the flag is still raised and no second row follows it.
+
+One row per query holds for any implementation, not only for one honouring the ungrounded consumer's
+at-most-once contract. That consumer's idempotence is keyed on its having FIRED rather than on the
+early `done` having gone out, which also makes its warning reachable in the classic shape; and the
+classic write site skips its save where a row was already attempted. Neither shipped implementation can
+reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
+`ChartSearchServiceRouter` never calls it, passing the caller's through — but a second call is a
+second ROW, `saveAuditLog` building a fresh one each time, and the module should not owe the table's
+shape to a collaborator's good behaviour.
+
+**What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
+row before streaming and update it afterwards — was not taken, and what stands against it is a
+second write per query and a specification change rather than a second row.
+`ChartSearchAiAuditSearchModeTest` and `ChartSearchAiAuditReferenceSliceTest` each pin **one
+`saveAuditLog` call** per streaming query, in both shapes, which a pre-persist design reddens by
+calling it twice — but their subject is the call and not the table, so neither of them says what such
+a design would leave in it. That one call is one row today is a property of `saveAuditLog`, which
+builds a fresh row on every call; a design that instead updated the row its first call had persisted
+would be rewriting that method's "the only place a row is built" shape, and re-specifying both
+suites. Neither was re-decided here. So the row is written once, at the end, from the best answer the
+controller holds:
+
+- the pipeline's own `ChartAnswer` where the ungrounded consumer has handed one over — which is why
+  that consumer now fires in BOTH shapes rather than being wired to a no-op in the classic one. Its
+  contract already says it fires on the live inference path regardless of whether grounding is
+  enabled, and the answer it carries states the search mode, the reference slice and the citations.
+  Filing `unknown` and two nulls with that object in scope would state "the producer stated no
+  measurement" where the producer stated both.
+- otherwise the answer text the model had produced, accumulated by the token consumer **before** each
+  frame is written, so a fragment whose write the client refused is on the record. Over-recording by
+  one fragment is the safe direction for an audit trail.
+
+**A row filed the second way states `unknown` and no slice, and that is a residue rather than an
+oversight.** The handoff comes after the `references` frame, so both disconnect windows the ticket
+describes fall here — and so does a third it does not describe, a cached answer, which the router
+hands over in one token call and never surfaces through the consumer. Such a row can therefore hold
+the answer in FULL under `unknown`, so the length of the answer does not say which way a row was
+filed. **Nor does anything on a row filed the FIRST way say that its stream came apart**: it carries
+the pipeline's own mode and reference count, which is what
+`ChartSearchAiStreamDisconnectAuditTest.aFailureAfterTheAnswerIsCompleteAuditsThePipelinesOwnAnswer`
+asserts, and is the same row a completed query leaves. `unknown` is therefore a subset of "this query
+did not finish" and not a test for it; the README's audit-log section says that to a client.
+Closing the residue would need a new signal on the `searchStreaming` interface carrying the mode
+ahead of the answer, and the mode is a property of the chart that was assembled, which is the
+producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.
+
+**The gate.** The row is owed once the pipeline has spoken on any of the consumer channels, which is
+the REST layer's only signal that inference produced something. A query that failed before any of
+them writes no row, as before: nothing was produced. A preview, or an abandoned `thinking` frame, is
+model output about this patient that the pipeline produced, so those are audited — including a chart too
+large for the committed pass, where the preview ran, the preview being over a focused slice and the
+committed pass over the whole chart. `maybeEmitPreliminaryReasoning` returns early both where
+`chartsearchai.progressiveReasoning.enabled` is off, which ships, and where the chart mode is the
+`queryScoped` one, which also ships — so on a stock install no preview runs and `thinking` is the
+first frame.
+
+**Its consequence, stated rather than hidden: those queries consume a rate-limit slot.**
+`checkRateLimit` counts persisted rows against `chartsearchai.rateLimitPerMinute` (default 10), so a
+clinician reloading impatiently while a CPU install thinks can throttle themselves out having
+received no answer. That is the intended direction — their being uncounted was the other half of what
+#450 reports — but an operator seeing 429s after abandoned queries should know why.
+
+**The second recommendation, and the half of it that was declined.** `saveAuditLog` swallowed every
+persistence failure at WARN, which on a default OpenMRS install sits among ordinary operational
+noise; an access to PHI that went unrecorded is not that, so it reports at ERROR with the cause
+attached. The level is the whole of the observable difference — the method returns null both when the
+write failed and when the row got no id — which is the argument `LogCapture`'s javadoc makes about
+issue #149.
+
+Making the failure *fail closed* was not taken. It is mechanically available on the blocking
+`/search` handler, which persists before returning the answer. On the streaming one the row is
+written after delivery, so nothing is there to fail closed ON — reaching it means pre-persisting,
+which is the design above, at the cost of a second write per query and of re-specifying the two
+suites named there. Nothing here shows that this endpoint CANNOT fail closed; what it shows is what
+doing so would cost. A compliance switch that silently does not apply to the endpoint the frontend
+uses by default is worse than no switch, and which way to resolve that — pre-persist and re-specify,
+or accept the asymmetry — is a policy call rather than a defect.
+
+**What it costs**, measured 2026-09-17 by driving the real `streamAnswer` from a throwaway omod case
+with a stub streaming 4096 fragments — `DEFAULT_LLM_MAX_OUTPUT_TOKENS`, a 16,384-character answer —
+at 200 requests per JVM after 30 warmups, per-request caller-thread allocation read off
+`com.sun.management.ThreadMXBean.getThreadAllocatedBytes`, with an A/A control on every run:
+
+- accumulating the answer costs **+36,992 bytes** per request against the **1.94 MB** the REST layer
+  already allocates for that answer, and wall clock sits below an A/A spread of 203 µs on a ~1.2 ms
+  request.
+- firing the ungrounded consumer in the classic shape, where it was a no-op lambda, costs **+48
+  bytes** per request. Measure it against a stub that FIRES the consumer; with one that does not, the
+  arms differ by whether the allocation happens at all.
+- the audit INSERT on the disconnect path extends neither the engine's critical section — the
+  consumer throws inside `LocalLlmEngine`'s `synchronized` method, so the monitor is released before
+  the `finally` — nor any client-visible latency, `writeSseEvent` having flushed whatever terminal
+  frame the exit writes, where it writes one.
+
+**No ceiling on the accumulated text, and that is a decision.** `max_tokens` is advisory to the peer
+rather than enforced locally, which is issue #446's premise — and #446 is OPEN, so nothing bounds a
+response today. That cuts against a cap here rather than for one: `LlmResponseParser` accumulates the
+whole JSON envelope, reasoning and citations included, on the same request and through both engines,
+so it is strictly larger and equally unbounded. Whatever ceiling #446 lands should cover both, at the
+source.
+
+**A residue this decision cannot close from a test, named rather than implied.** The fallback write
+runs in a `finally` reached *because* something threw, and `AuditLogServiceImpl` is class-level
+`@Transactional`. If the ambient Hibernate session or transaction is already unusable — a failure in
+the grounding tail, which touches chart state — `saveAuditLog` swallows it at ERROR and the row is
+lost, which is the hole this decision closes, on the path most likely to produce it. **It has not
+been measured**: it needs a live standalone with a real DAO, and the suite runs on stubs. A review
+round raised it; nothing here refutes or confirms it. Three further clauses the suite does not
+discriminate are named at their own sites rather than here.
+
+**An api test-jar was tried and reverted**, so that it is not re-proposed on the strength of the one
+thing it buys. Publishing api's test classes and depending on them from omod gives the omod suite
+`LogCapture`, the repo's instrument for asserting the LEVEL an outcome is reported at. It also opens
+api's whole test classpath — fixtures included — to omod, which prose in both modules states the
+opposite of as a load-bearing fact; the one that decides is a PRODUCTION javadoc,
+`DrugSafetyValidator`'s `StandingChartAlerts` factories being public because `omod/pom.xml` declares
+no api test-jar. `StandingChartAlertsTest`, `ArchitectureGuardTest`,
+`ChartSearchAiSafetyWarningSeverityWireTest` and `ChartSearchAiChartAlertsTest` each say the same of
+themselves. And `omod/pom.xml`'s `unpack-dependencies` execution filters by neither classifier nor
+scope, so it shipped api's test classes and its Spring and Hibernate test configs inside the released
+`.omod` — measured, with the whole suite green and the build exit 0 — needing a load-bearing
+`excludeClassifiers` line no test could hold. One level assertion does not buy that. `ControllerLog`
+in the omod test package asks the one question those cases need instead, and pins its own
+restoration, because a capture that leaves a `LoggerConfig` behind blinds every later capture of the
+package (issue #439's third round).
+
+**Pinned by** `ChartSearchAiStreamDisconnectAuditTest`, whose case names are the arrangements, and
+`ChartSearchAiAuditWriteFailureLoudnessTest` for the ERROR, with the successful write as its control
+and the capture's own restoration beside it. Mutate each guard and read the failures.
+
+## Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here
+
+**Status: Accepted** (September 2026) — implemented, issues
+[#444](https://github.com/openmrs/openmrs-module-chartsearchai/issues/444) (severity HIGH) and
+[#449](https://github.com/openmrs/openmrs-module-chartsearchai/issues/449) (severity MEDIUM), two
+security-scan findings of one defect (CWE-494). It changes no prompt, no chip, no response key and no
+wire format.
+
+**Context.** The module does not ship the files it executes. Two places fetch them, and both fetched
+from the mutable `main` branch of a repository owned by someone outside the OpenMRS organisation:
+
+- `backend-init.sh`, the published backend image's ENTRYPOINT, provisions the GGUF weights that
+  `LocalLlmEngine` serves through the bundled native `llama-server` and the e5 ONNX embedder and
+  vocab whose paths it writes into querystore's global properties;
+- `.github/workflows/build-standalone.yml` bakes the same class of files into the standalone zip the
+  README advertises as the product download.
+
+Nothing bound the received bytes to a version anyone had reviewed — no pinned revision, no digest, no
+signature. The entrypoint `mv`'d whatever curl produced into the filename `config.xml` defaults
+`chartsearchai.llm.modelFilePath` to; the workflow did not even pass `curl -f`, so an HTML error page
+would have been assembled into the bundle as a model. Whoever controlled those repositories at fetch
+time therefore decided what the clinical LLM says about every patient chart, and the module's own
+downstream validators cannot restore that — citation grounding and `DrugSafetyValidator` both operate
+on the model's own text.
+
+**What was taken.** One manifest, `model-manifest.tsv`, records each artifact's pinned Hugging Face
+commit, its sha256 and its exact byte count; one POSIX-sh library, `scripts/model-manifest.sh`, is
+sourced by both fetch sites and is the only thing that downloads a model. Its composed step
+`fetch_and_verify` refuses anything that is not the recorded artifact and returns a distinct code
+per reason, so a caller can add the diagnostic it alone has and can word its own message honestly.
+Some of those codes report a deletion — a digest mismatch, a size mismatch, and the case below
+where a copy already on the volume is deleted and its replacement then cannot be fetched; the rest
+report that nothing was verified rather than that something was removed, and the library's own
+code table is the authority on which is which. Callers word "refused and deleted" off the code and
+never off the disk, so a code that reported a deletion as a plain fetch failure would make every
+caller's message false at once.
+
+The manifest is one file rather than one per consumer because the two consumers are one defect: a
+digest written twice is a digest that will be bumped once. That is also why the fix is one PR — and
+why the two sites now share one `vocab.txt` row. They had been fetching byte-identical bytes from
+two different third-party accounts, which is two pins to remember and one more party to trust for
+nothing.
+
+**Three choices inside it are worth recording.**
+
+*The revision is a Hugging Face commit hash, not an OpenMRS-controlled mirror.* Both findings offer
+either. A mirror is the stronger answer — it removes the third party from the fetch path rather than
+freezing what they served — but it is infrastructure this repository cannot provision, and the
+digest is what actually binds the bytes either way. The manifest's `url` column is almost the whole
+of what a mirror would change — the exception is `ModelDownloadPinningGuardTest`, whose row check
+requires a `huggingface.co` `resolve/<40-hex>` url — in two places, since it also requires README's
+hand-download urls to be byte-equal to a row. Moving a row to a mirror means widening both to
+whatever makes the new url immutable. Better it says so than that a mirror arrives one day and the
+guard reads as a refusal of the idea.
+
+*A file already on the volume is verified, not trusted for its name, and replaced when it fails.*
+`/openmrs/data` outlives the container, so the population this fix most needs to reach —
+deployments provisioned before it existed — is exactly the one a download-time-only check never
+runs against. A file that fails is
+re-fetched from the pinned revision rather than merely refused, because a stale file and a
+substituted one are indistinguishable on disk and the replacement is bound to the same digest:
+that decides how many restarts recovery takes, not what is accepted. **A refusal does cost the
+copy**: the bytes are deleted before the replacement is fetched, so a deployment that cannot reach
+the pinned revision is left with neither file — which is why that outcome has an exit code of its
+own rather than sharing the one whose contract says nothing was deleted, and the message an
+operator gets says the copy is gone
+(`ModelDownloadIntegrityTest.aCopyDeletedForAReplacementThatNeverArrivesIsNotReportedAsAPlainFetchFailure`).
+For the embedder that means a container which
+refuses to start — and stays stopped, because the `backend` service declares no restart policy, which
+`ModelDownloadPinningGuardTest.theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal`
+asserts of this repository's `docker-compose.yml`. The deploy server's compose file is not that one —
+`Dockerfile.backend` repeats the HEALTHCHECK block for exactly that reason — so a policy added there
+is residue no test here can see. That is the fail-closed direction and it is the point — the state
+being removed is one where unverified weights answer clinical questions — but it is a real cost,
+and the refusal's own log lines, naming the expected and the received digest, are what an operator
+is left to report.
+
+The cost is real, and two drafts of this paragraph got it wrong before it was measured — the first
+said the hashing is "paid alongside the download it replaces", which is true only of a first boot,
+and the second attributed a rate to a CPU feature when the measurement had actually varied the
+TOOL. What is true: on a steady-state restart there is no download, because the old code returned
+early whenever the target existed (`backend-init.sh:176-178` at `c430a960`), so a restart did no
+work on the weights at all. Removing that early return is the point of this decision, and the
+hashing it adds is net-new work with nothing to overlap.
+
+**So the cost table above is an argument for putting the early return back**, and nothing would have
+noticed. Measured 2026-09-17 against the suite as it then stood, and reproduced independently:
+re-inserting those same three lines at either fetch site — in `fetch_llm_in_background`, or as an
+absence test wrapped around a top-level `fetch_or_exit` — left every api case, `sh -n` and
+`shellcheck -s sh -S warning` green. The guards over these fetches
+asked whether one is NAMED (routed through the library) and POSITIONED (in the current shell, ahead
+of the property write); neither is a question about whether REACHING it is conditioned on the file's
+absence, and the library cannot answer it at all, not being the site that would decline to call it.
+That is the same lesson the subshell family taught, arriving from the other direction: the property
+worth pinning is what the shell DOES. `EntrypointVolumeVerificationTest` pastes
+`fetch_llm_in_background` and `_download_llm_file` out of the entrypoint by name, sources the real
+library, and runs the entrypoint's own calls with the target ALREADY on the volume — once holding the
+recorded artifact, which must be reported ready without a download, and once holding same-length
+bytes no row records, which must be refused and deleted. The embedder's two fetches are top-level
+statements with no function to extract, so that half stays a source channel:
+`ModelDownloadPinningGuardTest.everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally` asserts
+the property positively — every command naming a provisioned artifact sits at nesting depth 0, inside
+no block and no function, so where it is written is when it runs — rather than enumerating the
+spellings of a skip, which is the shape this decision already records being defeated in turn. Its
+nesting walk has to balance to 0 at end of file, which is what makes a construct it cannot parse a
+loud failure instead of a silent zero. The residue is named in both: depth is not reachability, an
+`exit` above these statements would skip them at depth 0, a command that merely NAMES an artifact
+inside a function is reported rather than ignored, and a skip written inside a function the harness
+does not paste is outside both.
+
+The volume is 7.94 GiB across the four artifacts (8,519,952,880 bytes): 0.41 GiB synchronous — the
+embedder, because the global properties it gates are written seconds later — and 7.53 GiB in two
+parallel background subshells. What that costs depends on which of the three tools `file_sha256`
+finds, and the spread between them is larger than any other factor here. Measured 2026-09-17 on an
+Apple M1 Max over a warm 1 GiB file, every digest compared and identical, and reproduced
+independently on a second machine of the same class over a real 4.58 GiB GGUF:
+
+| tool | rate | 7.94 GiB sequentially |
+|---|---|---|
+| `openssl dgst -sha256` | 1.67 GiB/s | ~4.8 s |
+| `sha256sum` | 1.55 GiB/s | ~5.1 s |
+| `shasum -a 256` (Perl) | 0.30 GiB/s | ~26 s |
+
+**Both columns are binary units**, which is what the rates were taken in; mixing them with the
+decimal byte count above overstates the projection by 7%. And the column is sequential, which is an
+upper bound rather than what is paid: the two large artifacts hash in two background subshells, and
+a run over a pair of files of that size showed no bandwidth contention — the larger file's own rate
+was unchanged, so the wall cost is about the larger of the two rather than their sum.
+
+That 5x is why `file_sha256` tries the two fast tools first and `shasum` last, an order this
+measurement changed. **The `sha256sum` row was not measured on GNU coreutils**: the machine has
+Apple's `/sbin/sha256sum`, and no container runtime was available to measure the Debian-family
+build that `Dockerfile.backend`'s `eclipse-temurin:21-jre` base provides — which is the row the
+image takes. So that figure is a transfer from a different implementation of the same algorithm and
+is the weakest number here. It does not move the conclusion: even at `shasum`'s rate the
+synchronous half is 1.4 s against the 30-minute `start_period` `docker-compose.yml` gives the
+backend service, under a tenth of a percent of it. What none of this measures is slow storage —
+every run read at NVMe speed, and below roughly 0.3 GB/s the read dominates and the tool choice
+stops mattering.
+
+*A refusal that must stop the start is a library behaviour, not a branch at the call site.* The
+entrypoint used to read the library's exit code and branch on it, and the property "a refusal stops
+the start" was then something only a source-reading guard could check. Four readings of it were
+defeated in turn — a statement inserted between the fetch and the branch, so `$?` was that
+statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
+recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
+next. `fetch_or_exit` NARROWS that class rather than closing it: there is no branch to spell, and
+what the shell DOES is a behaviour a test drives. Reviewers then found two further spellings, and
+neither is a misread branch — each is a subshell sitting between the call and the entrypoint's own
+shell. One `&` on the call's last continuation line backgrounds the whole command; a `| tee`
+appended to the same call makes it an element of a pipeline, which POSIX also runs in a subshell.
+Both left every source guard and shellcheck green, and both were reproduced against the real
+library: the refusal printed in full, the script then ran on to the next statement and exited 0.
+The guard now reads the logical command and refuses all three shapes a line can spell — a call
+that is not the command itself, a command substitution being a subshell too; a trailing `&`; and a
+pipe.
+
+**The residue is named rather than claimed away**, and the previous attempt to bound it — "what is
+bounded is the accidental edit" — was itself falsified by the `| tee`, which is about as ordinary
+an edit as there is. What a line-level rule cannot see is a subshell the call's own line does not
+spell: a `fetch_or_exit` inside a shell function that is itself backgrounded or piped, or inside a
+multi-line `( … ) &` group — that last one driven against the real library here, printing the
+refusal and then running on to the next statement, exit 0, exactly as the two closed shapes did.
+Closing it would mean the library detecting its own subshell, for which POSIX sh offers no
+portable test.
+
+The pattern is worth naming beyond this decision. Changing the KIND of question — from parsing a
+shape to driving a behaviour — cut four spellings at once where four successive repairs had each
+bought one. It did not make the property unbreakable: a claim that it had was written here and
+refuted within a cycle, and the narrower claim that replaced it was refuted in the next one.
+
+*A model path is published only for bytes THIS shell verified.* The other half of #444's refusal is
+that the embedding global properties stay unconfigured, and that too was read off the source: a
+guard compared the line of the last embedder fetch against the line of the first
+`configure_retrieval_gps` invocation. A reviewer defeated it by wrapping the two fetches in a
+function defined where they already sat and calling it after the wiring — the verification then ran
+after the global-property write, with every source guard, `sh -n` and shellcheck green. Driven
+against a path-rewritten copy of the real entrypoint, a `mariadb` stub recording every statement and
+a loopback origin serving bytes no row records, that arrangement INSERTed
+`querystore.embedding.modelFilePath` and `querystore.embedding.vocabFilePath` before the embedder was
+refused; the unwrapped entrypoint wrote neither.
+
+So the ordering stopped being a fact about source layout. `fetch_and_verify` records each id that
+verified in the CURRENT shell, and `require_verified` is what `configure_retrieval_gps` asks before
+it writes either path. Re-driven the same way against the fixed entrypoint, the same wrap wrote
+neither path — the paths simply go unwritten, which is the fail-closed direction and the same state
+a refusal produces — while a run serving bytes that DO match the recorded digest wrote both, which
+is what says the gate is not merely refusing everything. The ledger is an ordinary shell variable,
+which settles the subshell family above in the direction that matters: a fetch backgrounded, piped,
+command-substituted, or taken inside a function that is any of those, records nothing the parent
+shell can see, so no path is published even though the `exit` stopped nothing. What it cannot do is
+make the `exit` land, which is why the line-level guard stays.
+
+That positional guard is now a second channel rather than the guarantee, and it asserts the premise
+it rests on: a must-have fetch is a top-level statement of the entrypoint, so where it is written is
+when it runs. The function wrap fails that premise, which is what reddens it.
+
+*A decline turns the bootstrap sweep off itself, rather than by way of the property.* The other half
+of the refusal was written as a consequence of the first: the paths go unwritten, so the safety
+below them — `[ -z "$_model_gp" ]` over a read-back of `querystore.embedding.modelFilePath` — finds
+it blank and switches `querystore.bootstrap.autostart` off. That composition holds on a virgin
+database only. `gp_set_if_blank` leaves a row it finds non-blank standing, deliberately, so a
+deployment past its first good start reads back the path the LAST good start wrote, whatever this
+start did. On the shipped entrypoint the embedder goes through `fetch_or_exit`, whose refusal ends
+the shell before the wiring runs, so what the decline answers is a start that reaches the wiring
+with nothing in the ledger — the swallowed-exit residue above, where a refusal has already deleted
+the file that path names and the `exit` stopped nothing. Measured 2026-09-17 against the
+entrypoint's own wiring functions, a `mariadb` stand-in whose store survives between starts and a
+refusal taken in a background subshell: the pre-fix arm left
+`modelFilePath=querystore/model.onnx bootstrap.autostart=true`, which is the per-record exception
+flood `configure_retrieval_gps` exists to prevent, reached from inside the gate that was supposed to
+close it. So the `else` arm now writes the sweep off on the ledger's verdict, and the blank-path
+test stays for the one case only it can answer — the gate PASSED and the write did not take, which
+`gp_set_if_blank` discards the error of. The two reasons are distinct in the line an operator gets.
+`EntrypointRetrievalWiringTest` drives both arms, that third case, and a verified control; it is a
+third channel because neither of the other two can see a composition — one drives the library with
+no database, the other reads source. The claim that the two halves already composed to one
+fail-closed state was written in the entrypoint's comment and in the guard's own allow-list, and
+believed in both for three review rounds, which is why the correction is recorded here. The prose
+that replaced it then overreached the other way, wherever it was restated: it said a start whose
+embedder is REFUSED reaches this arm, which on the shipped entrypoint it cannot, `fetch_or_exit`
+having ended the shell at the download step. What reaches the arm is a start with nothing in the
+ledger. The code is fail-closed either way; only the wording moved.
+
+
+*The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
+not subsume its message. The two failures an operator can act on differently are a transfer that
+stopped short and bytes that are not the artifact, and only the first has a remedy the operator
+owns — retry. A single "the digest did not match" would send them looking for an attacker in both
+cases. The guard was introduced for the ONNX export shape
+[Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) records; **pinning
+the revision retired that cause**, and the guard survives for the message alone, which is why its
+diagnostic names a truncated transfer. The order is the size branch of `_mm_verify_file`, and the
+message it enables is the caller's diagnostic lines that `fetch_or_exit` prints for that code alone
+— change one and the other reads false.
+`ModelDownloadIntegrityTest.aTruncatedTransferIsRefusedAsAShortFileRatherThanAsASubstitution` is
+what notices the order, and
+`.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript` that the diagnostic is size-only.
+
+**What this does not close.** Two fetches in these same files stay unverified and are out of scope
+for both findings: `Dockerfile.backend` downloads `openmrs.war` from a Maven repository, and
+`backend-init.sh` fetches the demo SQL dump from a GitHub release URL an environment variable can
+override. Neither is a file a native parser executes, and both are separate decisions about who the
+project trusts.
+
+**Moving a pin.** The same recipe [Decision 36](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
+records for the bundled knowledge base: change the revision in the `url` column, re-record `sha256`
+and `bytes` from the new revision, and run the suite. Take the digest from the file itself —
+huggingface.co's `paths-info` API reports a git-lfs object's `oid`, which is its sha256, and the
+`x-linked-etag` header on a HEAD of the pinned URL confirms the same value independently. **Do not
+reach for that header on a file that is not an lfs object.** It is present there too and it is a git
+blob sha1 — 40 hex characters rather than 64, of a different thing — so a small file like `vocab.txt`
+has to be downloaded and hashed. `ModelDownloadPinningGuardTest` requires 64 hex in that column, so
+the confusion reddens the build rather than shipping, but it is the mistake this recipe exists to
+prevent: measured 2026-09-17, `vocab.txt` at the pinned revision returns
+`x-linked-etag: "fb140275c155a9c7c5a3b3e0e77a9e839594a938"`, which is not its sha256.
+
+**Nothing in the suite checks a digest against the Hub**, and nothing can without downloading
+multiple gigabytes in CI: the tests prove the library refuses what does not match the manifest, not
+that the manifest matches upstream. A wrong digest therefore fails closed but fails everywhere — in
+every deployment and every standalone build, on the first fetch — so the first release build after a
+pin move is the check, and it is the one step of this recipe a maintainer cannot skip.
+
+→ `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
+serves substituted bytes, which is the acceptance both findings state; its ledger cases are where
+"the embedder is verified before its path is published" now lives.
+`ModelDownloadPinningGuardTest` reads the source for what no behaviour of the library can show —
+that each site still routes through it, that the rename still follows the verification, that the
+entrypoint still asks `require_verified` before it publishes either embedder path, and that no
+revision has relaxed back to a branch name. Mutate any of those and read the failures.
+`EntrypointRetrievalWiringTest` runs `configure_retrieval_gps` itself, taken out of the entrypoint
+by name, against a `mariadb` stand-in whose global-property store persists across starts — the one
+channel that can see what the ledger and `gp_set_if_blank` compose to.
+`EntrypointVolumeVerificationTest` runs the weights fetch the same way, with the target already on
+the volume, which is where "a file already there is verified rather than trusted for its name" now
+lives.
+
+## Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#445](https://github.com/openmrs/openmrs-module-chartsearchai/issues/445), a security-scan finding

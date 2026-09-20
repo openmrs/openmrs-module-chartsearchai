@@ -33,6 +33,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * that don't include the field yield {@code cachedTokens=0}, which is
  * the correct semantics.</p>
  *
+ * <p><b>The inner {@code catch (IOException)} in {@link #parseStreamingResponse} wraps the chunk
+ * PARSE and nothing else, and that is load-bearing.</b> {@code reader.readLine()} sits in the
+ * while-condition outside it, so a ceiling failure raised by the bounded stream
+ * {@link RemoteLlmEngine} wraps around this one's input propagates instead of being swallowed as
+ * an unparseable chunk (issue #446). Widening that catch to cover the read would make an
+ * untrusted peer's flood look like a malformed chunk, and fail open.</p>
+ *
  * <p>Callers pass their own SLF4J {@link Logger} so log entries carry the
  * caller's class name. Token-usage logs omit the {@code "(N cached)"}
  * suffix when {@code cachedTokens} is zero to keep output clean for

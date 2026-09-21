@@ -8863,10 +8863,17 @@ so the line-level subshell guard passes it too — left every case of the four c
 drive this entrypoint green, with `sh -n` and `shellcheck -s sh -S warning` clean, driven at the PR
 head on 2026-09-21. `{` and `}` are now
 counted in command position, which reddens both that shape and `{ … } | cat`. The residue is the
-shape of the miss rather than its instance: a multi-line `( … ) &` is the same hole and is left
-open, because `(` in this file also opens a command substitution, an arithmetic expansion and a
-`case` arm's label, so counting it would trade a missing depth for a wrong one. The rest of the
-residue is named in both guards: depth is not reachability, an
+shape of the miss rather than its instance: a multi-line `( … ) &` stays outside the depth walk,
+because `(` in this file also opens a command substitution, an arithmetic expansion and a
+`case` arm's label, so counting it would trade a missing depth for a wrong one. It is no longer
+outside everything, though, which round 6 measured: wrapping the entrypoint's own two
+`fetch_or_degrade` statements in a multi-line `( … ) & wait` — `sh -n` clean, shellcheck exit 0 —
+reddens `EntrypointRetrievalWiringTest.theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused`,
+because `MODEL_MANIFEST_REFUSED` is written in the subshell and `chartsearchai.models.embedderStatus`
+then comes back saying no refusal was recorded. That is the `embedderStatus` channel covering a shape
+neither source guard sees, and it reaches this file's own two statements rather than the shape
+wherever it is written. The rest of the residue is named in both guards: depth is not reachability,
+an
 `exit` above these statements would skip them at depth 0, a command that merely NAMES an artifact
 inside a function is reported rather than ignored, and a skip written inside a function the harness
 does not paste is outside both.
@@ -8969,8 +8976,13 @@ multi-line `( … ) &` group — that last one driven against the real library h
 refusal and then running on to the next statement, exit 0, exactly as the two closed shapes did.
 A third shape, a `{ … } &` or `{ … } | cat` brace group around both fetches, was found in review
 round 1 of the amendment above and is now caught — not here, but by the depth walk, which counts
-`{` and `}`. Closing the rest would mean the library detecting its own subshell, for which POSIX sh
-offers no portable test.
+`{` and `}`. The multi-line `( … ) &` around this file's own two statements is caught too, and by
+neither source guard: round 6 measured it reddening
+`EntrypointRetrievalWiringTest.theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused`
+on the `chartsearchai.models.embedderStatus` row, which reads "no refusal was recorded" for a
+refusal taken in a subshell. What stays outside every channel is the shape written somewhere the
+harness does not run. Closing that would mean the library detecting its own subshell, for which
+POSIX sh offers no portable test.
 
 The pattern is worth naming beyond this decision. Changing the KIND of question — from parsing a
 shape to driving a behaviour — cut four spellings at once where four successive repairs had each
@@ -9060,6 +9072,24 @@ statement rather than off a helper's name, and it asserts one exists so the exem
 unexercised. The wording moved twice, and the third time the code moved with it — and a sentence
 here saying the code was then "fail-closed throughout" was refuted in the next round, below.
 
+**And it reached two of querystore's three paths under that directory, which review round 6 of that
+amendment found.** `querystore.embedding.queryModelFilePath` is the query encoder of a dual-encoder
+model. querystore resolves it through the same `ModelFileResolver.resolveModelPath` as the other
+two, with `optional=true`, and `OnnxEmbeddingProvider.embedQuery` loads a session over whatever it
+names before the call that resolves the vocab is evaluated — so the ONNX runtime parses those bytes
+even though the inference then throws on the blanked vocab row. Nothing in this repository points
+that property at a file and the demo does not set it, so a start that verifies puts no value there
+for a refusal to take back. What reaches it is a deployment that pointed it at the file these
+fetches write to: on a refusal at code 4 or 5 with a REACHABLE database the withdrawal lands, so
+`quarantine_unverified_embedder` never runs, the unverified copy stays at `querystore/model.onnx`,
+and that row goes on naming it. The residue as it had been scoped — "a row pointed at a file this
+module never provisioned" — does not describe that case, the bytes being ones these fetches wrote.
+So the withdrawal issues a third `UPDATE`, whose status joins the same `_wd_issued` answer; that row
+is not read back, and the asymmetry is residue rather than coverage — a database that takes the
+statement and leaves the row standing is caught for the two rows beside it and not for this one.
+`EntrypointRetrievalWiringTest.bothEmbedderPathsAreWithdrawnWhenTheRefusalLeftTheUnverifiedFileOnTheVolume`
+is where it is driven; drop the statement and read it fail.
+
 **And the blanking sat below two returns that had nothing to do with it, which review round 2 of
 that amendment found.** `configure_retrieval_gps` opened with an unconditional return for an absent
 `mariadb` client and another for the schema probe, and both predate everything above: they are about
@@ -9075,13 +9105,13 @@ Three things changed, and the first is the shape rather than a patch: **the func
 predicts what the database will accept, it reads each statement's status.** The two returns are one
 diagnostic line, the withdrawal runs above it, and the sweep switch runs below — which matters
 because the schema probe is the one of the two predictions that can be WRONG while a row stands, it
-wanting `global_property` and three other tables. Second, the withdrawal ANSWERS: both `UPDATE`s'
-statuses are read and both values read back, because "the statement was issued" and "the row is
-blank" are different questions, and a read-back alone answers empty for a database that could not be
-asked at all — fail-open in exactly the direction this gate exists to close. Third, where the
-withdrawal cannot land, `quarantine_unverified_embedder` moves the two embedder targets this start
-provisions to `<target>.unverified`, whichever of them are on the volume: querystore resolves both
-paths with `optional=false`, and `ModelFileResolver.resolveModelPath` throws `Model file not found`
+wanting `global_property` and three other tables. Second, the withdrawal ANSWERS: every `UPDATE`'s
+status is read and the two `optional=false` values are read back, because "the statement was issued"
+and "the row is blank" are different questions, and a read-back alone answers empty for a database
+that could not be asked at all — fail-open in exactly the direction this gate exists to close.
+Third, where the withdrawal cannot land, `quarantine_unverified_embedder` moves the two embedder
+targets this start provisions to `<target>.unverified`, whichever of them are on the volume:
+querystore resolves both paths with `optional=false`, and `ModelFileResolver.resolveModelPath` throws `Model file not found`
 for a path with no file at it just as `OnnxEmbeddingProvider.resolvePath` throws for a blank one, so
 a row naming either of those two names nothing loadable and the downstream state there is the one a
 landed withdrawal produces. Both, because the gate's unit is the pair — two shapes reach the arm
@@ -9181,6 +9211,20 @@ while the file that row names has been moved to `.unverified` and querystore thr
 database can write one either, and `exec /openmrs/startup.sh` replaces the shell before the database
 that `startup.sh` then waits for comes back. What is owed is that README says where the channel holds,
 and `.theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt` pins the behaviour it describes.
+
+**And on those same two branches the container log's LAST line said the opposite, which review round
+6 found.** `configure_retrieval_gps` ends by printing the three rows it read back, and a `gp_value`
+that failed answers the empty string — the answer a blanked row gives too — so the line read
+`chartsearchai.querystore.enabled= querystore.embedding.modelFilePath= bootstrap.autostart=` over
+rows that were all still standing, on the very branches where README says that log is the start's
+only account of itself. Same shape as the third arm round 3 removed, at a lower cost: the three
+lines above it carry the truth, so the harm is diagnostic rather than a row left naming unverified
+bytes. Each read's own status now decides whether its value or "(could not be read)" is shown, and
+the values themselves are unchanged, because the blank-path tests have to go on reading an
+unreadable path as no path configured and trying the sweep switch anyway.
+`EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached`
+reads that line back over rows it has just asserted are standing; drop the fallbacks and read it
+fail.
 
 And `quarantine_unverified_embedder`'s own wording was about the wrong subject until round 3: its
 failure line, and the line that calls it, said the moved copy was one this start REFUSED, which two

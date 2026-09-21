@@ -287,7 +287,7 @@ fetch_and_verify_override() {
 #
 # It returns rather than exiting, and what keeps that fail-closed is the LEDGER, not the exit: a
 # refusal records nothing in MODEL_MANIFEST_VERIFIED, so require_verified answers no and
-# configure_retrieval_gps WITHDRAWS both embedder paths — and wherever that withdrawal cannot be
+# configure_retrieval_gps WITHDRAWS the embedder paths — and wherever that withdrawal cannot be
 # confirmed to have landed, puts the copy on the volume out of reach instead, which is the only
 # instrument left when the row cannot be blanked. Withholding the write alone would not have been
 # enough once the start continues — a row an earlier good start wrote stands whatever this start

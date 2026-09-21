@@ -103,6 +103,15 @@ public class EntrypointRetrievalWiringTest {
 
 	private static final String VOCAB_PATH_GP = "querystore.embedding.vocabFilePath";
 
+	/**
+	 * querystore's third path under the same application data directory — the query encoder of a
+	 * dual-encoder model, which it resolves with {@code optional=true} and which nothing in this
+	 * repository ever points at a file. A deployment that pointed it at the file the entrypoint
+	 * provisions has a row naming bytes a refused start did not verify, so the withdrawal takes this
+	 * one back as well.
+	 */
+	private static final String QUERY_MODEL_PATH_GP = "querystore.embedding.queryModelFilePath";
+
 	private static final String AUTOSTART_GP = "querystore.bootstrap.autostart";
 
 	/** Where the refusal's own diagnosis is recorded, readable over REST. */
@@ -238,6 +247,7 @@ public class EntrypointRetrievalWiringTest {
 	public void bothEmbedderPathsAreWithdrawnWhenTheRefusalLeftTheUnverifiedFileOnTheVolume() throws Exception {
 		given(MODEL_PATH_GP, "querystore/model.onnx");
 		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(QUERY_MODEL_PATH_GP, "querystore/model.onnx");
 		given(AUTOSTART_GP, "true");
 
 		Run run = run(refusedWithNothingDeleted());
@@ -250,6 +260,9 @@ public class EntrypointRetrievalWiringTest {
 				+ " start refused to verify\n" + run);
 		assertEquals("", gp(VOCAB_PATH_GP), "querystore is still pointed at a vocab file on the volume that this"
 				+ " start refused to verify\n" + run);
+		assertEquals("", gp(QUERY_MODEL_PATH_GP), "querystore's query-encoder row still names the ONNX file on the"
+				+ " volume that this start refused to verify, and it is loaded through the same resolver as the"
+				+ " two rows beside it\n" + run);
 		assertEquals("false", gp(AUTOSTART_GP), "the sweep was left on over a path this start did not verify\n"
 				+ run);
 	}
@@ -286,8 +299,10 @@ public class EntrypointRetrievalWiringTest {
 				"nothing was refused, so this case says nothing about what a refusal does to the start\n" + run);
 		assertTrue(run.output.contains("already loaded"), "the demo seed did not read its own sentinel as already"
 				+ " satisfied, so this start was on its way to fetching a dataset dump\n" + run);
-		assertTrue(gp(EMBEDDER_STATUS_GP).contains(GATED_ARTIFACTS.get(0) + ":4"), "the start never reached the"
-				+ " retrieval wiring after the refusal, so the refusal is what ended it: "
+		assertTrue(gp(EMBEDDER_STATUS_GP).contains(GATED_ARTIFACTS.get(0) + ":4"), "the refusal this start took"
+				+ " is not in the channel a deployment nobody can open a shell on reads, which is either a start"
+				+ " that never reached the retrieval wiring or a refusal taken where this shell could not read"
+				+ " it — an empty record tells them apart, and this is what was recorded: "
 				+ gp(EMBEDDER_STATUS_GP) + "\n" + run);
 		assertEquals("", gp(MODEL_PATH_GP), "the start reached the wiring and left an earlier start's path naming"
 				+ " bytes this start refused\n" + run);
@@ -338,6 +353,13 @@ public class EntrypointRetrievalWiringTest {
 	 * letter. What is left is the FILE, and moving it out from under the name the row carries leaves
 	 * querystore throwing "Model file not found" where a landed withdrawal would have it throwing on
 	 * an unconfigured property.
+	 *
+	 * <p><b>And it is the branch the summary line cannot speak for.</b> Every {@code gp_value} here
+	 * FAILS, and a failed read answers the empty string — the same answer a blanked row gives — so
+	 * the last thing this start says about the rows showed each of them empty while all of them were
+	 * standing. That is the shape ADR Decision 106 records a whole arm being removed for, a log
+	 * asserting the opposite so nobody looks, and on this branch README says the container log is
+	 * this start's only account of itself.
 	 */
 	@Test
 	public void theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached() throws Exception {
@@ -359,6 +381,23 @@ public class EntrypointRetrievalWiringTest {
 				+ run);
 		assertTrue(Files.exists(quarantined(onnx)) && Files.exists(quarantined(vocab)),
 				"the refused copies were not moved aside, so an operator has lost them\n" + run);
+		assertEquals("true", gp(AUTOSTART_GP), "the sweep switch landed after all, so what this case then reads"
+				+ " off the summary line says nothing\n" + run);
+
+		// Found by the prefix it is written with rather than by position, so a line printed after it
+		// does not change what this reads.
+		String shown = "";
+		for (String line : wiringLines(run)) {
+			if (line.startsWith("[retrieval-wiring] chartsearchai.querystore.enabled=")) {
+				shown = line;
+			}
+		}
+		assertFalse(shown.isEmpty(), "the wiring printed no line showing the rows at all, so this case cannot read"
+				+ " what it told an operator about them\n" + run);
+		assertFalse(shown.contains("querystore.embedding.modelFilePath= "), "a row this start could not read is"
+				+ " shown blank, over one still naming the file it refused: " + shown + "\n" + run);
+		assertFalse(shown.endsWith("bootstrap.autostart="), "the sweep row is shown blank, which reads as off,"
+				+ " over a row still carrying true: " + shown + "\n" + run);
 	}
 
 	/**

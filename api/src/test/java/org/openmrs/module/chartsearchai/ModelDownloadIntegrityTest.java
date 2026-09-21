@@ -600,6 +600,94 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	/**
+	 * <b>The three codes that reach this caller only through a fetch, and the arm an {@code exit}
+	 * has a syntactically natural home in.</b> The case above drives 0, 1 and 2 and
+	 * {@link EntrypointRetrievalWiringTest#theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused}
+	 * drives 4. Codes 3, 5 and 6 are driven against {@code fetch_and_verify_url} further up, which
+	 * is a different question: that is what the library ANSWERS, and this is what the caller does
+	 * with the answer. {@link #REPLACEMENT_UNFETCHABLE} is the one of the three with an arm
+	 * body of its own, and that body already ends "A restart retries the download." — so an
+	 * {@code exit "$_mm_oe_code"} added beside that sentence restores the 2026-09-21 outage for the
+	 * refusal a pin move or a stale copy on the volume produces, and left the classes that read
+	 * this library and this entrypoint green with {@code sh -n} and shellcheck clean until this
+	 * case existed. Mutate the arm and read the failure.
+	 *
+	 * <p>Each code is asked the three things the case above asks — the status, the continuation and
+	 * the ledger's refusal — plus what the code promises about the COPY, which is the fact that
+	 * decides whether a restart recovers anything: 6 lost the one that was there, 3 never had one,
+	 * 5 leaves it where it was. The wording that belongs to 6 alone is asserted ABSENT from the
+	 * other two, so an arm that reaches a neighbour's message fails here rather than reading as
+	 * covered.
+	 */
+	@Test
+	public void theCopyLostTheFetchThatFailedAndTheFileNothingCouldHashEachLeaveTheStartRunning() throws Exception {
+		Path fixture = work.resolve("manifest-remaining-codes.tsv");
+		Files.write(fixture, ("critical-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
+				+ "\n").getBytes(StandardCharsets.UTF_8));
+		Path target = work.resolve("model.bin");
+		String call = "fetch_or_degrade critical-artifact '" + target + "' 'the critical artifact' 'a hint line'\n"
+				+ "echo \"DEGRADE-CODE=$?\"\n"
+				+ "echo REACHED-THE-LINE-AFTER\n"
+				+ "if require_verified critical-artifact; then echo PATH-PUBLISHABLE; else echo PATH-WITHHELD; fi";
+		// The sentence the 6) arm ends on, which is also where an exit fits the syntax: read as a
+		// literal so a rewording of it fails this rather than quietly leaving the arm undriven.
+		String lostTheCopy = "there is no copy of";
+
+		// 6: a copy on the volume that matches nothing, deleted for a replacement the pinned
+		// revision cannot serve. The state a pin move produces on a deployment provisioned before it.
+		status = 404;
+		Files.write(target, SUBSTITUTED_BYTES);
+		Result lost = library(call, fixture);
+
+		assertTrue(lost.output.contains("DEGRADE-CODE=" + REPLACEMENT_UNFETCHABLE),
+				"the code that says the deployment lost its copy must reach the caller\n" + lost);
+		assertTrue(lost.output.contains("REACHED-THE-LINE-AFTER"), "the start must continue past the one refusal"
+				+ " whose arm has a body for an exit to be written into\n" + lost);
+		assertTrue(lost.output.contains("PATH-WITHHELD"), "a lost copy must leave its path unpublishable\n" + lost);
+		assertEquals(OK, lost.exit, "the shell ended on a refusal instead of running on to its next statement\n"
+				+ lost);
+		assertFalse(Files.exists(target), "this code promises the copy is gone; it is still there, so the case is"
+				+ " not the state it is about\n" + lost);
+		assertTrue(lost.output.contains(lostTheCopy),
+				"the operator is not told the volume no longer has a copy at all\n" + lost);
+
+		// 3: the same failing origin with nothing at the target, which is the control — code 3's
+		// contract is that nothing was deleted, and it must not borrow 6's wording.
+		Files.deleteIfExists(target);
+		Result nothingFetched = library(call, fixture);
+
+		assertTrue(nothingFetched.output.contains("DEGRADE-CODE=" + DOWNLOAD_FAILED),
+				"a fetch that failed with nothing at the target must report its own code\n" + nothingFetched);
+		assertTrue(nothingFetched.output.contains("REACHED-THE-LINE-AFTER"),
+				"the start must continue past a failed fetch\n" + nothingFetched);
+		assertTrue(nothingFetched.output.contains("PATH-WITHHELD"),
+				"a failed fetch must leave its path unpublishable\n" + nothingFetched);
+		assertEquals(OK, nothingFetched.exit, "the shell ended on a failed fetch\n" + nothingFetched);
+		assertFalse(nothingFetched.output.contains(lostTheCopy), "an operator who had nothing at that name was told"
+				+ " the deployment lost a copy\n" + nothingFetched);
+
+		// 5: the recorded bytes on the volume and no tool to hash them with. Nothing is deleted —
+		// the code is a statement about the tools, not about the bytes.
+		assumeTrue(which("stat") != null, "stat is needed to reach the hashing step");
+		Path onlyFetchTools = pathWith("no-hashing-tool-through-the-caller", List.of("curl", "stat", "rm", "mv"));
+		status = 200;
+		Files.write(target, GOOD_BYTES);
+		Result unhashable = library(call, fixture, onlyFetchTools);
+
+		assertTrue(unhashable.output.contains("DEGRADE-CODE=" + HASH_UNAVAILABLE),
+				"a file no tool could hash must report its own code\n" + unhashable);
+		assertTrue(unhashable.output.contains("REACHED-THE-LINE-AFTER"),
+				"the start must continue past a file it could not hash\n" + unhashable);
+		assertTrue(unhashable.output.contains("PATH-WITHHELD"), "a file this shell could not hash is a file it did"
+				+ " not verify, so its path must stay unpublishable\n" + unhashable);
+		assertEquals(OK, unhashable.exit, "the shell ended on a file it could not hash\n" + unhashable);
+		assertTrue(Files.exists(target), "a file that was never hashed must be left where it was, or every start"
+				+ " re-downloads it to refuse it again\n" + unhashable);
+		assertFalse(unhashable.output.contains(lostTheCopy),
+				"an operator whose copy is still on the volume was told it is gone\n" + unhashable);
+	}
+
+	/**
 	 * <b>The refusal's own record, which is the only channel its REASON has.</b> A withdrawn path
 	 * and a switched-off sweep say chart search is off; they do not say whether a restart can
 	 * recover anything, and on the deployment ADR Decision 106's amendment was measured on nobody

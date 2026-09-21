@@ -727,6 +727,13 @@ public class ModelDownloadPinningGuardTest {
 	 * {@code fetch_or_degrade} inside a shell FUNCTION that is itself backgrounded or piped, or
 	 * inside a multi-line {@code ( … ) &} group — and closing that would mean the library detecting
 	 * its own subshell, which it has no portable way to do.
+	 *
+	 * <p>The second of those is not outside every channel any more. A multi-line {@code ( … ) &}
+	 * around this entrypoint's own two fetches reddens
+	 * {@link EntrypointRetrievalWiringTest#theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused},
+	 * which runs the file: {@code MODEL_MANIFEST_REFUSED} is written in the subshell, so
+	 * {@code chartsearchai.models.embedderStatus} comes back saying no refusal was recorded
+	 * (measured round 6). What that case cannot reach is the shape written where it does not run.
 	 */
 	@Test
 	public void everyArtifactChartSearchNeedsIsFetchedInTheStartsOwnShell() throws IOException {
@@ -941,8 +948,11 @@ public class ModelDownloadPinningGuardTest {
 	 * {@code ( … ) &} is the same hole and is left open deliberately: {@code (} in this file also
 	 * opens a command substitution, an arithmetic expansion and a {@code case} arm's label, so
 	 * counting it in command position is a parse this walk does not attempt, and a wrong depth is
-	 * worse here than a missing one. ADR Decision 106 names that shape as residue for the subshell
-	 * guard too, and {@code require_verified} is what covers both at runtime.
+	 * worse here than a missing one. It is left open HERE rather than left open: {@code
+	 * require_verified} withholds the path at runtime either way, and around this file's own two
+	 * fetches the shape reddens
+	 * {@link EntrypointRetrievalWiringTest#theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused}
+	 * through {@code chartsearchai.models.embedderStatus} (measured round 6).
 	 */
 	private static int[] nestingDepths(List<String> lines) {
 		int[] depths = new int[lines.size()];
@@ -1094,13 +1104,21 @@ public class ModelDownloadPinningGuardTest {
 	 * destination — a review agent moved both COPY targets to {@code /opt/wrong/} and the guard
 	 * stayed green.
 	 *
-	 * <p>The consequence is not subtle, and it is the one pre-Tomcat exit this entrypoint still has
-	 * now that a refused model file returns instead: sourcing a file that is not there ends a POSIX
-	 * shell on the spot, so PID 1 dies before {@code exec}ing the server and the whole deployment
-	 * goes with it — the chain ADR Decision 106's amendment measures. That is the failure
+	 * <p>The consequence is not subtle: sourcing a file that is not there ends a POSIX shell on the
+	 * spot, so PID 1 dies before {@code exec}ing the server and the whole deployment goes with it —
+	 * the chain ADR Decision 106's amendment measures. That is the failure
 	 * {@code build.yml}'s {@code entrypoint-lint} comment is written against, and neither
 	 * {@code sh -n} nor shellcheck can see it: both are happy with a {@code .} of an absolute path
 	 * that does not exist.
+	 *
+	 * <p>It is not the entrypoint's only pre-Tomcat exit. The {@code exec runuser -u openmrs} that
+	 * drops the start to uid 1001 is another, and it is on the published image's path:
+	 * {@code Dockerfile.backend} declares no {@code USER}, so the entrypoint starts as root and
+	 * takes that branch on every start, and an {@code exec} that cannot run its target ends a
+	 * non-interactive shell before the next statement the same way (measured 2026-09-21: exit 126
+	 * under {@code /bin/sh}, 127 under {@code dash}). {@code runuser} is in the
+	 * {@code eclipse-temurin:21-jre} base today, so nothing there is broken — which is why this
+	 * guard reads the two files below and says nothing about it.
 	 */
 	@Test
 	public void theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem() throws IOException {

@@ -114,6 +114,14 @@ public class EntrypointRetrievalWiringTest {
 
 	private static final String AUTOSTART_GP = "querystore.bootstrap.autostart";
 
+	/**
+	 * The retrieval switch, which names no file and which the summary line shows first. A start past
+	 * its first good one reads it back non-blank whatever this start did, {@code gp_set_if_blank}
+	 * leaving a written row standing, so a case can ask what the line says about a row it knows is
+	 * there.
+	 */
+	private static final String ENABLED_GP = "chartsearchai.querystore.enabled";
+
 	/** Where the refusal's own diagnosis is recorded, readable over REST. */
 	private static final String EMBEDDER_STATUS_GP = "chartsearchai.models.embedderStatus";
 
@@ -366,6 +374,7 @@ public class EntrypointRetrievalWiringTest {
 		given(MODEL_PATH_GP, "querystore/model.onnx");
 		given(VOCAB_PATH_GP, "querystore/vocab.txt");
 		given(AUTOSTART_GP, "true");
+		given(ENABLED_GP, "true");
 		databaseUnreachable = true;
 
 		Run run = execute(refusedWithNothingDeleted(), null);
@@ -383,6 +392,8 @@ public class EntrypointRetrievalWiringTest {
 				"the refused copies were not moved aside, so an operator has lost them\n" + run);
 		assertEquals("true", gp(AUTOSTART_GP), "the sweep switch landed after all, so what this case then reads"
 				+ " off the summary line says nothing\n" + run);
+		assertEquals("true", gp(ENABLED_GP), "the retrieval switch was rewritten after all, so what this case"
+				+ " then reads off the summary line about it says nothing\n" + run);
 
 		// Found by the prefix it is written with rather than by position, so a line printed after it
 		// does not change what this reads.
@@ -394,6 +405,8 @@ public class EntrypointRetrievalWiringTest {
 		}
 		assertFalse(shown.isEmpty(), "the wiring printed no line showing the rows at all, so this case cannot read"
 				+ " what it told an operator about them\n" + run);
+		assertFalse(shown.contains("chartsearchai.querystore.enabled= "), "the retrieval switch is shown blank,"
+				+ " which reads as chart search being off, over a row still carrying true: " + shown + "\n" + run);
 		assertFalse(shown.contains("querystore.embedding.modelFilePath= "), "a row this start could not read is"
 				+ " shown blank, over one still naming the file it refused: " + shown + "\n" + run);
 		assertFalse(shown.endsWith("bootstrap.autostart="), "the sweep row is shown blank, which reads as off,"

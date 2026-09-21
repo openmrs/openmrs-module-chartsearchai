@@ -9133,14 +9133,17 @@ and `openmrs_schema_present` both query without a database argument while every 
 `"$DB_NAME"`, so a `DB_NAME` that does not name the database OpenMRS uses — the drift the
 entrypoint's own comment at the credential block is about, and the state after a `--destroy-volumes`
 deploy where `openmrs-runtime.properties` is gone and `DB_NAME` falls back to a default — answers
-both probes and rejects every write. Driven at the round-2 head with the stand-in's schema count at
-zero and the model path's `UPDATE` rejected, with a row from an earlier good start in the store: the
-start printed "so no row can be naming it", moved nothing, and left `modelFilePath` naming the
-unverified ONNX with `chartsearchai.querystore.enabled` true — the CWE-494 state again, through the
-gate again, with the log asserting the opposite so nobody looks. So the withdrawal's own answer is the
-only thing the arm reads: it landed, or the file goes out of reach. The cost is one re-download on a
-reachable database that has never carried a schema, and what it buys is a branch, an ADR paragraph and
-a README clause removed rather than a fourth prediction added.
+the reachability probe, fails the schema probe, and rejects every write. The schema probe counts
+`information_schema.tables` at `table_schema='$DB_NAME'`, so the drift is what makes it answer no,
+while both probes reach the server at all because neither passes a database to connect to. Driven at
+the round-2 head with the stand-in's schema count at zero and the model path's `UPDATE` rejected,
+with a row from an earlier good start in the store: the start printed "so no row can be naming it",
+moved nothing, and left `modelFilePath` naming the unverified ONNX with
+`chartsearchai.querystore.enabled` true — the CWE-494 state again, through the gate again, with the
+log asserting the opposite so nobody looks. So the withdrawal's own answer is the only thing the arm
+reads: it landed, or the file goes out of reach. The cost is one re-download on a reachable database
+that has never carried a schema, and what it buys is a branch, an ADR paragraph and a README clause
+removed rather than a fourth prediction added.
 `EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhereTheSchemaProbeAnsweredNoAndTheWithdrawalWasRejected`
 is the case; no case before it held both of those knobs off their defaults at once.
 

@@ -576,23 +576,42 @@ configure_retrieval_gps() {
   gp_set_if_blank 'chartsearchai.querystore.enabled' 'true'
 
   # #444: this is where a model file's path leaves the script and becomes something querystore
-  # loads, so it may only be written for bytes THIS start verified. require_verified answers that
-  # from the library's own record of what ran in this shell rather than from where the fetches
-  # above are written — so moving them, wrapping them in a function called later, or taking them
-  # in a subshell leaves these two properties unwritten instead of pointing querystore at bytes
-  # nothing checked. A decline also turns the sweep off below, and says so HERE rather than
-  # leaving it to the blank-path test: gp_set_if_blank deliberately leaves an already-written row
-  # standing, so on every deployment past its first good start that property is non-blank whatever
-  # this start did, and nothing else here would answer it. A start reaches here with nothing in the
-  # ledger two ways now, and they need not be told apart because the answer is the same: the fetch
-  # above was REFUSED — which no longer stops the start, so this gate is what keeps the refusal
-  # fail-closed — or its verification was taken in a subshell, which records nothing this shell can
-  # read. ADR Decision 106.
+  # loads, so it may only stand for bytes THIS start verified. require_verified answers that from
+  # the library's own record of what ran in this shell rather than from where the fetches above are
+  # written — so moving them, wrapping them in a function called later, or taking them in a
+  # subshell leaves these two properties carrying no path instead of pointing querystore at bytes
+  # nothing checked. A start reaches here with nothing in the ledger two ways now, and they need
+  # not be told apart because the answer is the same: the fetch above was REFUSED — which no
+  # longer stops the start — or its verification was taken in a subshell, which records nothing
+  # this shell can read. ADR Decision 106.
+  #
+  # The decline arm BLANKS the two paths rather than merely withholding the write, and that is what
+  # makes it fail-closed on a deployment past its first good start. gp_set_if_blank deliberately
+  # leaves an already-written row standing, so that property is non-blank whatever this start did;
+  # and a refusal does not always cost the file the row names — of the codes that report no
+  # deletion, 4 (no manifest row resolves the artifact, so the target is never opened) and 5 (it
+  # could not be hashed) both leave the copy where it was. Withholding the write would then leave
+  # querystore loading an ONNX file still on the volume that this start refused to check, with
+  # OpenMRS up and the healthcheck green. Blanking costs an operator their own
+  # path on a start that refused, which is the same courtesy the sweep's own UPDATE below already
+  # declines to extend, and the next good start writes the module's path back. The sweep goes off
+  # on the same verdict, and says so HERE rather than leaving it to the blank-path test below,
+  # which cannot tell a path this start withdrew from one that was never written.
   if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
     gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
     gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"
   else
-    echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are not written; a value already in the database is an earlier start's and no verdict on this one." >&2
+    # Each property spelled at its own statement, the way the sweep's is below: a helper taking the
+    # name as $1 would hide it from the guard that reads this file for where a model path is
+    # published (ModelDownloadPinningGuardTest
+    # .noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger).
+    seed_sql "$DB_NAME" -e \
+      "UPDATE global_property SET property_value='' WHERE property='querystore.embedding.modelFilePath';" \
+      >/dev/null 2>&1 || true
+    seed_sql "$DB_NAME" -e \
+      "UPDATE global_property SET property_value='' WHERE property='querystore.embedding.vocabFilePath';" \
+      >/dev/null 2>&1 || true
+    echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are blanked; any value already in the database was an earlier start's and no verdict on this one." >&2
     _sweep_off_because='the embedder did not verify in this start'
   fi
 
@@ -600,10 +619,11 @@ configure_retrieval_gps() {
   _enabled_gp=$(gp_value 'chartsearchai.querystore.enabled')
 
   # Never leave the combination that floods: a bootstrap sweep enabled with no embedder to run it.
-  # This test covers the case the property itself can state — nothing has ever configured one —
-  # and the gate above covers the case it cannot, a path an earlier start wrote reading exactly
-  # like one this start verified. The sweep goes off once whichever fired, and when both did the
-  # gate's reason is the one printed, because it names what changed in THIS start.
+  # This test answers the one case the gate above cannot: the gate PASSED and the write it gates
+  # did not take — gp_set_if_blank discards its own errors, so reading the property back is the
+  # only thing that knows. Since the decline arm blanks, the two now agree on a refused start
+  # rather than only the gate firing; the reasons stay separate because they name different causes,
+  # and the gate's is the one printed, because it names what changed in THIS start.
   if [ -z "$_model_gp" ]; then
     _sweep_off_because="${_sweep_off_because:-no embedder path is configured}"
   fi

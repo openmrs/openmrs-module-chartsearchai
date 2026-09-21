@@ -8783,14 +8783,16 @@ paragraph above did not weigh:
   Loki containers running there are not exposed. The diagnosis had to be reconstructed from
   outside, from compose lifecycle lines in a GitHub Actions log.
 - *The exit was never what made it fail-closed.* `require_verified` is. A refusal records nothing
-  in `MODEL_MANIFEST_VERIFIED`, so `configure_retrieval_gps` withholds
-  `querystore.embedding.modelFilePath` and forces `querystore.bootstrap.autostart` off — and it
-  does that whether the start then stops or continues. Unverified bytes could not reach a clinical
-  question either way. The exit was redundant with respect to the property it was defending, and
-  the two are now separated:
+  in `MODEL_MANIFEST_VERIFIED`, so `configure_retrieval_gps` declines, and it does that whether the
+  start then stops or continues. The exit was redundant with respect to the property it was
+  defending, and the two are now separated:
   `ModelDownloadIntegrityTest.aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable`
   asserts the code, the continuation and the ledger's refusal together, because it is the three of
-  them that make the outcome right.
+  them that make the outcome right. **What that decline HAS to do changed with the exit**, and the
+  first version of this amendment did not weigh it: withholding the write is not enough once the
+  start continues, because `gp_set_if_blank` leaves an earlier good start's row standing and codes
+  3, 4 and 5 delete nothing — see *A decline turns the bootstrap sweep off itself* below, where
+  that hole was found in review round 1 and closed.
 
 What the subshell guard asks changed with it, and is worth stating because it inverts. While the
 form exited, a subshell swallowed the exit and let the start reach the property write — fail-open.
@@ -8801,10 +8803,15 @@ configures no retrieval.
 same guard re-aimed at that.
 
 `ModelDownloadPinningGuardTest.theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal`
-still asserts this repository's `docker-compose.yml` declares no restart policy, though a refusal is
-no longer a thing it could loop through. The deploy server's compose file is not that one —
-`Dockerfile.backend` repeats the HEALTHCHECK block for exactly that reason — so a policy added there
-is residue no test here can see.
+is **retired** with the reason it was written for. It asserted this repository's
+`docker-compose.yml` gives the backend no restart policy, on the ground that "a refusal only fails
+CLOSED if the container that refused stays down" — which the change above removes, the ledger being
+what fails it closed. Its replacement ground, that a stopped container is one an operator can
+inspect, is refuted by the amendment's own second bullet: nobody on `chartsearchai.openmrs.org`
+could inspect one. And its reach was this repository's compose file, which is not the deploy server's —
+`Dockerfile.backend` repeats the HEALTHCHECK block for exactly that reason. Dropped in review round
+1 rather than given a third rationale nobody had measured. This is not an argument FOR a restart
+policy; it is that this repository no longer has a tested opinion on one.
 
 The cost is real, and two drafts of this paragraph got it wrong before it was measured — the first
 said the hashing is "paid alongside the download it replaces", which is true only of a first boot,
@@ -8833,8 +8840,19 @@ statements with no function to extract, so that half stays a source channel:
 the property positively — every command naming a provisioned artifact sits at nesting depth 0, inside
 no block and no function, so where it is written is when it runs — rather than enumerating the
 spellings of a skip, which is the shape this decision already records being defeated in turn. Its
-nesting walk has to balance to 0 at end of file, which is what makes a construct it cannot parse a
-loud failure instead of a silent zero. The residue is named in both: depth is not reachability, an
+nesting walk has to balance to 0 at end of file, which fails a construct it HALF reads — and round
+1 of the 2026-09-21 amendment's review showed that is not the calibration it was written as. A
+construct neither side of which the walk recognises contributes 0 at both ends, balances, and
+reports the statements inside it at top level. A brace group did exactly that: `{ … } &` around the
+two embedder fetches — "background the embedder like the LLM", touching neither fetch's own line,
+so the line-level subshell guard passes it too — left every case of the four classes that read or
+drive this entrypoint green, with `sh -n` and `shellcheck -s sh -S warning` clean, driven at the PR
+head on 2026-09-21. `{` and `}` are now
+counted in command position, which reddens both that shape and `{ … } | cat`. The residue is the
+shape of the miss rather than its instance: a multi-line `( … ) &` is the same hole and is left
+open, because `(` in this file also opens a command substitution, an arithmetic expansion and a
+`case` arm's label, so counting it would trade a missing depth for a wrong one. The rest of the
+residue is named in both guards: depth is not reachability, an
 `exit` above these statements would skip them at depth 0, a command that merely NAMES an artifact
 inside a function is reported rather than ignored, and a skip written inside a function the harness
 does not paste is outside both.
@@ -8869,14 +8887,20 @@ backend service, under a tenth of a percent of it. What none of this measures is
 every run read at NVMe speed, and below roughly 0.3 GB/s the read dominates and the tool choice
 stops mattering.
 
-*A refusal that must stop the start is a library behaviour, not a branch at the call site.* The
+*What a refusal DOES to the start is a library behaviour, not a branch at the call site.* The
 entrypoint used to read the library's exit code and branch on it, and the property "a refusal stops
 the start" was then something only a source-reading guard could check. Four readings of it were
 defeated in turn — a statement inserted between the fetch and the branch, so `$?` was that
 statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
 recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
 next. `fetch_or_degrade` NARROWS that class rather than closing it: there is no branch to spell, and
-what the shell DOES is a behaviour a test drives. Reviewers then found two further spellings, and
+what the shell DOES is a behaviour a test drives. What the library returns is not what the CALL SITE
+does with it, though, and round 1 of the 2026-09-21 amendment's review found that gap open: `|| exit 1`
+appended to the ONNX fetch's last continuation line restored the outage in full, with every source
+guard, `sh -n` and `shellcheck` green. So
+`EntrypointRetrievalWiringTest.theEntrypointsOwnEmbedderFetchesLeaveTheStartRunning` now takes those
+two statements out of `backend-init.sh` verbatim, refuses both, and asks whether the statement after
+them runs. Reviewers then found two further spellings, and
 neither is a misread branch — each is a subshell sitting between the call and the entrypoint's own
 shell. One `&` on the call's last continuation line backgrounds the whole command; a `| tee`
 appended to the same call makes it an element of a pipeline, which POSIX also runs in a subshell.
@@ -8892,8 +8916,10 @@ an edit as there is. What a line-level rule cannot see is a subshell the call's 
 spell: a `fetch_or_degrade` inside a shell function that is itself backgrounded or piped, or inside a
 multi-line `( … ) &` group — that last one driven against the real library here, printing the
 refusal and then running on to the next statement, exit 0, exactly as the two closed shapes did.
-Closing it would mean the library detecting its own subshell, for which POSIX sh offers no
-portable test.
+A third shape, a `{ … } &` or `{ … } | cat` brace group around both fetches, was found in review
+round 1 of the amendment above and is now caught — not here, but by the depth walk, which counts
+`{` and `}`. Closing the rest would mean the library detecting its own subshell, for which POSIX sh
+offers no portable test.
 
 The pattern is worth naming beyond this decision. Changing the KIND of question — from parsing a
 shape to driving a behaviour — cut four spellings at once where four successive repairs had each
@@ -8914,8 +8940,10 @@ refused; the unwrapped entrypoint wrote neither.
 So the ordering stopped being a fact about source layout. `fetch_and_verify` records each id that
 verified in the CURRENT shell, and `require_verified` is what `configure_retrieval_gps` asks before
 it writes either path. Re-driven the same way against the fixed entrypoint, the same wrap wrote
-neither path — the paths simply go unwritten, which is the fail-closed direction and the same state
-a refusal produces — while a run serving bytes that DO match the recorded digest wrote both, which
+neither path — they simply go unwritten, which is the fail-closed direction and the same state a
+refusal produces; since round 1 of the amendment's review the arm also BLANKS a path an earlier
+start left, which that virgin run had none of — while a run serving bytes that DO match the
+recorded digest wrote both, which
 is what says the gate is not merely refusing everything. The ledger is an ordinary shell variable,
 which settles the subshell family above in the direction that matters: a fetch backgrounded, piped,
 command-substituted, or taken inside a function that is any of those, records nothing the parent
@@ -8934,7 +8962,7 @@ database only. `gp_set_if_blank` leaves a row it finds non-blank standing, delib
 deployment past its first good start reads back the path the LAST good start wrote, whatever this
 start did. The embedder goes through `fetch_or_degrade`, whose refusal leaves the start running, so
 the wiring is reached with nothing in the ledger by an ordinary refusal as well as by the subshell
-residue above — in both, a refusal has already deleted the file that path names. Measured 2026-09-17 against the
+residue above. Measured 2026-09-17 against the
 entrypoint's own wiring functions, a `mariadb` stand-in whose store survives between starts and a
 refusal taken in a background subshell: the pre-fix arm left
 `modelFilePath=querystore/model.onnx bootstrap.autostart=true`, which is the per-record exception
@@ -8951,7 +8979,29 @@ that replaced it then overreached the other way, wherever it was restated: it sa
 embedder is REFUSED reaches this arm, which while the form exited it could not. The 2026-09-21
 amendment above makes that reading true — a refusal does now reach the arm — and what the arm
 answers is unchanged, because it was always "nothing in the ledger" and a refusal records nothing.
-The code is fail-closed throughout; only the wording moved, twice.
+
+**And the sweep was only half of what the decline owed, which review round 1 of that amendment
+found.** The prose above, and an earlier sentence here that said "in both, a refusal has already
+deleted the file that path names", read a deletion into every refusal. The library's own code table
+does not: 1, 2 and 6 delete, and **3, 4 and 5 do not** — code 4, the artifact no manifest row
+resolves, never opens the target at all. A backend image whose `model-manifest.tsv` row is missing
+or renamed therefore reached the wiring with the unverified ONNX file still on the volume and the
+last good start's row still naming it, and withholding the write left that row standing: OpenMRS up,
+healthcheck green, querystore embedding clinical questions with bytes this start refused to check.
+That is the state #444 exists to remove, reached through the gate meant to close it, and while the
+form exited it was unreachable. Driven at the PR head before the fix, against the entrypoint's own
+two fetch statements and a manifest resolving neither row: `modelFilePath=querystore/model.onnx`
+with both files still on the volume. So the decline arm now **blanks** both paths — an `UPDATE` to
+the empty string per property, spelled at its own statement so the source guard can read which
+property it names — rather than only declining to write them. It costs an operator their own path
+on a refused start, which is the same courtesy the sweep's `UPDATE` beside it already declines to
+extend, and the next good start writes the module's back.
+`EntrypointRetrievalWiringTest.bothEmbedderPathsAreWithdrawnWhenTheRefusalLeftTheUnverifiedFileOnTheVolume`
+is the case; `ModelDownloadPinningGuardTest`'s inverted question needed a WITHDRAWAL exemption to
+let a `querystore.embedding.*` write sit outside the ledger's gate, read off the empty value in the
+statement rather than off a helper's name, and it asserts one exists so the exemption cannot go
+unexercised. The code is fail-closed throughout; the wording moved twice, and the third time the
+code moved with it.
 
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
@@ -9002,7 +9052,9 @@ entrypoint still asks `require_verified` before it publishes either embedder pat
 revision has relaxed back to a branch name. Mutate any of those and read the failures.
 `EntrypointRetrievalWiringTest` runs `configure_retrieval_gps` itself, taken out of the entrypoint
 by name, against a `mariadb` stand-in whose global-property store persists across starts — the one
-channel that can see what the ledger and `gp_set_if_blank` compose to.
+channel that can see what the ledger and `gp_set_if_blank` compose to, and since round 1 of the
+amendment's review it runs the entrypoint's own two `fetch_or_degrade` statements ahead of it, so
+what the CALL SITE does with a refusal is driven rather than read.
 `EntrypointVolumeVerificationTest` runs the weights fetch the same way, with the target already on
 the volume, which is where "a file already there is verified rather than trusted for its name" now
 lives.

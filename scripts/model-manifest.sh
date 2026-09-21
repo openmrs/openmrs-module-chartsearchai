@@ -270,10 +270,12 @@ fetch_and_verify_override() {
 #
 # It returns rather than exiting, and what keeps that fail-closed is the LEDGER, not the exit: a
 # refusal records nothing in MODEL_MANIFEST_VERIFIED, so require_verified answers no and the
-# entrypoint withholds the path. Unverified bytes cannot answer a clinical question either way,
-# which is the property Decision 106 was protecting; stopping the container was a second, much
-# wider consequence that took the whole OpenMRS instance and its SPA down with it, measured
-# 2026-09-21 and recorded in that decision's amendment.
+# entrypoint BLANKS both embedder paths. Withholding the write alone would not have been enough
+# once the start continues — a row an earlier good start wrote stands whatever this start did, and
+# codes 3, 4 and 5 delete nothing, so it can still name a file that is still there. Unverified
+# bytes answering a clinical question is the state Decision 106 removes; stopping the container was
+# a second, much wider consequence that took the whole OpenMRS instance and its SPA down with it,
+# measured 2026-09-21 and recorded in that decision's amendment.
 #
 # Still asked of the call site: that this runs in the entrypoint's OWN shell. The ledger is an
 # ordinary shell variable, so backgrounding the call with `&`, taking it in a command substitution,
@@ -292,11 +294,10 @@ fetch_or_degrade() {
 	_mm_oe_label=$3
 	shift 3
 	if fetch_and_verify "$_mm_oe_id" "$_mm_oe_target" "$_mm_oe_label"; then
-		# Reported HERE, on the branch that knows. The caller used to echo this after the call and
-		# read $? for it, which puts the status at a distance from the command that set it — the
-		# first of the four readings ADR Decision 106 records being defeated, arriving again from
-		# the other side. It also cannot be true on the other branch: a refusal DELETES the copy, so
-		# file_bytes would measure a file that is not there.
+		# Reported HERE, on the branch that knows. The caller used to echo it unconditionally after
+		# the call, which was sound only while a refusal exited before reaching it: now that the
+		# call returns, that line would say "ready" for an artifact this shell has just refused,
+		# and for codes 1, 2 and 6 would measure a copy it has just deleted.
 		echo "$_mm_oe_label ready: $_mm_oe_target ($(file_bytes "$_mm_oe_target") bytes)."
 		return 0
 	else
@@ -305,7 +306,8 @@ fetch_or_degrade() {
 
 	echo "       Chart search cannot run without a verified copy of this file, so it stays off:" >&2
 	echo "       OpenMRS starts without chart search rather than serving it on bytes nothing" >&2
-	echo "       checked. No path to this file is written, whatever an earlier start wrote." >&2
+	echo "       checked. No path to it is left configured — a path an earlier start wrote is" >&2
+	echo "       withdrawn too, so nothing loads this file until a start verifies it." >&2
 	case $_mm_oe_code in
 		2)
 			for _mm_oe_line in "$@"; do

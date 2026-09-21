@@ -130,9 +130,10 @@ public class ModelDownloadPinningGuardTest {
 			// because a freshly imported dump brings its own value for it.
 			"chartsearchai.querystore.enabled",
 			// The bootstrap sweep, which configure_retrieval_gps turns OFF whenever the ledger
-			// declined — the fail-closed half of the same gate. Not on reading the path back:
-			// gp_set_if_blank leaves an earlier start's row standing, so that read is non-blank on
-			// every deployment past its first good start. EntrypointRetrievalWiringTest drives it.
+			// declined — the fail-closed half of the same gate, alongside the two path
+			// withdrawals. Off the ledger's verdict rather than off reading the path back, so the
+			// line an operator gets names what changed in THIS start.
+			// EntrypointRetrievalWiringTest drives it.
 			"querystore.bootstrap.autostart",
 			// The demo seed's own bookkeeping and the CPU breadcrumb.
 			"chartsearchai.demo.seedStatus", "chartsearchai.demo.seededDataset", "chartsearchai.demo.cpuInfo");
@@ -144,16 +145,6 @@ public class ModelDownloadPinningGuardTest {
 	 */
 	private static final Pattern QUOTED_PROPERTY = Pattern
 			.compile("'([A-Za-z][A-Za-z0-9]*(?:\\.[A-Za-z0-9]+)+)'");
-
-	/** A {@code docker-compose.yml} service name: a key whose value is the block beneath it. */
-	private static final Pattern SERVICE_NAME = Pattern.compile("\\s*([A-Za-z0-9_.-]+):\\s*");
-
-	/**
-	 * A restart policy as either compose spells it — the plain {@code restart:} key, and Swarm's
-	 * {@code restart_policy:} nested under {@code deploy:}, which no service here declares but which
-	 * would have the same effect.
-	 */
-	private static final Pattern RESTART_KEY = Pattern.compile("^restart(_policy)?\\s*:");
 
 	/**
 	 * The entrypoint's read of the library's ledger — the one command that names an artifact without
@@ -167,10 +158,18 @@ public class ModelDownloadPinningGuardTest {
 	private static final Pattern LEDGER_GATE = Pattern
 			.compile("^(?:if )?require_verified(?: [A-Za-z0-9_.-]+)+;?\\s*(?:then)?$");
 
-	/** The shell words that open a block, in command position. {@code elif} closes and reopens one. */
-	private static final Set<String> BLOCK_OPENERS = Set.of("if", "case", "while", "until", "for");
+	/**
+	 * The shell words that open a block, in command position. {@code elif} closes and reopens one.
+	 *
+	 * <p>{@code \u007b} is one of them: a brace GROUP is the shape that backgrounds or pipes a run of
+	 * statements without touching any of their own lines, so a walk that did not count it reported
+	 * the statements inside {@code \u007b … \u007d &} at top level and still balanced to 0
+	 * (measured 2026-09-21). It is unambiguous in command position in this file in a way {@code (}
+	 * is not — see {@link #nestingDepths}'s residue.
+	 */
+	private static final Set<String> BLOCK_OPENERS = Set.of("if", "case", "while", "until", "for", "{");
 
-	private static final Set<String> BLOCK_CLOSERS = Set.of("fi", "esac", "done");
+	private static final Set<String> BLOCK_CLOSERS = Set.of("fi", "esac", "done", "}");
 
 	/** A function definition whose body is the lines below it, closing at column 0. */
 	private static final Pattern FUNCTION_OPENER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*\\(\\)\\s*\\{\\s*$");
@@ -416,13 +415,12 @@ public class ModelDownloadPinningGuardTest {
 	 * <b>The guarantee the check above is only a second channel for.</b> A model file's path reaches a
 	 * global property only behind {@code require_verified} naming that artifact, so what decides it is
 	 * what the running shell DID rather than where a fetch is written. Rearranging the entrypoint then
-	 * leaves the paths unwritten — the fail-closed direction — instead of pointing querystore at
-	 * bytes this start never checked, and the same decline turns the bootstrap sweep off, so a start
-	 * that reaches the wiring with nothing in the ledger cannot leave the sweep enabled over a path
-	 * nothing checked — a refused fetch and one taken in a subshell both reach the wiring with an
-	 * empty ledger, and the gate declines for either. What that
-	 * composes to in a database that remembers an earlier start is
-	 * {@link EntrypointRetrievalWiringTest}'s question, not this one's; source cannot answer it.
+	 * leaves no path standing — the fail-closed direction — instead of pointing querystore at bytes
+	 * this start never checked, and the same decline both WITHDRAWS a path an earlier good start
+	 * wrote and turns the bootstrap sweep off. A refused fetch and one taken in a subshell both
+	 * reach the wiring with an empty ledger, and the gate declines for either. What that composes to
+	 * in a database that remembers an earlier start is {@link EntrypointRetrievalWiringTest}'s
+	 * question, not this one's; source cannot answer it.
 	 *
 	 * <p><b>Two questions, and the second is asked the other way round.</b> The first ties a write to
 	 * an ARTIFACT by the VARIABLE the fetch targets: {@code $ONNX_FILE} is what
@@ -433,10 +431,10 @@ public class ModelDownloadPinningGuardTest {
 	 * alias that defeated the fetch deny-list {@link #DECLARED_NON_MODEL_FETCHES} replaced. So the
 	 * second question inverts
 	 * it: EVERY global-property write in the entrypoint must sit behind the ledger's gate unless the
-	 * property is declared in {@link #DECLARED_NON_MODEL_PROPERTIES} as carrying no model path, and
-	 * a write whose property name is not a literal this guard can read is itself a violation. A new
-	 * path property then costs an entry there, which is the point at which someone asks whether it
-	 * is a model's.
+	 * property is declared in {@link #DECLARED_NON_MODEL_PROPERTIES} as carrying no model path or
+	 * the write {@link #withdrawsAPath}, and a write whose property name is not a literal this guard
+	 * can read is itself a violation. A new path property then costs an entry there, which is the
+	 * point at which someone asks whether it is a model's.
 	 *
 	 * <p><b>The residue, named rather than claimed away.</b> Both questions read THIS file, and only
 	 * for the two write forms it uses: a statement assembled from fragments so that no line spells
@@ -481,6 +479,7 @@ public class ModelDownloadPinningGuardTest {
 		// so an intermediate assignment changes nothing about the answer.
 		int gated = 0;
 		int declaredWrites = 0;
+		int withdrawals = 0;
 		for (int i = 0; i < lines.size(); i++) {
 			String line = lines.get(i);
 			if (line.trim().startsWith("#") || !writesAGlobalProperty(lines, i)) {
@@ -500,6 +499,8 @@ public class ModelDownloadPinningGuardTest {
 			for (String name : named) {
 				if (behindAnyLedger.contains(i)) {
 					gated++;
+				} else if (withdrawsAPath(line)) {
+					withdrawals++;
 				} else if (DECLARED_NON_MODEL_PROPERTIES.contains(name)) {
 					declaredWrites++;
 				} else {
@@ -517,6 +518,24 @@ public class ModelDownloadPinningGuardTest {
 				+ " the ledger's gate; the inverted question read nothing");
 		assertTrue(declaredWrites > 0, "no declared non-model property is written either, so the allow-list this"
 				+ " question rests on is never exercised");
+		assertTrue(withdrawals > 0, "no write in backend-init.sh takes a model path back, so the exemption the"
+				+ " question above rests on is never exercised; the decline arm has to blank both embedder paths"
+				+ " (#444, ADR Decision 106)");
+	}
+
+	/**
+	 * Whether the write on this line sets the property to the EMPTY string, which publishes no path
+	 * and takes back whatever one was there. That is how {@code configure_retrieval_gps}'s decline
+	 * arm withdraws a row an earlier good start left standing — the half {@code gp_set_if_blank}
+	 * deliberately will not do, and the one a refusal that deleted nothing (the library's codes 4
+	 * and 5) leaves pointing at unverified bytes still on the volume.
+	 *
+	 * <p>Read off the VALUE in the statement rather than off a helper's name, so a write that grew
+	 * a path to publish stops being a withdrawal here the moment it does. What this cannot see is a
+	 * statement assembled from fragments, which is the same residue the question it serves names.
+	 */
+	private static boolean withdrawsAPath(String line) {
+		return line.contains("SET property_value=''");
 	}
 
 	/**
@@ -778,9 +797,10 @@ public class ModelDownloadPinningGuardTest {
 	 * <p><b>The residue.</b> Depth is not reachability — an {@code exit} or {@code return} placed
 	 * above these statements would skip them at depth 0 — and a skip written INSIDE a function is
 	 * invisible here, which is {@link EntrypointVolumeVerificationTest}'s question: it drives the
-	 * weights fetch with the target already present rather than reading where the call sits. The walk
-	 * is calibrated on the file it reads, having to balance to 0 at end of file, so a construct it
-	 * cannot parse fails it loudly instead of reporting no violation. And the unit is a command that
+	 * weights fetch with the target already present rather than reading where the call sits. The
+	 * walk's balance to 0 at end of file fails a construct it HALF reads and not one it does not
+	 * read at all — {@link #nestingDepths} carries what that cost and which shape is still open.
+	 * And the unit is a command that
 	 * NAMES an artifact, so a log line mentioning one from inside a function would be reported here;
 	 * that direction over-reports rather than passing, and an artifact named nowhere outside the
 	 * ledger gate fails the same way.
@@ -812,8 +832,9 @@ public class ModelDownloadPinningGuardTest {
 				statements.put(artifact, statements.get(artifact) + 1);
 				if (depths[i] != 0) {
 					violations.add(EntrypointSource.ENTRYPOINT + " names " + artifact + " at line " + (i + 1)
-							+ " inside a block or a function, so whether it runs depends on something other than"
-							+ " the start happening: " + command);
+							+ " inside a block or a function, so what it does depends on something other than the"
+							+ " start reaching this line — a condition, a caller, or the subshell a brace group"
+							+ " closed with & or a pipe runs it in: " + command);
 				} else if (BLOCK_OPENERS.contains(firstWord(command))) {
 					violations.add(EntrypointSource.ENTRYPOINT + " names " + artifact + " at line " + (i + 1)
 							+ " on a command that is itself a condition, so the fetch runs only when that"
@@ -841,8 +862,20 @@ public class ModelDownloadPinningGuardTest {
 	 * a plain token scan reads as shell. Here-document bodies are skipped for the same reason: they
 	 * carry SQL and Java properties rather than commands.
 	 *
-	 * <p>The walk has to balance to 0 at end of file. That is its calibration: a construct it cannot
-	 * parse then fails it loudly, where a silently wrong depth would report no violation.
+	 * <p>The walk has to balance to 0 at end of file, which is what fails a construct it half-reads.
+	 * It is not a calibration of the depths themselves, and the difference was measured on
+	 * 2026-09-21: a construct neither side of which it recognises contributes 0 at both ends, so it
+	 * balances while the statements inside it are reported at top level. A brace group did exactly
+	 * that — {@code \u007b … \u007d &}, which is "background the embedder like the LLM" and touches
+	 * neither fetch's own line — until {@code \u007b} and {@code \u007d} were added to the words
+	 * counted above.
+	 *
+	 * <p><b>The residue is the shape of that miss, not the one instance.</b> A multi-line
+	 * {@code ( … ) &} is the same hole and is left open deliberately: {@code (} in this file also
+	 * opens a command substitution, an arithmetic expansion and a {@code case} arm's label, so
+	 * counting it in command position is a parse this walk does not attempt, and a wrong depth is
+	 * worse here than a missing one. ADR Decision 106 names that shape as residue for the subshell
+	 * guard too, and {@code require_verified} is what covers both at runtime.
 	 */
 	private static int[] nestingDepths(List<String> lines) {
 		int[] depths = new int[lines.size()];
@@ -994,12 +1027,13 @@ public class ModelDownloadPinningGuardTest {
 	 * destination — a review agent moved both COPY targets to {@code /opt/wrong/} and the guard
 	 * stayed green.
 	 *
-	 * <p>The consequence is not subtle. Sourcing a file that is not there exits a POSIX shell, so
-	 * PID 1 dies before {@code exec}ing the server, and by
-	 * {@link #theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal} the container
-	 * stops and stays stopped. That is the failure {@code build.yml}'s
-	 * {@code entrypoint-lint} comment is written against, and neither {@code sh -n} nor shellcheck
-	 * can see it: both are happy with a {@code .} of an absolute path that does not exist.
+	 * <p>The consequence is not subtle, and it is the one pre-Tomcat exit this entrypoint still has
+	 * now that a refused model file returns instead: sourcing a file that is not there ends a POSIX
+	 * shell on the spot, so PID 1 dies before {@code exec}ing the server and the whole deployment
+	 * goes with it — the chain ADR Decision 106's amendment measures. That is the failure
+	 * {@code build.yml}'s {@code entrypoint-lint} comment is written against, and neither
+	 * {@code sh -n} nor shellcheck can see it: both are happy with a {@code .} of an absolute path
+	 * that does not exist.
 	 */
 	@Test
 	public void theImageCarriesBothTheLibraryAndTheManifestAtThePathsThatReadThem() throws IOException {
@@ -1027,90 +1061,6 @@ public class ModelDownloadPinningGuardTest {
 		assertTrue(copied.contains(manifest), "the library reads its digests from " + manifest
 				+ ", which Dockerfile.backend never COPYs there; every fetch would fail to resolve. COPY destinations: "
 				+ copied);
-	}
-
-	/**
-	 * A refusal no longer takes the container down at all — ADR Decision 106's 2026-09-21
-	 * amendment, where the ledger rather than an exit is what fails it closed — so the loop this
-	 * was first written against is not reachable through a model file any more. What it still
-	 * asserts is that a backend which dies for a reason the entrypoint cannot cause (a missing
-	 * library to source, the JVM, Tomcat) leaves a stopped container to inspect rather than a
-	 * churning one, and that it would have seen a policy — a service in this file carries a restart
-	 * key, and the walk finds it there.
-	 *
-	 * <p><b>What it reads is THIS repository's compose file, and that is the whole of its reach.</b>
-	 * {@code Dockerfile.backend}'s HEALTHCHECK comment records that the deploy server's compose file
-	 * is not this one, so a policy added there is residue nothing here can see.
-	 */
-	@Test
-	public void theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal() throws IOException {
-		Map<String, List<String>> services = composeServices();
-
-		List<String> backend = services.get("backend");
-		assertTrue(backend != null && backend.stream().anyMatch(line -> line.trim().startsWith("image:")),
-				"this guard reads the backend service of docker-compose.yml and did not find it carrying an image: of"
-						+ " its own, so it would have had nothing to check. Services read: " + services.keySet());
-
-		Set<String> withAPolicy = new LinkedHashSet<String>();
-		for (Map.Entry<String, List<String>> service : services.entrySet()) {
-			if (service.getValue().stream().anyMatch(line -> RESTART_KEY.matcher(line.trim()).find())) {
-				withAPolicy.add(service.getKey());
-			}
-		}
-		assertFalse(withAPolicy.isEmpty(), "no service in docker-compose.yml carries a restart key, so this guard has"
-				+ " not shown it would see one on backend; the check needs a service that does, or another way to read"
-				+ " the key");
-		assertFalse(withAPolicy.contains("backend"), "the backend service declares a restart policy, so a model file"
-				+ " the entrypoint refuses would be refused again on every restart rather than leaving the container"
-				+ " stopped (#444, ADR Decision 106). Services declaring one: " + withAPolicy);
-	}
-
-	/**
-	 * Each entry of {@code docker-compose.yml}'s {@code services:} mapping, mapped to the lines of
-	 * its block. The service indent is taken from the file rather than assumed, so a reindented file
-	 * is still read rather than silently yielding no services.
-	 */
-	private static Map<String, List<String>> composeServices() throws IOException {
-		List<String> block = new ArrayList<String>();
-		boolean inServices = false;
-		for (String line : codeLines("docker-compose.yml")) {
-			if (indentOf(line) == 0) {
-				inServices = line.trim().equals("services:");
-			} else if (inServices) {
-				block.add(line);
-			}
-		}
-		assertFalse(block.isEmpty(),
-				"docker-compose.yml has no services: block, so every check over it would pass vacuously");
-
-		int serviceIndent = Integer.MAX_VALUE;
-		for (String line : block) {
-			serviceIndent = Math.min(serviceIndent, indentOf(line));
-		}
-
-		Map<String, List<String>> services = new LinkedHashMap<String, List<String>>();
-		List<String> current = null;
-		for (String line : block) {
-			Matcher name = SERVICE_NAME.matcher(line);
-			if (indentOf(line) == serviceIndent && name.matches()) {
-				current = new ArrayList<String>();
-				services.put(name.group(1), current);
-			} else if (current != null) {
-				current.add(line);
-			}
-		}
-		assertFalse(services.isEmpty(), "docker-compose.yml's services: block names no service, so every check over it"
-				+ " would pass vacuously");
-		return services;
-	}
-
-	/** How many leading whitespace characters {@code line} carries. */
-	private static int indentOf(String line) {
-		int indent = 0;
-		while (indent < line.length() && Character.isWhitespace(line.charAt(indent))) {
-			indent++;
-		}
-		return indent;
 	}
 
 	/** The one capture of {@code pattern} in {@code relative}, or a failure saying what was sought. */

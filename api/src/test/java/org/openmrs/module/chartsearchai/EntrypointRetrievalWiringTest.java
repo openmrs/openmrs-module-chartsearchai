@@ -22,7 +22,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,14 +43,15 @@ import org.junit.jupiter.api.io.TempDir;
  * the state they compose to was not. On the shipped entrypoint the embedder goes through
  * {@code fetch_or_degrade}, whose refusal now leaves the start RUNNING, so this wiring is reached
  * with an empty ledger by an ordinary refusal as well as by the subshell residue ADR Decision 106
- * names. The refusal cases below construct the subshell shape, because it is the one that also
- * reaches here on a download that SUCCEEDED and so cannot be told from a good start by anything
- * but the ledger. Such a start has deleted the file and publishes no path, but the row from the last
- * good start still names that now-absent file — so a safety keyed on reading the property back finds
- * it non-blank and leaves {@code querystore.bootstrap.autostart} on, which is the per-record
- * exception flood that function's own comment exists to prevent and measures the cost of. Neither
- * existing channel can see that: one drives the library without a database, the other reads source.
- * Only running the wiring against a store that REMEMBERS an earlier start does.
+ * names. The row the last good start wrote is still standing either way, and what it names depends
+ * on WHICH refusal: the library's own code table gives codes 1, 2 and 6 a deletion and codes 3, 4
+ * and 5 none — code 4, an artifact no manifest row resolves, never opens the target at all. So a
+ * safety keyed on reading that property back finds it non-blank in both, and leaves
+ * {@code querystore.bootstrap.autostart} on: the per-record exception flood that function's own
+ * comment exists to prevent where the file is gone, and querystore embedding clinical questions
+ * with bytes this start did not check where it is not. Neither existing channel can see either:
+ * one drives the library without a database, the other reads source. Only running the wiring
+ * against a store that REMEMBERS an earlier start does.
  *
  * <p><b>It runs the entrypoint's own functions, not a retelling of them.</b> Each function below is
  * taken verbatim out of {@code backend-init.sh} by name — a definition that moves or changes shape
@@ -100,6 +103,12 @@ public class EntrypointRetrievalWiringTest {
 	/** One byte different and the same LENGTH, so the digest is what refuses it, not the size. */
 	private static final byte[] UNRECORDED_BYTES = "the embedder bytes the maintainers reviewer\n"
 			.getBytes(StandardCharsets.UTF_8);
+
+	/**
+	 * Echoed by the statement immediately after the entrypoint's own embedder fetches, so a case can
+	 * ask whether the start got past them rather than inferring it from what ran later.
+	 */
+	private static final String PAST_THE_FETCHES = "the start reached the statement after the embedder fetches";
 
 	@TempDir
 	Path work;
@@ -155,10 +164,11 @@ public class EntrypointRetrievalWiringTest {
 
 	/**
 	 * <b>The returning deployment.</b> One good start wrote the path; this start's embedder is
-	 * refused and its file deleted, in a subshell so the {@code exit} never reaches the entrypoint's
-	 * shell — the residue ADR Decision 106 names as what the ledger, not the line-level guard,
-	 * covers. The property still names the deleted file, so a safety that reads it back sees nothing
-	 * wrong; the sweep has to go off on the gate's verdict instead.
+	 * refused and its file deleted, in a subshell so neither the status nor the ledger entry reaches
+	 * the entrypoint's shell — the residue ADR Decision 106 names as what the ledger, not the
+	 * line-level guard, covers. The row an earlier start wrote is what {@code gp_set_if_blank} would
+	 * leave standing, naming a file that is no longer there, so the arm has to withdraw it and turn
+	 * the sweep off on the gate's verdict.
 	 */
 	@Test
 	public void theSweepGoesOffWhenTheEmbedderDidNotVerifyAndAnEarlierStartLeftItsPathBehind() throws Exception {
@@ -170,12 +180,64 @@ public class EntrypointRetrievalWiringTest {
 
 		assertFalse(Files.exists(onnx), "the refusal did not delete the file, so this case is not the state it"
 				+ " is about\n" + run);
-		assertEquals("querystore/model.onnx", gp(MODEL_PATH_GP),
-				"the earlier start's path is what makes this case; it must still be standing\n" + run);
+		assertEquals("", gp(MODEL_PATH_GP), "the earlier start's path still names the file this start's refusal"
+				+ " deleted\n" + run);
 		assertEquals("false", gp(AUTOSTART_GP), "the embedder was refused and its file deleted, and the sweep was"
 				+ " left on to fail once per record\n" + run);
 		assertTrue(run.output.contains("the embedder did not verify in this start"),
 				"the operator is not told which of the two reasons turned the sweep off\n" + run);
+	}
+
+	/**
+	 * <b>The refusal that deletes nothing, which is the one the withheld write cannot cover.</b> A
+	 * backend image whose manifest resolves neither embedder row refuses both at code 4 without
+	 * opening either file, so the unverified copy an earlier start left is still on the volume. The
+	 * row that names it is still in the database and reads exactly like one this start verified;
+	 * withholding the write leaves it standing, and querystore then embeds clinical questions with
+	 * bytes nothing checked — the state #444 and ADR Decision 106 exist to remove, reached with a
+	 * green healthcheck and OpenMRS running. Both paths have to be withdrawn.
+	 */
+	@Test
+	public void bothEmbedderPathsAreWithdrawnWhenTheRefusalLeftTheUnverifiedFileOnTheVolume() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(AUTOSTART_GP, "true");
+
+		Run run = run(refusedWithNothingDeleted());
+
+		assertTrue(Files.exists(onnx) && Files.exists(vocab), "the refusal deleted the files, so this case is not"
+				+ " the state it is about — it is the one above\n" + run);
+		assertTrue(run.output.contains("Chart search cannot run without a verified copy of this file"),
+				"nothing was refused, so this case would pass on a start that verified\n" + run);
+		assertEquals("", gp(MODEL_PATH_GP), "querystore is still pointed at an ONNX file on the volume that this"
+				+ " start refused to verify\n" + run);
+		assertEquals("", gp(VOCAB_PATH_GP), "querystore is still pointed at a vocab file on the volume that this"
+				+ " start refused to verify\n" + run);
+		assertEquals("false", gp(AUTOSTART_GP), "the sweep was left on over a path this start did not verify\n"
+				+ run);
+	}
+
+	/**
+	 * <b>The entrypoint's own two statements, and what they do to the shell.</b> The library returns
+	 * rather than exiting, and {@code ModelDownloadIntegrityTest} drives that; what nothing drove is
+	 * the CALL SITE, where {@code || exit 1} appended to the last continuation line restores the
+	 * outage in full and is invisible to every source guard, to {@code sh -n} and to
+	 * {@code shellcheck}. This runs the two statements {@code backend-init.sh} actually ships, on a
+	 * refusal, and asks whether the statement after them runs.
+	 */
+	@Test
+	public void theEntrypointsOwnEmbedderFetchesLeaveTheStartRunning() throws Exception {
+		given(AUTOSTART_GP, "true");
+		List<String> preamble = new ArrayList<String>(refusedWithNothingDeleted());
+		preamble.add("echo '" + PAST_THE_FETCHES + "'");
+
+		Run run = execute(preamble, null);
+
+		assertTrue(run.output.contains("Chart search cannot run without a verified copy of this file"),
+				"nothing was refused, so this case says nothing about what a refusal does to the start\n" + run);
+		assertTrue(run.output.contains(PAST_THE_FETCHES), "backend-init.sh's own embedder fetch statements ended"
+				+ " the start on a refusal, which is the outage ADR Decision 106's amendment measures\n" + run);
+		assertEquals(0, run.exit, "the start did not survive its own embedder fetches\n" + run);
 	}
 
 	/** The virgin database: nothing has ever configured an embedder, and the sweep still goes off. */
@@ -267,6 +329,67 @@ public class EntrypointRetrievalWiringTest {
 		return List.of("fetch_or_degrade " + GATED_ARTIFACTS.get(0) + " \"$ONNX_FILE\" 'the embedder' &", "wait");
 	}
 
+	/**
+	 * The refusal that costs the deployment nothing on disk: the manifest resolves neither artifact,
+	 * so {@code fetch_or_degrade} answers 4 without ever opening the target and the unverified copy
+	 * an earlier start left is still on the volume when the wiring runs. This is the shape of a
+	 * backend image whose {@code model-manifest.tsv} row was renamed or dropped, and it is a refusal
+	 * the entrypoint's OWN shell takes — no subshell — so the start runs on to the wiring by the
+	 * ordinary path. Code 5, a copy the library could not hash, reaches the arm in the same state
+	 * and is not driven here: residue, rather than a claim about it.
+	 */
+	private List<String> refusedWithNothingDeleted() throws Exception {
+		Files.write(onnx, UNRECORDED_BYTES);
+		Files.write(vocab, UNRECORDED_BYTES);
+		Path unresolvable = work.resolve("manifest-naming-nothing-the-gate-asks-about.tsv");
+		StringBuilder rows = new StringBuilder();
+		for (String artifact : GATED_ARTIFACTS) {
+			rows.append("renamed-").append(artifact).append('\t').append(ModelManifest.sha256(RECORDED_BYTES))
+					.append('\t').append(RECORDED_BYTES.length).append('\t')
+					.append(work.resolve("never-served").toUri()).append('\n');
+		}
+		Files.write(unresolvable, rows.toString().getBytes(StandardCharsets.UTF_8));
+
+		List<String> lines = new ArrayList<String>();
+		lines.add("MODEL_MANIFEST_FILE='" + unresolvable + "'");
+		lines.addAll(entrypointEmbedderFetches());
+		return lines;
+	}
+
+	/**
+	 * The entrypoint's own embedder fetch statements, read out of {@code backend-init.sh} as whole
+	 * logical commands so a continuation line is part of the statement it continues. Taken rather
+	 * than retold for the reason the wiring functions are: what a case here drives is then the text
+	 * that ships, so an {@code || exit 1} appended to one of them — the edit anyone "restoring
+	 * strictness" reaches for, and the one shape the library's own {@code return} cannot rule out —
+	 * is inside what these cases run.
+	 */
+	private static List<String> entrypointEmbedderFetches() throws IOException {
+		List<String> lines = Files.readAllLines(repo(ENTRYPOINT), StandardCharsets.UTF_8);
+		List<String> fetches = new ArrayList<String>();
+		Map<String, Integer> found = new LinkedHashMap<String, Integer>();
+		for (int i = 0; i < lines.size(); i++) {
+			if (lines.get(i).trim().startsWith("#") || EntrypointSource.continuesTheLineAbove(lines, i)) {
+				continue;
+			}
+			String command = EntrypointSource.logicalCommand(lines, i);
+			for (String artifact : GATED_ARTIFACTS) {
+				if (command.startsWith("fetch_or_degrade " + artifact + " ")) {
+					found.put(artifact, found.getOrDefault(artifact, 0) + 1);
+					fetches.add(command);
+				}
+			}
+		}
+		// Per artifact rather than a total, so two statements for one of them and none for the
+		// other cannot add up to the right count.
+		for (String artifact : GATED_ARTIFACTS) {
+			assertEquals(1, found.getOrDefault(artifact, 0), ENTRYPOINT + " does not carry exactly one statement"
+					+ " beginning `fetch_or_degrade " + artifact + " `, so these cases would be driving something"
+					+ " other than what it ships. Read: " + fetches);
+		}
+		return fetches;
+	}
+
 	/** Both artifacts verified the way a restart verifies them: off bytes already on the volume. */
 	private List<String> verified() {
 		List<String> lines = new ArrayList<String>();
@@ -280,12 +403,32 @@ public class EntrypointRetrievalWiringTest {
 	}
 
 	/**
+	 * {@link #execute} plus the invariants every case rests on: the wiring function finished, it
+	 * issued at least one statement, and the stand-in understood all of them. A case whose subject
+	 * is one of those — whether the start reached the wiring at all — drives {@code execute}
+	 * directly, so the failure names the property rather than one of these.
+	 */
+	private Run run(List<String> preamble, String refuseWriteTo) throws Exception {
+		Run run = execute(preamble, refuseWriteTo);
+		assertEquals(0, run.exit, "configure_retrieval_gps itself failed; in the entrypoint that is the"
+				+ " \"step errored\" line, and everything below is then about a function that did not finish\n"
+				+ run);
+		List<String> issued = issuedStatements();
+		assertFalse(issued.isEmpty(), "the wiring issued no statement at all, so this case measured nothing\n" + run);
+		for (String statement : issued) {
+			assertFalse(statement.startsWith("UNHANDLED: "), "the stand-in was handed a statement it cannot answer,"
+					+ " so what the wiring did with it is unknown: " + statement + "\n" + run);
+		}
+		return run;
+	}
+
+	/**
 	 * Sources the real library, pastes the entrypoint's own wiring functions in, runs
 	 * {@code preamble} — the fetches whose outcome the ledger then carries — and calls
 	 * {@code configure_retrieval_gps}. {@code refuseWriteTo} names a property the stand-in will
 	 * refuse to write, standing in for a database that rejects the statement.
 	 */
-	private Run run(List<String> preamble, String refuseWriteTo) throws Exception {
+	private Run execute(List<String> preamble, String refuseWriteTo) throws Exception {
 		List<String> script = new ArrayList<String>();
 		script.add("PATH='" + stubs + "':$PATH");
 		script.add("export PATH");
@@ -319,18 +462,7 @@ public class EntrypointRetrievalWiringTest {
 		Process process = builder.start();
 		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);
 		assertTrue(process.waitFor(120, TimeUnit.SECONDS), "the wiring did not finish");
-		Run run = new Run(process.exitValue(), output);
-
-		assertEquals(0, run.exit, "configure_retrieval_gps itself failed; in the entrypoint that is the"
-				+ " \"step errored\" line, and everything below is then about a function that did not finish\n"
-				+ run);
-		List<String> issued = issuedStatements();
-		assertFalse(issued.isEmpty(), "the wiring issued no statement at all, so this case measured nothing\n" + run);
-		for (String statement : issued) {
-			assertFalse(statement.startsWith("UNHANDLED: "), "the stand-in was handed a statement it cannot answer,"
-					+ " so what the wiring did with it is unknown: " + statement + "\n" + run);
-		}
-		return run;
+		return new Run(process.exitValue(), output);
 	}
 
 	private List<String> issuedStatements() throws IOException {

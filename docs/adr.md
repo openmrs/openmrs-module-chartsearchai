@@ -9079,11 +9079,17 @@ wanting `global_property` and three other tables. Second, the withdrawal ANSWERS
 statuses are read and both values read back, because "the statement was issued" and "the row is
 blank" are different questions, and a read-back alone answers empty for a database that could not be
 asked at all — fail-open in exactly the direction this gate exists to close. Third, where the
-withdrawal cannot land, `quarantine_unverified_embedder` moves the refused copy to
-`<target>.unverified`: querystore resolves both paths with `optional=false`, and
-`ModelFileResolver.resolveModelPath` throws `Model file not found` for a path with no file at it
-just as `OnnxEmbeddingProvider.resolvePath` throws for a blank one, so the row the start could not
-withdraw names nothing loadable and the downstream state is the one a landed withdrawal produces.
+withdrawal cannot land, `quarantine_unverified_embedder` moves the two embedder targets this start
+provisions to `<target>.unverified`, whichever of them are on the volume: querystore resolves both
+paths with `optional=false`, and `ModelFileResolver.resolveModelPath` throws `Model file not found`
+for a path with no file at it just as `OnnxEmbeddingProvider.resolvePath` throws for a blank one, so
+a row naming either of those two names nothing loadable and the downstream state there is the one a
+landed withdrawal produces. Both, because the gate's unit is the pair — two shapes reach the arm
+with a copy that VERIFIED, and the paragraph on the quarantine's own wording below is about what
+that makes sayable. And only those two: the withdrawal blanks whatever the row names, an operator's
+own path included, while this reaches the two targets the fetches wrote to, so a row naming a file
+this module never provisioned survives it — outside #444 either way, its subject being bytes this
+module fetched.
 Moved rather than deleted for the reason `file_bytes` will not answer 0: code 5 is a statement about
 the tools, not the bytes, and deleting on it re-downloads the same file every start to delete it
 again.
@@ -9107,6 +9113,21 @@ reachable database that has never carried a schema, and what it buys is a branch
 a README clause removed rather than a fourth prediction added.
 `EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhereTheSchemaProbeAnsweredNoAndTheWithdrawalWasRejected`
 is the case; no case before it held both of those knobs off their defaults at once.
+
+**Run that same calculus one level up and it reaches the withdrawal, so here is why the withdrawal
+stays.** Quarantining on every decline is simpler again: it takes the database off the safety path
+entirely, `withdraw_embedder_paths` goes, and the decline arm stops needing an answer from the
+database at all. Three things keep it. It is not free where the withdrawal WOULD have landed —
+`model-manifest.tsv` records 435,811,516 bytes for `embedder-e5-base-v2-onnx`, and moving that copy
+aside on a start whose database would have taken the blanking spends that download again on the next
+start, and on every refused start after it, against a database that was healthy throughout. It does
+not reach as far — the quarantine touches the two targets the fetches wrote to, so a row an operator
+pointed at a file this module never provisioned is withdrawn and never quarantined. And the `mv`
+itself can fail, on a read-only volume or a permission the container does not have, which is the
+residue named below: today that residue needs BOTH instruments to have failed, and with the
+withdrawal gone it would need only the one. So they are complementary rather than redundant, and the
+ORDER is what the trade buys — the cheaper instrument first, the download spent only where its
+landing could not be confirmed.
 
 **And the withdrawal's two `UPDATE`s were chained**, `|| return 1`, so the vocab's was never issued on
 a database that rejected the model path's — one statement's rejection standing as a verdict on the

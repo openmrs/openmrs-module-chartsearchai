@@ -135,7 +135,10 @@ fetch_or_degrade embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab" \
 # in background subshells and the embedder's run in this shell, because the
 # ledger the property write consults cannot be written from a subshell.
 # What matters in both is that rejected bytes are deleted rather than left
-# under the name config.xml points modelFilePath at.
+# under the name config.xml points modelFilePath at — on the codes that
+# report a deletion. Codes 4 and 5 report none: 4 never opens the target,
+# so whatever is at that name is untouched, and 5 could not hash what is
+# at it, which the catch-all arm below says outright.
 _download_llm_file() {
   _id=$1
   _target=$2
@@ -591,11 +594,12 @@ withdraw_embedder_paths() {
   [ "$_wd_issued" = yes ] && [ -z "$_wd_model" ] && [ -z "$_wd_vocab" ]
 }
 
-# The instrument that needs no database: take the FILE out of the name querystore loads, so a row
-# this start could not withdraw names nothing loadable. querystore resolves both of these paths
-# with optional=false, and ModelFileResolver throws "Model file not found" for a path with no file
-# at it exactly as OnnxEmbeddingProvider throws for a blank one — so this leaves querystore in the
-# same state a landed withdrawal does, by the other route.
+# The instrument that needs no database: take the FILE out of the two names querystore loads, so a
+# row this start could not withdraw names nothing loadable — for those two names and no others,
+# which the last paragraph below is about. querystore resolves both of these paths with
+# optional=false, and ModelFileResolver throws "Model file not found" for a path with no file at it
+# exactly as OnnxEmbeddingProvider throws for a blank one — so this leaves querystore in the same
+# state a landed withdrawal does, by the other route.
 #
 # Moved rather than deleted, and for the reason file_bytes will not answer 0 for a file it could not
 # measure: code 5 is "this copy could not be hashed", which is a statement about the tools and not

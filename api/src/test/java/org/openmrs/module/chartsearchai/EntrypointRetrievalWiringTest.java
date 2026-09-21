@@ -18,7 +18,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -105,6 +107,15 @@ public class EntrypointRetrievalWiringTest {
 
 	/** Where the refusal's own diagnosis is recorded, readable over REST. */
 	private static final String EMBEDDER_STATUS_GP = "chartsearchai.models.embedderStatus";
+
+	/**
+	 * What the entrypoint prints when {@code command -v mariadb} finds nothing. It is the only
+	 * thing that tells that branch apart from a client that IS present and cannot connect: both
+	 * reach the same quarantine and both leave the stand-in's log empty, because a real client
+	 * never writes it. Spelled as a literal, so a rewording in {@code backend-init.sh} fails the
+	 * case that reads it rather than quietly widening what that case accepts.
+	 */
+	private static final String NO_CLIENT_IN_THE_IMAGE = "the mariadb client is absent from this image";
 
 	private static final byte[] RECORDED_BYTES = "the embedder bytes the maintainers reviewed\n"
 			.getBytes(StandardCharsets.UTF_8);
@@ -397,7 +408,8 @@ public class EntrypointRetrievalWiringTest {
 	 * {@code README.md} says where the channel holds, and that this is pinned rather than assumed.
 	 * This is the database-not-answering branch;
 	 * {@link #theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent} pins the other one by
-	 * asserting the stand-in was handed nothing at all, which no write of any kind survives.
+	 * asserting the line the entrypoint prints for an absent client, which is what tells the two
+	 * apart — the stand-in is handed nothing on either.
 	 */
 	@Test
 	public void theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt() throws Exception {
@@ -417,8 +429,10 @@ public class EntrypointRetrievalWiringTest {
 
 	/**
 	 * <b>The first of the two returns: no {@code mariadb} client in the image.</b> Nothing here can
-	 * read or write a global property, so the same instrument applies — and this is the case that
-	 * proves the client really was absent, by asserting the stand-in was handed nothing at all.
+	 * read or write a global property, so the same instrument applies — and what proves the client
+	 * really was absent is the line the entrypoint prints for it. An empty stand-in log does not:
+	 * a real client found on the host's PATH writes that log no more than a missing one does, so
+	 * the log alone reads the same here as on the database-not-answering branch.
 	 */
 	@Test
 	public void theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent() throws Exception {
@@ -428,6 +442,9 @@ public class EntrypointRetrievalWiringTest {
 
 		Run run = execute(refusedWithNothingDeleted(), null);
 
+		assertTrue(run.output.contains(NO_CLIENT_IN_THE_IMAGE), "the start never printed the line it prints"
+				+ " for an absent mariadb client, so this case did not drive that branch: either a client was"
+				+ " found, or the function returned before reaching the line\n" + run);
 		assertTrue(issuedStatements().isEmpty(), "a mariadb client answered, so this case did not drive an image"
 				+ " without one: " + issuedStatements() + "\n" + run);
 		assertTrue(run.output.contains("Chart search cannot run without a verified copy of this file"),
@@ -919,12 +936,13 @@ public class EntrypointRetrievalWiringTest {
 	 */
 	private Run execute(List<String> preamble, String refuseWriteTo) throws Exception {
 		List<String> script = new ArrayList<String>();
-		// Where the case is about an image with no client, the whole PATH is replaced by the system
-		// directories rather than prefixed, so a client the HOST happens to carry somewhere else
-		// cannot answer. A machine that ships one in /usr/bin would still be found, which is why
-		// the case asserts the line the entrypoint prints for an absent client rather than
-		// inferring it.
-		script.add(clientAbsent ? "PATH='/usr/bin:/bin:/usr/sbin:/sbin'" : "PATH='" + stubs + "':$PATH");
+		// Where the case is about an image with no client, PATH is replaced by one BUILT without a
+		// client rather than prefixed, so neither a client the host carries elsewhere nor one it
+		// ships in /usr/bin can answer. The case asserts the line the entrypoint prints for an
+		// absent client on top of that, so a PATH that did not manage it fails rather than being
+		// inferred from what the stand-in was not handed.
+		script.add(clientAbsent ? "PATH='" + systemPathWithoutAMariadbClient() + "'"
+				: "PATH='" + stubs + "':$PATH");
 		script.add("export PATH");
 		script.add(". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'");
 		// What the entrypoint assigns around the wiring: the connection the stand-in answers for,
@@ -963,6 +981,56 @@ public class EntrypointRetrievalWiringTest {
 		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);
 		assertTrue(process.waitFor(120, TimeUnit.SECONDS), "the wiring did not finish");
 		return new Run(process.exitValue(), output);
+	}
+
+	/**
+	 * The four system directories' contents as one directory of symlinks, with every entry named
+	 * {@code mariadb} left out: a PATH that has no client on it whatever the host has installed.
+	 *
+	 * <p><b>Why it is built and not spelled.</b> {@code PATH='/usr/bin:/bin:/usr/sbin:/sbin'} is
+	 * an absent client only where the host happens not to ship one, and
+	 * {@code Dockerfile.backend}'s {@code mariadb-client} puts one in {@code /usr/bin} — so on a
+	 * Linux box or CI image carrying that package the case that drives the absent-client branch
+	 * drove the database-not-answering one instead, where a client is found and cannot connect,
+	 * and passed. Nothing else about the search changes: the same four directories, in the same
+	 * order, first spelling of a name winning, so each tool the run reaches for resolves through a
+	 * link to the same file it resolved to before. The residue is {@code argv[0]}, which is now the
+	 * link's path rather than the system directory's — a tool that reads its own name for anything
+	 * would see the difference.
+	 *
+	 * <p>Both halves are asserted rather than assumed — that something was linked, since a PATH of
+	 * nothing is one where every command is absent and not one where only this client is, and that
+	 * the one name it exists to leave out is not on it.
+	 */
+	private Path systemPathWithoutAMariadbClient() throws IOException {
+		Path withoutAClient = work.resolve("system-bin-without-a-mariadb-client");
+		if (Files.isDirectory(withoutAClient)) {
+			return withoutAClient;
+		}
+		Files.createDirectories(withoutAClient);
+		int linked = 0;
+		for (String directory : List.of("/usr/bin", "/bin", "/usr/sbin", "/sbin")) {
+			Path system = Paths.get(directory);
+			if (!Files.isDirectory(system)) {
+				continue;
+			}
+			try (DirectoryStream<Path> entries = Files.newDirectoryStream(system)) {
+				for (Path entry : entries) {
+					Path link = withoutAClient.resolve(entry.getFileName().toString());
+					if ("mariadb".equals(entry.getFileName().toString())
+							|| Files.exists(link, LinkOption.NOFOLLOW_LINKS)) {
+						continue;
+					}
+					Files.createSymbolicLink(link, entry);
+					linked++;
+				}
+			}
+		}
+		assertTrue(linked > 0, "no system directory could be read, so this is a PATH on which every command is"
+				+ " absent rather than one on which only the mariadb client is");
+		assertFalse(Files.exists(withoutAClient.resolve("mariadb"), LinkOption.NOFOLLOW_LINKS),
+				"the one name this PATH exists to leave out is on it");
+		return withoutAClient;
 	}
 
 	private List<String> issuedStatements() throws IOException {

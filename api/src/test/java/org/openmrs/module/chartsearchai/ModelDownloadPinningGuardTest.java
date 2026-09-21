@@ -81,14 +81,16 @@ public class ModelDownloadPinningGuardTest {
 			"embedder-e5-base-v2-vocab");
 
 	/**
-	 * The artifacts the module cannot start without, so a refusal of one must stop the start. The
-	 * LLM weights are deliberately NOT among them — they are fetched in the background so OpenMRS
-	 * can come up without them, and the comment above {@code _download_llm_file} says why.
+	 * The artifacts CHART SEARCH cannot run without, so a refusal of one must leave its path
+	 * unpublished. It no longer stops the start: ADR Decision 106's amendment measures what that
+	 * cost the whole instance. The LLM weights are not among them for a different reason — they are
+	 * fetched in background subshells, which cannot write the ledger these two are read out of, and
+	 * the comment above {@code _download_llm_file} says the rest.
 	 *
-	 * <p>Declared rather than matched by substring, so adding a third must-have artifact costs an
-	 * entry here instead of passing unnoticed.
+	 * <p>Declared rather than matched by substring, so adding a third such artifact costs an entry
+	 * here instead of passing unnoticed.
 	 */
-	private static final List<String> CANNOT_START_WITHOUT = List.of("embedder-e5-base-v2-onnx",
+	private static final List<String> CHART_SEARCH_NEEDS = List.of("embedder-e5-base-v2-onnx",
 			"embedder-e5-base-v2-vocab");
 
 	/**
@@ -96,7 +98,7 @@ public class ModelDownloadPinningGuardTest {
 	 * Anything that puts bytes on the volume belongs here — the library's own entry points and the
 	 * transfer tools a call site could reach around them with.
 	 */
-	private static final List<String> FETCH_FORMS = List.of("fetch_or_exit", "fetch_and_verify", "curl ", "wget ");
+	private static final List<String> FETCH_FORMS = List.of("fetch_or_degrade", "fetch_and_verify", "curl ", "wget ");
 
 	/**
 	 * The fetches in these two files that are NOT models, each named by a fragment of its own line.
@@ -159,7 +161,7 @@ public class ModelDownloadPinningGuardTest {
 	 * it. {@code EntrypointRetrievalWiringTest} reads the same line for the artifacts it names.
 	 *
 	 * <p>The WHOLE command has to be the gate. Excluding anything merely STARTING with it would let
-	 * {@code if require_verified …; then fetch_or_exit …; fi} carry a conditional fetch out through
+	 * {@code if require_verified …; then fetch_or_degrade …; fi} carry a conditional fetch out through
 	 * the exemption, which is the shape of every bypass this class has already been shown.
 	 */
 	private static final Pattern LEDGER_GATE = Pattern
@@ -392,7 +394,7 @@ public class ModelDownloadPinningGuardTest {
 				wiring = i;
 			}
 			// Either fetch form; which one each site must use is the exiting-form guard's question.
-			if (line.trim().matches("^fetch_(and_verify|or_exit) .*") && line.contains("embedder-e5-base-v2")) {
+			if (line.trim().matches("^fetch_(and_verify|or_degrade) .*") && line.contains("embedder-e5-base-v2")) {
 				lastEmbedderFetch = Math.max(lastEmbedderFetch, i);
 				String enclosing = enclosingFunction(lines, i);
 				if (enclosing != null) {
@@ -417,14 +419,14 @@ public class ModelDownloadPinningGuardTest {
 	 * leaves the paths unwritten — the fail-closed direction — instead of pointing querystore at
 	 * bytes this start never checked, and the same decline turns the bootstrap sweep off, so a start
 	 * that reaches the wiring with nothing in the ledger cannot leave the sweep enabled over a path
-	 * nothing checked — the embedder's own fetches exit on a refusal, so such a start is one whose
-	 * verification is absent from this shell's ledger rather than one refused in it. What that
+	 * nothing checked — a refused fetch and one taken in a subshell both reach the wiring with an
+	 * empty ledger, and the gate declines for either. What that
 	 * composes to in a database that remembers an earlier start is
 	 * {@link EntrypointRetrievalWiringTest}'s question, not this one's; source cannot answer it.
 	 *
 	 * <p><b>Two questions, and the second is asked the other way round.</b> The first ties a write to
 	 * an ARTIFACT by the VARIABLE the fetch targets: {@code $ONNX_FILE} is what
-	 * {@code fetch_or_exit embedder-e5-base-v2-onnx} writes and what the property's value is built
+	 * {@code fetch_or_degrade embedder-e5-base-v2-onnx} writes and what the property's value is built
 	 * from. That reading alone is one intermediate assignment wide — copy {@code $ONNX_FILE} into a
 	 * fresh name on one line and publish a third {@code querystore.embedding.*} property from that
 	 * name on the next, and the write itself mentions no fetch target at all, which is the same
@@ -440,7 +442,7 @@ public class ModelDownloadPinningGuardTest {
 	 * for the two write forms it uses: a statement assembled from fragments so that no line spells
 	 * {@code INSERT INTO global_property}, or a property set from outside this file entirely, is
 	 * outside both. And the artifact tie is asked only for
-	 * {@link #CANNOT_START_WITHOUT}, so a third must-have artifact's path sitting behind the ledger
+	 * {@link #CHART_SEARCH_NEEDS}, so a third must-have artifact's path sitting behind the ledger
 	 * entry for a DIFFERENT one satisfies the inverted question. What {@code require_verified}
 	 * answers at runtime is {@code ModelDownloadIntegrityTest}'s question, driven against the real
 	 * library.
@@ -452,7 +454,7 @@ public class ModelDownloadPinningGuardTest {
 		List<String> violations = new ArrayList<String>();
 		int writes = 0;
 		Set<Integer> behindAnyLedger = new LinkedHashSet<Integer>();
-		for (String artifact : CANNOT_START_WITHOUT) {
+		for (String artifact : CHART_SEARCH_NEEDS) {
 			String variable = fetchTargetVariable(lines, artifact);
 			assertTrue(variable != null, "no fetch of " + artifact + " in backend-init.sh names a target variable,"
 					+ " so this guard cannot tell which property carries its path");
@@ -509,9 +511,9 @@ public class ModelDownloadPinningGuardTest {
 		}
 
 		assertEquals(List.of(), violations, "a model path published without the library's verdict on its bytes");
-		assertTrue(writes >= CANNOT_START_WITHOUT.size(), "backend-init.sh publishes no must-have artifact's path at"
+		assertTrue(writes >= CHART_SEARCH_NEEDS.size(), "backend-init.sh publishes no must-have artifact's path at"
 				+ " all; this guard read nothing");
-		assertTrue(gated >= CANNOT_START_WITHOUT.size(), "no global-property write in backend-init.sh sits behind"
+		assertTrue(gated >= CHART_SEARCH_NEEDS.size(), "no global-property write in backend-init.sh sits behind"
 				+ " the ledger's gate; the inverted question read nothing");
 		assertTrue(declaredWrites > 0, "no declared non-model property is written either, so the allow-list this"
 				+ " question rests on is never exercised");
@@ -553,7 +555,7 @@ public class ModelDownloadPinningGuardTest {
 
 	/** The variable a must-have artifact is fetched INTO, read off the fetch's own target argument. */
 	private static String fetchTargetVariable(List<String> lines, String artifact) {
-		Pattern fetch = Pattern.compile("^fetch_(?:and_verify|or_exit)\\s+" + Pattern.quote(artifact) + "\\s.*");
+		Pattern fetch = Pattern.compile("^fetch_(?:and_verify|or_degrade)\\s+" + Pattern.quote(artifact) + "\\s.*");
 		Matcher name = Pattern.compile("\\$\\{?([A-Za-z_][A-Za-z0-9_]*)").matcher("");
 		for (int i = 0; i < lines.size(); i++) {
 			String command = EntrypointSource.logicalCommand(lines, i).trim();
@@ -671,39 +673,39 @@ public class ModelDownloadPinningGuardTest {
 	}
 
 	/**
-	 * Each artifact the module cannot start without is fetched through {@code fetch_or_exit}, the
-	 * form that leaves rather than returning — and the call is the command itself, neither
-	 * backgrounded nor an element of a pipeline, because an {@code exit} in a subshell stops
-	 * nothing.
+	 * Each artifact chart search needs is fetched through {@code fetch_or_degrade} in the start's
+	 * OWN shell — the call is the command itself, neither backgrounded, nor taken in a command
+	 * substitution, nor an element of a pipeline.
 	 *
-	 * <p><b>This narrows a property successive reviews have defeated; it does not close it.</b>
-	 * While the entrypoint branched on the library's status itself, four readings of the source
-	 * were defeated in turn (ADR Decision 106 lists them) and each repair made the next reachable.
-	 * Moving the branch into the library made the refusal a BEHAVIOUR that
-	 * {@code ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript}
-	 * drives — and reviewers then found two more spellings of the same subshell, each with both
-	 * source guards and shellcheck green: one {@code &} on the last continuation line backgrounds
-	 * the whole command, and a {@code | tee} appended to it runs it as a pipeline element, which
-	 * POSIX also puts in a subshell. Both let the start continue to the global-property write.
+	 * <p><b>What the subshell costs is no longer the exit; it is the LEDGER.</b> While this form
+	 * exited, a subshell swallowed the exit and let the start run on to the property write. It now
+	 * returns — ADR Decision 106's amendment, and
+	 * {@code ModelDownloadIntegrityTest.aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable}
+	 * drives what it does instead — so what a subshell swallows is the ledger entry. That direction
+	 * is not fail-open: {@code require_verified} declines and the path stays unwritten
+	 * ({@code ModelDownloadIntegrityTest
+	 * .aVerificationTakenInASubshellPublishesNothingToTheShellThatWritesThePath}). It is fail-SHUT
+	 * on a good download — the bytes verify, nothing records it, and a healthy deployment
+	 * configures no retrieval at all, silently. That is the failure this guard now exists for.
 	 *
-	 * <p><b>What this reads, and the residue.</b> It reads the logical command a must-have
-	 * artifact is named on, and asks three things of it: that the command IS a
-	 * {@code fetch_or_exit} rather than one taken inside another (a command substitution is a
-	 * subshell too), that it does not end in {@code &}, and that it contains no pipe. What a
-	 * line-level rule cannot see is a subshell the line does not spell — a {@code fetch_or_exit}
-	 * inside a shell FUNCTION that is itself backgrounded or piped, or inside a multi-line
-	 * {@code ( … ) &} group — and closing that would mean the library detecting its own subshell,
-	 * which it has no portable way to do.
+	 * <p><b>It narrows a property successive reviews have defeated; it does not close it.</b> While
+	 * the entrypoint branched on the library's status itself, four readings of the source were
+	 * defeated in turn (ADR Decision 106 lists them) and each repair made the next reachable.
+	 * Reviewers then found two more spellings of the same subshell, each with both source guards and
+	 * shellcheck green: one {@code &} on the last continuation line backgrounds the whole command,
+	 * and a {@code | tee} appended to it runs it as a pipeline element, which POSIX also puts in a
+	 * subshell.
 	 *
-	 * <p>What escapes is the EXIT, and the global-property write no longer follows it. The ledger
-	 * {@link #noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger} reads is an
-	 * ordinary shell variable, so a verification taken in any of those subshells records nothing the
-	 * shell that publishes the path can see — {@code ModelDownloadIntegrityTest
-	 * .aVerificationTakenInASubshellPublishesNothingToTheShellThatWritesThePath} drives these shapes
-	 * and asserts the path stays unpublishable.
+	 * <p><b>What this reads, and the residue.</b> It reads the logical command such an artifact is
+	 * named on, and asks three things of it: that the command IS a {@code fetch_or_degrade} rather
+	 * than one taken inside another (a command substitution is a subshell too), that it does not
+	 * end in {@code &}, and that it contains no pipe. What a line-level rule cannot see is a
+	 * subshell the line does not spell — a {@code fetch_or_degrade} inside a shell FUNCTION that is
+	 * itself backgrounded or piped, or inside a multi-line {@code ( … ) &} group — and closing that
+	 * would mean the library detecting its own subshell, which it has no portable way to do.
 	 */
 	@Test
-	public void everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm() throws IOException {
+	public void everyArtifactChartSearchNeedsIsFetchedInTheStartsOwnShell() throws IOException {
 		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
 		List<String> violations = new ArrayList<String>();
 		int fetches = 0;
@@ -718,40 +720,40 @@ public class ModelDownloadPinningGuardTest {
 				continue;
 			}
 			String command = EntrypointSource.logicalCommand(lines, i);
-			if (CANNOT_START_WITHOUT.stream().noneMatch(command::contains)) {
+			if (CHART_SEARCH_NEEDS.stream().noneMatch(command::contains)) {
 				continue;
 			}
 			// A command that only TALKS about the artifact is not a fetch. Asked as "does it RUN a
 			// fetch" rather than "does it start with echo": the prefix form skipped
-			// `echo "$(fetch_or_exit ...)"` outright, and the entrypoint already writes
+			// `echo "$(fetch_or_degrade ...)"` outright, and the entrypoint already writes
 			// echo-with-command-substitution lines.
 			if (FETCH_FORMS.stream().noneMatch(command::contains)) {
 				continue;
 			}
 			fetches++;
-			if (!command.startsWith("fetch_or_exit ")) {
-				violations.add(command.contains("fetch_or_exit")
-						? "backend-init.sh takes a fetch_or_exit inside another command, where a command"
-								+ " substitution runs it in a subshell and its exit stops nothing: " + command
-						: "backend-init.sh fetches an artifact the module cannot start without through a"
-								+ " form that returns instead of exiting, so a refusal would leave the start running on"
-								+ " to the global-property write: " + command);
+			if (!command.startsWith("fetch_or_degrade ")) {
+				violations.add(command.contains("fetch_or_degrade")
+						? "backend-init.sh takes a fetch_or_degrade inside another command, where a command"
+								+ " substitution runs it in a subshell and its verification reaches no ledger: "
+								+ command
+						: "backend-init.sh fetches an artifact chart search needs through a form that is not"
+								+ " the one whose verification the property write reads: " + command);
 				continue;
 			}
 			if (command.endsWith("&") && !command.endsWith("&&")) {
-				violations.add("backend-init.sh backgrounds a fetch_or_exit call, so its exit runs in a"
-						+ " subshell and stops nothing: " + command);
+				violations.add("backend-init.sh backgrounds a fetch_or_degrade call, so it records its"
+						+ " verification in a subshell the property write cannot read: " + command);
 			}
 			// `||` is an or-list separator and leaves the call in the current shell; a single `|`
 			// makes it an element of a pipeline, and POSIX runs every element in a subshell.
 			if (command.replace("||", "").indexOf('|') >= 0) {
-				violations.add("backend-init.sh pipes a fetch_or_exit call, and every element of a pipeline"
-						+ " runs in a subshell, so its exit stops nothing: " + command);
+				violations.add("backend-init.sh pipes a fetch_or_degrade call, and every element of a pipeline"
+						+ " runs in a subshell, so its verification reaches no ledger: " + command);
 			}
 		}
 
-		assertEquals(List.of(), violations, "a refusal that would not stop the start");
-		assertTrue(fetches > 0, "backend-init.sh fetches no must-have artifact; this guard read nothing");
+		assertEquals(List.of(), violations, "a verification the start's own shell would never see");
+		assertTrue(fetches > 0, "backend-init.sh fetches nothing chart search needs; this guard read nothing");
 	}
 
 	/**
@@ -795,7 +797,7 @@ public class ModelDownloadPinningGuardTest {
 		}
 		for (int i = 0; i < lines.size(); i++) {
 			// Whole logical commands, read only from the line that OPENS one — the reason
-			// everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm gives.
+			// everyArtifactChartSearchNeedsIsFetchedInTheStartsOwnShell gives.
 			if (lines.get(i).trim().startsWith("#") || EntrypointSource.continuesTheLineAbove(lines, i)) {
 				continue;
 			}
@@ -1028,12 +1030,13 @@ public class ModelDownloadPinningGuardTest {
 	}
 
 	/**
-	 * A refusal only fails CLOSED if the container that refused stays down. Verification is not
-	 * stateful across starts, so a substituted or unreachable model file is refused again on every
-	 * start: a {@code restart:} policy on the backend service would turn one refusal into a loop
-	 * that leaves an operator a churning container instead of a stopped one to report. This asserts
-	 * the service declares no such policy, and that it would have seen one — a service in this file
-	 * carries a restart key, and the walk finds it there.
+	 * A refusal no longer takes the container down at all — ADR Decision 106's 2026-09-21
+	 * amendment, where the ledger rather than an exit is what fails it closed — so the loop this
+	 * was first written against is not reachable through a model file any more. What it still
+	 * asserts is that a backend which dies for a reason the entrypoint cannot cause (a missing
+	 * library to source, the JVM, Tomcat) leaves a stopped container to inspect rather than a
+	 * churning one, and that it would have seen a policy — a service in this file carries a restart
+	 * key, and the walk finds it there.
 	 *
 	 * <p><b>What it reads is THIS repository's compose file, and that is the whole of its reach.</b>
 	 * {@code Dockerfile.backend}'s HEALTHCHECK comment records that the deploy server's compose file

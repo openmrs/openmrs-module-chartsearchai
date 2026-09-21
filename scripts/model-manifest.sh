@@ -259,38 +259,53 @@ fetch_and_verify_override() {
 	fetch_and_verify_url "$1" "$2" 0 "$3" "$4" "the $5 input"
 }
 
-# fetch_or_exit <manifest-id> <target> <label> [diagnostic-line...]
+# fetch_or_degrade <manifest-id> <target> <label> [diagnostic-line...]
 #
-# For an artifact the module cannot start without — the querystore embedder and its vocab, whose
+# For an artifact CHART SEARCH cannot run without — the querystore embedder and its vocab, whose
 # paths configure_retrieval_gps writes into global properties seconds later. Fetches and verifies as
-# fetch_and_verify does, and on any refusal says what the code means and EXITS rather than
-# returning. The caller's diagnostic lines are the SIZE message and are printed for code 2 alone —
-# ADR Decision 106 for why the size refusal has a message of its own.
+# fetch_and_verify does, and on any refusal says what the code means, says the start goes on
+# without chart search, and RETURNS that code. The caller's diagnostic lines are the SIZE message
+# and are printed for code 2 alone — ADR Decision 106 for why the size refusal has a message of its
+# own.
 #
-# The exit leaves the shell this runs IN, so any subshell between here and the entrypoint's own
-# shell swallows it: backgrounding the call with `&`, taking it in a command substitution, and
-# making it an element of a pipeline (`| tee`) all do that, POSIX running every pipeline element in
-# a subshell. The guard named below refuses all three where the call site spells them on the call's
-# own line; a call wrapped in a function that is itself backgrounded or piped is not reachable from
-# a line.
+# It returns rather than exiting, and what keeps that fail-closed is the LEDGER, not the exit: a
+# refusal records nothing in MODEL_MANIFEST_VERIFIED, so require_verified answers no and the
+# entrypoint withholds the path. Unverified bytes cannot answer a clinical question either way,
+# which is the property Decision 106 was protecting; stopping the container was a second, much
+# wider consequence that took the whole OpenMRS instance and its SPA down with it, measured
+# 2026-09-21 and recorded in that decision's amendment.
 #
-# Exiting here rather than leaving the caller to branch narrows the ways of getting it wrong: there
-# is no branch to spell, and what the shell DOES is a behaviour a test drives —
-# ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript. ADR
-# Decision 106 lists the spellings that defeated the branch this replaced, and what is left.
-fetch_or_exit() {
+# Still asked of the call site: that this runs in the entrypoint's OWN shell. The ledger is an
+# ordinary shell variable, so backgrounding the call with `&`, taking it in a command substitution,
+# or making it an element of a pipeline (`| tee`, POSIX running every pipeline element in a
+# subshell) records the verification somewhere the shell that publishes the path cannot read — and
+# a good download would then configure no retrieval at all. The guard named below refuses all three
+# where the call site spells them on the call's own line; a call wrapped in a function that is
+# itself backgrounded or piped is not reachable from a line.
+#
+# What the shell DOES is a behaviour a test drives —
+# ModelDownloadIntegrityTest.aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable.
+# ADR Decision 106 lists the spellings that defeated the source-reading branch this replaced.
+fetch_or_degrade() {
 	_mm_oe_id=$1
 	_mm_oe_target=$2
 	_mm_oe_label=$3
 	shift 3
 	if fetch_and_verify "$_mm_oe_id" "$_mm_oe_target" "$_mm_oe_label"; then
+		# Reported HERE, on the branch that knows. The caller used to echo this after the call and
+		# read $? for it, which puts the status at a distance from the command that set it — the
+		# first of the four readings ADR Decision 106 records being defeated, arriving again from
+		# the other side. It also cannot be true on the other branch: a refusal DELETES the copy, so
+		# file_bytes would measure a file that is not there.
+		echo "$_mm_oe_label ready: $_mm_oe_target ($(file_bytes "$_mm_oe_target") bytes)."
 		return 0
 	else
 		_mm_oe_code=$?
 	fi
 
-	echo "       Chart search cannot run without a verified copy of this file, so the start is" >&2
-	echo "       refused rather than left to fail at the first query." >&2
+	echo "       Chart search cannot run without a verified copy of this file, so it stays off:" >&2
+	echo "       OpenMRS starts without chart search rather than serving it on bytes nothing" >&2
+	echo "       checked. No path to this file is written, whatever an earlier start wrote." >&2
 	case $_mm_oe_code in
 		2)
 			for _mm_oe_line in "$@"; do
@@ -306,14 +321,14 @@ fetch_or_exit() {
 			;;
 		6)
 			# The one refusal that also costs the volume the copy it had. Said here because the
-			# lines above read as "we declined to start on bytes we could not check", which omits
+			# lines above read as "chart search stays off on bytes we could not check", which omits
 			# the fact that decides whether a restart can recover anything.
 			echo "       The copy that was on the volume was refused and deleted, and the pinned" >&2
 			echo "       revision could not then be reached to replace it, so there is no copy of" >&2
 			echo "       this file left. A restart retries the download." >&2
 			;;
 	esac
-	exit "$_mm_oe_code"
+	return "$_mm_oe_code"
 }
 
 # require_url_for_digest <url> <sha256> <url-input-name> <digest-input-name>
@@ -356,7 +371,7 @@ fetch_and_verify() {
 # The ledger is an ordinary shell variable, so a fetch taken in a SUBSHELL — backgrounded, piped,
 # in a command substitution, or inside a function that is any of those — records nothing the parent
 # shell can see, and this answers no. That is the direction to fail in, and it is what covers the
-# subshell shapes fetch_or_exit's line-level guard cannot see.
+# subshell shapes fetch_or_degrade's line-level guard cannot see.
 #
 # 0 or 1, and 1 is NOT a code from the table above: nothing was fetched, so nothing was refused or
 # deleted. Naming no artifact is itself a failure — a call that lost its arguments would otherwise

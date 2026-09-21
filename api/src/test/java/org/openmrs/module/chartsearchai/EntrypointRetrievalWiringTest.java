@@ -39,10 +39,11 @@ import org.junit.jupiter.api.io.TempDir;
  * <p><b>Why a third channel exists.</b> The ledger answers what THIS shell verified and
  * {@code gp_set_if_blank} preserves a row an earlier start wrote; both are right on their own, and
  * the state they compose to was not. On the shipped entrypoint the embedder goes through
- * {@code fetch_or_exit}, whose refusal ends the shell before this wiring runs, so what the gate's
- * decline answers is a start that reaches the wiring with nothing in the ledger — the swallowed-exit
- * residue ADR Decision 106 names, a fetch taken in a subshell, which the refusal cases below
- * construct deliberately. Such a start has deleted the file and publishes no path, but the row from the last
+ * {@code fetch_or_degrade}, whose refusal now leaves the start RUNNING, so this wiring is reached
+ * with an empty ledger by an ordinary refusal as well as by the subshell residue ADR Decision 106
+ * names. The refusal cases below construct the subshell shape, because it is the one that also
+ * reaches here on a download that SUCCEEDED and so cannot be told from a good start by anything
+ * but the ledger. Such a start has deleted the file and publishes no path, but the row from the last
  * good start still names that now-absent file — so a safety keyed on reading the property back finds
  * it non-blank and leaves {@code querystore.bootstrap.autostart} on, which is the per-record
  * exception flood that function's own comment exists to prevent and measures the cost of. Neither
@@ -257,20 +258,20 @@ public class EntrypointRetrievalWiringTest {
 
 	/**
 	 * The shape of a refusal the entrypoint's shell never learns about: the fetch is real and so is
-	 * the refusal, but {@code fetch_or_exit}'s {@code exit} leaves the background subshell rather
-	 * than the script, so the wiring runs afterwards with an empty ledger. Unrecorded bytes are
-	 * already at the target, which is what the refusal deletes.
+	 * the refusal, but it happens in a background subshell, so neither its status nor its ledger
+	 * entry reaches the script and the wiring runs afterwards with an empty ledger. Unrecorded
+	 * bytes are already at the target, which is what the refusal deletes.
 	 */
 	private List<String> refusedInASubshell() throws IOException {
 		Files.write(onnx, UNRECORDED_BYTES);
-		return List.of("fetch_or_exit " + GATED_ARTIFACTS.get(0) + " \"$ONNX_FILE\" 'the embedder' &", "wait");
+		return List.of("fetch_or_degrade " + GATED_ARTIFACTS.get(0) + " \"$ONNX_FILE\" 'the embedder' &", "wait");
 	}
 
 	/** Both artifacts verified the way a restart verifies them: off bytes already on the volume. */
 	private List<String> verified() {
 		List<String> lines = new ArrayList<String>();
-		lines.add("fetch_or_exit " + GATED_ARTIFACTS.get(0) + " \"$ONNX_FILE\" 'the embedder'");
-		lines.add("fetch_or_exit " + GATED_ARTIFACTS.get(1) + " \"$VOCAB_FILE\" 'the vocab'");
+		lines.add("fetch_or_degrade " + GATED_ARTIFACTS.get(0) + " \"$ONNX_FILE\" 'the embedder'");
+		lines.add("fetch_or_degrade " + GATED_ARTIFACTS.get(1) + " \"$VOCAB_FILE\" 'the vocab'");
 		return lines;
 	}
 

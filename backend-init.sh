@@ -75,23 +75,28 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 # ModelDownloadPinningGuardTest
 # .everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally refuses a
 # test of the file's own presence wrapped around either of them.
+#
+# A refusal leaves chart search OFF and the start RUNNING. What makes that
+# fail-closed is the ledger, not a stopped container: nothing is recorded
+# for a refused artifact, so require_verified declines below and no path to
+# it is written. Exiting here instead cost the whole instance — the gateway
+# cannot resolve a backend that is not running and stops serving the SPA
+# too — for a chart-search dependency. Decision 106's amendment measures it.
 . /usr/local/bin/model-manifest.sh
 
 ONNX_FILE="$QS_DIR/model.onnx"
 VOCAB_FILE="$QS_DIR/vocab.txt"
 
-fetch_or_exit embedder-e5-base-v2-onnx "$ONNX_FILE" "e5-base-v2 ONNX embedder (~440MB)" \
+fetch_or_degrade embedder-e5-base-v2-onnx "$ONNX_FILE" "e5-base-v2 ONNX embedder (~440MB)" \
   "A graph-only ONNX file from an external-data export is ~1MB and the" \
   "runtime fails late, at first inference, with a misleading \"Not a" \
   "directory\" error reading a sidecar weights file that is not there." \
   "The revision is pinned, so it cannot have changed shape upstream: a" \
   "truncated transfer is the likely cause and a restart is the remedy."
-echo "Embedder ready: $ONNX_FILE ($(file_bytes "$ONNX_FILE") bytes)."
 
-fetch_or_exit embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab" \
+fetch_or_degrade embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab" \
   "A truncated vocab fails tokenizer init or, worse, silently degrades" \
   "embeddings as missing tokens fall back to [UNK]."
-echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 
 # ---- LLM: Gemma 4 E4B Instruct, Q4_K_M -------------------------------------
 # Chosen over Gemma 4 E2B, Gemma 4 26B-MoE, and Llama-3.2-3B as the
@@ -122,11 +127,14 @@ echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 # fetch_llm_in_background call overwriting them. fetch_and_verify keeps the
 # same discipline, and prefixes every variable of its own with _mm_.
 #
-# A refusal here does not stop the container the way the embedder's does:
-# the weights are fetched in the background precisely so OpenMRS can come up
+# A refusal here stops nothing, as the embedder's no longer does either: the
+# weights are fetched in the background precisely so OpenMRS can come up
 # without them, and chart search already reports its own error while the
-# file is absent. What matters is that rejected bytes are deleted rather
-# than left under the name config.xml points modelFilePath at.
+# file is absent. The difference that remains is the WAITING — these two run
+# in background subshells and the embedder's run in this shell, because the
+# ledger the property write consults cannot be written from a subshell.
+# What matters in both is that rejected bytes are deleted rather than left
+# under the name config.xml points modelFilePath at.
 _download_llm_file() {
   _id=$1
   _target=$2
@@ -575,10 +583,11 @@ configure_retrieval_gps() {
   # nothing checked. A decline also turns the sweep off below, and says so HERE rather than
   # leaving it to the blank-path test: gp_set_if_blank deliberately leaves an already-written row
   # standing, so on every deployment past its first good start that property is non-blank whatever
-  # this start did, and nothing else here would answer it. The embedder's own fetches above exit on
-  # a refusal, so a start that gets here with nothing in the ledger is one whose verification is
-  # absent from this shell's ledger rather than one refused in it — a fetch taken in a subshell,
-  # for instance, which swallows the exit as well as the ledger entry. ADR Decision 106.
+  # this start did, and nothing else here would answer it. A start reaches here with nothing in the
+  # ledger two ways now, and they need not be told apart because the answer is the same: the fetch
+  # above was REFUSED — which no longer stops the start, so this gate is what keeps the refusal
+  # fail-closed — or its verification was taken in a subshell, which records nothing this shell can
+  # read. ADR Decision 106.
   if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
     gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
     gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"

@@ -102,7 +102,7 @@ These methods are the ONLY correct entry points for their respective operations.
 
 ## Model files
 
-- **Fetching a model file**: `scripts/model-manifest.sh` — `fetch_and_verify` against the pinned revision and sha256 `model-manifest.tsv` records, `fetch_or_exit` where the module cannot start without it, or `fetch_and_verify_override` on the dispatched path. That manifest is the ONE source of either (#444, #449). Never spell a `huggingface.co` URL at a call site, nor fetch a model beside the library. → ADR Decision 106; `ModelDownloadPinningGuardTest`.
+- **Fetching a model file**: `scripts/model-manifest.sh` — `fetch_and_verify` against the pinned revision and sha256 `model-manifest.tsv` records, `fetch_or_degrade` for what chart search needs, or `fetch_and_verify_override` on the dispatched path. That manifest is the ONE source of either (#444, #449). Never spell a `huggingface.co` URL at a call site, nor fetch a model beside the library. → ADR Decision 106; `ModelDownloadPinningGuardTest`.
 
 ## Tests and eval
 

@@ -518,41 +518,64 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	/**
-	 * For an artifact the module cannot start without, a refusal must STOP the script rather than
-	 * return a code someone has to remember to branch on.
+	 * A refusal of the embedder must leave the START running and the PATH unpublished — the
+	 * property is that unverified bytes never answer a clinical question, not that OpenMRS stops.
 	 *
-	 * <p><b>This is the behaviour that replaced a source-reading guard defeated four times.</b>
-	 * While the entrypoint spelled the branch itself, every reading of the source was defeated one
-	 * more way and each fix opened the next; the branch now lives in {@code fetch_or_exit}, so the
-	 * question is what the shell DOES. The case asserts it by putting a line after the call and
-	 * checking it never runs — which is exactly what the entrypoint puts there
-	 * ({@code echo "Embedder ready..."} and then the global-property write).
+	 * <p><b>This replaces a case that asserted the opposite</b>, and the evidence is in ADR
+	 * Decision 106's own amendment: on 2026-09-21 the public demo was hard-down and undiagnosable.
+	 * The backend exited here, the gateway's nginx could then not resolve its {@code backend}
+	 * upstream and exited too, and the SPA went with it — so the whole instance was lost for a
+	 * chart-search dependency, with the refusal's log lines readable only by someone with a shell
+	 * on the host, which the people running it did not have.
+	 *
+	 * <p><b>What still holds is asserted here, not assumed.</b> The ledger is what makes this
+	 * fail-closed: {@code require_verified} answers no for an artifact this shell did not verify,
+	 * so {@code configure_retrieval_gps} withholds
+	 * {@code querystore.embedding.modelFilePath} whatever the start went on to do. Each case below
+	 * asks the code, the continuation and the ledger together, because it is the THREE of them
+	 * that make the outcome right — a continuation whose ledger said yes would be the fail-open
+	 * this decision exists to prevent.
 	 */
 	@Test
-	public void aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript() throws Exception {
-		Path fixture = work.resolve("manifest-or-exit.tsv");
+	public void aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable() throws Exception {
+		Path fixture = work.resolve("manifest-or-degrade.tsv");
 		Files.write(fixture, ("critical-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
 				+ "\n").getBytes(StandardCharsets.UTF_8));
 		Path target = work.resolve("model.bin");
-		String call = "fetch_or_exit critical-artifact '" + target + "' 'the critical artifact' 'a hint line'\n"
-				+ "echo REACHED-THE-LINE-AFTER";
+		// The line after the call is what the entrypoint really puts there: `echo "Embedder
+		// ready..."` and, further down, the global-property write that require_verified gates.
+		String call = "fetch_or_degrade critical-artifact '" + target + "' 'the critical artifact' 'a hint line'\n"
+				+ "echo \"DEGRADE-CODE=$?\"\n"
+				+ "echo REACHED-THE-LINE-AFTER\n"
+				+ "if require_verified critical-artifact; then echo PATH-PUBLISHABLE; else echo PATH-WITHHELD; fi";
 
 		served = SUBSTITUTED_BYTES;
 		Result substituted = library(call, fixture);
 
-		assertEquals(DIGEST_MISMATCH, substituted.exit, "a substitution must leave its own status\n" + substituted);
-		assertFalse(substituted.output.contains("REACHED-THE-LINE-AFTER"),
-				"the script ran on past a refusal, which is what reaches the global-property write\n" + substituted);
+		assertTrue(substituted.output.contains("DEGRADE-CODE=" + DIGEST_MISMATCH),
+				"a substitution must still leave its own status\n" + substituted);
+		assertTrue(substituted.output.contains("REACHED-THE-LINE-AFTER"),
+				"the start must continue past a refusal instead of taking the instance down with it\n" + substituted);
+		assertTrue(substituted.output.contains("PATH-WITHHELD"),
+				"a refused artifact must stay unpublishable, which is what keeps this fail-closed\n" + substituted);
+		assertTrue(substituted.output.contains("without chart search"),
+				"the refusal must say what the start will and will not do\n" + substituted);
+		// "ready" is the one word a refusal must not produce, and the reason it could is that the
+		// caller used to print it AFTER the call off $?. A refusal deletes the copy, so that line
+		// would also have measured a file that is not there.
+		assertFalse(substituted.output.contains(" ready:"),
+				"a refused artifact was reported ready\n" + substituted);
 
-		// The caller's hint lines are the size diagnostic — what a digest mismatch gets instead is
-		// the generic refusal, because "the export changed shape" is the wrong thing to tell someone
-		// whose bytes are the wrong bytes at the right length.
 		served = Arrays.copyOf(GOOD_BYTES, 10);
 		Result truncated = library(call, fixture);
 
-		assertEquals(SIZE_MISMATCH, truncated.exit, "a short file must leave its own status\n" + truncated);
-		assertFalse(truncated.output.contains("REACHED-THE-LINE-AFTER"),
-				"the script ran on past a short file\n" + truncated);
+		assertTrue(truncated.output.contains("DEGRADE-CODE=" + SIZE_MISMATCH),
+				"a short file must still leave its own status\n" + truncated);
+		assertTrue(truncated.output.contains("REACHED-THE-LINE-AFTER"), "the start must continue\n" + truncated);
+		assertTrue(truncated.output.contains("PATH-WITHHELD"), "a short file must stay unpublishable\n" + truncated);
+		// The caller's hint lines are the size diagnostic — what a digest mismatch gets instead is
+		// the generic refusal, because "the export changed shape" is the wrong thing to tell someone
+		// whose bytes are the wrong bytes at the right length.
 		assertTrue(truncated.output.contains("a hint line"),
 				"the caller's size diagnostic must be printed\n" + truncated);
 		assertFalse(substituted.output.contains("a hint line"),
@@ -563,8 +586,15 @@ public class ModelDownloadIntegrityTest {
 		Result accepted = library(call, fixture);
 
 		assertEquals(OK, accepted.exit, "a verified artifact must not stop the script\n" + accepted);
+		assertTrue(accepted.output.contains("DEGRADE-CODE=" + OK), "a verified artifact returns 0\n" + accepted);
 		assertTrue(accepted.output.contains("REACHED-THE-LINE-AFTER"),
 				"the script must continue when the artifact verifies\n" + accepted);
+		assertTrue(accepted.output.contains("PATH-PUBLISHABLE"),
+				"a verified artifact must be publishable, or a good start configures no retrieval\n" + accepted);
+		assertTrue(accepted.output.contains("the critical artifact ready: " + target),
+				"a verified artifact must be reported ready, by the branch that knows it is\n" + accepted);
+		assertTrue(accepted.output.contains("(" + GOOD_BYTES.length + " bytes)"),
+				"the ready line must carry the size it measured\n" + accepted);
 	}
 
 	// ---- the ledger: a path is publishable only for bytes THIS shell verified ------------------
@@ -611,7 +641,7 @@ public class ModelDownloadIntegrityTest {
 	/**
 	 * A verification taken in a subshell is one the shell that writes the path never saw, and the
 	 * ledger says so — the fail-closed direction, and the point. Every shape
-	 * {@code ModelDownloadPinningGuardTest.everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm}
+	 * {@code ModelDownloadPinningGuardTest.everyArtifactChartSearchNeedsIsFetchedInTheStartsOwnShell}
 	 * reads a LINE for is here, plus the two its javadoc names as residue because no line spells
 	 * them: a function that is itself backgrounded, and a multi-line {@code ( … ) &} group.
 	 *

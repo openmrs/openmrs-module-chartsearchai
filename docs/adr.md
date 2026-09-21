@@ -8761,15 +8761,50 @@ the pinned revision is left with neither file — which is why that outcome has 
 own rather than sharing the one whose contract says nothing was deleted, and the message an
 operator gets says the copy is gone
 (`ModelDownloadIntegrityTest.aCopyDeletedForAReplacementThatNeverArrivesIsNotReportedAsAPlainFetchFailure`).
-For the embedder that means a container which
-refuses to start — and stays stopped, because the `backend` service declares no restart policy, which
+For the embedder that first meant a container which refused to start
+and stayed stopped. **That half was amended on 2026-09-21 — see "The exit was the wrong instrument"
+below.** What did not change is the direction: the state being removed is one where unverified
+weights answer clinical questions.
+
+**The exit was the wrong instrument, amended 2026-09-21.** The embedder now goes through
+`fetch_or_degrade`, which prints the same diagnosis, says the start goes on without chart search,
+and RETURNS the code. Nothing about what is accepted moved. Three things were measured that the
+paragraph above did not weigh:
+
+- *The blast radius is the whole instance, not chart search.* On 2026-09-21 the public demo was
+  hard-down. The backend exited at this step; the gateway's nginx could then not resolve its
+  `backend` upstream and exited too; and the SPA, which that same gateway serves, went with it.
+  Compose showed it plainly on the next deploy — `frontend Running` and `db Running`, while
+  `backend` and `gateway` had both to be *created* anew. So a chart-search dependency took down
+  every other thing the deployment does, including the patient chart itself.
+- *The operator the cost was priced against does not exist here.* "The refusal's own log lines are
+  what an operator is left to report" assumes someone can read the container log. On
+  `chartsearchai.openmrs.org` nobody in the loop could: no shell on the host, and the Grafana and
+  Loki containers running there are not exposed. The diagnosis had to be reconstructed from
+  outside, from compose lifecycle lines in a GitHub Actions log.
+- *The exit was never what made it fail-closed.* `require_verified` is. A refusal records nothing
+  in `MODEL_MANIFEST_VERIFIED`, so `configure_retrieval_gps` withholds
+  `querystore.embedding.modelFilePath` and forces `querystore.bootstrap.autostart` off — and it
+  does that whether the start then stops or continues. Unverified bytes could not reach a clinical
+  question either way. The exit was redundant with respect to the property it was defending, and
+  the two are now separated:
+  `ModelDownloadIntegrityTest.aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable`
+  asserts the code, the continuation and the ledger's refusal together, because it is the three of
+  them that make the outcome right.
+
+What the subshell guard asks changed with it, and is worth stating because it inverts. While the
+form exited, a subshell swallowed the exit and let the start reach the property write — fail-open.
+Now it swallows the *ledger entry*, so the path stays unwritten: not fail-open, but fail-SHUT on a
+good download, where the bytes verify, nothing records it, and a healthy deployment silently
+configures no retrieval.
+`ModelDownloadPinningGuardTest.everyArtifactChartSearchNeedsIsFetchedInTheStartsOwnShell` is the
+same guard re-aimed at that.
+
 `ModelDownloadPinningGuardTest.theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal`
-asserts of this repository's `docker-compose.yml`. The deploy server's compose file is not that one —
+still asserts this repository's `docker-compose.yml` declares no restart policy, though a refusal is
+no longer a thing it could loop through. The deploy server's compose file is not that one —
 `Dockerfile.backend` repeats the HEALTHCHECK block for exactly that reason — so a policy added there
-is residue no test here can see. That is the fail-closed direction and it is the point — the state
-being removed is one where unverified weights answer clinical questions — but it is a real cost,
-and the refusal's own log lines, naming the expected and the received digest, are what an operator
-is left to report.
+is residue no test here can see.
 
 The cost is real, and two drafts of this paragraph got it wrong before it was measured — the first
 said the hashing is "paid alongside the download it replaces", which is true only of a first boot,
@@ -8782,7 +8817,7 @@ hashing it adds is net-new work with nothing to overlap.
 **So the cost table above is an argument for putting the early return back**, and nothing would have
 noticed. Measured 2026-09-17 against the suite as it then stood, and reproduced independently:
 re-inserting those same three lines at either fetch site — in `fetch_llm_in_background`, or as an
-absence test wrapped around a top-level `fetch_or_exit` — left every api case, `sh -n` and
+absence test wrapped around a top-level `fetch_or_degrade` — left every api case, `sh -n` and
 `shellcheck -s sh -S warning` green. The guards over these fetches
 asked whether one is NAMED (routed through the library) and POSITIONED (in the current shell, ahead
 of the property write); neither is a question about whether REACHING it is conditioned on the file's
@@ -8840,7 +8875,7 @@ the start" was then something only a source-reading guard could check. Four read
 defeated in turn — a statement inserted between the fetch and the branch, so `$?` was that
 statement's status; an arm printing the word "exit" without running it; a glob arm the scan did not
 recognise; a pattern list `0|2)` folding the refusal into the success case — and each fix opened the
-next. `fetch_or_exit` NARROWS that class rather than closing it: there is no branch to spell, and
+next. `fetch_or_degrade` NARROWS that class rather than closing it: there is no branch to spell, and
 what the shell DOES is a behaviour a test drives. Reviewers then found two further spellings, and
 neither is a misread branch — each is a subshell sitting between the call and the entrypoint's own
 shell. One `&` on the call's last continuation line backgrounds the whole command; a `| tee`
@@ -8854,7 +8889,7 @@ pipe.
 **The residue is named rather than claimed away**, and the previous attempt to bound it — "what is
 bounded is the accidental edit" — was itself falsified by the `| tee`, which is about as ordinary
 an edit as there is. What a line-level rule cannot see is a subshell the call's own line does not
-spell: a `fetch_or_exit` inside a shell function that is itself backgrounded or piped, or inside a
+spell: a `fetch_or_degrade` inside a shell function that is itself backgrounded or piped, or inside a
 multi-line `( … ) &` group — that last one driven against the real library here, printing the
 refusal and then running on to the next statement, exit 0, exactly as the two closed shapes did.
 Closing it would mean the library detecting its own subshell, for which POSIX sh offers no
@@ -8897,10 +8932,9 @@ below them — `[ -z "$_model_gp" ]` over a read-back of `querystore.embedding.m
 it blank and switches `querystore.bootstrap.autostart` off. That composition holds on a virgin
 database only. `gp_set_if_blank` leaves a row it finds non-blank standing, deliberately, so a
 deployment past its first good start reads back the path the LAST good start wrote, whatever this
-start did. On the shipped entrypoint the embedder goes through `fetch_or_exit`, whose refusal ends
-the shell before the wiring runs, so what the decline answers is a start that reaches the wiring
-with nothing in the ledger — the swallowed-exit residue above, where a refusal has already deleted
-the file that path names and the `exit` stopped nothing. Measured 2026-09-17 against the
+start did. The embedder goes through `fetch_or_degrade`, whose refusal leaves the start running, so
+the wiring is reached with nothing in the ledger by an ordinary refusal as well as by the subshell
+residue above — in both, a refusal has already deleted the file that path names. Measured 2026-09-17 against the
 entrypoint's own wiring functions, a `mariadb` stand-in whose store survives between starts and a
 refusal taken in a background subshell: the pre-fix arm left
 `modelFilePath=querystore/model.onnx bootstrap.autostart=true`, which is the per-record exception
@@ -8914,9 +8948,10 @@ no database, the other reads source. The claim that the two halves already compo
 fail-closed state was written in the entrypoint's comment and in the guard's own allow-list, and
 believed in both for three review rounds, which is why the correction is recorded here. The prose
 that replaced it then overreached the other way, wherever it was restated: it said a start whose
-embedder is REFUSED reaches this arm, which on the shipped entrypoint it cannot, `fetch_or_exit`
-having ended the shell at the download step. What reaches the arm is a start with nothing in the
-ledger. The code is fail-closed either way; only the wording moved.
+embedder is REFUSED reaches this arm, which while the form exited it could not. The 2026-09-21
+amendment above makes that reading true — a refusal does now reach the arm — and what the arm
+answers is unchanged, because it was always "nothing in the ledger" and a refusal records nothing.
+The code is fail-closed throughout; only the wording moved, twice.
 
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
@@ -8927,11 +8962,12 @@ cases. The guard was introduced for the ONNX export shape
 [Decision 22](#decision-22-e5-base-v2-for-the-querystore-backed-retrieval-path) records; **pinning
 the revision retired that cause**, and the guard survives for the message alone, which is why its
 diagnostic names a truncated transfer. The order is the size branch of `_mm_verify_file`, and the
-message it enables is the caller's diagnostic lines that `fetch_or_exit` prints for that code alone
+message it enables is the caller's diagnostic lines that `fetch_or_degrade` prints for that code alone
 — change one and the other reads false.
 `ModelDownloadIntegrityTest.aTruncatedTransferIsRefusedAsAShortFileRatherThanAsASubstitution` is
 what notices the order, and
-`.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript` that the diagnostic is size-only.
+`.aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable` that the diagnostic is
+size-only.
 
 **What this does not close.** Two fetches in these same files stay unverified and are out of scope
 for both findings: `Dockerfile.backend` downloads `openmrs.war` from a Maven repository, and

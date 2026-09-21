@@ -571,16 +571,24 @@ gp_value() {
 # a row that still named the file; and a read-back alone answers empty for a database that could not
 # be reached at all, which is the same answer a withdrawn row gives — fail-open in the one direction
 # this whole gate exists to close. configure_retrieval_gps acts on the answer.
+#
+# Both UPDATEs are ISSUED before any status is acted on. Chained with `|| return 1` the vocab's
+# UPDATE was never issued on a database that rejected the model path's, so a store that would have
+# taken it kept a row naming half an embedder this start did not verify — and querystore resolves the
+# vocab with optional=false too. One statement's rejection is no verdict on the next. On a database
+# that is not answering that costs four connect timeouts rather than one, which is the same order as
+# the reads and writes below this call already pay on that path.
 withdraw_embedder_paths() {
+  _wd_issued=yes
   seed_sql "$DB_NAME" -e \
     "UPDATE global_property SET property_value='' WHERE property='querystore.embedding.modelFilePath';" \
-    >/dev/null 2>&1 || return 1
+    >/dev/null 2>&1 || _wd_issued=no
   seed_sql "$DB_NAME" -e \
     "UPDATE global_property SET property_value='' WHERE property='querystore.embedding.vocabFilePath';" \
-    >/dev/null 2>&1 || return 1
-  _wd_model=$(gp_value 'querystore.embedding.modelFilePath') || return 1
-  _wd_vocab=$(gp_value 'querystore.embedding.vocabFilePath') || return 1
-  [ -z "$_wd_model" ] && [ -z "$_wd_vocab" ]
+    >/dev/null 2>&1 || _wd_issued=no
+  _wd_model=$(gp_value 'querystore.embedding.modelFilePath') || _wd_issued=no
+  _wd_vocab=$(gp_value 'querystore.embedding.vocabFilePath') || _wd_issued=no
+  [ "$_wd_issued" = yes ] && [ -z "$_wd_model" ] && [ -z "$_wd_vocab" ]
 }
 
 # The instrument that needs no database: take the FILE out of the name querystore loads, so a row
@@ -600,6 +608,12 @@ withdraw_embedder_paths() {
 # Where only one was refused that costs the other a re-download, which is the price of the pair
 # being the unit everywhere rather than here alone.
 #
+# So the lines below, and the suffix, are about the EMBEDDER and never about the bytes of the file
+# they name. Two shapes reach here with a copy that verified: one artifact refused and the other
+# not, and a verification taken where this shell cannot read it, which refuses nothing at all —
+# MODEL_MANIFEST_REFUSED is empty in the second and _embedder_status says so. Calling either copy
+# refused would put an operator-facing line at odds with the property beside it.
+#
 # It reaches LESS far than the withdrawal, and that is worth stating: the withdrawal blanks whatever
 # the row names, an operator's own path included, while this reaches only the two targets the fetches
 # above wrote to. So a row naming a file this module never provisioned survives this path — which is
@@ -610,7 +624,7 @@ quarantine_unverified_embedder() {
     if mv -f "$_q_file" "$_q_file.unverified" 2>/dev/null; then
       echo "[retrieval-wiring] moved $_q_file aside to $_q_file.unverified; nothing can load it under the name a global property names." >&2
     else
-      echo "[retrieval-wiring] could not move $_q_file aside, so querystore may still load bytes this start refused." >&2
+      echo "[retrieval-wiring] could not move $_q_file aside, so querystore may still load an embedder this start did not verify." >&2
     fi
   done
 }
@@ -621,25 +635,25 @@ configure_retrieval_gps() {
   # reason anything measured — the same discipline MODEL_MANIFEST_VERIFIED keeps.
   _sweep_off_because=''
 
-  # Why this start cannot write a global property at all, and whether a row could be standing
-  # regardless. Computed rather than RETURNED on, which is the correction: two unconditional early
-  # returns used to sit here — "mariadb client absent", and the schema probe — and either left the
+  # Why this start cannot write a global property at all. Computed rather than RETURNED on, which is
+  # the correction: two unconditional early returns used to sit here — "mariadb client absent", and the schema probe — and either left the
   # decline arm below unreached, so a row an earlier good start wrote went on naming a file this
   # start refused at a code that deletes nothing, with querystore.bootstrap.autostart still true.
   # That is the CWE-494 state #444 removes, reached through the gate meant to close it, and while
   # fetch_or_degrade's predecessor exited the container it was unreachable. ADR Decision 106.
   #
-  # The probe's two answers are not one answer. Reachable and carrying no OpenMRS schema means there
-  # is no global_property table, so no row names anything and there is nothing to take back;
-  # unreachable means a row may well be standing and unreadable. schema_absent_because exists for
-  # that distinction and this is the second reader of it.
+  # It is a DIAGNOSTIC, and never a verdict on whether a row is standing — which is what a third arm
+  # below asserted off it until neither probe could support that. The schema check wants four tables,
+  # so a database carrying global_property without one of the other three answers no while the row is
+  # there and an UPDATE on it lands; and both probes query without a database argument while every
+  # write below passes "$DB_NAME", so a DB_NAME that does not name the database OpenMRS actually uses
+  # answers no for a schema that is entirely present and rejects every write. schema_absent_because
+  # is what keeps "I could not ask" out of the wording either way.
   _store_unwritable_because=''
-  _no_row_can_stand=''
   if ! command -v mariadb >/dev/null 2>&1; then
     _store_unwritable_because='the mariadb client is absent from this image'
   elif ! openmrs_schema_present; then
     _store_unwritable_because=$(schema_absent_because)
-    db_reachable && _no_row_can_stand=yes
   fi
 
   # #444: this is where a model file's path leaves the script and becomes something querystore
@@ -665,9 +679,12 @@ configure_retrieval_gps() {
   # on the same verdict, and says so HERE rather than leaving it to the blank-path test below,
   # which cannot tell a path this start withdrew from one that was never written.
   #
-  # Three outcomes, because the withdrawal can fail to land and a row that stands unwithdrawn is
-  # the state being removed: it landed; there was no row to land on; or it did not land and the
-  # file is put out of reach instead, which needs no database.
+  # Two outcomes, because the withdrawal can fail to land and a row that stands unwithdrawn is the
+  # state being removed: it landed, or it did not and the file is put out of reach instead, which
+  # needs no database. There is deliberately no third arm for "there was no row to take back": only
+  # a probe could answer that, a probe can answer no while a row stands, and being wrong there
+  # leaves querystore pointed at bytes this start did not verify. What asserting it saved was one
+  # re-download on a reachable database that has never carried a schema.
   if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
     gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
     gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"
@@ -680,10 +697,8 @@ configure_retrieval_gps() {
     _embedder_status="not verified in this start:${MODEL_MANIFEST_REFUSED:- no refusal was recorded, so the verification was taken where this shell cannot read it}"
     if withdraw_embedder_paths; then
       echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are blanked; any value already in the database was an earlier start's and no verdict on this one." >&2
-    elif [ -n "$_no_row_can_stand" ]; then
-      echo "[retrieval-wiring] the embedder has not verified in this start, and $_store_unwritable_because, so no row can be naming it." >&2
     else
-      echo "[retrieval-wiring] the embedder has not verified in this start and the withdrawal of its paths could not be confirmed (${_store_unwritable_because:-the database did not take the write}); taking the copy on the volume out of reach instead, where the refusal left one." >&2
+      echo "[retrieval-wiring] the embedder has not verified in this start and the withdrawal of its paths could not be confirmed (${_store_unwritable_because:-the database did not take the write}); taking the copies on the volume out of reach instead, where this start left any." >&2
       quarantine_unverified_embedder
     fi
   fi
@@ -691,9 +706,8 @@ configure_retrieval_gps() {
   # Everything below reads the database or writes to it, and every one of those statements has its
   # own status read rather than its outcome predicted. The two returns this function used to open
   # with predicted it — and a prediction is what made the arm above unreachable, and what would now
-  # skip the sweep switch below on the one probe answer that can be WRONG while a row stands: the
-  # schema check wants four tables, so a database carrying global_property without one of the other
-  # three answers no while the row is there and the UPDATE lands.
+  # skip the sweep switch below on a probe answer that can be no while the row is there and the
+  # UPDATE lands, for the reasons the diagnostic above carries.
   if [ -n "$_store_unwritable_because" ]; then
     echo "[retrieval-wiring] $_store_unwritable_because, so a global property this start writes may not land; querystore may stay unconfigured and chart search off."
   fi

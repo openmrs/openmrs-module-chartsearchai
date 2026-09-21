@@ -8912,9 +8912,9 @@ what the shell DOES is a behaviour a test drives. What the library returns is no
 does with it, though, and round 1 of the 2026-09-21 amendment's review found that gap open: `|| exit 1`
 appended to the ONNX fetch's last continuation line restored the outage in full, with every source
 guard, `sh -n` and `shellcheck` green. So
-`EntrypointRetrievalWiringTest.theEntrypointsOwnEmbedderFetchesLeaveTheStartRunning` now takes those
-two statements out of `backend-init.sh` verbatim, refuses both, and asks whether the statement after
-them runs. Reviewers then found two further spellings, and
+`EntrypointRetrievalWiringTest.theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused`
+now drives the start on a refusal and asks whether it reaches the wiring and then the hand-off to
+Tomcat. Reviewers then found two further spellings, and
 neither is a misread branch — each is a subshell sitting between the call and the entrypoint's own
 shell. One `&` on the call's last continuation line backgrounds the whole command; a `| tee`
 appended to the same call makes it an element of a pipeline, which POSIX also runs in a subshell.
@@ -8938,6 +8938,28 @@ quote or a backslash makes literal blanked out, which is what keeps a `&` inside
 `ModelDownloadPinningGuardTest.theOwnShellRuleReadsTheOperatorsTheShellReads` spells the shapes as
 commands, because the shipped file spells none of them and the rule would otherwise be pinned only
 by a mutation nobody runs.
+
+**And `theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused` asked its question of
+the HARNESS's next statement, which round 3 found.** It collected
+the two `fetch_or_degrade` commands out of `backend-init.sh` and appended an `echo` of its own, so
+"the statement after them" was never the entrypoint's — nothing in the tree read that file for an
+`exit`, a `return` or a `set` at all. Two one-line edits restored the outage with all four classes
+that read this file green, `sh -n` and `shellcheck -s sh -S warning` clean, measured 2026-09-21 at the
+round-2 head: a `require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab || exit 1`
+written as the next top-level statement, which the ledger gate's own pattern does not admit, so it
+was not exempted but simply unread; and a `set -e` after the shebang, under which the real library
+exits 4 at the refusal and the statement after it never runs — an edit a reviewer might ask for as
+shell hygiene. So the case now runs `backend-init.sh` itself, every top-level statement of it, with
+the edges that reach outside a test redirected and each asserted present first: the re-exec as
+another OS user, the hand-off to Tomcat, the sourced library, `/openmrs/data`, and the two roots the
+runtime properties are searched under. Every edge goes to a placeholder before any real path goes in,
+because the replacements carry the strings being looked for — this repository's own checkout path
+contains `/openmrs` and the volume's replacement ends in `/openmrs/data` — and the obvious spelling
+sent the library to a path spliced out of the checkout and the temporary directory both. Mutate
+either edit back in and read which case fails:
+`theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused`, on the assertion that the
+start reached the wiring at all. The residue is that this drives the file with those edges
+redirected, so a defect in one of the edges themselves is outside it.
 
 **The residue is named rather than claimed away**, and the previous attempt to bound it — "what is
 bounded is the accidental edit" — was itself falsified by the `| tee`, which is about as ordinary
@@ -9064,11 +9086,35 @@ just as `OnnxEmbeddingProvider.resolvePath` throws for a blank one, so the row t
 withdraw names nothing loadable and the downstream state is the one a landed withdrawal produces.
 Moved rather than deleted for the reason `file_bytes` will not answer 0: code 5 is a statement about
 the tools, not the bytes, and deleting on it re-downloads the same file every start to delete it
-again. Where the database is REACHABLE and carries no schema there is no row to withdraw, so that
-one branch says so and moves nothing.
+again.
 
-The three routes in are each a case —
-`EntrypointRetrievalWiringTest.theWithdrawalIsIssuedEvenWhereTheSchemaProbeAnswersNo`,
+**A third arm asserted there was no row to take back, and round 3 removed it.** It skipped the
+quarantine wherever the database was reachable and the schema probe answered below four, on the
+ground that a database carrying no OpenMRS schema carries no `global_property` row either — which
+is the same probe this decision had already recorded as the one that can answer no while the row is
+there, wanting `global_property` and three other tables. It is weaker than that again: `db_reachable`
+and `openmrs_schema_present` both query without a database argument while every write passes
+`"$DB_NAME"`, so a `DB_NAME` that does not name the database OpenMRS uses — the drift the
+entrypoint's own comment at the credential block is about, and the state after a `--destroy-volumes`
+deploy where `openmrs-runtime.properties` is gone and `DB_NAME` falls back to a default — answers
+both probes and rejects every write. Driven at the round-2 head with the stand-in's schema count at
+zero and the model path's `UPDATE` rejected, with a row from an earlier good start in the store: the
+start printed "so no row can be naming it", moved nothing, and left `modelFilePath` naming the
+unverified ONNX with `chartsearchai.querystore.enabled` true — the CWE-494 state again, through the
+gate again, with the log asserting the opposite so nobody looks. So the withdrawal's own answer is the
+only thing the arm reads: it landed, or the file goes out of reach. The cost is one re-download on a
+reachable database that has never carried a schema, and what it buys is a branch, an ADR paragraph and
+a README clause removed rather than a fourth prediction added.
+`EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhereTheSchemaProbeAnsweredNoAndTheWithdrawalWasRejected`
+is the case; no case before it held both of those knobs off their defaults at once.
+
+**And the withdrawal's two `UPDATE`s were chained**, `|| return 1`, so the vocab's was never issued on
+a database that rejected the model path's — one statement's rejection standing as a verdict on the
+next, over a property querystore resolves with `optional=false` just the same.
+`.theVocabsWithdrawalIsIssuedEvenWhereTheModelPathsWasRejected` is the case.
+
+Each route in is a case —
+`.theWithdrawalIsIssuedEvenWhereTheSchemaProbeAnswersNo`,
 `.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached`,
 `.theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent` — and
 `.theUnverifiedCopyIsPutOutOfReachWhenTheWithdrawalWasRejected` is the rejected `UPDATE`. **None of
@@ -9096,11 +9142,35 @@ refusal rather than leaving it standing.
 **What this still does not close, named rather than claimed away.** The gateway shares the backend
 container's fate for every OTHER reason that container can be absent — the war download in
 `Dockerfile.backend`, the JVM, Tomcat — and none of that is a chart-search dependency, so none of it
-is in scope here; what this decision removed is the one such dependency it had put there. And the
-flood the sweep switch exists to prevent is not prevented on the quarantine path: nothing there can
-write `querystore.bootstrap.autostart`, so a sweep an earlier start left on runs and throws once per
-record over a path that now names no file. That is the trade taken deliberately — a logging cost
-against unverified bytes answering clinical questions at the scale of a full sweep.
+is in scope here; what this decision removed is the one such dependency it had put there.
+
+And the flood the sweep switch exists to prevent is not prevented where the start can write nothing
+at all — no `mariadb` client, or a database that is not answering: `querystore.bootstrap.autostart`
+is not reachable there either, so a sweep an earlier start left on runs and throws once per record
+over a path that now names no file. That is the trade taken deliberately — a logging cost against
+unverified bytes answering clinical questions at the scale of a full sweep. On the quarantine's other
+routes, a rejected `UPDATE` or a schema probe answering no, the sweep switch does land, and
+`EntrypointRetrievalWiringTest` reads it back on each.
+
+`chartsearchai.models.embedderStatus` is unreachable on those same two branches, and it is the channel
+the amendment's second premise turns on. It goes through the same `seed_sql` as the withdrawal, so
+where no write lands REST goes on serving the last good start's value — "verified in this start" —
+while the file that row names has been moved to `.unverified` and querystore throws
+`Model file not found`. A sentinel would not close it: nothing in a shell that cannot reach the
+database can write one either, and `exec /openmrs/startup.sh` replaces the shell before the database
+that `startup.sh` then waits for comes back. What is owed is that README says where the channel holds,
+and `.theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt` pins the behaviour it describes.
+
+And `quarantine_unverified_embedder`'s own wording was about the wrong subject until round 3: its
+failure line, and the line that calls it, said the moved copy was one this start REFUSED, which two
+shapes reaching the arm make false — one artifact refused and the other verified, where a verified file is
+moved aside under a `.unverified` name, and a verification taken where this shell cannot read it,
+where `MODEL_MANIFEST_REFUSED` is empty and nothing was refused at all. They are worded off what
+`require_verified` answered instead, about the EMBEDDER and never about the bytes of the file they
+name, which is also what the pair being the unit already made true of the move itself.
+`.theQuarantinesOwnLinesClaimNoRefusalWhereNothingWasRefused` drives the second shape; the residue is
+the `mv` that fails, whose line no case reaches, and the `.unverified` suffix, which stays because it
+is the embedder's verdict and not the file's.
 
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does

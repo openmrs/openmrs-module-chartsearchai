@@ -287,14 +287,14 @@ fetch_and_verify_override() {
 #
 # It returns rather than exiting, and what keeps that fail-closed is the LEDGER, not the exit: a
 # refusal records nothing in MODEL_MANIFEST_VERIFIED, so require_verified answers no and
-# configure_retrieval_gps WITHDRAWS both embedder paths — and where that withdrawal cannot reach the
-# database at all, puts the copy on the volume out of reach instead, which is the only instrument
-# left when the row cannot be read. Withholding the write alone would not have been enough once the
-# start continues — a row an earlier good start wrote stands whatever this start did, and codes 3, 4
-# and 5 delete nothing, so it can still name a file that is still there. Unverified bytes answering
-# a clinical question is the state Decision 106 removes; stopping the container also took the whole
-# OpenMRS instance and its SPA down, on 2026-09-21, and that decision's amendment says which part
-# of the route was observed and which reconstructed.
+# configure_retrieval_gps WITHDRAWS both embedder paths — and wherever that withdrawal cannot be
+# confirmed to have landed, puts the copy on the volume out of reach instead, which is the only
+# instrument left when the row cannot be blanked. Withholding the write alone would not have been
+# enough once the start continues — a row an earlier good start wrote stands whatever this start
+# did, and codes 3, 4 and 5 delete nothing, so it can still name a file that is still there.
+# Unverified bytes answering a clinical question is the state Decision 106 removes; stopping the
+# container also took the whole OpenMRS instance and its SPA down, on 2026-09-21, and that
+# decision's amendment says which part of the route was observed and which reconstructed.
 #
 # Still asked of the call site: that this runs in the entrypoint's OWN shell. The ledger is an
 # ordinary shell variable, so backgrounding the call with `&`, taking it in a command substitution,
@@ -326,8 +326,10 @@ fetch_or_degrade() {
 
 	echo "       Chart search cannot run without a verified copy of this file, so it stays off:" >&2
 	echo "       OpenMRS starts without chart search rather than serving it on bytes nothing" >&2
-	echo "       checked. No path to it is left configured — a path an earlier start wrote is" >&2
-	echo "       withdrawn too, so nothing loads this file until a start verifies it." >&2
+	echo "       checked. No path to it is left configured, and a path an earlier start wrote is" >&2
+	echo "       taken back — by blanking the row, or, where that cannot be confirmed, by moving" >&2
+	echo "       the copy out from under the name it carries. Nothing loads this file until a" >&2
+	echo "       start verifies it." >&2
 	case $_mm_oe_code in
 		2)
 			for _mm_oe_line in "$@"; do

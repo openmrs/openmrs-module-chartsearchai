@@ -61,13 +61,19 @@ import org.junit.jupiter.api.io.TempDir;
  * and a stand-in for the {@code mariadb} client, which is the database boundary the way
  * {@code ModelDownloadIntegrityTest}'s loopback server is the network one.
  *
- * <p><b>The residue, named rather than claimed away.</b> This drives the wiring function and the
- * library; it does not run the entrypoint end to end. Where the top-level fetches sit relative to
- * the wiring call is still {@code ModelDownloadPinningGuardTest}'s question, and whether a refusal
- * ends the shell at all is {@code ModelDownloadIntegrityTest}'s. The stand-in understands only the
- * statements this wiring issues and REFUSES anything else, so a statement it cannot answer fails a
+ * <p><b>Most cases here drive the wiring function; one drives the whole file.</b>
+ * {@link #theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused} runs every
+ * top-level statement of {@code backend-init.sh}, with the edges that reach outside a test
+ * redirected, because what a refusal does to the START is not a property of the function the rest of
+ * these cases call. Where a fetch SITS relative to the wiring call is still
+ * {@code ModelDownloadPinningGuardTest}'s question, and what the library itself returns is
+ * {@code ModelDownloadIntegrityTest}'s.
+ *
+ * <p><b>The residue, named rather than claimed away.</b> The stand-in understands only the
+ * statements these starts issue and REFUSES anything else, so a statement it cannot answer fails a
  * case instead of being silently accepted — but it is not MariaDB, and a defect that needs real
- * server semantics is outside it.
+ * server semantics is outside it. Nothing here reaches the network: the manifest rows and the demo
+ * dump url both name a file nothing serves.
  */
 public class EntrypointRetrievalWiringTest {
 
@@ -107,11 +113,14 @@ public class EntrypointRetrievalWiringTest {
 	private static final byte[] UNRECORDED_BYTES = "the embedder bytes the maintainers reviewer\n"
 			.getBytes(StandardCharsets.UTF_8);
 
+	/** The seed's own sentinel, which says the dataset a start would otherwise fetch is already in. */
+	private static final String SEEDED_DATASET_GP = "chartsearchai.demo.seededDataset";
+
 	/**
-	 * Echoed by the statement immediately after the entrypoint's own embedder fetches, so a case can
-	 * ask whether the start got past them rather than inferring it from what ran later.
+	 * Echoed where {@code backend-init.sh} hands off to Tomcat, so a case can ask whether the start
+	 * reached its own last statement rather than inferring it from something that ran earlier.
 	 */
-	private static final String PAST_THE_FETCHES = "the start reached the statement after the embedder fetches";
+	private static final String REACHED_STARTUP = "the start reached the hand-off to /openmrs/startup.sh";
 
 	@TempDir
 	Path work;
@@ -234,26 +243,48 @@ public class EntrypointRetrievalWiringTest {
 	}
 
 	/**
-	 * <b>The entrypoint's own two statements, and what they do to the shell.</b> The library returns
-	 * rather than exiting, and {@code ModelDownloadIntegrityTest} drives that; what nothing drove is
-	 * the CALL SITE, where {@code || exit 1} appended to the last continuation line restores the
-	 * outage in full and is invisible to every source guard, to {@code sh -n} and to
-	 * {@code shellcheck}. This runs the two statements {@code backend-init.sh} actually ships, on a
-	 * refusal, and asks whether the statement after them runs.
+	 * <b>The entrypoint's own statements, and what a refusal does to the start.</b> The library
+	 * returns rather than exiting, and {@code ModelDownloadIntegrityTest} drives that; what nothing
+	 * drove is the SCRIPT. This runs {@code backend-init.sh} itself, every top-level statement of it
+	 * from the first line through to the hand-off to Tomcat, over a manifest that resolves neither
+	 * embedder row — and asks whether the start reaches the retrieval wiring and then that hand-off.
+	 *
+	 * <p><b>Collecting the two fetch commands was not enough, and it took a round to see why.</b>
+	 * The earlier form of this case took the two {@code fetch_or_degrade} statements out of the file
+	 * and appended an {@code echo} of its own, so "the statement after them" was the harness's and
+	 * not the entrypoint's next statement. Two one-line edits restore the outage in full and each
+	 * left all four classes that read this file green with {@code sh -n} and
+	 * {@code shellcheck -s sh -S warning} clean (measured 2026-09-21): a {@code require_verified}
+	 * over both {@link #GATED_ARTIFACTS} followed by {@code || exit 1}, written as the next
+	 * top-level statement — which the ledger-gate exemption's own pattern does not even admit, so it
+	 * is not exempted but simply unread — and a {@code set -e} after the shebang, under which the
+	 * real library exits 4 at the refusal and the statement after it never runs. Both are inside
+	 * what this case now runs. ADR Decision 106.
 	 */
 	@Test
-	public void theEntrypointsOwnEmbedderFetchesLeaveTheStartRunning() throws Exception {
+	public void theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
 		given(AUTOSTART_GP, "true");
-		List<String> preamble = new ArrayList<String>(refusedWithNothingDeleted());
-		preamble.add("echo '" + PAST_THE_FETCHES + "'");
+		given(SEEDED_DATASET_GP, demoSeedTag());
 
-		Run run = execute(preamble, null);
+		Run run = runTheWholeEntrypointWithItsEmbedderRefused();
 
 		assertTrue(run.output.contains("Chart search cannot run without a verified copy of this file"),
 				"nothing was refused, so this case says nothing about what a refusal does to the start\n" + run);
-		assertTrue(run.output.contains(PAST_THE_FETCHES), "backend-init.sh's own embedder fetch statements ended"
-				+ " the start on a refusal, which is the outage ADR Decision 106's amendment measures\n" + run);
-		assertEquals(0, run.exit, "the start did not survive its own embedder fetches\n" + run);
+		assertTrue(run.output.contains("already loaded"), "the demo seed did not read its own sentinel as already"
+				+ " satisfied, so this start was on its way to fetching a dataset dump\n" + run);
+		assertTrue(gp(EMBEDDER_STATUS_GP).contains(GATED_ARTIFACTS.get(0) + ":4"), "the start never reached the"
+				+ " retrieval wiring after the refusal, so the refusal is what ended it: "
+				+ gp(EMBEDDER_STATUS_GP) + "\n" + run);
+		assertEquals("", gp(MODEL_PATH_GP), "the start reached the wiring and left an earlier start's path naming"
+				+ " bytes this start refused\n" + run);
+		assertEquals("false", gp(AUTOSTART_GP), "the start reached the wiring and left the sweep on\n" + run);
+		assertTrue(run.output.contains(REACHED_STARTUP), "backend-init.sh ended the start on a refused embedder"
+				+ " instead of handing off to Tomcat without chart search, which is the outage ADR Decision 106's"
+				+ " amendment measures\n" + run);
+		assertEquals(0, run.exit, "the start did not survive its own statements on a refused embedder\n" + run);
+		assertTheStandInUnderstoodEveryStatement(run);
 	}
 
 	// ---- and reaches the withdrawal whatever else the start cannot do --------------------------
@@ -319,6 +350,72 @@ public class EntrypointRetrievalWiringTest {
 	}
 
 	/**
+	 * <b>The operator-facing lines about a copy taken out of reach claim no refusal where nothing
+	 * was refused.</b> The quarantine's failure line and the line that calls it used to assert the
+	 * moved copy was one this start refused, and two shapes reach the arm with that false: one
+	 * artifact refused and the other verified, where a VERIFIED file is moved aside, and a
+	 * verification taken where this shell cannot read it, which refuses nothing at all —
+	 * {@code MODEL_MANIFEST_REFUSED} is empty, and {@code _embedder_status} beside them already gets
+	 * that right. The {@code .unverified} suffix stays: it is the EMBEDDER's verdict, the unit
+	 * everywhere in that function, and no per-file name is true of whichever copy did verify.
+	 *
+	 * <p>This drives the second shape, with a database that answers the reads
+	 * and rejects the model path's {@code UPDATE} so the diagnosis itself still lands and can be read
+	 * back as the control, and asks the whole of what the wiring told an operator — a line at odds
+	 * with the property beside it sends them looking for a refusal that never happened.
+	 */
+	@Test
+	public void theQuarantinesOwnLinesClaimNoRefusalWhereNothingWasRefused() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(AUTOSTART_GP, "true");
+		// The subshell shape fetches the ONNX alone and its refusal deletes it, so this is the copy
+		// left for the quarantine to move — an earlier start's vocab, which nothing in this start
+		// refused either.
+		Files.write(vocab, UNRECORDED_BYTES);
+
+		Run run = run(refusedInASubshell(), MODEL_PATH_GP);
+
+		assertTrue(gp(EMBEDDER_STATUS_GP).contains("no refusal was recorded"), "this shell recorded a refusal of"
+				+ " its own, so this case is the other shape and says nothing about wording a refusal nobody"
+				+ " took: " + gp(EMBEDDER_STATUS_GP) + "\n" + run);
+		assertTrue(Files.exists(quarantined(vocab)), "no copy was taken out of reach, so the lines this case reads"
+				+ " were never printed\n" + run);
+		for (String line : wiringLines(run)) {
+			assertFalse(line.contains("refus"), "the wiring told an operator a refusal this shell never took: "
+					+ line + "\n" + run);
+		}
+	}
+
+	/**
+	 * <b>What the diagnosis cannot say, stated here rather than left to be found.</b> The status
+	 * property goes through the same {@code seed_sql} as the withdrawal, so on the branches that
+	 * reach the quarantine because nothing can be written — no {@code mariadb} client, and a
+	 * database that is not answering — it is not written either: REST goes on serving the last good
+	 * start's value while the row it names has been moved to {@code .unverified}. No shell that
+	 * cannot reach the database can close that, so what is owed is that the claim in
+	 * {@code README.md} says where the channel holds, and that this is pinned rather than assumed.
+	 * This is the database-not-answering branch;
+	 * {@link #theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent} pins the other one by
+	 * asserting the stand-in was handed nothing at all, which no write of any kind survives.
+	 */
+	@Test
+	public void theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(EMBEDDER_STATUS_GP, "verified in this start");
+		databaseUnreachable = true;
+
+		Run run = execute(refusedWithNothingDeleted(), null);
+
+		assertTrue(run.output.contains("could not record " + EMBEDDER_STATUS_GP), "the start neither recorded a"
+				+ " diagnosis nor said it could not, so an operator has no line for either\n" + run);
+		assertEquals("verified in this start", gp(EMBEDDER_STATUS_GP), "this start's refusal reached the property"
+				+ " after all, so README may claim the channel holds on this branch too\n" + run);
+		assertTrue(Files.exists(quarantined(onnx)), "the copy was not moved aside, so this case is not the state"
+				+ " the stale diagnosis is about\n" + run);
+	}
+
+	/**
 	 * <b>The first of the two returns: no {@code mariadb} client in the image.</b> Nothing here can
 	 * read or write a global property, so the same instrument applies — and this is the case that
 	 * proves the client really was absent, by asserting the stand-in was handed nothing at all.
@@ -365,6 +462,66 @@ public class EntrypointRetrievalWiringTest {
 		assertTrue(Files.exists(quarantined(onnx)), "the refused copy was not moved aside\n" + run);
 		assertEquals("false", gp(AUTOSTART_GP), "the sweep was left on over a path this start did not verify\n"
 				+ run);
+	}
+
+	/**
+	 * <b>A rejected withdrawal on a database the schema probe answers no for.</b> The arm used to
+	 * skip the quarantine whenever the database was reachable and the four-table probe answered
+	 * below four, on the ground that a database carrying no OpenMRS schema carries no
+	 * {@code global_property} row to take back either. The probe cannot answer that: it is the one
+	 * of the two predictions that can be WRONG while a row stands, which the comment below the gate
+	 * already said of it, and a {@code DB_NAME} that does not name the database OpenMRS uses answers
+	 * no for a schema that is entirely there — both probes query without a database argument while
+	 * every write passes it. So a start refused at a code that deletes nothing moved nothing and
+	 * reached {@code exec /openmrs/startup.sh} with querystore still pointed at the unverified ONNX.
+	 * Driven with both of the knobs the stand-in's javadoc calls deliberately independent: the count
+	 * below four, and a database that answers the reads and rejects the {@code UPDATE}.
+	 */
+	@Test
+	public void theUnverifiedCopyIsPutOutOfReachWhereTheSchemaProbeAnsweredNoAndTheWithdrawalWasRejected()
+			throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(AUTOSTART_GP, "true");
+		schemaTables = "0";
+
+		Run run = run(refusedWithNothingDeleted(), MODEL_PATH_GP);
+
+		assertTrue(run.output.contains("carries no OpenMRS schema"), "the schema gate did not fire, so this case is"
+				+ " not the state it is about\n" + run);
+		assertEquals("querystore/model.onnx", gp(MODEL_PATH_GP), "the write was supposed to be rejected; this case"
+				+ " proves nothing if it landed\n" + run);
+		assertTrue(run.output.contains("could not be confirmed"), "the start took neither the landed-withdrawal arm"
+				+ " nor the one that falls back to the file, so what it did with the row is unknown\n" + run);
+		assertFalse(Files.exists(onnx), "the row still names querystore/model.onnx and the unverified ONNX file is"
+				+ " still there under that name, so querystore embeds clinical questions with bytes this start"
+				+ " refused\n" + run);
+		assertTrue(Files.exists(quarantined(onnx)) && Files.exists(quarantined(vocab)),
+				"the copies this start could not verify were not moved aside\n" + run);
+		assertEquals("false", gp(AUTOSTART_GP), "the sweep was left on over a path this start did not verify\n"
+				+ run);
+	}
+
+	/**
+	 * <b>Both withdrawals are issued, because the first one's rejection is no verdict on the
+	 * second.</b> The two {@code UPDATE}s were chained with {@code || return 1}, so a database that
+	 * rejected the model path's never had the vocab's issued at all — and querystore resolves the
+	 * vocab with {@code optional=false} too, so a vocab row left standing names half an embedder
+	 * this start did not verify, under a name the file is still at wherever the quarantine cannot
+	 * move it.
+	 */
+	@Test
+	public void theVocabsWithdrawalIsIssuedEvenWhereTheModelPathsWasRejected() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(AUTOSTART_GP, "true");
+
+		Run run = run(refusedWithNothingDeleted(), MODEL_PATH_GP);
+
+		assertEquals("querystore/model.onnx", gp(MODEL_PATH_GP), "the write was supposed to be rejected; this case"
+				+ " proves nothing if it landed\n" + run);
+		assertEquals("", gp(VOCAB_PATH_GP), "the vocab row still names a file this start did not verify, because"
+				+ " the model path's rejection returned before the vocab's own statement was issued\n" + run);
 	}
 
 	/**
@@ -543,6 +700,19 @@ public class EntrypointRetrievalWiringTest {
 	private List<String> refusedWithNothingDeleted() throws Exception {
 		Files.write(onnx, UNRECORDED_BYTES);
 		Files.write(vocab, UNRECORDED_BYTES);
+		List<String> lines = new ArrayList<String>();
+		lines.add("MODEL_MANIFEST_FILE='" + unresolvableManifest() + "'");
+		lines.addAll(entrypointEmbedderFetches());
+		return lines;
+	}
+
+	/**
+	 * A manifest whose rows name neither gated artifact, so {@code fetch_or_degrade} answers 4 for
+	 * both without ever opening a target — the shape of a backend image whose {@code
+	 * model-manifest.tsv} row was renamed or dropped. Written beside the fixture the good runs use
+	 * rather than replacing it, so a case chooses which manifest the start reads.
+	 */
+	private Path unresolvableManifest() throws Exception {
 		Path unresolvable = work.resolve("manifest-naming-nothing-the-gate-asks-about.tsv");
 		StringBuilder rows = new StringBuilder();
 		for (String artifact : GATED_ARTIFACTS) {
@@ -551,11 +721,7 @@ public class EntrypointRetrievalWiringTest {
 					.append(work.resolve("never-served").toUri()).append('\n');
 		}
 		Files.write(unresolvable, rows.toString().getBytes(StandardCharsets.UTF_8));
-
-		List<String> lines = new ArrayList<String>();
-		lines.add("MODEL_MANIFEST_FILE='" + unresolvable + "'");
-		lines.addAll(entrypointEmbedderFetches());
-		return lines;
+		return unresolvable;
 	}
 
 	/**
@@ -592,6 +758,117 @@ public class EntrypointRetrievalWiringTest {
 		return fetches;
 	}
 
+	/**
+	 * Runs the whole of {@code backend-init.sh} with the {@code mariadb} stand-in on PATH and the
+	 * manifest that resolves neither embedder row, so both of the entrypoint's own embedder fetches
+	 * refuse at code 4 — by the ordinary path, in the start's own shell, and with the copies an
+	 * earlier start left still on the volume.
+	 *
+	 * <p>Nothing here may reach the network. The manifest rows and the demo-seed dump url are both
+	 * pointed at a file nothing serves, so a fetch of either fails rather than being attempted, and
+	 * the seed's own sentinel is seeded besides.
+	 */
+	private Run runTheWholeEntrypointWithItsEmbedderRefused() throws Exception {
+		Files.write(onnx, UNRECORDED_BYTES);
+		Files.write(vocab, UNRECORDED_BYTES);
+		ProcessBuilder builder = new ProcessBuilder("/bin/sh", theWholeEntrypointRewrittenToRunHere().toString());
+		builder.environment().put("PATH", stubs + ":" + builder.environment().get("PATH"));
+		builder.environment().put("MODEL_MANIFEST_FILE", unresolvableManifest().toString());
+		builder.environment().put("MARIADB_STAND_IN_STORE", store.toString());
+		builder.environment().put("MARIADB_STAND_IN_LOG", statements.toString());
+		builder.environment().put("CHARTSEARCHAI_DEMO_DUMP_URL", work.resolve("never-served").toUri().toString());
+		builder.redirectErrorStream(true);
+		Process process = builder.start();
+		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);
+		assertTrue(process.waitFor(120, TimeUnit.SECONDS), "the entrypoint did not finish");
+		return new Run(process.exitValue(), output);
+	}
+
+	/**
+	 * The whole of {@code backend-init.sh}, with the edges that reach outside a test rewritten and
+	 * nothing else. Each is asserted present before it is replaced, so a rename there stops this
+	 * loudly rather than leaving it driving a file whose outside edges it no longer redirects:
+	 *
+	 * <ul>
+	 * <li>the re-exec as another OS user, which only a root shell takes and which no test can
+	 * follow — inert on an ordinary machine, and what keeps a build running as root from failing
+	 * this case for a reason that is not about a refusal;</li>
+	 * <li>the hand-off to Tomcat, replaced by an echo of {@link #REACHED_STARTUP} so that reaching
+	 * the entrypoint's own last statement is something a case can read;</li>
+	 * <li>the sourced library, at the path {@code Dockerfile.backend} installs it to;</li>
+	 * <li>{@code /openmrs/data}, the volume this start provisions into, rewritten under the case's
+	 * temporary directory — which is where the fixture targets already sit, so the entrypoint's own
+	 * {@code ONNX_FILE} and {@code VOCAB_FILE} come out as the two files the case placed;</li>
+	 * <li>the two roots the runtime properties are searched under, collapsed to the case's own, so a
+	 * machine that really carries either cannot hand this start another instance's credentials.</li>
+	 * </ul>
+	 *
+	 * <p>Everything else the entrypoint does, it does: the demo seed's own gate, the installer
+	 * correction, the runtime-properties write, the retrieval wiring and the CPU breadcrumb all run
+	 * against the stand-in.
+	 */
+	private Path theWholeEntrypointRewrittenToRunHere() throws IOException {
+		Path root = work.resolve("openmrs");
+		assertTrue(root.toString().matches("[^\\s']+"), "this case interpolates " + root + " into shell that"
+				+ " cannot quote all of it, so a temporary directory carrying a space or a quote would change"
+				+ " what the entrypoint reads");
+		String text = new String(Files.readAllBytes(repo(ENTRYPOINT)), StandardCharsets.UTF_8);
+		// Every edge goes to a placeholder before any real path goes in, because the paths going in
+		// carry the strings being looked for: this repository's own checkout path contains
+		// "/openmrs", and the volume's replacement ends in "/openmrs/data". So a rewrite written the
+		// obvious way redirects an earlier rewrite's output — measured 2026-09-21, where the library
+		// landed at a path spliced out of the checkout and the temporary directory both.
+		text = replacingOnce(text, "exec /openmrs/startup.sh", "@@HAND_OFF@@");
+		text = replacingOnce(text, "exec runuser -u openmrs -- \"$0\" \"$@\"", "@@NO_REEXEC@@");
+		text = replacingOnce(text, ". /usr/local/bin/model-manifest.sh", "@@LIBRARY@@");
+		// Both search roots collapse to the case's own, so a machine that really carries one of them
+		// cannot hand this start another instance's database credentials.
+		text = replacingOnce(text, "find /openmrs /usr/local/tomcat", "find @@ROOT@@");
+		text = replacingEvery(text, "/openmrs/data", "@@VOLUME@@");
+		text = replacingOnce(text, "@@HAND_OFF@@", "echo '" + REACHED_STARTUP + "'");
+		text = replacingOnce(text, "@@NO_REEXEC@@",
+				"echo '[test] the re-exec as another OS user is not followed here'");
+		text = replacingOnce(text, "@@LIBRARY@@",
+				". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'");
+		text = replacingOnce(text, "@@ROOT@@", root.toString());
+		text = replacingEvery(text, "@@VOLUME@@", root.resolve("data").toString());
+		assertFalse(text.contains("@@"), "a placeholder this rewrite put in is still in the file it is about to"
+				+ " run, so some edge of the entrypoint is not redirected");
+		Path driver = work.resolve("backend-init-driven.sh");
+		Files.write(driver, text.getBytes(StandardCharsets.UTF_8));
+		return driver;
+	}
+
+	/** {@code text} with its one occurrence of {@code target} replaced, or a failure naming it. */
+	private static String replacingOnce(String text, String target, String replacement) {
+		assertEquals(1, text.split(Pattern.quote(target), -1).length - 1, ENTRYPOINT + " does not carry `" + target
+				+ "` exactly once, so this harness would drive a file it has not redirected");
+		return text.replace(target, replacement);
+	}
+
+	/** {@code text} with every occurrence of {@code target} replaced, of which there has to be one. */
+	private static String replacingEvery(String text, String target, String replacement) {
+		assertTrue(text.contains(target), ENTRYPOINT + " no longer carries `" + target + "`, so this harness would"
+				+ " drive a file it has not redirected");
+		return text.replace(target, replacement);
+	}
+
+	/**
+	 * The demo dataset tag {@code backend-init.sh} assigns, read out of it so the store a case hands
+	 * the whole entrypoint looks like a steady-state deploy's: the seed's sentinel already carries
+	 * the tag, so the seed says so and skips rather than reaching for a dataset dump.
+	 */
+	private static String demoSeedTag() throws IOException {
+		Matcher tag = Pattern.compile("^DEMO_SEED_TAG=\"([^\"]+)\"\\s*$").matcher("");
+		for (String line : Files.readAllLines(repo(ENTRYPOINT), StandardCharsets.UTF_8)) {
+			if (tag.reset(line).matches()) {
+				return tag.group(1);
+			}
+		}
+		throw new IllegalStateException(ENTRYPOINT + " no longer assigns DEMO_SEED_TAG, so this case cannot tell"
+				+ " its demo seed that the dataset it would otherwise download is already loaded");
+	}
+
 	/** Both artifacts verified the way a restart verifies them: off bytes already on the volume. */
 	private List<String> verified() {
 		List<String> lines = new ArrayList<String>();
@@ -615,13 +892,23 @@ public class EntrypointRetrievalWiringTest {
 		assertEquals(0, run.exit, "configure_retrieval_gps itself failed; in the entrypoint that is the"
 				+ " \"step errored\" line, and everything below is then about a function that did not finish\n"
 				+ run);
+		assertTheStandInUnderstoodEveryStatement(run);
+		return run;
+	}
+
+	/**
+	 * At least one statement reached the stand-in and it understood all of them. A statement it
+	 * cannot answer fails the case rather than being silently accepted, which is what keeps a case
+	 * from passing for a reason nobody checked.
+	 */
+	private void assertTheStandInUnderstoodEveryStatement(Run run) throws IOException {
 		List<String> issued = issuedStatements();
-		assertFalse(issued.isEmpty(), "the wiring issued no statement at all, so this case measured nothing\n" + run);
+		assertFalse(issued.isEmpty(), "no statement reached the database at all, so this case measured nothing\n"
+				+ run);
 		for (String statement : issued) {
 			assertFalse(statement.startsWith("UNHANDLED: "), "the stand-in was handed a statement it cannot answer,"
-					+ " so what the wiring did with it is unknown: " + statement + "\n" + run);
+					+ " so what the start did with it is unknown: " + statement + "\n" + run);
 		}
-		return run;
 	}
 
 	/**
@@ -680,6 +967,17 @@ public class EntrypointRetrievalWiringTest {
 
 	private List<String> issuedStatements() throws IOException {
 		return Files.readAllLines(statements, StandardCharsets.UTF_8);
+	}
+
+	/** Every line the retrieval wiring printed, which is what an operator reading a start has. */
+	private static List<String> wiringLines(Run run) {
+		List<String> lines = new ArrayList<String>();
+		for (String line : run.output.split("\n", -1)) {
+			if (line.contains("[retrieval-wiring]")) {
+				lines.add(line);
+			}
+		}
+		return lines;
 	}
 
 	/** Seeds a global property the way an earlier start or an operator would have left it. */
@@ -787,6 +1085,13 @@ public class EntrypointRetrievalWiringTest {
 				"\t\techo 1 ;;",
 				"\t*'information_schema.tables'*)",
 				"\t\techo \"${MARIADB_STAND_IN_SCHEMA_TABLES:-4}\" ;;",
+				// The demo seed's own sentinel read, which the whole-entrypoint case reaches. A row
+				// that was never written prints nothing, the way the client prints nothing for an
+				// empty result — not the empty line COALESCE's reader gets.
+				"\t'SELECT property_value FROM global_property'*)",
+				"\t\tif [ -f \"$MARIADB_STAND_IN_STORE/$_property\" ]; then",
+				"\t\t\tcat \"$MARIADB_STAND_IN_STORE/$_property\"",
+				"\t\tfi ;;",
 				"\t'SELECT COALESCE(property_value'*)",
 				"\t\tif [ -f \"$MARIADB_STAND_IN_STORE/$_property\" ]; then",
 				"\t\t\tcat \"$MARIADB_STAND_IN_STORE/$_property\"",

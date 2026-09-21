@@ -790,11 +790,10 @@ public class ModelDownloadPinningGuardTest {
 	 * argument being text rather than syntax.
 	 *
 	 * <p>{@code &&} and {@code ||} are list separators and leave the call in this shell, so they
-	 * are not reported; what they lead to is
-	 * {@code EntrypointRetrievalWiringTest.theEntrypointsOwnEmbedderFetchesLeaveTheStartRunning}'s
-	 * question, which drives the statements instead of reading them. {@code >&} and {@code <&} are
-	 * redirections. The residue is the one this guard's own javadoc names: a subshell no operator on
-	 * this line spells.
+	 * are not reported; what they lead to is {@code EntrypointRetrievalWiringTest
+	 * .theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused}'s question, which
+	 * runs the entrypoint instead of reading it. {@code >&} and {@code <&} are redirections. The
+	 * residue is the one this guard's own javadoc names: a subshell no operator on this line spells.
 	 */
 	private static String outsideTheStartsOwnShell(String command) {
 		String operators = EntrypointSource.shellSyntaxOf(EntrypointSource.withoutComment(command))

@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -412,10 +414,9 @@ public class ModelDownloadIntegrityTest {
 	 * A resume that cannot succeed must not be retried forever. {@code curl -C -} exits 33 when the
 	 * origin answers a {@code Range} request with a whole 200 — which a caching proxy in front of the
 	 * container will do — and nothing else in the path deletes the {@code .partial}, so the next
-	 * start made the same impossible request. For the embedder that is a container which stops and stays
-	 * stopped, the end state
-	 * {@code ModelDownloadPinningGuardTest.theBackendServiceDeclaresNoRestartPolicyThatWouldLoopThroughARefusal}
-	 * asserts of the compose file.
+	 * start made the same impossible request. For the embedder that is a deployment where chart
+	 * search is off and no restart can turn it back on, since every start repeats the request that
+	 * cannot be answered.
 	 *
 	 * <p>The server here does not honour {@code Range}, which is what makes the case reachable.
 	 */
@@ -518,41 +519,65 @@ public class ModelDownloadIntegrityTest {
 	}
 
 	/**
-	 * For an artifact the module cannot start without, a refusal must STOP the script rather than
-	 * return a code someone has to remember to branch on.
+	 * A refusal of the embedder must leave the START running and the PATH unpublished — the
+	 * property is that unverified bytes never answer a clinical question, not that OpenMRS stops.
 	 *
-	 * <p><b>This is the behaviour that replaced a source-reading guard defeated four times.</b>
-	 * While the entrypoint spelled the branch itself, every reading of the source was defeated one
-	 * more way and each fix opened the next; the branch now lives in {@code fetch_or_exit}, so the
-	 * question is what the shell DOES. The case asserts it by putting a line after the call and
-	 * checking it never runs — which is exactly what the entrypoint puts there
-	 * ({@code echo "Embedder ready..."} and then the global-property write).
+	 * <p><b>This replaces a case that asserted the opposite</b>, and the evidence is in ADR
+	 * Decision 106's own amendment: on 2026-09-21 the public demo was hard-down and undiagnosable,
+	 * the SPA the gateway serves with it, with the refusal's log lines readable only by someone
+	 * with a shell on the host, which the people running it did not have. The route from this step
+	 * to the gateway is reconstructed rather than observed, and the decision says which half is
+	 * which; the whole instance being lost for a chart-search dependency is the part that does not
+	 * depend on it.
+	 *
+	 * <p><b>What still holds is asserted here, not assumed.</b> The ledger is what makes this
+	 * fail-closed: {@code require_verified} answers no for an artifact this shell did not verify,
+	 * so {@code configure_retrieval_gps} withholds
+	 * {@code querystore.embedding.modelFilePath} whatever the start went on to do. Each case below
+	 * asks the code, the continuation and the ledger together, because it is the THREE of them
+	 * that make the outcome right — a continuation whose ledger said yes would be the fail-open
+	 * this decision exists to prevent.
 	 */
 	@Test
-	public void aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript() throws Exception {
-		Path fixture = work.resolve("manifest-or-exit.tsv");
+	public void aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable() throws Exception {
+		Path fixture = work.resolve("manifest-or-degrade.tsv");
 		Files.write(fixture, ("critical-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
 				+ "\n").getBytes(StandardCharsets.UTF_8));
 		Path target = work.resolve("model.bin");
-		String call = "fetch_or_exit critical-artifact '" + target + "' 'the critical artifact' 'a hint line'\n"
-				+ "echo REACHED-THE-LINE-AFTER";
+		// The line after the call is what the entrypoint really puts there: `echo "Embedder
+		// ready..."` and, further down, the global-property write that require_verified gates.
+		String call = "fetch_or_degrade critical-artifact '" + target + "' 'the critical artifact' 'a hint line'\n"
+				+ "echo \"DEGRADE-CODE=$?\"\n"
+				+ "echo REACHED-THE-LINE-AFTER\n"
+				+ "if require_verified critical-artifact; then echo PATH-PUBLISHABLE; else echo PATH-WITHHELD; fi";
 
 		served = SUBSTITUTED_BYTES;
 		Result substituted = library(call, fixture);
 
-		assertEquals(DIGEST_MISMATCH, substituted.exit, "a substitution must leave its own status\n" + substituted);
-		assertFalse(substituted.output.contains("REACHED-THE-LINE-AFTER"),
-				"the script ran on past a refusal, which is what reaches the global-property write\n" + substituted);
+		assertTrue(substituted.output.contains("DEGRADE-CODE=" + DIGEST_MISMATCH),
+				"a substitution must still leave its own status\n" + substituted);
+		assertTrue(substituted.output.contains("REACHED-THE-LINE-AFTER"),
+				"the start must continue past a refusal instead of taking the instance down with it\n" + substituted);
+		assertTrue(substituted.output.contains("PATH-WITHHELD"),
+				"a refused artifact must stay unpublishable, which is what keeps this fail-closed\n" + substituted);
+		assertTrue(substituted.output.contains("without chart search"),
+				"the refusal must say what the start will and will not do\n" + substituted);
+		// "ready" is the one word a refusal must not produce, and the reason it could is that the
+		// caller used to print it AFTER the call off $?. A refusal deletes the copy, so that line
+		// would also have measured a file that is not there.
+		assertFalse(substituted.output.contains(" ready:"),
+				"a refused artifact was reported ready\n" + substituted);
 
-		// The caller's hint lines are the size diagnostic — what a digest mismatch gets instead is
-		// the generic refusal, because "the export changed shape" is the wrong thing to tell someone
-		// whose bytes are the wrong bytes at the right length.
 		served = Arrays.copyOf(GOOD_BYTES, 10);
 		Result truncated = library(call, fixture);
 
-		assertEquals(SIZE_MISMATCH, truncated.exit, "a short file must leave its own status\n" + truncated);
-		assertFalse(truncated.output.contains("REACHED-THE-LINE-AFTER"),
-				"the script ran on past a short file\n" + truncated);
+		assertTrue(truncated.output.contains("DEGRADE-CODE=" + SIZE_MISMATCH),
+				"a short file must still leave its own status\n" + truncated);
+		assertTrue(truncated.output.contains("REACHED-THE-LINE-AFTER"), "the start must continue\n" + truncated);
+		assertTrue(truncated.output.contains("PATH-WITHHELD"), "a short file must stay unpublishable\n" + truncated);
+		// The caller's hint lines are the size diagnostic — what a digest mismatch gets instead is
+		// the generic refusal, because "the export changed shape" is the wrong thing to tell someone
+		// whose bytes are the wrong bytes at the right length.
 		assertTrue(truncated.output.contains("a hint line"),
 				"the caller's size diagnostic must be printed\n" + truncated);
 		assertFalse(substituted.output.contains("a hint line"),
@@ -563,8 +588,156 @@ public class ModelDownloadIntegrityTest {
 		Result accepted = library(call, fixture);
 
 		assertEquals(OK, accepted.exit, "a verified artifact must not stop the script\n" + accepted);
+		assertTrue(accepted.output.contains("DEGRADE-CODE=" + OK), "a verified artifact returns 0\n" + accepted);
 		assertTrue(accepted.output.contains("REACHED-THE-LINE-AFTER"),
 				"the script must continue when the artifact verifies\n" + accepted);
+		assertTrue(accepted.output.contains("PATH-PUBLISHABLE"),
+				"a verified artifact must be publishable, or a good start configures no retrieval\n" + accepted);
+		assertTrue(accepted.output.contains("the critical artifact ready: " + target),
+				"a verified artifact must be reported ready, by the branch that knows it is\n" + accepted);
+		assertTrue(accepted.output.contains("(" + GOOD_BYTES.length + " bytes)"),
+				"the ready line must carry the size it measured\n" + accepted);
+	}
+
+	/**
+	 * <b>The three codes that reach this caller only through a fetch, and the arm an {@code exit}
+	 * has a syntactically natural home in.</b> The case above drives 0, 1 and 2 and
+	 * {@link EntrypointRetrievalWiringTest#theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused}
+	 * drives 4. Codes 3, 5 and 6 are driven against {@code fetch_and_verify_url} further up, which
+	 * is a different question: that is what the library ANSWERS, and this is what the caller does
+	 * with the answer. {@link #REPLACEMENT_UNFETCHABLE} is the one of the three with an arm
+	 * body of its own, and that body already ends "A restart retries the download." — so an
+	 * {@code exit "$_mm_oe_code"} added beside that sentence restores the 2026-09-21 outage for the
+	 * refusal a pin move or a stale copy on the volume produces, and left the classes that read
+	 * this library and this entrypoint green with {@code sh -n} and shellcheck clean until this
+	 * case existed. Mutate the arm and read the failure.
+	 *
+	 * <p>Each code is asked the three things the case above asks — the status, the continuation and
+	 * the ledger's refusal — plus what the code promises about the COPY, which is the fact that
+	 * decides whether a restart recovers anything: 6 lost the one that was there, 3 never had one,
+	 * 5 leaves it where it was. The wording that belongs to 6 alone is asserted ABSENT from the
+	 * other two, so an arm that reaches a neighbour's message fails here rather than reading as
+	 * covered.
+	 */
+	@Test
+	public void theCopyLostTheFetchThatFailedAndTheFileNothingCouldHashEachLeaveTheStartRunning() throws Exception {
+		Path fixture = work.resolve("manifest-remaining-codes.tsv");
+		Files.write(fixture, ("critical-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
+				+ "\n").getBytes(StandardCharsets.UTF_8));
+		Path target = work.resolve("model.bin");
+		String call = "fetch_or_degrade critical-artifact '" + target + "' 'the critical artifact' 'a hint line'\n"
+				+ "echo \"DEGRADE-CODE=$?\"\n"
+				+ "echo REACHED-THE-LINE-AFTER\n"
+				+ "if require_verified critical-artifact; then echo PATH-PUBLISHABLE; else echo PATH-WITHHELD; fi";
+		// The sentence the 6) arm ends on, which is also where an exit fits the syntax: read as a
+		// literal so a rewording of it fails this rather than quietly leaving the arm undriven.
+		String lostTheCopy = "there is no copy of";
+
+		// 6: a copy on the volume that matches nothing, deleted for a replacement the pinned
+		// revision cannot serve. The state a pin move produces on a deployment provisioned before it.
+		status = 404;
+		Files.write(target, SUBSTITUTED_BYTES);
+		Result lost = library(call, fixture);
+
+		assertTrue(lost.output.contains("DEGRADE-CODE=" + REPLACEMENT_UNFETCHABLE),
+				"the code that says the deployment lost its copy must reach the caller\n" + lost);
+		assertTrue(lost.output.contains("REACHED-THE-LINE-AFTER"), "the start must continue past the one refusal"
+				+ " whose arm has a body for an exit to be written into\n" + lost);
+		assertTrue(lost.output.contains("PATH-WITHHELD"), "a lost copy must leave its path unpublishable\n" + lost);
+		assertEquals(OK, lost.exit, "the shell ended on a refusal instead of running on to its next statement\n"
+				+ lost);
+		assertFalse(Files.exists(target), "this code promises the copy is gone; it is still there, so the case is"
+				+ " not the state it is about\n" + lost);
+		assertTrue(lost.output.contains(lostTheCopy),
+				"the operator is not told the volume no longer has a copy at all\n" + lost);
+
+		// 3: the same failing origin with nothing at the target, which is the control — code 3's
+		// contract is that nothing was deleted, and it must not borrow 6's wording.
+		Files.deleteIfExists(target);
+		Result nothingFetched = library(call, fixture);
+
+		assertTrue(nothingFetched.output.contains("DEGRADE-CODE=" + DOWNLOAD_FAILED),
+				"a fetch that failed with nothing at the target must report its own code\n" + nothingFetched);
+		assertTrue(nothingFetched.output.contains("REACHED-THE-LINE-AFTER"),
+				"the start must continue past a failed fetch\n" + nothingFetched);
+		assertTrue(nothingFetched.output.contains("PATH-WITHHELD"),
+				"a failed fetch must leave its path unpublishable\n" + nothingFetched);
+		assertEquals(OK, nothingFetched.exit, "the shell ended on a failed fetch\n" + nothingFetched);
+		assertFalse(nothingFetched.output.contains(lostTheCopy), "an operator who had nothing at that name was told"
+				+ " the deployment lost a copy\n" + nothingFetched);
+
+		// 5: the recorded bytes on the volume and no tool to hash them with. Nothing is deleted —
+		// the code is a statement about the tools, not about the bytes.
+		assumeTrue(which("stat") != null, "stat is needed to reach the hashing step");
+		Path onlyFetchTools = pathWith("no-hashing-tool-through-the-caller", List.of("curl", "stat", "rm", "mv"));
+		status = 200;
+		Files.write(target, GOOD_BYTES);
+		Result unhashable = library(call, fixture, onlyFetchTools);
+
+		assertTrue(unhashable.output.contains("DEGRADE-CODE=" + HASH_UNAVAILABLE),
+				"a file no tool could hash must report its own code\n" + unhashable);
+		assertTrue(unhashable.output.contains("REACHED-THE-LINE-AFTER"),
+				"the start must continue past a file it could not hash\n" + unhashable);
+		assertTrue(unhashable.output.contains("PATH-WITHHELD"), "a file this shell could not hash is a file it did"
+				+ " not verify, so its path must stay unpublishable\n" + unhashable);
+		assertEquals(OK, unhashable.exit, "the shell ended on a file it could not hash\n" + unhashable);
+		assertTrue(Files.exists(target), "a file that was never hashed must be left where it was, or every start"
+				+ " re-downloads it to refuse it again\n" + unhashable);
+		assertFalse(unhashable.output.contains(lostTheCopy),
+				"an operator whose copy is still on the volume was told it is gone\n" + unhashable);
+	}
+
+	/**
+	 * <b>The refusal's own record, which is the only channel its REASON has.</b> A withdrawn path
+	 * and a switched-off sweep say chart search is off; they do not say whether a restart can
+	 * recover anything, and on the deployment ADR Decision 106's amendment was measured on nobody
+	 * could read the container log that does. So {@code fetch_or_degrade} records the artifact id
+	 * and the code it answered, and {@code configure_retrieval_gps} puts that into a global
+	 * property REST serves.
+	 *
+	 * <p>Three things are asked of it, because a record that says the wrong thing is worse than
+	 * none: a refusal names the artifact AND the code, so two reasons are told apart; a
+	 * verification records nothing at all, the discipline the verified ledger keeps in the other
+	 * direction; and the value carries no PATH, which is exactly what the withdrawal beside it
+	 * exists to take back.
+	 */
+	@Test
+	public void aRefusalRecordsTheArtifactAndItsCodeAndAVerificationRecordsNothing() throws Exception {
+		Path fixture = work.resolve("manifest-refusal-record.tsv");
+		Files.write(fixture, ("recorded-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
+				+ "\n").getBytes(StandardCharsets.UTF_8));
+		Path target = work.resolve("model.bin");
+		String call = "fetch_or_degrade recorded-artifact '" + target + "' 'the recorded artifact'\n"
+				+ "echo \"REFUSED=[$MODEL_MANIFEST_REFUSED]\"";
+
+		served = SUBSTITUTED_BYTES;
+		Result substituted = library(call, fixture);
+
+		// Equality rather than containment, so the record carrying anything MORE fails too — the
+		// target's path being the thing it must not carry, and containment could not see it.
+		assertEquals("recorded-artifact:" + DIGEST_MISMATCH, refusalRecord(substituted.output),
+				"a refusal must record the artifact and the library's code and nothing else: without them an"
+						+ " operator reading this over REST cannot tell a substitution from a missing manifest"
+						+ " row, and a path here would publish for unverified bytes what the withdrawal beside it"
+						+ " takes back\n" + substituted);
+
+		served = GOOD_BYTES;
+		Files.deleteIfExists(target);
+		Result accepted = library(call, fixture);
+
+		assertEquals("", refusalRecord(accepted.output), "a verification recorded a refusal, so a start with"
+				+ " nothing wrong tells an operator something is\n" + accepted);
+	}
+
+	/**
+	 * What the library left in {@code MODEL_MANIFEST_REFUSED}, read out of the driver's own echo and
+	 * trimmed of the delimiter the accumulation leads with. A driver that echoed nothing fails here
+	 * rather than handing back an empty string that reads as "no refusal".
+	 */
+	private static String refusalRecord(String output) {
+		Matcher record = Pattern.compile("REFUSED=\\[([^\\]]*)\\]").matcher(output);
+		assertTrue(record.find(), "the driver did not echo the refusal record at all:\n" + output);
+		return record.group(1).trim();
 	}
 
 	// ---- the ledger: a path is publishable only for bytes THIS shell verified ------------------
@@ -611,7 +784,7 @@ public class ModelDownloadIntegrityTest {
 	/**
 	 * A verification taken in a subshell is one the shell that writes the path never saw, and the
 	 * ledger says so — the fail-closed direction, and the point. Every shape
-	 * {@code ModelDownloadPinningGuardTest.everyArtifactTheModuleCannotStartWithoutIsFetchedThroughTheExitingForm}
+	 * {@code ModelDownloadPinningGuardTest.everyArtifactChartSearchNeedsIsFetchedInTheStartsOwnShell}
 	 * reads a LINE for is here, plus the two its javadoc names as residue because no line spells
 	 * them: a function that is itself backgrounded, and a multi-line {@code ( … ) &} group.
 	 *

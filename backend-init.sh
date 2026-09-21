@@ -25,11 +25,15 @@
 #   querystore.embedding.vocabFilePath  = querystore/vocab.txt
 #   querystore.embedding.queryModelFilePath = (empty — single encoder)
 # configure_retrieval_gps below now writes them, on every start and only
-# where the property is blank, so a deliberately-set value survives. The
-# one exception is chartsearchai.querystore.enabled on the seed path,
-# which maybe_seed_demo_data asserts outright because a freshly imported
-# dump carries its own value for it. They used to be an operator step,
-# which meant they lived nowhere but the demo's database and a
+# where the property is blank, so a deliberately-set value survives a
+# start that verifies. Two writes are not blank-only:
+# chartsearchai.querystore.enabled on the seed path, which
+# maybe_seed_demo_data asserts outright because a freshly imported dump
+# carries its own value for it, and the withdrawal on a start that
+# verified no embedder, which blanks the two embedder paths and the
+# query-encoder row beside them whatever they held — an operator's own
+# value included. They used to be an operator step, which meant they
+# lived nowhere but the demo's database and a
 # --destroy-volumes deploy deleted the wiring along with it; see that
 # function for what the resulting unconfigured-embedder state costs.
 
@@ -75,23 +79,31 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 # ModelDownloadPinningGuardTest
 # .everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally refuses a
 # test of the file's own presence wrapped around either of them.
+#
+# A refusal leaves chart search OFF and the start RUNNING. What makes that
+# fail-closed is the ledger, not a stopped container: nothing is recorded
+# for a refused artifact, so require_verified declines below, no path to it
+# is written, and whatever path the row holds is taken back, an operator's
+# own included — by blanking the row, or, where that cannot be confirmed,
+# by moving the copy out from under the name it carries. Exiting here
+# instead cost the whole instance and the SPA with it, for a chart-search
+# dependency. Decision 106's amendment records what was observed and what
+# is inferred from it.
 . /usr/local/bin/model-manifest.sh
 
 ONNX_FILE="$QS_DIR/model.onnx"
 VOCAB_FILE="$QS_DIR/vocab.txt"
 
-fetch_or_exit embedder-e5-base-v2-onnx "$ONNX_FILE" "e5-base-v2 ONNX embedder (~440MB)" \
+fetch_or_degrade embedder-e5-base-v2-onnx "$ONNX_FILE" "e5-base-v2 ONNX embedder (~440MB)" \
   "A graph-only ONNX file from an external-data export is ~1MB and the" \
   "runtime fails late, at first inference, with a misleading \"Not a" \
   "directory\" error reading a sidecar weights file that is not there." \
   "The revision is pinned, so it cannot have changed shape upstream: a" \
   "truncated transfer is the likely cause and a restart is the remedy."
-echo "Embedder ready: $ONNX_FILE ($(file_bytes "$ONNX_FILE") bytes)."
 
-fetch_or_exit embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab" \
+fetch_or_degrade embedder-e5-base-v2-vocab "$VOCAB_FILE" "e5-base-v2 vocab" \
   "A truncated vocab fails tokenizer init or, worse, silently degrades" \
   "embeddings as missing tokens fall back to [UNK]."
-echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 
 # ---- LLM: Gemma 4 E4B Instruct, Q4_K_M -------------------------------------
 # Chosen over Gemma 4 E2B, Gemma 4 26B-MoE, and Llama-3.2-3B as the
@@ -122,11 +134,17 @@ echo "Vocab ready: $VOCAB_FILE ($(file_bytes "$VOCAB_FILE") bytes)."
 # fetch_llm_in_background call overwriting them. fetch_and_verify keeps the
 # same discipline, and prefixes every variable of its own with _mm_.
 #
-# A refusal here does not stop the container the way the embedder's does:
-# the weights are fetched in the background precisely so OpenMRS can come up
+# A refusal here stops nothing, as the embedder's no longer does either: the
+# weights are fetched in the background precisely so OpenMRS can come up
 # without them, and chart search already reports its own error while the
-# file is absent. What matters is that rejected bytes are deleted rather
-# than left under the name config.xml points modelFilePath at.
+# file is absent. The difference that remains is the WAITING — these two run
+# in background subshells and the embedder's run in this shell, because the
+# ledger the property write consults cannot be written from a subshell.
+# What matters in both is that rejected bytes are deleted rather than left
+# under the name config.xml points modelFilePath at — on the codes that
+# report a deletion. Codes 4 and 5 report none: 4 never opens the target,
+# so whatever is at that name is untouched, and 5 could not hash what is
+# at it, which the catch-all arm below says outright.
 _download_llm_file() {
   _id=$1
   _target=$2
@@ -551,61 +569,256 @@ gp_value() {
     "SELECT COALESCE(property_value,'') FROM global_property WHERE property='$1'" 2>/dev/null
 }
 
-configure_retrieval_gps() {
-  command -v mariadb >/dev/null 2>&1 || { echo "[retrieval-wiring] mariadb client absent; skipping."; return 0; }
-  if ! openmrs_schema_present; then
-    echo "[retrieval-wiring] $(schema_absent_because); no global properties written, so querystore stays unconfigured and chart search will be off."
-    return 0
-  fi
+# Takes the embedder paths back to the empty string, and answers whether the DATABASE now carries
+# that verdict rather than whether the statements were issued. Three rows go: the two querystore
+# resolves with optional=false, and the query-encoder path beside them, which the last paragraph
+# below is about. Each property is spelled at its own statement, the way the sweep's is: a helper
+# taking the name as $1 would hide it from the guard
+# that reads this file for where a model path is published (ModelDownloadPinningGuardTest
+# .noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger).
+#
+# Every step's status is read, and then the two optional=false values are read back. What the suite
+# pins is that SOME status is read: turn every `|| _wd_issued=no` here into `|| true` and
+# EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached,
+# .theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent and
+# .theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt go red, because a read-back alone
+# answers empty for a database that could not be asked at all — the same answer a withdrawn row
+# gives, fail-open in the one direction this whole gate exists to close. No step is pinned on its
+# own, though: discard the UPDATEs' status, or the reads', or the -z tests on this function's last
+# line, and nothing reds: on every branch these cases drive, what is left still
+# answers. They all stay anyway, since a discarded UPDATE error is what let the start go on
+# saying "its paths are blanked" over a row that still named the file — but on what is driven they
+# are defence in depth over each other rather than separate detectors, and no case tells them
+# apart. configure_retrieval_gps acts on the answer.
+#
+# Every UPDATE is ISSUED before any status is acted on. Chained with `|| return 1` the vocab's
+# UPDATE was never issued on a database that rejected the model path's, so a store that would have
+# taken it kept a row naming half an embedder this start did not verify — and querystore resolves the
+# vocab with optional=false too. One statement's rejection is no verdict on the next. On a database
+# that is not answering, each statement here costs its own connect timeout, which is the same order
+# as the reads and writes below this call already pay on that path.
+#
+# The third row is querystore's query encoder, `querystore.embedding.queryModelFilePath`. querystore
+# resolves it with optional=true, nothing in this repository writes it, and a start that verifies
+# leaves it alone — so a start that verifies never puts a value there for this to take back. What
+# reaches it is a deployment that pointed it at the file these fetches write to: on a refusal that
+# deletes nothing the copy is still on the volume, the quarantine does not run where the withdrawal
+# lands, and querystore opens an ONNX session over bytes this start refused, which is the state #444
+# is about. Its statement joins the answer below through the same `_wd_issued`; it is NOT read back,
+# and that is residue rather than coverage — a database that takes the statement and leaves the row
+# standing is caught for the two rows above and not for this one.
+withdraw_embedder_paths() {
+  _wd_issued=yes
+  seed_sql "$DB_NAME" -e \
+    "UPDATE global_property SET property_value='' WHERE property='querystore.embedding.modelFilePath';" \
+    >/dev/null 2>&1 || _wd_issued=no
+  seed_sql "$DB_NAME" -e \
+    "UPDATE global_property SET property_value='' WHERE property='querystore.embedding.vocabFilePath';" \
+    >/dev/null 2>&1 || _wd_issued=no
+  seed_sql "$DB_NAME" -e \
+    "UPDATE global_property SET property_value='' WHERE property='querystore.embedding.queryModelFilePath';" \
+    >/dev/null 2>&1 || _wd_issued=no
+  _wd_model=$(gp_value 'querystore.embedding.modelFilePath') || _wd_issued=no
+  _wd_vocab=$(gp_value 'querystore.embedding.vocabFilePath') || _wd_issued=no
+  [ "$_wd_issued" = yes ] && [ -z "$_wd_model" ] && [ -z "$_wd_vocab" ]
+}
 
+# The instrument that needs no database: take the FILE out of the two names querystore loads, so a
+# row this start could not withdraw names nothing loadable — for those two names and no others,
+# which the last paragraph below is about. querystore resolves both of these paths with
+# optional=false, and ModelFileResolver throws "Model file not found" for a path with no file at it
+# exactly as OnnxEmbeddingProvider throws for a blank one — so this leaves querystore in the same
+# state a landed withdrawal does, by the other route.
+#
+# Moved rather than deleted, and for the reason file_bytes will not answer 0 for a file it could not
+# measure: code 5 is "this copy could not be hashed", which is a statement about the tools and not
+# about the bytes, and deleting on it would re-download the same file every start to delete it
+# again. An operator keeps the copy, and the next start finds the target absent and fetches the
+# recorded artifact from zero.
+#
+# BOTH copies go, for the reason the withdrawal blanks every row it reaches when one artifact was
+# refused: the gate's unit is the pair, and an embedder without its vocab is not half-configured
+# but unusable. Where only one was refused that costs the other a re-download, which is the price of
+# the pair being the unit everywhere rather than here alone.
+#
+# So the lines below, and the suffix, are about the EMBEDDER and never about the bytes of the file
+# they name. Two shapes reach here with a copy that verified: one artifact refused and the other
+# not, and a verification taken where this shell cannot read it, which refuses nothing at all —
+# MODEL_MANIFEST_REFUSED is empty in the second and _embedder_status says so. Calling either copy
+# refused would put an operator-facing line at odds with the property beside it.
+#
+# It reaches LESS far than the withdrawal, and that is worth stating: the withdrawal blanks whatever
+# the row names, an operator's own path included, while this reaches only the two targets the fetches
+# above wrote to. So a row naming a file this module never provisioned survives this path — which is
+# outside #444 either way, its subject being bytes this module fetched.
+quarantine_unverified_embedder() {
+  for _q_file in "$ONNX_FILE" "$VOCAB_FILE"; do
+    [ -f "$_q_file" ] || continue
+    if mv -f "$_q_file" "$_q_file.unverified" 2>/dev/null; then
+      echo "[retrieval-wiring] moved $_q_file aside to $_q_file.unverified; nothing can load it under the name a global property names." >&2
+    else
+      echo "[retrieval-wiring] could not move $_q_file aside, so querystore may still load an embedder this start did not verify." >&2
+    fi
+  done
+}
+
+configure_retrieval_gps() {
   # Why the sweep has to go off, set by whichever check below finds a reason and empty until one
   # does. Assigned here rather than defaulted, so a value arriving in the environment is not a
   # reason anything measured — the same discipline MODEL_MANIFEST_VERIFIED keeps.
   _sweep_off_because=''
 
-  # Paths are relative to the application data directory, derived from the same
-  # variables the downloads above wrote to so there is one source of truth.
-  gp_set_if_blank 'chartsearchai.querystore.enabled' 'true'
+  # Why this start cannot write a global property at all. Computed rather than RETURNED on, which is
+  # the correction: two unconditional early returns used to sit here — "mariadb client absent", and the schema probe — and either left the
+  # decline arm below unreached, so a row an earlier good start wrote went on naming a file this
+  # start refused at a code that deletes nothing, with querystore.bootstrap.autostart still true.
+  # That is the CWE-494 state #444 removes, reached through the gate meant to close it, and while
+  # fetch_or_degrade's predecessor exited the container it was unreachable. ADR Decision 106.
+  #
+  # It is a DIAGNOSTIC, and never a verdict on whether a row is standing — which is what a third arm
+  # below asserted off it until neither probe could support that. The schema check wants four tables,
+  # so a database carrying global_property without one of the other three answers no while the row is
+  # there and an UPDATE on it lands; and both probes query without a database argument while every
+  # write below passes "$DB_NAME", so a DB_NAME that does not name the database OpenMRS actually uses
+  # answers no for a schema that is entirely present and rejects every write. schema_absent_because
+  # is what keeps "I could not ask" out of the wording either way.
+  #
+  # What that costs on a database that is not answering, stated because it is what the returns
+  # bought: they paid at most one connect timeout for the whole function, and every statement below
+  # now pays its own — the reachability probe, the withdrawal's own statements, then the reads and writes
+  # after it. Count them off issuedStatements() in
+  # EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached,
+  # which drives exactly that branch, rather than trusting a number written here. It costs nothing
+  # measurable on the ordinary compose failure, where the db container is down and the connection
+  # fails at once; the shape that spends it is an address that black-holes, and there it is
+  # spent on top of the 60s maybe_seed_demo_data already waited, against the backend's 30m health
+  # start_period in docker-compose.yml. seed_sql sets no connect timeout on the client, so bounding
+  # it is a lever left open rather than one measured and rejected.
+  _store_unwritable_because=''
+  if ! command -v mariadb >/dev/null 2>&1; then
+    _store_unwritable_because='the mariadb client is absent from this image'
+  elif ! openmrs_schema_present; then
+    _store_unwritable_because=$(schema_absent_because)
+  fi
 
   # #444: this is where a model file's path leaves the script and becomes something querystore
-  # loads, so it may only be written for bytes THIS start verified. require_verified answers that
-  # from the library's own record of what ran in this shell rather than from where the fetches
-  # above are written — so moving them, wrapping them in a function called later, or taking them
-  # in a subshell leaves these two properties unwritten instead of pointing querystore at bytes
-  # nothing checked. A decline also turns the sweep off below, and says so HERE rather than
-  # leaving it to the blank-path test: gp_set_if_blank deliberately leaves an already-written row
-  # standing, so on every deployment past its first good start that property is non-blank whatever
-  # this start did, and nothing else here would answer it. The embedder's own fetches above exit on
-  # a refusal, so a start that gets here with nothing in the ledger is one whose verification is
-  # absent from this shell's ledger rather than one refused in it — a fetch taken in a subshell,
-  # for instance, which swallows the exit as well as the ledger entry. ADR Decision 106.
+  # loads, so it may only stand for bytes THIS start verified. require_verified answers that from
+  # the library's own record of what ran in this shell rather than from where the fetches above are
+  # written — so moving them, wrapping them in a function called later, or taking them in a
+  # subshell leaves these two properties carrying no path instead of pointing querystore at bytes
+  # nothing checked. A start reaches here with nothing in the ledger two ways now, and they need
+  # not be told apart because the answer is the same: the fetch above was REFUSED — which no
+  # longer stops the start — or its verification was taken in a subshell, which records nothing
+  # this shell can read. ADR Decision 106.
+  #
+  # The decline arm WITHDRAWS the paths rather than merely withholding the write, and that is
+  # what makes it fail-closed on a deployment past its first good start. gp_set_if_blank
+  # deliberately leaves an already-written row standing, so that property is non-blank whatever this
+  # start did; and a refusal does not always cost the file the row names — of the codes that report
+  # no deletion, 4 (no manifest row resolves the artifact, so the target is never opened) and 5 (it
+  # could not be hashed) both leave the copy where it was. Withholding the write would then leave
+  # querystore loading an ONNX file still on the volume that this start refused to check, with
+  # OpenMRS up and the healthcheck green. Withdrawing costs an operator their own
+  # path on a start that refused, which is the same courtesy the sweep's own UPDATE below already
+  # declines to extend, and the next good start writes the module's path back. The sweep goes off
+  # on the same verdict, and says so HERE rather than leaving it to the blank-path test below,
+  # which cannot tell a path this start withdrew from one that was never written.
+  #
+  # Two outcomes, because the withdrawal can fail to land and a row that stands unwithdrawn is the
+  # state being removed: it landed, or it did not and the file is put out of reach instead, which
+  # needs no database. There is deliberately no third arm for "there was no row to take back": only
+  # a probe could answer that, a probe can answer no while a row stands, and being wrong there
+  # leaves querystore pointed at bytes this start did not verify. What asserting it saved was one
+  # re-download on a reachable database that has never carried a schema.
   if require_verified embedder-e5-base-v2-onnx embedder-e5-base-v2-vocab; then
     gp_set_if_blank 'querystore.embedding.modelFilePath' "${ONNX_FILE#/openmrs/data/}"
     gp_set_if_blank 'querystore.embedding.vocabFilePath' "${VOCAB_FILE#/openmrs/data/}"
+    _embedder_status='verified in this start'
   else
-    echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are not written; a value already in the database is an earlier start's and no verdict on this one." >&2
     _sweep_off_because='the embedder did not verify in this start'
+    # Whichever way the refusal came, the entry the library recorded for it is what an operator
+    # gets to read; an empty one is the subshell shape, where the bytes may well have verified
+    # somewhere this shell cannot see.
+    _embedder_status="not verified in this start:${MODEL_MANIFEST_REFUSED:- no refusal was recorded, so the verification was taken where this shell cannot read it}"
+    if withdraw_embedder_paths; then
+      echo "[retrieval-wiring] the embedder has not verified in this start, so its paths are blanked; any value already in the database was an earlier start's and no verdict on this one." >&2
+    else
+      echo "[retrieval-wiring] the embedder has not verified in this start and the withdrawal of its paths could not be confirmed (${_store_unwritable_because:-the database did not take the write}); taking the copies on the volume out of reach instead, where this start left any." >&2
+      quarantine_unverified_embedder
+    fi
   fi
 
-  _model_gp=$(gp_value 'querystore.embedding.modelFilePath')
-  _enabled_gp=$(gp_value 'chartsearchai.querystore.enabled')
+  # Nothing below is SKIPPED on the probe's answer, and each statement anything rests on reads its
+  # own status rather than having its outcome predicted — the sweep's UPDATE and the diagnosis's
+  # INSERT here, as the withdrawal's do above. The switch does not and is not relied on to; the
+  # read-backs read theirs only to say so on the summary line, never to decide anything. The two returns this function used
+  # to open with predicted the outcome for all of them — and a prediction is what made the arm above
+  # unreachable, and what would now skip the sweep switch below on a probe answer that can be no
+  # while the row is there and the UPDATE lands, for the reasons the diagnostic above carries.
+  if [ -n "$_store_unwritable_because" ]; then
+    echo "[retrieval-wiring] $_store_unwritable_because, so a global property this start writes may not land; querystore may stay unconfigured and chart search off."
+  fi
+
+  # The retrieval switch, which names no file and needs no verdict on any bytes.
+  gp_set_if_blank 'chartsearchai.querystore.enabled' 'true'
+
+  # The refusal's own diagnosis, in the one channel a deployment nobody can open a shell on has:
+  # readable at GET /ws/rest/v1/systemsetting?q=chartsearchai.models.embedderStatus, the way
+  # seed_status and record_cpu_breadcrumb are. A withdrawn path and a sweep switched off say chart
+  # search is off and nothing about WHY, so a digest refusal, a missing manifest row, a failed
+  # transfer and a verification taken in a subshell are one state seen from outside — and only the
+  # last of those is recoverable by restarting. It carries the artifact id and the library's code
+  # and never a path, which is what the withdrawal above exists to take back.
+  _embedder_status=$(printf %s "$_embedder_status" | sed "s/'/''/g")
+  seed_sql "$DB_NAME" -e \
+    "INSERT INTO global_property (property,property_value,uuid) VALUES ('chartsearchai.models.embedderStatus','$_embedder_status',UUID()) ON DUPLICATE KEY UPDATE property_value='$_embedder_status';" \
+    >/dev/null 2>&1 || echo "[retrieval-wiring] could not record chartsearchai.models.embedderStatus." >&2
+
+  # How each of these is SHOWN on the last line of this function, empty until a read fails. A
+  # gp_value that failed answers the empty string, which is the answer a blanked row gives too, so
+  # that line read "withdrawn and swept off" over the two branches where nothing this start wrote
+  # could land and the rows were still standing — the shape ADR Decision 106 records a third arm
+  # being removed for, a log asserting the opposite so nobody looks. The VALUES stay empty, because
+  # the tests below have to read an unreadable path as no path configured and try the sweep switch
+  # anyway; only the display changes. The vocab has no shown form because that line does not carry
+  # it. Assigned here rather than defaulted, for the reason _sweep_off_because is.
+  _model_shown='' _enabled_shown='' _autostart_shown=''
+  _model_gp=$(gp_value 'querystore.embedding.modelFilePath') || _model_shown='(could not be read)'
+  _vocab_gp=$(gp_value 'querystore.embedding.vocabFilePath')
+  _enabled_gp=$(gp_value 'chartsearchai.querystore.enabled') || _enabled_shown='(could not be read)'
 
   # Never leave the combination that floods: a bootstrap sweep enabled with no embedder to run it.
-  # This test covers the case the property itself can state — nothing has ever configured one —
-  # and the gate above covers the case it cannot, a path an earlier start wrote reading exactly
-  # like one this start verified. The sweep goes off once whichever fired, and when both did the
-  # gate's reason is the one printed, because it names what changed in THIS start.
+  # These tests answer the one case the gate above cannot: the gate PASSED and a write it gates did
+  # not take — gp_set_if_blank discards its own errors, so reading the properties back is the only
+  # thing that knows. Since the decline arm withdraws, the two now agree on a refused start rather
+  # than only the gate firing; the reasons stay separate because they name different causes, and
+  # the gate's is the one printed, because it names what changed in THIS start.
+  #
+  # BOTH paths are read, because either one missing is enough to throw once per record: querystore
+  # resolves the vocab with optional=false as well, so a vocab the write did not reach throws where
+  # the model path alone would have read as configured.
   if [ -z "$_model_gp" ]; then
     _sweep_off_because="${_sweep_off_because:-no embedder path is configured}"
+  elif [ -z "$_vocab_gp" ]; then
+    _sweep_off_because="${_sweep_off_because:-no vocab path is configured beside the embedder path}"
   fi
   if [ -n "$_sweep_off_because" ]; then
-    seed_sql "$DB_NAME" -e \
+    # Read the statement's status for the reason withdraw_embedder_paths reads its own: an UPDATE
+    # the database rejects, discarded, left the start asserting the sweep was off over a row that
+    # still said true.
+    if seed_sql "$DB_NAME" -e \
       "UPDATE global_property SET property_value='false' WHERE property='querystore.bootstrap.autostart';" \
-      >/dev/null 2>&1 || true
-    echo "[retrieval-wiring] $_sweep_off_because; querystore.bootstrap.autostart forced to false so the sweep cannot fail per record."
+      >/dev/null 2>&1; then
+      echo "[retrieval-wiring] $_sweep_off_because; querystore.bootstrap.autostart forced to false so the sweep cannot fail per record."
+    else
+      echo "[retrieval-wiring] $_sweep_off_because, and querystore.bootstrap.autostart could not be written, so the sweep may still run and fail once per record." >&2
+    fi
   fi
 
-  echo "[retrieval-wiring] chartsearchai.querystore.enabled=$_enabled_gp querystore.embedding.modelFilePath=$_model_gp bootstrap.autostart=$(gp_value 'querystore.bootstrap.autostart')"
+  # Read after the switch above rather than inside the line below, so its own status is readable at
+  # all: a command substitution in an argument discards it.
+  _autostart_gp=$(gp_value 'querystore.bootstrap.autostart') || _autostart_shown='(could not be read)'
+  echo "[retrieval-wiring] chartsearchai.querystore.enabled=${_enabled_shown:-$_enabled_gp} querystore.embedding.modelFilePath=${_model_shown:-$_model_gp} bootstrap.autostart=${_autostart_shown:-$_autostart_gp}"
 }
 configure_retrieval_gps || echo "[retrieval-wiring] step errored; continuing to start OpenMRS."
 

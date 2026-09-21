@@ -33,6 +33,23 @@ MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model
 # .theLedgerRefusesAQuestionNamingNothingAndCountsNothingItDidNotMeasure.
 MODEL_MANIFEST_VERIFIED=''
 
+# What fetch_or_degrade REFUSED in this shell, as `<id>:<code>` entries, space-delimited — the
+# ledger's mirror, kept under the same discipline: fetch_or_degrade is the only writer,
+# configure_retrieval_gps in backend-init.sh the only reader, and it is assigned unconditionally so
+# a value arriving in the environment is not a refusal anything here took.
+#
+# It carries the artifact id and the code from the table below, and nothing else. A PATH in it would
+# publish for unverified bytes exactly what require_verified withholds. What it is FOR is the second
+# premise of ADR Decision 106's amendment: on a deployment whose container log nobody in the loop
+# can read, a blanked path says chart search is off and says nothing about why, so a digest refusal,
+# a missing manifest row and a failed transfer are one state seen from outside. The entrypoint
+# records this in a global property that is readable over REST.
+#
+# fetch_and_verify does not write it. The weights go through that one in background subshells, whose
+# variables reach no parent shell, so an entry there would be recorded for the embedder and lost for
+# the weights — one name answering for two behaviours.
+MODEL_MANIFEST_REFUSED=''
+
 # Exit codes fetch_and_verify_url contracts with its callers, which branch on them to say something
 # useful about the artifact they asked for:
 #   0  the file is present and is the reviewed artifact
@@ -259,38 +276,60 @@ fetch_and_verify_override() {
 	fetch_and_verify_url "$1" "$2" 0 "$3" "$4" "the $5 input"
 }
 
-# fetch_or_exit <manifest-id> <target> <label> [diagnostic-line...]
+# fetch_or_degrade <manifest-id> <target> <label> [diagnostic-line...]
 #
-# For an artifact the module cannot start without — the querystore embedder and its vocab, whose
+# For an artifact CHART SEARCH cannot run without — the querystore embedder and its vocab, whose
 # paths configure_retrieval_gps writes into global properties seconds later. Fetches and verifies as
-# fetch_and_verify does, and on any refusal says what the code means and EXITS rather than
-# returning. The caller's diagnostic lines are the SIZE message and are printed for code 2 alone —
-# ADR Decision 106 for why the size refusal has a message of its own.
+# fetch_and_verify does, and on any refusal says what the code means, says the start goes on
+# without chart search, and RETURNS that code. The caller's diagnostic lines are the SIZE message
+# and are printed for code 2 alone — ADR Decision 106 for why the size refusal has a message of its
+# own.
 #
-# The exit leaves the shell this runs IN, so any subshell between here and the entrypoint's own
-# shell swallows it: backgrounding the call with `&`, taking it in a command substitution, and
-# making it an element of a pipeline (`| tee`) all do that, POSIX running every pipeline element in
-# a subshell. The guard named below refuses all three where the call site spells them on the call's
-# own line; a call wrapped in a function that is itself backgrounded or piped is not reachable from
-# a line.
+# It returns rather than exiting, and what keeps that fail-closed is the LEDGER, not the exit: a
+# refusal records nothing in MODEL_MANIFEST_VERIFIED, so require_verified answers no and
+# configure_retrieval_gps WITHDRAWS the embedder paths — and wherever that withdrawal cannot be
+# confirmed to have landed, puts the copy on the volume out of reach instead, which is the only
+# instrument left when the row cannot be blanked. Withholding the write alone would not have been
+# enough once the start continues — a row an earlier good start wrote stands whatever this start
+# did, and codes 3, 4 and 5 delete nothing, so it can still name a file that is still there.
+# Unverified bytes answering a clinical question is the state Decision 106 removes; stopping the
+# container also took the whole OpenMRS instance and its SPA down, on 2026-09-21, and that
+# decision's amendment says which part of the route was observed and which reconstructed.
 #
-# Exiting here rather than leaving the caller to branch narrows the ways of getting it wrong: there
-# is no branch to spell, and what the shell DOES is a behaviour a test drives —
-# ModelDownloadIntegrityTest.aRefusalOfAnArtifactTheModuleCannotStartWithoutStopsTheScript. ADR
-# Decision 106 lists the spellings that defeated the branch this replaced, and what is left.
-fetch_or_exit() {
+# Still asked of the call site: that this runs in the entrypoint's OWN shell. The ledger is an
+# ordinary shell variable, so backgrounding the call with `&`, taking it in a command substitution,
+# or making it an element of a pipeline (`| tee`, POSIX running every pipeline element in a
+# subshell) records the verification somewhere the shell that publishes the path cannot read — and
+# a good download would then configure no retrieval at all. The guard named below refuses all three
+# where the call site spells them on the call's own line; a call wrapped in a function that is
+# itself backgrounded or piped is not reachable from a line.
+#
+# What the shell DOES is a behaviour a test drives —
+# ModelDownloadIntegrityTest.aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable.
+# ADR Decision 106 lists the spellings that defeated the source-reading branch this replaced.
+fetch_or_degrade() {
 	_mm_oe_id=$1
 	_mm_oe_target=$2
 	_mm_oe_label=$3
 	shift 3
 	if fetch_and_verify "$_mm_oe_id" "$_mm_oe_target" "$_mm_oe_label"; then
+		# Reported HERE, on the branch that knows. The caller used to echo it unconditionally after
+		# the call, which was sound only while a refusal exited before reaching it: now that the
+		# call returns, that line would say "ready" for an artifact this shell has just refused,
+		# and for codes 1, 2 and 6 would measure a copy it has just deleted.
+		echo "$_mm_oe_label ready: $_mm_oe_target ($(file_bytes "$_mm_oe_target") bytes)."
 		return 0
 	else
 		_mm_oe_code=$?
+		MODEL_MANIFEST_REFUSED="$MODEL_MANIFEST_REFUSED $_mm_oe_id:$_mm_oe_code"
 	fi
 
-	echo "       Chart search cannot run without a verified copy of this file, so the start is" >&2
-	echo "       refused rather than left to fail at the first query." >&2
+	echo "       Chart search cannot run without a verified copy of this file, so it stays off:" >&2
+	echo "       OpenMRS starts without chart search rather than serving it on bytes nothing" >&2
+	echo "       checked. No path to it is left configured, and a path an earlier start wrote is" >&2
+	echo "       taken back — by blanking the row, or, where that cannot be confirmed, by moving" >&2
+	echo "       the copy out from under the name it carries. Nothing loads this file until a" >&2
+	echo "       start verifies it." >&2
 	case $_mm_oe_code in
 		2)
 			for _mm_oe_line in "$@"; do
@@ -306,14 +345,14 @@ fetch_or_exit() {
 			;;
 		6)
 			# The one refusal that also costs the volume the copy it had. Said here because the
-			# lines above read as "we declined to start on bytes we could not check", which omits
+			# lines above read as "chart search stays off on bytes we could not check", which omits
 			# the fact that decides whether a restart can recover anything.
 			echo "       The copy that was on the volume was refused and deleted, and the pinned" >&2
 			echo "       revision could not then be reached to replace it, so there is no copy of" >&2
 			echo "       this file left. A restart retries the download." >&2
 			;;
 	esac
-	exit "$_mm_oe_code"
+	return "$_mm_oe_code"
 }
 
 # require_url_for_digest <url> <sha256> <url-input-name> <digest-input-name>
@@ -356,7 +395,7 @@ fetch_and_verify() {
 # The ledger is an ordinary shell variable, so a fetch taken in a SUBSHELL — backgrounded, piped,
 # in a command substitution, or inside a function that is any of those — records nothing the parent
 # shell can see, and this answers no. That is the direction to fail in, and it is what covers the
-# subshell shapes fetch_or_exit's line-level guard cannot see.
+# subshell shapes fetch_or_degrade's line-level guard cannot see.
 #
 # 0 or 1, and 1 is NOT a code from the table above: nothing was fetched, so nothing was refused or
 # deleted. Naming no artifact is itself a failure — a call that lost its arguments would otherwise

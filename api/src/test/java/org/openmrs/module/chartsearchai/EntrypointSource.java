@@ -75,7 +75,15 @@ public final class EntrypointSource {
 				+ " code it is named after");
 	}
 
-	/** The logical command starting at {@code from}, continuation lines joined, {@code \\} dropped. */
+	/**
+	 * The logical command starting at {@code from}: continuation lines joined, {@code \\} dropped,
+	 * and a trailing comment removed.
+	 *
+	 * <p><b>The comment is not part of the command, and reading it as part of one defeated a
+	 * guard.</b> {@code … &  # why} still backgrounds the command, while {@code endsWith("&")} is
+	 * false of that text — so a reader asking what the shell DOES with a command has to be handed
+	 * the text the shell reads. ADR Decision 106 records the shape.
+	 */
 	public static String logicalCommand(List<String> lines, int from) {
 		StringBuilder command = new StringBuilder(lines.get(from).trim());
 		int i = from;
@@ -83,7 +91,55 @@ public final class EntrypointSource {
 			command.setLength(command.length() - 1);
 			command.append(' ').append(lines.get(++i).trim());
 		}
-		return command.toString().trim();
+		return withoutComment(command.toString()).trim();
+	}
+
+	/**
+	 * {@code command} up to the {@code #} that opens a comment in it, or all of it where none does.
+	 *
+	 * <p>A {@code #} opens one only where the shell would start a word with it: outside quotes,
+	 * unescaped, and at the start of the command or after whitespace. That is what leaves
+	 * {@code ${VAR#prefix}} and a {@code #} inside an argument alone.
+	 */
+	public static String withoutComment(String command) {
+		String syntax = shellSyntaxOf(command);
+		for (int i = 0; i < syntax.length(); i++) {
+			if (syntax.charAt(i) == '#' && (i == 0 || Character.isWhitespace(command.charAt(i - 1)))) {
+				return command.substring(0, i);
+			}
+		}
+		return command;
+	}
+
+	/**
+	 * {@code command} with everything a quote or a backslash makes literal blanked out, index for
+	 * index. So a {@code &}, a {@code |} or a {@code #} surviving here is the shell's own syntax,
+	 * and one inside an argument — {@code "e5-base-v2 ONNX embedder (~440MB)"}, a diagnostic line
+	 * carrying {@code \"Not a} — is not.
+	 *
+	 * <p>Backslash escapes are read outside single quotes only, which is where the shell reads
+	 * them; inside single quotes a backslash is literal. A line the caller has already stripped of
+	 * its continuation {@code \\} carries none of its own.
+	 */
+	public static String shellSyntaxOf(String command) {
+		StringBuilder syntax = new StringBuilder();
+		char open = 0;
+		for (int i = 0; i < command.length(); i++) {
+			char c = command.charAt(i);
+			if (c == '\\' && open != '\'' && i + 1 < command.length()) {
+				syntax.append("  ");
+				i++;
+			} else if (open == 0 && (c == '\'' || c == '"')) {
+				open = c;
+				syntax.append(' ');
+			} else if (open != 0 && c == open) {
+				open = 0;
+				syntax.append(' ');
+			} else {
+				syntax.append(open == 0 ? c : ' ');
+			}
+		}
+		return syntax.toString();
 	}
 
 	/**

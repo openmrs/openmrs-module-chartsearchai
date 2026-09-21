@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -521,11 +523,12 @@ public class ModelDownloadIntegrityTest {
 	 * property is that unverified bytes never answer a clinical question, not that OpenMRS stops.
 	 *
 	 * <p><b>This replaces a case that asserted the opposite</b>, and the evidence is in ADR
-	 * Decision 106's own amendment: on 2026-09-21 the public demo was hard-down and undiagnosable.
-	 * The backend exited here, the gateway's nginx could then not resolve its {@code backend}
-	 * upstream and exited too, and the SPA went with it — so the whole instance was lost for a
-	 * chart-search dependency, with the refusal's log lines readable only by someone with a shell
-	 * on the host, which the people running it did not have.
+	 * Decision 106's own amendment: on 2026-09-21 the public demo was hard-down and undiagnosable,
+	 * the SPA the gateway serves with it, with the refusal's log lines readable only by someone
+	 * with a shell on the host, which the people running it did not have. The route from this step
+	 * to the gateway is reconstructed rather than observed, and the decision says which half is
+	 * which; the whole instance being lost for a chart-search dependency is the part that does not
+	 * depend on it.
 	 *
 	 * <p><b>What still holds is asserted here, not assumed.</b> The ledger is what makes this
 	 * fail-closed: {@code require_verified} answers no for an artifact this shell did not verify,
@@ -594,6 +597,59 @@ public class ModelDownloadIntegrityTest {
 				"a verified artifact must be reported ready, by the branch that knows it is\n" + accepted);
 		assertTrue(accepted.output.contains("(" + GOOD_BYTES.length + " bytes)"),
 				"the ready line must carry the size it measured\n" + accepted);
+	}
+
+	/**
+	 * <b>The refusal's own record, which is the only channel its REASON has.</b> A withdrawn path
+	 * and a switched-off sweep say chart search is off; they do not say whether a restart can
+	 * recover anything, and on the deployment ADR Decision 106's amendment was measured on nobody
+	 * could read the container log that does. So {@code fetch_or_degrade} records the artifact id
+	 * and the code it answered, and {@code configure_retrieval_gps} puts that into a global
+	 * property REST serves.
+	 *
+	 * <p>Three things are asked of it, because a record that says the wrong thing is worse than
+	 * none: a refusal names the artifact AND the code, so two reasons are told apart; a
+	 * verification records nothing at all, the discipline the verified ledger keeps in the other
+	 * direction; and the value carries no PATH, which is exactly what the withdrawal beside it
+	 * exists to take back.
+	 */
+	@Test
+	public void aRefusalRecordsTheArtifactAndItsCodeAndAVerificationRecordsNothing() throws Exception {
+		Path fixture = work.resolve("manifest-refusal-record.tsv");
+		Files.write(fixture, ("recorded-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
+				+ "\n").getBytes(StandardCharsets.UTF_8));
+		Path target = work.resolve("model.bin");
+		String call = "fetch_or_degrade recorded-artifact '" + target + "' 'the recorded artifact'\n"
+				+ "echo \"REFUSED=[$MODEL_MANIFEST_REFUSED]\"";
+
+		served = SUBSTITUTED_BYTES;
+		Result substituted = library(call, fixture);
+
+		// Equality rather than containment, so the record carrying anything MORE fails too — the
+		// target's path being the thing it must not carry, and containment could not see it.
+		assertEquals("recorded-artifact:" + DIGEST_MISMATCH, refusalRecord(substituted.output),
+				"a refusal must record the artifact and the library's code and nothing else: without them an"
+						+ " operator reading this over REST cannot tell a substitution from a missing manifest"
+						+ " row, and a path here would publish for unverified bytes what the withdrawal beside it"
+						+ " takes back\n" + substituted);
+
+		served = GOOD_BYTES;
+		Files.deleteIfExists(target);
+		Result accepted = library(call, fixture);
+
+		assertEquals("", refusalRecord(accepted.output), "a verification recorded a refusal, so a start with"
+				+ " nothing wrong tells an operator something is\n" + accepted);
+	}
+
+	/**
+	 * What the library left in {@code MODEL_MANIFEST_REFUSED}, read out of the driver's own echo and
+	 * trimmed of the delimiter the accumulation leads with. A driver that echoed nothing fails here
+	 * rather than handing back an empty string that reads as "no refusal".
+	 */
+	private static String refusalRecord(String output) {
+		Matcher record = Pattern.compile("REFUSED=\\[([^\\]]*)\\]").matcher(output);
+		assertTrue(record.find(), "the driver did not echo the refusal record at all:\n" + output);
+		return record.group(1).trim();
 	}
 
 	// ---- the ledger: a path is publishable only for bytes THIS shell verified ------------------

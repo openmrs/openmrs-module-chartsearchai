@@ -8772,11 +8772,22 @@ and RETURNS the code. Nothing about what is accepted moved. Three things were me
 paragraph above did not weigh:
 
 - *The blast radius is the whole instance, not chart search.* On 2026-09-21 the public demo was
-  hard-down. The backend exited at this step; the gateway's nginx could then not resolve its
-  `backend` upstream and exited too; and the SPA, which that same gateway serves, went with it.
-  Compose showed it plainly on the next deploy — `frontend Running` and `db Running`, while
-  `backend` and `gateway` had both to be *created* anew. So a chart-search dependency took down
-  every other thing the deployment does, including the patient chart itself.
+  hard-down, and the SPA the same gateway serves was down with it. **What was OBSERVED is one
+  thing and the chain from it is another, and review round 2 of this amendment found the chain
+  written as fact.** Observed, in the next deploy's compose output: `frontend Running` and
+  `db Running`, while `backend` and `gateway` had both to be *created* anew. Inferred from it: that
+  the backend exited at this step and the gateway followed. The link the observation does not
+  supply is the REMOVAL — a container that exits still exists, in `docker ps -a`, until something
+  removes it, so "Creating" establishes that both were absent at that moment and not that exiting
+  is what removed them. Whatever the `deploy emr-3-ai` forced command runs supplies that link, and
+  nothing in this repository can read it. What this repository does supply is why the gateway's
+  fate is coupled to the backend's at all: `Dockerfile.gateway` inserts a
+  `proxy_pass http://backend:8080` location into both of the distro's nginx templates, and
+  `.github/workflows/build-docker.yml` builds and publishes that image under the tag
+  `docker-compose.yml` pulls — so the name `backend` is spelled in a config this repo owns, though
+  the distro's own `location /openmrs` block around it is upstream and not read here. **The
+  direction of the change does not rest on the chain**: an instance-wide dependency on a
+  chart-search artifact should not exist whichever way the two containers went down.
 - *The operator the cost was priced against does not exist here.* "The refusal's own log lines are
   what an operator is left to report" assumes someone can read the container log. On
   `chartsearchai.openmrs.org` nobody in the loop could: no shell on the host, and the Grafana and
@@ -8784,7 +8795,10 @@ paragraph above did not weigh:
   outside, from compose lifecycle lines in a GitHub Actions log.
 - *The exit was never what made it fail-closed.* `require_verified` is. A refusal records nothing
   in `MODEL_MANIFEST_VERIFIED`, so `configure_retrieval_gps` declines, and it does that whether the
-  start then stops or continues. The exit was redundant with respect to the property it was
+  start then stops or continues — **which took two more rounds to be true of every path through
+  that function, rather than of the gate alone**: what the decline OWED grew when the start stopped
+  stopping, and two returns sat above it. Both corrections are recorded under *A decline turns the
+  bootstrap sweep off itself* below. The exit was redundant with respect to the property it was
   defending, and the two are now separated:
   `ModelDownloadIntegrityTest.aRefusalOfTheEmbedderLetsTheStartContinueWithItsPathStillUnpublishable`
   asserts the code, the continuation and the ledger's refusal together, because it is the three of
@@ -8906,9 +8920,24 @@ shell. One `&` on the call's last continuation line backgrounds the whole comman
 appended to the same call makes it an element of a pipeline, which POSIX also runs in a subshell.
 Both left every source guard and shellcheck green, and both were reproduced against the real
 library: the refusal printed in full, the script then ran on to the next statement and exited 0.
-The guard now reads the logical command and refuses all three shapes a line can spell — a call
-that is not the command itself, a command substitution being a subshell too; a trailing `&`; and a
-pipe.
+The guard now reads the logical command and refuses a call that is not the command itself, a
+command substitution being a subshell too, and an unquoted `&` or `|` anywhere in it that is not
+part of `&&`, `||` or a redirection.
+
+**"A TRAILING `&`" is how that was first written, and review round 2 of the amendment defeated it
+twice over.** `endsWith("&")` is false of `… &  # overlap it with the LLM pulls`, which the shell
+reads as the same background operator and a comment, and false of `… & wait`, where the `&`
+terminates the fetch and `wait` is the next command — the comment because `logicalCommand` joined
+continuations without stripping one, and the `wait` because the question was asked of the command's
+END rather than of the command. Both left this class, the wiring suite, `sh -n` and
+`shellcheck -s sh -S warning` green at the PR head; the first is the annotated form of the very
+edit this decision records being attempted once. So `logicalCommand` now drops the comment, and the
+operator question is asked over `EntrypointSource.shellSyntaxOf` — the command with everything a
+quote or a backslash makes literal blanked out, which is what keeps a `&` inside
+`'e5-base-v2 (~440MB) & its vocab'` from reading as syntax while `2>&1` and `&&` stay allowed.
+`ModelDownloadPinningGuardTest.theOwnShellRuleReadsTheOperatorsTheShellReads` spells the shapes as
+commands, because the shipped file spells none of them and the rule would otherwise be pinned only
+by a mutation nobody runs.
 
 **The residue is named rather than claimed away**, and the previous attempt to bound it — "what is
 bounded is the accidental edit" — was itself falsified by the `| tee`, which is about as ordinary
@@ -8970,6 +8999,12 @@ flood `configure_retrieval_gps` exists to prevent, reached from inside the gate 
 close it. So the `else` arm now writes the sweep off on the ledger's verdict, and the blank-path
 test stays for the one case only it can answer — the gate PASSED and the write did not take, which
 `gp_set_if_blank` discards the error of. The two reasons are distinct in the line an operator gets.
+**It read ONE of the two writes**, which review round 2 found the sentence beside it overstating:
+querystore resolves the vocab path with `optional=false` as well, so a vocab whose write never
+landed throws once per record exactly as a missing model path does, while `modelFilePath` reads back
+non-blank and the sweep stays on. Both are read back now, each with its own reason.
+`EntrypointRetrievalWiringTest.theSweepGoesOffWhenTheVerifiedVocabsPathCouldNotBeWritten` is the
+case; drop the second arm and read it fail.
 `EntrypointRetrievalWiringTest` drives both arms, that third case, and a verified control; it is a
 third channel because neither of the other two can see a composition — one drives the library with
 no database, the other reads source. The claim that the two halves already composed to one
@@ -9000,8 +9035,72 @@ extend, and the next good start writes the module's back.
 is the case; `ModelDownloadPinningGuardTest`'s inverted question needed a WITHDRAWAL exemption to
 let a `querystore.embedding.*` write sit outside the ledger's gate, read off the empty value in the
 statement rather than off a helper's name, and it asserts one exists so the exemption cannot go
-unexercised. The code is fail-closed throughout; the wording moved twice, and the third time the
-code moved with it.
+unexercised. The wording moved twice, and the third time the code moved with it — and a sentence
+here saying the code was then "fail-closed throughout" was refuted in the next round, below.
+
+**And the blanking sat below two returns that had nothing to do with it, which review round 2 of
+that amendment found.** `configure_retrieval_gps` opened with an unconditional return for an absent
+`mariadb` client and another for the schema probe, and both predate everything above: they are about
+whether the function can CONFIGURE retrieval, and the arm they were skipping is the safety. So a
+start refused at a code that deletes nothing, on a deployment whose database the entrypoint could not
+reach or whose probe answered below four tables, reached `exec /openmrs/startup.sh` with
+`modelFilePath` still naming the unverified ONNX on the volume, `querystore.bootstrap.autostart`
+still true, and one log line saying the opposite — the same CWE-494 state one paragraph up, reached
+by a different route, and unreachable too while the form exited. `startup.sh` waits for the database
+on its own afterwards, so a database this step missed is not a database OpenMRS then fails on.
+
+Three things changed, and the first is the shape rather than a patch: **the function no longer
+predicts what the database will accept, it reads each statement's status.** The two returns are one
+diagnostic line, the withdrawal runs above it, and the sweep switch runs below — which matters
+because the schema probe is the one of the two predictions that can be WRONG while a row stands, it
+wanting `global_property` and three other tables. Second, the withdrawal ANSWERS: both `UPDATE`s'
+statuses are read and both values read back, because "the statement was issued" and "the row is
+blank" are different questions, and a read-back alone answers empty for a database that could not be
+asked at all — fail-open in exactly the direction this gate exists to close. Third, where the
+withdrawal cannot land, `quarantine_unverified_embedder` moves the refused copy to
+`<target>.unverified`: querystore resolves both paths with `optional=false`, and
+`ModelFileResolver.resolveModelPath` throws `Model file not found` for a path with no file at it
+just as `OnnxEmbeddingProvider.resolvePath` throws for a blank one, so the row the start could not
+withdraw names nothing loadable and the downstream state is the one a landed withdrawal produces.
+Moved rather than deleted for the reason `file_bytes` will not answer 0: code 5 is a statement about
+the tools, not the bytes, and deleting on it re-downloads the same file every start to delete it
+again. Where the database is REACHABLE and carries no schema there is no row to withdraw, so that
+one branch says so and moves nothing.
+
+The three routes in are each a case —
+`EntrypointRetrievalWiringTest.theWithdrawalIsIssuedEvenWhereTheSchemaProbeAnswersNo`,
+`.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached`,
+`.theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent` — and
+`.theUnverifiedCopyIsPutOutOfReachWhenTheWithdrawalWasRejected` is the rejected `UPDATE`. **None of
+them could be written before the harness was unstubbed**, which is its own lesson: its `mariadb`
+stand-in answered the `information_schema` probe with a hardcoded 4, always reached the database, and
+could only refuse an `INSERT`, so the reachability check, the schema probe and the withdrawal's own
+statement were each held at one answer and no case could drive any of the four. Mutate the early
+returns back in, or the withdrawal back to
+`|| true`, and read which cases fail.
+
+*And a refusal now says WHY where it can be read.* The amendment's second premise — nobody on the
+deployment could read a container log — was answered only halfway: a withdrawn path and a sweep
+switched off say chart search is off and nothing about which of the codes fired, so a digest refusal,
+a missing manifest row, a failed transfer and a verification taken in a subshell were one state from
+outside, with different remedies. `fetch_or_degrade` now records `<id>:<code>` in
+`MODEL_MANIFEST_REFUSED` — the verified ledger's mirror, one writer and one reader, assigned
+unconditionally for the same reason — and the entrypoint puts it in
+`chartsearchai.models.embedderStatus`, the channel `seed_status` and `record_cpu_breadcrumb` already
+use. It carries the id and the code and never a path, which is what the withdrawal beside it exists
+to take back. `ModelDownloadIntegrityTest.aRefusalRecordsTheArtifactAndItsCodeAndAVerificationRecordsNothing`
+is the library half; `EntrypointRetrievalWiringTest.theRefusedArtifactAndItsCodeAreRecordedWhereRestCanReadThemAndAreReplacedOnceItVerifies`
+is the composed one, and its second run is what says a start that verifies replaces an earlier
+refusal rather than leaving it standing.
+
+**What this still does not close, named rather than claimed away.** The gateway shares the backend
+container's fate for every OTHER reason that container can be absent — the war download in
+`Dockerfile.backend`, the JVM, Tomcat — and none of that is a chart-search dependency, so none of it
+is in scope here; what this decision removed is the one such dependency it had put there. And the
+flood the sweep switch exists to prevent is not prevented on the quarantine path: nothing there can
+write `querystore.bootstrap.autostart`, so a sweep an earlier start left on runs and throws once per
+record over a path that now names no file. That is the trade taken deliberately — a logging cost
+against unverified bytes answering clinical questions at the scale of a full sweep.
 
 
 *The entrypoint's size guard stays, ahead of the digest.* A digest subsumes it as a check and does
@@ -9054,7 +9153,9 @@ revision has relaxed back to a branch name. Mutate any of those and read the fai
 by name, against a `mariadb` stand-in whose global-property store persists across starts — the one
 channel that can see what the ledger and `gp_set_if_blank` compose to, and since round 1 of the
 amendment's review it runs the entrypoint's own two `fetch_or_degrade` statements ahead of it, so
-what the CALL SITE does with a refusal is driven rather than read.
+what the CALL SITE does with a refusal is driven rather than read. Since round 2 its stand-in also
+takes the reachability, the schema count and the write refusal as knobs rather than answering each
+of them one fixed way, which is what makes those three gates inside that function reachable at all.
 `EntrypointVolumeVerificationTest` runs the weights fetch the same way, with the target already on
 the volume, which is where "a file already there is verified rather than trusted for its name" now
 lives.

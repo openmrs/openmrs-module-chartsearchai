@@ -135,6 +135,10 @@ public class ModelDownloadPinningGuardTest {
 			// line an operator gets names what changed in THIS start.
 			// EntrypointRetrievalWiringTest drives it.
 			"querystore.bootstrap.autostart",
+			// The refusal's own diagnosis, which is the artifact id and the library's code and
+			// deliberately not a path — ADR Decision 106's amendment, whose second premise is that
+			// nobody on the deployment can read a container log.
+			"chartsearchai.models.embedderStatus",
 			// The demo seed's own bookkeeping and the CPU breadcrumb.
 			"chartsearchai.demo.seedStatus", "chartsearchai.demo.seededDataset", "chartsearchai.demo.cpuInfo");
 
@@ -716,12 +720,13 @@ public class ModelDownloadPinningGuardTest {
 	 * subshell.
 	 *
 	 * <p><b>What this reads, and the residue.</b> It reads the logical command such an artifact is
-	 * named on, and asks three things of it: that the command IS a {@code fetch_or_degrade} rather
-	 * than one taken inside another (a command substitution is a subshell too), that it does not
-	 * end in {@code &}, and that it contains no pipe. What a line-level rule cannot see is a
-	 * subshell the line does not spell — a {@code fetch_or_degrade} inside a shell FUNCTION that is
-	 * itself backgrounded or piped, or inside a multi-line {@code ( … ) &} group — and closing that
-	 * would mean the library detecting its own subshell, which it has no portable way to do.
+	 * named on, and asks two things of it: that the command IS a {@code fetch_or_degrade} rather
+	 * than one taken inside another (a command substitution is a subshell too), and that
+	 * {@link #outsideTheStartsOwnShell} finds no operator in it that moves the call into a
+	 * subshell. What a line-level rule cannot see is a subshell the line does not spell — a
+	 * {@code fetch_or_degrade} inside a shell FUNCTION that is itself backgrounded or piped, or
+	 * inside a multi-line {@code ( … ) &} group — and closing that would mean the library detecting
+	 * its own subshell, which it has no portable way to do.
 	 */
 	@Test
 	public void everyArtifactChartSearchNeedsIsFetchedInTheStartsOwnShell() throws IOException {
@@ -759,20 +764,83 @@ public class ModelDownloadPinningGuardTest {
 								+ " the one whose verification the property write reads: " + command);
 				continue;
 			}
-			if (command.endsWith("&") && !command.endsWith("&&")) {
-				violations.add("backend-init.sh backgrounds a fetch_or_degrade call, so it records its"
+			String subshell = outsideTheStartsOwnShell(command);
+			if (subshell != null) {
+				violations.add("backend-init.sh " + subshell + " a fetch_or_degrade call, so it records its"
 						+ " verification in a subshell the property write cannot read: " + command);
-			}
-			// `||` is an or-list separator and leaves the call in the current shell; a single `|`
-			// makes it an element of a pipeline, and POSIX runs every element in a subshell.
-			if (command.replace("||", "").indexOf('|') >= 0) {
-				violations.add("backend-init.sh pipes a fetch_or_degrade call, and every element of a pipeline"
-						+ " runs in a subshell, so its verification reaches no ledger: " + command);
 			}
 		}
 
 		assertEquals(List.of(), violations, "a verification the start's own shell would never see");
 		assertTrue(fetches > 0, "backend-init.sh fetches nothing chart search needs; this guard read nothing");
+	}
+
+	/**
+	 * How {@code command} moves the call out of the start's own shell — the verb for the message
+	 * above — or {@code null} where it does not.
+	 *
+	 * <p><b>Asked of the whole command's SYNTAX, not of its last character.</b>
+	 * {@code endsWith("&")} was the earlier reading, and it is false of two shapes that background
+	 * the command all the same: {@code … &  # why}, which the shell reads as {@code … &} and a
+	 * comment, and {@code … & wait}, where the {@code &} terminates the fetch and {@code wait} is
+	 * the next command. Both left this class green at the PR head (ADR Decision 106). So the
+	 * question is asked of the whole command: does an unquoted {@code &} or {@code |} appear
+	 * ANYWHERE in it that is not part of {@code &&}, {@code ||} or a redirection, over the text
+	 * {@link EntrypointSource#shellSyntaxOf} leaves — a {@code &} or a {@code |} inside an
+	 * argument being text rather than syntax.
+	 *
+	 * <p>{@code &&} and {@code ||} are list separators and leave the call in this shell, so they
+	 * are not reported; what they lead to is
+	 * {@code EntrypointRetrievalWiringTest.theEntrypointsOwnEmbedderFetchesLeaveTheStartRunning}'s
+	 * question, which drives the statements instead of reading them. {@code >&} and {@code <&} are
+	 * redirections. The residue is the one this guard's own javadoc names: a subshell no operator on
+	 * this line spells.
+	 */
+	private static String outsideTheStartsOwnShell(String command) {
+		String operators = EntrypointSource.shellSyntaxOf(EntrypointSource.withoutComment(command))
+				.replace("&&", "  ").replace(">&", "  ").replace("<&", "  ");
+		if (operators.indexOf('&') >= 0) {
+			return "backgrounds";
+		}
+		if (operators.replace("||", "  ").indexOf('|') >= 0) {
+			return "pipes";
+		}
+		return null;
+	}
+
+	/**
+	 * The shapes {@link #outsideTheStartsOwnShell} has to answer, spelled as commands rather than
+	 * left to whatever {@code backend-init.sh} happens to contain: the shipped file spells none of
+	 * them, so the rule would otherwise be pinned only by the absence of a mutation nobody runs.
+	 *
+	 * <p>Mutate the predicate — swap the whole-command scan back for {@code endsWith("&")}, drop
+	 * the {@code &&} exemption, blank the quote walk — and read which rows fail.
+	 */
+	@Test
+	public void theOwnShellRuleReadsTheOperatorsTheShellReads() {
+		Map<String, String> shapes = new LinkedHashMap<String, String>();
+		// Backgrounded, in the three spellings a line can carry.
+		shapes.put("fetch_or_degrade a \"$T\" 'label' &", "backgrounds");
+		shapes.put("fetch_or_degrade a \"$T\" 'label' &  # overlap it with the LLM pulls", "backgrounds");
+		shapes.put("fetch_or_degrade a \"$T\" 'label' & wait", "backgrounds");
+		// A pipeline element.
+		shapes.put("fetch_or_degrade a \"$T\" 'label' | tee /tmp/log", "pipes");
+		// In this shell: a plain call, a list, and arguments that merely CONTAIN an operator or a
+		// comment character. The diagnostic lines the entrypoint passes are of the last kind.
+		shapes.put("fetch_or_degrade a \"$T\" 'label'", null);
+		shapes.put("fetch_or_degrade a \"$T\" 'label' || echo 'refused'", null);
+		shapes.put("fetch_or_degrade a \"$T\" 'label' && echo 'ready'", null);
+		shapes.put("fetch_or_degrade a \"$T\" 'e5-base-v2 (~440MB) & its vocab'", null);
+		shapes.put("fetch_or_degrade a \"$T\" \"a misleading \\\"Not a\\\" error | not a pipe\"", null);
+		shapes.put("fetch_or_degrade a \"${T#/openmrs/data/}\" 'label'", null);
+		shapes.put("fetch_or_degrade a \"$T\" 'label' 2>&1", null);
+		shapes.put("fetch_or_degrade a \"$T\" 'label'  # fetched here & verified here", null);
+
+		Map<String, String> read = new LinkedHashMap<String, String>();
+		for (String command : shapes.keySet()) {
+			read.put(command, outsideTheStartsOwnShell(command));
+		}
+		assertEquals(shapes, read, "the own-shell rule does not read these commands the way the shell does");
 	}
 
 	/**

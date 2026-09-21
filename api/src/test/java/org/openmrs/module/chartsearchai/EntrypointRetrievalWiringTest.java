@@ -81,7 +81,7 @@ public class EntrypointRetrievalWiringTest {
 	 */
 	private static final List<String> WIRING_FUNCTIONS = List.of("seed_sql", "db_reachable",
 			"openmrs_schema_present", "schema_absent_because", "gp_set_if_blank", "gp_value",
-			"configure_retrieval_gps");
+			"withdraw_embedder_paths", "quarantine_unverified_embedder", "configure_retrieval_gps");
 
 	/**
 	 * The artifacts the gate asks about, which the fixture manifest has to carry rows for.
@@ -96,6 +96,9 @@ public class EntrypointRetrievalWiringTest {
 	private static final String VOCAB_PATH_GP = "querystore.embedding.vocabFilePath";
 
 	private static final String AUTOSTART_GP = "querystore.bootstrap.autostart";
+
+	/** Where the refusal's own diagnosis is recorded, readable over REST. */
+	private static final String EMBEDDER_STATUS_GP = "chartsearchai.models.embedderStatus";
 
 	private static final byte[] RECORDED_BYTES = "the embedder bytes the maintainers reviewed\n"
 			.getBytes(StandardCharsets.UTF_8);
@@ -126,6 +129,19 @@ public class EntrypointRetrievalWiringTest {
 	private Path vocab;
 
 	private Path manifest;
+
+	/**
+	 * What the {@code information_schema} probe answers, {@code null} for the stand-in's own
+	 * default of four. The gate {@code openmrs_schema_present} closes on was stubbed permanently
+	 * open until round 2 of the amendment's review, so no case could reach past it.
+	 */
+	private String schemaTables;
+
+	/** Whether the stand-in refuses every statement, the way a database that is not answering does. */
+	private boolean databaseUnreachable;
+
+	/** Whether the {@code mariadb} client is on PATH at all — the first of the two old returns. */
+	private boolean clientAbsent;
 
 	@BeforeEach
 	public void setUp() throws Exception {
@@ -238,6 +254,192 @@ public class EntrypointRetrievalWiringTest {
 		assertTrue(run.output.contains(PAST_THE_FETCHES), "backend-init.sh's own embedder fetch statements ended"
 				+ " the start on a refusal, which is the outage ADR Decision 106's amendment measures\n" + run);
 		assertEquals(0, run.exit, "the start did not survive its own embedder fetches\n" + run);
+	}
+
+	// ---- and reaches the withdrawal whatever else the start cannot do --------------------------
+
+	/**
+	 * <b>The schema probe answering no did not use to reach the withdrawal at all.</b>
+	 * {@code configure_retrieval_gps} opened with two unconditional returns, and this was the
+	 * second: a probe answer of anything below four tables ended the function before the gate.
+	 * The probe is the one of the two that can be WRONG while the row stands — it wants
+	 * {@code global_property} and three others, so a database carrying the row without one of the
+	 * others answers no and the {@code UPDATE} on it lands. Driven with the count the stand-in
+	 * reports set to zero and the last good start's rows in the store: the withdrawal has to be
+	 * issued, and the sweep switched off, on a start that could not otherwise configure anything.
+	 */
+	@Test
+	public void theWithdrawalIsIssuedEvenWhereTheSchemaProbeAnswersNo() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(AUTOSTART_GP, "true");
+		schemaTables = "0";
+
+		Run run = run(refusedWithNothingDeleted());
+
+		assertTrue(run.output.contains("carries no OpenMRS schema"), "the schema gate did not fire, so this case is"
+				+ " not the state it is about\n" + run);
+		assertEquals("", gp(MODEL_PATH_GP), "querystore is still pointed at an ONNX file this start refused to"
+				+ " verify, because the schema probe ended the function before the withdrawal\n" + run);
+		assertEquals("", gp(VOCAB_PATH_GP), "the vocab row was left standing for the same reason\n" + run);
+		assertEquals("false", gp(AUTOSTART_GP), "the sweep was left on over a path this start did not verify\n"
+				+ run);
+	}
+
+	/**
+	 * <b>The withdrawal that cannot be issued at all, and the instrument that needs no database.</b>
+	 * A database the entrypoint cannot reach answers every statement with a failure, so the row the
+	 * last good start wrote cannot be read, cannot be blanked, and goes on naming an ONNX file this
+	 * start refused at a code that deletes nothing. {@code startup.sh} waits for the database on its
+	 * own afterwards, so OpenMRS can serve against one this step missed — the row is not a dead
+	 * letter. What is left is the FILE, and moving it out from under the name the row carries leaves
+	 * querystore throwing "Model file not found" where a landed withdrawal would have it throwing on
+	 * an unconfigured property.
+	 */
+	@Test
+	public void theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(AUTOSTART_GP, "true");
+		databaseUnreachable = true;
+
+		Run run = execute(refusedWithNothingDeleted(), null);
+
+		assertTrue(run.output.contains("could not be reached"), "the database was reachable, so this case is not"
+				+ " the state it is about\n" + run);
+		assertEquals("querystore/model.onnx", gp(MODEL_PATH_GP), "the row was withdrawn after all, so what this"
+				+ " case then reads about the file says nothing\n" + run);
+		assertFalse(Files.exists(onnx), "the row still names querystore/model.onnx and the unverified ONNX file is"
+				+ " still there under that name, so querystore embeds clinical questions with bytes this start"
+				+ " refused\n" + run);
+		assertFalse(Files.exists(vocab), "the vocab this start refused is still under the name its row carries\n"
+				+ run);
+		assertTrue(Files.exists(quarantined(onnx)) && Files.exists(quarantined(vocab)),
+				"the refused copies were not moved aside, so an operator has lost them\n" + run);
+	}
+
+	/**
+	 * <b>The first of the two returns: no {@code mariadb} client in the image.</b> Nothing here can
+	 * read or write a global property, so the same instrument applies — and this is the case that
+	 * proves the client really was absent, by asserting the stand-in was handed nothing at all.
+	 */
+	@Test
+	public void theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(AUTOSTART_GP, "true");
+		clientAbsent = true;
+
+		Run run = execute(refusedWithNothingDeleted(), null);
+
+		assertTrue(issuedStatements().isEmpty(), "a mariadb client answered, so this case did not drive an image"
+				+ " without one: " + issuedStatements() + "\n" + run);
+		assertTrue(run.output.contains("Chart search cannot run without a verified copy of this file"),
+				"nothing was refused, so this case says nothing about what the start then did\n" + run);
+		assertFalse(Files.exists(onnx), "the row an earlier start wrote still names the unverified ONNX file and"
+				+ " nothing here could withdraw it\n" + run);
+		assertTrue(Files.exists(quarantined(onnx)), "the refused copy was not moved aside\n" + run);
+	}
+
+	/**
+	 * <b>The withdrawal that is issued and does not land.</b> Both statements were
+	 * {@code >/dev/null 2>&1 || true}, so a database that answers the reads and rejects the
+	 * {@code UPDATE} left the start printing "so its paths are blanked" over a row that still named
+	 * the file. Reading the read-back is not the detector either — it answers empty for a database
+	 * that could not be asked. So the statement's own status is read, and a withdrawal that did not
+	 * land falls back to the file.
+	 */
+	@Test
+	public void theUnverifiedCopyIsPutOutOfReachWhenTheWithdrawalWasRejected() throws Exception {
+		given(MODEL_PATH_GP, "querystore/model.onnx");
+		given(VOCAB_PATH_GP, "querystore/vocab.txt");
+		given(AUTOSTART_GP, "true");
+
+		Run run = run(refusedWithNothingDeleted(), MODEL_PATH_GP);
+
+		assertEquals("querystore/model.onnx", gp(MODEL_PATH_GP), "the write was supposed to be rejected; this case"
+				+ " proves nothing if it landed\n" + run);
+		assertFalse(run.output.contains("so its paths are blanked"), "the start said the paths were blanked over a"
+				+ " row that still names the file\n" + run);
+		assertFalse(Files.exists(onnx), "the row still names the unverified ONNX file and the file is still there"
+				+ " under that name\n" + run);
+		assertTrue(Files.exists(quarantined(onnx)), "the refused copy was not moved aside\n" + run);
+		assertEquals("false", gp(AUTOSTART_GP), "the sweep was left on over a path this start did not verify\n"
+				+ run);
+	}
+
+	/**
+	 * <b>The vocab half of the read-back, which the claim beside it used to overstate.</b> The
+	 * comment said the test answers "the gate PASSED and the write it gates did not take", and it
+	 * read one of the two writes. querystore resolves the vocab path with {@code optional=false}
+	 * as well, so a vocab the write never reached throws once per record exactly as a missing model
+	 * path does — while {@code modelFilePath} reads back non-blank and the sweep stays on.
+	 */
+	@Test
+	public void theSweepGoesOffWhenTheVerifiedVocabsPathCouldNotBeWritten() throws Exception {
+		given(AUTOSTART_GP, "true");
+		Files.write(onnx, RECORDED_BYTES);
+		Files.write(vocab, RECORDED_BYTES);
+
+		Run run = run(verified(), VOCAB_PATH_GP);
+
+		assertEquals(onnx.toString(), gp(MODEL_PATH_GP), "the model path was supposed to land; this case is about"
+				+ " the other one failing alone\n" + run);
+		assertEquals("", gp(VOCAB_PATH_GP), "the vocab write was supposed to be rejected; this case proves nothing"
+				+ " if it landed\n" + run);
+		assertEquals("false", gp(AUTOSTART_GP), "the sweep was left on with no vocab for it to tokenize with\n"
+				+ run);
+	}
+
+	// ---- and says which artifact, and why, where REST can read it ------------------------------
+
+	/**
+	 * <b>The diagnosis, in the one channel a deployment nobody can open a shell on has.</b> A
+	 * withdrawn path and a switched-off sweep say chart search is off and nothing about why: a
+	 * digest refusal, a missing manifest row and a failed transfer are one state seen from outside,
+	 * and only some of them are recoverable by restarting. The second premise of ADR Decision 106's
+	 * amendment is that nobody on {@code chartsearchai.openmrs.org} could read a container log, so
+	 * the artifact id and the library's code are recorded where {@code seed_status} and
+	 * {@code record_cpu_breadcrumb} record theirs.
+	 *
+	 * <p>The second run is what says the row is not a one-way latch: a start that verifies has to
+	 * replace an earlier start's refusal rather than leave it standing, or the property tells an
+	 * operator about a refusal that is over.
+	 */
+	@Test
+	public void theRefusedArtifactAndItsCodeAreRecordedWhereRestCanReadThemAndAreReplacedOnceItVerifies()
+			throws Exception {
+		Run refused = run(refusedWithNothingDeleted());
+
+		assertTrue(gp(EMBEDDER_STATUS_GP).contains(GATED_ARTIFACTS.get(0) + ":4"), "the refused artifact and the"
+				+ " library's code for it are not readable over REST, so a refusal cannot be told from a manifest"
+				+ " that is missing a row: " + gp(EMBEDDER_STATUS_GP) + "\n" + refused);
+		assertFalse(gp(EMBEDDER_STATUS_GP).contains(onnx.toString()), "the diagnosis carries the path to bytes"
+				+ " this start refused, which is what the withdrawal beside it takes back: "
+				+ gp(EMBEDDER_STATUS_GP) + "\n" + refused);
+
+		Files.write(onnx, RECORDED_BYTES);
+		Files.write(vocab, RECORDED_BYTES);
+		Run verified = run(verified());
+
+		assertEquals("verified in this start", gp(EMBEDDER_STATUS_GP), "the earlier start's refusal is still what"
+				+ " an operator reads on a start that verified\n" + verified);
+	}
+
+	/**
+	 * A verification taken where this shell cannot see it is the one shape that reaches the decline
+	 * arm with nothing refused — ADR Decision 106's fail-SHUT direction, where the bytes verify and
+	 * a healthy deployment configures no retrieval. It is recorded as that rather than as a refusal,
+	 * because a restart is no remedy for it and the refusal codes would send an operator looking for
+	 * one.
+	 */
+	@Test
+	public void aVerificationThisShellCannotSeeIsRecordedAsThatRatherThanAsARefusal() throws Exception {
+		Run run = run(refusedInASubshell());
+
+		assertTrue(gp(EMBEDDER_STATUS_GP).startsWith("not verified in this start"),
+				"a start that published no path recorded no verdict at all: " + gp(EMBEDDER_STATUS_GP) + "\n" + run);
+		assertTrue(gp(EMBEDDER_STATUS_GP).contains("no refusal was recorded"), "a refusal this shell never took is"
+				+ " reported as one, which points an operator at a restart: " + gp(EMBEDDER_STATUS_GP) + "\n" + run);
 	}
 
 	/** The virgin database: nothing has ever configured an embedder, and the sweep still goes off. */
@@ -430,7 +632,12 @@ public class EntrypointRetrievalWiringTest {
 	 */
 	private Run execute(List<String> preamble, String refuseWriteTo) throws Exception {
 		List<String> script = new ArrayList<String>();
-		script.add("PATH='" + stubs + "':$PATH");
+		// Where the case is about an image with no client, the whole PATH is replaced by the system
+		// directories rather than prefixed, so a client the HOST happens to carry somewhere else
+		// cannot answer. A machine that ships one in /usr/bin would still be found, which is why
+		// the case asserts the line the entrypoint prints for an absent client rather than
+		// inferring it.
+		script.add(clientAbsent ? "PATH='/usr/bin:/bin:/usr/sbin:/sbin'" : "PATH='" + stubs + "':$PATH");
 		script.add("export PATH");
 		script.add(". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'");
 		// What the entrypoint assigns around the wiring: the connection the stand-in answers for,
@@ -458,6 +665,12 @@ public class EntrypointRetrievalWiringTest {
 		if (refuseWriteTo != null) {
 			builder.environment().put("MARIADB_STAND_IN_REFUSE", refuseWriteTo);
 		}
+		if (schemaTables != null) {
+			builder.environment().put("MARIADB_STAND_IN_SCHEMA_TABLES", schemaTables);
+		}
+		if (databaseUnreachable) {
+			builder.environment().put("MARIADB_STAND_IN_UNREACHABLE", "yes");
+		}
 		builder.redirectErrorStream(true);
 		Process process = builder.start();
 		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);
@@ -472,6 +685,11 @@ public class EntrypointRetrievalWiringTest {
 	/** Seeds a global property the way an earlier start or an operator would have left it. */
 	private void given(String property, String value) throws IOException {
 		Files.write(store.resolve(property), value.getBytes(StandardCharsets.UTF_8));
+	}
+
+	/** Where a copy the wiring put out of reach ends up, so a case reads the name rather than guessing it. */
+	private static Path quarantined(Path target) {
+		return target.resolveSibling(target.getFileName() + ".unverified");
 	}
 
 	/** What the store holds for a property, empty where no row was ever written. */
@@ -516,6 +734,20 @@ public class EntrypointRetrievalWiringTest {
 	 * <p>Two semantics are MariaDB's and are what the cases turn on: {@code ON DUPLICATE KEY UPDATE
 	 * … IF(property_value IS NULL OR property_value = '', …)} leaves a row that already carries a
 	 * value standing, and an {@code UPDATE} matches nothing where the property was never written.
+	 *
+	 * <p><b>Three knobs, and each of them answered a fixed value until round 2 of the amendment's
+	 * review.</b> A stand-in that always reaches the database, always reports four schema tables and
+	 * can only refuse an {@code INSERT} holds every gate in this function permanently open, so no
+	 * case could drive the two returns {@code configure_retrieval_gps} used to open with, nor a
+	 * rejected withdrawal. {@code MARIADB_STAND_IN_UNREACHABLE} refuses every statement the way a
+	 * database that is not answering does, {@code MARIADB_STAND_IN_SCHEMA_TABLES} is what the
+	 * {@code information_schema} probe counts, and {@code MARIADB_STAND_IN_REFUSE} now names a
+	 * property no write of any shape may reach.
+	 *
+	 * <p>The schema count and the store are deliberately INDEPENDENT: a database carrying
+	 * {@code global_property} without one of the other three tables the probe wants answers a count
+	 * below four while the row is there and an {@code UPDATE} on it lands, which is the world where
+	 * the probe is wrong rather than the database empty.
 	 */
 	private static String mariadbStandIn() {
 		return String.join("\n",
@@ -528,12 +760,33 @@ public class EntrypointRetrievalWiringTest {
 				"done",
 				"_sql=$(printf '%s' \"$_sql\" | tr '\\n' ' ')",
 				"printf '%s\\n' \"$_sql\" >> \"$MARIADB_STAND_IN_LOG\"",
+				"if [ -n \"$MARIADB_STAND_IN_UNREACHABLE\" ]; then",
+				"\techo \"mariadb stand-in: could not connect\" >&2",
+				"\texit 1",
+				"fi",
+				// The property this statement is about: named by a WHERE clause in a read or an
+				// UPDATE, and by the first VALUES item in an INSERT. One name for both shapes, so
+				// the refusal knob below reaches every write rather than only the INSERT — which
+				// is what left a rejected WITHDRAWAL undriveable.
 				"_property=$(printf '%s' \"$_sql\" | sed -n \"s/.*property='\\\\([^']*\\\\)'.*/\\\\1/p\")",
+				"[ -n \"$_property\" ] || _property=$(printf '%s' \"$_sql\" \\",
+				"\t| sed -n \"s/.*VALUES ('\\\\([^']*\\\\)'.*/\\\\1/p\")",
+				// Refused for a WRITE only, so the world a case drives is a database that answers
+				// the reads and rejects the statement — which is what makes "the withdrawal was
+				// issued" and "the row is blank" two different questions.
+				"case \"$_sql\" in",
+				"\t'INSERT INTO global_property'* | 'UPDATE global_property'*)",
+				"\t\tif [ -n \"$MARIADB_STAND_IN_REFUSE\" ] \\",
+				"\t\t\t&& [ \"$_property\" = \"$MARIADB_STAND_IN_REFUSE\" ]; then",
+				"\t\t\techo \"mariadb stand-in: refusing to write $_property\" >&2",
+				"\t\t\texit 1",
+				"\t\tfi ;;",
+				"esac",
 				"case \"$_sql\" in",
 				"\t'SELECT 1'*)",
 				"\t\techo 1 ;;",
 				"\t*'information_schema.tables'*)",
-				"\t\techo 4 ;;",
+				"\t\techo \"${MARIADB_STAND_IN_SCHEMA_TABLES:-4}\" ;;",
 				"\t'SELECT COALESCE(property_value'*)",
 				"\t\tif [ -f \"$MARIADB_STAND_IN_STORE/$_property\" ]; then",
 				"\t\t\tcat \"$MARIADB_STAND_IN_STORE/$_property\"",
@@ -541,19 +794,14 @@ public class EntrypointRetrievalWiringTest {
 				"\t\t\techo ''",
 				"\t\tfi ;;",
 				"\t'INSERT INTO global_property'*)",
-				"\t\t_name=$(printf '%s' \"$_sql\" | sed -n \"s/.*VALUES ('\\\\([^']*\\\\)'.*/\\\\1/p\")",
 				"\t\t_value=$(printf '%s' \"$_sql\" | sed -n \"s/.*VALUES ('[^']*','\\\\([^']*\\\\)'.*/\\\\1/p\")",
-				"\t\tif [ -n \"$MARIADB_STAND_IN_REFUSE\" ] && [ \"$_name\" = \"$MARIADB_STAND_IN_REFUSE\" ]; then",
-				"\t\t\techo \"mariadb stand-in: refusing to write $_name\" >&2",
-				"\t\t\texit 1",
-				"\t\tfi",
 				"\t\tcase \"$_sql\" in",
 				"\t\t\t*'IF(property_value IS NULL'*)",
-				"\t\t\t\tif [ ! -s \"$MARIADB_STAND_IN_STORE/$_name\" ]; then",
-				"\t\t\t\t\tprintf '%s' \"$_value\" > \"$MARIADB_STAND_IN_STORE/$_name\"",
+				"\t\t\t\tif [ ! -s \"$MARIADB_STAND_IN_STORE/$_property\" ]; then",
+				"\t\t\t\t\tprintf '%s' \"$_value\" > \"$MARIADB_STAND_IN_STORE/$_property\"",
 				"\t\t\t\tfi ;;",
 				"\t\t\t*)",
-				"\t\t\t\tprintf '%s' \"$_value\" > \"$MARIADB_STAND_IN_STORE/$_name\" ;;",
+				"\t\t\t\tprintf '%s' \"$_value\" > \"$MARIADB_STAND_IN_STORE/$_property\" ;;",
 				"\t\tesac ;;",
 				"\t'UPDATE global_property SET property_value='*)",
 				"\t\t_value=$(printf '%s' \"$_sql\" \\",

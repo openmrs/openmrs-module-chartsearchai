@@ -33,6 +33,23 @@ MODEL_MANIFEST_FILE="${MODEL_MANIFEST_FILE:-/usr/local/share/chartsearchai/model
 # .theLedgerRefusesAQuestionNamingNothingAndCountsNothingItDidNotMeasure.
 MODEL_MANIFEST_VERIFIED=''
 
+# What fetch_or_degrade REFUSED in this shell, as `<id>:<code>` entries, space-delimited — the
+# ledger's mirror, kept under the same discipline: fetch_or_degrade is the only writer,
+# configure_retrieval_gps in backend-init.sh the only reader, and it is assigned unconditionally so
+# a value arriving in the environment is not a refusal anything here took.
+#
+# It carries the artifact id and the code from the table below, and nothing else. A PATH in it would
+# publish for unverified bytes exactly what require_verified withholds. What it is FOR is the second
+# premise of ADR Decision 106's amendment: on a deployment whose container log nobody in the loop
+# can read, a blanked path says chart search is off and says nothing about why, so a digest refusal,
+# a missing manifest row and a failed transfer are one state seen from outside. The entrypoint
+# records this in a global property that is readable over REST.
+#
+# fetch_and_verify does not write it. The weights go through that one in background subshells, whose
+# variables reach no parent shell, so an entry there would be recorded for the embedder and lost for
+# the weights — one name answering for two behaviours.
+MODEL_MANIFEST_REFUSED=''
+
 # Exit codes fetch_and_verify_url contracts with its callers, which branch on them to say something
 # useful about the artifact they asked for:
 #   0  the file is present and is the reviewed artifact
@@ -269,13 +286,15 @@ fetch_and_verify_override() {
 # own.
 #
 # It returns rather than exiting, and what keeps that fail-closed is the LEDGER, not the exit: a
-# refusal records nothing in MODEL_MANIFEST_VERIFIED, so require_verified answers no and the
-# entrypoint BLANKS both embedder paths. Withholding the write alone would not have been enough
-# once the start continues — a row an earlier good start wrote stands whatever this start did, and
-# codes 3, 4 and 5 delete nothing, so it can still name a file that is still there. Unverified
-# bytes answering a clinical question is the state Decision 106 removes; stopping the container was
-# a second, much wider consequence that took the whole OpenMRS instance and its SPA down with it,
-# measured 2026-09-21 and recorded in that decision's amendment.
+# refusal records nothing in MODEL_MANIFEST_VERIFIED, so require_verified answers no and
+# configure_retrieval_gps WITHDRAWS both embedder paths — and where that withdrawal cannot reach the
+# database at all, puts the copy on the volume out of reach instead, which is the only instrument
+# left when the row cannot be read. Withholding the write alone would not have been enough once the
+# start continues — a row an earlier good start wrote stands whatever this start did, and codes 3, 4
+# and 5 delete nothing, so it can still name a file that is still there. Unverified bytes answering
+# a clinical question is the state Decision 106 removes; stopping the container also took the whole
+# OpenMRS instance and its SPA down, on 2026-09-21, and that decision's amendment says which part
+# of the route was observed and which reconstructed.
 #
 # Still asked of the call site: that this runs in the entrypoint's OWN shell. The ledger is an
 # ordinary shell variable, so backgrounding the call with `&`, taking it in a command substitution,
@@ -302,6 +321,7 @@ fetch_or_degrade() {
 		return 0
 	else
 		_mm_oe_code=$?
+		MODEL_MANIFEST_REFUSED="$MODEL_MANIFEST_REFUSED $_mm_oe_id:$_mm_oe_code"
 	fi
 
 	echo "       Chart search cannot run without a verified copy of this file, so it stays off:" >&2

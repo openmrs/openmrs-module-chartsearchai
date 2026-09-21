@@ -109,11 +109,12 @@ public class EntrypointRetrievalWiringTest {
 	private static final String EMBEDDER_STATUS_GP = "chartsearchai.models.embedderStatus";
 
 	/**
-	 * What the entrypoint prints when {@code command -v mariadb} finds nothing. It is the only
-	 * thing that tells that branch apart from a client that IS present and cannot connect: both
-	 * reach the same quarantine and both leave the stand-in's log empty, because a real client
-	 * never writes it. Spelled as a literal, so a rewording in {@code backend-init.sh} fails the
-	 * case that reads it rather than quietly widening what that case accepts.
+	 * What the entrypoint prints when {@code command -v mariadb} finds nothing. It is what tells
+	 * that branch apart from a client that IS present and cannot connect: both reach the same
+	 * quarantine, and a REAL client found on the host writes no stand-in log, so an empty log is
+	 * no evidence the client was absent. Spelled as a literal, so a rewording in
+	 * {@code backend-init.sh} fails the case that reads it rather than quietly widening what that
+	 * case accepts.
 	 */
 	private static final String NO_CLIENT_IN_THE_IMAGE = "the mariadb client is absent from this image";
 
@@ -409,7 +410,9 @@ public class EntrypointRetrievalWiringTest {
 	 * This is the database-not-answering branch;
 	 * {@link #theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent} pins the other one by
 	 * asserting the line the entrypoint prints for an absent client, which is what tells the two
-	 * apart — the stand-in is handed nothing on either.
+	 * apart — {@link #NO_CLIENT_IN_THE_IMAGE} carries why an empty stand-in log does not. The
+	 * stand-in IS the client here and is handed every statement this branch issues, refusing each
+	 * one the way a database that is not answering does.
 	 */
 	@Test
 	public void theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt() throws Exception {
@@ -432,7 +435,7 @@ public class EntrypointRetrievalWiringTest {
 	 * read or write a global property, so the same instrument applies — and what proves the client
 	 * really was absent is the line the entrypoint prints for it. An empty stand-in log does not:
 	 * a real client found on the host's PATH writes that log no more than a missing one does, so
-	 * the log alone reads the same here as on the database-not-answering branch.
+	 * the log alone reads here just as it would on a start that found one and could not connect.
 	 */
 	@Test
 	public void theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent() throws Exception {

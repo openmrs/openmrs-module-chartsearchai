@@ -79,10 +79,11 @@ mkdir -p "$QS_DIR" "$LLM_DIR"
 # A refusal leaves chart search OFF and the start RUNNING. What makes that
 # fail-closed is the ledger, not a stopped container: nothing is recorded
 # for a refused artifact, so require_verified declines below, no path to it
-# is written, and any path an earlier start wrote is taken back. Exiting
-# here instead cost the whole instance and the SPA with it, for a
-# chart-search dependency. Decision 106's amendment records what was
-# observed and what is inferred from it.
+# is written, and any path an earlier start wrote is taken back — by
+# blanking the row, or, where that cannot be confirmed, by moving the copy
+# out from under the name it carries. Exiting here instead cost the whole
+# instance and the SPA with it, for a chart-search dependency. Decision
+# 106's amendment records what was observed and what is inferred from it.
 . /usr/local/bin/model-manifest.sh
 
 ONNX_FILE="$QS_DIR/model.onnx"
@@ -569,11 +570,19 @@ gp_value() {
 # that reads this file for where a model path is published (ModelDownloadPinningGuardTest
 # .noModelPathReachesAGlobalPropertyExceptBehindTheLibrarysVerifiedLedger).
 #
-# Every step's status is read, and then the values are read back, because neither alone is the
-# verdict landing. A discarded UPDATE error let the start go on saying "its paths are blanked" over
-# a row that still named the file; and a read-back alone answers empty for a database that could not
-# be reached at all, which is the same answer a withdrawn row gives — fail-open in the one direction
-# this whole gate exists to close. configure_retrieval_gps acts on the answer.
+# Every step's status is read, and then the values are read back. What the suite pins is that SOME
+# status is read: turn all four `|| _wd_issued=no` into `|| true` and
+# EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached,
+# .theUnverifiedCopyIsPutOutOfReachWhenTheMariadbClientIsAbsent and
+# .theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt go red, because a read-back alone
+# answers empty for a database that could not be asked at all — the same answer a withdrawn row
+# gives, fail-open in the one direction this whole gate exists to close. No step is pinned on its
+# own, though: discard the two UPDATEs' status, or the two reads', or the two -z tests on this
+# function's last line, and nothing reds: on every branch these cases drive, what is left still
+# answers. They all stay anyway, since a discarded UPDATE error is what let the start go on
+# saying "its paths are blanked" over a row that still named the file — but on what is driven they
+# are defence in depth over each other rather than separate detectors, and no case tells them
+# apart. configure_retrieval_gps acts on the answer.
 #
 # Both UPDATEs are ISSUED before any status is acted on. Chained with `|| return 1` the vocab's
 # UPDATE was never issued on a database that rejected the model path's, so a store that would have
@@ -653,6 +662,18 @@ configure_retrieval_gps() {
   # write below passes "$DB_NAME", so a DB_NAME that does not name the database OpenMRS actually uses
   # answers no for a schema that is entirely present and rejects every write. schema_absent_because
   # is what keeps "I could not ask" out of the wording either way.
+  #
+  # What that costs on a database that is not answering, stated because it is what the returns
+  # bought: they paid at most one connect timeout for the whole function, and every statement below
+  # now pays its own — the reachability probe, the withdrawal's four, then the reads and writes
+  # after it. Count them off issuedStatements() in
+  # EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached,
+  # which drives exactly that branch, rather than trusting a number written here. It costs nothing
+  # measurable on the ordinary compose failure, where the db container is down and the connection
+  # fails at once; the shape that spends it is an address that black-holes, and there it is
+  # spent on top of the 60s maybe_seed_demo_data already waited, against the backend's 30m health
+  # start_period in docker-compose.yml. seed_sql sets no connect timeout on the client, so bounding
+  # it is a lever left open rather than one measured and rejected.
   _store_unwritable_because=''
   if ! command -v mariadb >/dev/null 2>&1; then
     _store_unwritable_because='the mariadb client is absent from this image'

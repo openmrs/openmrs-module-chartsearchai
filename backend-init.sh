@@ -685,7 +685,7 @@ configure_retrieval_gps() {
   #
   # What that costs on a database that is not answering, stated because it is what the returns
   # bought: they paid at most one connect timeout for the whole function, and every statement below
-  # now pays its own — the reachability probe, the withdrawal's four, then the reads and writes
+  # now pays its own — the reachability probe, the withdrawal's own statements, then the reads and writes
   # after it. Count them off issuedStatements() in
   # EntrypointRetrievalWiringTest.theUnverifiedCopyIsPutOutOfReachWhenTheDatabaseCouldNotBeReached,
   # which drives exactly that branch, rather than trusting a number written here. It costs nothing

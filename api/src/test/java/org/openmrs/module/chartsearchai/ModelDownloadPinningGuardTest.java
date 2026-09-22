@@ -1148,6 +1148,106 @@ public class ModelDownloadPinningGuardTest {
 				+ copied);
 	}
 
+	/**
+	 * The mode a {@code COPY --chmod=} line names is stamped on the DIRECTORIES BuildKit creates for
+	 * the destination as well as on the file, so a mode that is right for a file is wrong for the
+	 * directory it invents: {@code 0644} on a directory clears the traverse bit, and nothing under it
+	 * can be opened once the start has dropped to uid 1001.
+	 *
+	 * <p>Measured 2026-09-22 in the image the demo was serving
+	 * ({@code openmrs/openmrs-reference-application-3-backend:sha-d11b5308}, amd64): the layer
+	 * carrying the manifest holds {@code drw-r--r-- usr/local/share/chartsearchai/} beside
+	 * {@code -rw-r--r-- .../model-manifest.tsv}, while {@code usr/local/share/} above it — a
+	 * directory the base image ships — is {@code drwxr-xr-x}. {@code /usr/local/bin} is shipped too,
+	 * which is why the library COPYed there was readable and only the manifest was not. The
+	 * entrypoint's {@code exec runuser -u openmrs} runs before every fetch, so {@code _mm_field}'s
+	 * {@code [ ! -f "$MODEL_MANIFEST_FILE" ]} answers "no manifest" and every fetch resolves nothing.
+	 * The embedder's two codes are the part that is RECORDED — that start's
+	 * {@code chartsearchai.models.embedderStatus} read
+	 * {@code not verified in this start: embedder-e5-base-v2-onnx:4 embedder-e5-base-v2-vocab:4} —
+	 * and the weights' is inferred from the same step, since they are fetched in background subshells
+	 * that record nothing. What was MEASURED of them is the absence: the demo's own
+	 * {@code ModelFileResolver} reported {@code Model file not found} for both GGUF names, and for
+	 * the three older names this project has used.
+	 *
+	 * <p>So the rule is that a mode-setting COPY may not be what CREATES the directory it lands in.
+	 * It is deliberately unconditional rather than exempting the directories the base image ships:
+	 * which those are is the fact that changed silently here, {@code /usr/local/bin} having covered
+	 * for this line shape for as long as nothing was added beside it. {@code mkdir -p} over a
+	 * directory that already exists leaves its mode alone, so obeying it costs nothing.
+	 *
+	 * <p>What this cannot see is a mode named on the {@code mkdir} itself ({@code mkdir -m 700}), and
+	 * it says nothing about the FILE's mode, which is what {@code --chmod} is there to set.
+	 * → #466; ADR Decision 106. The weights' half of that outage — the same failure, recorded
+	 * nowhere a deployment can read — is #467.
+	 */
+	@Test
+	public void noCopyThatSetsAModeIsWhatCreatesTheDirectoryTheStartMustTraverse() throws IOException {
+		List<String> created = new ArrayList<String>();
+		List<String> violations = new ArrayList<String>();
+		int modeSetting = 0;
+		for (String line : joinedCodeLines("Dockerfile.backend")) {
+			String[] words = line.trim().split("\\s+");
+			if (words[0].equals("FROM")) {
+				// A directory made in an earlier stage is not in THIS one's filesystem, and this file
+				// has five stages. Without the reset, a `mkdir` anywhere above would answer for a COPY
+				// in a stage that never ran it.
+				created.clear();
+			} else if (words[0].equals("RUN")) {
+				created.addAll(directoriesMade(words));
+			} else if (words[0].equals("COPY") && line.contains("--chmod=")) {
+				modeSetting++;
+				String destination = words[words.length - 1];
+				String directory = destination.endsWith("/")
+						? destination.substring(0, destination.length() - 1)
+						: destination.replaceAll("/[^/]*$", "");
+				if (!created.contains(directory)) {
+					violations.add(directory + " (" + line.trim() + ")");
+				}
+			}
+		}
+		assertTrue(modeSetting > 0, "Dockerfile.backend names a mode on no COPY at all; this guard read nothing");
+		assertEquals(List.of(), violations,
+				"a COPY that names a mode stamps it on the directories it creates too, and a file's mode leaves"
+						+ " those untraversable to the uid the entrypoint drops to, so every fetch resolves nothing;"
+						+ " create these with an earlier RUN mkdir -p instead");
+	}
+
+	/** Every absolute directory the {@code mkdir} calls on one shell line make, in order. */
+	private static List<String> directoriesMade(String[] words) {
+		List<String> made = new ArrayList<String>();
+		boolean inMkdir = false;
+		for (String word : words) {
+			if (word.equals("mkdir")) {
+				inMkdir = true;
+			} else if (word.startsWith("&") || word.startsWith(";") || word.startsWith("|")) {
+				inMkdir = false;
+			} else if (inMkdir && word.startsWith("/")) {
+				made.add(word);
+			}
+		}
+		return made;
+	}
+
+	/** {@link #codeLines} with backslash continuations joined, so one command reads as one line. */
+	private static List<String> joinedCodeLines(String relative) throws IOException {
+		List<String> joined = new ArrayList<String>();
+		StringBuilder pending = new StringBuilder();
+		for (String line : codeLines(relative)) {
+			String trimmed = line.trim();
+			if (trimmed.endsWith("\\")) {
+				pending.append(trimmed, 0, trimmed.length() - 1).append(' ');
+				continue;
+			}
+			joined.add(pending.append(trimmed).toString());
+			pending.setLength(0);
+		}
+		if (pending.length() > 0) {
+			joined.add(pending.toString());
+		}
+		return joined;
+	}
+
 	/** The one capture of {@code pattern} in {@code relative}, or a failure saying what was sought. */
 	private static String soleMatch(String relative, String pattern, String what) throws IOException {
 		List<String> found = new ArrayList<String>();

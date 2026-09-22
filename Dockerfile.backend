@@ -67,6 +67,13 @@ COPY --from=core-war /openmrs.war /openmrs/distribution/openmrs_core/openmrs.war
 # Add the chartsearchai module + the querystore module it is aware-of-bound to.
 COPY --from=chartsearchai-builder /build/omod/target/chartsearchai-*.omod /openmrs/distribution/openmrs_modules/
 COPY --from=querystore-builder /build/omod/target/querystore-*.omod /openmrs/distribution/openmrs_modules/
+# Create the directories the mode-setting COPYs below land in, rather than letting them create
+# them: BuildKit stamps a --chmod mode onto the directories it makes for the destination as well as
+# onto the file, and 0644 on a directory clears the traverse bit — so the manifest was unreadable to
+# the uid the entrypoint drops to, the embedder's fetches recorded code 4 ("could not be resolved"),
+# and the demo ran with no model file at all. mkdir -p leaves a directory the base image ships alone.
+# (#466) → ModelDownloadPinningGuardTest.noCopyThatSetsAModeIsWhatCreatesTheDirectoryTheStartMustTraverse
+RUN mkdir -p /usr/local/bin /usr/local/share/chartsearchai
 COPY --chmod=755 backend-init.sh /usr/local/bin/backend-init.sh
 # The entrypoint sources the library and reads the digests from the manifest; without both in the
 # image it cannot tell the reviewed model files from substituted ones (#444). ADR Decision 106.

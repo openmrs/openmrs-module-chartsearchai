@@ -39,7 +39,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * severity floor. Every case runs the real validator over the shipped knowledge base.
  *
  * <p><b>Context-sensitive because the arm is gated, and OFF on a stock install</b> —
- * {@code chartsearchai.drugSafety.derivedFindings}, ADR Decision 110, whose precision section is the
+ * {@code chartsearchai.drugSafety.derivedFindings}, ADR Decision 111, whose precision section is the
  * reason. A contextless case runs with the property absent, which fails safe to the default, so it could
  * not tell an arm that honours the switch from one that ignores it. {@link #setUp} turns it on for every
  * case here; {@link #aStockInstallRaisesNoConditionMediatedFindingOnTheLinkTheReviewMeasuredFalse} and
@@ -130,7 +130,7 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 
 	@Test
 	public void theInjectedFindingIsACautionAndNotAReasonToWithhold() {
-		// ADR Decision 110, after Decision 86: a derived chain is not a rating of the pair — a text match
+		// ADR Decision 111, after Decision 86: a derived chain is not a rating of the pair — a text match
 		// over two drug-disease rows found it — so it is a caution, the weakest claim this layer makes.
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shippedService()).injectRecords(
 				DrugReferenceTestSupport.oneRecordChart(), onOrders("Stavudine", "Lamivudine"),
@@ -282,6 +282,49 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	}
 
 	@Test
+	public void aFindingAboutADrugTheChartHoldsOnlyAsAnEndedOrderStatesTheEndedOrderCaution() {
+		// Issue #472: every drug-in-play chip is stamped when its drug is one the chart records only as an
+		// order no longer in force, and the finding then states the ended-order caution rather than the
+		// proposal one. The derived chip is raised in that arm, so it is stamped like the others.
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shippedService()).injectRecords(
+			DrugReferenceTestSupport.chartOf(DrugReferenceTestSupport.drugOrderRecord(1, "Metformin 500mg",
+				Boolean.FALSE, new java.util.Date(1767225600000L))),
+			onOrders("Stavudine"), "Does metformin interact with her medications?");
+
+		List<String> derived = new ArrayList<String>();
+		for (String text : DrugReferenceTestSupport.findingTexts(chart)) {
+			if (text.contains(DISCLAIMER)) {
+				derived.add(text);
+			}
+		}
+		assertEquals(1, derived.size(), DrugReferenceTestSupport.findingTexts(chart).toString());
+		assertTrue(derived.get(0).endsWith(DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER.trim()),
+				"a drug held only as an ended order states the ended-order caution: " + derived.get(0));
+	}
+
+	@Test
+	public void theCauseSidesFindingAboutAnEndedOrderStatesTheEndedOrderCautionToo() {
+		// The other direction's chip is built at its own call site, so it needs its own case: the drug in
+		// play is the CAUSE here (stavudine, held only as an ended order) and the rated partner is active.
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shippedService()).injectRecords(
+			DrugReferenceTestSupport.chartOf(DrugReferenceTestSupport.drugOrderRecord(1, "Stavudine 30mg",
+				Boolean.FALSE, new java.util.Date(1767225600000L))),
+			onOrders("Metformin"), "Does stavudine interact with her medications?");
+
+		List<String> derived = new ArrayList<String>();
+		for (String text : DrugReferenceTestSupport.findingTexts(chart)) {
+			if (text.contains(DISCLAIMER)) {
+				derived.add(text);
+			}
+		}
+		assertEquals(1, derived.size(), DrugReferenceTestSupport.findingTexts(chart).toString());
+		assertTrue(derived.get(0).contains("The DDInter drug-disease note of Stavudine"),
+				"precondition: the cause-side chip: " + derived.get(0));
+		assertTrue(derived.get(0).endsWith(DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER.trim()),
+				"a drug held only as an ended order states the ended-order caution: " + derived.get(0));
+	}
+
+	@Test
 	public void aConditionMediatedFindingDoesNotLicenseWithholding() {
 		List<SafetyWarning> chips = conditionMediated("Can I give metformin?", onOrders("Stavudine"));
 
@@ -296,7 +339,7 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	public void aStockInstallRaisesNoConditionMediatedFindingOnTheLinkTheReviewMeasuredFalse() {
 		// Metformin's drug-disease note names congestive heart failure only as a CONTRAINDICATION, and the
 		// knowledge base's matcher reads that sentence as causal, so the derived tier links metformin to
-		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 110). With the
+		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 111). With the
 		// precision of the kept chains unmeasured, a stock install states none of them, and the
 		// interaction arm the same property does NOT gate still speaks.
 		derivedFindings(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS);
@@ -391,7 +434,7 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	}
 
 	/**
-	 * One prescription, one name, across chip TYPES (#339, ADR Decision 110): every active order a
+	 * One prescription, one name, across chip TYPES (#339, ADR Decision 111): every active order a
 	 * {@code condition-mediated} chip names is a name the response's interaction chips print, so a
 	 * combination prescription is never named by its display on one chip and by a constituent on another.
 	 * Held here, where the arm is switched on, over the two shipped-knowledge-base arrangements

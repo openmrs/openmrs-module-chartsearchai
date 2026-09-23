@@ -271,13 +271,15 @@ public class SafetyFindingSeverityStrengthTest {
 						+ "passes on too little: " + findings);
 		String[] clauses = { WITHHOLD, CAUTION,
 			DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION.trim(),
-			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION.trim() };
+			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION.trim(),
+			DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER.trim(),
+			DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER.trim() };
 		boolean sawWithhold = false, sawCaution = false;
 		for (RecordMapping finding : findings) {
 			String text = finding.getText();
 			sawWithhold |= text.contains(WITHHOLD);
 			sawCaution |= text.contains(CAUTION);
-			// A plain count, because the four CLAUSES are not substrings of one another — ADR Decision 37
+			// A plain count, because the CLAUSES are not substrings of one another — ADR Decision 37
 			// makes that distinction and it is easy to lose: what nests is the phrase each clause names
 			// its CLASS with ("a reason to withhold it", inside the caution clause negated), not the
 			// clause. SafetyVerdictSeverityGradationTest

@@ -621,7 +621,7 @@ public class ChartSearchAiConstants {
 
 	/**
 	 * Whether the knowledge base's DERIVED tier raises {@code condition-mediated} findings (issues #391
-	 * Part B and #473, ADR Decision 110): {@link #DERIVED_FINDINGS_MAJOR} states a chain whose rated side
+	 * Part B and #473, ADR Decision 111): {@link #DERIVED_FINDINGS_MAJOR} states a chain whose rated side
 	 * is {@code Major}, {@link #DERIVED_FINDINGS_OFF} states none. Ships OFF, on evidence: the chains are
 	 * a text match over drug-disease notes, and one of them links metformin to Heart Failure through a
 	 * sentence naming it only as a contraindication — which puts a false causal chip on metformin beside

@@ -202,8 +202,8 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 	 * the normal state of every install, so a WARN here is a WARN nobody can act on.
 	 *
 	 * <p>Not the same as producing no finding, and the difference is the whole of ADR Decision 36's
-	 * settlement. This knowledge base is redistributed rather than authored here, and it trips two content
-	 * rules on 19 of its 2283 rows whose remedy issue #196 records as an upstream handoff — so the
+	 * settlement. This knowledge base is redistributed rather than authored here, and it trips several
+	 * content rules (ADR Decision 36 carries the rows) whose remedy is an upstream handoff — so the
 	 * findings exist, reach {@code GET /chartsearchai/drugreferencestatus} in full, and are reported in
 	 * the log at INFO rather than WARN. {@link DrugReferenceFindingLoudnessTest} is where that rule is
 	 * specified; this asserts the consequence for the shipped default, which is the case every install

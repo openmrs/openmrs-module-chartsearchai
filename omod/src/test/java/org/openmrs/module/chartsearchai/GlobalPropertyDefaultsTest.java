@@ -78,7 +78,7 @@ public class GlobalPropertyDefaultsTest {
 	}
 
 	/**
-	 * The derived tier's switch (issues #391 and #473, ADR Decision 110), for the same reason as the record
+	 * The derived tier's switch (issues #391 and #473, ADR Decision 111), for the same reason as the record
 	 * number flag above: the constant is what every contextless test falls back to, and
 	 * {@code config.xml}'s value is what an install runs. A drift would pin one install in the api suite
 	 * and ship another.

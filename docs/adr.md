@@ -115,7 +115,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
 - [Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
 - [Decision 109: A Moderate interaction is a caution, because DDInter reserves avoid for Major](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)
-- [Decision 110: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution](#decision-110-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)
+- [Decision 110: A finding about a drug the chart records only as an ended order says so, rather than reading as a proposal](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
+- [Decision 111: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -2372,6 +2373,8 @@ The module's load-time validity check (Decision 32, issues #150/#156/#196/#211/#
 | `derivative-merged-with-its-parent-substance` | 1 | `Fluoroestradiol f-18` keyed as `estradiol` |
 | `self-paired-interaction-rows` | 28 rows | both sides the same substance |
 
+**Since #476 a third content rule reports this dataset**, `substance-name-contradicted-by-the-bridge`: a row whose `rxnorm_name` and display name do not carry each other as a word, where the dataset's own CIEL bridge names that display name as an ingredient of concepts it files on other rows and not on it. Measured 2026-09-23 through `getLoadStatus()` over the shipped file, it names six rows, `Sulfamethoxazole` filed as `sulfamethazine` among them; two (`Omeprazole`, `Hyoscyamine`) are rows the table above already counts, and one (`Calcium saccharate` filed as `calcium glucarate`) is a synonym, so the rows the three content rules name come to 23. Its javadoc, `DrugReferenceValidity.reportSubstanceNamesContradictedByTheBridge`, carries the list. Nothing below changes: it is a data rule, softened for this dataset like the two above it.
+
 That collided with two standing rules: *a rule must stay silent on an untouched default*, and `everyShippedDatasetSatisfiesEveryRule`, whose premise was that every dataset the module ships satisfies every rule. Three resolutions were considered and two rejected on evidence.
 
 **Correcting the data ourselves was rejected.** It sounds obvious — we are the ones shipping it — and it tops out at 10 of 19. Classifying each offender by the field that holds the offending value: **10 are stray `ciel[]` cross-walk links** (a rival product wrongly attached to a row), which delete cleanly and assert nothing new. The other **9 sit in the row's own `rxnorm_name`**, which `DdiDrugReferenceSource` feeds to `setSubstanceName` — the field `DrugReference.substanceKey()`/`substanceGroupKey()` are built from, and that issues #164, #185 and #187 rest on. Editing it re-partitions substances on our own authority. And they are not typos: they are RxNorm ingredient normalizations of enantiomers, prodrugs and metabolites (`Hyoscyamine`→`atropine` — hyoscyamine *is* l-atropine; `Fenofibric acid`→`fenofibrate`, its active metabolite; `Fosnetupitant`→`netupitant`, its prodrug), so "correcting" them means authoring a clinical normalization decision per substance. `Fluoroestradiol f-18` would need a DrugBank id the module does not have. So a data fork cannot reach silence, and would trade a checkable provenance for one.
@@ -2400,7 +2403,7 @@ Bundled byte-identical to the upstream release, so it can be verified rather tha
 - **+** A knowledge-base refresh is a file copy, and provenance is checkable by hash.
 - **−** The dose-excess arm is dormant by default; an install that needs dose ceilings must select `sourceFormat=json` or supply a dosing dataset.
 - **−** The module becomes a redistributor of a third-party academic dataset, with the attribution, NC licence terms and governance caveat that carries.
-- **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff.
+- **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff — and since #476 the rows the content rules name come to 23, one of them a synonym (see the note under the table above).
 - **−** +3.8 MB of packed jar (4,031,048 bytes for the entry, schema 1.3 — see the measurement above), ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover the same 3.8 MB and is untouched here.)
 
 ## Decision 55: Each operand of the name scan is folded once where it is produced
@@ -5442,7 +5445,7 @@ The second row is the control that makes the first a cede rather than a chart th
 
 ## Decision 72: A finding about a medication the patient is already taking states a call about that medication
 
-**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348).
+**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal).
 
 ### Context — the defect
 
@@ -9840,7 +9843,209 @@ rating below `major` is a caution.** Nothing else about the split moves:
 `SafetyVerdictSeverityGradationTest.theTwoCurrentMedicationBranchesAreExactlyTheseWords`,
 `SafetyFindingSeverityStrengthTest.theModulesOwnWithholdingAnswerAsksTheOneRatingBoundaryAndNoSecond`.
 
-## Decision 110: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution
+## Decision 110: A finding about a drug the chart records only as an ended order says so, rather than reading as a proposal
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#472](https://github.com/openmrs/openmrs-module-chartsearchai/issues/472).
+
+### Context
+
+On a RefApp 3.7.1 standalone (patient `2d384cef-da03-4a3b-beb1-632011eb8654`: active Lamivudine and
+Nevirapine, a discontinued Rifampicin), the interaction screen was scoped correctly — *"Check her current
+medications for drug interactions."* related only the active pair — but a question NAMING the stopped
+drug was not: *"Her current medications are lamivudine, nevirapine and rifampicin. Any interactions?"*
+and *"Why was her rifampicin stopped, and does it matter for her current medications?"* each raised a
+Major chip "Rifampicin interacts with active order Nevirapine", and the answers read *"a reason to
+withhold it"* and *"No — Rifampicin should not be given"*. The drug-in-play arm raises every finding
+about a question-named drug as a PROPOSAL, and nothing in it read the chart's own in-force stamp
+(`RecordMapping.getOrderActive()`, issue #317), which said the order was not in force. Retrieval was not the cause: the screen's
+medication list is `getActiveOrders` alone, and scoping retrieval would have removed the history the
+questions about it need.
+
+### Decision
+
+**A third REFERENT, beside a proposal and [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)'s current
+medication**: `SafetyWarning.isAboutAnEndedOrder()`, set by the drug-in-play arm, and by the question-pair
+arm for its chip's subject (added in review, below), for a substance in play that a record stamped NOT IN
+FORCE names, and only where the module can say she is not on it: no active
+order resolves to it, no drug-order record the stamp does not call ended names it (in force, or
+unstamped — `null` is "the module cannot say", and may be an order she is on), her active orders were
+read in full, and every one of them resolved (`DrugSafetyValidator.everyActiveOrderResolves`, the gate
+Decision 108 put on "not already taking"). The last two were raised in this change's hardening: without
+them an order under a brand the data lacks, beside an older ended record of the same drug, was told to
+the model as ended. Both classes, interaction and contraindication,
+because the condition is one condition. The record states one of two clauses in place of the proposal
+pair, one sentence of the prompt's safety paragraph teaches both in their own words, and the chip
+publishes `aboutAnEndedOrder`. Where that sentence sits, and that the ranking sentence does NOT name the
+new call, were decided by the measurement below and not by argument.
+
+**The act is CONDITIONAL, and the referent is named in the prompt's existing words.** The first draft
+said "a reason not to restart it", and the plan's refutation gate cited Decision 72's own finding
+against it: an act that presupposes a proposal is what made the model manufacture one. So the clause
+reads "a reason against giving it should it be proposed again", and names the referent as the prompt
+already names such a record ("no longer in force", after `PatientChartSerializer.INACTIVE_ORDER_LABEL`)
+rather than as "stopped" — the stamp is also `FALSE` for a voided order, which was never stopped.
+
+**Not for the drug a question PROPOSES.** *"Can I give her rifampicin?"* supplies the proposal the
+withholding call needs, so it keeps that call; the referent is for the question that proposed nothing.
+Which questions propose is `QueryScopeRouter.asksWhetherToGiveADrug`, the closed grammar
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+admits a proposal by, over the same marking of the question's names — so the two paths cannot
+disagree: a question the module answers from its findings is one this change never re-refers. The
+first form of this change re-referred it and extended the composer's withholding lead to the new
+clause, and the hardening's integration review found the module path then leading with "No" where the
+prompt branch forbids the model to; `strengthRank` now answers `-1` for the new clauses, so
+`composeFromFindings` composes nothing and an answer carrying one keeps the model call. A proposal phrased outside the grammar is read as none, and gets
+the conditional call.
+
+**The answer states it too, and the module writes that sentence** (review round 1). The measurement below
+recorded R1's shipped answer still opening *"Yes, there are interactions recorded for these medications."*:
+the refusal gone, the false premise confirmed, and the referent only on a chip key no client renders yet.
+So the chip also carries the date (`SafetyWarning.getEndedOrderStopDate()`, the latest
+`RecordMapping.getOrderStopDate()` among the ended records naming the drug, published as
+`endedOrderStopDate`), and `EndedOrderStatement.withEndedOrdersStated` appends, where no sentence of the
+MODEL's answer names the drug beside "no longer in force", *"The chart records Rifampicin (rifampin) only as
+an order no longer in force (ended …), not as a current medication."* — the drug printed as the chip's
+label, which appends a generic name wherever it diverges from the display name — Decision 100's
+mechanism, at its three call sites, appending and never replacing. Whether a sentence names the drug is
+`DrugSafetyValidator.namesTheEndedOrderDrug`, the prose rule over every row of the substance (review round
+2): until then it was a substring of that label, which no answer writes, so on the ticket's own R2 cell the
+answer said it and the module said it again. It changes no prompt and no clause, so it does not reopen
+the measurement below; it is clinician-visible text that measurement did not see. The date is held on the
+chip as the published `yyyy-MM-dd` string, so the chip's value and the wire's are one spelling.
+
+**The question-pair arm too** (review round 1). A question naming two drugs the chart holds only as ended
+orders — *"Why were her simvastatin and clarithromycin stopped?"* — reached that arm, which stated
+*"a reason to withhold it"* with the chip answering `false`: the same missing referent. It now stamps its
+chips off the same holder, on the chip's SUBJECT.
+
+### The measurement
+
+**The instrument.** Builds, not prompt hunks, on the RefApp 3.7.1 standalone (`:8081`, bundled DDInter
+KB, local Gemma E4B, `chartMode=fullChart`), one restart per arm, every patient reindexed after it, each
+of thirteen cells run twice. Baseline `997099a6` (`main`); three candidates differing only in the prompt:
+A, the branch inside the safety paragraph and the ranking sentence extended to name it; B, the same with
+the ranking sentence left alone; C, the branch after the paragraph's never-"Yes" token, ranking sentence
+alone. Cells: the ticket's two reproduction questions and a proposal of the same drug on patient
+`2d384cef-da03-4a3b-beb1-632011eb8654` (R1 *"Her current medications are lamivudine, nevirapine and
+rifampicin. Any interactions?"*, R2 *"Why was her rifampicin stopped, and does it matter for her current
+medications?"*, R3 *"Can I give her rifampicin?"*) and its three clean controls;
+`docs/ddi-interaction-question-examples.md` §3a–§3d, the cells Decision 72 was licensed on; a medication-list
+question on §3d's patient (*"What are her current medications?"* on `dc8560c9-…`); and two §1 proposals.
+
+**Comparability.** In every arm, `interactionPairs` and the chip list (type, severity, drug) were
+identical to the baseline cell for cell. The global properties were snapshotted for the baseline and
+A and were identical; B and C were not snapshotted, and nothing in the run wrote one. Each arm's two runs
+were byte-identical on every cell except the baseline's §3d, whose two *"Yes"* leads name different
+interactions first. B and C flagged `aboutAnEndedOrder` on Rifampicin in R1 and R2 and on no other cell; A, whose code
+predates the proposal gate, flagged R3 as well.
+
+**The leads** (run 1; run 2 identical):
+
+- **R1.** Baseline: *"Yes, there are interactions … Rifampicin interacts with Nevirapine, which is a Major
+  interaction and is a reason to withhold it"*. A: *"No — Rifampicin should not be proposed again …"*.
+  B and C: *"Yes, there are interactions recorded for these medications."*, no refusal, C keeping the
+  Major rating in its prose. No arm says the order has ended.
+- **R2.** Baseline: *"No — Rifampicin should not be given …"*. A, B and C: the reason is not recorded,
+  *"Rifampicin's order is no longer in force, not as a current medication"*, then the Major finding; C
+  also cites the stop date.
+- **R3.** Baseline, B and C: *"No — rifampicin should not be given …"*, the proposal call. A, which
+  re-referred it: *"Rifampicin's order is no longer in force, and the finding relates it to a Major
+  interaction …"* — the loss of a proposal's refusal that the proposal gate was added for.
+- **§3a / §3b**, the two current-medication cells. Baseline: §3a *"No — Methotrexate should be
+  changed …"*, §3b *"Enalapril Co 10mg is related to Salicylic acid …"*. A: §3a a statement lead, §3b
+  *"No — Enalapril should be changed …"*. B: both open with *"No — … should be changed"*. C: §3a *"Methotrexate
+  has a finding related to Salicylic acid …"*, §3b *"No — Enalapril should be changed …"*.
+- **§3c, §3d**: every arm keeps a *"Yes"* lead.
+- **The controls, §1 and the Decision 47 cell**: no lead changed. The only changes were wording and
+  formatting. The screening control lost its second sentence (which states how many medications were
+  compared) in B and C, and the medication list gained dose text in every candidate.
+
+**Result.** C ships: it is the only arm with no refusal on either reproduction cell AND no more
+current-medication screening cells opening with Decision 72's residue 1 — a bare *"No —"* — than the
+baseline, one of two, though on §3b rather than §3a. A matches that count but refuses on R1; B has the
+residue on both cells. So the ranking sentence does not name the new call: the plan's refutation gate
+asked for that naming, and it is declined on this measurement.
+
+**What this does not establish.** No null arm was run, meaning an unrelated sentence of the same length
+in the same place. So the §3a/§3b swap cannot be attributed to the branch's content rather than to any
+perturbation of the prompt. §3b's lead moved in every candidate arm and §3a's in A and C, and neither
+is settled by this run.
+
+**The base predates Decision 109** (review round 2). Baseline `997099a6` and all three candidates were
+built before [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)
+(#474) was merged into this branch. §3b is the Moderate pair Salicylic acid × Enalapril, and under
+Decision 109 its record states `STRENGTH_CAUTION_CURRENT_MEDICATION` in place of the change clause, and
+the prompt's current-medication caution branch was reworded. So §3b's recorded leads above — arm C's
+*"No — Enalapril should be changed …"* among them, which the Result's count rests on — describe a clause
+and a branch the merged head no longer ships, and for that cell the Result's selection criterion was not
+measured against the shipped strength rules. A re-run on the merged base is recorded below.
+
+### Re-check on the merged base
+
+The shipped arm only, on the head that merges Decision 109 (`5db3ccc7`), the same standalone and
+patients, each cell twice. No baseline arm was re-run on the merged base, so this measures what ships
+and not a new A/B. Both runs were byte-identical on every cell, and the chip lists matched the
+candidate arms' above.
+
+- **R1** opens *"Yes, there are interactions recorded for these medications."* and now ends with the
+  module's sentence *"The chart records Rifampicin (rifampin) only as an order no longer in force
+  (ended 2026-09-23), not as a current medication."* That date is the order's `date_stopped`.
+- **R2** states the ended order once, in the model's own words, and the module appends nothing.
+- **R3** keeps the proposal call, *"No — Rifampicin should not be given …"*, with `aboutAnEndedOrder`
+  false.
+- **§3a** opens *"Methotrexate is related to a Major interaction with Salicylic acid …"*.
+- **§3b**, now a caution under Decision 109, opens *"Salicylic acid is a caution regarding its
+  interaction with Enalapril …"*.
+
+Neither current-medication cell opens with a bare *"No —"* on the merged base. That is fewer than any
+arm above, and fewer than the pre-109 baseline's one; the selection criterion the Result used is no
+longer tipped by §3b. For the run, the rig's local-LLM port global property was moved off one another
+rig on the machine held, and it was restored after the run.
+
+### Residues
+
+- R1's MODEL prose still opens *"Yes"* and does not say the order has ended; the module's appended
+  sentence says it. Whether the answer "said it" is a sentence containing "no longer in force" that names
+  the drug by `namesTheEndedOrderDrug` — so a paraphrase of that phrase, or a name no row of the substance
+  carries, gets the sentence as well: said twice rather than not at all. The drug test's own residue runs
+  the other way: an alias the substance shares with another (#209's shape) names it too, so a sentence
+  saying that other drug's order is no longer in force reads as saying it of this one.
+- The appended sentence is not on the early `done` of async grounding, which is emitted before the chips
+  exist — Decision 100's completion shares that, and async grounding ships off.
+- A chart that did not RETRIEVE the ended record states nothing, and the finding stays a proposal as
+  before — the in-force question is the chart builder's, written in one place, and is not asked of
+  `OrderService` a second time here.
+- A record naming the drug outside its drug field (an order reason) is read as naming it — the echo
+  test's own residue, since it is the same predicate.
+- The dose arm states no ended-order referent. The question-pair arm states its chip SUBJECT's, so a pair
+  whose subject she was never prescribed keeps the proposal call though its partner is held as ended. Its
+  proposal gate is the one-drug grammar, so a question proposing the PAIR (*"Can I give her simvastatin
+  with clarithromycin?"*) is read as proposing nothing and takes the conditional call. The chip's `detail`
+  is unchanged, so a client renders the chip's referent only by reading `aboutAnEndedOrder` and
+  `endedOrderStopDate` (`openmrs-esm-chartsearchai`'s half).
+- The ended-order WITHHOLDING clause is longer than `ReferenceProseFidelityCheck`'s
+  `MIN_REPRODUCED_WORDS`, so an answer paraphrasing it mid-sentence can raise that WARN where the
+  proposal clause it replaces could not — Decision 72's recorded cost, one referent over. The caution
+  clause replaces one that already cleared that floor.
+- A patient with any active order the data cannot resolve gets no ended-order referent at all, even for
+  a drug that order plainly is not — the price of the resolution gate.
+- The chips pass judges a substance over every row the pass resolved, and the ANSWER can add a row of a
+  question's substance the pre-answer pass did not have. Where an ended record names that substance only
+  by an alias the added row alone carries, the chip can state the referent while the record the model
+  read stated the proposal call, or the reverse. Judging it over the question's rows alone would close
+  it, as issue #238 did for naming; nothing in the suite discriminates that change, so it was not made.
+
+→ `EndedOrderFindingReferentTest` (the real injector and validator over querystore's real rendered
+order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and read the failures;
+`.aQuestionPairFindingAboutTwoDrugsTheChartHoldsOnlyAsEndedOrdersStatesTheEndedOrderCall`,
+`.theChipCarriesTheLatestDateAnEndedOrderOfTheDrugStopped`),
+`LlmInferenceServiceEndedOrderStatementContextTest` (the appended sentence, both answer paths;
+`.anAnswerNamingTheEndedDrugByANameItsChipLabelOnlyAppendsIsReturnedByteForByte` for the label),
+`SafetyVerdictSeverityGradationTest.theEndedOrderBranchIsExactlyTheseWords`,
+`ChartSearchAiSafetyWarningSeverityWireTest`.
+
+## Decision 111: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution
 
 **Status: Accepted** (September 2026) — issues [#473](https://github.com/openmrs/openmrs-module-chartsearchai/issues/473)
 and [#391](https://github.com/openmrs/openmrs-module-chartsearchai/issues/391) Part B. It closes neither: see
@@ -9931,6 +10136,10 @@ exactly that. The QT, hepatotoxicity and neuropathy groups need data this knowle
   not added: that is a prompt-facing change with a prompt branch of its own to measure, and a site that
   judges row E's chain a reason to withhold has no switch for it here.
 - **Not a pair the screen found.** `PairChipExtent` counts DDInter pairwise rule pairs; this is not one.
+- **Stamped for an ended order like every other drug-in-play chip** (Decision 110, #472). Where the drug
+  in play is one the chart holds only as an order no longer in force, the chip reads as about that order,
+  and the injected finding states the ended-order caution. Both directions' call sites are pinned by a
+  case of their own.
 
 **No case in `OneOrderNameAcrossOneResponseTest` is changed.** Two of its cases —
 `aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay` and

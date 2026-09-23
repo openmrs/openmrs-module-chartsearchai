@@ -660,7 +660,7 @@ public final class DrugReferenceTestSupport {
 	 * ({@code STRENGTH_CHANGE_CURRENT_MEDICATION} and {@code STRENGTH_CAUTION_CURRENT_MEDICATION}), so
 	 * delimiting on {@code STRENGTH_WITHHOLD} alone returns the clause PLUS a call on every screening
 	 * arrangement — a bridge compared against a bridge plus a clause, whose diff reads as a bridge
-	 * defect. All four are searched and the earliest wins; a finding stating none still yields its
+	 * defect. All of them are searched (issue #472 added the ended-order pair) and the earliest wins; a finding stating none still yields its
 	 * whole tail, which is the pre-existing behaviour and is why callers that care assert the call
 	 * separately ({@code InteractionFindingChartOrderBridgeTest.callOf}).
 	 */
@@ -674,7 +674,9 @@ public final class DrugReferenceTestSupport {
 		for (String clause : Arrays.asList(DrugReferenceInjector.STRENGTH_WITHHOLD,
 			DrugReferenceInjector.STRENGTH_CAUTION,
 			DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION,
-			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION)) {
+			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION,
+			DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER,
+			DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER)) {
 			int found = finding.indexOf(clause, at);
 			if (found >= 0 && (end < 0 || found < end)) {
 				end = found;
@@ -1625,6 +1627,27 @@ public final class DrugReferenceTestSupport {
 	static String querystoreRenderedText(DrugOrder order) {
 		QueryDocument doc = new DrugOrderRecordSerializer().serialize(order);
 		return doc.getText() == null ? "" : doc.getText();
+	}
+
+	/**
+	 * A {@code drug_order} chart record for an order of {@code drugName}: the standard dataset's drug
+	 * order ({@link #standardDatasetDrugOrder}) renamed in memory and never saved, carrying the text
+	 * querystore's real serializer renders for it ({@link #querystoreRenderedText}) and the in-force
+	 * stamp and stop date the chart builder would write — {@code FALSE} for an order no longer in
+	 * force, {@code TRUE} for one in force, {@code null} where the module could not say (issue #472).
+	 * Public so a case in another package drives the same record as the reference suite does.
+	 */
+	public static RecordMapping drugOrderRecord(int index, String drugName, Boolean orderActive,
+			java.util.Date stopDate) {
+		DrugOrder order = standardDatasetDrugOrder();
+		order.getDrug().setName(drugName);
+		String text = querystoreRenderedText(order);
+		assertTrue(text.toLowerCase(Locale.ROOT).contains(drugName.toLowerCase(Locale.ROOT)),
+				"precondition: querystore's rendered text for the order names its drug, or no case "
+						+ "using this record is about a record that names it: " + text);
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
+				order.getUuid() + "-" + index, null, text, null, 0, orderActive, stopDate, null, null, null,
+				null);
 	}
 
 	/**

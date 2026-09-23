@@ -1,0 +1,61 @@
+{
+ "metadata": {
+  "note": "HAND-AUTHORED edge dataset for the load-time validity check on issue #476 - NOT a slice of the shipped KB, which offers no row at this edge (measured 2026-09-23 by driving DrugReferenceService.getLoadStatus() over the shipped file with the edge's conjunct deleted: the reported rows did not change). ONE POSITIVE, the shipped shape re-authored: Examplazole publishes rxnorm_name `otherazine`, and the bridge files `Examplazole / partnerine` on Partnerine and not on it. ONE CONTROL: Basecillin butyrate publishes rxnorm_name `basecillin`, a name its own display stem carries as a WORD - an ester filed under its parent, which both sibling rules read as legitimate - and the bridge files `Basecillin butyrate / partnerine` on Partnerine and not on it. The control must NOT be reported."
+ },
+ "mechanisms": {},
+ "drugs": [
+  {
+   "id": "EDGE1",
+   "name": "Examplazole",
+   "rxcui": null,
+   "rxnorm_name": "otherazine",
+   "drugbank_id": "DBX0001",
+   "atc": [],
+   "brand_names": [],
+   "ciel": [
+    {
+     "code": "900001",
+     "uuid": "900001AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Otherazine"
+    }
+   ]
+  },
+  {
+   "id": "EDGE2",
+   "name": "Basecillin butyrate",
+   "rxcui": null,
+   "rxnorm_name": "basecillin",
+   "drugbank_id": "DBX0002",
+   "atc": [],
+   "brand_names": [],
+   "ciel": []
+  },
+  {
+   "id": "EDGE3",
+   "name": "Partnerine",
+   "rxcui": null,
+   "rxnorm_name": "partnerine",
+   "drugbank_id": "DBX0003",
+   "atc": [],
+   "brand_names": [],
+   "ciel": [
+    {
+     "code": "900002",
+     "uuid": "900002AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Examplazole / partnerine"
+    },
+    {
+     "code": "900003",
+     "uuid": "900003AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Basecillin butyrate / partnerine"
+    },
+    {
+     "code": "900004",
+     "uuid": "900004AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Partnerine"
+    }
+   ]
+  }
+ ],
+ "interactions": []
+}

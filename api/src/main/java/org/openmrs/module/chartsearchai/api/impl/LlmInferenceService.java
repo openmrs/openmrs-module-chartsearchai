@@ -275,6 +275,10 @@ public class LlmInferenceService implements ChartSearchService {
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
 					response.getAnswer(),
 					FindingPartnerCoverageCheck.unstatedPartners(response.getAnswer(), safetyWarnings));
+			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
+			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
+			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
+					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings));
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -770,6 +774,10 @@ public class LlmInferenceService implements ChartSearchService {
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
 					response.getAnswer(),
 					FindingPartnerCoverageCheck.unstatedPartners(response.getAnswer(), safetyWarnings));
+			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
+			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
+			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
+					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings));
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -840,6 +848,11 @@ public class LlmInferenceService implements ChartSearchService {
 				mappings, pairExtent);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				FindingPartnerCoverageCheck.unstatedPartners(composed, safetyWarnings));
+		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is
+		// about an ended order today: strengthRank refuses the ended-order clauses, so a question whose
+		// findings carry one keeps the model call.
+		answer = EndedOrderStatement.withEndedOrdersStated(answer,
+				EndedOrderStatement.unstatedEndedOrders(composed, safetyWarnings));
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);

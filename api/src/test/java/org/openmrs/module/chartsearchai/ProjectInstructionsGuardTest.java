@@ -172,7 +172,7 @@ public class ProjectInstructionsGuardTest {
 	 * synthetic-chip bullet gave up its parenthetical reason, which ADR Decision 60's rejected
 	 * alternatives already carry — and the new rule was cut to its directive (which method, one chip per
 	 * condition naming every partner, a caution, never in the pair extent), its evidence going to ADR
-	 * Decision 110 and the method's javadoc. The residue that would not fit is that directive.
+	 * Decision 111 and the method's javadoc. The residue that would not fit is that directive.
 	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once

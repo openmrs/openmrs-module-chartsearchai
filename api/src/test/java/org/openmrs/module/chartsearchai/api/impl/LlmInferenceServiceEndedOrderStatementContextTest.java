@@ -272,6 +272,23 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		}
 	}
 
+	/**
+	 * Issue #494 item 2: a combination name joining two OTHER drugs, with this drug named before it and
+	 * no joiner between, is those drugs' subject and not this one's, so the phrase after it does not
+	 * state this drug's end.
+	 */
+	@Test
+	public void aPhraseAfterACombinationNameOfOtherDrugsDoesNotStateThisOnesEnd() {
+		String answer = "Ibuprofen interacts with metformin/warfarin, whose order is no longer in force; it "
+				+ "also interacts with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(completed);
+		assertEquals(answer + STATEMENT, completed.getAnswer(),
+				"the combination names metformin and warfarin, not ibuprofen");
+	}
+
 	/** Where no drug is named before the phrase, this drug named nearest after it still states it. */
 	@Test
 	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStated() {
@@ -282,6 +299,39 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 
 		assertAnEndedChip(answer);
 		assertEquals(stated, answer.getAnswer(), "the sentence says it of ibuprofen, so nothing is appended");
+	}
+
+	/**
+	 * Issue #494 item 1: this drug is named before the phrase and other drugs only after it. The drug
+	 * named after the phrase is asked only where none is named before, so the phrase is about ibuprofen
+	 * and nothing is appended.
+	 */
+	@Test
+	public void aDrugNamedAfterThePhraseDoesNotTakeItFromThisDrugNamedBefore() {
+		String stated = "Ibuprofen's order is no longer in force; metformin interacts with her "
+				+ "Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the phrase is about ibuprofen, so nothing is appended");
+	}
+
+	/**
+	 * The mirror of issue #494 item 1: another drug is named before the phrase and this drug only after
+	 * it. The drug named after the phrase is not asked, so the phrase is about metformin and the sentence
+	 * is appended.
+	 */
+	@Test
+	public void thisDrugNamedAfterThePhraseDoesNotTakeItFromADrugNamedBefore() {
+		String answer = "Her metformin order is no longer in force; ibuprofen interacts with her "
+				+ "Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(completed);
+		assertEquals(answer + STATEMENT, completed.getAnswer(),
+				"the phrase is about metformin, the drug named nearest before it");
 	}
 
 	/**

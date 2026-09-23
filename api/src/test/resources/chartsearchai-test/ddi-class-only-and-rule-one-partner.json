@@ -32,6 +32,12 @@
     "D10AA02",
     "H02AB04"
    ],
+   "brand_names": [
+    "Depo-Medrol",
+    "HybriSil",
+    "Medrol",
+    "Solu-Medrol"
+   ],
    "ciel": [
     {
      "code": "104977",
@@ -80,6 +86,12 @@
     "D07AA01",
     "D10AA02",
     "H02AB04"
+   ],
+   "brand_names": [
+    "Depo-Medrol",
+    "HybriSil",
+    "Medrol",
+    "Solu-Medrol"
    ],
    "ciel": [
     {
@@ -137,6 +149,19 @@
     "S01CB02",
     "S02BA03",
     "S03BA02"
+   ],
+   "brand_names": [
+    "Blephamide",
+    "Cortamine",
+    "MILLIPRED",
+    "Orapred",
+    "Pediapred",
+    "Pred Forte",
+    "Pred Mild",
+    "Prednistab",
+    "Surolan",
+    "Temaril-P",
+    "Veripred"
    ],
    "ciel": [
     {
@@ -224,6 +249,10 @@
    "drugbank_id": "DB00682",
    "atc": [
     "B01AA03"
+   ],
+   "brand_names": [
+    "Coumadin",
+    "Jantoven"
    ],
    "ciel": [
     {

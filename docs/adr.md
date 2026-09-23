@@ -9800,6 +9800,47 @@ rating below `major` is a caution.** Nothing else about the split moves:
   on `main`. An earlier round of this change removed the fold leg and turned both into a caution lead,
   and it was reverted as outside the issue. `FoldedFindingStrengthTest.aModerateRuleFoldedWithAClassRelationshipStillStatesTheStrongerClaim`
   pins the arrangement over a verbatim slice of those rows.
+
+  **Measured for [#479](https://github.com/openmrs/openmrs-module-chartsearchai/issues/479)
+  (September 2026), and the leg stays.** The removal criterion was written down before either
+  measurement ran: remove the leg only if a folded cell flips to the caution lead beyond an A/A arm,
+  every flipped cell still states its rating AND its class relationship, unlicensed verdicts stay
+  0 → 0, and no other cell moves.
+  - *The population*, over the shipped knowledge base (`DdiDrugReferenceSource.load()`) with the
+    bundled groups file, counted in interaction rows AS LOADED — one per orientation, since the parser
+    files each link under both of its drugs and either orientation can fold, so about twice the file's
+    own rows. Through `DrugReference.atcSubgroups()` intersected, the partner by
+    `DrugReferenceService.lookupByToken` and `CrossReactivityGroup.sharedGroup`: **108 of the 24,690**
+    Minor rows share a level-4 subgroup (the figure `licensesWithholding`'s javadoc records,
+    reproduced) and none a curated group; **3,080 of the 378,830** Moderate rows share one or the
+    other (3,054 a subgroup, 60 a group). Through the real arm instead — `DrugSafetyValidator.validate`
+    on *"Can I give this patient {subject}?"* with the partner as the only active order — the rule
+    chip at that row's rating carries the fold for **101** Minor and **3,015** Moderate rows
+    (52 and 1,561 unordered display-name pairs), and `licensesWithholding` answers true for every
+    one. Why the arm's figure is the smaller one was not investigated. Calibration for that second
+    figure: it was taken over a prefilter admitting only rows whose two drugs share an ATC level-2
+    prefix or a curated group, and 3,000 rows sampled from outside it folded none. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
+  - *The A/B*, on the 3.7.1 standalone: `main` @ `27e9cf40` against the same tree with the
+    `carriesUnratedRelationship()` leg removed, `capture_probe_safety.sh` over 21 cells (Kamwara
+    `1530b813-…`, `23c54782-…` on Metronidazole and `83f95445-…` on Methotrexate × efavirenz,
+    zidovudine, amlodipine, rifampicin, ketoconazole, azathioprine, tenofovir, phrasing *"Can I give
+    this patient {drug}?"*), scored by `score_probe_safety.py`. A second `main` arm was byte-identical
+    on all 21 answers. The removal changed exactly four answers, the four folded cells (efavirenz
+    and zidovudine on Kamwara, both Moderate; ketoconazole × Metronidazole and azathioprine ×
+    Methotrexate, both Minor), each from *"No — … should not be given"* to the caution lead. Unlicensed
+    verdicts stayed 0 → 0. Both arms exit 3 because the Methotrexate patient's context read failed, a
+    flag about the host rather than a verdict.
+  - *Why the criterion failed.* The ketoconazole answer dropped its rating under the removal
+    (`ratings dropped` 0 → 1). And only that answer states the folded class sentence at all: the
+    other three flipped answers name neither the shared subgroup nor duplicate therapy for the folded
+    pair, and neither do the four `main` answers. So the caution lead did not carry both claims of
+    the finding it softened. The missing class sentence predates the removal and the dropped rating
+    does not; the criterion was not written to excuse either.
+
+  What is left is the same residue, now measured: by the arm's figure a fold of two cautions
+  withholds on 3,116 of the 403,520 Minor and Moderate rows as loaded. A later
+  proposal to grade it would have to show the caution-led answer stating both claims, which is a
+  prompt question this measurement did not try to answer.
 - **The current-medication caution branch now asks for the rating, and opens as the change branch
   does.** The issue requires a Moderate finding to be stated with its rating (#299, #337) and not as a
   permission or a "Yes" (#107 arm C), and moving Moderate to the caution moved a screened Moderate

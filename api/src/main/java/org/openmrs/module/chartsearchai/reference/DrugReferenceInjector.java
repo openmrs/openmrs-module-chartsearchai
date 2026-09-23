@@ -2285,8 +2285,9 @@ public class DrugReferenceInjector {
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
 	 * that type, so a provenance clause never arrives without a strength beside it; and only an
 	 * interaction can carry a BRIDGE, for which that method answers one unconditionally too. Said
-	 * rather than left to be rediscovered — mutating the guard (in {@link #findingBody} since issue #469) to {@code !clauseFollows} alone
-	 * leaves the whole api suite green, and so does dropping the bridge term. All three are kept because
+	 * rather than left to be rediscovered — mutating the guard (in {@link #findingBody} since issue
+	 * #469) to {@code !clauseFollows} alone leaves the whole api suite green, and so does dropping the
+	 * bridge term. All three are kept because
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */

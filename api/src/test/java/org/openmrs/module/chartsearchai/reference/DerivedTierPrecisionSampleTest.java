@@ -26,6 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -69,17 +70,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code disease_notes} table, which the module does not load. A rewritten note leaves every count
  * unchanged, which is why this is here;</li>
  * <li>the WHOLE POPULATION — one line per link in the census rule's order, its note id, condition, kept
- * chains and distinct rated substances, against the SHA-256 the sample file records (issue #496), so a
- * move of chains that changes those for a link no item adjudicates is reported where every count above
- * still holds. A run that ranks the links writes the lines it hashes to {@code api/}{@value #RANKED_LINKS}
+ * chains, distinct rated substances and the sorted names of its cause drugs, against the SHA-256 the sample
+ * file records (issues #496, #500), so a move of chains that changes those for a link no item adjudicates
+ * is reported where every count above still holds. A run that ranks the links writes the lines it hashes to {@code api/}{@value #RANKED_LINKS}
  * and hashes that file, so a refresh that reddens it leaves the ranking and weights to re-measure from;</li>
  * <li>the SAMPLE — its items are the links outside the census at the draw's positions the sample file
  * records.</li>
  * </ul>
  * Not checked: that those positions are what the recorded {@code random.Random(480)} draw returns (Python's
  * generator is not re-derived here); which rated substances a link's chains are read through where its
- * counts hold; and, for a link no item adjudicates, which cause drugs, or anything else its line does not
- * carry, where its counts hold.
+ * counts hold; and, for a link no item adjudicates, anything its line does not carry, such as which of two
+ * cause entries sharing a name a chain is read through.
  *
  * <p>It re-derives no verdict: those are data, recorded in
  * {@code api/src/test/resources/eval/derived-tier-precision-sample.json}, and nothing here judges a note.
@@ -337,17 +338,28 @@ public class DerivedTierPrecisionSampleTest {
 	@Test
 	public void everyLinkCarriesTheWeightsThePopulationWasMeasuredWith() throws Exception {
 		StringBuilder lines = new StringBuilder();
+		Set<String> unwritable = new LinkedHashSet<String>();
 		for (String link : rankedLinks()) {
 			lines.append(link).append('\t').append(chainsByLink.get(link)).append('\t')
-					.append(ratedSubstancesByLink.get(link).size()).append('\n');
+					.append(ratedSubstancesByLink.get(link).size());
+			// Sorted, so the line depends on which cause drugs a link is read through and not on load order.
+			for (String cause : new TreeSet<String>(causeDrugsByLink.get(link))) {
+				if (cause.indexOf('\t') >= 0 || cause.indexOf('\n') >= 0) {
+					unwritable.add(cause);
+				}
+				lines.append('\t').append(cause);
+			}
+			lines.append('\n');
 		}
+		assertTrue(unwritable.isEmpty(), "cause drug names a TAB-separated, LF-terminated line cannot carry"
+				+ " unambiguously: " + unwritable);
 		// Written before the assertion, so a refresh that reddens it leaves the list to re-measure from, and the
 		// file is what is hashed, so the list left behind is the one the assertion judged.
 		Path emitted = ModuleSourceRoot.apiRoot().resolve(RANKED_LINKS);
 		Files.createDirectories(emitted.getParent());
 		Files.write(emitted, lines.toString().getBytes(StandardCharsets.UTF_8));
 		assertEquals(sample.path("population").path("rankedLinks").path("sha256").asText(),
-			ModelManifest.sha256(Files.readAllBytes(emitted)), "the ranked (link, kept chains, rated substances) enumeration is not"
+			ModelManifest.sha256(Files.readAllBytes(emitted)), "the ranked (link, kept chains, rated substances, cause drugs) enumeration is not"
 					+ " the one the precision figure was measured over; re-measure (ADR Decision 111) from " + emitted);
 	}
 

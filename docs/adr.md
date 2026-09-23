@@ -10368,7 +10368,9 @@ of its (drug, condition) keys name more than one note.
   the figure was measured, hashes the same bytes as at the commit that recorded them. A run that ranks
   the links writes them to `api/target/derived-tier-precision-ranked-links.tsv`, so a re-measurement
   after a refresh starts from the test's own ranking and weights rather than from a script that re-ranks
-  them; each adjudicated link's cause drugs are not in it. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
+  them. Since #500 each line also carries the sorted names of its link's cause drugs, and the hash was
+  re-recorded for it; with those fields cut off, the lines the class wrote at `bc68da1f` hash to the value
+  #496 recorded, so the appended names are the only change. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
   - one word of note 319: `everyAdjudicatedNoteIsTheTextItWasJudgedOn`;
   - the one Major rated side of link 1660 × Hyperbilirubinemia set to Moderate:
     `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and
@@ -10397,7 +10399,11 @@ of its (drug, condition) keys name more than one note.
   - all 128 rows of link 940 × Hypotension, which no item adjudicates, moved to note 1, #496's mutation,
     which leaves every count above unchanged: `everyLinkCarriesTheWeightsThePopulationWasMeasuredWith`
     alone;
-  - one of the sample file's recorded draw positions changed: `theSampledLinksAreTheRecordedDrawFromTheRest`.
+  - one of the sample file's recorded draw positions changed: `theSampledLinksAreTheRecordedDrawFromTheRest`;
+  - on 2026-09-24, the `cause_note_id` of all 128 rows of link 940 × Hypotension swapped with that of the
+    128 rows of 262 × Hypotension, two unadjudicated links with the same kept chains and rated substances
+    (#500): `everyLinkCarriesTheWeightsThePopulationWasMeasuredWith` alone. The class before #500 stayed
+    green on it.
 
   The Flibanserin, Acetaminophen and Didanosine lines were run with
   `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor` in the class, the lines above

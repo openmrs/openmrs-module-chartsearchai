@@ -48,7 +48,8 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p><b>Everything but the model is real</b>: patient 7 of the standard dataset (active order 111,
  * ASPIRIN) read through the real {@code OrderService}, the real injector and validator over the DDInter
  * excerpt the tests load, and the real {@link LlmInferenceService#search}/{@code searchStreaming}. The
- * chart the stub strategy returns carries an ended Ibuprofen order in querystore's REAL rendered text.
+ * chart the stub strategy returns carries an ended Ibuprofen order in querystore's REAL rendered text, or,
+ * in the cases about a name Omeprazole shares with another drug, an ended Omeprazole order.
  * The model is a recorder answering R1's recorded words.
  */
 public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModuleContextSensitiveTest {
@@ -396,10 +397,8 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 	 * Issue #498 item 2: the nearest name before the phrase is another drug's, metformin, joined by a slash
 	 * to the kit's name, which this drug shares with Clarithromycin. The combination walk meets the two
 	 * occurrences of the kit's name ending at one position, and the tie goes to this drug, so nothing is
-	 * appended. Two tie rules hold it, each enough alone: the walk's own comparison, and the loop condition
-	 * the walk returns to (see {@code nearestIsOwn}). Giving the tie away at either one alone — the loop's
-	 * {@code >} made {@code >=}, or the walk's {@code >=} made {@code >} — leaves this case green, and at
-	 * both reddens it.
+	 * appended. One tie rule holds it since issue #505: the loop condition the walk returns to (see
+	 * {@code nearestIsOwn}), whose {@code >} made {@code >=} reddens this case.
 	 */
 	@Test
 	public void aNameThisDrugSharesWithAnotherJoinedToANearerDrugStatesIt() {

@@ -686,8 +686,9 @@ public class SafetyVerdictSeverityGradationTest {
 	}
 
 	/**
-	 * Across the FOUR strength classes there is exactly ONE phrase that sits inside another's words,
-	 * and it is the one ADR Decision 37 already handles (issue #348).
+	 * Across the strength classes there is exactly ONE phrase that sits inside another's words, and it
+	 * is the one ADR Decision 37 already handles (issue #348; since #472 the walk covers the ended-order
+	 * pair too).
 	 *
 	 * <p>The hazard is that decision's own: "a reason to withhold it" occurs inside
 	 * {@code STRENGTH_CAUTION} too, negated, so a branch whose antecedent is that bare phrase is
@@ -696,7 +697,7 @@ public class SafetyVerdictSeverityGradationTest {
 	 * pins; the containment itself is left standing, deliberately, because the clauses read as
 	 * English.
 	 *
-	 * <p>Adding two more classes turns 2 ordered pairs into 12, and no behavioural test can see a
+	 * <p>Every class added multiplies the ordered pairs, and no behavioural test can see a
 	 * shallow read — the MODEL is what reads shallowly. So the whole product is walked and the one
 	 * admitted pair is named rather than skipped: a reword that introduced a SECOND containment
 	 * reddens here, and so does one that removed the admitted one without this case being re-read.
@@ -707,7 +708,9 @@ public class SafetyVerdictSeverityGradationTest {
 		String caution = clauseCore(DrugReferenceInjector.STRENGTH_CAUTION);
 		String[] cores = { withhold, caution,
 			clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
-			clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION) };
+			clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION),
+			clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER),
+			clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER) };
 
 		assertTrue(caution.contains(withhold),
 				"precondition: the admitted pair is the withholding class named inside the caution "
@@ -791,5 +794,51 @@ public class SafetyVerdictSeverityGradationTest {
 					+ "repository can see what a model makes of them — ADR Decision 72's two-build "
 					+ "A/B is what licensed these words. A reword re-opens that measurement, so this "
 					+ "failure is the reminder that one is owed, not a literal to repair");
+	}
+
+	/**
+	 * Both ended-order classes are taught in the words the injected record uses, under the content
+	 * rules the current-medication branches are held to (issue #472): the branch opens by NAMING the
+	 * medication, instructs no refusal and forbids one outright, and borrows no permission lead. One
+	 * sentence carries both cores, so each core is put to the same rules.
+	 */
+	@Test
+	public void bothEndedOrderClassesAreTaughtInTheWordsTheInjectedRecordUses() {
+		assertCurrentMedicationBranch(clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER),
+			"the ended-order withholding class must have a branch, or a finding about a drug her chart "
+					+ "records only as an ended order falls through to the proposal refusal — issue #472");
+		assertCurrentMedicationBranch(clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER),
+			"and so must its caution counterpart, in the same words");
+	}
+
+	/**
+	 * The ended-order branch is EXACTLY these words (issue #472) — the seal over the properties above,
+	 * for the reason {@link #theTwoCurrentMedicationBranchesAreExactlyTheseWords} gives of its own: the
+	 * A/B on a standalone that ADR Decision 110 records licensed them, and a reword re-opens it.
+	 */
+	@Test
+	public void theEndedOrderBranchIsExactlyTheseWords() {
+		String withhold = clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER);
+		String caution = clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER);
+		List<String> branches = new ArrayList<String>();
+		for (String sentence : safetyParagraph().split("(?<=\\.)\\s+")) {
+			if ((sentence.contains(withhold) || sentence.contains(caution)) && sentence.contains("open")) {
+				branches.add(sentence);
+			}
+		}
+
+		assertEquals(Arrays.asList(
+			"A finding that says it is a reason against giving it should it be proposed again; this "
+					+ "patient's chart records its order as no longer in force, not as a current "
+					+ "medication, or that it is a caution to weigh should it be proposed again; this "
+					+ "patient's chart records its order as no longer in force, not as a current "
+					+ "medication, is not about a medication this patient is taking now: open by naming "
+					+ "that medication and saying its order is no longer in force, then what the finding "
+					+ "relates it to, carry the finding's severity, and never open by refusing to give a "
+					+ "drug."),
+			branches,
+			"this sentence is what an answer about a drug her chart records as ended opens from, and "
+					+ "ADR Decision 110's A/B is what licensed these words — a reword re-opens that "
+					+ "measurement");
 	}
 }

@@ -437,8 +437,9 @@ public class DrugReferenceInjector {
 	/**
 	 * As {@link #preAnswerFindings(PatientClinicalContext, String)}, for a caller that has already
 	 * resolved the patient's active orders to their reference entries and so can spare the validator
-	 * deriving them a second time (issue #255) — which is {@link #injectRecords}, the only production
-	 * caller that passes a non-null list; the two-argument overload above reaches this one too.
+	 * deriving them a second time (issue #255). {@link #injectRecords} passes a non-null list through
+	 * the overload below, which also hands over the chart's records; the two-argument overload above
+	 * reaches this one too.
 	 *
 	 * @param orderEntries that resolution, or {@code null} to let the validator resolve for itself.
 	 *        It must be the resolution of {@code context}'s own orders; see the validator's own
@@ -447,6 +448,19 @@ public class DrugReferenceInjector {
 	 */
 	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question,
 			List<DrugReference> orderEntries) {
+		return preAnswerFindings(context, question, orderEntries, null);
+	}
+
+	/**
+	 * As above, additionally handing the validator the chart's records — which {@link #injectRecords}
+	 * holds and every other caller does not. With an empty answer nothing the validator reads off
+	 * them for its echo test or its subject matter can fire, so what they add is the one thing it
+	 * reads off a record regardless of the answer: whether the chart holds a drug in play only as an
+	 * order no longer in force (issue #472), so the record the model reads states the same referent
+	 * as the chip beside the answer.
+	 */
+	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question,
+			List<DrugReference> orderEntries, List<RecordMapping> chartMappings) {
 		// Gated on the SAME toggle that gates the chips, because the two must never disagree. The
 		// validator's public entry point checks this GP; the package-private overload used here does
 		// not, so without this an operator setting validateAnswers=false would switch the chips off
@@ -458,7 +472,7 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
 			return Collections.emptyList();
 		}
-		return drugSafetyValidator.validate("", question, context, null, orderEntries);
+		return drugSafetyValidator.validate("", question, context, chartMappings, orderEntries);
 	}
 
 	/**
@@ -578,7 +592,7 @@ public class DrugReferenceInjector {
 				: null;
 		// Handed the resolution above rather than left to derive it again (issue #255): validate used to
 		// resolve the same orders again, and this method already holds that answer.
-		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries);
+		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries, chart.getMappings());
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		// Whether the interaction SCREEN ran over a pair of this patient's own medications and related
 		// none of them — issue #401, and the one thing this injection has to say when it has nothing
@@ -2115,6 +2129,31 @@ public class DrugReferenceInjector {
 			+ "a medication this patient is already taking, not a reason to change it.";
 
 	/**
+	 * {@link #STRENGTH_WITHHOLD}'s counterpart for a finding about a drug this patient's CHART records
+	 * only as an order no longer in force (issue #472) — {@code SafetyWarning.isAboutAnEndedOrder()}.
+	 *
+	 * <p>The same strength, a third referent. {@link #STRENGTH_WITHHOLD} names an act — withholding —
+	 * that presupposes a proposal, and on a question that proposed nothing (<em>"Why was her rifampicin
+	 * stopped…?"</em>) the answer supplied the missing proposal and refused it: ADR Decision 72's cause,
+	 * one referent over. So the act is stated CONDITIONALLY ("should it be proposed again") and the
+	 * referent is named in the words the prompt already uses for such a record ("no longer in force",
+	 * after {@code PatientChartSerializer.INACTIVE_ORDER_LABEL}), rather than as a new vocabulary.
+	 */
+	public static final String STRENGTH_WITHHOLD_ENDED_ORDER = " This finding is a reason against giving "
+			+ "it should it be proposed again; this patient's chart records its order as no longer in "
+			+ "force, not as a current medication.";
+
+	/**
+	 * {@link #STRENGTH_CAUTION}'s counterpart for the same findings (issue #472), written in the same
+	 * change for the reason {@link #STRENGTH_CAUTION_CURRENT_MEDICATION} was: left alone, a Minor pair
+	 * about an ended order keeps the proposal caution, whose prompt branch opens by stating that the
+	 * drug CAN be given.
+	 */
+	public static final String STRENGTH_CAUTION_ENDED_ORDER = " This finding is a caution to weigh should "
+			+ "it be proposed again; this patient's chart records its order as no longer in force, not as "
+			+ "a current medication.";
+
+	/**
 	 * How a contraindication finding's rule reached this patient's chart, stated in the finding
 	 * itself where nothing corroborates that match — as a record of the drug for an allergy rule, and
 	 * since issue #309 as a whole word for a condition rule (issue #308) — the
@@ -2334,7 +2373,8 @@ public class DrugReferenceInjector {
 	 *     {@code QueryScopeRouter.asksWhetherToGiveADrug} with the drug's own name marked, where an
 	 *     interaction the data rates as a reason to withhold it relates it to one of her orders
 	 *     ({@link #STRENGTH_WITHHOLD} — the proposal clause, which only the drug-in-play arm states
-	 *     before there is an answer). Not already taking it, because the drug-in-play arm states a
+	 *     before there is an answer, and still the one it states for a drug her chart holds only as
+	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the drug-in-play arm states a
 	 *     proposal clause for a drug she does take (issue #402), and composing would make that defect
 	 *     certain — asked of {@code herSubstances}, the substances this pass resolved her orders to.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
@@ -2373,7 +2413,7 @@ public class DrugReferenceInjector {
 			asked.add(entry.substanceGroupKey());
 		}
 		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
-				|| !QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs))) {
+				|| !questionProposes(question, questionDrugs)) {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
@@ -2388,6 +2428,19 @@ public class DrugReferenceInjector {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether {@code question} asks whether to GIVE the drug it names — {@code
+	 * QueryScopeRouter.asksWhetherToGiveADrug} over the question's words with its own names marked. One
+	 * spelling for its two callers, which must not disagree: {@link #answersFromFindings} admits a
+	 * proposal by it (issue #469), and {@code DrugSafetyValidator}'s ended-order holder keeps a proposed
+	 * drug a proposal by it (issue #472), so a question the module answers from its findings is one
+	 * whose drug is never re-referred.
+	 */
+	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
+		return !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs));
 	}
 
 	/**
@@ -2446,8 +2499,10 @@ public class DrugReferenceInjector {
 	 * medications — a screen — opens with that finding: a lead saying which of two medications to
 	 * change would state a choice no finding makes, which issue #469 measured the model adding in three cells.
 	 *
-	 * @return the answer, or {@code null} where a finding states no strength clause — which no
-	 *         reachable type does today — so that such a question keeps the model call
+	 * @return the answer, or {@code null} where a finding states a clause {@link #strengthRank} does not
+	 *         rank — no strength clause at all, which no reachable type does today, or an ended-order
+	 *         clause (issue #472), which neither admitted shape should carry — so that such a question
+	 *         keeps the model call
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers) {
@@ -2474,8 +2529,11 @@ public class DrugReferenceInjector {
 		return String.join("\n", lines);
 	}
 
-	/** The prompt's ranking of the four clauses a finding can state, strongest first, or {@code -1}
-	 *  for a finding stating none. */
+	/** The prompt's ranking of the four clauses it ranks, strongest first, or {@code -1} for any other
+	 *  finding — one stating no clause, or the ended-order pair. That pair (issue #472) answers {@code -1} on purpose, so
+	 *  an answer carrying one keeps the model call. Neither shape {@link #answersFromFindings} admits
+	 *  should carry one: a proposal keeps its drug a proposal, and a screen names no drug to put in
+	 *  play. */
 	private static int strengthRank(String clause) {
 		if (STRENGTH_WITHHOLD.equals(clause)) {
 			return 0;
@@ -2834,23 +2892,35 @@ public class DrugReferenceInjector {
 	 * {@link SafetyWarning#isAboutACurrentMedication()}, established by the arm; it is never a reading
 	 * of the detail. Neither is this module telling a clinician what to do, which is the line
 	 * {@code DrugSafetyValidator}'s class javadoc draws.
+	 *
+	 * <p>Since issue #472 a third pair, {@link #STRENGTH_WITHHOLD_ENDED_ORDER} and
+	 * {@link #STRENGTH_CAUTION_ENDED_ORDER}, for a finding about a drug the chart records only as an
+	 * order no longer in force — {@link SafetyWarning#isAboutAnEndedOrder()}, set by the drug-in-play
+	 * and question-pair arms and exclusive with the current-medication referent. Same strengths again;
+	 * ADR Decision 110.
 	 */
 	private static String strengthClause(SafetyWarning finding) {
 		// The REFERENT axis, asked first because it is orthogonal to the strength axis below and
 		// because reading them the other way round is how a branch gets missed: every clause the
 		// method can return states one of the two strengths, and which PAIR it draws from is decided
 		// here (issue #348).
+		// Since issue #472 there are THREE referents, and SafetyWarning keeps the two non-proposal ones
+		// exclusive, so the order these are asked in decides nothing.
 		boolean current = finding.isAboutACurrentMedication();
+		boolean ended = finding.isAboutAnEndedOrder();
 		if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
 			if (DrugSafetyValidator.licensesWithholding(finding)) {
-				return current ? STRENGTH_CHANGE_CURRENT_MEDICATION : STRENGTH_WITHHOLD;
+				return current ? STRENGTH_CHANGE_CURRENT_MEDICATION
+						: ended ? STRENGTH_WITHHOLD_ENDED_ORDER : STRENGTH_WITHHOLD;
 			}
-			return current ? STRENGTH_CAUTION_CURRENT_MEDICATION : STRENGTH_CAUTION;
+			return current ? STRENGTH_CAUTION_CURRENT_MEDICATION
+					: ended ? STRENGTH_CAUTION_ENDED_ORDER : STRENGTH_CAUTION;
 		}
 		if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
 			// A contraindication is never a caution — ADR Decision 37 measured the alternative — so the
 			// referent is the only thing left to decide.
-			return current ? STRENGTH_CHANGE_CURRENT_MEDICATION : STRENGTH_WITHHOLD;
+			return current ? STRENGTH_CHANGE_CURRENT_MEDICATION
+					: ended ? STRENGTH_WITHHOLD_ENDED_ORDER : STRENGTH_WITHHOLD;
 		}
 		return "";
 	}

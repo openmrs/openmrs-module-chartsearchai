@@ -248,7 +248,7 @@ public class LlmProvider {
 			+ "problems\", \"any eye issues\"), cite nothing after a no-record verdict — do not "
 			+ "list vital signs or unrelated measurements.\n"
 			// The two question shapes named here are EXAMPLES of this paragraph's scope, not its
-			// bound, and nothing else carries scope: the #348 branches at the end of the paragraph
+			// bound, and nothing else carries scope: the #348 branches near the end of the paragraph
 			// are gated on the FINDING's clause and never on the question, and the screening shape
 			// they exist for ("Does she have any drug interactions I should know about?") is not one
 			// of the shapes listed. The scope reaches it in practice — the reproduction IS this
@@ -282,7 +282,8 @@ public class LlmProvider {
 			// clause, because LlmProviderTest fails this paragraph on the substring "otherwise" in
 			// any casing (#107 arm D).
 			//
-			// Placed BEFORE the never-"Yes" token that closes the paragraph, so that token's "such an
+			// Placed BEFORE the never-"Yes" token (which closed the paragraph until #472's branch
+			// followed it), so that token's "such an
 			// answer" reaches these two branches as well. That is deliberate and it is what they ask
 			// for: neither branch wants a VERDICT at all — the lead is a statement about medications
 			// already prescribed, which is the sentence #348 says the chip carries and the answer does
@@ -291,7 +292,8 @@ public class LlmProvider {
 			// instruction in a paragraph of its own is #112's refuted shape. The other — putting
 			// these two branches AFTER the never-"Yes" token — has not been measured, and the
 			// argument against it is legibility only: the token's own scope becomes the thing a
-			// reader has to infer. Worth weighing rather than settled: one READING of ADR Decision
+			// reader has to infer (ADR Decision 110 later measured that placement for ITS branch, not
+			// for these two). Worth weighing rather than settled: one READING of ADR Decision
 			// 72's first residue — §3a still opening with a bare "No —" — is that this token plus the
 			// yes/no verdict paragraph above leave no other lead available on a screening question.
 			// That reading is not measured either, and no arm has tried the placement.
@@ -317,7 +319,27 @@ public class LlmProvider {
 			+ "finding that is a reason to withhold it leads, then one that is a reason to change a "
 			+ "medication this patient is already taking, then a caution. "
 			+ "The finding's mechanism is the evidence for the call it states: it belongs after the "
-			+ "call, not in place of it. Never open such an answer with \"Yes\".\n"
+			+ "call, not in place of it. Never open such an answer with \"Yes\". "
+			// ISSUE #472. The third referent: a finding about a drug this patient's chart records only
+			// as an order no longer in force, whose two clauses name that referent and state the act
+			// conditionally. One branch for both, quoting each clause in the record's own words, for
+			// the reasons the #348 comment above gives of its two; the same content rules bind it —
+			// open by naming the medication, forbid the refusal lead, instruct no permission. AFTER the
+			// never-"Yes" token and outside the ranking sentence, both chosen by ADR Decision 110's
+			// A/B rather than by argument: of the three arms run, the one with no refusal on either
+			// reproduction cell and no more current-medication screening cells opening with a bare
+			// "No —" than the baseline. It did not leave them untouched — the decision records which
+			// cell moved. That A/B ran on a base predating ADR Decision 109 (#474), so one of those two
+			// cells, the Moderate pair §3b, was read under a change clause and a current-medication
+			// caution branch this prompt no longer ships; Decision 110 records the re-run on the
+			// merged base.
+			+ "A finding that says it is a reason against giving it should it be proposed again; this "
+			+ "patient's chart records its order as no longer in force, not as a current medication, or "
+			+ "that it is a caution to weigh should it be proposed again; this patient's chart records "
+			+ "its order as no longer in force, not as a current medication, is not about a medication "
+			+ "this patient is taking now: open by naming that medication and saying its order is no "
+			+ "longer in force, then what the finding relates it to, carry the finding's severity, and "
+			+ "never open by refusing to give a drug.\n"
 			+ "Your answer must not vary based on the punctuation or phrasing of the query "
 			+ "— focus only on its semantic meaning.\n\n"
 			+ "The following is a FORMAT DEMONSTRATION ONLY using fake non-medical data. "

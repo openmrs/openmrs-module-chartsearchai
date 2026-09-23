@@ -10053,18 +10053,19 @@ rig on the machine held, and it was restored after the run.
   (`DrugReference.namedOccurrences`), where a name of any row the chip carries for its substance counts as
   this drug and any other entry `findImpliedByQuery` reads the sentence to name counts as another; a
   hyphen, slash or plus sign joining the nearest name to one of this drug's makes them one subject; and
-  where no drug is named before the phrase, the sentence rule. So Decision 47's recorded *"Nevirapine was
+  where no drug is named before the phrase, the drug named nearest after it, by where its name starts, a
+  tie going to this drug (issue #489; until then the sentence rule). So Decision 47's recorded *"Nevirapine was
   prescribed, but its order is no longer in force"* reads as said, and *"Rifampicin interacts with
   nevirapine; her isoniazid order is no longer in force."* does not — nor do its variants joined by
   "and", by a parenthesis or by a "whose" clause about the other drug (issue #482; until then any sentence naming the drug
   and carrying the phrase was read as saying it). Said twice rather than not at all: a paraphrase of that
   phrase, a name no row of the substance carries, a pronoun reaching back past a nearer drug
-  (*"Ibuprofen interacts with aspirin, but its order is no longer in force"*), and this drug listed
-  before another in one subject (*"Her ibuprofen and metformin orders are …"*). Toward silence: a pronoun
+  (*"Ibuprofen interacts with aspirin, but its order is no longer in force"*), this drug listed
+  before another in one subject (*"Her ibuprofen and metformin orders are …"*), and, after the phrase,
+  this drug listed after another or joined behind it in a combination name (*"The orders no longer in
+  force are her metformin and ibuprofen"*, *"… is her metformin/ibuprofen"*). Toward silence: a pronoun
   reaching back past this drug to one named before it (*"Metformin interacts with ibuprofen, but its order
-  is no longer in force"*), a nearer drug the loaded data does not carry, and a phrase ahead of the drug
-  it is about in a sentence naming this one elsewhere (*"The order no longer in force is her metformin;
-  ibuprofen …"*), which the sentence rule reads as stated. The drug test's own residue also runs that
+  is no longer in force"*), and a nearer drug the loaded data does not carry. The drug test's own residue also runs that
   way: an alias the substance shares with another (#209's shape) names it too, and a tie in position goes
   to this drug, so a sentence saying that other drug's order is no longer in force reads as saying it of
   this one.

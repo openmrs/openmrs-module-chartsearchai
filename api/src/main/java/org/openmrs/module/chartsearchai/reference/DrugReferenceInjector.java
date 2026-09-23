@@ -437,8 +437,9 @@ public class DrugReferenceInjector {
 	/**
 	 * As {@link #preAnswerFindings(PatientClinicalContext, String)}, for a caller that has already
 	 * resolved the patient's active orders to their reference entries and so can spare the validator
-	 * deriving them a second time (issue #255) — which is {@link #injectRecords}, the only production
-	 * caller that passes a non-null list; the two-argument overload above reaches this one too.
+	 * deriving them a second time (issue #255). {@link #injectRecords} passes a non-null list through
+	 * the overload below, which also hands over the chart's records; the two-argument overload above
+	 * reaches this one too.
 	 *
 	 * @param orderEntries that resolution, or {@code null} to let the validator resolve for itself.
 	 *        It must be the resolution of {@code context}'s own orders; see the validator's own
@@ -2470,10 +2471,11 @@ public class DrugReferenceInjector {
 	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
 	 * cannot take the answer's first sentence and leave the question unanswered. One key does both,
 	 * because the two never meet: only the screening arm relates two of her own medications, and it
-	 * stands down for a question that resolved a drug. Within each group, strongest first — withhold,
-	 * change a current medication, then the two cautions, the order the prompt gives the model for the
-	 * first three and this module's own choice between the last two — read off {@link #strengthClause}
-	 * and never off the severity word; stable, so the injection order stands within a class.
+	 * stands down for a question that resolved a drug. Within each group, strongest first, by
+	 * {@link #strengthRank} — every withholding clause ahead of every caution, in the order the prompt's
+	 * ranking sentence names the withholding ones, and this module's own choice among the cautions —
+	 * read off {@link #strengthClause} and never off the severity word; stable, so the injection order
+	 * stands within a class.
 	 *
 	 * <p><b>That last sort is a defence nothing observes today.</b> The arms already append a
 	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
@@ -2884,6 +2886,11 @@ public class DrugReferenceInjector {
 	 * {@link SafetyWarning#isAboutACurrentMedication()}, established by the arm; it is never a reading
 	 * of the detail. Neither is this module telling a clinician what to do, which is the line
 	 * {@code DrugSafetyValidator}'s class javadoc draws.
+	 *
+	 * <p>Since issue #472 a third pair, {@link #STRENGTH_WITHHOLD_ENDED_ORDER} and
+	 * {@link #STRENGTH_CAUTION_ENDED_ORDER}, for a finding about a drug the chart records only as an
+	 * order no longer in force — {@link SafetyWarning#isAboutAnEndedOrder()}, set by the drug-in-play
+	 * arm and exclusive with the current-medication referent. Same strengths again; ADR Decision 110.
 	 */
 	private static String strengthClause(SafetyWarning finding) {
 		// The REFERENT axis, asked first because it is orthogonal to the strength axis below and

@@ -268,4 +268,26 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 				"the question proposes the drug, so the module answers it and leads with the withholding "
 						+ "call: " + answer);
 	}
+
+	/**
+	 * A CLASS-only finding — a shared ATC subgroup and no rule — about a drug the chart holds only as
+	 * an ended order states the ended-order caution: the class arm's chip is built apart from the rule
+	 * chips, so it is its own site. Over the shipped-KB slice {@code ClassOnlyFindingStrengthTest}
+	 * uses, where prednisolone shares {@code H02AB} with her Methylprednisolone and no rule relates them.
+	 */
+	@Test
+	public void aClassOnlyFindingAboutADrugTheChartHoldsOnlyAsAnEndedOrderStatesTheEndedOrderCaution()
+			throws IOException {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.ddiFixtureService("chartsearchai-test/ddi-class-only-and-rule-one-partner.json"),
+			DrugReferenceTestSupport.chartOf(orderRecord(1, "Prednisolone 5mg", Boolean.FALSE)),
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Methylprednisolone"),
+				DrugReferenceTestSupport.set("H02AB04"), null, null),
+			"Is it safe to give prednisolone?");
+
+		assertTrue(finding.contains("same ATC class (H02AB)"),
+				"precondition: this is the class arm's finding: " + finding);
+		assertTrue(finding.endsWith(CAUTION_ENDED),
+				"the class-only chip states the ended-order referent too: " + finding);
+	}
 }

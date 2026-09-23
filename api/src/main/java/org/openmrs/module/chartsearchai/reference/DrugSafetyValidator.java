@@ -972,7 +972,8 @@ public class DrugSafetyValidator {
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
 				// FALSE at both, and not because the drug cannot also be a current medication — it often
 				// is. The question or the answer PROPOSED it, so what this finding licenses is a
-				// decision about that proposal (issue #348).
+				// decision about that proposal (issue #348) — unless the chart holds it only as an
+				// ended order, which the ledger states on the chip itself (issue #472, EndedOrders).
 				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier,
 					false);
 				addAllergyContraindications(contraindications, ref, recordedAllergens, false);

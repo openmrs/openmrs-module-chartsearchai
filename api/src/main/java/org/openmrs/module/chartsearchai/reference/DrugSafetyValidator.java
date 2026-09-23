@@ -777,6 +777,9 @@ public class DrugSafetyValidator {
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS);
 		boolean warnContra = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
+		// The derived tier's own switch, read once per pass beside the toggles it sits under: it runs only
+		// where warnOnInteractions does, and turns off without taking the pairwise chips with it.
+		boolean derivedFindings = statesDerivedFindings();
 
 		String lower = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
 		List<DrugReference> all = drugReferenceService.getAll();
@@ -1002,6 +1005,12 @@ public class DrugSafetyValidator {
 				// method that sees both (issue #88).
 				int related = addInteractionWarnings(warnings, rows, subjects, context, severityFloor,
 						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, endedOrders);
+				// After the pairwise chips for this drug and never counted into `related`: a derived chain
+				// is not a DDInter pair row, and PairChipExtent counts those alone (ADR Decision 111).
+				if (derivedFindings) {
+					addConditionMediatedWarnings(warnings, rows, subjects, context, orderEntries, coMedications,
+						bridgedOrders, endedOrders);
+				}
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
 					questionDrugPairs += related;
@@ -1331,6 +1340,14 @@ public class DrugSafetyValidator {
 	 * nothing.
 	 */
 	static boolean licensesWithholding(SafetyWarning finding) {
+		// A derived chain is a caution, and asked by TYPE because nothing else about it could say so:
+		// it carries no severity, so the rating leg below would read it as "unrated" and withhold. ADR
+		// Decision 86's criterion is the reason: a relationship nobody authored, inferred from the data
+		// rather than rated by it, is the weakest claim this layer makes — and a derived chain is a text
+		// match over two drug-disease rows, not a rating of the pair (Decision 111).
+		if (SafetyWarning.TYPE_CONDITION_MEDIATED.equals(finding.getType())) {
+			return false;
+		}
 		// FIRST, and it can only ever lower the answer (issue #400). A finding whose only evidence is
 		// that two drugs share a classification is the weakest claim this layer makes: nobody authored
 		// it, and the data it comes from says two drugs sit in one subgroup rather than anything about
@@ -1363,6 +1380,20 @@ public class DrugSafetyValidator {
 		return floorRank(ChartSearchAiUtils.getStringGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY));
+	}
+
+	/**
+	 * Whether this install states the knowledge base's derived-tier findings
+	 * ({@code chartsearchai.drugSafety.derivedFindings}, ADR Decision 111): only the value {@code major}
+	 * says yes, and every other value — {@code off}, the default, and one the switch does not offer —
+	 * says no. Failing to the default is the rule every drug-safety property follows; here the default is
+	 * off because a false causal link is what the knowledge base's matcher was measured to produce on a
+	 * common co-prescription (the decision carries it).
+	 */
+	static boolean statesDerivedFindings() {
+		return ChartSearchAiConstants.DERIVED_FINDINGS_MAJOR.equalsIgnoreCase(ChartSearchAiUtils.getStringGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS));
 	}
 
 	/**
@@ -4102,7 +4133,7 @@ public class DrugSafetyValidator {
 	 * drug in play: stated beside them in the current-medication column (issue #348), one response would
 	 * refuse the drug as a proposal and call it a medication to change, the one-site shape issue #402
 	 * recorded and reverted. Its STRENGTH is the unrated default, so on a proposal it withholds a further
-	 * course of a drug two orders already carry. ADR Decision 111 carries why of both.
+	 * course of a drug two orders already carry. ADR Decision 112 carries why of both.
 	 */
 	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =
@@ -6793,6 +6824,308 @@ public class DrugSafetyValidator {
 				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName,
 				chartOrderBridges, aboutACurrentMedication,
 				namedPartners == null ? Collections.singletonList(partnerName) : namedPartners);
+	}
+
+	/**
+	 * The drug-in-play arm's DERIVED-tier finding (issues #391 Part B, #473; ADR Decision 111): the
+	 * substance {@code rows} are the rows of, against every other substance the patient's active orders
+	 * resolve to ({@code orderEntries}, the one list every consumer takes), related through a drug-disease
+	 * CONDITION in either direction — this drug RATED for a condition a partner's note names, or this
+	 * drug's note naming a condition a partner is rated for. See
+	 * {@link DrugReference#getConditionMediatedRisks()}; only a {@code Major} rated side is loaded.
+	 *
+	 * <p><b>One chip per direction and CONDITION, naming every partner it links</b> — the additive
+	 * finding #473 asks for: three orders linked to one condition are one warning about that condition,
+	 * not three. The collapse drops no partner and moves no rating: each partner is named once, with the
+	 * rating that links it, and the chip names them all ({@link SafetyWarning#namedPartners()}). What it
+	 * does drop is a partner's WEAKER links to the same condition, where several of its rows link it —
+	 * see {@link #keepStrongestLink}. Identity is {@link DrugReference#substanceGroupKey()} of the built
+	 * cause entry on both sides, so a substance with several rows is one partner. The chip also names the
+	 * other orders on the SUBJECT's side of that condition ({@link #coMembers}), so the set is stated
+	 * whichever of its members the question is about.
+	 *
+	 * <p><b>Called only where {@link #statesDerivedFindings} says so</b>, which a stock install does not.
+	 *
+	 * <p>A partner is NAMED by the co-medication ladder ({@link #conditionMediatedPartnerName}), so one
+	 * prescription is named as the interaction chips beside it name it, through {@link #ACTIVE_ORDER_NOUN}, the form every chip and
+	 * {@code FindingPartnerCoverageCheck}'s appended sentence use, and the prescription it came from is
+	 * attributed by {@link #chartOrderBridges} — the one shared call, handed the whole order list because
+	 * this arm makes no {@code activeOrdersOtherThan} reduction, as {@link #addInteractionWarnings} does not.
+	 *
+	 * <p>What the chip says is only what the knowledge base asserts: that a sentence in one drug's
+	 * drug-disease note names the condition and the knowledge base's matcher READS it as causal. That
+	 * matcher is a text heuristic that can link through a mention that is not causal. That, and that
+	 * the chain is not a rating of the pair, is why the finding is a caution ({@link #licensesWithholding}).
+	 *
+	 * <p>Appended after this drug's pairwise chips. Being a caution it cannot outrank a withholding chip,
+	 * but it trails this drug's caution chips too rather than being ranked among them — the same stated
+	 * limit the class-only chips carry (#346). It is never passed through
+	 * {@link #collapseSharedMechanisms}, and where DDInter also rates the pair both chips stand: they are
+	 * two claims from two tables.
+	 */
+	private static void addConditionMediatedWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
+			SubstanceSubjects subjects, PatientClinicalContext context, List<DrugReference> orderEntries,
+			CoMedications coMedications, BridgedOrders bridgedOrders, EndedOrders endedOrders) {
+		if (context == null || orderEntries == null || orderEntries.isEmpty()) {
+			return;
+		}
+		DrugReference subject = subjects.subjectOf(rows.get(0));
+		Object subjectKey = rows.get(0).substanceGroupKey();
+		Map<Object, List<DrugReference>> partners = new LinkedHashMap<Object, List<DrugReference>>();
+		for (DrugReference entry : orderEntries) {
+			Object key = entry.substanceGroupKey();
+			if (!key.equals(subjectKey)) {
+				partners.computeIfAbsent(key, k -> new ArrayList<DrugReference>()).add(entry);
+			}
+		}
+		if (partners.isEmpty()) {
+			return;
+		}
+		// condition -> partner substance -> the link naming it; insertion-ordered so the chip lists
+		// partners in the order the patient's orders resolved.
+		Map<String, Map<Object, DrugReference.ConditionMediatedRisk>> subjectRated =
+				new LinkedHashMap<String, Map<Object, DrugReference.ConditionMediatedRisk>>();
+		Map<String, Map<Object, DrugReference.ConditionMediatedRisk>> subjectCauses =
+				new LinkedHashMap<String, Map<Object, DrugReference.ConditionMediatedRisk>>();
+		for (DrugReference row : rows) {
+			for (DrugReference.ConditionMediatedRisk risk : row.getConditionMediatedRisks()) {
+				Object cause = risk.getCause().substanceGroupKey();
+				if (partners.containsKey(cause)) {
+					keepStrongestLink(subjectRated, risk, cause);
+				}
+			}
+		}
+		for (Map.Entry<Object, List<DrugReference>> partner : partners.entrySet()) {
+			for (DrugReference entry : partner.getValue()) {
+				for (DrugReference.ConditionMediatedRisk risk : entry.getConditionMediatedRisks()) {
+					if (risk.getCause().substanceGroupKey().equals(subjectKey)) {
+						keepStrongestLink(subjectCauses, risk, partner.getKey());
+					}
+				}
+			}
+		}
+		for (Map.Entry<String, Map<Object, DrugReference.ConditionMediatedRisk>> group : subjectRated.entrySet()) {
+			// Stamped like every other drug-in-play chip (issue #472): a drug the chart holds only as an
+			// ended order is not a proposal, and the finding must not read as one.
+			warnings.add(endedOrders.stamp(subject, conditionMediatedWarning(true, group.getKey(), group.getValue(),
+				coMembers(true, group.getKey(), group.getValue(), partners), rows, subject, subjects, partners,
+				context, orderEntries, coMedications, bridgedOrders)));
+		}
+		for (Map.Entry<String, Map<Object, DrugReference.ConditionMediatedRisk>> group : subjectCauses.entrySet()) {
+			warnings.add(endedOrders.stamp(subject, conditionMediatedWarning(false, group.getKey(), group.getValue(),
+				coMembers(false, group.getKey(), group.getValue(), partners), rows, subject, subjects, partners,
+				context, orderEntries, coMedications, bridgedOrders)));
+		}
+	}
+
+	/**
+	 * The other active orders on the SUBJECT's side of one chip's condition: where the subject is rated
+	 * for {@code condition}, every other order rated for it that one of the chip's causes links to; where
+	 * the subject's note names it, every other order whose note names it and links to one of the chip's
+	 * rated orders. So one finding names every order the derived edges on that condition join to its
+	 * partners (#473's N-drug finding), whichever member of the set the question is about — without this,
+	 * the chip named only the partners on the OTHER side. An order already a partner of the chip is not
+	 * named twice — by substance here, and again by the NAME the ladder prints in
+	 * {@link #conditionMediatedWarning}. The two checks overlap, so
+	 * {@code ConditionMediatedFindingTest.anOrderOnBothSidesOfTheConditionIsNamedOnce} reddens only with one
+	 * of each removed; a prescription whose two constituents sit on opposite sides, which only the name check
+	 * reaches, no arrangement of the shipped knowledge base was found to make. A co-cause keeps its strongest cause-side
+	 * filing, as a partner does ({@link #keepStrongestLink}); a co-rated order needs none, the load keeping
+	 * only a Major rated side.
+	 *
+	 * @param links the chip's partners on the other side, keyed on substance
+	 * @return co-member substance to the link that admits it, in the order the patient's orders resolved
+	 */
+	private static Map<Object, DrugReference.ConditionMediatedRisk> coMembers(boolean subjectRated,
+			String condition, Map<Object, DrugReference.ConditionMediatedRisk> links,
+			Map<Object, List<DrugReference>> partners) {
+		// The rated end of each edge holds it: a co-rated order's own rows, or the chip's rated partners'
+		// rows for a co-cause — each walked once. Keyed through keepStrongestLink's per-partner rule.
+		Map<String, Map<Object, DrugReference.ConditionMediatedRisk>> found =
+				new LinkedHashMap<String, Map<Object, DrugReference.ConditionMediatedRisk>>();
+		for (Map.Entry<Object, List<DrugReference>> partner : partners.entrySet()) {
+			boolean holdsEdges = subjectRated ? !links.containsKey(partner.getKey()) : links.containsKey(partner.getKey());
+			if (!holdsEdges) {
+				continue;
+			}
+			for (DrugReference holder : partner.getValue()) {
+				for (DrugReference.ConditionMediatedRisk risk : holder.getConditionMediatedRisks()) {
+					if (!risk.getCondition().equals(condition)) {
+						continue;
+					}
+					Object cause = risk.getCause().substanceGroupKey();
+					if (subjectRated && links.containsKey(cause)) {
+						keepStrongestLink(found, risk, partner.getKey());
+					} else if (!subjectRated && partners.containsKey(cause) && !links.containsKey(cause)) {
+						keepStrongestLink(found, risk, cause);
+					}
+				}
+			}
+		}
+		Map<Object, DrugReference.ConditionMediatedRisk> byMember = found.get(condition);
+		Map<Object, DrugReference.ConditionMediatedRisk> co = new LinkedHashMap<Object, DrugReference.ConditionMediatedRisk>();
+		for (Object candidate : partners.keySet()) {
+			if (byMember != null && byMember.containsKey(candidate)) {
+				co.put(candidate, byMember.get(candidate));
+			}
+		}
+		return co;
+	}
+
+	/**
+	 * Keep, per condition and partner, the link whose CAUSE-side rating is strongest; a tie keeps the
+	 * first. Ranked by {@link #severityRank} rather than {@link #severityPriority}, deliberately: the two differ
+	 * only on an unrated value, which {@code severityPriority} ranks FIRST because an unrated interaction
+	 * RULE may be a hand-authored one, and unrated is not low-rated there. A drug-disease filing the knowledge base did not rate is no
+	 * such rule, so it ranks weakest here.
+	 */
+	private static void keepStrongestLink(Map<String, Map<Object, DrugReference.ConditionMediatedRisk>> groups,
+			DrugReference.ConditionMediatedRisk risk, Object partner) {
+		Map<Object, DrugReference.ConditionMediatedRisk> byPartner = groups.computeIfAbsent(risk.getCondition(),
+			k -> new LinkedHashMap<Object, DrugReference.ConditionMediatedRisk>());
+		DrugReference.ConditionMediatedRisk kept = byPartner.get(partner);
+		if (kept == null || severityRank(risk.getCauseSeverity()) > severityRank(kept.getCauseSeverity())) {
+			byPartner.put(partner, risk);
+		}
+	}
+
+	/**
+	 * The sentence every condition-mediated chip ends on. It says the finding is derived and not a
+	 * pairwise rating, and that it has NO severity of its own: the only rating words in the detail are
+	 * drug-disease ratings, and a prompt that asks the model to state each finding's severity would
+	 * otherwise find "Major" there and report it as this finding's.
+	 */
+	static final String CONDITION_MEDIATED_PROVENANCE = "Derived from DDInter's drug-disease rows by a text"
+			+ " match; not a DDInter pairwise rating, and this finding has no severity of its own.";
+
+	/**
+	 * One condition-mediated chip. {@code subjectRated} says which direction: the subject RATED for
+	 * {@code condition} and each partner's note naming it, or the subject's note naming it and each
+	 * partner rated for it. Where the partner is the cause, each partner is stated with the cause-side
+	 * filing that links it; where it is rated, the rating is stated once for them all, since the load
+	 * keeps only a Major rated side. So collapsing partners into one chip moves no rating. Where the ladder names two constituents of one prescription by one name, that
+	 * partner carries both filings, each labelled with the constituent it belongs to. {@code coMembers} are
+	 * stated beside the subject — "as is" a co-rated order, "as does that of" a co-cause's note — and named
+	 * in {@link SafetyWarning#namedPartners()} after the partners.
+	 */
+	private static SafetyWarning conditionMediatedWarning(boolean subjectRated, String condition,
+			Map<Object, DrugReference.ConditionMediatedRisk> links,
+			Map<Object, DrugReference.ConditionMediatedRisk> coMembers, List<DrugReference> rows,
+			DrugReference subject, SubstanceSubjects subjects, Map<Object, List<DrugReference>> partners,
+			PatientClinicalContext context, List<DrugReference> orderEntries, CoMedications coMedications,
+			BridgedOrders bridgedOrders) {
+		// Partner name -> the links naming it. Keyed on the NAME the ladder prints, so two constituents
+		// of one prescription the ladder names by its display are that one partner, stated once, and
+		// never as two active orders.
+		Map<String, List<DrugReference.ConditionMediatedRisk>> linksByName =
+				new LinkedHashMap<String, List<DrugReference.ConditionMediatedRisk>>();
+		List<SafetyWarning.ChartOrderBridge> bridges = new ArrayList<SafetyWarning.ChartOrderBridge>();
+		Set<String> seenBridges = new HashSet<String>();
+		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> link : links.entrySet()) {
+			DrugReference partnerRow = partners.get(link.getKey()).get(0);
+			String name = conditionMediatedPartnerName(partnerRow, subjects, coMedications);
+			linksByName.computeIfAbsent(name, k -> new ArrayList<DrugReference.ConditionMediatedRisk>())
+					.add(link.getValue());
+			for (SafetyWarning.ChartOrderBridge bridge : chartOrderBridges(rows, subject, partnerRow, name,
+					context, context.getActiveDrugOrders(), orderEntries, bridgedOrders)) {
+				if (seenBridges.add(bridge.toString())) {
+					bridges.add(bridge);
+				}
+			}
+		}
+		// The subject's co-members (coMembers), named by the same ladder; a name the chip already gives a
+		// partner is that one prescription, stated once.
+		Map<String, List<DrugReference.ConditionMediatedRisk>> coByName =
+				new LinkedHashMap<String, List<DrugReference.ConditionMediatedRisk>>();
+		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> member : coMembers.entrySet()) {
+			DrugReference memberRow = partners.get(member.getKey()).get(0);
+			String name = conditionMediatedPartnerName(memberRow, subjects, coMedications);
+			if (linksByName.containsKey(name)) {
+				continue;
+			}
+			coByName.computeIfAbsent(name, k -> new ArrayList<DrugReference.ConditionMediatedRisk>())
+					.add(member.getValue());
+			for (SafetyWarning.ChartOrderBridge bridge : chartOrderBridges(rows, subject, memberRow, name,
+					context, context.getActiveDrugOrders(), orderEntries, bridgedOrders)) {
+				if (seenBridges.add(bridge.toString())) {
+					bridges.add(bridge);
+				}
+			}
+		}
+		List<String> coStated = new ArrayList<String>();
+		boolean severalCoNotes = coByName.size() > 1;
+		for (Map.Entry<String, List<DrugReference.ConditionMediatedRisk>> member : coByName.entrySet()) {
+			String entry = ACTIVE_ORDER_NOUN + " " + member.getKey();
+			if (!subjectRated) {
+				List<String> filings = new ArrayList<String>();
+				for (DrugReference.ConditionMediatedRisk risk : member.getValue()) {
+					String filing = risk.getCauseCondition() + ", " + risk.getCauseSeverity();
+					filings.add(member.getValue().size() > 1
+							? "its " + subjects.subjectOf(risk.getCause()).displayLabel() + ": " + filing : filing);
+				}
+				severalCoNotes |= member.getValue().size() > 1;
+				entry += " (" + String.join("; ", filings) + ")";
+			}
+			coStated.add(entry);
+		}
+		List<String> names = new ArrayList<String>(linksByName.keySet());
+		names.addAll(coByName.keySet());
+		List<String> stated = new ArrayList<String>();
+		Set<String> subjectFilings = new LinkedHashSet<String>();
+		// The rated side's rating, stated once: the load keeps only chains whose rated side is Major
+		// (DdiDrugReferenceSource.attachConditionMediatedRisks), so every link here shares it.
+		String ratedSeverity = links.values().iterator().next().getSeverity();
+		boolean severalNotes = false;
+		for (Map.Entry<String, List<DrugReference.ConditionMediatedRisk>> partner : linksByName.entrySet()) {
+			List<DrugReference.ConditionMediatedRisk> partnerLinks = partner.getValue();
+			List<String> filings = new ArrayList<String>();
+			for (DrugReference.ConditionMediatedRisk risk : partnerLinks) {
+				if (subjectRated) {
+					String filing = risk.getCauseCondition() + ", " + risk.getCauseSeverity();
+					filings.add(partnerLinks.size() > 1
+							? "its " + subjects.subjectOf(risk.getCause()).displayLabel() + ": " + filing : filing);
+				} else {
+					subjectFilings.add(risk.getCauseCondition() + ", " + risk.getCauseSeverity());
+				}
+			}
+			severalNotes |= subjectRated && partnerLinks.size() > 1;
+			stated.add(ACTIVE_ORDER_NOUN + " " + partner.getKey()
+					+ (subjectRated ? " (" + String.join("; ", filings) + ")" : ""));
+		}
+		String detail;
+		if (subjectRated) {
+			boolean plural = stated.size() > 1 || severalNotes;
+			detail = subject.displayLabel() + " is rated " + ratedSeverity + " in " + condition
+					+ " (DDInter drug-disease)"
+					+ (coStated.isEmpty() ? "" : ", as " + (coStated.size() > 1 ? "are " : "is ") + joinPartners(coStated))
+					+ ", and the DDInter drug-disease note" + (plural ? "s" : "") + " of "
+					+ joinPartners(stated) + (plural ? " each name " : " names ") + condition
+					+ " in a sentence the knowledge base reads as causal. " + CONDITION_MEDIATED_PROVENANCE;
+		} else {
+			boolean severalFilings = subjectFilings.size() > 1;
+			detail = "The DDInter drug-disease note" + (severalFilings ? "s" : "") + " of " + subject.displayLabel()
+					+ " (" + String.join("; ", subjectFilings) + ")" + (severalFilings ? " name " : " names ")
+					+ condition + " in a sentence the knowledge base reads as causal"
+					+ (coStated.isEmpty() ? "" : ", as " + (severalCoNotes ? "do those of " : "does that of ")
+							+ joinPartners(coStated))
+					+ ", and " + joinPartners(stated)
+					+ (stated.size() > 1 ? " are each rated " : " is rated ") + ratedSeverity + " in " + condition
+					+ " (DDInter drug-disease). " + CONDITION_MEDIATED_PROVENANCE;
+		}
+		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names);
+	}
+
+	/**
+	 * The name a condition-mediated chip calls a partner by: the co-medication ladder's, through
+	 * {@link #classPartnerName} — the one a class-only chip about the same prescription prints, so one
+	 * prescription is named one way across the response (issue #339) and a combination prescription is
+	 * named by its display rather than as the constituents the chain is about. Where the ladder reaches no
+	 * co-medication for the substance, the row this response names it by.
+	 */
+	private static String conditionMediatedPartnerName(DrugReference partnerRow, SubstanceSubjects subjects,
+			CoMedications coMedications) {
+		OrderPartner partner = coMedications.partnerNaming(partnerRow);
+		return partner != null ? classPartnerName(partner, subjects) : subjects.subjectOf(partnerRow).displayLabel();
 	}
 
 	/**
@@ -10391,7 +10724,7 @@ public class DrugSafetyValidator {
 		 * <p>The DISPLAY and nothing else the order records (issue #293), only for an order
 		 * {@link DrugSafetyValidator#displayNamesADrug} admits (issue #290), and deliberately narrower
 		 * than the co-medication walk and {@link DrugSafetyValidator#resolvesFrom}, which also accept a
-		 * shared ATC code or a bridged concept. ADR Decision 111 carries why, and what it gives up.
+		 * shared ATC code or a bridged concept. ADR Decision 112 carries why, and what it gives up.
 		 * Empty for a chart of fewer than two orders, which cannot raise the finding, without resolving
 		 * anything.
 		 */

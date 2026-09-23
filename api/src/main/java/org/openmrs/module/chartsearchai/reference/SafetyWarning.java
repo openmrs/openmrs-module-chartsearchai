@@ -71,6 +71,23 @@ public class SafetyWarning {
 	 */
 	public static final String TYPE_CONTRAINDICATION = "contraindication";
 
+	/**
+	 * Condition-mediated: the knowledge base's DERIVED tier links a drug in play and an active order
+	 * through a drug-disease CONDITION — one drug's DDInter drug-disease note names the condition in a
+	 * sentence the knowledge base reads as causal, and the other is rated {@code Major} for it (issues
+	 * #391 Part B, #473). One join: a drug IN PLAY against the patient's active orders, in either
+	 * direction. The active orders linked through one condition in one direction are named in ONE chip,
+	 * with the other orders on the drug in play's own side of it, so one pair can still raise a chip per
+	 * condition in each direction. Raised only where {@code chartsearchai.drugSafety.derivedFindings} is
+	 * {@code major}, which a stock install is not.
+	 *
+	 * <p>A type of its own so it is never confused with, folded into or ranked against a DDInter
+	 * pairwise rating: it carries no {@code severity} (the chain is not a rating of the pair), it is a caution and
+	 * never a reason to withhold ({@code DrugSafetyValidator.licensesWithholding}, ADR Decision 111), and
+	 * its detail says it is derived. See {@code DrugSafetyValidator.addConditionMediatedWarnings}.
+	 */
+	public static final String TYPE_CONDITION_MEDIATED = "condition-mediated";
+
 	private final String type;
 
 	private final String drug;
@@ -235,6 +252,20 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * A CONDITION-MEDIATED chip's warning (see {@link #TYPE_CONDITION_MEDIATED}). The one construction
+	 * site is {@code DrugSafetyValidator.addConditionMediatedWarnings}. A factory for the reason
+	 * {@link #classOnlyInteraction} is one: no rating, no rule to reconcile, no folded relationship and
+	 * no chart record the join fired on, BY CONSTRUCTION. It names active orders, so it carries the
+	 * partners it names ({@link #namedPartners()}) and the prescriptions they came from
+	 * ({@link #chartOrderBridges()}); it is about the drug in play, never a current medication.
+	 */
+	static SafetyWarning conditionMediated(String drug, String detail, List<ChartOrderBridge> bridges,
+			List<String> namedPartners) {
+		return new SafetyWarning(TYPE_CONDITION_MEDIATED, drug, detail, null, false, false, null, null,
+				bridges, false, null, false, namedPartners);
+	}
+
+	/**
 	 * A CLASS-ONLY interaction chip's warning: two of the patient's co-prescribed drugs share an ATC
 	 * subgroup or a curated cross-reactivity group, and no rule of any kind relates them (issue #400).
 	 * The one construction site is {@code DrugSafetyValidator.addInteractionWarnings}' {@code classOnly}
@@ -263,7 +294,7 @@ public class SafetyWarning {
 	 * record, no bridge (each order it names is named because its own display names the substance, so
 	 * there is nothing to bridge) — and {@link #isAboutACurrentMedication()} with them: the drug-in-play arm raises it, and that arm states
 	 * the proposal referent at every site (issue #402's one-site fix was reverted for making one site
-	 * disagree with the rest, ADR Decision 111). {@link #restsOnSharedClassificationAlone()} is false:
+	 * disagree with the rest, ADR Decision 112). {@link #restsOnSharedClassificationAlone()} is false:
 	 * this is an identity claim, so {@code DrugSafetyValidator.licensesWithholding} answers by the
 	 * unrated default.
 	 *
@@ -431,9 +462,10 @@ public class SafetyWarning {
 	 *
 	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
 	 * one or for the finding that a drug is already in several of her orders (issue #477), where a
-	 * display several orders carry appears once — so a reader never has to tell a chip that carries no
-	 * list from a chip that covers no order. It is the structural answer to "which of her orders is
-	 * this chip about", and the reason nothing downstream recovers that by matching a phrase in prose.
+	 * display several orders carry appears once — and so does every CONDITION-MEDIATED chip, one name
+	 * per active order it links; so a reader never has to tell a chip that carries no list from a chip
+	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
+	 * and the reason nothing downstream recovers that by matching a phrase in prose.
 	 *
 	 * <p><b>Empty is the chip types that name no active order</b>: a contraindication, an overdose,
 	 * and the class-only interaction chip, whose partner is a class rather than an order. So empty is
@@ -445,7 +477,8 @@ public class SafetyWarning {
 		return namedPartners;
 	}
 
-	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
+	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION},
+	 *  {@link #TYPE_CONDITION_MEDIATED}. */
 	public String getType() {
 		return type;
 	}
@@ -926,7 +959,7 @@ public class SafetyWarning {
 	 * includes {@link #substanceInSeveralActiveOrders} (issue #477), though what it states is that two
 	 * of her orders already carry the drug: the arm's other findings about that drug state the proposal
 	 * call, and one finding stating the other column beside them is the one-site shape issue #402
-	 * recorded and reverted (ADR Decision 111).
+	 * recorded and reverted (ADR Decision 112).
 	 *
 	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and nothing
 	 * reads the second answer.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in

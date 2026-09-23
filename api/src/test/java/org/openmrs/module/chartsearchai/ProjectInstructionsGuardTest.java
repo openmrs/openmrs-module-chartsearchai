@@ -166,6 +166,14 @@ public class ProjectInstructionsGuardTest {
 	 * ladder live — before trimming a fifth time, because a split is the move that made the
 	 * drug-safety budget tractable and no amount of trimming has made this one so.
 	 *
+	 * <p><b>The reference budget was raised from 76,000 to 76,500 on 2026-09-23</b> (issues #391 Part B
+	 * and #473), in the state the 2026-09-07 paragraph above describes: the file sat 2 bytes under the
+	 * cap at base {@code 997099a6}, so no rule of any size could land. Trimming came first — the
+	 * synthetic-chip bullet gave up its parenthetical reason, which ADR Decision 60's rejected
+	 * alternatives already carry — and the new rule was cut to its directive (which method, one chip per
+	 * condition naming every partner, a caution, never in the pair extent), its evidence going to ADR
+	 * Decision 111 and the method's javadoc. The residue that would not fit is that directive.
+	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once
 	 * {@link #noBulletCarriesMoreProseThanItsBudget} had been satisfied — room for a few rules, not
@@ -181,7 +189,7 @@ public class ProjectInstructionsGuardTest {
 	private static Map<Path, Integer> budgets() {
 		Map<Path, Integer> m = new LinkedHashMap<>();
 		m.put(ROOT_INSTRUCTIONS, 25_000);
-		m.put(REFERENCE_INSTRUCTIONS, 76_000);
+		m.put(REFERENCE_INSTRUCTIONS, 76_500);
 		// The local-LLM subprocess rules (#445). The principle above asks for headroom of roughly a
 		// tenth; the first two drafts of this entry said it had that and did not — the second
 		// announced the correction while repeating the arithmetic of the first, which a review

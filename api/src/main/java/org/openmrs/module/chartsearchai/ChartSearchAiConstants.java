@@ -619,6 +619,24 @@ public class ChartSearchAiConstants {
 
 	public static final String DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY = "minor";
 
+	/**
+	 * Whether the knowledge base's DERIVED tier raises {@code condition-mediated} findings (issues #391
+	 * Part B and #473, ADR Decision 111): {@link #DERIVED_FINDINGS_MAJOR} states a chain whose rated side
+	 * is {@code Major}, {@link #DERIVED_FINDINGS_OFF} states none. Ships OFF, on evidence: the chains are
+	 * a text match over drug-disease notes, and one of them links metformin to Heart Failure through a
+	 * sentence naming it only as a contraindication — which puts a false causal chip on metformin beside
+	 * every common ACE inhibitor and beta-blocker. No precision figure over the kept chains has been
+	 * measured. {@code all} is not offered (#391 proposed it): the loader keeps no non-{@code Major}
+	 * rated side. Any value other than {@code major} reads as off, the default.
+	 */
+	public static final String GP_DRUG_SAFETY_DERIVED_FINDINGS = "chartsearchai.drugSafety.derivedFindings";
+
+	public static final String DERIVED_FINDINGS_OFF = "off";
+
+	public static final String DERIVED_FINDINGS_MAJOR = "major";
+
+	public static final String DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS = DERIVED_FINDINGS_OFF;
+
 	/** Concept UUID (a kg-valued numeric concept) used to read the patient's most recent weight for
 	 *  the weight-aware per-dose overdose check. The value {@link #DRUG_SAFETY_WEIGHT_CONCEPT_DISABLED}
 	 *  disables the weight-aware arm; blank/absent falls back to the default like every other GP

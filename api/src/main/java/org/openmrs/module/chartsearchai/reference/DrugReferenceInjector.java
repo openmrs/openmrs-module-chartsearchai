@@ -2318,7 +2318,8 @@ public class DrugReferenceInjector {
 	 * <p>The full-stop guard asks about ALL THREE clauses, and TWO of its three halves cannot fire today. Only a
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
 	 * that type, so a provenance clause never arrives without a strength beside it; and only an
-	 * interaction can carry a BRIDGE, for which that method answers one unconditionally too. Said
+	 * interaction or a condition-mediated finding can carry a BRIDGE, for each of which that method
+	 * answers one unconditionally too. Said
 	 * rather than left to be rediscovered — mutating the guard (in {@link #findingBody} since issue
 	 * #469) to {@code !clauseFollows} alone leaves the whole api suite green, and so does dropping the
 	 * bridge term. All three are kept because
@@ -2577,7 +2578,8 @@ public class DrugReferenceInjector {
 		// Ahead of provenance, and for a reason rather than by chance: this clause says what the names
 		// INSIDE the detail stand for in this chart, so it reads as a gloss on the sentence it follows,
 		// while provenance qualifies how a rule reached the chart at all. The two cannot co-occur today
-		// (only a contraindication carries provenance and only an interaction carries a bridge), so
+		// (only a contraindication carries provenance, and only an interaction or a condition-mediated
+		// finding carries a bridge), so
 		// nothing behavioural pins the order — measured: swapping these two leaves the whole build
 		// green, while moving either AFTER the strength clause reddens
 		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
@@ -2911,7 +2913,10 @@ public class DrugReferenceInjector {
 		// exclusive, so the order these are asked in decides nothing.
 		boolean current = finding.isAboutACurrentMedication();
 		boolean ended = finding.isAboutAnEndedOrder();
-		if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+		// A condition-mediated finding takes the interaction split: licensesWithholding decides it, and
+		// answers a caution for that type (ADR Decision 111), so the clause is never assumed here.
+		if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+				|| SafetyWarning.TYPE_CONDITION_MEDIATED.equals(finding.getType())) {
 			if (DrugSafetyValidator.licensesWithholding(finding)) {
 				return current ? STRENGTH_CHANGE_CURRENT_MEDICATION
 						: ended ? STRENGTH_WITHHOLD_ENDED_ORDER : STRENGTH_WITHHOLD;

@@ -941,6 +941,17 @@ public final class DrugReferenceTestSupport {
 		return interactions;
 	}
 
+	/** The chips of {@code warnings} whose {@link SafetyWarning#getType()} is {@code type}, in order. */
+	static List<SafetyWarning> ofType(List<SafetyWarning> warnings, String type) {
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (type.equals(warning.getType())) {
+				out.add(warning);
+			}
+		}
+		return out;
+	}
+
 	/** Every active order {@code warnings} name, each once — {@link SafetyWarning#namedPartners()} over
 	 *  a whole response, which is the population {@code FindingPartnerCoverageCheck} measures the
 	 *  answer against. */

@@ -110,7 +110,7 @@ public class SubstanceInSeveralActiveOrdersTest {
 		assertFalse(finding.isAboutACurrentMedication(),
 				"the drug-in-play arm states ONE referent for the drug in play, the proposal, at every "
 						+ "site: one finding stating the current-medication call beside rule chips stating the "
-						+ "proposal call is issue #402's reverted one-site shape (ADR Decision 111)");
+						+ "proposal call is issue #402's reverted one-site shape (ADR Decision 112)");
 	}
 
 	@Test
@@ -280,7 +280,7 @@ public class SubstanceInSeveralActiveOrdersTest {
 		// issue's finding each state the PROPOSAL column — the Major and the new finding withholding, the
 		// Minor a caution. Review round 1 found the new finding alone stating the current-medication
 		// clause, so one response refused rifampicin as a proposal and, two findings later, called it a
-		// medication to change; the lead the prompt ranks first was the refusal (ADR Decision 111).
+		// medication to change; the lead the prompt ranks first was the refusal (ADR Decision 112).
 		// Unrated, the new finding keeps the default an unrated relationship has (Decision 86 graded down
 		// only shared classification), so it withholds and is never the caution.
 		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD), clauses(QUESTION));

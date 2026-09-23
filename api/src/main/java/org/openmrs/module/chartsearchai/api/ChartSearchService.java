@@ -775,6 +775,9 @@ public interface ChartSearchService {
 		/** @see #getFindingPartnerCoverage() */
 		private final FindingPartnerCoverage findingPartnerCoverage;
 
+		/** @see #isAnsweredByTheModule() */
+		private final boolean answeredByTheModule;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -835,7 +838,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null);
+					null, null, null, null, null, null, null, null, null, false);
 		}
 
 		/**
@@ -871,8 +874,10 @@ public interface ChartSearchService {
 				Boolean chartReadForSafety,
 				DrugReferenceLoad.Coverage conditionRuleCoverage,
 				List<OrderStopDate> orderStopDates,
-				FindingPartnerCoverage findingPartnerCoverage) {
+				FindingPartnerCoverage findingPartnerCoverage,
+				boolean answeredByTheModule) {
 			this.findingPartnerCoverage = findingPartnerCoverage;
+			this.answeredByTheModule = answeredByTheModule;
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -1290,6 +1295,30 @@ public interface ChartSearchService {
 		 */
 		public FindingPartnerCoverage getFindingPartnerCoverage() {
 			return findingPartnerCoverage;
+		}
+
+		/**
+		 * Whether this answer's text was composed by the module from its own drug-safety findings,
+		 * with no model asked to write it — issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>,
+		 * {@code chartsearchai.drugSafety.answerFromFindings}, ADR Decision 108. Published as the
+		 * {@code answeredByTheModule} response key, the answer-level counterpart of
+		 * {@link RecordReference#isAttachedByTheModule()}.
+		 *
+		 * <p><b>Stated rather than left to be inferred.</b> Where it is {@code true} the keys that judge
+		 * what a model WROTE — {@link #getUnfaithfullyRenderedCitations()},
+		 * {@link #getMisattributedOrderCitations()}, {@link #getActiveOrderClaims()},
+		 * {@link #getUnstatedFindingSeverities()}, {@link #getFindingCitationExtent()},
+		 * {@link #getUnstatedDosingCeilings()} and {@link #getFindingPartnerCoverage()} — state
+		 * {@code null}, no measurement, because no model wrote anything for them to judge. {@code null}
+		 * is also what those keys state for other reasons, and a token count of zero is also what an
+		 * engine reporting no usage produces, so neither pattern tells a consumer that no model ran;
+		 * this does.
+		 *
+		 * <p>{@code false} says a model was asked. It is not a claim about how good that answer is.
+		 */
+		public boolean isAnsweredByTheModule() {
+			return answeredByTheModule;
 		}
 
 		public FindingCitationExtent getFindingCitationExtent() {

@@ -113,6 +113,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 105: A streaming query that reached inference is audited however the stream ends](#decision-105-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends)
 - [Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
 - [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
+- [Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -9499,3 +9500,118 @@ child's environment — so
 `LlmEndpointTestSupport.isReachable` now asks the completions route rather than only `/health`
 (public, per row 5), which turns what would have been a 401 error per case into a clean skip, and
 `chartsearchai.test.llm.apiKey` points those suites at a keyed server of the tester's own.
+
+## Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them
+
+**Status: Accepted** (September 2026) — implemented behind `chartsearchai.drugSafety.answerFromFindings`,
+shipping OFF, issue [#469](https://github.com/openmrs/openmrs-module-chartsearchai/issues/469). The gate
+the issue names has not been run; see the last section.
+
+### Context
+
+Where a question names a drug the pre-answer pass relates to one of the patient's active orders, the
+answer is decided before the model runs: the injected `safety_finding` record states the call
+(`licensesWithholding`, through the strength clause `renderFinding` appends, #283), and the prompt tells
+the model to open with it. What the model call then adds is a restatement of that record, and the issue
+measured what the restatement costs. Over thirty-nine cells on a RefApp 3.7.1 standalone (the issue's
+three comments: withhold, mixed withhold-and-caution, caution-only and no-finding questions, one model
+and one rig), **no answer used a chart fact the module does not encode**, while the restatement dropped
+findings (`findingCitations` 1 of 3, 6 of 20, 0 of 2), a caution, a rating, the source's own hedge
+(*"data from pharmacokinetic studies are inconsistent and conflicting"*), the sentence naming renal
+impairment for a patient recorded with oliguria, and led *"No —"* on a question whose answer is yes —
+several of them with every answer-judging key reading clean. The issue gives the reason nothing else
+could be expected: the system prompt forbids adding information not in the records, so on a question
+the module resolved, the call can only restate the module's records or emit the no-address sentence.
+
+### The decision
+
+**Where the module resolved the question itself, the answer is composed from its findings and no model
+is asked** — not for the answer, a repair, a preview or grounding. `DrugReferenceInjector` decides it
+once per injection, off the resolutions that pass already holds, and stamps the answer on the chart it
+builds (`PatientChart.getModuleAnswer()`); `LlmInferenceService` uses it on both answer paths through
+one method when the property is on.
+
+**Three shapes, and every other question keeps the model call** (`answersFromFindings`):
+
+- an interaction screen of her own medications that related nothing, answered with the screen note's
+  own words (ADR Decision 87), qualifier included;
+- an interaction screen that raised findings — no drug in the question and
+  `QueryScopeRouter.isInteractionScreening`, which is what keeps a medication-list or allergy question
+  (which widens the order-driven arm too) from being answered with a finding alone;
+- a question proposing ONE substance she is not already taking, raising a finding about it, that
+  `QueryScopeRouter.asksWhetherToGiveADrug` admits.
+
+That last predicate is new, and it is a positive list where ADR Decision 89 had to widen one. The
+difference is the direction of a miss: there, a missed phrasing hid a hazard; here it keeps the call
+the question always had, so only an admission can be wrong. [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
+declined a gate on "the question proposes giving a drug" as a second hand-picked vocabulary with nothing
+measured behind it, and that description fits this one too; what differs is what the gate protects.
+There, gating would have withheld a harmless note from some questions; here, NOT gating would replace
+the model's answer to a dosing or current-use question with a refusal, which the gate pass of this
+change constructed (*"What dose of ibuprofen can I give her?"*). The vocabulary is still unmeasured,
+and its misses are the first thing the gate below should read. It admits a proposal modal with a proposal
+verb, or a question asking whether the drug is safe or appropriate, and refuses a concern word (shared
+with the screening trigger rather than re-listed), an interaction word, a negation or alternative, and
+a dose or an amount — each a question the withholding "No" would answer backwards, or only half of.
+"Not already taking" is issue #402: the drug-in-play arm states a proposal clause for a drug she takes,
+and composing would make that defect certain.
+
+**The composed text.** Lines strongest first, ranked as the prompt ranks them for the model (withhold,
+change a current medication, caution, caution about a current medication), read off `strengthClause`.
+A proposal that withholds leads *"No — X should not be given: this module's drug-safety check found a
+reason to withhold it."*; a proposal caution leads *"X can be given, with a caution to note: "* with the
+caution in the same sentence. A finding about her own medications gets no lead — its first sentence
+already names the medication, what it relates it to and its rating, and a lead naming the one to change
+would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
+is the finding record's text between its head and its strength clause (one method, `findingBody`, for
+both), cited by its own number. The strength clause stays out: it is prompt-facing only, and the issue
+counts its paste into an answer as a loss (R7, M4).
+
+**What is published beside it.** `answeredByTheModule: true`, because the keys that judge a model's
+prose — `unfaithfullyRenderedCitations`, `misattributedOrderCitations`, `activeOrderClaims`,
+`unstatedFindingSeverities`, `unstatedDosingCeilings`, `findingCitations`, `findingPartners` — state
+`null` and a null alone could mean a check that failed. The chips pass is handed the empty answer, as
+the pass that raised the findings was, so the chips beside the answer are the findings it states; scoping
+the order-driven arm by text the module itself just wrote would be circular (the issue's M8 and N5 are a
+model's wording raising a chip the question alone does not). The references, `orderStopDates`, the chips
+and `interactionPairs` are produced as on the model's path. The token counts are zero, which the audit
+row already writes as null.
+
+### What it reverses
+
+Decision 85 refused deterministic text in the answer — *"this module never writes clinical prose into an
+answer"* — and Decision 90 repeated that refusal. Decision 100 already appends a module sentence. This
+goes further, and within a bound: the module writes the WHOLE answer, only where it resolved the question
+itself, and in its records' own words behind at most one fixed lead sentence. Decision 85's second reason — that two
+checks would report on prose no model wrote — is met by not running them. The duplication with
+`findingsRenderedByClient`'s "Safety checks" block (Decision 90) is real: a client rendering both shows
+the same findings twice, and README says to render one; what it removes is the chance of the two
+disagreeing.
+
+### Residues, stated
+
+- A question naming a drug that raised nothing keeps the call, alone or beside a drug that did; the
+  issue leaves its wording open, and *"The records do not address X"* is false of a question the drug's
+  own reference record does address, such as its dose.
+- A question about a drug she already takes (R3, D6) keeps the call, and with it #402.
+- The allergy-question cells R7 and R8 are not screens, so they keep the call.
+- A compound question that is both a screen and a list (*"what is she taking, and do any interact?"*)
+  passes `isInteractionScreening`, and the composed answer states only the screen.
+- With `chartsearchai.drugSafety.citeOrderRecords` off, as it ships, an interaction line cites no order
+  record, where the model supplied one in 10 of the first check's 16 cells. A contraindication line's
+  chart record still arrives as `attachedByTheModule`.
+- The composed lines are the REPORTED findings. On a capped screen, whether the list is complete is
+  `interactionPairs`' to say, and the answer does not.
+- A phrasing the suitability predicate does not recognise keeps the call.
+
+### What gates turning it on
+
+The gate the issue names, not run in this change: the probe-safety corpus
+(`eval/drift-metric/score_probe_safety.py`, including its abstention controls) and the thirty-nine cells
+of the issue's three comments, both arms on one build, with only this property between them. What the
+arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
+yes, and which questions the predicate refuses that the issue's cells expected answered.
+
+→ `LlmInferenceServiceAnswerFromFindingsContextTest` (the real injector and validator on patient 7,
+both paths, each gate conjunct reddening its own case), `QueryScopeRouterTest.asksWhetherToGiveADrug_*`,
+`ChartSearchAiAnsweredByTheModuleTest`.

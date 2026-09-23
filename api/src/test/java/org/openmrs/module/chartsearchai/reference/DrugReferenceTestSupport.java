@@ -1236,7 +1236,7 @@ public final class DrugReferenceTestSupport {
 	 * curated-group chip or admit a group-related active order. Silently: nothing fails, the case just
 	 * stops testing what it says it tests.
 	 */
-	static DrugReferenceService ddinterServiceWithGroups() {
+	public static DrugReferenceService ddinterServiceWithGroups() {
 		return serviceWithGroups(ddinterEntries());
 	}
 

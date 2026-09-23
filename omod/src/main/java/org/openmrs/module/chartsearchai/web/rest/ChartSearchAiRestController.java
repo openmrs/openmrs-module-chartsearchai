@@ -1848,6 +1848,11 @@ public class ChartSearchAiRestController {
 				serializeFindingPartnerCoverage(answer.getFindingPartnerCoverage()));
 		target.put("chartReadForSafety", answer.getChartReadForSafety());
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+		// Issue #469: whether any model wrote this answer. Beside the keys it explains — where it is
+		// true, the checks of a model's prose above state null because there was no such prose —
+		// and on every surface they reach, the early done included. ChartAnswer.isAnsweredByTheModule
+		// is canonical for what it does and does not assert.
+		target.put("answeredByTheModule", Boolean.valueOf(answer.isAnsweredByTheModule()));
 	}
 
 	/**

@@ -124,6 +124,27 @@ public final class QueryScopeRouter {
 	 *  unrelated question is worse than missing a phrasing. */
 	private static final Pattern INTERACTION_CUES = cues("interact(?:s|ed|ing|ion|ions)?");
 
+	/** The half of {@link #MEDICATION_SAFETY_CUES} that asks whether a drug is SAFE — the only half a
+	 *  question proposing a drug can carry and still take a "No" for its answer (issue #469, see
+	 *  {@link #asksWhetherToGiveADrug}). */
+	private static final String[] SAFETY_WORDS = { "safe", "safety" };
+
+	/** The rest of {@link #MEDICATION_SAFETY_CUES}: a concern, a risk, or a change to a medication.
+	 *  Split out, not re-listed, so the screening trigger and {@link #asksWhetherToGiveADrug} read one
+	 *  vocabulary. */
+	private static final String[] CONCERN_WORDS = { "unsafe", "danger(?:ous)?", "harmful", "risk(?:s|y)?",
+			"worry", "worried", "worrying", "concern(?:s|ed|ing)?",
+			"problem(?:s|atic)?", "wrong",
+			"stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
+			"change(?:d|s)?", "adjust(?:ed|ment|ments)?" };
+
+	private static String[] concat(String[] first, String[] second) {
+		String[] all = new String[first.length + second.length];
+		System.arraycopy(first, 0, all, 0, first.length);
+		System.arraycopy(second, 0, all, first.length, second.length);
+		return all;
+	}
+
 	/**
 	 * The SECOND way a question asks for an interaction screen: it asks after the SAFETY of the
 	 * medications the patient is already on, or after CHANGING them, without using the word
@@ -148,12 +169,7 @@ public final class QueryScopeRouter {
 	 * bare "check". Both carry everyday non-medication senses in a chart question, which is the
 	 * reason {@link #INTERACTION_CUES} gives for excluding "conflict" and "interfere".
 	 */
-	private static final Pattern MEDICATION_SAFETY_CUES = cues(
-			"safe", "unsafe", "safety", "danger(?:ous)?", "harmful", "risk(?:s|y)?",
-			"worry", "worried", "worrying", "concern(?:s|ed|ing)?",
-			"problem(?:s|atic)?", "wrong",
-			"stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
-			"change(?:d|s)?", "adjust(?:ed|ment|ments)?");
+	private static final Pattern MEDICATION_SAFETY_CUES = cues(concat(SAFETY_WORDS, CONCERN_WORDS));
 
 	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
@@ -199,6 +215,67 @@ public final class QueryScopeRouter {
 	private static boolean asksForADrugSafetyReading(String question) {
 		return INTERACTION_CUES.matcher(question).find()
 				|| MEDICATION_SAFETY_CUES.matcher(question).find();
+	}
+
+	/** A modal a proposal is asked with ("can I", "should we", "is it ok"). */
+	private static final Pattern PROPOSAL_MODAL_CUES = cues("can", "could", "may", "should", "ok", "okay");
+
+	/** A verb proposing to put the patient on a drug. */
+	private static final Pattern PROPOSAL_VERB_CUES = cues("give", "start", "take", "prescribe",
+			"administer", "add");
+
+	/** Asking after the drug's suitability rather than proposing it with a verb. */
+	private static final Pattern SAFETY_CUES = cues(concat(SAFETY_WORDS, new String[] { "appropriate" }));
+
+	private static final Pattern CONCERN_CUES = cues(CONCERN_WORDS);
+
+	/** A question the right answer to which reverses when a finding withholds, or which asks about
+	 *  something else as well: a negation, an alternative, a contraindication in its own words. */
+	private static final Pattern INVERTING_CUES = cues("not", "no", "never", "\\w+n['\u2019]t", "avoid",
+			"contraindicat(?:ed|ion|ions)?", "instead", "alternatives?", "other than", "besides",
+			"without");
+
+	/** A dose, a quantity or a schedule — which the drug's reference record may address and its
+	 *  findings do not. */
+	private static final Pattern DOSE_CUES = cues("doses?", "dosing", "dosage", "how much", "how many",
+			"maximum", "max", "often", "frequency");
+
+	/** An amount with its unit. Not built with {@link #cues}: its word boundary would fall between
+	 *  the digit and the unit of {@code 400mg}, where there is none. */
+	private static final Pattern DOSE_AMOUNT = Pattern.compile(
+			"\\d\\s*(?:mg|mcg|\u00b5g|g|ml|units?)\\b", Pattern.CASE_INSENSITIVE);
+
+	/**
+	 * Whether {@code question} asks whether to put the patient on a drug — "Can I give her
+	 * ibuprofen?", "Is it safe to start clarithromycin?", "Can this patient take warfarin?" — and
+	 * nothing else. Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">
+	 * #469</a>: it bounds which questions {@code DrugReferenceInjector} answers from its own findings,
+	 * where a withholding finding makes the answer "No".
+	 *
+	 * <p><b>Fail-CLOSED, and the direction is the whole design.</b> A question it does not admit keeps
+	 * the model call it has always had, so a phrasing it misses costs nothing it did not cost before;
+	 * only an ADMISSION can go wrong. That is why this is a positive list, where
+	 * {@link #isInteractionScreening} had to be widened after a positive list MISSED screens (ADR
+	 * Decision 89): there a miss hid a hazard, here a miss hides nothing.
+	 *
+	 * <p>Admitted: a proposal modal with a proposal verb, or a question asking whether the drug is safe
+	 * or appropriate. Refused whatever else it carries: a concern or risk word
+	 * ({@link #CONCERN_WORDS}, shared with the screening trigger), an interaction word, a negation or an
+	 * alternative, and a dose or an amount — each a question to which "No — should not be given" is
+	 * the wrong answer or not the whole one.
+	 */
+	public static boolean asksWhetherToGiveADrug(String question) {
+		if (question == null) {
+			return false;
+		}
+		boolean proposes = (PROPOSAL_MODAL_CUES.matcher(question).find()
+				&& PROPOSAL_VERB_CUES.matcher(question).find())
+				|| SAFETY_CUES.matcher(question).find();
+		return proposes && !CONCERN_CUES.matcher(question).find()
+				&& !INTERACTION_CUES.matcher(question).find()
+				&& !INVERTING_CUES.matcher(question).find()
+				&& !DOSE_CUES.matcher(question).find()
+				&& !DOSE_AMOUNT.matcher(question).find();
 	}
 
 	/**

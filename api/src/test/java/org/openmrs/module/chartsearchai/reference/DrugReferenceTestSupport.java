@@ -1268,6 +1268,12 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/** A service pinned to the given entries (groups pinned empty by the {@code setEntries} seam). */
+	/** A service over a curated fixture's entries, for a caller outside this package — the same
+	 *  {@link #serviceWith} over {@link #fixtureEntries} this package's own cases compose. */
+	public static DrugReferenceService curatedFixtureService(String classpathResource) throws IOException {
+		return serviceWith(fixtureEntries(classpathResource));
+	}
+
 	static DrugReferenceService serviceWith(List<DrugReference> entries) {
 		DrugReferenceService svc = new DrugReferenceService();
 		svc.setEntries(entries);

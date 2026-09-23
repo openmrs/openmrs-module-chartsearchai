@@ -2308,8 +2308,10 @@ public class DrugReferenceInjector {
 	 * Decision 108. Asked once per injection, off the resolutions this pass already holds.
 	 *
 	 * <p><b>The module answers only with what a finding POSITIVELY states, and never with a clearance
-	 * or a negative.</b> A finding that withholds a proposed drug makes "No" true whatever else the
-	 * module did or could not do; "can be given", or "no interactions were found", is true only if
+	 * or a negative.</b> A corroborated finding that withholds a proposed drug makes "No" true whatever
+	 * else the module did or could not do — corroborated, because one resting on a match the module
+	 * could not corroborate ({@link SafetyWarning#restsOnAnUncorroboratedChartMatch()}) carries its
+	 * own hedge, and a composed "No" would state the call without it; "can be given", or "no interactions were found", is true only if
 	 * every arm ran over a chart that was read in full and could resolve every record in it, which
 	 * nothing here can establish — an unread allergy list, an allergen recorded as a class or a brand
 	 * the data does not carry, a switched-off arm each made such an answer false, and each was found
@@ -2317,7 +2319,7 @@ public class DrugReferenceInjector {
 	 * <ul>
 	 * <li>A question PROPOSING one drug she is not already taking, admitted by
 	 *     {@code QueryScopeRouter.asksWhetherToGiveADrug} once the drug's own names are taken out of
-	 *     it, where a finding about that drug WITHHOLDS it ({@link #STRENGTH_WITHHOLD} — only the
+	 *     it, where a corroborated finding about that drug WITHHOLDS it ({@link #STRENGTH_WITHHOLD} — only the
 	 *     drug-in-play arm raises a proposal finding before there is an answer, and with one substance
 	 *     in play it is about that one). Not already taking it, because the drug-in-play arm states a
 	 *     proposal clause for a drug she does take (issue #402), and composing would make that defect
@@ -2358,8 +2360,10 @@ public class DrugReferenceInjector {
 		}
 		for (SafetyWarning finding : findings) {
 			// The proposal clause and never its current-medication counterpart, which strengthClause
-			// gives a finding about a drug she takes: so this is a finding about the drug proposed.
-			if (STRENGTH_WITHHOLD.equals(strengthClause(finding))) {
+			// gives a finding about a drug she takes: so this is a finding about the drug proposed. And
+			// one the module could corroborate: a match it could not (a token inside a longer word of her
+			// chart) states its own hedge, which a composed "No" would drop.
+			if (STRENGTH_WITHHOLD.equals(strengthClause(finding)) && !finding.restsOnAnUncorroboratedChartMatch()) {
 				return true;
 			}
 		}

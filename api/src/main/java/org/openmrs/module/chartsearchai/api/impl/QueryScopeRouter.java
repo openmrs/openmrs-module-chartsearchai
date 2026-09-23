@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -211,8 +210,9 @@ public final class QueryScopeRouter {
 
 	/**
 	 * The word {@code DrugReferenceInjector} puts where a question names the drug it proposes, so
-	 * {@link #asksWhetherToGiveADrug} can read WHERE the name stood — issue #469. No question word
-	 * can spell it: {@link #words} never yields an underscore.
+	 * {@link #asksWhetherToGiveADrug} can read WHERE the name stood — issue #469. A question that
+	 * spells it literally yields it as a word too, and is then refused: every shape has exactly one
+	 * mark, and the drug the injector resolved adds its own.
 	 */
 	public static final String DRUG_NAME = "_drug_";
 
@@ -266,8 +266,8 @@ public final class QueryScopeRouter {
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on) "
 					+ D + "(?: now| today)?",
 			// "Is it safe to give her ibuprofen?", "Is it safe to start her on clarithromycin?"
-			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:give|start|prescribe|administer|add|take) (?:"
-					+ PATIENT + " )?(?:on )?" + D + "(?: now| today)?",
+			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
+					+ PATIENT + " )?(?:on )?|take )" + D + "(?: now| today)?",
 			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?"
 			"is " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"

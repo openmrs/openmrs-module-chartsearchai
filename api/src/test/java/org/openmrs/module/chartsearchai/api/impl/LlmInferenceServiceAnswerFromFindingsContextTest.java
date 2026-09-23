@@ -83,7 +83,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	private static TestableService serviceWith(RecordingProvider provider) {
-		DrugReferenceService reference = DrugReferenceTestSupport.ddinterServiceWithGroups();
+		return serviceWith(provider, DrugReferenceTestSupport.ddinterServiceWithGroups());
+	}
+
+	private static TestableService serviceWith(RecordingProvider provider, DrugReferenceService reference) {
 		TestableService service = new TestableService();
 		service.setChartBuildingStrategy(new StubStrategy());
 		service.setLlmProvider(provider);
@@ -363,14 +366,42 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A second drug the question names is not taken out with the first one's names: omeprazole's
-	 * reference entry is also filed under a combination name carrying amoxicillin, and removing every
-	 * word of every one of its names once admitted this as a question about omeprazole alone.
+	 * A second drug the question names keeps the call. Omeprazole's reference entry is also filed under
+	 * a combination name carrying amoxicillin, which is how an earlier form of the gate — removing every
+	 * word of every one of the drug's names — once admitted this as a question about omeprazole alone;
+	 * no proposal shape carries a second drug, which is what refuses it now.
 	 */
 	@Test
 	public void aSecondDrugInsideTheFirstsCombinationNameStillAsksTheModel() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		assertTheModelIsAsked("Can I give her omeprazole with amoxicillin?");
+	}
+
+	/**
+	 * A withholding finding the module itself marks UNCORROBORATED is not a "No" it can state: the
+	 * curated rule's token {@code opium} matched her allergy {@code Tiotropium} by containment alone,
+	 * and the finding says so. The model reads that hedge beside the call; a composed "No" would drop it.
+	 */
+	@Test
+	public void aWithholdingFindingTheModuleCouldNotCorroborateStillAsksTheModel() throws Exception {
+		DrugReferenceService curated = DrugReferenceTestSupport
+				.curatedFixtureService("chartsearchai-test/drug-reference-mid-word-allergy-token.json");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Tiotropium");
+		String question = "Can I give her opium?";
+
+		answerFromFindings(false);
+		RecordingProvider recorder = new RecordingProvider();
+		serviceWith(recorder, curated).search(patient, question);
+		assertTrue(recorder.lastRecords.contains("could not corroborate"),
+				"precondition: the only withholding finding is marked uncorroborated, chart was: "
+						+ recorder.lastRecords);
+
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, curated).search(patient, question);
+
+		assertEquals(1, provider.calls, "the module cannot state a call it could not corroborate");
+		assertFalse(answer.isAnsweredByTheModule());
 	}
 
 	/** Issue #402's shape: a question naming a drug she already takes. The drug-in-play arm states a

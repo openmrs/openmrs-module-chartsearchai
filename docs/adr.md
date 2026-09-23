@@ -7047,9 +7047,9 @@ prevent repeating.
 
 ### Rejected alternatives
 
-- **Deterministic finding text written into the answer.** Still refused, and Decision 85's reason
-  stands: this module does not write clinical prose into an answer. (Reversed within a bound by
-  [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).) The argument that the module's
+- **Deterministic finding text written into the answer.** Refused here, on Decision 85's reason
+  that this module does not write clinical prose into an answer — a refusal since reversed within a
+  bound by [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them). The argument that the module's
   prose "already reaches the clinician corrupted" is weak and rests on a non-default install — without
   the repair it does not reach the answer at all.
 - **Leaving it an operator flip.** It is a strict improvement over the shipped arm on every scored
@@ -9533,7 +9533,8 @@ stamps the answer on the chart it builds (`PatientChart.getModuleAnswer()`), com
 property is off; `LlmInferenceService` serves that stamp on both answer paths through one method.
 
 **The module states only what a finding positively says, and never a clearance or a negative.** A
-finding that withholds a proposed drug makes "No" true whatever else the module did or could not do.
+corroborated finding that withholds a proposed drug makes "No" true whatever else the module did or
+could not do.
 "Can be given", or "no interactions were found", is true only where every arm ran over a chart read in
 full whose every record the data could resolve, and nothing in this module can establish that. The
 first form of this change composed both, and fresh reviewers found each one false in turn: an allergy
@@ -9542,7 +9543,10 @@ the data does not carry, a switched-off arm, a screen naming a food. Those quest
 call. Two shapes are answered:
 
 - **A question proposing ONE substance she is not already taking, where a finding about it withholds
-  it** (`STRENGTH_WITHHOLD`), admitted by `QueryScopeRouter.asksWhetherToGiveADrug` with the drug's own
+  it** (`STRENGTH_WITHHOLD`) and does not rest on a match the module could not corroborate
+  (`SafetyWarning.restsOnAnUncorroboratedChartMatch`): such a finding states its own hedge, and a
+  composed "No" would state the call without it — on a curated dataset, a rule on `opium` matching an
+  allergy recorded as `Tiotropium`, admitted by `QueryScopeRouter.asksWhetherToGiveADrug` with the drug's own
   name marked in the question — the spans `DrugReference.namedOccurrences` reports, so only the name
   the question wrote is marked and never another of the entry's names (removing every word of every
   alias once admitted *"Can I give her diclofenac for her arthritis pain?"*, `Aleve Arthritis Pain`

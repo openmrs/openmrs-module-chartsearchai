@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,16 +71,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <li>the WHOLE POPULATION — one line per link in the census rule's order, its note id, condition, kept
  * chains and distinct rated substances, against the SHA-256 the sample file records (issue #496), so a
  * move of chains that changes those for a link no item adjudicates is reported where every count above
- * still holds. Every
- * run writes those lines to {@code api/target/derived-tier-precision-ranked-links.tsv} before asserting,
- * the list a re-measurement starts from;</li>
+ * still holds. A run that ranks the links writes the lines it hashes to {@code api/}{@value #RANKED_LINKS}
+ * and hashes that file, so a refresh that reddens it leaves the ranking and weights to re-measure from;</li>
  * <li>the SAMPLE — its items are the links outside the census at the draw's positions the sample file
  * records.</li>
  * </ul>
- * Not checked: that those positions are what {@code random.Random(480).sample(range(988), 100)} returns
- * (Python's generator is not re-derived here), and, for a link no item adjudicates, a change to what its
- * line does not carry — which cause drugs or which rated substances it is read through, for example —
- * that keeps its counts.
+ * Not checked: that those positions are what the recorded {@code random.Random(480)} draw returns (Python's
+ * generator is not re-derived here); which rated substances a link's chains are read through where its
+ * counts hold; and, for a link no item adjudicates, which cause drugs, or anything else its line does not
+ * carry, where its counts hold.
  *
  * <p>It re-derives no verdict: those are data, recorded in
  * {@code api/src/test/resources/eval/derived-tier-precision-sample.json}, and nothing here judges a note.
@@ -90,7 +88,7 @@ public class DerivedTierPrecisionSampleTest {
 
 	private static final String SAMPLE = "/eval/derived-tier-precision-sample.json";
 
-	/** Where every run writes the ranked enumeration, under the {@code api} module. */
+	/** Where a run that ranks the links writes the enumeration it hashes, under the {@code api} module. */
 	private static final String RANKED_LINKS = "target/derived-tier-precision-ranked-links.tsv";
 
 	private static JsonNode sample;
@@ -343,15 +341,13 @@ public class DerivedTierPrecisionSampleTest {
 			lines.append(link).append('\t').append(chainsByLink.get(link)).append('\t')
 					.append(ratedSubstancesByLink.get(link).size()).append('\n');
 		}
-		byte[] enumeration = lines.toString().getBytes(StandardCharsets.UTF_8);
-		// Written before the assertion, so a refresh that reddens it leaves the list to re-measure from.
+		// Written before the assertion, so a refresh that reddens it leaves the list to re-measure from, and the
+		// file is what is hashed, so the list left behind is the one the assertion judged.
 		Path emitted = ModuleSourceRoot.apiRoot().resolve(RANKED_LINKS);
 		Files.createDirectories(emitted.getParent());
-		Files.write(emitted, enumeration);
-		assertArrayEquals(enumeration, Files.readAllBytes(emitted), "the list written to " + emitted
-				+ " is not the enumeration hashed below");
+		Files.write(emitted, lines.toString().getBytes(StandardCharsets.UTF_8));
 		assertEquals(sample.path("population").path("rankedLinks").path("sha256").asText(),
-			ModelManifest.sha256(enumeration), "the ranked (link, kept chains, rated substances) enumeration is not"
+			ModelManifest.sha256(Files.readAllBytes(emitted)), "the ranked (link, kept chains, rated substances) enumeration is not"
 					+ " the one the precision figure was measured over; re-measure (ADR Decision 111) from " + emitted);
 	}
 
@@ -364,7 +360,8 @@ public class DerivedTierPrecisionSampleTest {
 		assertTrue(positions.isArray() && positions.size() > 0, "precondition: the recorded draw's positions");
 		Set<String> drawn = new LinkedHashSet<String>();
 		for (JsonNode position : positions) {
-			assertTrue(position.isInt() && position.asInt() >= 0 && position.asInt() < rest.size(),
+			assertTrue(position.isInt(), "a recorded position that is not an integer: " + position);
+			assertTrue(position.asInt() >= 0 && position.asInt() < rest.size(),
 				"a recorded position outside the " + rest.size() + " links outside the census: " + position);
 			assertTrue(drawn.add(rest.get(position.asInt())), "a position recorded twice: " + position);
 		}

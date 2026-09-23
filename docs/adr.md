@@ -10363,13 +10363,12 @@ of its (drug, condition) keys name more than one note.
   fails the build when the shipped knowledge base stops being the one measured. Since #485 the join above
   is its own code, and it re-derives every recorded weight through it rather than reading one total from
   the sample file, so editing a number there no longer turns it green; its class javadoc lists what it
-  checks and what it does not. Since #496 it also holds every link's line — note id, condition, kept
-  chains and distinct rated substances, in the census rule's order — to a SHA-256 in the sample file, and
-  the sampled items to the draw's recorded positions in the links outside the census; the class run at
-  `27e9cf40`, where the figure was measured, emits the same bytes as at the commit that recorded them.
-  Every run writes those lines to `api/target/derived-tier-precision-ranked-links.tsv`, so a
-  re-measurement after a refresh starts from the list the test ranked rather than from a script that
-  re-ranks it. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
+  checks and what it does not. Since #496 it also pins every link's ranked weights to a SHA-256 in the
+  sample file, and the sampled items to the draw's recorded positions; the class run at `27e9cf40`, where
+  the figure was measured, hashes the same bytes as at the commit that recorded them. A run that ranks
+  the links writes them to `api/target/derived-tier-precision-ranked-links.tsv`, so a re-measurement
+  after a refresh starts from the test's own ranking and weights rather than from a script that re-ranks
+  them; each adjudicated link's cause drugs are not in it. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
   - one word of note 319: `everyAdjudicatedNoteIsTheTextItWasJudgedOn`;
   - the one Major rated side of link 1660 × Hyperbilirubinemia set to Moderate:
     `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and

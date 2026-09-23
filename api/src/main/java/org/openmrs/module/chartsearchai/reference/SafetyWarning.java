@@ -1068,8 +1068,8 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * Whether this is {@link #ordersSharingASubstance(String, String, List)}' finding — that two of her own orders carry one
-	 * substance — rather than a relationship between two substances. An INTERACTION finding that
+	 * Whether this is {@link #ordersSharingASubstance(String, String, List)}' finding — that two of
+	 * her own orders carry one substance — rather than a relationship between two substances. An INTERACTION finding that
 	 * relates no PAIR, so {@code DrugReferenceInjector.answersFromFindings} asks this to keep a screen
 	 * the module answers itself one that related at least one pair (ADR Decision 108). Package-private,
 	 * matching the factory: it is on neither the wire nor either collapse key.

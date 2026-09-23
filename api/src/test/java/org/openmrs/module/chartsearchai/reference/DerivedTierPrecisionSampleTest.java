@@ -209,9 +209,9 @@ public class DerivedTierPrecisionSampleTest {
 		assertEquals(census.path("keptChains").asInt(), censusChains,
 			"the census items' kept chains against the recorded census total");
 		assertEquals(drawn.path("links").asInt(), sampledLinks, "sampled items against the recorded sample");
-		assertEquals(chainsByLink.size() - censusLinks, drawn.path("ofLinks").asInt(),
+		assertEquals(drawn.path("ofLinks").asInt(), chainsByLink.size() - censusLinks,
 			"the sample was drawn from every link outside the census");
-		assertEquals(keptChains - censusChains, drawn.path("ofKeptChains").asInt(),
+		assertEquals(drawn.path("ofKeptChains").asInt(), keptChains - censusChains,
 			"the sampled stratum's chains are every kept chain outside the census");
 	}
 

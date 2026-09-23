@@ -10351,7 +10351,18 @@ of its (drug, condition) keys name more than one note.
     `theCensusIsStillTheHeaviestLinks` and `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`;
   - one kept row duplicated under another note id: `everyKeptChainJoinsTheOneRawRowItWasReadFrom`,
     `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and
-    `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`.
+    `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`;
+  - every row of sampled link 3618 × Hypotension re-pointed from its cause drug, Flibanserin, to
+    Acetaminophen, which leaves every count, stratum, census rank and note unchanged:
+    `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor`. The class without that
+    test stayed green on it;
+  - Acetaminophen added to that link's `causeDrugs` in the sample file, a drug the knowledge base does
+    not read that link through: the same test;
+  - control note 2 × Acidosis, Lactic's two Abacavir rows re-pointed to Didanosine, already a cause drug
+    of that link: that test and `everyKeptChainJoinsTheOneRawRowItWasReadFrom`.
+
+  The last three were run with `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor`
+  in the class, the rest before it was added.
 
 **Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
 stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the

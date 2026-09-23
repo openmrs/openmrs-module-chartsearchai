@@ -57,6 +57,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * them ({@link DrugReference#substanceGroupKey()}), carried by every item and by no control, each item
  * filed in the {@code census} or the {@code sample} stratum and no control in either, and for a control
  * that its link is still kept;</li>
+ * <li>each adjudicated LINK's CAUSE drugs — the names of the cause entries its kept chains are read
+ * through ({@link DrugReference.ConditionMediatedRisk#getCause()}), as a set, against the {@code causeDrugs}
+ * its note was judged for, items and controls alike, so a chain re-pointed to a drug the note does not
+ * discuss is reported even where every count holds;</li>
  * <li>the CENSUS — still the heaviest links, by the rule the sample file records;</li>
  * <li>the TEXT each verdict was given on — the SHA-256 of every adjudicated note, read from the raw
  * {@code disease_notes} table, which the module does not load. A rewritten note leaves every count
@@ -81,6 +85,9 @@ public class DerivedTierPrecisionSampleTest {
 	/** The distinct rated substances per link. */
 	private static Map<String, Set<Object>> ratedSubstancesByLink;
 
+	/** The distinct names of the cause entries per link. */
+	private static Map<String, Set<String>> causeDrugsByLink;
+
 	/** Kept chains that matched no raw row, or more than one, with how many they matched. */
 	private static Map<String, Integer> unjoinedChains;
 
@@ -103,6 +110,7 @@ public class DerivedTierPrecisionSampleTest {
 		Map<String, String> entryNames = new HashMap<String, String>();
 		List<String> chainKeys = new ArrayList<String>();
 		List<Object> chainSubstances = new ArrayList<Object>();
+		List<String> chainCauses = new ArrayList<String>();
 		for (DrugReference rated : DrugReferenceTestSupport.shippedEntries()) {
 			entryNames.put(rated.getId(), rated.getName());
 			for (DrugReference.ConditionMediatedRisk risk : rated.getConditionMediatedRisks()) {
@@ -110,6 +118,7 @@ public class DerivedTierPrecisionSampleTest {
 					risk.getCauseSeverity(), risk.getCondition(), risk.getSeverity()));
 				Object substance = rated.substanceGroupKey();
 				chainSubstances.add(substance instanceof DrugReference ? rated.getId() : substance);
+				chainCauses.add(risk.getCause().getName());
 			}
 		}
 		keptChains = chainKeys.size();
@@ -152,6 +161,7 @@ public class DerivedTierPrecisionSampleTest {
 
 		chainsByLink = new HashMap<String, Integer>();
 		ratedSubstancesByLink = new HashMap<String, Set<Object>>();
+		causeDrugsByLink = new HashMap<String, Set<String>>();
 		unjoinedChains = new LinkedHashMap<String, Integer>();
 		for (int i = 0; i < chainKeys.size(); i++) {
 			List<String> links = notesByChainKey.get(chainKeys.get(i));
@@ -162,6 +172,7 @@ public class DerivedTierPrecisionSampleTest {
 			String link = links.get(0);
 			chainsByLink.merge(link, 1, Integer::sum);
 			ratedSubstancesByLink.computeIfAbsent(link, k -> new HashSet<Object>()).add(chainSubstances.get(i));
+			causeDrugsByLink.computeIfAbsent(link, k -> new HashSet<String>()).add(chainCauses.get(i));
 		}
 
 		adjudicatedNotes = new HashMap<String, String>();
@@ -260,6 +271,40 @@ public class DerivedTierPrecisionSampleTest {
 		}
 		assertTrue(wrong.isEmpty(), "adjudicated links whose weights no longer describe the shipped knowledge"
 				+ " base; re-measure (ADR Decision 111): " + wrong);
+	}
+
+	@Test
+	public void everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor() {
+		List<String> wrong = new ArrayList<String>();
+		int checked = 0;
+		for (JsonNode item : adjudicated()) {
+			String link = link(item);
+			Set<String> kept = causeDrugsByLink.get(link);
+			if (kept == null) {
+				// Reported by everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith.
+				continue;
+			}
+			JsonNode causeDrugs = item.path("causeDrugs");
+			Set<String> recorded = new LinkedHashSet<String>();
+			for (JsonNode drug : causeDrugs) {
+				if (!recorded.add(drug.asText())) {
+					wrong.add(link + ": causeDrugs names " + drug.asText() + " twice");
+				}
+			}
+			if (!causeDrugs.isArray() || recorded.isEmpty()) {
+				wrong.add(link + ": no recorded causeDrugs");
+			} else if (!recorded.equals(kept)) {
+				Set<String> gone = new LinkedHashSet<String>(recorded);
+				gone.removeAll(kept);
+				Set<String> added = new LinkedHashSet<String>(kept);
+				added.removeAll(recorded);
+				wrong.add(link + ": recorded causeDrugs no longer read through " + gone + "; now read through " + added);
+			}
+			checked++;
+		}
+		assertTrue(checked > 0, "precondition: the recorded sample carries adjudicated links the loader keeps");
+		assertTrue(wrong.isEmpty(), "adjudicated links whose kept chains are no longer read through the drugs their"
+				+ " note was judged for; re-measure (ADR Decision 111): " + wrong);
 	}
 
 	@Test

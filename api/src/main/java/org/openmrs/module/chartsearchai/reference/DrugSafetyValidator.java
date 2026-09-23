@@ -1092,7 +1092,7 @@ public class DrugSafetyValidator {
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
 			// After the pairs and outside their extent: it relates no pair (issue #477).
-			addOrdersSharingASubstance(warnings, context, orderEntries, subjects, coMedications);
+			addOrdersSharingASubstance(warnings, orderEntries, subjects, coMedications);
 		}
 		// And where neither of them STATED one, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
@@ -4315,7 +4315,7 @@ public class DrugSafetyValidator {
 	 * pass resolved her orders to ({@code orderEntries}, which {@code validate} already holds), so the
 	 * candidates are never built from {@link DrugReferenceService#findNamedSubstances}. Substances are
 	 * named by the row this response names them by ({@link SubstanceSubjects#subjectOf}) and listed in
-	 * label order; sets in the chart order of their orders.
+	 * label order; sets in the order {@code orderEntries} first reaches one of their substances.
 	 *
 	 * <p><b>Raised on a screening question and nowhere else</b> — the screening arm's own gate, read off
 	 * the question alone, so both {@code validate} passes of a request agree. Not on a question putting a
@@ -4324,11 +4324,8 @@ public class DrugSafetyValidator {
 	 * therapy. It relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decision 113
 	 * carries the scope and what it leaves open.
 	 */
-	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, PatientClinicalContext context,
-			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications) {
-		if (context == null) {
-			return;
-		}
+	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, List<DrugReference> orderEntries,
+			SubstanceSubjects subjects, CoMedications coMedications) {
 		Map<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> shared =
 				new LinkedHashMap<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>();
 		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
@@ -4344,21 +4341,7 @@ public class DrugSafetyValidator {
 			}
 			substances.add(subjects.subjectOf(rows.get(0)).displayLabel());
 		}
-		List<Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>> sets =
-				new ArrayList<Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>>(
-						shared.entrySet());
-		final List<PatientClinicalContext.ActiveDrugOrder> chartOrder = context.getActiveDrugOrders();
-		Collections.sort(sets, (a, b) -> {
-			for (int i = 0; i < Math.min(a.getKey().size(), b.getKey().size()); i++) {
-				int byPosition = Integer.compare(chartOrder.indexOf(a.getKey().get(i)),
-					chartOrder.indexOf(b.getKey().get(i)));
-				if (byPosition != 0) {
-					return byPosition;
-				}
-			}
-			return Integer.compare(a.getKey().size(), b.getKey().size());
-		});
-		for (Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> set : sets) {
+		for (Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> set : shared.entrySet()) {
 			List<String> substances = set.getValue();
 			Collections.sort(substances, String.CASE_INSENSITIVE_ORDER);
 			Map<String, Integer> ordersByDisplay = ordersByDisplay(set.getKey());

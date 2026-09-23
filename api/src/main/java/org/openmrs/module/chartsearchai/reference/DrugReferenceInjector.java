@@ -2382,7 +2382,9 @@ public class DrugReferenceInjector {
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication
 	 *     question also raises the order-driven arm's allergy finding and an answer of that alone says
-	 *     nothing of what the screen found.</li>
+	 *     nothing of what the screen found — and not the finding that two of her orders share a
+	 *     substance ({@code SafetyWarning.statesOrdersSharingASubstance}, issue #477), which relates no
+	 *     pair either.</li>
 	 * </ul>
 	 *
 	 * <p>Both need {@code chartRead}: the chart-read verdict this pass stamped, AND every active order

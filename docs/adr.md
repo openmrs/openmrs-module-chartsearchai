@@ -10554,7 +10554,7 @@ Rifampicin (rifampin) are in active orders A and B — possible duplicate therap
   That rule was raised by gate pass 2 at plan time.
 - **One finding per set of orders, not one per substance** (Decision 99): on the reproduction, three
   per-substance chips would name one pair of orders three times. Substances are listed in label
-  order, and sets in their orders' chart order.
+  order.
 - **Raised on a screening question only**, inside the screening arm's own gate
   (`questionDrugs.isEmpty() && isInteractionScreening`), which reads the question alone. Both
   `validate` passes therefore agree. The first plan also raised it on a question putting a drug in

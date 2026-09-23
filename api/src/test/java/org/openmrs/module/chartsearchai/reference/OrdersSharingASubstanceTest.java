@@ -100,6 +100,24 @@ public class OrdersSharingASubstanceTest {
 	}
 
 	@Test
+	public void twoSetsOfOrdersAreTwoFindings() throws IOException {
+		// One per set, in either chart arrangement. The order between the two is the resolution's.
+		for (boolean ethambutolFirst : new boolean[] { true, false }) {
+			PatientClinicalContext.ActiveDrugOrder emb = DrugReferenceTestSupport.activeOrder("order-emb",
+				"Ethambutol 400mg");
+			PatientClinicalContext.ActiveDrugOrder rhz = DrugReferenceTestSupport.activeOrder("order-rhz", RHZ);
+			PatientClinicalContext.ActiveDrugOrder rhze = DrugReferenceTestSupport.activeOrder("order-rhze", RHZE);
+			String ethambutol = "Ethambutol is in active orders " + (ethambutolFirst ? "Ethambutol 400mg and " + RHZE
+					: RHZE + " and Ethambutol 400mg") + " — possible duplicate therapy";
+			List<String> found = DrugReferenceTestSupport.details(shared(screen(FIXTURE, ethambutolFirst
+					? contextOf(emb, rhz, rhze) : contextOf(rhz, rhze, emb))));
+
+			assertEquals(ethambutolFirst ? Arrays.asList(ethambutol, SHARED_BY_BOTH)
+					: Arrays.asList(SHARED_BY_BOTH, ethambutol), found);
+		}
+	}
+
+	@Test
 	public void oneOrderNamesNothing() throws IOException {
 		assertEquals(0, shared(screen(FIXTURE, contextOf(
 				DrugReferenceTestSupport.activeOrder("order-rhz", RHZ)))).size());

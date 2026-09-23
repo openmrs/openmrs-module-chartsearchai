@@ -971,7 +971,9 @@ public class SafetyWarning {
 	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
 	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries — and that
 	 * second arm answers true only where no SIBLING ROW put the substance in play, because its chips
-	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction. The
+	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction. Beside
+	 * the first of them, inside its gate, {@link #ordersSharingASubstance(String, String, List)} (issue
+	 * #477) answers true too: every order it names is hers, and a screen proposes nothing. The
 	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
 	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because

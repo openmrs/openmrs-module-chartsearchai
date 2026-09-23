@@ -1258,10 +1258,10 @@ public final class DrugReferenceValidity {
 	 * concept side too is issue #476's follow-up. Keyed by its whole name, an ingredient such as
 	 * {@code X (anhydrous)} named no row, because a row's stem never ends in a qualifier. The stripped
 	 * qualifier can name a distinct presentation (an isotope, a salt), so this can now report a row the
-	 * bridge does NOT contradict. The first conjunct is what keeps such a row silent: a row whose substance name and stem
-	 * carry each other as a word is never reported. Measured 2026-09-24 by this method through
-	 * {@link DrugReferenceService#getLoadStatus()} over the shipped KB, the change left the reported rows
-	 * as they were.
+	 * bridge does NOT contradict — a synonym row among them, such as {@code Acetylsalicylic acid} above,
+	 * wherever a concept filed elsewhere names its display name with a qualifier. Measured 2026-09-24 by
+	 * this method through {@link DrugReferenceService#getLoadStatus()} over the shipped KB, the change
+	 * left the reported rows as they were.
 	 *
 	 * <p><b>What it still misses, and why no widening here closes it.</b> Measured the same way, reporting
 	 * a row wherever any ingredient filed elsewhere carries its stem as a WORD

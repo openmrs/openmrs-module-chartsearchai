@@ -835,8 +835,8 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 
 	/**
 	 * Issue #476's residue, in a hand-authored dataset: the rule compares a row's display STEM, so a
-	 * trailing qualifier on either side must not hide the contradiction. The shipped file offers neither
-	 * shape (the fixture's own note says what measured that).
+	 * trailing qualifier on either side must not hide the contradiction. The shipped file reports no row
+	 * at either edge (the fixture's own note says what measured that).
 	 * <ul>
 	 *   <li>An ingredient the bridge spells with a trailing qualifier ({@code Trailexine (anhydrous)})
 	 *       still names the row {@code Trailexine}. Keyed by its whole normalized name it matched no

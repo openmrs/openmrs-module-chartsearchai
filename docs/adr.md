@@ -9532,9 +9532,7 @@ decides it once per injection (`answersFromFindings`), off the resolutions that 
 stamps the answer on the chart it builds (`PatientChart.getModuleAnswer()`), composing nothing while the
 property is off; `LlmInferenceService` serves that stamp on both answer paths through one method.
 
-**The module states only what a finding positively says, and never a clearance or a negative.** A
-corroborated finding that withholds a proposed drug makes "No" true whatever else the module did or
-could not do.
+**The module states only what a finding positively says, and never a clearance or a negative.**
 "Can be given", or "no interactions were found", is true only where every arm ran over a chart read in
 full whose every record the data could resolve, and nothing in this module can establish that. The
 first form of this change composed both, and fresh reviewers found each one false in turn: an allergy
@@ -9542,11 +9540,9 @@ list the module could not read, an allergen recorded as a class (*"Proton pump i
 the data does not carry, a switched-off arm, a screen naming a food. Those questions keep the model
 call. Two shapes are answered:
 
-- **A question proposing ONE substance she is not already taking, where a finding about it withholds
-  it** (`STRENGTH_WITHHOLD`) and does not rest on a match the module could not corroborate
-  (`SafetyWarning.restsOnAnUncorroboratedChartMatch`): such a finding states its own hedge, and a
-  composed "No" would state the call without it — on a curated dataset, a rule on `opium` matching an
-  allergy recorded as `Tiotropium`, admitted by `QueryScopeRouter.asksWhetherToGiveADrug` with the drug's own
+- **A question proposing ONE substance she is not already taking, where an INTERACTION the data rates
+  as a reason to withhold it relates it to one of her orders** (`STRENGTH_WITHHOLD`). The question is
+  admitted by `QueryScopeRouter.asksWhetherToGiveADrug` with the drug's own
   name marked in the question — the spans `DrugReference.namedOccurrences` reports, so only the name
   the question wrote is marked and never another of the entry's names (removing every word of every
   alias once admitted *"Can I give her diclofenac for her arthritis pain?"*, `Aleve Arthritis Pain`
@@ -9557,6 +9553,18 @@ call. Two shapes are answered:
   `QueryScopeRouter.asksOnlyToScreenHerMedications`. An interaction finding and not any finding,
   because a medication question also raises the order-driven arm's allergy finding, and an answer of
   that alone says nothing of what the screen found.
+
+**The "No" is licensed by an interaction, never by a contraindication.** An interaction finding is a
+relationship the dataset RATES between two substances this module resolved; a contraindication finding
+is a curated rule's token matched against her records' free text, under a note the rule's author wrote.
+Review drove three false categorical "No"s through contraindications in turn: a token inside a longer
+word the module flags as uncorroborated (`opium` in an allergy recorded as `Tiotropium`), a class token
+doing the same with no flag (`egg` in `Eggplant` — `restsOnAnUncorroboratedChartMatch` is `false` for
+a rule that is not self-named, and its own javadoc says `false` is no certificate), and the shipped
+curated seed's own gentamicin note, *"significant renal impairment (dose adjustment required)"*, under
+"should not be given". A contraindication a question also raised is still stated as a line of the
+answer; it does not decide it. So a drug withheld by a contraindication alone — her recorded allergy
+to the very drug included — keeps the model call.
 
 Both need the chart-read verdict the injector stamped (`chartReadForSafety`): with the orders unread
 "not already taking" cannot be asked, and a screen has only part of her list to relate.
@@ -9600,7 +9608,9 @@ prose — `unfaithfullyRenderedCitations`, `misattributedOrderCitations`, `activ
 `null` and a null alone could mean a check that failed. The chips pass is handed the empty answer, as
 the pass that raised the findings was, so the chips beside the answer are the findings it states; scoping
 the order-driven arm by text the module itself just wrote would be circular (the issue's M8 and N5 are a
-model's wording raising a chip the question alone does not). The references, `orderStopDates`, the chips
+model's wording raising a chip the question alone does not). No test pins that input: handing the
+chips pass the composed text instead leaves the suite green, and no arrangement built in review
+widened the chips through it. The references, `orderStopDates`, the chips
 and `interactionPairs` are produced as on the model's path. The token counts are zero, which the audit
 row already writes as null.
 
@@ -9618,7 +9628,7 @@ chance of the two disagreeing.
 ### Residues, stated
 
 - A proposal no finding withholds keeps the call — caution-only, and nothing raised — and so does a
-  screen that related nothing. The issue's widening to those cases asked for a wording that must not
+  screen that related nothing, and a proposal withheld by a contraindication alone. The issue's widening to those cases asked for a wording that must not
   read as a clearance; this change found none that the module can support, and left them to the model.
 - A question about a drug she already takes (R3, D6) keeps the call, and with it #402.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.

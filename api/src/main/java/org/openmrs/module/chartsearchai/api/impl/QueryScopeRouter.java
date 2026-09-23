@@ -258,10 +258,9 @@ public final class QueryScopeRouter {
 	 */
 	private static final List<Pattern> PROPOSAL_SHAPES = shapes(
 			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give
-			// ibuprofen to her?", "Can I give her omeprazole, given her allergies?"
+			// ibuprofen to her?"
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer|add) (?:"
-					+ PATIENT + " )?(?:on )?" + D + "(?: to " + PATIENT + ")?(?: now| today)?"
-					+ "(?: given " + POSSESSIVE + " (?:allergies|allergy|" + MEDICATION_WORD + "))?",
+					+ PATIENT + " )?(?:on )?" + D + "(?: to " + PATIENT + ")?(?: now| today)?",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?"
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on) "
 					+ D + "(?: now| today)?",

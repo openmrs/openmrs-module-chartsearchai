@@ -169,8 +169,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.getSafetyWarnings().isEmpty(), "the chips are produced as before");
 		for (org.openmrs.module.chartsearchai.reference.SafetyWarning chip : answer.getSafetyWarnings()) {
 			assertTrue(answer.getAnswer().contains(chip.getDetail()),
-					"the chips pass reads the question alone, as the pass that raised the findings did, so "
-							+ "every chip beside the answer is a finding it states. Missing: " + chip.getDetail());
+					"every chip beside a composed answer is a finding it states. Missing: " + chip.getDetail());
 		}
 		assertNotNull(answer.getPairChipExtent(), "and so is the pair extent");
 	}
@@ -213,49 +212,39 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A proposed drug whose findings do not WITHHOLD it is answered by the model: the module's answer
-	 * would have to be "can be given", a clearance nothing here can establish — an allergy list it
-	 * could not read, an allergen recorded as a class or a brand the data does not carry, a switched-off
-	 * arm each made that sentence false in review. Omeprazole's one finding is a Minor caution against
-	 * her aspirin; with her aspirin allergy recorded the allergy question adds a stronger finding about
-	 * her own aspirin, and the drug asked about is still only cautioned.
+	 * A proposed drug no INTERACTION withholds is answered by the model. Only cautioned, the module's
+	 * answer would have to be "can be given", a clearance nothing here can establish. Withheld only by
+	 * a contraindication — here her recorded allergy to the very drug — the "No" would rest on a curated
+	 * rule's token matched against her records' free text, which review found false three ways.
 	 */
 	@Test
-	public void aProposalNoFindingWithholdsStillAsksTheModel() {
+	public void aProposalNoInteractionWithholdsStillAsksTheModel() {
 		assertTheModelIsAsked("Can I give her omeprazole?");
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
-		assertTheModelIsAsked("Can I give her omeprazole, given her allergies?");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Omeprazole");
+		assertTheModelIsAsked("Can I give her omeprazole?");
 	}
 
 	/**
-	 * A set of findings of different strengths: the findings about the PROPOSED drug first, strongest
-	 * first, and the strongest of them leading; then the ones about her own medications. Omeprazole
-	 * relates Moderate to her warfarin (withhold) and Minor to her aspirin (a caution), and the allergy
-	 * question widens the order-driven arm to her aspirin allergy against her aspirin prescription (a
-	 * reason to change a current medication, which by the prompt's own ranking outranks a caution —
-	 * but is not what was asked about).
+	 * A set of findings of different strengths is one answer led by the withholding call, the stronger
+	 * finding first: omeprazole relates Moderate to her warfarin (withhold) and Minor to her aspirin
+	 * (a caution), and both are stated.
 	 */
 	@Test
-	public void findingsOfDifferentStrengthsAreLedByTheStrongestAndOrderedByStrength() throws Exception {
+	public void findingsOfDifferentStrengthsAreLedByTheWithholdingCall() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
-		String question = "Can I give her omeprazole, given her allergies?";
+		String question = "Can I give her omeprazole?";
 		List<Finding> findings = findingsInThePromptFor(question);
 		String withhold = null;
-		String change = null;
 		String caution = null;
 		for (Finding finding : findings) {
 			String line = answerFacingBody(finding) + " [" + finding.index + "]";
 			if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD)) {
-				withhold = withhold == null ? line : withhold;
-			} else if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)) {
-				change = change == null ? line : change;
+				withhold = line;
 			} else if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION)) {
-				caution = caution == null ? line : caution;
+				caution = line;
 			}
 		}
-		assertTrue(withhold != null && change != null && caution != null,
-				"precondition: all three strengths are raised, findings were: " + findings);
+		assertTrue(withhold != null && caution != null, "precondition: both strengths, findings were: " + findings);
 
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, question);
@@ -263,9 +252,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls);
 		String text = answer.getAnswer();
 		assertTrue(text.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Omeprazole"
-				+ DrugReferenceInjector.WITHHOLD_LEAD_CLOSING), "the strongest leads: " + text);
-		assertTrue(text.indexOf(withhold) < text.indexOf(caution) && text.indexOf(caution) < text.indexOf(change),
-				"then the proposed drug's findings by strength, then her own medications': " + text);
+				+ DrugReferenceInjector.WITHHOLD_LEAD_CLOSING), "the withholding call leads: " + text);
+		assertTrue(text.indexOf(withhold) < text.indexOf(caution), "then the stronger finding first: " + text);
 		assertCarriesEveryFinding(answer, findings);
 	}
 
@@ -343,25 +331,6 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, question);
 
 		assertEquals(1, provider.calls, "a list question is not a screen");
-		assertFalse(answer.isAnsweredByTheModule());
-	}
-
-	/** A proposed drug that raised NOTHING beside a finding about something else: the allergy
-	 *  question widens the order-driven arm to her aspirin allergy and her aspirin prescription, while
-	 *  metformin relates to her order only at Unknown, which the shipped floor filters. An answer made
-	 *  of that one finding would leave the drug asked about silent. */
-	@Test
-	public void aProposedDrugThatRaisedNothingOfItsOwnStillAsksTheModel() {
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
-		String question = "Can I give her metformin, given her allergies?";
-		assertFalse(findingsInThePromptFor(question).isEmpty(),
-				"precondition: a finding IS raised, about her own prescription, so it is the missing "
-						+ "finding about metformin that keeps the call");
-
-		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, question);
-
-		assertEquals(1, provider.calls, "metformin raised nothing, so the module has no answer for it");
 		assertFalse(answer.isAnsweredByTheModule());
 	}
 

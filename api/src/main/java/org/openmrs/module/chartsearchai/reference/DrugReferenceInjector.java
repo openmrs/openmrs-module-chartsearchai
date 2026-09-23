@@ -2308,20 +2308,26 @@ public class DrugReferenceInjector {
 	 * Decision 108. Asked once per injection, off the resolutions this pass already holds.
 	 *
 	 * <p><b>The module answers only with what a finding POSITIVELY states, and never with a clearance
-	 * or a negative.</b> A corroborated finding that withholds a proposed drug makes "No" true whatever
-	 * else the module did or could not do — corroborated, because one resting on a match the module
-	 * could not corroborate ({@link SafetyWarning#restsOnAnUncorroboratedChartMatch()}) carries its
-	 * own hedge, and a composed "No" would state the call without it; "can be given", or "no interactions were found", is true only if
-	 * every arm ran over a chart that was read in full and could resolve every record in it, which
-	 * nothing here can establish — an unread allergy list, an allergen recorded as a class or a brand
-	 * the data does not carry, a switched-off arm each made such an answer false, and each was found
-	 * one after another. So those questions keep the model call, and the shapes answered are two:
+	 * or a negative.</b> "Can be given", or "no interactions were found", is true only if every arm ran
+	 * over a chart that was read in full and could resolve every record in it, which nothing here can
+	 * establish — an unread allergy list, an allergen recorded as a class or a brand the data does not
+	 * carry, a switched-off arm each made such an answer false, and each was found one after another.
+	 * So those questions keep the model call.
+	 *
+	 * <p><b>And the "No" is licensed by an INTERACTION, never by a contraindication.</b> An interaction
+	 * finding is a relationship the dataset RATES between two substances this module resolved; a
+	 * contraindication finding is a curated rule's token matched against her records' free text, under a
+	 * note the rule's author wrote. Review drove three false categorical "No"s through contraindications
+	 * in turn — a token inside a longer word ({@code opium} in {@code Tiotropium}, flagged uncorroborated),
+	 * a class token doing the same without the flag ({@code egg} in {@code Eggplant}), and a note reading
+	 * "dose adjustment required" under "should not be given". A contraindication a question also raised
+	 * is still stated as a line of the answer; it does not decide the answer. The shapes answered are two:
 	 * <ul>
 	 * <li>A question PROPOSING one drug she is not already taking, admitted by
-	 *     {@code QueryScopeRouter.asksWhetherToGiveADrug} once the drug's own names are taken out of
-	 *     it, where a corroborated finding about that drug WITHHOLDS it ({@link #STRENGTH_WITHHOLD} — only the
-	 *     drug-in-play arm raises a proposal finding before there is an answer, and with one substance
-	 *     in play it is about that one). Not already taking it, because the drug-in-play arm states a
+	 *     {@code QueryScopeRouter.asksWhetherToGiveADrug} with the drug's own name marked, where an
+	 *     interaction the data rates as a reason to withhold it relates it to one of her orders
+	 *     ({@link #STRENGTH_WITHHOLD} — the proposal clause, which only the drug-in-play arm states
+	 *     before there is an answer). Not already taking it, because the drug-in-play arm states a
 	 *     proposal clause for a drug she does take (issue #402), and composing would make that defect
 	 *     certain — asked of {@code herSubstances}, the substances this pass resolved her orders to.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
@@ -2359,11 +2365,11 @@ public class DrugReferenceInjector {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
-			// The proposal clause and never its current-medication counterpart, which strengthClause
-			// gives a finding about a drug she takes: so this is a finding about the drug proposed. And
-			// one the module could corroborate: a match it could not (a token inside a longer word of her
-			// chart) states its own hedge, which a composed "No" would drop.
-			if (STRENGTH_WITHHOLD.equals(strengthClause(finding)) && !finding.restsOnAnUncorroboratedChartMatch()) {
+			// An INTERACTION the data rates as a reason to withhold, stating the proposal clause and never
+			// its current-medication counterpart — so a finding about the drug proposed. Not a
+			// contraindication: see this method's javadoc.
+			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					&& STRENGTH_WITHHOLD.equals(strengthClause(finding))) {
 				return true;
 			}
 		}

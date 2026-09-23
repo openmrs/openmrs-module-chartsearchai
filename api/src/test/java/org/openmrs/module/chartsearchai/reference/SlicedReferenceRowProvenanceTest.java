@@ -29,15 +29,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * A listed test fixture that calls itself a verbatim slice of the shipped knowledge base still is one.
  *
- * <p><b>Why a case rather than trust.</b> The cases that read such a slice build their answers out of
- * the record the injector renders from it and compare them against that same record, so they are
+ * <p><b>Why a case rather than trust.</b> The cases that read such a slice build their answers out
+ * of the record the injector renders from it and compare them against that same record, so they are
  * self-relative: edit a row and they stay green while the record they were written about no longer
- * exists. That matters because a decision can quote the rendered record — ADR Decision 59 quotes the
- * one {@code ddi-issue338-allergy-cross-reactivity.json} produces, character for character — so an
- * edit to a slice can make a published measurement false on a green build. Measured: editing a row's {@code rxcui} leaves every case in
- * {@code ReferenceProseFidelityTest} green, because it changes nothing the injector renders. Some
- * edits those cases DO catch — an ATC code, because it changes the sentence they are built around —
- * which is why the claim is about the file being a slice and not about the cases being blind.
+ * exists. That matters because a decision can quote the rendered record — ADR Decision 59 quotes
+ * the one {@code ddi-issue338-allergy-cross-reactivity.json} produces, character for character — so
+ * an edit to a slice can make a published measurement false on a green build. Measured: editing a
+ * row's {@code rxcui} leaves every case in {@code ReferenceProseFidelityTest} green, because it
+ * changes nothing the injector renders. Some edits those cases DO catch — an ATC code, because it
+ * changes the sentence they are built around — which is why the claim is about the file being a
+ * slice and not about the cases being blind.
  *
  * <p><b>Whole rows, not projections.</b> An earlier version of this compared four accessors and let
  * seven kinds of edit through — {@code rxcui}, {@code drugbank_id}, a {@code ciel} entry, the

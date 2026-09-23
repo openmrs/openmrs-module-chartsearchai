@@ -103,8 +103,9 @@ public class BridgedConceptOrderResolutionTest {
 			DrugReferenceTestSupport.set(INEXIUM_ORDER), atcCodes, null, ESOMEPRAZOLE_CONCEPT);
 	}
 
-	/** How an ANGLOPHONE dictionary spells the same product — a brand the fixture carries nowhere,
-	 *  beside the concept name it DOES carry. */
+	/** How an ANGLOPHONE dictionary spells the same product — a brand
+	 *  {@code DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES}, which its cases load,
+	 *  carries nowhere, beside the concept name it DOES carry. */
 	private static final String NEXIUM_ORDER = "Nexium 40mg";
 
 	/** The {@code en} shape of that prescription: a brand display, and the concept's own

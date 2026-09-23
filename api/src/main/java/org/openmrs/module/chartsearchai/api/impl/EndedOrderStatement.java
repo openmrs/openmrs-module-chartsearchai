@@ -36,17 +36,17 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  *
  * <p><b>What "the answer said so" is</b>: some sentence of the answer
  * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) contains {@link #NO_LONGER_IN_FORCE}, the words the
- * prompt's ended-order branch tells the model to use, ABOUT the chip's drug. An occurrence is about the
- * drug named NEAREST before it, asked clause by clause back from the phrase ({@link #clauseStart}): the
- * first clause that names any drug decides, so a clause naming none ({@code "Nevirapine was prescribed,
- * but its order is no longer in force"}, ADR Decision 47's recorded live wording) is read through, and so
- * is a fragment a comma or a dose range left inside another drug's clause. So <em>"Rifampicin interacts
- * with nevirapine; her isoniazid order is no longer in force."</em> does not state rifampicin's end (issue
- * #482): until then one sentence naming the drug anywhere and carrying the phrase anywhere was read as
- * saying it. Whether a clause names some OTHER drug is {@link DrugSafetyValidator#namesADrug}, over the
- * loaded dataset; where no clause before the phrase names any drug, the sentence rule stands. The
- * drug is asked by {@link DrugSafetyValidator#namesTheEndedOrderDrug} — the prose rule over every row of
- * its substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
+ * prompt's ended-order branch tells the model to use, ABOUT the chip's drug — the drug named nearest
+ * before that occurrence, by position, or a combination name joining this drug to it
+ * ({@link DrugSafetyValidator#isAboutTheEndedOrderDrug}, over the loaded dataset). So <em>"Rifampicin
+ * interacts with nevirapine; her isoniazid order is no longer in force."</em> does not state rifampicin's
+ * end, and neither does the same sentence with "and" in place of the semicolon (issue #482): until then
+ * one sentence naming the drug anywhere and carrying the phrase anywhere was read as saying it. ADR
+ * Decision 47's recorded live wording, <em>"Nevirapine was prescribed, but its order is no longer in
+ * force"</em>, names no other drug before the phrase and still states it; where no drug at all is named
+ * before the phrase, the sentence rule stands. The drug is asked by
+ * {@link DrugSafetyValidator#namesTheEndedOrderDrug}'s rows — the prose rule over every row of its
+ * substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
  * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is
  * containment, so a paraphrase ("it was discontinued") reads as unstated and the sentence is appended
  * beside it — the residue runs toward saying it twice rather than toward silence, the direction
@@ -57,18 +57,6 @@ public final class EndedOrderStatement {
 
 	/** The prompt's words for such an order, after {@code PatientChartSerializer.INACTIVE_ORDER_LABEL}. */
 	static final String NO_LONGER_IN_FORCE = "no longer in force";
-
-	/**
-	 * Where the clause an occurrence of {@link #NO_LONGER_IN_FORCE} sits in begins, within a sentence
-	 * {@code SENTENCE_BOUNDARY} already cut: these characters, and a hyphen written as a dash
-	 * ({@link #clauseStart}). It shares no character with {@code ChartSearchAiUtils.SENTENCE_TERMINATORS}
-	 * and is not a claim unit — it splits nothing grounding or a fidelity check judges. It only decides
-	 * which drug a phrase already inside one sentence is read as being ABOUT, and it can only take a
-	 * "stated" reading away, never add one. Wider than {@code ActiveOrderCitationFidelityCheck.clauseBound}'s
-	 * comma and semicolon on purpose: there a colon introduces the very marker run being attributed, and
-	 * cutting it would lose the claim's citations; here no citation is attributed.
-	 */
-	static final String CLAUSE_BOUNDARIES = ",;:\u2013\u2014";
 
 	private EndedOrderStatement() {
 	}
@@ -100,66 +88,16 @@ public final class EndedOrderStatement {
 	private static boolean statesItEnded(String[] sentences, SafetyWarning warning,
 			DrugSafetyValidator validator) {
 		for (String sentence : sentences) {
-			String lower = sentence.toLowerCase(Locale.ROOT);
-			// A clause is a piece of its sentence, so a sentence not naming the drug has no clause that does.
-			if (!lower.contains(NO_LONGER_IN_FORCE)
-					|| !DrugSafetyValidator.namesTheEndedOrderDrug(lower, warning)) {
+			if (!sentence.toLowerCase(Locale.ROOT).contains(NO_LONGER_IN_FORCE)) {
 				continue;
 			}
-			for (int at = lower.indexOf(NO_LONGER_IN_FORCE); at >= 0;
-					at = lower.indexOf(NO_LONGER_IN_FORCE, at + 1)) {
-				if (aboutTheDrug(lower, at, warning, validator)) {
-					return true;
-				}
+			// With no validator wired, nothing knows another drug's names: the sentence rule.
+			if (validator != null ? validator.isAboutTheEndedOrderDrug(sentence, NO_LONGER_IN_FORCE, warning)
+					: DrugSafetyValidator.namesTheEndedOrderDrug(sentence, warning)) {
+				return true;
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * Whether the occurrence of {@link #NO_LONGER_IN_FORCE} at {@code at} of {@code sentence}, a sentence
-	 * naming the chip's drug, is about that drug: walking back clause by clause, the first that names this
-	 * drug says yes and the first that names any other says no; where none before the phrase names a drug,
-	 * yes, the sentence rule.
-	 */
-	private static boolean aboutTheDrug(String sentence, int at, SafetyWarning warning,
-			DrugSafetyValidator validator) {
-		for (int end = at; end > 0;) {
-			int start = clauseStart(sentence, end);
-			String clause = sentence.substring(start, end);
-			if (DrugSafetyValidator.namesTheEndedOrderDrug(clause, warning)) {
-				return true;
-			}
-			if (validator != null && validator.namesADrug(clause)) {
-				return false;
-			}
-			end = start - 1;
-		}
-		return true;
-	}
-
-	/**
-	 * Where the clause holding position {@code at} of {@code sentence} begins — after the last of
-	 * {@link #CLAUSE_BOUNDARIES} before it, or after a hyphen standing for a dash: one with whitespace on
-	 * both sides ({@code " - "}) or doubled ({@code "--"}). A hyphen inside a word ({@code co-trimoxazole})
-	 * is neither, and does not end a clause.
-	 */
-	private static int clauseStart(String sentence, int at) {
-		for (int i = at - 1; i >= 0; i--) {
-			char c = sentence.charAt(i);
-			if (CLAUSE_BOUNDARIES.indexOf(c) >= 0 || c == '-' && isADash(sentence, i)) {
-				return i + 1;
-			}
-		}
-		return 0;
-	}
-
-	private static boolean isADash(String sentence, int i) {
-		boolean spaced = i > 0 && i + 1 < sentence.length() && Character.isWhitespace(sentence.charAt(i - 1))
-				&& Character.isWhitespace(sentence.charAt(i + 1));
-		boolean doubled = i > 0 && sentence.charAt(i - 1) == '-' || i + 1 < sentence.length()
-				&& sentence.charAt(i + 1) == '-';
-		return spaced || doubled;
 	}
 
 	/**

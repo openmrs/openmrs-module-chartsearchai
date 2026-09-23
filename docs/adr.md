@@ -10370,7 +10370,8 @@ of its (drug, condition) keys name more than one note.
   after a refresh starts from the test's own ranking and weights rather than from a script that re-ranks
   them. Since #500 each line also carries the sorted names of its link's cause drugs, and the hash was
   re-recorded for it; with those fields cut off, the lines the class now writes hash to the value #496
-  recorded, so the appended names are the only change. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
+  recorded, so the appended names are the only change. Each mutation below was seen to redden the class on
+  2026-09-23, in the tests named:
   - one word of note 319: `everyAdjudicatedNoteIsTheTextItWasJudgedOn`;
   - the one Major rated side of link 1660 × Hyperbilirubinemia set to Moderate:
     `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and

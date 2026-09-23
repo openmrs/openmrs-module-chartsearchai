@@ -361,7 +361,8 @@ public class DerivedTierPrecisionSampleTest {
 				+ " unambiguously: " + unwritable);
 		assertEquals(sample.path("population").path("rankedLinks").path("sha256").asText(),
 			ModelManifest.sha256(Files.readAllBytes(emitted)), "the ranked (link, kept chains, rated substances,"
-					+ " cause drugs) enumeration is not the one the precision figure was measured over; re-measure (ADR Decision 111) from " + emitted);
+					+ " cause drugs) enumeration is not the one the precision figure was measured over; re-measure"
+					+ " (ADR Decision 111) from " + emitted);
 	}
 
 	@Test

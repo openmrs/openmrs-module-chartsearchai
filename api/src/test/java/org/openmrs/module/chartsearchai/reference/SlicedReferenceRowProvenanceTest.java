@@ -50,7 +50,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * file is hand-authored still passes, and only its presence is checked.
  *
  * <p><b>Derived chains, where a slice carries them.</b> Where a slice carries
- * {@code derived_interactions}, the rows of it falling wholly inside the slice are compared too
+ * {@value #DERIVED}, the rows of it falling wholly inside the slice are compared too
  * (issue #503). A slice that does not carry that table is not held to the shipped rows falling inside
  * it, and loads with no condition-mediated chain where the shipped dataset may attach some.
  *
@@ -65,6 +65,9 @@ public class SlicedReferenceRowProvenanceTest {
 
 	/** The shipped dataset, on the main classpath. */
 	private static final String SHIPPED = "chartsearchai/ddi-knowledge-base.json";
+
+	/** The table of pairwise interaction rows. */
+	private static final String INTERACTIONS = "interactions";
 
 	/** The table of derived (condition-mediated) chains, which the loader reads. */
 	private static final String DERIVED = "derived_interactions";
@@ -192,7 +195,7 @@ public class SlicedReferenceRowProvenanceTest {
 	/** @return the interaction rows of {@code dataset} whose BOTH partners are in {@code ids}, in the
 	 *          dataset's own order — which is what "falling wholly inside the slice" means. */
 	private static List<JsonNode> interactionsWithin(JsonNode dataset, Set<String> ids) {
-		return rowsWithin(dataset, "interactions", 0, 1, ids);
+		return rowsWithin(dataset, INTERACTIONS, 0, 1, ids);
 	}
 
 	/** @return the rows of {@code dataset}'s {@code table} whose two id columns are BOTH in {@code ids},

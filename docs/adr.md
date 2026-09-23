@@ -10060,10 +10060,10 @@ rig on the machine held, and it was restored after the run.
   "and", by a parenthesis or by a "whose" clause about the other drug (issue #482; until then any sentence naming the drug
   and carrying the phrase was read as saying it). Said twice rather than not at all: a paraphrase of that
   phrase, a name no row of the substance carries, a pronoun reaching back past a nearer drug
-  (*"Ibuprofen interacts with aspirin, but its order is no longer in force"*), this drug listed
-  before another in one subject (*"Her ibuprofen and metformin orders are …"*), and, after the phrase,
+  (*"Ibuprofen interacts with aspirin, but its order is no longer in force"*); this drug listed
+  before another in one subject (*"Her ibuprofen and metformin orders are …"*); after the phrase,
   this drug listed after another or joined behind it in a combination name (*"The orders no longer in
-  force are her metformin and ibuprofen"*, *"… is her metformin/ibuprofen"*), and a phrase ahead of this
+  force are her metformin and ibuprofen"*, *"… is her metformin/ibuprofen"*); and a phrase ahead of this
   drug where another drug is named before the phrase (*"Aspirin is current; the order no longer in force
   is her ibuprofen"*). Toward silence: a pronoun reaching back past this drug to one named before it
   (*"Metformin interacts with ibuprofen, but its order is no longer in force"*), a nearer drug the loaded

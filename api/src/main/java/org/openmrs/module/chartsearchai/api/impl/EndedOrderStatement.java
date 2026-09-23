@@ -37,15 +37,14 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * <p><b>What "the answer said so" is</b>: some sentence of the answer
  * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) contains {@link #NO_LONGER_IN_FORCE}, the words the
  * prompt's ended-order branch tells the model to use, ABOUT the chip's drug — the drug named nearest
- * before that occurrence, by position, or a combination name joining this drug to it
+ * before that occurrence, by position, or a combination name joining this drug to it, or, where no drug
+ * is named before it, the drug named nearest after it (issue #489)
  * ({@link DrugSafetyValidator#isAboutTheEndedOrderDrug}, over the loaded dataset). So <em>"Rifampicin
  * interacts with nevirapine; her isoniazid order is no longer in force."</em> does not state rifampicin's
  * end, and neither does the same sentence with "and" in place of the semicolon (issue #482): until then
  * one sentence naming the drug anywhere and carrying the phrase anywhere was read as saying it. ADR
  * Decision 47's recorded live wording, <em>"Nevirapine was prescribed, but its order is no longer in
- * force"</em>, names no other drug before the phrase and still states it; where no drug at all is named
- * before the phrase, the drug named after it decides (issue #489;
- * {@link DrugSafetyValidator#isAboutTheEndedOrderDrug} states how). The drug is asked by
+ * force"</em>, names no other drug before the phrase and still states it. The drug is asked by
  * {@link DrugSafetyValidator#namesTheEndedOrderDrug}'s rows — the prose rule over every row of its
  * substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
  * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is

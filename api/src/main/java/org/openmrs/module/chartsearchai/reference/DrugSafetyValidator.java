@@ -1875,9 +1875,9 @@ public class DrugSafetyValidator {
 	 * which is the sentence rule.
 	 *
 	 * <p>Its residues, in each direction, are ADR Decision 110's first residue: a pronoun reaching back past
-	 * a nearer drug to this one, this drug listed before another in one subject ("her ibuprofen and
-	 * metformin orders"), and, after the phrase, this drug listed after another or joined behind it in a
-	 * combination name ("no longer in force are her metformin and ibuprofen orders"), and a phrase ahead of
+	 * a nearer drug to this one; this drug listed before another in one subject ("her ibuprofen and
+	 * metformin orders"); after the phrase, this drug listed after another or joined behind it in a
+	 * combination name ("no longer in force are her metformin and ibuprofen orders"); and a phrase ahead of
 	 * this drug where another is named before the phrase, read as the other's (the sentence appended, said
 	 * twice); a pronoun reaching back past this drug to one named before it, a nearer drug the loaded data
 	 * does not carry, and a phrase ahead of another drug where this one is named before the phrase, read as

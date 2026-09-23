@@ -751,8 +751,6 @@ public class DrugReferenceInjector {
 		// LAST for the reason the class note is: it is about what this response's SCREEN did rather
 		// than about any entry, so it reads after everything the response resolved — which, when it
 		// fires, is nothing. Its gate is resolved above, once, beside the resolutions it reads.
-		// The screen note's record number, for the module-composed answer below (issue #469).
-		int screenNoteNumber = index;
 		if (screenRelatedNothing) {
 			String rendered = renderInteractionScreenNote(screenedSubstances.size());
 			mappings.add(new RecordMapping(index,
@@ -806,18 +804,13 @@ public class DrugReferenceInjector {
 		// Read only where there is something it could decide, and HERE rather than where the answer is
 		// used, so that with the property off none of the composition runs at all (issue #469).
 		String moduleAnswer = null;
-		if ((screenRelatedNothing || !findings.isEmpty())
+		if (!findings.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& answersFromFindings(question, questionDrugs, screenedSubstances, findings,
-						screenRelatedNothing)) {
-			// A screen that related nothing is answered by its own note, qualifier included, cited by
-			// the number it was given above; everything else by the findings. Stamped only where the
-			// property is on, so LlmInferenceService reads the stamp alone and reads no property.
-			moduleAnswer = screenRelatedNothing
-					? interactionScreenNoteBody(screenedSubstances.size()) + " [" + screenNoteNumber + "]"
-					: composeFromFindings(findings, findingNumbers, orderRecordNumbers);
+						context.chartReadForSafety())) {
+			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers);
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -2310,62 +2303,43 @@ public class DrugReferenceInjector {
 			" should not be given: this module's drug-safety check found a reason to withhold it.";
 
 	/**
-	 * The graded lead of a module-composed answer whose strongest finding about the PROPOSED drug is a
-	 * caution, the drug before it and the caution itself after it — in the same sentence, which is what
-	 * the prompt's own caution branch asks of the model, so the caution is never dropped.
-	 */
-	public static final String CAUTION_LEAD = " can be given, with a caution to note: ";
-
-	/**
-	 * Whether this injection resolved the question well enough to answer it from its own findings —
+	 * Whether this injection's findings answer the question, so that no model need restate them —
 	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
-	 * Decision 108. Asked once per injection, off the resolutions this pass already holds. The one
-	 * other way a question keeps the model call is {@link #composeFromFindings} declining a finding
-	 * that states no strength clause, which no reachable type does.
+	 * Decision 108. Asked once per injection, off the resolutions this pass already holds.
 	 *
-	 * <p><b>Three shapes, and anything else keeps the model call.</b>
+	 * <p><b>The module answers only with what a finding POSITIVELY states, and never with a clearance
+	 * or a negative.</b> A finding that withholds a proposed drug makes "No" true whatever else the
+	 * module did or could not do; "can be given", or "no interactions were found", is true only if
+	 * every arm ran over a chart that was read in full and could resolve every record in it, which
+	 * nothing here can establish — an unread allergy list, an allergen recorded as a class or a brand
+	 * the data does not carry, a switched-off arm each made such an answer false, and each was found
+	 * one after another. So those questions keep the model call, and the shapes answered are two:
 	 * <ul>
-	 * <li>A screen of her own medications that related nothing — {@code screenRelatedNothing}, the
-	 *     note's own gate (ADR Decision 87), read and not re-derived — on an install whose interaction
-	 *     arms run ({@link DrugSafetyValidator#reportsInteractions()}). That gate reads no toggle, so
-	 *     without the second conjunct a screen switched off would be answered "no interactions were
-	 *     found". Its answer is the note.</li>
-	 * <li>A screen of her own medications that related at least one pair of them — an INTERACTION
-	 *     finding, not only the order-driven arm's allergy or condition finding a medication question
-	 *     also raises, which would leave the answer saying nothing of what the screen found.</li>
-	 * <li>A question PROPOSING one drug, on an install where both the interaction and the
-	 *     contraindication arms run — a caution stated as "can be given" would otherwise stand beside
-	 *     a contraindication nobody checked: exactly one substance, a substance she is not already taking,
-	 *     a question {@code QueryScopeRouter.asksWhetherToGiveADrug} admits once the drug's own names
-	 *     are taken out of it, and a finding about that drug. A finding about it is one that is not
-	 *     {@link SafetyWarning#isAboutACurrentMedication()} — only the drug-in-play arm raises those
-	 *     before there is an answer, and with one substance in play it is about that one. Not already
-	 *     taking it, because the drug-in-play arm states a PROPOSAL clause for a drug she does take
-	 *     (issue #402), and composing would make that defect certain rather than possible — asked of
-	 *     {@code herSubstances}, the substances this pass resolved her orders to, and not of a second
-	 *     resolution.</li>
+	 * <li>A question PROPOSING one drug she is not already taking, admitted by
+	 *     {@code QueryScopeRouter.asksWhetherToGiveADrug} once the drug's own names are taken out of
+	 *     it, where a finding about that drug WITHHOLDS it ({@link #STRENGTH_WITHHOLD} — only the
+	 *     drug-in-play arm raises a proposal finding before there is an answer, and with one substance
+	 *     in play it is about that one). Not already taking it, because the drug-in-play arm states a
+	 *     proposal clause for a drug she does take (issue #402), and composing would make that defect
+	 *     certain — asked of {@code herSubstances}, the substances this pass resolved her orders to.</li>
+	 * <li>A request to screen her own medications against each other, admitted by
+	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
+	 *     where the screen related at least one pair: an INTERACTION finding, since a medication
+	 *     question also raises the order-driven arm's allergy finding and an answer of that alone says
+	 *     nothing of what the screen found.</li>
 	 * </ul>
 	 *
-	 * <p>Both screen shapes need interaction arms that run ({@link DrugSafetyValidator#reportsInteractions()}),
-	 * a question naming no drug the dataset resolved, and
-	 * {@code QueryScopeRouter.asksOnlyToScreenHerMedications}: a closed vocabulary too, because the
-	 * screening arm keeps running for a question naming something the dataset does not carry — a drug
-	 * it does not know, a drug CLASS (whose note asks for a drug by name), a food — and would answer it
-	 * with her own findings. No class term is in that vocabulary, so no class question passes it.
-	 *
-	 * <p>What is left out keeps today's path: a named drug that raised nothing, two named drugs, and
-	 * every question neither predicate recognises. Both predicates are FAIL-CLOSED, so a phrasing they
-	 * miss costs the model call it always cost, and only an admission can be wrong.
+	 * <p>Both need {@code chartRead}, the chart-read verdict this pass stamped: with the orders unread
+	 * "not already taking" cannot be asked, and a screen has only part of her list to relate.
 	 */
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
-			Set<Object> herSubstances, List<SafetyWarning> findings, boolean screenRelatedNothing) {
+			Set<Object> herSubstances, List<SafetyWarning> findings, boolean chartRead) {
+		if (!chartRead) {
+			return false;
+		}
 		if (questionDrugs.isEmpty()) {
-			if (!QueryScopeRouter.asksOnlyToScreenHerMedications(question)
-					|| !DrugSafetyValidator.reportsInteractions()) {
+			if (!QueryScopeRouter.asksOnlyToScreenHerMedications(question)) {
 				return false;
-			}
-			if (screenRelatedNothing) {
-				return true;
 			}
 			for (SafetyWarning finding : findings) {
 				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
@@ -2374,35 +2348,42 @@ public class DrugReferenceInjector {
 			}
 			return false;
 		}
-		// Every arm that could have spoken against the drug must have run, or a caution the arms that
-		// did run raised would be stated as "can be given" beside a contraindication nobody checked.
-		if (!DrugSafetyValidator.reportsInteractions() || !DrugSafetyValidator.reportsContraindications()) {
-			return false;
-		}
 		Set<Object> asked = new LinkedHashSet<Object>();
-		Set<String> namesOfIt = new HashSet<String>();
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
-			for (String alias : entry.getAliases()) {
-				if (alias != null) {
-					namesOfIt.addAll(QueryScopeRouter.words(DrugReference.foldedLower(alias)));
-				}
-			}
 		}
-		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)) {
-			return false;
-		}
-		List<String> rest = QueryScopeRouter.words(DrugReference.foldedLower(question));
-		rest.removeAll(namesOfIt);
-		if (!QueryScopeRouter.asksWhetherToGiveADrug(rest)) {
+		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
+				|| !QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs))) {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
-			if (!finding.isAboutACurrentMedication()) {
+			// The proposal clause and never its current-medication counterpart, which strengthClause
+			// gives a finding about a drug she takes: so this is a finding about the drug proposed.
+			if (STRENGTH_WITHHOLD.equals(strengthClause(finding))) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * The question's words once every place it NAMES one of {@code entries} is taken out — the spans
+	 * {@link DrugReference#namedOccurrences} reports, the one accessor for WHERE a prose match sits, so
+	 * the words removed are exactly the name the question wrote and never another alias's words
+	 * ("Aleve Arthritis Pain" is one of diclofenac's names, and removing its words from any diclofenac
+	 * question once admitted "… for her arthritis pain").
+	 */
+	private static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
+		String folded = DrugReference.foldedLower(question);
+		char[] text = folded.toCharArray();
+		for (DrugReference entry : entries) {
+			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+				for (int k = occurrence.getStart(); k < occurrence.getEnd(); k++) {
+					text[k] = ' ';
+				}
+			}
+		}
+		return QueryScopeRouter.words(new String(text));
 	}
 
 	/**
@@ -2443,11 +2424,8 @@ public class DrugReferenceInjector {
 			lines.add(findingBody(findings.get(i), orderRecordNumbers, true) + " [" + numbers.get(i) + "]");
 		}
 		SafetyWarning first = findings.get(order.get(0));
-		String firstClause = clauses[order.get(0)];
-		if (STRENGTH_WITHHOLD.equals(firstClause)) {
+		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
 			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
-		} else if (STRENGTH_CAUTION.equals(firstClause)) {
-			lines.set(0, first.getDrug() + CAUTION_LEAD + lines.get(0));
 		}
 		return String.join("\n", lines);
 	}
@@ -2686,16 +2664,7 @@ public class DrugReferenceInjector {
 	 * @return the rendered note
 	 */
 	private static String renderInteractionScreenNote(int screened) {
-		return FINDING_PREFIX + "interaction screen. " + interactionScreenNoteBody(screened);
-	}
-
-	/**
-	 * The screen note's words after its record head — what {@link #renderInteractionScreenNote} puts
-	 * in the prompt and, since issue #469, what a module-composed answer states verbatim for a screen
-	 * that related nothing, qualifier included. One method so the two cannot drift.
-	 */
-	private static String interactionScreenNoteBody(int screened) {
-		return SCREEN_NOTE_FINDING_LEAD + screened
+		return FINDING_PREFIX + "interaction screen. " + SCREEN_NOTE_FINDING_LEAD + screened
 				+ " of them were checked against each other and the "
 				+ "reference data relates none of them at or above the configured severity level. This "
 				+ "check compares individual substances: relationships resting only on two drugs "

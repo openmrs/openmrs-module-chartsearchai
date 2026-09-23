@@ -259,15 +259,16 @@ public final class QueryScopeRouter {
 
 	/**
 	 * Every word a request to screen her OWN medications against each other may carry — issue #469.
-	 * Closed, for the reason {@link #PROPOSAL_VOCABULARY} is.
+	 * Closed, for the reason {@link #PROPOSAL_VOCABULARY} is. No word that makes some OTHER drug the
+	 * subject ("drugs", "which", "anything", "that") is in it: "Which drugs interact with her
+	 * medications?" asks about drugs she is not on, which a screen of her own does not answer.
 	 */
 	private static final Set<String> SCREEN_VOCABULARY = vocabulary("are", "is", "do", "does", "there",
 			"any", "of", "her", "his", "their", "the", "this", "patient", "patient's", "she", "he", "they",
-			"current", "currently", "active", "medications", "medication", "meds", "medicines", "drugs",
-			"drug", "prescriptions", "interact", "interacts", "interacting", "interaction",
-			"interactions", "with", "each", "other", "one", "another", "between", "among", "together",
-			"taking", "on", "in", "have", "has", "i", "should", "know", "about", "all", "a", "an",
-			"check", "for", "anything", "that", "which");
+			"current", "currently", "active", "medications", "medication", "meds", "medicines",
+			"prescriptions", "drug", "interact", "interacting", "interaction", "interactions", "with",
+			"each", "other", "one", "another", "between", "among", "together", "taking", "on", "in",
+			"have", "has", "i", "should", "know", "about", "all", "a", "an", "check", "for");
 
 	/**
 	 * Whether a question proposes giving ONE drug and asks nothing else — "Can I give her ibuprofen?",
@@ -302,20 +303,19 @@ public final class QueryScopeRouter {
 	}
 
 	/**
-	 * Whether a question asks to screen the patient's OWN medications against each other and nothing
-	 * else — "Are any of her current medications interacting with each other?", "Do any of her meds
-	 * interact?" — issue #469. {@link #isInteractionScreening} AND every word in a closed vocabulary,
-	 * for the reason {@link #asksWhetherToGiveADrug} gives. The vocabulary carries none of
-	 * {@link #MEDICATION_SAFETY_CUES}' words, deliberately: the screening trigger also fires on a
-	 * safety or change word (ADR Decision 89), and "Is there a change in her medications?" asks for her
-	 * order history, which an answer of interaction findings does not give — so what admits a screen
-	 * here is the {@code interact*} family alone. The second conjunct is what keeps a screen
-	 * that names something the dataset does not carry — a drug it does not know, a class, a food —
-	 * from being answered with findings about her own medications, which the screening arm still
-	 * raises for such a question.
+	 * Whether a question naming no drug asks to screen the patient's OWN medications against each other
+	 * and nothing else — "Are any of her current medications interacting with each other?", "Do any of
+	 * her meds interact?" — issue #469: every word in a closed vocabulary, for the reason
+	 * {@link #asksWhetherToGiveADrug} gives. It does not ask {@link #isInteractionScreening} as well,
+	 * and the reason is its one caller: {@code DrugReferenceInjector} admits a screen only where an
+	 * interaction finding was raised for a question naming no drug, and only the screening arm, gated on
+	 * that very predicate, raises one. The vocabulary carries none of {@link #MEDICATION_SAFETY_CUES}'
+	 * words, deliberately: the screening trigger also fires on a safety or change word (ADR Decision
+	 * 89), and "Is there a change in her medications?" asks for her order history, which an answer of
+	 * interaction findings does not give.
 	 */
 	public static boolean asksOnlyToScreenHerMedications(String question) {
-		return isInteractionScreening(question) && allIn(words(question), SCREEN_VOCABULARY);
+		return allIn(words(question), SCREEN_VOCABULARY);
 	}
 
 	/**

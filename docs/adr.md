@@ -9520,71 +9520,68 @@ and one rig), **no answer used a chart fact the module does not encode**, while 
 findings (`findingCitations` 1 of 3, 6 of 20, 0 of 2), a caution, a rating, the source's own hedge
 (*"data from pharmacokinetic studies are inconsistent and conflicting"*), the sentence naming renal
 impairment for a patient recorded with oliguria, and led *"No —"* on a question whose answer is yes —
-several of them with every answer-judging key reading clean. The issue gives the reason nothing else
-could be expected: the system prompt forbids adding information not in the records, so on a question
-the module resolved, the call can only restate the module's records or emit the no-address sentence.
+several of them with every answer-judging key reading clean. The system prompt forbids adding
+information not in the records, so on a question the module resolved, the call can only restate the
+module's records or emit the no-address sentence.
 
 ### The decision
 
-**Where the module resolved the question itself, the answer is composed from its findings and no model
-is asked** — not for the answer, a repair, a preview or grounding. `DrugReferenceInjector` decides it
-once per injection, off the resolutions that pass already holds, and stamps the answer on the chart it
-builds (`PatientChart.getModuleAnswer()`), composing nothing while the property is off;
-`LlmInferenceService` serves that stamp on both answer paths through one method.
+**Where a finding positively answers the question, the answer is composed from the findings and no
+model is asked** — not for the answer, a repair, a preview or grounding. `DrugReferenceInjector`
+decides it once per injection (`answersFromFindings`), off the resolutions that pass already holds, and
+stamps the answer on the chart it builds (`PatientChart.getModuleAnswer()`), composing nothing while the
+property is off; `LlmInferenceService` serves that stamp on both answer paths through one method.
 
-**Three shapes, and every other question keeps the model call** (`answersFromFindings`):
+**The module states only what a finding positively says, and never a clearance or a negative.** A
+finding that withholds a proposed drug makes "No" true whatever else the module did or could not do.
+"Can be given", or "no interactions were found", is true only where every arm ran over a chart read in
+full whose every record the data could resolve, and nothing in this module can establish that. The
+first form of this change composed both, and fresh reviewers found each one false in turn: an allergy
+list the module could not read, an allergen recorded as a class (*"Proton pump inhibitors"*) or a brand
+the data does not carry, a switched-off arm, a screen naming a food. Those questions keep the model
+call. Two shapes are answered:
 
-- an interaction screen of her own medications that related nothing, answered with the screen note's
-  own words (ADR Decision 87), qualifier included — only where the interaction arms run at all
-  (`DrugSafetyValidator.reportsInteractions`). The note's own gate reads no toggle, so with
-  `validateAnswers` or `warnOnInteractions` off the prompt still carries a note saying no interactions
-  were found of a screen that never ran. That is the note's gate and not this change's, and it is left
-  standing; what this change refuses is making that sentence the whole answer;
-- an interaction screen of her own medications that related at least one pair of them — an
-  INTERACTION finding, since a medication question also raises the order-driven arm's allergy finding
-  and an answer of that alone would say nothing of what the screen found;
-- a question proposing ONE substance she is not already taking, raising a finding about it, that
-  `QueryScopeRouter.asksWhetherToGiveADrug` admits once the drug's own names are taken out of it — on
-  an install where both the interaction and the contraindication arms run
-  (`DrugSafetyValidator.reportsInteractions`, `reportsContraindications`), or a Minor caution would be
-  stated as "can be given" beside an allergy to the drug nobody checked for.
+- **A question proposing ONE substance she is not already taking, where a finding about it withholds
+  it** (`STRENGTH_WITHHOLD`), admitted by `QueryScopeRouter.asksWhetherToGiveADrug` once the drug's own
+  names are taken out of the question — the spans `DrugReference.namedOccurrences` reports, so only the
+  name the question wrote goes and never another of the entry's names (removing every word of every
+  alias once admitted *"Can I give her diclofenac for her arthritis pain?"*, `Aleve Arthritis Pain`
+  being one of diclofenac's names). "Not already taking" is issue #402: the drug-in-play arm states a
+  proposal clause for a drug she takes, and composing would make that defect certain.
+- **A request to screen her own medications against each other that related at least one pair** — an
+  INTERACTION finding, naming no drug the dataset resolved, admitted by
+  `QueryScopeRouter.asksOnlyToScreenHerMedications`. An interaction finding and not any finding,
+  because a medication question also raises the order-driven arm's allergy finding, and an answer of
+  that alone says nothing of what the screen found.
 
-Both screen shapes also need the interaction arms to run, a question naming no drug the dataset
-resolved, and
-`QueryScopeRouter.asksOnlyToScreenHerMedications` — `isInteractionScreening` and every word in a closed
-list. The screening arm keeps running for a screen that names something the dataset does not carry —
-a drug it does not know, a drug class, a food — and raises her own findings for it, so without the
-list *"Does zorblatine interact with any of her medications?"* was answered with her aspirin–warfarin
-finding. The list also keeps out a question about her medication LIST or her allergies, which widens
-the order-driven arm too, a compound screen-and-list question, and — by carrying none of the screening
-trigger's safety or change words — *"Is there a change in her medications?"*, which the trigger reads
-as a screen (ADR Decision 89) and which asks for her order history.
+Both need the chart-read verdict the injector stamped (`chartReadForSafety`): with the orders unread
+"not already taking" cannot be asked, and a screen has only part of her list to relate.
 
-**Both predicates are closed vocabularies, and fail-CLOSED.** A question carrying any word outside
-its list keeps the model call. The first form of the proposal predicate was a list of REFUSING words (a
-concern, a negation, a dose), and a review drove four questions through it that it should have refused
-— wh-questions (*"How should I give her ibuprofen?"*), a condition (*"… safe for her kidneys?"*) — and a list
-of refusals is open-ended where a list of admissions fails closed. ADR Decision
-89 had to widen a positive list, and the difference is the direction of a miss: there a missed phrasing
-hid a hazard; here it keeps the call the question always had, so only an admission can be wrong.
+**Both question predicates are closed vocabularies, and fail-CLOSED.** A question carrying any word
+outside its list keeps the model call, so a dose, a wh-question, a negation, a purpose or condition in
+words outside the list (*"… for her knee pain"*, *"… safe for her kidneys?"*), a second drug, a class, a
+food or an unknown drug is left to the model — and so is *"Is there a change in her medications?"*,
+which the screening trigger reads as a screen (ADR Decision 89) and which asks for her order history:
+the screen vocabulary carries none of that trigger's safety or change words, nor a word making some
+other drug the subject (*"Which drugs interact with her medications?"*). The first form of the proposal
+predicate was a list of REFUSING words, and a review drove questions through it that it should have
+refused; a list of refusals is open-ended where a list of admissions fails closed. ADR Decision 89 had
+to widen a positive list, and the difference is the direction of a miss: there a missed phrasing hid a
+hazard; here it keeps the call the question always had.
 [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
 declined a gate on "the question proposes giving a drug" as a second hand-picked vocabulary with nothing
 measured behind it, and that description fits these too; what differs is what the gate protects. There,
-gating would have withheld a harmless note from some questions; here, NOT gating would replace the
+gating would have withheld a harmless note from some questions; here, not gating would replace the
 model's answer to a dosing, current-use or wh-question with a refusal. The lists are unmeasured, and
 their misses are the first thing the gate below should read — beginning with the issue's own headline
 question, *"Can I give her ibuprofen for her knee pain?"*, which a purpose clause keeps with the model.
-"Not already taking" is issue #402: the drug-in-play arm states a proposal clause for a drug she takes,
-and composing would make that defect certain.
 
-**The composed text.** The findings about the proposed drug first, then any about her own
-medications that a widened question also raised — so a stronger finding about her aspirin cannot take
-the first sentence of an answer about omeprazole — each group strongest first by the ranking the prompt
-gives the model (withhold, change a current medication, caution, caution about a current medication),
-read off `strengthClause`. A proposal that withholds leads *"No — X should not be given: this module's drug-safety check found a
-reason to withhold it."*; a proposal caution leads *"X can be given, with a caution to note: "* with the
-caution in the same sentence. A finding about her own medications gets no lead: a lead naming the one to
-change would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
+**The composed text.** The findings about the proposed drug first, then any about her own medications a
+widened question also raised, each group strongest first by the ranking the prompt gives the model
+(withhold, change a current medication, caution, caution about a current medication), read off
+`strengthClause`. A proposal leads *"No — X should not be given: this module's drug-safety check found a
+reason to withhold it."*; a screen gets no lead, since a lead naming which of her medications to change
+would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
 is the finding record's text between its head and its strength clause (one method, `findingBody`, for
 both), cited by its own number. The strength clause stays out: it is prompt-facing only, and the issue
 counts its paste into an answer as a loss (R7, M4).
@@ -9603,39 +9600,37 @@ row already writes as null.
 
 Decision 85 refused deterministic text in the answer — *"this module never writes clinical prose into an
 answer"* — and Decision 90 repeated that refusal. Decision 100 already appends a module sentence. This
-goes further, and within a bound: the module writes the WHOLE answer, only where it resolved the question
-itself, and in its records' own words behind at most one fixed lead sentence. Decision 85's second reason — that two
-checks would report on prose no model wrote — is met by not running them. The duplication with
-`findingsRenderedByClient`'s "Safety checks" block (Decision 90) is real: a client rendering both shows
-the same findings twice, and README says to render one; what it removes is the chance of the two
-disagreeing.
+goes further, and within a bound: the module writes the WHOLE answer, only where a finding positively
+answers the question, in its records' own words behind at most one fixed lead sentence. Decision 85's
+second reason — that two checks would report on prose no model wrote — is met by not running them. The
+duplication with `findingsRenderedByClient`'s "Safety checks" block (Decision 90) is real: a client
+rendering both shows the same findings twice, and README says to render one; what it removes is the
+chance of the two disagreeing.
 
 ### Residues, stated
 
-- A question naming a drug that raised nothing keeps the call, alone or beside a drug that did; the
-  issue leaves its wording open, and *"The records do not address X"* is false of a question the drug's
-  own reference record does address, such as its dose.
+- A proposal no finding withholds keeps the call — caution-only, and nothing raised — and so does a
+  screen that related nothing. The issue's widening to those cases asked for a wording that must not
+  read as a clearance; this change found none that the module can support, and left them to the model.
 - A question about a drug she already takes (R3, D6) keeps the call, and with it #402.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.
+- A phrasing either vocabulary does not carry keeps the call, the headline question of the issue
+  included; a purpose spelled in the proposal vocabulary's own words (*"… for her allergies"*) is
+  admitted.
 - With `chartsearchai.drugSafety.citeOrderRecords` off, as it ships, an interaction line cites no order
   record, where the model supplied one in 10 of the first check's 16 cells. A contraindication line's
   allergy or condition record still arrives, as `attachedByTheModule: true`.
 - The composed lines are the REPORTED findings. On a capped screen, whether the list is complete is
   `interactionPairs`' to say, and the answer does not.
-- A phrasing either vocabulary does not carry keeps the call, the headline question of the issue
-  included.
 - The citations of a composed answer's own markers read `attachedByTheModule: false`, that flag
   marking a citation added beside the answer's markers; the answer's provenance is
   `answeredByTheModule`, and a scorer such as `eval/drift-metric/metric_score.py`'s `model_cited` must
   read it before crediting those citations to the model.
-- A purpose clause spelled in the proposal vocabulary's own words (*"… for her allergies"*) is admitted.
-- A proposal is answered where no condition rule could fire (`conditionRuleCoverage` absent, as on a
-  DDInter-only install); the condition half of the contraindication screen then had nothing to ask.
+- The audit row records no model ran only as empty token counts, which an engine reporting no usage
+  also writes; no column states it.
 - `ChartSearchServiceRouter`'s answer cache does not key on this property (nor on the other
   `drugSafety` toggles), so with a cache TTL set, flipping it serves the other setting's answer until
   the entry expires — which a both-arms gate must avoid by leaving the TTL at its default of 0.
-- The audit row records no model ran only as empty token counts, which an engine reporting no usage
-  also writes; no column states it.
 
 ### What gates turning it on
 
@@ -9643,8 +9638,8 @@ The gate the issue names, not run in this change: the probe-safety corpus
 (`eval/drift-metric/score_probe_safety.py`, including its abstention controls) and the thirty-nine cells
 of the issue's three comments, both arms on one build, with only this property between them. What the
 arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
-yes, and which questions the predicate refuses that the issue's cells expected answered.
+yes, and which questions the vocabularies refuse that the issue's cells expected answered.
 
-→ `LlmInferenceServiceAnswerFromFindingsContextTest` (the real injector and validator on patient 7,
-both paths, each conjunct of `answersFromFindings` and of the two vocabulary predicates reddening a case
-of its own), `ChartSearchAiAnsweredByTheModuleTest`.
+→ `LlmInferenceServiceAnswerFromFindingsContextTest` — the real injector and validator on patient 7,
+both paths; mutate a conjunct of `answersFromFindings` or of the two vocabulary predicates and read the
+failures — and `ChartSearchAiAnsweredByTheModuleTest`.

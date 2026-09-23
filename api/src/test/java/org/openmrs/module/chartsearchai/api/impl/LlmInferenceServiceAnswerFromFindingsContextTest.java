@@ -172,6 +172,19 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertNotNull(answer.getPairChipExtent(), "and so is the pair extent");
 	}
 
+	/** A question asking only whether the drug is SAFE or APPROPRIATE, with no proposal verb, is a
+	 *  proposal too. */
+	@Test
+	public void aSuitabilityQuestionIsAnsweredFromTheFindingsToo() {
+		answerFromFindings(true);
+		for (String question : new String[] { "Is ibuprofen safe for her?", "Is ibuprofen appropriate for her?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question);
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		}
+	}
+
 	@Test
 	public void searchStreaming_takesTheSamePathAndHandsTheComposedAnswerToEverySurface() {
 		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
@@ -194,21 +207,19 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(answer.getAnswer(), early.get(0).getAnswer());
 	}
 
+	/**
+	 * A proposed drug whose findings do not WITHHOLD it is answered by the model: the module's answer
+	 * would have to be "can be given", a clearance nothing here can establish — an allergy list it
+	 * could not read, an allergen recorded as a class or a brand the data does not carry, a switched-off
+	 * arm each made that sentence false in review. Omeprazole's one finding is a Minor caution against
+	 * her aspirin; with her aspirin allergy recorded the allergy question adds a stronger finding about
+	 * her own aspirin, and the drug asked about is still only cautioned.
+	 */
 	@Test
-	public void aCautionOnlyFindingLeadsWithTheGradedLeadNamingTheCautionInTheSameSentence() {
-		String question = "Can I give her omeprazole?";
-		List<Finding> findings = findingsInThePromptFor(question);
-		assertFalse(findings.isEmpty(), "precondition: omeprazole x her aspirin order raises a Minor finding");
-
-		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, question);
-
-		assertEquals(0, provider.calls);
-		assertTrue(answer.getAnswer().startsWith(findings.get(0).drug + " can be given, with a caution to note: "
-				+ answerFacingBody(findings.get(0)) + " [" + findings.get(0).index + "]"),
-				"a caution is never read as a reason to withhold, and it is named in the lead: "
-						+ answer.getAnswer());
-		assertCarriesEveryFinding(answer, findings);
+	public void aProposalNoFindingWithholdsStillAsksTheModel() {
+		assertTheModelIsAsked("Can I give her omeprazole?");
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		assertTheModelIsAsked("Can I give her omeprazole, given her allergies?");
 	}
 
 	/**
@@ -253,38 +264,6 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertCarriesEveryFinding(answer, findings);
 	}
 
-	/**
-	 * The proposed drug is answered for even where a finding about her own medications is stronger:
-	 * omeprazole's only finding is a Minor caution against her aspirin, and the allergy question raises
-	 * a reason to change that aspirin. Led by the stronger, the answer would open on her aspirin and say
-	 * nothing of whether omeprazole can be given.
-	 */
-	@Test
-	public void theProposedDrugIsAnsweredForBeforeAStrongerFindingAboutHerOwnMedication() {
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
-		String question = "Can I give her omeprazole, given her allergies?";
-		List<Finding> findings = findingsInThePromptFor(question);
-		Finding caution = null;
-		boolean change = false;
-		for (Finding finding : findings) {
-			if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION)) {
-				caution = finding;
-			}
-			change |= finding.text.endsWith(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION);
-		}
-		assertTrue(caution != null && change, "precondition: a proposal caution beside a stronger finding "
-				+ "about her own medication, findings were: " + findings);
-
-		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, question);
-
-		assertEquals(0, provider.calls);
-		assertTrue(answer.getAnswer().startsWith("Omeprazole" + DrugReferenceInjector.CAUTION_LEAD
-				+ answerFacingBody(caution) + " [" + caution.index + "]"),
-				"the drug asked about leads, with its caution in the same sentence: " + answer.getAnswer());
-		assertCarriesEveryFinding(answer, findings);
-	}
-
 	@Test
 	public void withThePropertyOffTheModelIsAskedAsBefore() {
 		answerFromFindings(false);
@@ -318,6 +297,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			"Can I give her ibuprofen and omeprazole?",
 			// no proposal at all, in words a proposal is made of
 			"Is she on ibuprofen?",
+			"Give her ibuprofen?",
 			// a proposal cue beside a concern or a negation: "No" would answer it backwards
 			"Can I give her ibuprofen, or is it risky?",
 			"Can I give her ibuprofen or not?",
@@ -348,7 +328,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		String question = "What medications is she taking?";
 		assertFalse(findingsInThePromptFor(question).isEmpty(),
 				"precondition: the allergy to her own prescription raises a finding on a list question, "
-						+ "so it is the screening conjunct and not an empty finding list that keeps the call");
+						+ "so it is the gate and not an empty finding list that keeps the call");
 
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, question);
@@ -374,6 +354,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(1, provider.calls, "metformin raised nothing, so the module has no answer for it");
 		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/**
+	 * A second drug the question names is not taken out with the first one's names: omeprazole's
+	 * reference entry is also filed under a combination name carrying amoxicillin, and removing every
+	 * word of every one of its names once admitted this as a question about omeprazole alone.
+	 */
+	@Test
+	public void aSecondDrugInsideTheFirstsCombinationNameStillAsksTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		assertTheModelIsAsked("Can I give her omeprazole with amoxicillin?");
 	}
 
 	/** Issue #402's shape: a question naming a drug she already takes. The drug-in-play arm states a
@@ -422,7 +413,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(), "precondition: her own orders interact");
 		for (String question : new String[] { "Does zorblatine interact with any of her medications?",
 				"Is grapefruit juice safe with her medications?",
-				"Do NSAIDs interact with any of her medications?" }) {
+				"Do NSAIDs interact with any of her medications?",
+				"Which drugs interact with her medications?",
+				"Is there anything that interacts with her medications?" }) {
 			assertFalse(findingsInThePromptFor(question).isEmpty(),
 					"precondition: the screening arm raises her findings for " + question);
 			RecordingProvider provider = new RecordingProvider();
@@ -432,53 +425,38 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/** A screen that related nothing is answered by the model: the module's answer would be the screen
+	 *  note's negative, which is true only of a screen that ran over a fully read, fully resolved list. */
 	@Test
-	public void aScreenThatRelatedNothingIsAnsweredWithTheScreenNote() throws Exception {
+	public void aScreenThatRelatedNothingStillAsksTheModel() throws Exception {
 		executeDataSet(METFORMIN_ORDER);
 		answerFromFindings(false);
 		RecordingProvider recorder = new RecordingProvider();
 		serviceWith(recorder).search(patient, SCREEN);
-		Matcher note = Pattern.compile("\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX)
-				+ "interaction screen\\. ([^\\n]*)").matcher(recorder.lastRecords);
-		assertTrue(note.find(), "precondition: the screen note is injected, chart was: " + recorder.lastRecords);
+		assertTrue(recorder.lastRecords.contains(DrugReferenceInjector.FINDING_PREFIX + "interaction screen."),
+				"precondition: the screen note is injected, chart was: " + recorder.lastRecords);
 
 		answerFromFindings(true);
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
-		assertEquals(0, provider.calls);
-		assertEquals(note.group(2) + " [" + note.group(1) + "]", answer.getAnswer(),
-				"the note verbatim, qualifier included, cited by its own number");
-		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals(1, provider.calls);
+		assertFalse(answer.isAnsweredByTheModule());
 	}
 
-	/**
-	 * The screen note is injected whether or not the screen could run — its gate reads no toggle — so
-	 * with the interaction arm switched off it says no interactions were found of a screen that never
-	 * happened. That is the note's own gate and outside this change; what this change must not do is
-	 * make that sentence the module's whole answer. Each toggle the screening arm needs is turned off
-	 * in turn, and the precondition checks the note really is in the prompt.
-	 */
+	/** A proposal the module would otherwise answer, over a chart whose allergy list it could not read,
+	 *  is answered by the model: the chart-read verdict is a term of the gate. */
 	@Test
-	public void aScreenNoteIsNotTheAnswerWhereTheScreenCouldNotHaveRun() throws Exception {
-		executeDataSet(METFORMIN_ORDER);
-		for (String toggle : new String[] { ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
-				ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS }) {
-			Context.getAdministrationService().setGlobalProperty(toggle, "false");
-			answerFromFindings(false);
-			RecordingProvider recorder = new RecordingProvider();
-			serviceWith(recorder).search(patient, SCREEN);
-			assertTrue(recorder.lastRecords.contains(DrugReferenceInjector.FINDING_PREFIX + "interaction screen."),
-					"precondition, with " + toggle + " off: the note is still injected");
+	public void aProposalOverAChartThatWasNotReadStillAsksTheModel() {
+		assertFalse(findingsInThePromptFor(PROPOSAL).isEmpty(), "precondition: ibuprofen is withheld");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = DrugReferenceTestSupport.refusingPrivilege(
+				org.openmrs.util.PrivilegeConstants.GET_ALLERGIES,
+				() -> serviceWith(provider).search(patient, PROPOSAL));
 
-			answerFromFindings(true);
-			RecordingProvider provider = new RecordingProvider();
-			ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
-
-			assertEquals(1, provider.calls, "with " + toggle + " off no screen ran, so the model is asked");
-			assertFalse(answer.isAnsweredByTheModule());
-			Context.getAdministrationService().setGlobalProperty(toggle, "true");
-		}
+		assertEquals(Boolean.FALSE, answer.getChartReadForSafety(), "precondition: the allergies were not read");
+		assertEquals(1, provider.calls, "the module cannot say what it did not read");
+		assertFalse(answer.isAnsweredByTheModule());
 	}
 
 	/** With the property on, the model must still be asked, where the module did raise something for
@@ -507,17 +485,6 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelIsAsked(SCREEN);
 	}
 
-	@Test
-	public void aScreenWithTheInteractionArmsSwitchedOffStillAsksTheModel() throws Exception {
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
-		executeDataSet(WARFARIN_ORDER);
-		Context.getAdministrationService()
-				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS, "false");
-		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(),
-				"precondition: the allergy finding is still raised with the interaction arms off");
-		assertTheModelIsAsked(SCREEN);
-	}
-
 	/** A question about her medications that carries a safety or change word but asks for no screen
 	 *  of them against each other. */
 	@Test
@@ -526,23 +493,6 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		for (String question : new String[] { "Is there a change in her medications?",
 				"Should I stop all her medications?", "Does she have any safe medications?" }) {
 			assertTheModelIsAsked(question);
-		}
-	}
-
-	/**
-	 * A proposal is answered by the module only where every arm that could have spoken against the drug
-	 * ran. With the contraindication arms off, her recorded allergy to the drug raises nothing and the
-	 * one finding left is a Minor caution — which the module would then state as "can be given".
-	 */
-	@Test
-	public void aProposalWithAnArmSwitchedOffStillAsksTheModel() {
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Omeprazole");
-		String question = "Can I give her omeprazole?";
-		for (String toggle : new String[] { ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
-				ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS }) {
-			Context.getAdministrationService().setGlobalProperty(toggle, "false");
-			assertTheModelIsAsked(question);
-			Context.getAdministrationService().setGlobalProperty(toggle, "true");
 		}
 	}
 

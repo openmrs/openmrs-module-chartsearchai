@@ -937,11 +937,11 @@ public class SafetyWarning {
 	 * {@link #isAboutACurrentMedication()}: that method's guard refuses it, a defence the arms do not
 	 * need today, since none states both of one chip.
 	 *
-	 * <p><b>{@code false} is not a certificate that the drug is current.</b> It is also the answer
-	 * wherever the chart the module built carries no record of the ended order (a query-scoped slice
-	 * need not retrieve it), wherever the module could not say whether an order is in force (the stamp's
-	 * {@code null}, which {@code SerializedRecord.orderActive} enumerates), and for every arm but the
-	 * drug-in-play one. Published verbatim as the chip's {@code aboutAnEndedOrder} key.
+	 * <p><b>{@code false} is not a certificate that the drug is current.</b> It is also the answer for
+	 * a drug the question proposes giving, for every arm but the drug-in-play one, and wherever the
+	 * module could not rule out that she is on it — the conditions are {@code DrugSafetyValidator}'s
+	 * {@code EndedOrders} javadoc's to enumerate, not this one's. Published verbatim as the chip's
+	 * {@code aboutAnEndedOrder} key.
 	 */
 	public boolean isAboutAnEndedOrder() {
 		return aboutAnEndedOrder;

@@ -9732,8 +9732,9 @@ Decision 108 put on "not already taking"). The last two were raised in this chan
 them an order under a brand the data lacks, beside an older ended record of the same drug, was told to
 the model as ended. Both classes, interaction and contraindication,
 because the condition is one condition. The record states one of two clauses in place of the proposal
-pair, the prompt's safety paragraph teaches both in their own words, the ranking sentence places the
-withholding one, and the chip publishes `aboutAnEndedOrder`.
+pair, one sentence of the prompt's safety paragraph teaches both in their own words, and the chip
+publishes `aboutAnEndedOrder`. Where that sentence sits, and that the ranking sentence does NOT name the
+new call, were decided by the measurement below and not by argument.
 
 **The act is CONDITIONAL, and the referent is named in the prompt's existing words.** The first draft
 said "a reason not to restart it", and the plan's refutation gate cited Decision 72's own finding
@@ -9756,9 +9757,61 @@ the conditional call.
 
 ### The measurement
 
-Recorded below from the two-build A/B this change was gated on.
+**The instrument.** Builds, not prompt hunks, on the RefApp 3.7.1 standalone (`:8081`, bundled DDInter
+KB, local Gemma E4B, `chartMode=fullChart`), one restart per arm, every patient reindexed after it, each
+of thirteen cells run twice. Baseline `997099a6` (`main`); three candidates differing only in the prompt:
+A, the branch inside the safety paragraph and the ranking sentence extended to name it; B, the same with
+the ranking sentence left alone; C, the branch after the paragraph's never-"Yes" token, ranking sentence
+alone. Cells: the ticket's two reproduction questions and a proposal of the same drug on patient
+`2d384cef-da03-4a3b-beb1-632011eb8654` (R1 *"Her current medications are lamivudine, nevirapine and
+rifampicin. Any interactions?"*, R2 *"Why was her rifampicin stopped, and does it matter for her current
+medications?"*, R3 *"Can I give her rifampicin?"*) and its three clean controls;
+`docs/ddi-interaction-question-examples.md` §3a–§3d, the cells Decision 72 was licensed on; the ended-order
+cell Decision 47's gate ran (*"What are her current medications?"* on `dc8560c9-…`); and two §1 proposals.
+
+**Comparability.** In every arm, `interactionPairs` and the chip list (type, severity, drug) were
+identical to the baseline cell for cell. The global properties were snapshotted for the baseline and
+A and were identical; B and C were not snapshotted, and nothing in the run wrote one. Each arm's two runs
+were byte-identical on every cell except the baseline's §3d, whose two *"Yes"* leads name different
+interactions first. The candidate arms flagged `aboutAnEndedOrder` on
+Rifampicin in R1 and R2 and on no other cell. Candidate A's code predates the proposal gate, so it
+flagged R3 too.
+
+**The leads** (run 1; run 2 identical):
+
+- **R1.** Baseline: *"Yes, there are interactions … Rifampicin interacts with Nevirapine, which is a Major
+  interaction and is a reason to withhold it"*. A: *"No — Rifampicin should not be proposed again …"*.
+  B and C: *"Yes, there are interactions recorded for these medications."*, no refusal, C keeping the
+  Major rating in its prose. No arm says the order has ended.
+- **R2.** Baseline: *"No — Rifampicin should not be given …"*. A, B and C: the reason is not recorded,
+  *"Rifampicin's order is no longer in force, not as a current medication"*, then the Major finding; C
+  also cites the stop date.
+- **R3.** Baseline, B and C: *"No — rifampicin should not be given …"*, the proposal call.
+- **§3a / §3b**, the two current-medication cells. Baseline: §3a *"No — Methotrexate should be
+  changed …"*, §3b *"Enalapril Co 10mg is related to Salicylic acid …"*. A: §3a a statement lead, §3b
+  *"No — Enalapril should be changed …"*. B: both open with *"No — … should be changed"*. C: §3a *"Methotrexate
+  has a finding related to Salicylic acid …"*, §3b *"No — Enalapril should be changed …"*.
+- **§3c, §3d**: every arm keeps a *"Yes"* lead.
+- **The controls, §1 and the Decision 47 cell**: no lead changed. The only changes were wording and
+  formatting. The screening control lost its second sentence (which states how many medications were
+  compared) in B and C, and the medication list gained dose text in every candidate.
+
+**Result.** C ships. Every candidate removes the refusal from both reproduction cells except A's R1.
+C is the only arm leaving Decision 72's residue 1 on as many current-medication cells as the baseline.
+That residue is a bare *"No —"* on a screening question, and C has it on one cell of two, as the baseline
+does, though on §3b rather than §3a. B has it on both, and A adds a refusal on R1. So the ranking
+sentence does not name the new call. The
+plan's refutation gate asked for that naming, and it is declined on this measurement.
+
+**What this does not establish.** No null arm was run, meaning an unrelated sentence of the same length
+in the same place. So the §3a/§3b swap cannot be attributed to the branch's content rather than to any
+perturbation of the prompt. Those two cells moved in every candidate arm, in different directions, and
+neither is settled by this run.
 
 ### Residues
+
+- R1 opens *"Yes"* on a question that states the ended drug as current, and does not say its order has
+  ended. The chip states it (`aboutAnEndedOrder: true`) and the answer does not.
 
 - A chart that did not RETRIEVE the ended record states nothing, and the finding stays a proposal as
   before — the in-force question is the chart builder's, written in one place, and is not asked of

@@ -615,13 +615,6 @@ public class SafetyVerdictSeverityGradationTest {
 		// absent altogether is -1 and reddens here too, so this line carries its own existence
 		// check.
 		int cautionAt = sentence.indexOf("a caution");
-		// Issue #472's withholding call about an ended order is placed too, after the call about a
-		// current medication and ahead of the caution — named by the head of its clause, which is the
-		// part of it that states the call.
-		int endedAt = sentence.indexOf("a reason against giving it should it be proposed again");
-		assertTrue(endedAt > changeAt && endedAt < cautionAt,
-				"the ended-order withholding call must be ranked after the current-medication call and "
-						+ "ahead of the caution: " + sentence);
 		assertTrue(cautionAt > changeAt,
 				"and the caution must be named LAST — omitted or promoted, the ranking states an "
 						+ "order the two branches above contradict: " + sentence);
@@ -790,8 +783,8 @@ public class SafetyVerdictSeverityGradationTest {
 
 	/**
 	 * The ended-order branch is EXACTLY these words (issue #472) — the seal over the properties above,
-	 * for the reason {@link #theTwoCurrentMedicationBranchesAreExactlyTheseWords} gives of its own: a
-	 * two-build A/B on a standalone licensed them (ADR Decision 110), and a reword re-opens it.
+	 * for the reason {@link #theTwoCurrentMedicationBranchesAreExactlyTheseWords} gives of its own: the
+	 * A/B on a standalone that ADR Decision 110 records licensed them, and a reword re-opens it.
 	 */
 	@Test
 	public void theEndedOrderBranchIsExactlyTheseWords() {
@@ -815,7 +808,7 @@ public class SafetyVerdictSeverityGradationTest {
 					+ "drug."),
 			branches,
 			"this sentence is what an answer about a drug her chart records as ended opens from, and "
-					+ "ADR Decision 110's two-build A/B is what licensed these words — a reword re-opens "
-					+ "that measurement");
+					+ "ADR Decision 110's A/B is what licensed these words — a reword re-opens that "
+					+ "measurement");
 	}
 }

@@ -2517,9 +2517,10 @@ public class DrugReferenceInjector {
 	}
 
 	/** The prompt's ranking of the four clauses a finding can state, strongest first, or {@code -1}
-	 *  for a finding stating none. The ended-order pair (issue #472) answers {@code -1} on purpose: it
-	 *  is never stated for the drug a question PROPOSES, which is the only question
-	 *  {@link #answersFromFindings} admits, so an answer carrying one keeps the model call. */
+	 *  for a finding stating none. The ended-order pair (issue #472) answers {@code -1} on purpose, so
+	 *  an answer carrying one keeps the model call. Neither shape {@link #answersFromFindings} admits
+	 *  should carry one: a proposal keeps its drug a proposal, and a screen names no drug to put in
+	 *  play. */
 	private static int strengthRank(String clause) {
 		if (STRENGTH_WITHHOLD.equals(clause)) {
 			return 0;

@@ -308,26 +308,27 @@ public class LlmProvider {
 			+ "give a drug. A finding that says it is a caution about a medication this patient is "
 			+ "already taking, not a reason to change it, is not evidence against that medication: "
 			+ "open by naming it and the caution in the same sentence, and never open by refusing to "
-			+ "give a drug. "
+			+ "give a drug. Where findings state calls of both kinds, the strongest still governs: a "
+			+ "finding that is a reason to withhold it leads, then one that is a reason to change a "
+			+ "medication this patient is already taking, then a caution. "
+			+ "The finding's mechanism is the evidence for the call it states: it belongs after the "
+			+ "call, not in place of it. Never open such an answer with \"Yes\". "
 			// ISSUE #472. The third referent: a finding about a drug this patient's chart records only
 			// as an order no longer in force, whose two clauses name that referent and state the act
 			// conditionally. One branch for both, quoting each clause in the record's own words, for
 			// the reasons the #348 comment above gives of its two; the same content rules bind it —
-			// open by naming the medication, forbid the refusal lead, instruct no permission. Its
-			// words were licensed by a two-build A/B on a standalone, which ADR Decision 110 records.
+			// open by naming the medication, forbid the refusal lead, instruct no permission. AFTER the
+			// never-"Yes" token and outside the ranking sentence, both chosen by ADR Decision 110's
+			// A/B rather than by argument: of the three placements run, this is the one that left as
+			// few current-medication screening cells opening with a bare "No —" as the baseline did.
+			// It did not leave them untouched — the decision records which cell moved.
 			+ "A finding that says it is a reason against giving it should it be proposed again; this "
 			+ "patient's chart records its order as no longer in force, not as a current medication, or "
 			+ "that it is a caution to weigh should it be proposed again; this patient's chart records "
 			+ "its order as no longer in force, not as a current medication, is not about a medication "
 			+ "this patient is taking now: open by naming that medication and saying its order is no "
 			+ "longer in force, then what the finding relates it to, carry the finding's severity, and "
-			+ "never open by refusing to give a drug. "
-			+ "Where findings state calls of both kinds, the strongest still governs: a "
-			+ "finding that is a reason to withhold it leads, then one that is a reason to change a "
-			+ "medication this patient is already taking, then one that is a reason against giving it "
-			+ "should it be proposed again, then a caution. "
-			+ "The finding's mechanism is the evidence for the call it states: it belongs after the "
-			+ "call, not in place of it. Never open such an answer with \"Yes\".\n"
+			+ "never open by refusing to give a drug.\n"
 			+ "Your answer must not vary based on the punctuation or phrasing of the query "
 			+ "— focus only on its semantic meaning.\n\n"
 			+ "The following is a FORMAT DEMONSTRATION ONLY using fake non-medical data. "

@@ -9571,8 +9571,10 @@ type over. Review found both licensing a "No": paracetamol's unrated curated rul
 methylphenidate's Minor row against modafinil carrying the N06BA class sentence. So a drug withheld by a contraindication alone — her recorded allergy
 to the very drug included — keeps the model call.
 
-Both need the chart-read verdict the injector stamped (`chartReadForSafety`): with the orders unread
-"not already taking" cannot be asked, and a screen has only part of her list to relate.
+Both need the chart-read verdict the injector stamped (`chartReadForSafety`), and every active order
+resolved to an entry (`DrugSafetyValidator.everyActiveOrderResolves`): an order unread, or read and
+written under a name the data does not carry — a warfarin brand it lacks — leaves "not already
+taking" unanswerable, and a screen with only part of her list to relate.
 
 **Both question predicates are closed GRAMMARS, and fail-CLOSED.** Each is a short list of question
 shapes over the question's words, with the proposed drug's name marked where it stood
@@ -9659,6 +9661,8 @@ chance of the two disagreeing.
   marking a citation added beside the answer's markers; the answer's provenance is
   `answeredByTheModule`, and a scorer such as `eval/drift-metric/metric_score.py`'s `model_cited` must
   read it before crediting those citations to the model.
+- The response's `disclaimer` still calls the answer AI-generated where `answeredByTheModule` is
+  true; its advice to verify against the records holds either way.
 - The audit row records no model ran only as empty token counts, which an engine reporting no usage
   also writes; no column states it.
 - `ChartSearchServiceRouter`'s answer cache does not key on this property (nor on the other

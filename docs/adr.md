@@ -9814,10 +9814,18 @@ rating below `major` is a caution.** Nothing else about the split moves:
     Minor rows share a level-4 subgroup (the figure `licensesWithholding`'s javadoc records,
     reproduced) and none a curated group; **3,080 of the 378,830** Moderate rows share one or the
     other (3,054 a subgroup, 60 a group). Through the real arm instead — `DrugSafetyValidator.validate`
-    on *"Can I give this patient {subject}?"* with the partner as the only active order — the rule
+    on *"Can I give this patient {subject}?"*, over a context whose drug names are the partner's
+    display name and whose chart ATC set is that row's `normalizedAtcCodes()` — the rule
     chip at that row's rating carries the fold for **101** Minor and **3,015** Moderate rows
     (52 and 1,561 unordered display-name pairs), and `licensesWithholding` answers true for every
-    one. Why the arm's figure is the smaller one was not investigated. Calibration for that second
+    one. The count depends on that shape. Re-measured for
+    [#488](https://github.com/openmrs/openmrs-module-chartsearchai/issues/488) at `adb0f178`
+    (September 2026), through the same arm and over the prefilter and calibration described below:
+    adding one `ActiveDrugOrder` for the partner that carries those codes leaves 101 / 3,015; an order
+    carrying no ATC map, over a chart ATC set left empty, gives 101 / 3,018 (52 / 1,563 pairs); the
+    names alone fold none. The arm's rows are not a subset of the population above: all 101 Minor
+    rows are among the 108, but 10 of the 3,015 Moderate rows share neither a level-4 subgroup nor a
+    curated group, so 3,005 lie inside the 3,080. Calibration for that second
     figure: it was taken over a prefilter admitting only rows whose two drugs share an ATC level-2
     prefix or a curated group, and 3,000 rows sampled from outside it folded none. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
   - *The A/B*, on the 3.7.1 standalone: `main` @ `27e9cf40` against the same tree with the

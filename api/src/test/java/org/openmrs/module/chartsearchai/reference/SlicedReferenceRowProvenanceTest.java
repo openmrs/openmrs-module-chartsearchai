@@ -67,7 +67,8 @@ public class SlicedReferenceRowProvenanceTest {
 	 *  note for a declared deviation. */
 	private static final List<String> SLICES = java.util.Arrays.asList(
 			"chartsearchai-test/ddi-issue338-allergy-cross-reactivity.json",
-			"chartsearchai-test/ddi-brand-name-aliases.json");
+			"chartsearchai-test/ddi-brand-name-aliases.json",
+			"chartsearchai-test/ddi-class-only-and-rule-one-partner.json");
 
 	@Test
 	public void everySliceOnTheListIsFieldForFieldTheShippedDatasets() throws Exception {

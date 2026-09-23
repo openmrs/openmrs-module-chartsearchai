@@ -10080,10 +10080,27 @@ orders A and B — possible duplicate therapy"*. One order states nothing: that 
   code, which this knowledge base does not treat as identity (`Omeprazole` publishes esomeprazole's
   `A02BC05`). The co-medication walk and `resolvesFrom` accept both, and may: they only withhold. This
   answer backs a positive claim, so it is deliberately the narrower one.
-- **Its referent is a current medication.** The finding is about two of her prescriptions whatever the
-  question proposed; stated in the proposal clause it would refuse, in proposal words, a drug on her own
-  list — [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402)'s defect, made
-  certain. It is the drug-in-play arm's only finding that answers `isAboutACurrentMedication()` true.
+- **Its referent is its arm's, a proposal** (review round 1). The first version stated the
+  current-medication clause, on the ground that the finding is about two of her prescriptions. That made
+  it the one finding of the drug-in-play arm in the other column: on the reproduction the Major and the
+  Minor stated the proposal call and this finding the change call, and the prompt's ranking sentence puts
+  a reason to withhold first. The standalone verification of that version recorded the lead *"No —
+  Rifampicin should not be given: it interacts with active order Rifampicin isoniazid pyrazinamide and
+  ethamboult, a Major problem"* (the model's spelling), then this finding, given "a Major problem" it does
+  not carry. One site disagreeing with the rest is the first of the three reasons
+  [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402) gives for reverting its
+  one-site referent fix, and
+  [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)'s
+  holder re-labels every chip of a substance or none. In the proposal column the finding states what a
+  proposal needs: the drug is already given, in these orders, which is a reason to withhold a further
+  course. #402's defect is a refusal that does not say the drug is hers, and this finding's own sentence
+  says it.
+- **Re-labelling all of the drug's findings where two orders carry it was proposed and declined**
+  (review round 1). That is #402's reversal of the proposal rule, and #402 says that reversal owes
+  Decision 72's fourteen-cell A/B. Its two-order trigger also has no referent reason: one order makes the
+  drug as much a current medication as two, so on one order the arm would go on refusing in proposal
+  words. Decision 110's measurement records what the reversal can cost: its arm A re-referred a proposal
+  question (R3) and lost the proposal's refusal.
 - **Its strength is the unrated default** (withhold, so the current-medication change clause). Decision
   86 graded down shared classification alone on measured evidence; this is an identity claim, not that.
   A caution was proposed and refused at plan time: its prompt branch opens by stating the drug can be
@@ -10097,14 +10114,21 @@ orders A and B — possible duplicate therapy"*. One order states nothing: that 
 - The reproduction's rifampicin answer gains the fact that she already receives it, and in which
   orders. The rule chips stand as they were — the finding is appended after them — so the Major
   against pyrazinamide, the data's relationship with her regimen's other constituents, remains.
-- **Where this is the strongest finding the verdict lead moves** to the current-medication branch.
-  Not measured on a model before shipping; the standalone verification of this change records what it
-  observed.
-- **Not delivered, and the reason `Refs` and not `Fixes`:** a drug in play carried by ONE order (a
-  single combination) states nothing, and two of her orders sharing a substance nobody asked about (the
-  issue's Metformin question) state nothing either: this finding is raised only for the drug in
-  play, and the arm that relates her own medications with no drug in play, the screening arm, has no
-  class leg.
+- **No prompt sentence and no clause is new.** The finding states `STRENGTH_WITHHOLD`, which the
+  prompt's proposal branch already quotes. Beside a rated Major it is in the class the ranking sentence
+  puts first, not below it. Not measured on a model in this revision.
+- **It states no severity, and the prompt asks the answer to carry the finding's own.** The
+  verification above saw the model lend it a neighbouring finding's "Major". Every unrated class-only
+  chip has the same shape, and this change does not address it.
+- **Not delivered, and the reason `Refs` and not `Fixes`:** the issue's Direction asks, for a proposed
+  drug, that the answer say she already receives it and in which order(s), one order included, on the
+  #402 / #472 referent axis. That is #402's change: the drug-in-play arm states the proposal referent at
+  every site, for a drug she takes too, and #402 records what reversing it owes (every site, and
+  Decision 72's A/B). It is deferred to #402. What ships is the duplicate-therapy fact the class arm's
+  skip cannot state, which exists only where two or more orders carry the drug, so one order states
+  nothing here. Two of her orders sharing a substance nobody asked about (the issue's Metformin
+  question) state nothing either: this finding is raised only for a drug in play, and the screening arm,
+  which relates her own medications when no drug is in play, has no class leg.
 - An order whose display does not name the substance — a brand the data files under several
   substances, or an order known only by its codes — is not counted.
 

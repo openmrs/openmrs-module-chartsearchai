@@ -2887,9 +2887,7 @@ public class DrugReferenceInjector {
 	 * ONE-finding screen, which that measurement never covered, and there the clause is the only
 	 * instruction the record carries. So the sentence was not wrong; its scope was unstated.
 	 *
-	 * <p>Hence the REFERENT axis, orthogonal to the strength axis: the two order-driven arms — and the
-	 * drug-in-play arm's one finding about her own orders (issue #477,
-	 * {@code DrugSafetyValidator.alreadyInSeveralOrders}) — state
+	 * <p>Hence the REFERENT axis, orthogonal to the strength axis: the two order-driven arms state
 	 * {@link #STRENGTH_CHANGE_CURRENT_MEDICATION} or {@link #STRENGTH_CAUTION_CURRENT_MEDICATION},
 	 * which license exactly what their proposal counterparts do. Every clause here still states a
 	 * strength and none is a caution where the other pair withholds, so the strength half of this

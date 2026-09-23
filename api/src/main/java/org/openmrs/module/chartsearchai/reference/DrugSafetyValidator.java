@@ -4098,9 +4098,11 @@ public class DrugSafetyValidator {
 	 * (issue #185). Which orders count is {@link CoMedications#ordersWhoseDisplayNames}, and the
 	 * sentence names each by that same display, so the evidence and the printed name are one string.
 	 *
-	 * <p><b>Its REFERENT is a current medication</b> (issue #348) — the drug-in-play arm's one finding
-	 * that answers true, because its subject is her own orders — and its STRENGTH the unrated default.
-	 * ADR Decision 111 carries why of both.
+	 * <p><b>Its REFERENT is its arm's, a proposal</b>, like every other finding this arm raises about the
+	 * drug in play: stated beside them in the current-medication column (issue #348), one response would
+	 * refuse the drug as a proposal and call it a medication to change, the one-site shape issue #402
+	 * recorded and reverted. Its STRENGTH is the unrated default, so on a proposal it withholds a further
+	 * course of a drug two orders already carry. ADR Decision 111 carries why of both.
 	 */
 	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =

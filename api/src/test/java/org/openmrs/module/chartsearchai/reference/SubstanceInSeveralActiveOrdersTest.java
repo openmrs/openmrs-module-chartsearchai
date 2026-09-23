@@ -73,6 +73,11 @@ public class SubstanceInSeveralActiveOrdersTest {
 
 	private static final String WITHHOLD = "This finding is a reason to withhold it.";
 
+	private static final String CAUTION = "This finding is a caution to note, not a reason to withhold it.";
+
+	private static final String CAUTION_CURRENT = "This finding is a caution about a medication this patient"
+			+ " is already taking, not a reason to change it.";
+
 	@Test
 	public void aDrugInPlayThatTwoOfHerOrdersContainIsNamedAsAlreadyTakenInBoth() throws IOException {
 		List<SafetyWarning> warnings = chips(FIXTURE, QUESTION, twoTuberculosisCombinations());
@@ -102,9 +107,10 @@ public class SubstanceInSeveralActiveOrdersTest {
 				"the orders the finding names, structurally — every interaction chip states them");
 		assertEquals(SafetyWarning.TYPE_INTERACTION, finding.getType());
 		assertEquals(null, finding.getSeverity(), "nothing rates this relationship");
-		assertTrue(finding.isAboutACurrentMedication(),
-				"the finding is about two of her own prescriptions, so its referent is a current "
-						+ "medication — a proposal clause here is issue #402's defect made certain");
+		assertFalse(finding.isAboutACurrentMedication(),
+				"the drug-in-play arm states ONE referent for the drug in play, the proposal, at every "
+						+ "site: one finding stating the current-medication call beside rule chips stating the "
+						+ "proposal call is issue #402's reverted one-site shape (ADR Decision 111)");
 	}
 
 	@Test
@@ -269,24 +275,51 @@ public class SubstanceInSeveralActiveOrdersTest {
 	}
 
 	@Test
-	public void theFindingReachesTheModelAsAReasonToChangeHerCurrentMedication() throws IOException {
-		// Through the real injector: the finding is unrated, so it keeps the default strength an unrated
-		// relationship has (ADR Decision 86 graded down only shared classification), and its referent
-		// is her own prescriptions — so the clause is the current-medication one, never the proposal's
-		// "withhold it" and never the caution, whose prompt branch opens by saying the drug can be given.
+	public void everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent() throws IOException {
+		// Through the real injector, the whole finding list in order: the Major, the Minor and this
+		// issue's finding each state the PROPOSAL column — the Major and the new finding withholding, the
+		// Minor a caution. Review round 1 found the new finding alone stating the current-medication
+		// clause, so one response refused rifampicin as a proposal and, two findings later, called it a
+		// medication to change; the lead the prompt ranks first was the refusal (ADR Decision 111).
+		// Unrated, the new finding keeps the default an unrated relationship has (Decision 86 graded down
+		// only shared classification), so it withholds and is never the caution.
+		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD), clauses(QUESTION));
+	}
+
+	@Test
+	public void theIssuesOwnQuestionWhichTheGrammarDoesNotReadAsAProposalStatesTheSameReferent()
+			throws IOException {
+		// The ticket's question names four drugs before rifampicin, and QueryScopeRouter's closed
+		// proposal grammar does not admit it — so issue #472's gate would treat it as proposing nothing.
+		// The referent here is not that gate's: the arm's findings state the proposal column on any
+		// question, and this finding states what its siblings state.
+		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD), clauses(
+				"The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and"
+						+ " sulfamethoxazole is it safe to give Rifampicin?"));
+	}
+
+	/** The strength clause each injected finding ENDS with, in injection order — or the finding's tail
+	 *  where it ends with none of the four, so a fifth clause fails the comparison by name. */
+	private static List<String> clauses(String question) throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
-				DrugReferenceTestSupport.oneRecordChart(), twoTuberculosisCombinations(), QUESTION);
+				DrugReferenceTestSupport.oneRecordChart(), twoTuberculosisCombinations(), question);
 
-		List<String> texts = new ArrayList<String>();
+		List<String> clauses = new ArrayList<String>();
+		boolean sawTheFinding = false;
 		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
-			if (finding.getText().contains(ALREADY_IN)) {
-				texts.add(finding.getText());
+			String text = finding.getText().trim();
+			sawTheFinding |= text.contains(ALREADY_IN);
+			String clause = text.substring(Math.max(0, text.length() - 120));
+			for (String known : Arrays.asList(WITHHOLD, CAUTION, CHANGE_CURRENT, CAUTION_CURRENT)) {
+				if (text.endsWith(known)) {
+					clause = known;
+				}
 			}
+			clauses.add(clause);
 		}
-		assertEquals(1, texts.size(), "was: " + chart.getText());
-		assertTrue(texts.get(0).contains(CHANGE_CURRENT), texts.get(0));
-		assertFalse(texts.get(0).contains(WITHHOLD), texts.get(0));
+		assertTrue(sawTheFinding, "precondition: this issue's finding reached the prompt: " + chart.getText());
+		return clauses;
 	}
 
 	private static PatientClinicalContext twoTuberculosisCombinations() {

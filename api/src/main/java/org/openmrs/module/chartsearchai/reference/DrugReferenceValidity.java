@@ -1251,11 +1251,27 @@ public final class DrugReferenceValidity {
 	 *       synonym such as {@code Acetylsalicylic acid} publishing {@code aspirin} silent in the shipped
 	 *       KB: no concept filed elsewhere names {@code acetylsalicylic acid}.</li>
 	 * </ul>
-	 * Both compared through {@link DrugReference#normalizeName}, the identity between two reference
-	 * strings; never through {@link DrugReference#isNamed}, which reads the row's aliases, and those
-	 * include the very substance name under test. The row side is its display STEM and the concept side
-	 * is not, so an ingredient the bridge spells with a trailing qualifier matches no row — a missed
-	 * report, never a false one.
+	 * Both sides are compared as a {@link DrugReference#displayStem}, which is
+	 * {@link DrugReference#normalizeName} (the identity between two reference strings) with any trailing
+	 * parenthesized qualifier removed. It is never {@link DrugReference#isNamed}, which reads the row's
+	 * aliases, and those include the very substance name under test. Stripping the qualifier on the
+	 * concept side too is issue #476's follow-up. Keyed by its whole name, an ingredient such as
+	 * {@code X (anhydrous)} named no row, because a row's stem never ends in a qualifier. The stripped
+	 * qualifier can name a distinct presentation (an isotope, a salt), so this can now report a row the
+	 * bridge does NOT contradict — a synonym row among them, such as {@code Acetylsalicylic acid} above,
+	 * wherever a concept filed elsewhere names its display name with a qualifier. Measured 2026-09-24 by
+	 * this method through {@link DrugReferenceService#getLoadStatus()} over the shipped KB, the change
+	 * left the reported rows as they were.
+	 *
+	 * <p><b>What it still misses, and why no widening here closes it.</b> Measured the same way, reporting
+	 * a row wherever any ingredient filed elsewhere carries its stem as a WORD
+	 * ({@link DrugReference#containsWord}) reported nine rows instead of six. The three added were false
+	 * ({@code Aluminium (carbonate)}, {@code Polyethylene glycol (3350 with electrolytes)}, {@code Yeast}),
+	 * and neither of the two known misses was among them: {@code Monopotassium phosphate}, which the
+	 * bridge spells {@code Monobasic potassium phosphate}, and {@code Iodide I-131}, which it spells
+	 * {@code Sodium iodide I131}. Matching those takes chemistry knowledge the module does not hold. So
+	 * does a contradiction in a field this rule does not read, such as the row's {@code atc}: the module
+	 * ships no ATC index to check a code against a name.
 	 *
 	 * <p>The rule reads only the loaded model, so it runs over any dataset publishing a bridge. The
 	 * curated and {@code atc} schemas publish none and it is silent there by construction.
@@ -1287,8 +1303,8 @@ public final class DrugReferenceValidity {
 				conceptNames.put(uuid, name);
 				List<String> ingredients = DrugReference.combinationConstituents(name);
 				for (String ingredient : ingredients.isEmpty() ? Collections.singletonList(name) : ingredients) {
-					String key = DrugReference.normalizeName(ingredient);
-					if (key != null) {
+					String key = DrugReference.displayStem(ingredient);
+					if (!key.isEmpty()) {
 						conceptsNaming.computeIfAbsent(key, k -> new HashSet<String>()).add(uuid);
 					}
 				}

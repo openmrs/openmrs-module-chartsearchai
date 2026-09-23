@@ -32,6 +32,7 @@ import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
@@ -246,7 +247,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		for (Finding finding : findings) {
 			assertFalse(finding.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
 					"precondition: no finding withholds omeprazole, was: " + finding.text);
-			if (finding.text.contains("Warfarin") && finding.text.contains("Moderate")
+			if (finding.text.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "Warfarin — Moderate.")
 					&& finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION)) {
 				moderateWarfarinCaution = true;
 			}

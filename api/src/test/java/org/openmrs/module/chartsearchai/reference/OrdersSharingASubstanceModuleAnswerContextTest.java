@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,6 +75,27 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 				+ " — possible duplicate therapy"), "was: " + answer);
 		assertTrue(answer.contains("Ethambutol is in active orders " + RHZE + " and Ethambutol 400mg"
 				+ " — possible duplicate therapy"), "was: " + answer);
+	}
+
+	@Test
+	public void theSharedSubstanceTiesARatedMajorAndFollowsIt() throws IOException {
+		// A Major pair about her current therapy and the shared-substance finding state the same clause,
+		// a reason to change it, so the strength sort ties them and keeps the order the arms raised them
+		// in: the screen's pairs, then this finding. Only a caution falls behind it.
+		PatientChart chart = screen(
+			DrugReferenceTestSupport.activeOrder("order-rhz", "Isoniazid / pyrazinamide / rifampin"),
+			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg"));
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
+		List<String> lines = Arrays.asList(answer.split("\\n"));
+		assertEquals(3, lines.size(), "was: " + answer);
+		assertTrue(lines.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+			"the Major leads: " + answer);
+		assertTrue(lines.get(1).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
+				+ " rifampin and Rifampicin 150mg — possible duplicate therapy."), "then this finding: " + answer);
+		assertTrue(lines.get(2).startsWith("Isoniazid interacts with active order Rifampicin (rifampin) — Minor."),
+			"then the caution: " + answer);
 	}
 
 	@Test

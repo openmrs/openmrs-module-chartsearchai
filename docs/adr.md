@@ -10574,8 +10574,8 @@ Rifampicin (rifampin) are in active orders A and B — possible duplicate therap
   pair instead was written in Phase 2 and reverted in its second pass, because the model path, the
   default, would still lead with it and one chart would open two ways by global property. Nor does it stand in
   for a screen result at [Decision 87](#decision-87-a-screen-that-related-nothing-says-so-in-the-prompt-instead-of-reaching-the-model-as-an-empty-slice)'s
-  note: beside it, a screen that related nothing still says so (`nothingButOrdersSharingASubstance`). Both
-  were found in `/harden`'s Phase 2, after the pair gate alone had been written.
+  note: beside it, a screen that related nothing still says so (`nothingButOrdersSharingASubstance`),
+  which `/harden`'s Phase 2 found after the pair gate alone had been written.
 
 ### Consequences
 

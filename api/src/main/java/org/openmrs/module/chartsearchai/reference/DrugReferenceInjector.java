@@ -2506,8 +2506,8 @@ public class DrugReferenceInjector {
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
 	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
 	 * cannot take the answer's first sentence and leave the question unanswered. A screen's finding that
-	 * her orders share a substance (issue #477) is an interaction finding and ranks by strength with the
-	 * pairs, as the prompt's ranking sentence has the model rank it, so the two paths open alike. One key does both,
+	 * her orders share a substance (issue #477) is an interaction finding and ranks by strength with
+	 * the pairs, as the prompt's ranking sentence has the model rank it, so the two paths open alike. One key does both,
 	 * because the two never meet: the screening arm stands down for a question that resolved a drug,
 	 * and the drug-in-play arm's finding about two of her own orders (issue #477) arises only for a
 	 * drug she already takes, which {@link #answersFromFindings} refuses to answer for. Within each
@@ -2516,12 +2516,10 @@ public class DrugReferenceInjector {
 	 * — read off {@link #strengthClause} and never off the severity word; stable, so the injection order
 	 * stands within a class.
 	 *
-	 * <p><b>That last sort is a defence nothing observes today.</b> The arms already append a
-	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
-	 * then its interactions, which {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING} orders, in
-	 * every arrangement this change's tests and reviews built — so removing the sort leaves the suite
-	 * green. It stays because the lead is decided by the FIRST
-	 * line, and that must not depend on the order the arms happen to run in.
+	 * <p><b>That last sort is observed on a screen</b>: the screening arm appends the finding that her
+	 * orders share a substance after its pairs, and the sort is what moves it ahead of a caution —
+	 * {@code OrdersSharingASubstanceModuleAnswerContextTest} reddens without it. The lead is decided by
+	 * the FIRST line, and that must not depend on the order the arms happen to run in.
 	 *
 	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
 	 * medications — a screen — opens with that finding: a lead saying which of two medications to

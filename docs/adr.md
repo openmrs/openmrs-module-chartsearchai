@@ -10563,8 +10563,8 @@ reproduced both through the real `LlmInferenceService.search` on patient 7:
   reason to withhold". `answersFromFindings` admits a proposal by it and `composeFromFindings` orders by
   it, so the gate and the line order cannot disagree. The key is scoped to that class, and a screen's
   order does not move.
-- **A contraindication whose clause is one of the two current-medication clauses keeps the clause's
-  referent**: *"This finding is about a medication this patient is already taking."*, after its body and
+- **A contraindication about a medication she already takes (`SafetyWarning.isAboutACurrentMedication`)
+  keeps its clause's referent**: *"This finding is about a medication this patient is already taking."*, after its body and
   before its marker. The referent words are the clause's own, one constant for all three. The sentence
   **names no drug.** The finding's drug is an entry her order resolved to, which an order's name can
   imply without naming it. Printing that label in a claim about her record is what `findNamedSubstances`
@@ -10576,8 +10576,7 @@ reproduced both through the real `LlmInferenceService.search` on patient 7:
 
 Decision 108 bounded the module's prose to *"its records' own words behind at most one fixed lead
 sentence"*. A composed contraindication line about her own medication now also carries one fixed
-sentence, of the same kind as the lead: a fixed wording read off the arm's flag
-(`SafetyWarning.isAboutACurrentMedication`, through the clause `strengthClause` returned). That line
+sentence, of the same kind as the lead: a fixed wording read off the arm's flag and the finding's type. That line
 therefore differs from the record it cites, which is one of the reasons Decision 108 gave for refusing
 composed-only order-record numbers. The difference this time is that the sentence claims nothing the
 record's clause does not already claim, and it carries no call.

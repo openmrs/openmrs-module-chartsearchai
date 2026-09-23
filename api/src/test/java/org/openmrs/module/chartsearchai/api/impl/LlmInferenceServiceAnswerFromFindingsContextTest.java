@@ -424,8 +424,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
 		assertEquals(0, provider.calls);
-		assertTrue(answer.getAnswer().contains(answerFacingBody(allergy)
-				+ " This finding is about a medication this patient is already taking. [" + allergy.index + "]"),
+		assertTrue(answer.getAnswer().contains(answerFacingBody(allergy) + CURRENT_MEDICATION_REFERENT
+				+ " [" + allergy.index + "]"),
 				"the allergy line says the drug is one she already takes: " + answer.getAnswer());
 		assertCarriesEveryFinding(answer, findings);
 	}

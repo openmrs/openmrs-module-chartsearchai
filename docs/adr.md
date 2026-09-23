@@ -9801,6 +9801,47 @@ rating below `major` is a caution.** Nothing else about the split moves:
   on `main`. An earlier round of this change removed the fold leg and turned both into a caution lead,
   and it was reverted as outside the issue. `FoldedFindingStrengthTest.aModerateRuleFoldedWithAClassRelationshipStillStatesTheStrongerClaim`
   pins the arrangement over a verbatim slice of those rows.
+
+  **Measured for [#479](https://github.com/openmrs/openmrs-module-chartsearchai/issues/479)
+  (September 2026), and the leg stays.** The removal criterion was written down before either
+  measurement ran: remove the leg only if a folded cell flips to the caution lead beyond an A/A arm,
+  every flipped cell still states its rating AND its class relationship, unlicensed verdicts stay
+  0 → 0, and no other cell moves.
+  - *The population*, over the shipped knowledge base (`DdiDrugReferenceSource.load()`) with the
+    bundled groups file, counted in interaction rows AS LOADED — one per orientation, since the parser
+    files each link under both of its drugs and either orientation can fold, so about twice the file's
+    own rows. Through `DrugReference.atcSubgroups()` intersected, the partner by
+    `DrugReferenceService.lookupByToken` and `CrossReactivityGroup.sharedGroup`: **108 of the 24,690**
+    Minor rows share a level-4 subgroup (the figure `licensesWithholding`'s javadoc records,
+    reproduced) and none a curated group; **3,080 of the 378,830** Moderate rows share one or the
+    other (3,054 a subgroup, 60 a group). Through the real arm instead — `DrugSafetyValidator.validate`
+    on *"Can I give this patient {subject}?"* with the partner as the only active order — the rule
+    chip at that row's rating carries the fold for **101** Minor and **3,015** Moderate rows
+    (52 and 1,561 unordered display-name pairs), and `licensesWithholding` answers true for every
+    one. Why the arm's figure is the smaller one was not investigated. Calibration for that second
+    figure: it was taken over a prefilter admitting only rows whose two drugs share an ATC level-2
+    prefix or a curated group, and 3,000 rows sampled from outside it folded none. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
+  - *The A/B*, on the 3.7.1 standalone: `main` @ `27e9cf40` against the same tree with the
+    `carriesUnratedRelationship()` leg removed, `capture_probe_safety.sh` over 21 cells (Kamwara
+    `1530b813-…`, `23c54782-…` on Metronidazole and `83f95445-…` on Methotrexate × efavirenz,
+    zidovudine, amlodipine, rifampicin, ketoconazole, azathioprine, tenofovir, phrasing *"Can I give
+    this patient {drug}?"*), scored by `score_probe_safety.py`. A second `main` arm was byte-identical
+    on all 21 answers. The removal changed exactly four answers, the four folded cells (efavirenz
+    and zidovudine on Kamwara, both Moderate; ketoconazole × Metronidazole and azathioprine ×
+    Methotrexate, both Minor), each from *"No — … should not be given"* to the caution lead. Unlicensed
+    verdicts stayed 0 → 0. Both arms exit 3 because the Methotrexate patient's context read failed, a
+    flag about the host rather than a verdict.
+  - *Why the criterion failed.* The ketoconazole answer dropped its rating under the removal
+    (`ratings dropped` 0 → 1). And only that answer states the folded class sentence at all: the
+    other three flipped answers name neither the shared subgroup nor duplicate therapy for the folded
+    pair, and neither do the four `main` answers. So the caution lead did not carry both claims of
+    the finding it softened. The missing class sentence predates the removal and the dropped rating
+    does not; the criterion was not written to excuse either.
+
+  What is left is the same residue, now measured: by the arm's figure a fold of two cautions
+  withholds on 3,116 of the 403,520 Minor and Moderate rows as loaded. A later
+  proposal to grade it would have to show the caution-led answer stating both claims, which is a
+  prompt question this measurement did not try to answer.
 - **The current-medication caution branch now asks for the rating, and opens as the change branch
   does.** The issue requires a Moderate finding to be stated with its rating (#299, #337) and not as a
   permission or a "Yes" (#107 arm C), and moving Moderate to the caution moved a screened Moderate
@@ -10129,7 +10170,7 @@ exactly that. The QT, hepatotoxicity and neuropathy groups need data this knowle
   **Against #359's row E**, which (as quoted on #391) expects a Major alert for metformin in a patient on
   stavudine: the Major there is metformin's own drug-disease rating in lactic acidosis, and the chip states
   it verbatim; what no source row rates is the PAIR, which DDInter rates `Unknown`. So a site that turns
-  the tier on gets the caution-graded lead on exactly that arrangement (the one measured cell under *What
+  the tier on gets the caution-graded lead on exactly that arrangement (the first measured cell under *What
   it does not do*), not the withholding alert row E expected. That is chosen: neither ticket asks for a
   strength (#391 Part B says only that the chain gets no severity of its own), and both false links
   measured here pass the `Major` gate, so a withholding strength would put a refusal behind a text match
@@ -10165,7 +10206,7 @@ the combination case.
   arm), and the question-pair arm has no leg either.
 - **The source rows are not citable.** The chip states both halves in its own words; the drug-disease
   note texts are not injected as records.
-- **Not on by default, and no rate behind turning it on.** Review round 1 measured a second false link,
+- **Not on by default.** Review round 1 measured a second false link,
   on one of the commonest co-prescriptions there is: metformin's drug-disease note (575) names
   congestive heart failure only inside the sentence making it a CONTRAINDICATION ("… is contraindicated
   in patients with … congestive heart failure requiring pharmacologic treatment …; and any condition
@@ -10178,8 +10219,10 @@ the combination case.
   which that note does not say. Being a caution bounds what a false link costs; it does not remove it,
   and a clinician reading a false causal claim beside every ACE inhibitor and beta-blocker learns to
   ignore the tier. So a stock install states none, and `major` is for a site that has judged these
-  chains on its own formulary. What would move the default is a precision figure over the kept chains,
-  which this decision does not have; the two false links above are examples, not a rate.
+  chains on its own formulary. The precision figure over the kept chains is now measured (*Precision*,
+  below, #480): about a quarter of them rest on a note that does not state that the drug causes the
+  condition. The default stays `off`; moving it, or the strength, is a decision to take against that
+  figure, not one this measurement takes.
 - **The `Major` gate is fixed at load**, so `all` would need the loader to keep what it drops.
 - **Order among a drug's chips.** It is appended after the drug's pairwise chips, so it trails that drug's
   caution chips too rather than being ranked among them — the limit the class-only chips already carry
@@ -10197,19 +10240,97 @@ the combination case.
   the link with the strongest cause-side rating is kept. On the shipped knowledge base no such key
   carries two different cause ratings (measured through the loader, 2026-09-23), so no case can
   observe the choice; a refresh that introduces one is what would.
-- **What the model does with it: one cell, not a rate.** Each chip is also an injected `safety_finding`,
+- **What the model does with it: two cells, not a rate.** Each chip is also an injected `safety_finding`,
   and where the drug already had one finding it makes the drug's findings several, which is what gates
   the enumeration clause (`severalFindingsAboutOneDrug`, Decision 84). That clause asks the model to state
   each finding's severity, and the only rating words in a derived finding are drug-disease ratings, so
-  its closing sentence says it has no severity of its own. Measured once, by review round 1's verifier
+  its closing sentence says it has no severity of its own. First measured by review round 1's verifier
   at `3f362bf7` (a RefApp 3.7.1-era standalone, local Gemma E4B, `derivedFindings=major`, a patient on
   Stavudine and Lamivudine, *Can I give metformin?*): the answer led "Metformin can be given, with one
   caution: it is rated Major in Acidosis, Lactic based on the DDInter drug-disease notes of …", called it
   "a caution to note, not a reason to withhold it", and used "Major" only for metformin's own
-  drug-disease rating. That is n=1 — no other question, patient or model was run.
+  drug-disease rating. A second cell, from the merging-head verifier on #475 (a pool-slot standalone, local
+  Gemma E4B, `derivedFindings=major`, a patient on Stavudine, Lamivudine and Lisinopril, the same question;
+  reported on #480), raised four chips, all cautions, and the answer's lead said metformin "is rated Major in
+  Heart Failure when combined with Lisinopril [10]": the known-false metformin → heart-failure link, and the
+  drug-disease rating stated as a rating of the pair despite the closing sentence. Two cells, not a rate.
 - **#391 Part A** — drug-disease rows as condition rules — is not done.
 
-→ `ConditionMediatedFindingTest`.
+
+### Precision (measured for #480)
+
+**Measured 2026-09-23 at `27e9cf40`, over the shipped knowledge base.** The population is every chain the
+loader keeps: 43,670, counted through `DrugReferenceTestSupport.shippedEntries()`. Each chain was joined
+back to its one raw `derived_interactions` row to recover `cause_note_id`, which the loader does not keep.
+The join matched every chain to exactly one row. `disease_interactions` is not the join key, because 158
+of its (drug, condition) keys name more than one note.
+
+- **The unit is the LINK**, (`cause_note_id`, condition): the matcher's decision that one drug-disease note
+  names one condition causally. A chain inherits its link's verdict. There are 1,088 links. They are
+  long-tailed: the 100 with the most kept chains carry 26,567 of the 43,670. A class note shared by several
+  cause drugs is one link.
+- **Design.** The 100 heaviest links were censused. From the other 988 links (17,103 chains), 100 were
+  sampled with `random.Random(480)`.
+- **Rubric**, abridged; the verbatim text the adjudicators were given, with its synonym rule and its
+  rule for an effect that leads to the condition, is the sample file's `rubric` field. For each link the
+  question is what the note says about its drug(s) and the condition.
+  - **CAUSES:** the drug can cause, induce, precipitate or lead to the condition, or the condition is
+    reported as an adverse event with it.
+  - **WORSENS:** the note says only that the drug aggravates a condition the patient already has.
+  - **NOT_CAUSAL:** anything else. That covers a contraindication or caution population, a risk factor,
+    a sign of some other effect, an indication, a monitoring item, a negated or "not established"
+    statement, or a condition the note does not name at all.
+- **Adjudication.** Two fresh agents on the same model as the author (Claude) each judged every item. They
+  were not told the hypothesis, and six controls were mixed in unmarked, so neither knew which items
+  they were:
+  - metformin note 575 × Heart Failure and × Hypotension, expected NOT_CAUSAL;
+  - rivaroxaban note 1713 × Pulmonary Embolism, an indication, expected NOT_CAUSAL;
+  - the NRTI note 2 × Acidosis, Lactic, expected CAUSES;
+  - pembrolizumab note 1255 × Diabetes Mellitus, Type 1, expected CAUSES;
+  - fenoldopam note 3585 × Hemorrhage, expected WORSENS.
+
+  Both agents returned every control as expected. They agreed on 204 of 206 items, and a third blind agent
+  decided the other two. **This is a model's reading against a stated rubric, not a clinician's review.**
+  Agents running on one model make correlated errors, so the agreement overstates reliability.
+- Every verdict, the note quote it rests on, the note's SHA-256 and the population counts are recorded in
+  `api/src/test/resources/eval/derived-tier-precision-sample.json`. `DerivedTierPrecisionSampleTest`
+  fails the build when the shipped knowledge base stops being the one measured: a different kept-chain
+  count, an adjudicated link that no longer occurs anywhere in the raw `derived_interactions` table, or a
+  rewritten adjudicated note. Two mutations of the
+  shipped file were each seen to redden it: one word of note 319, and one Major rated side set to Moderate.
+
+**Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
+stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the
+sampled links only (4,000 resamples, `random.Random(1)`). Each item in the sample file carries the counts
+every row is weighted by: its kept chains, and the distinct rated substances (`substanceGroupKey`) among
+them.
+
+| share of | strict | 95% | lenient | 95% |
+|---|---|---|---|---|
+| links (1,088) | 0.826 | 0.754–0.890 | 0.831 | 0.758–0.894 |
+| kept chains (43,670 rated entries) | 0.742 | 0.687–0.793 | 0.759 | 0.703–0.809 |
+| (link, rated substance) pairs, a substance counted once per link it is rated through (17,106) | 0.737 | 0.628–0.831 | 0.751 | 0.643–0.845 |
+| census stratum alone (100 links, 26,567 chains) | 0.744 of chains | exact | 0.771 of chains | exact |
+
+- **Weighted by chain, about one chain in four rests on a note that does not state that the drug causes
+  the condition.** The
+  chain-weighted share sits below the per-link one in both strata — the census is 0.79 of its links and
+  0.744 of its chains, the sample 0.83 of its links and 0.74 of their chains — so a link that is not CAUSES
+  tends to carry more chains than one that is. The census holds 21 such links (16 NOT_CAUSAL, 5 WORSENS).
+  The heaviest link of all is one: the antipsychotic class note (319) × Heart Failure, 1,404 chains. It
+  names heart failure as a cause of death in elderly patients with dementia, followed by "A causal relationship with
+  antipsychotic use has not been established". Next come a fluoroquinolone note × Infections (744), an
+  anti-epileptic note × Epilepsy (702), an ACE-inhibitor note × Heart Failure (561; it names heart
+  failure as a population being treated), and a salicylate note × Infections (465). The shapes among the
+  census's 21 include an indication or treated population, a risk factor, a negated statement, and a term reached
+  through a narrower one ("benign intracranial hypertension" read as Hypertension).
+- **Sensitivity.** The 1,404-chain link was one of the two items the first two agents split on. Read as
+  CAUSES, the strict chain figure rises to about 0.775. No other single verdict moves it by as much.
+- **What it is not.** It is a share of chains the loader keeps, not of chips a patient sees. A chip needs
+  both ends on the patient's orders, so exposure depends on prescribing, and nothing here weights by it.
+  It measures the matcher's causal reading, not whether the rated drug's own Major rating is right.
+
+→ `ConditionMediatedFindingTest`, `DerivedTierPrecisionSampleTest`.
 
 ## Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints
 

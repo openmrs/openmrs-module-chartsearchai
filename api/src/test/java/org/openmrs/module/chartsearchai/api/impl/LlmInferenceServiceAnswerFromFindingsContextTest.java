@@ -160,8 +160,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
 
 		assertEquals(0, provider.calls, "the module resolved the question, so the model is not asked");
-		assertTrue(answer.getAnswer().startsWith("No — " + findings.get(0).drug
-				+ " should not be given: this module's drug-safety check found a reason to withhold it."),
+		assertTrue(answer.getAnswer().startsWith("No — this module's drug-safety check found a reason to withhold "
+				+ findings.get(0).drug + "."),
 				"the lead is the call the finding states, was: " + answer.getAnswer());
 		assertCarriesEveryFinding(answer, findings);
 		assertNoModelProseWasJudged(answer);
@@ -347,12 +347,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A withholding finding the module itself marks UNCORROBORATED is not a "No" it can state: the
-	 * curated rule's token {@code opium} matched her allergy {@code Tiotropium} by containment alone,
-	 * and the finding says so. The model reads that hedge beside the call; a composed "No" would drop it.
+	 * A curated contraindication rule is never what licenses the module's "No": here its token
+	 * {@code opium} matched her allergy {@code Tiotropium} by containment alone, a match the finding
+	 * itself marks uncorroborated — one of the ways a rule's free-text match can be false.
 	 */
 	@Test
-	public void aWithholdingFindingTheModuleCouldNotCorroborateStillAsksTheModel() throws Exception {
+	public void aCuratedContraindicationRuleAloneStillAsksTheModel() throws Exception {
 		DrugReferenceService curated = DrugReferenceTestSupport
 				.curatedFixtureService("chartsearchai-test/drug-reference-mid-word-allergy-token.json");
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Tiotropium");
@@ -369,7 +369,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider, curated).search(patient, question);
 
-		assertEquals(1, provider.calls, "the module cannot state a call it could not corroborate");
+		assertEquals(1, provider.calls, "a contraindication alone never licenses the module's No");
 		assertFalse(answer.isAnsweredByTheModule());
 	}
 
@@ -455,8 +455,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
-	/** A screen that related nothing is answered by the model: the module's answer would be the screen
-	 *  note's negative, which is true only of a screen that ran over a fully read, fully resolved list. */
+	/** A screen that related nothing is answered by the model: the module never answers with the screen
+	 *  note's negative, which is true only of a screen that ran over a fully read, fully resolved list.
+	 *  A tripwire — the gate is not asked where no finding was raised — for a change that would give the
+	 *  note an answer of its own again. */
 	@Test
 	public void aScreenThatRelatedNothingStillAsksTheModel() throws Exception {
 		executeDataSet(METFORMIN_ORDER);
@@ -585,6 +587,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		@Override
 		protected boolean resolveProgressiveReasoningEnabled() {
 			return true;
+		}
+
+		/** Full-chart mode, so the progressive-reasoning preview would really run — queryScoped mode
+		 *  skips it before it reaches the provider, which would make the streaming case's "no preview
+		 *  pass" unfalsifiable. */
+		@Override
+		protected boolean resolveQueryScopedMode() {
+			return false;
 		}
 	}
 

@@ -45,8 +45,8 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 
 	private static final String QUESTION = "Can I give her ibuprofen?";
 
-	private static final String COMPOSED = "No — Ibuprofen should not be given: this module's "
-			+ "drug-safety check found a reason to withhold it.";
+	private static final String COMPOSED = "No — this module's drug-safety check found a reason to withhold "
+			+ "Ibuprofen.";
 
 	private ChartSearchAiRestController controller;
 

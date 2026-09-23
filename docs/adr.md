@@ -9595,8 +9595,9 @@ question, *"Can I give her ibuprofen for her knee pain?"*, which its purpose cla
 interactions — then any other finding about her own medications a widened question also raised, each
 group strongest first by the ranking the prompt gives the model
 (withhold, change a current medication, caution, caution about a current medication), read off
-`strengthClause`. A proposal leads *"No — X should not be given: this module's drug-safety check found a
-reason to withhold it."*; a screen gets no lead, since a lead naming which of her medications to change
+`strengthClause`. A proposal leads *"No — this module's drug-safety check found a reason to withhold
+X."* — what the finding states, and never "X should not be given", a directive the finding does not
+make (see the residue on deliberate combinations); a screen gets no lead, since a lead naming which of her medications to change
 would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
 is the finding record's text between its head and its strength clause (one method, `findingBody`, for
 both), cited by its own number. The strength clause stays out: it is prompt-facing only, and the issue
@@ -9630,6 +9631,17 @@ chance of the two disagreeing.
 - A proposal no finding withholds keeps the call — caution-only, and nothing raised — and so does a
   screen that related nothing, and a proposal withheld by a contraindication alone. The issue's widening to those cases asked for a wording that must not
   read as a clearance; this change found none that the module can support, and left them to the model.
+- **The withhold class is #283's rating split, and the module now states it without a model.** Moderate
+  withholds, and the data rates Moderate some combinations given on purpose: dual antiplatelet therapy
+  (clopidogrel, prasugrel, ticagrelor with her aspirin), a GP IIb/IIIa inhibitor whose own mechanism
+  text begins *"Although aspirin is routinely given with…"*, and heparin; enoxaparin's Major row is about
+  neuraxial anaesthesia. The prompt tells the model to lead "No" on exactly these findings too, but the
+  model can weigh the mechanism text and the module does not, so the lead says only that the module's
+  check found a reason to withhold the drug. Whether that is still too strong a first sentence for these
+  questions is the first thing the gate below must read.
+- Where one substance is filed as several presentation rows, the finding stated is the one the arm
+  elected, which can be a presentation other than the one the question named (*"Can I give her
+  Acular?"* — ketorolac eye drops — stated the systemic row's rule).
 - A question about a drug she already takes (R3, D6) keeps the call, and with it #402.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.
 - A phrasing no shape carries keeps the call, the headline question of the issue included.

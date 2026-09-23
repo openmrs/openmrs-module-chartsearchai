@@ -2291,16 +2291,23 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The lead of a module-composed answer whose strongest finding about the PROPOSED drug withholds it —
-	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. The
-	 * drug is spelled between the two halves. It opens with "No" because {@link #answersFromFindings}
-	 * admits a proposal only in one of {@code QueryScopeRouter.asksWhetherToGiveADrug}'s shapes, each
-	 * a question whose answer "No" is.
+	 * The lead of a module-composed answer whose finding about the PROPOSED drug withholds it — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. The drug
+	 * is spelled between the two halves.
+	 *
+	 * <p><b>It states what the finding states and no more</b>: that this module's check found a reason
+	 * to withhold the drug — the words of {@link #STRENGTH_WITHHOLD} — and never "should not be given",
+	 * a clinical directive the finding does not make. The difference is not cosmetic: a rating the data
+	 * gives MODERATE withholds (#283), and it gives Moderate to combinations given on purpose — a GP
+	 * IIb/IIIa inhibitor with aspirin, whose own mechanism text begins "Although aspirin is routinely
+	 * given with…". It opens "No" because that is the call the prompt tells the model to lead with on
+	 * this very clause, and because every shape {@code QueryScopeRouter.asksWhetherToGiveADrug} admits is
+	 * a question "No" answers.
 	 */
-	public static final String WITHHOLD_LEAD_OPENING = "No — ";
+	public static final String WITHHOLD_LEAD_OPENING =
+			"No — this module's drug-safety check found a reason to withhold ";
 
-	public static final String WITHHOLD_LEAD_CLOSING =
-			" should not be given: this module's drug-safety check found a reason to withhold it.";
+	public static final String WITHHOLD_LEAD_CLOSING = ".";
 
 	/**
 	 * Whether this injection's findings answer the question, so that no model need restate them —

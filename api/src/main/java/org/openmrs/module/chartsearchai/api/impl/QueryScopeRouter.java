@@ -242,9 +242,7 @@ public final class QueryScopeRouter {
 
 	private static final String POSSESSIVE = "(?:her|his|their|the patient's|this patient's)";
 
-	private static final String MEDICATION_WORD = "(?:medications|meds|medicines|prescriptions)";
-
-	private static final String MEDICATIONS = "(?:current |active )?" + MEDICATION_WORD;
+	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions)";
 
 	private static final String D = Pattern.quote(DRUG_NAME);
 

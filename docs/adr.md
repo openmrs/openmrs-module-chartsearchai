@@ -116,6 +116,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
 - [Decision 109: A Moderate interaction is a caution, because DDInter reserves avoid for Major](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)
 - [Decision 110: A finding about a drug the chart records only as an ended order says so, rather than reading as a proposal](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
+- [Decision 111: A substance already in two of the patient's own orders is stated as such, on the name the finding prints](#decision-111-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10043,3 +10044,68 @@ order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and 
 `.anAnswerNamingTheEndedDrugByANameItsChipLabelOnlyAppendsIsReturnedByteForByte` for the label),
 `SafetyVerdictSeverityGradationTest.theEndedOrderBranchIsExactlyTheseWords`,
 `ChartSearchAiSafetyWarningSeverityWireTest`.
+
+## Decision 111: A substance already in two of the patient's own orders is stated as such, on the name the finding prints
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close.
+
+### Context
+
+A patient on two active tuberculosis combinations that both contain rifampicin (`Isoniazid /
+pyrazinamide / rifampin`, `Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg`), asked
+whether rifampicin is safe, was told it interacts with the pyrazinamide and the isoniazid in those very
+combinations. Nothing said she already receives rifampicin, twice. Reproduced through the real
+`DrugSafetyValidator.validate` over the shipped knowledge base with the issue's six orders
+(`main` @ `3b4f1fec`, 2026-09-23).
+
+The class arm's restating-existing-therapy skip (`classRelationships`) is asked per CO-MEDICATION, and
+every order of one substance is one co-medication ([#186](https://github.com/openmrs/openmrs-module-chartsearchai/issues/186))
+— on the unnameable-code rung each order is its own partner and is skipped on its own. Either way the
+arm never counts ORDERS. The skip is right for the drug itself: negating its identity leg reddens the
+#185/#228/#392 cases, and none of them is about two orders.
+
+### The decision
+
+**`DrugSafetyValidator.alreadyInSeveralOrders` states, for the substance in play, the orders that
+already carry it — where there are two or more** — as *"Rifampicin (rifampin) is already in active
+orders A and B — possible duplicate therapy"*. One order states nothing: that is the drug itself
+(#185). Two orders recorded under one display are named once, with their count.
+
+- **Which orders carry it is decided on the DISPLAY, the name the finding prints**
+  (`CoMedications.ordersWhoseDisplayNames`, through `findNamedSubstances` over
+  `findImpliedByDrugName` folded to one row per substance — unfolded, two rows of one substance tie
+  and a brand such as `Acticlate` names nothing). Not on the order's other recorded names, which can name a different drug
+  ([#293](https://github.com/openmrs/openmrs-module-chartsearchai/issues/293)), and not on a shared ATC
+  code, which this knowledge base does not treat as identity (`Omeprazole` publishes esomeprazole's
+  `A02BC05`). The co-medication walk and `resolvesFrom` accept both, and may: they only withhold. This
+  answer backs a positive claim, so it is deliberately the narrower one.
+- **Its referent is a current medication.** The finding is about two of her prescriptions whatever the
+  question proposed; stated in the proposal clause it would refuse, in proposal words, a drug on her own
+  list — [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402)'s defect, made
+  certain. It is the drug-in-play arm's only finding that answers `isAboutACurrentMedication()` true.
+- **Its strength is the unrated default** (withhold, so the current-medication change clause). Decision
+  86 graded down shared classification alone on measured evidence; this is an identity claim, not that.
+  A caution was proposed and refused at plan time: its prompt branch opens by stating the drug can be
+  given, a permission to add a third course.
+- **It trails the drug-in-play arm's rule chips**, beside the class-only chips, rather than entering
+  `FINDING_STRENGTH_DESCENDING`'s sort, where an unrated finding would head the rated ones. It is not a
+  rule pair and is not counted into `PairChipExtent`. Its `namedPartners` are the orders it names.
+
+### Consequences
+
+- The reproduction's rifampicin answer gains the fact that she already receives it, and in which
+  orders. The rule chips stand as they were — the finding is appended after them — so the Major
+  against pyrazinamide, the data's relationship with her regimen's other constituents, remains.
+- **Where this is the strongest finding the verdict lead moves** to the current-medication branch.
+  Not measured on a model before shipping; the standalone verification of this change records what it
+  observed.
+- **Not delivered, and the reason `Refs` and not `Fixes`:** a drug in play carried by ONE order (a
+  single combination) states nothing, and two of her orders sharing a substance nobody asked about (the
+  issue's Metformin question) state nothing either: this finding is raised only for the drug in
+  play, and the arm that relates her own medications with no drug in play, the screening arm, has no
+  class leg.
+- An order whose display does not name the substance — a brand the data files under several
+  substances, or an order known only by its codes — is not counted.
+
+→ `SubstanceInSeveralActiveOrdersTest`.

@@ -1132,6 +1132,26 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The chips the real validator raises for {@code question} over a chart whose active orders carry
+	 * {@code displays}, one order per display, each with its own uuid — so a display listed twice is two
+	 * prescriptions under one name. Public for a case outside this package that needs a sentence the
+	 * validator really writes, rather than a copy of it (issue #477's finding, read by
+	 * {@code ActiveOrderCitationFidelityTest}).
+	 */
+	public static List<SafetyWarning> chipsOverOrders(String fixture, String question, String... displays)
+			throws IOException {
+		List<PatientClinicalContext.ActiveDrugOrder> orders =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		Set<String> names = new LinkedHashSet<String>();
+		for (int i = 0; i < displays.length; i++) {
+			orders.add(activeOrder("order-" + i, displays[i]));
+			names.add(displays[i]);
+		}
+		return validator(ddiFixtureService(fixture)).validate("", question,
+			ctx(40, null, names, null, null, null, orders));
+	}
+
+	/**
 	 * The unresolved half of {@link #contextNaming} — the chart as the builder reads it, before either
 	 * production surface attaches the reference data's own names. For a case whose subject IS that
 	 * resolution, so it must hold the raw context and the enriched one apart.

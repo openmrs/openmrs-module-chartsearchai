@@ -159,9 +159,10 @@ public class SafetyWarning {
 	 * one, since a chip of any type may in principle have been resolved from an order.
 	 *
 	 * <p>{@link #isAboutACurrentMedication()} is false here, as it is for the two shorter
-	 * constructors, and for the same reason rather than as a default: the two arms that answer true
-	 * to it reach {@link #interaction} or {@link #contraindication} instead (see that accessor for
-	 * which they are), so no caller of this constructor is one of them. A caller here is stating a
+	 * constructors, and for the same reason rather than as a default: every site that answers true
+	 * reaches {@link #interaction}, {@link #contraindication} or
+	 * {@link #substanceInSeveralActiveOrders} instead (see that accessor for which they are), so no
+	 * caller of this constructor is one of them. A caller here is stating a
 	 * chip's wire-facing shape, and issue #348's clause is decided by the arm that raised the
 	 * finding, never by whoever assembles one.
 	 */
@@ -251,6 +252,27 @@ public class SafetyWarning {
 	static SafetyWarning classOnlyInteraction(String drug, String detail) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), false, null, true);
+	}
+
+	/**
+	 * The warning that the drug in play is already in two or more of the patient's own active orders
+	 * (issue #477). The one construction site is {@code DrugSafetyValidator.alreadyInSeveralOrders},
+	 * which is canonical for why the finding exists and why its referent is what it is.
+	 *
+	 * <p>A FACTORY for {@link #classOnlyInteraction}'s reason: every other field of this shape is false
+	 * or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart record, no bridge (each order it
+	 * names is named because its own display names the substance, so there is nothing to bridge) — and
+	 * the one fact it does carry, {@link #isAboutACurrentMedication()} TRUE, is not one a caller should
+	 * be able to set on the drug-in-play arm's other chips. {@link #restsOnSharedClassificationAlone()}
+	 * is false: this is an identity claim, so {@code DrugSafetyValidator.licensesWithholding} answers by
+	 * the unrated default.
+	 *
+	 * @param orders the displays of the active orders the detail names, in the order it names them —
+	 *        {@link #namedPartners()}, which every interaction chip states
+	 */
+	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders) {
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -408,9 +430,10 @@ public class SafetyWarning {
 	 * "did the answer state all of them?" of.
 	 *
 	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
-	 * one — so a reader never has to tell a chip that carries no list from a chip that covers no
-	 * order. It is the structural answer to "which of her orders is this chip about", and the reason
-	 * nothing downstream recovers that by matching a phrase in prose.
+	 * one or for the finding that a drug is already in several of her orders (issue #477), where a
+	 * display several orders carry appears once — so a reader never has to tell a chip that carries no
+	 * list from a chip that covers no order. It is the structural answer to "which of her orders is
+	 * this chip about", and the reason nothing downstream recovers that by matching a phrase in prose.
 	 *
 	 * <p><b>Empty is the chip types that name no active order</b>: a contraindication, an overdose,
 	 * and the class-only interaction chip, whose partner is a class rather than an order. So empty is
@@ -888,8 +911,9 @@ public class SafetyWarning {
 	 * drug something proposed (issue #348) — which decides which COLUMN of the strength clauses
 	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
 	 *
-	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> Only the two
-	 * ORDER-DRIVEN arms ever answer true: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
+	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> The two
+	 * ORDER-DRIVEN arms answer true, and one finding of the drug-in-play arm does — see the end of
+	 * this paragraph: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
 	 * (issue #113), whose subject is drawn from the resolved active-order entries and whose partner is
 	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
 	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries — and that
@@ -899,7 +923,10 @@ public class SafetyWarning {
 	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because
 	 * a proposal is what was put to the module — unless the chart holds the drug only as an ended
-	 * order, which is {@link #isAboutAnEndedOrder()}'s referent and not this one (issue #472).
+	 * order, which is {@link #isAboutAnEndedOrder()}'s referent and not this one (issue #472). The one
+	 * exception is a finding whose SUBJECT is her own orders rather than the drug in play:
+	 * {@link #substanceInSeveralActiveOrders}, raised where two or more of her orders already carry
+	 * that drug (issue #477), which answers true for that reason.
 	 *
 	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and nothing
 	 * reads the second answer.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in

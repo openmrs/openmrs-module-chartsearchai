@@ -2419,9 +2419,10 @@ public class DrugReferenceInjector {
 		for (SafetyWarning finding : findings) {
 			// An INTERACTION the data RATES a reason to withhold — never an unrated rule, nor a class
 			// relationship folded onto a lower-rated row, both of which withhold only because they are
-			// not cautions. It is about the drug proposed and not one of her own: only the screening arm
-			// relates two of her own medications, and it stands down for a question that resolved a
-			// drug. Not a contraindication: see this method's javadoc.
+			// not cautions. It is about the drug proposed and not one of her own: the screening arm
+			// stands down for a question that resolved a drug, and the drug-in-play arm's finding about
+			// two of her own orders (issue #477) is unrated, so this test refuses it. Not a
+			// contraindication: see this method's javadoc.
 			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
 					&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())) {
 				return true;
@@ -2482,11 +2483,13 @@ public class DrugReferenceInjector {
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
 	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
 	 * cannot take the answer's first sentence and leave the question unanswered. One key does both,
-	 * because the two never meet: only the screening arm relates two of her own medications, and it
-	 * stands down for a question that resolved a drug. Within each group, strongest first — withhold,
-	 * change a current medication, then the two cautions, the order the prompt gives the model for the
-	 * first three and this module's own choice between the last two — read off {@link #strengthClause}
-	 * and never off the severity word; stable, so the injection order stands within a class.
+	 * because the two never meet: the screening arm stands down for a question that resolved a drug,
+	 * and the drug-in-play arm's finding about two of her own orders (issue #477) arises only for a
+	 * drug she already takes, which {@link #answersFromFindings} refuses to answer for. Within each
+	 * group, strongest first — withhold, change a current medication, then the two cautions, the order
+	 * the prompt gives the model for the first three and this module's own choice between the last two
+	 * — read off {@link #strengthClause} and never off the severity word; stable, so the injection order
+	 * stands within a class.
 	 *
 	 * <p><b>That last sort is a defence nothing observes today.</b> The arms already append a
 	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
@@ -2884,7 +2887,9 @@ public class DrugReferenceInjector {
 	 * ONE-finding screen, which that measurement never covered, and there the clause is the only
 	 * instruction the record carries. So the sentence was not wrong; its scope was unstated.
 	 *
-	 * <p>Hence the REFERENT axis, orthogonal to the strength axis: the two order-driven arms state
+	 * <p>Hence the REFERENT axis, orthogonal to the strength axis: the two order-driven arms — and the
+	 * drug-in-play arm's one finding about her own orders (issue #477,
+	 * {@code DrugSafetyValidator.alreadyInSeveralOrders}) — state
 	 * {@link #STRENGTH_CHANGE_CURRENT_MEDICATION} or {@link #STRENGTH_CAUTION_CURRENT_MEDICATION},
 	 * which license exactly what their proposal counterparts do. Every clause here still states a
 	 * strength and none is a caution where the other pair withholds, so the strength half of this

@@ -373,6 +373,33 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.isAnsweredByTheModule());
 	}
 
+	/**
+	 * An interaction the data does not RATE is not what licenses the module's "No": on the curated
+	 * dataset paracetamol's rule against warfarin carries no severity, which withholds only because an
+	 * unrated rule is not a caution (ADR Decision 37) — a rule's author's note, the same objection that
+	 * keeps contraindications from deciding the answer.
+	 */
+	@Test
+	public void anUnratedInteractionRuleStillAsksTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceService curated = DrugReferenceTestSupport.curatedService();
+		String question = "Can I give her paracetamol?";
+
+		answerFromFindings(false);
+		RecordingProvider recorder = new RecordingProvider();
+		serviceWith(recorder, curated).search(patient, question);
+		assertTrue(recorder.lastRecords.contains("Paracetamol interacts with active order")
+				&& recorder.lastRecords.contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"precondition: an unrated interaction withholds paracetamol, chart was: " + recorder.lastRecords);
+
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, curated).search(patient, question);
+
+		assertEquals(1, provider.calls, "no rating the data gives supports the No");
+		assertFalse(answer.isAnsweredByTheModule());
+	}
+
 	/** Issue #402's shape: a question naming a drug she already takes. The drug-in-play arm states a
 	 *  proposal clause for it, so composing would make that defect deterministic. */
 	@Test

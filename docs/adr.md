@@ -9562,8 +9562,13 @@ word the module flags as uncorroborated (`opium` in an allergy recorded as `Tiot
 doing the same with no flag (`egg` in `Eggplant` — `restsOnAnUncorroboratedChartMatch` is `false` for
 a rule that is not self-named, and its own javadoc says `false` is no certificate), and the shipped
 curated seed's own gentamicin note, *"significant renal impairment (dose adjustment required)"*, under
-"should not be given". A contraindication a question also raised is still stated as a line of the
-answer; it does not decide it. So a drug withheld by a contraindication alone — her recorded allergy
+the lead's earlier wording, "should not be given". A contraindication a question also raised is still stated as a line of the
+answer; it does not decide it. **And the interaction must be RATED a reason to withhold**
+(`DrugSafetyValidator.ratedAReasonToWithhold`, Moderate or above): an unrated curated rule, and an ATC
+or cross-reactivity class relationship folded onto a lower-rated row, both withhold under Decision 37
+only because neither is a caution, and the first is its author's note — the objection above, one rule
+type over. Review found both licensing a "No": paracetamol's unrated curated rule against warfarin, and
+methylphenidate's Minor row against modafinil carrying the N06BA class sentence. So a drug withheld by a contraindication alone — her recorded allergy
 to the very drug included — keeps the model call.
 
 Both need the chart-read verdict the injector stamped (`chartReadForSafety`): with the orders unread
@@ -9594,8 +9599,8 @@ question, *"Can I give her ibuprofen for her knee pain?"*, which its purpose cla
 **The composed text.** What was asked about first — the proposed drug's findings, or on a screen her
 interactions — then any other finding about her own medications a widened question also raised, each
 group strongest first by the ranking the prompt gives the model
-(withhold, change a current medication, caution, caution about a current medication), read off
-`strengthClause`. A proposal leads *"No — this module's drug-safety check found a reason to withhold
+(withhold, change a current medication, then the two cautions — the prompt orders the first three,
+and the order between the two cautions is this module's), read off `strengthClause`. A proposal leads *"No — this module's drug-safety check found a reason to withhold
 X."* — what the finding states, and never "X should not be given", a directive the finding does not
 make (see the residue on deliberate combinations); a screen gets no lead, since a lead naming which of her medications to change
 would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line

@@ -1210,6 +1210,16 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Whether the data itself RATES a relationship a reason to withhold — a rating of {@code moderate}
+	 * or above, and never an unrated one, which {@link #ratingLicensesWithholding} counts as
+	 * withholding because it is not a caution. Issue #469: the module states a withholding answer
+	 * without a model only where a rating says so, and an unrated rule is its author's note.
+	 */
+	static boolean ratedAReasonToWithhold(String severity) {
+		return severityRank(severity) >= severityRank("moderate");
+	}
+
+	/**
 	 * The rating a finding carries where an ANSWER stating that finding ought to state the rating
 	 * too, or {@code null} where there is no such word — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>. The one

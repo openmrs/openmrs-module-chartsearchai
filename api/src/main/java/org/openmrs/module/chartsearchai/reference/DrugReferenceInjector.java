@@ -2327,7 +2327,7 @@ public class DrugReferenceInjector {
 	 * note the rule's author wrote. Review drove three false categorical "No"s through contraindications
 	 * in turn — a token inside a longer word ({@code opium} in {@code Tiotropium}, flagged uncorroborated),
 	 * a class token doing the same without the flag ({@code egg} in {@code Eggplant}), and a note reading
-	 * "dose adjustment required" under "should not be given". A contraindication a question also raised
+	 * "dose adjustment required" under the lead's earlier wording, "should not be given". A contraindication a question also raised
 	 * is still stated as a line of the answer; it does not decide the answer. The shapes answered are two:
 	 * <ul>
 	 * <li>A question PROPOSING one drug she is not already taking, admitted by
@@ -2372,10 +2372,12 @@ public class DrugReferenceInjector {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
-			// An INTERACTION the data rates as a reason to withhold, stating the proposal clause and never
-			// its current-medication counterpart — so a finding about the drug proposed. Not a
-			// contraindication: see this method's javadoc.
+			// An INTERACTION the data RATES a reason to withhold — never an unrated rule, nor a class
+			// relationship folded onto a lower-rated row, both of which withhold only because they are
+			// not cautions — stating the proposal clause and never its current-medication counterpart,
+			// so a finding about the drug proposed. Not a contraindication: see this method's javadoc.
 			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())
 					&& STRENGTH_WITHHOLD.equals(strengthClause(finding))) {
 				return true;
 			}
@@ -2423,9 +2425,10 @@ public class DrugReferenceInjector {
 	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
 	 * cannot take the answer's first sentence and leave the question unanswered. One key does both,
 	 * because the two never meet: only the screening arm relates two of her own medications, and it
-	 * stands down for a question that resolved a drug. Within each group, strongest first by the
-	 * ranking the prompt gives the model, read off {@link #strengthClause} and never off the severity
-	 * word; stable, so the injection order stands within a class.
+	 * stands down for a question that resolved a drug. Within each group, strongest first — withhold,
+	 * change a current medication, then the two cautions, the order the prompt gives the model for the
+	 * first three and this module's own choice between the last two — read off {@link #strengthClause}
+	 * and never off the severity word; stable, so the injection order stands within a class.
 	 *
 	 * <p><b>That last sort is a defence nothing observes today.</b> The arms already append a
 	 * proposed drug's findings strongest first — its contraindications, which always withhold, and

@@ -26,6 +26,9 @@
    "atc": [
     "J04AK05"
    ],
+   "brand_names": [
+    "Sirturo"
+   ],
    "ciel": [
     {
      "code": "163143",
@@ -42,6 +45,17 @@
    "drugbank_id": "DB00300",
    "atc": [
     "J05AF07"
+   ],
+   "brand_names": [
+    "Atripla",
+    "Cimduo",
+    "Complera",
+    "Delstrigo",
+    "Stribild",
+    "Symfi",
+    "Temixys",
+    "Truvada",
+    "Viread"
    ],
    "ciel": [
     {
@@ -99,6 +113,18 @@
    "drugbank_id": "DB00879",
    "atc": [
     "J05AF09"
+   ],
+   "brand_names": [
+    "Atripla",
+    "Biktarvy",
+    "Complera",
+    "Descovy",
+    "Emtriva",
+    "Genvoya",
+    "Odefsey",
+    "Stribild",
+    "Symtuza",
+    "Truvada"
    ],
    "ciel": [
     {

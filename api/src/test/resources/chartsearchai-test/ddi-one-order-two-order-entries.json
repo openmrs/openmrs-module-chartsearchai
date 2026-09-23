@@ -32,6 +32,12 @@
    "atc": [
     "J05AF06"
    ],
+   "brand_names": [
+    "Epzicom",
+    "Triumeq",
+    "Trizivir",
+    "Ziagen"
+   ],
    "ciel": [
     {
      "code": "103166",
@@ -72,6 +78,17 @@
     "H02CA03",
     "J02AB02"
    ],
+   "brand_names": [
+    "Extina",
+    "Ketochlor",
+    "Ketodan",
+    "Kuric",
+    "Mal-A-Ket Wipes",
+    "Malacetic",
+    "Nizoral",
+    "Recorlev",
+    "Xolegel"
+   ],
    "ciel": [
     {
      "code": "78476",
@@ -91,6 +108,17 @@
     "G01AF11",
     "H02CA03",
     "J02AB02"
+   ],
+   "brand_names": [
+    "Extina",
+    "Ketochlor",
+    "Ketodan",
+    "Kuric",
+    "Mal-A-Ket Wipes",
+    "Malacetic",
+    "Nizoral",
+    "Recorlev",
+    "Xolegel"
    ],
    "ciel": [
     {

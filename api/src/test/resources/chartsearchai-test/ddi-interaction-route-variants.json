@@ -74,6 +74,7 @@
     "J01GB04",
     "S01AA24"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "78385",
@@ -96,6 +97,12 @@
    "atc": [
     "M01AB15",
     "S01BC05"
+   ],
+   "brand_names": [
+    "Acular",
+    "Acuvail",
+    "Omidria",
+    "Sprix"
    ],
    "ciel": [
     {
@@ -120,6 +127,12 @@
     "M01AB15",
     "S01BC05"
    ],
+   "brand_names": [
+    "Acular",
+    "Acuvail",
+    "Omidria",
+    "Sprix"
+   ],
    "ciel": [
     {
      "code": "78481",
@@ -142,6 +155,7 @@
    "atc": [
     "B01AE02"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "78730",
@@ -158,6 +172,10 @@
    "drugbank_id": "DB00338",
    "atc": [
     "A02BC05"
+   ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
    ],
    "ciel": [
     {
@@ -199,6 +217,22 @@
     "R01AB07",
     "S01GA04"
    ],
+   "brand_names": [
+    "Afrin",
+    "Allerest 12 Hour Nasal Spray",
+    "Dristan 12-Hour Nasal Spray",
+    "Duramist Plus",
+    "Kovanaze",
+    "Neo-Synephrine 12 Hour",
+    "Nostrilla",
+    "Qlearquil Nasal Decongestant",
+    "Rhofade",
+    "Sinex Long-Acting",
+    "Sinufrin Plus",
+    "Sudafed OM",
+    "Upneeq",
+    "Zicam Sinus Relief"
+   ],
    "ciel": [
     {
      "code": "81345",
@@ -223,6 +257,22 @@
     "R01AA05",
     "R01AB07",
     "S01GA04"
+   ],
+   "brand_names": [
+    "Afrin",
+    "Allerest 12 Hour Nasal Spray",
+    "Dristan 12-Hour Nasal Spray",
+    "Duramist Plus",
+    "Kovanaze",
+    "Neo-Synephrine 12 Hour",
+    "Nostrilla",
+    "Qlearquil Nasal Decongestant",
+    "Rhofade",
+    "Sinex Long-Acting",
+    "Sinufrin Plus",
+    "Sudafed OM",
+    "Upneeq",
+    "Zicam Sinus Relief"
    ],
    "ciel": [
     {
@@ -249,6 +299,22 @@
     "R01AB07",
     "S01GA04"
    ],
+   "brand_names": [
+    "Afrin",
+    "Allerest 12 Hour Nasal Spray",
+    "Dristan 12-Hour Nasal Spray",
+    "Duramist Plus",
+    "Kovanaze",
+    "Neo-Synephrine 12 Hour",
+    "Nostrilla",
+    "Qlearquil Nasal Decongestant",
+    "Rhofade",
+    "Sinex Long-Acting",
+    "Sinufrin Plus",
+    "Sudafed OM",
+    "Upneeq",
+    "Zicam Sinus Relief"
+   ],
    "ciel": [
     {
      "code": "81345",
@@ -270,6 +336,9 @@
    "drugbank_id": "DB00780",
    "atc": [
     "N06AF03"
+   ],
+   "brand_names": [
+    "Nardil"
    ],
    "ciel": [
     {
@@ -294,6 +363,11 @@
     "N01BA04",
     "S01HA08"
    ],
+   "brand_names": [
+    "Clorotekal",
+    "Iheezo",
+    "Nesacaine"
+   ],
    "ciel": [
     {
      "code": "73294",
@@ -316,6 +390,11 @@
    "atc": [
     "N01BA04",
     "S01HA08"
+   ],
+   "brand_names": [
+    "Clorotekal",
+    "Iheezo",
+    "Nesacaine"
    ],
    "ciel": [
     {
@@ -341,6 +420,20 @@
     "M01AB05",
     "M02AA15",
     "S01BC03"
+   ],
+   "brand_names": [
+    "Aleve Arthritis Pain",
+    "Arthrotec",
+    "Cambia",
+    "Cataflam",
+    "Licart",
+    "Lofena",
+    "Pennsaid",
+    "Trifena",
+    "Voltaren",
+    "Xiclo",
+    "Zipsor",
+    "Zorvolex"
    ],
    "ciel": [
     {
@@ -392,6 +485,20 @@
     "M02AA15",
     "S01BC03"
    ],
+   "brand_names": [
+    "Aleve Arthritis Pain",
+    "Arthrotec",
+    "Cambia",
+    "Cataflam",
+    "Licart",
+    "Lofena",
+    "Pennsaid",
+    "Trifena",
+    "Voltaren",
+    "Xiclo",
+    "Zipsor",
+    "Zorvolex"
+   ],
    "ciel": [
     {
      "code": "104486",
@@ -439,6 +546,10 @@
    "atc": [
     "A02BC05"
    ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
+   ],
    "ciel": [
     {
      "code": "167977",
@@ -483,6 +594,73 @@
     "S01BA02",
     "S01CB03",
     "S02BA01"
+   ],
+   "brand_names": [
+    "Ala-Cort",
+    "Alcortin",
+    "Alcortin A",
+    "Alkindi",
+    "Alocane Anti-Itch",
+    "Ana-Lex",
+    "Analpram HC",
+    "Anucort-HC",
+    "Anusol HC",
+    "Aquanil HC",
+    "Aquaphor Itch Relief",
+    "Beta-HC",
+    "Caldecort",
+    "Cipro HC",
+    "Cortaid",
+    "Cortane-B",
+    "Cortef",
+    "Cortenema",
+    "Corticool",
+    "Cortifoam",
+    "Cortisporin",
+    "Cortisporin-TC",
+    "Cortizone",
+    "Dermacort",
+    "Dermazene",
+    "Dermtex HC",
+    "Epifoam",
+    "Evesse",
+    "Gynecort",
+    "Hemmorex",
+    "Hemorrodil Plus",
+    "Hemril",
+    "Instacort",
+    "Kera-HC",
+    "Khindivi",
+    "Locoid",
+    "Malacetic",
+    "MiCort-HC",
+    "Monistat Itch Relief",
+    "Neo-Polycin HC",
+    "Novacort",
+    "Nucort",
+    "Oticin HC",
+    "Pandel",
+    "Pramosone",
+    "Procort 1.85/1.15",
+    "Procto-Kit",
+    "Procto-Med",
+    "Procto-Pak",
+    "Proctocort",
+    "Proctofoam-HC",
+    "Proctosol",
+    "Proctozone HC",
+    "Recort Plus",
+    "Sarnol-HC",
+    "Scalacort",
+    "Scalpicin Itch Relief",
+    "Solu-Cortef",
+    "Texacort",
+    "U-Cort",
+    "Vagisil Satin",
+    "Vanoxide-HC",
+    "Vytone",
+    "Westcort",
+    "Xerese"
    ],
    "ciel": [
     {
@@ -749,6 +927,73 @@
     "S01CB03",
     "S02BA01"
    ],
+   "brand_names": [
+    "Ala-Cort",
+    "Alcortin",
+    "Alcortin A",
+    "Alkindi",
+    "Alocane Anti-Itch",
+    "Ana-Lex",
+    "Analpram HC",
+    "Anucort-HC",
+    "Anusol HC",
+    "Aquanil HC",
+    "Aquaphor Itch Relief",
+    "Beta-HC",
+    "Caldecort",
+    "Cipro HC",
+    "Cortaid",
+    "Cortane-B",
+    "Cortef",
+    "Cortenema",
+    "Corticool",
+    "Cortifoam",
+    "Cortisporin",
+    "Cortisporin-TC",
+    "Cortizone",
+    "Dermacort",
+    "Dermazene",
+    "Dermtex HC",
+    "Epifoam",
+    "Evesse",
+    "Gynecort",
+    "Hemmorex",
+    "Hemorrodil Plus",
+    "Hemril",
+    "Instacort",
+    "Kera-HC",
+    "Khindivi",
+    "Locoid",
+    "Malacetic",
+    "MiCort-HC",
+    "Monistat Itch Relief",
+    "Neo-Polycin HC",
+    "Novacort",
+    "Nucort",
+    "Oticin HC",
+    "Pandel",
+    "Pramosone",
+    "Procort 1.85/1.15",
+    "Procto-Kit",
+    "Procto-Med",
+    "Procto-Pak",
+    "Proctocort",
+    "Proctofoam-HC",
+    "Proctosol",
+    "Proctozone HC",
+    "Recort Plus",
+    "Sarnol-HC",
+    "Scalacort",
+    "Scalpicin Itch Relief",
+    "Solu-Cortef",
+    "Texacort",
+    "U-Cort",
+    "Vagisil Satin",
+    "Vanoxide-HC",
+    "Vytone",
+    "Westcort",
+    "Xerese"
+   ],
    "ciel": [
     {
      "code": "103309",
@@ -1013,6 +1258,73 @@
     "S01BA02",
     "S01CB03",
     "S02BA01"
+   ],
+   "brand_names": [
+    "Ala-Cort",
+    "Alcortin",
+    "Alcortin A",
+    "Alkindi",
+    "Alocane Anti-Itch",
+    "Ana-Lex",
+    "Analpram HC",
+    "Anucort-HC",
+    "Anusol HC",
+    "Aquanil HC",
+    "Aquaphor Itch Relief",
+    "Beta-HC",
+    "Caldecort",
+    "Cipro HC",
+    "Cortaid",
+    "Cortane-B",
+    "Cortef",
+    "Cortenema",
+    "Corticool",
+    "Cortifoam",
+    "Cortisporin",
+    "Cortisporin-TC",
+    "Cortizone",
+    "Dermacort",
+    "Dermazene",
+    "Dermtex HC",
+    "Epifoam",
+    "Evesse",
+    "Gynecort",
+    "Hemmorex",
+    "Hemorrodil Plus",
+    "Hemril",
+    "Instacort",
+    "Kera-HC",
+    "Khindivi",
+    "Locoid",
+    "Malacetic",
+    "MiCort-HC",
+    "Monistat Itch Relief",
+    "Neo-Polycin HC",
+    "Novacort",
+    "Nucort",
+    "Oticin HC",
+    "Pandel",
+    "Pramosone",
+    "Procort 1.85/1.15",
+    "Procto-Kit",
+    "Procto-Med",
+    "Procto-Pak",
+    "Proctocort",
+    "Proctofoam-HC",
+    "Proctosol",
+    "Proctozone HC",
+    "Recort Plus",
+    "Sarnol-HC",
+    "Scalacort",
+    "Scalpicin Itch Relief",
+    "Solu-Cortef",
+    "Texacort",
+    "U-Cort",
+    "Vagisil Satin",
+    "Vanoxide-HC",
+    "Vytone",
+    "Westcort",
+    "Xerese"
    ],
    "ciel": [
     {

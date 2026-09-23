@@ -18,6 +18,7 @@
    "rxnorm_name": "Moderna COVID-19 Vaccine",
    "drugbank_id": null,
    "atc": [],
+   "brand_names": [],
    "ciel": []
   },
   {
@@ -27,6 +28,7 @@
    "rxnorm_name": "Tick-borne encephalitis vaccine (whole virus, inactivated)",
    "drugbank_id": null,
    "atc": [],
+   "brand_names": [],
    "ciel": []
   },
   {
@@ -36,6 +38,7 @@
    "rxnorm_name": "Tick-borne encephalitis vaccine (whole virus, inactivated)",
    "drugbank_id": "DB16611",
    "atc": [],
+   "brand_names": [],
    "ciel": []
   },
   {
@@ -45,6 +48,7 @@
    "rxnorm_name": null,
    "drugbank_id": null,
    "atc": [],
+   "brand_names": [],
    "ciel": []
   }
  ],

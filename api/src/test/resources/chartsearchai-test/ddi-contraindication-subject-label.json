@@ -26,6 +26,10 @@
    "atc": [
     "N05BA06"
    ],
+   "brand_names": [
+    "Ativan",
+    "Loreev"
+   ],
    "ciel": [
     {
      "code": "79054",
@@ -45,6 +49,7 @@
     "N01BA02",
     "S01HA05"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "82561",
@@ -69,6 +74,17 @@
     "D04AB06",
     "N01BA03",
     "S01HA03"
+   ],
+   "brand_names": [
+    "Altacaine",
+    "Cetacaine",
+    "Kovanaze",
+    "Neo-Predef",
+    "Numfast",
+    "Pliaglis",
+    "Pontocaine",
+    "Synera",
+    "Tetcaine"
    ],
    "ciel": [
     {
@@ -113,6 +129,11 @@
     "N01BA04",
     "S01HA08"
    ],
+   "brand_names": [
+    "Clorotekal",
+    "Iheezo",
+    "Nesacaine"
+   ],
    "ciel": [
     {
      "code": "73294",
@@ -135,6 +156,11 @@
    "atc": [
     "N01BA04",
     "S01HA08"
+   ],
+   "brand_names": [
+    "Clorotekal",
+    "Iheezo",
+    "Nesacaine"
    ],
    "ciel": [
     {

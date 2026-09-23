@@ -18,6 +18,10 @@
    "atc": [
     "A02BC05"
    ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
+   ],
    "ciel": [
     {
      "code": "167977",
@@ -55,6 +59,9 @@
    "atc": [
     "A02BC02"
    ],
+   "brand_names": [
+    "Protonix"
+   ],
    "ciel": [
     {
      "code": "81550",
@@ -77,6 +84,9 @@
    "atc": [
     "J04AB05"
    ],
+   "brand_names": [
+    "Priftin"
+   ],
    "ciel": [
     {
      "code": "83360",
@@ -93,6 +103,10 @@
    "drugbank_id": "DB00736",
    "atc": [
     "A02BC05"
+   ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
    ],
    "ciel": [
     {
@@ -131,6 +145,7 @@
    "atc": [
     "J04AC01"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "104943",

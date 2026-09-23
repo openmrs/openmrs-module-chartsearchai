@@ -20,6 +20,19 @@
    "atc": [
     "N06BA04"
    ],
+   "brand_names": [
+    "Aptensio",
+    "Concerta",
+    "Cotempla",
+    "Daytrana",
+    "Jornay",
+    "Metadate",
+    "Methylin",
+    "QuilliChew",
+    "Quillivant",
+    "Relexxii",
+    "Ritalin"
+   ],
    "ciel": [
     {
      "code": "79739",
@@ -41,6 +54,9 @@
    "drugbank_id": "DB00745",
    "atc": [
     "N06BA07"
+   ],
+   "brand_names": [
+    "Provigil"
    ],
    "ciel": [
     {

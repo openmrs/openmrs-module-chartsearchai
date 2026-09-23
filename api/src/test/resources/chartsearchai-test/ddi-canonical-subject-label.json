@@ -26,6 +26,10 @@
    "atc": [
     "N05BA06"
    ],
+   "brand_names": [
+    "Ativan",
+    "Loreev"
+   ],
    "ciel": [
     {
      "code": "79054",
@@ -43,6 +47,11 @@
    "atc": [
     "N01BA04",
     "S01HA08"
+   ],
+   "brand_names": [
+    "Clorotekal",
+    "Iheezo",
+    "Nesacaine"
    ],
    "ciel": [
     {
@@ -66,6 +75,11 @@
    "atc": [
     "N01BA04",
     "S01HA08"
+   ],
+   "brand_names": [
+    "Clorotekal",
+    "Iheezo",
+    "Nesacaine"
    ],
    "ciel": [
     {

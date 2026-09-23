@@ -20,6 +20,36 @@
    "atc": [
     "G03CA03"
    ],
+   "brand_names": [
+    "Alora",
+    "Bijuva",
+    "Climara",
+    "Climara Pro",
+    "Combipatch",
+    "Compudose",
+    "Delestrogen",
+    "Depo-estradiol",
+    "Divigel",
+    "Elestrin",
+    "Estrace",
+    "Estring",
+    "Estrogel",
+    "Evamist",
+    "Femring",
+    "Imvexxy",
+    "Lyllana",
+    "Menostar",
+    "Minivelle",
+    "Myfembree",
+    "Revalor",
+    "Synovex",
+    "Synovex C",
+    "Synovex H",
+    "Synovex S",
+    "Vagifem",
+    "Vivelle",
+    "Yuvafem"
+   ],
    "ciel": [
     {
      "code": "104597",
@@ -117,6 +147,22 @@
     "S02BA06",
     "S03BA01"
    ],
+   "brand_names": [
+    "Ciprodex",
+    "Decadron",
+    "Dexasone",
+    "Dexium",
+    "Dexlyt",
+    "Dextenza",
+    "Dexycu",
+    "Hemady",
+    "Maxidex",
+    "Maxitrol",
+    "Ozurdex",
+    "Poly-Dex",
+    "Tobradex",
+    "Tresaderm"
+   ],
    "ciel": [
     {
      "code": "104317",
@@ -204,6 +250,36 @@
    "atc": [
     "G03CA03"
    ],
+   "brand_names": [
+    "Alora",
+    "Bijuva",
+    "Climara",
+    "Climara Pro",
+    "Combipatch",
+    "Compudose",
+    "Delestrogen",
+    "Depo-estradiol",
+    "Divigel",
+    "Elestrin",
+    "Estrace",
+    "Estring",
+    "Estrogel",
+    "Evamist",
+    "Femring",
+    "Imvexxy",
+    "Lyllana",
+    "Menostar",
+    "Minivelle",
+    "Myfembree",
+    "Revalor",
+    "Synovex",
+    "Synovex C",
+    "Synovex H",
+    "Synovex S",
+    "Vagifem",
+    "Vivelle",
+    "Yuvafem"
+   ],
    "ciel": [
     {
      "code": "104597",
@@ -290,6 +366,36 @@
    "drugbank_id": "DB00783",
    "atc": [
     "G03CA03"
+   ],
+   "brand_names": [
+    "Alora",
+    "Bijuva",
+    "Climara",
+    "Climara Pro",
+    "Combipatch",
+    "Compudose",
+    "Delestrogen",
+    "Depo-estradiol",
+    "Divigel",
+    "Elestrin",
+    "Estrace",
+    "Estring",
+    "Estrogel",
+    "Evamist",
+    "Femring",
+    "Imvexxy",
+    "Lyllana",
+    "Menostar",
+    "Minivelle",
+    "Myfembree",
+    "Revalor",
+    "Synovex",
+    "Synovex C",
+    "Synovex H",
+    "Synovex S",
+    "Vagifem",
+    "Vivelle",
+    "Yuvafem"
    ],
    "ciel": [
     {

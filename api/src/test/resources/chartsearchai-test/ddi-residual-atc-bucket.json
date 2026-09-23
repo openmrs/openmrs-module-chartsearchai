@@ -18,6 +18,19 @@
       "atc": [
         "R06AX13"
       ],
+      "brand_names": [
+        "Alavert",
+        "Alavert D",
+        "Allerclear",
+        "Claritin",
+        "Claritin-D",
+        "Cleartime Indoor & Outdoor Allergies",
+        "Loradamed",
+        "Tavist Non-Sedating",
+        "Wal-itin",
+        "Wal-itin D",
+        "Wal-vert"
+      ],
       "ciel": [
         {
           "code": "104995",
@@ -41,6 +54,14 @@
         "R05CA02",
         "S01XA04",
         "V03AB21"
+      ],
+      "brand_names": [
+        "Iosat",
+        "Lactocal",
+        "SSKI brand of Potassium Iodide",
+        "ThyroSafe",
+        "ThyroShield",
+        "Vitafol-One"
       ],
       "ciel": [
         {
@@ -111,6 +132,9 @@
         "S01XA08",
         "V03AB23"
       ],
+      "brand_names": [
+        "Acetadote"
+      ],
       "ciel": [
         {
           "code": "103316",
@@ -139,6 +163,39 @@
         "A01AD05",
         "B01AC06",
         "N02BA01"
+      ],
+      "brand_names": [
+        "Alka-Seltzer",
+        "Anacin",
+        "Anacin Advanced Headache Formula",
+        "Anacin Aspirin Regimen",
+        "Arthriten Inflammatory Pain",
+        "Ascomp",
+        "Aspergum",
+        "Aspi-Cor",
+        "BC Arthritis",
+        "BC Original Formula",
+        "Backaid IPF",
+        "Bayer Aspirin",
+        "Bromo Seltzer Antacid Pain Reliever",
+        "Bufferin",
+        "Durlaza",
+        "Ecotrin",
+        "Equagesic",
+        "Exaprin",
+        "Exaprin Plus",
+        "Excedrin",
+        "Excedrin PM Triple Action",
+        "Miniprin",
+        "Norgesic",
+        "Norwich Aspirin",
+        "Orphengesic",
+        "Pamprin Max Formula",
+        "Saleto",
+        "St. Joseph Aspirin",
+        "Stanback Headache Powder Reformulated Jan 2011",
+        "Vazalore",
+        "Yosprala"
       ],
       "ciel": [
         {
@@ -462,6 +519,10 @@
       "atc": [
         "R06AX27"
       ],
+      "brand_names": [
+        "Clarinex",
+        "Clarinex-D"
+      ],
       "ciel": [
         {
           "code": "104420",
@@ -488,6 +549,25 @@
         "R01AA14",
         "R03AA01",
         "S01EA01"
+      ],
+      "brand_names": [
+        "Adrenalin",
+        "Articadent",
+        "Auvi-Q",
+        "Citanest Forte",
+        "Epipen",
+        "Flavalta",
+        "Lignospan",
+        "Marcaine with Epinephrine",
+        "Orabloc",
+        "Primatene Mist Inhaler",
+        "Sensorcaine with Epinephrine",
+        "Septocaine",
+        "Symjepi",
+        "Ultacan",
+        "Vivacaine",
+        "Xylocaine with Epinephrine",
+        "Zorcaine"
       ],
       "ciel": [
         {
@@ -581,6 +661,25 @@
         "R03AA01",
         "S01EA01"
       ],
+      "brand_names": [
+        "Adrenalin",
+        "Articadent",
+        "Auvi-Q",
+        "Citanest Forte",
+        "Epipen",
+        "Flavalta",
+        "Lignospan",
+        "Marcaine with Epinephrine",
+        "Orabloc",
+        "Primatene Mist Inhaler",
+        "Sensorcaine with Epinephrine",
+        "Septocaine",
+        "Symjepi",
+        "Ultacan",
+        "Vivacaine",
+        "Xylocaine with Epinephrine",
+        "Zorcaine"
+      ],
       "ciel": [
         {
           "code": "103606",
@@ -672,6 +771,25 @@
         "R01AA14",
         "R03AA01",
         "S01EA01"
+      ],
+      "brand_names": [
+        "Adrenalin",
+        "Articadent",
+        "Auvi-Q",
+        "Citanest Forte",
+        "Epipen",
+        "Flavalta",
+        "Lignospan",
+        "Marcaine with Epinephrine",
+        "Orabloc",
+        "Primatene Mist Inhaler",
+        "Sensorcaine with Epinephrine",
+        "Septocaine",
+        "Symjepi",
+        "Ultacan",
+        "Vivacaine",
+        "Xylocaine with Epinephrine",
+        "Zorcaine"
       ],
       "ciel": [
         {

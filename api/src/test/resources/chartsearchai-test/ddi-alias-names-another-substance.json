@@ -33,6 +33,15 @@
     "J07BN01",
     "J07BN04"
    ],
+   "brand_names": [
+    "Comirnaty 2023-2024",
+    "Comirnaty 2024-2025",
+    "Comirnaty 2025-2026",
+    "Mnexspike 2025-2026",
+    "Spikevax 2023-2024",
+    "Spikevax 2024-2025",
+    "Spikevax 2025-2026"
+   ],
    "ciel": [
     {
      "code": "166154",
@@ -69,6 +78,19 @@
    "drugbank_id": "DB00072",
    "atc": [
     "L01FD01"
+   ],
+   "brand_names": [
+    "Enhertu",
+    "Herceptin",
+    "Herceptin Hylecta",
+    "Hercessi",
+    "Herzuma",
+    "KADCYLA",
+    "Kanjinti",
+    "Ogivri",
+    "Ontruzant",
+    "Phesgo",
+    "Trazimera"
    ],
    "ciel": [
     {
@@ -137,6 +159,7 @@
    "atc": [
     "L01FD04"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "167465",
@@ -204,6 +227,9 @@
    "atc": [
     "L01FD03"
    ],
+   "brand_names": [
+    "KADCYLA"
+   ],
    "ciel": [
     {
      "code": "167465",
@@ -269,6 +295,7 @@
    "rxnorm_name": "Moderna COVID-19 Vaccine",
    "drugbank_id": null,
    "atc": [],
+   "brand_names": [],
    "ciel": []
   },
   {
@@ -278,6 +305,15 @@
    "rxnorm_name": "botulinum toxin type A",
    "drugbank_id": null,
    "atc": [],
+   "brand_names": [
+    "Botox",
+    "Botox Cosmetic",
+    "Daxxify",
+    "Dysport",
+    "Jeuveau",
+    "Letybo",
+    "Xeomin"
+   ],
    "ciel": [
     {
      "code": "72303",
@@ -298,6 +334,15 @@
    "rxnorm_name": "botulinum toxin type A",
    "drugbank_id": "DB00083",
    "atc": [],
+   "brand_names": [
+    "Botox",
+    "Botox Cosmetic",
+    "Daxxify",
+    "Dysport",
+    "Jeuveau",
+    "Letybo",
+    "Xeomin"
+   ],
    "ciel": [
     {
      "code": "72303",
@@ -327,6 +372,73 @@
     "S01BA02",
     "S01CB03",
     "S02BA01"
+   ],
+   "brand_names": [
+    "Ala-Cort",
+    "Alcortin",
+    "Alcortin A",
+    "Alkindi",
+    "Alocane Anti-Itch",
+    "Ana-Lex",
+    "Analpram HC",
+    "Anucort-HC",
+    "Anusol HC",
+    "Aquanil HC",
+    "Aquaphor Itch Relief",
+    "Beta-HC",
+    "Caldecort",
+    "Cipro HC",
+    "Cortaid",
+    "Cortane-B",
+    "Cortef",
+    "Cortenema",
+    "Corticool",
+    "Cortifoam",
+    "Cortisporin",
+    "Cortisporin-TC",
+    "Cortizone",
+    "Dermacort",
+    "Dermazene",
+    "Dermtex HC",
+    "Epifoam",
+    "Evesse",
+    "Gynecort",
+    "Hemmorex",
+    "Hemorrodil Plus",
+    "Hemril",
+    "Instacort",
+    "Kera-HC",
+    "Khindivi",
+    "Locoid",
+    "Malacetic",
+    "MiCort-HC",
+    "Monistat Itch Relief",
+    "Neo-Polycin HC",
+    "Novacort",
+    "Nucort",
+    "Oticin HC",
+    "Pandel",
+    "Pramosone",
+    "Procort 1.85/1.15",
+    "Procto-Kit",
+    "Procto-Med",
+    "Procto-Pak",
+    "Proctocort",
+    "Proctofoam-HC",
+    "Proctosol",
+    "Proctozone HC",
+    "Recort Plus",
+    "Sarnol-HC",
+    "Scalacort",
+    "Scalpicin Itch Relief",
+    "Solu-Cortef",
+    "Texacort",
+    "U-Cort",
+    "Vagisil Satin",
+    "Vanoxide-HC",
+    "Vytone",
+    "Westcort",
+    "Xerese"
    ],
    "ciel": [
     {
@@ -592,6 +704,73 @@
     "S01BA02",
     "S01CB03",
     "S02BA01"
+   ],
+   "brand_names": [
+    "Ala-Cort",
+    "Alcortin",
+    "Alcortin A",
+    "Alkindi",
+    "Alocane Anti-Itch",
+    "Ana-Lex",
+    "Analpram HC",
+    "Anucort-HC",
+    "Anusol HC",
+    "Aquanil HC",
+    "Aquaphor Itch Relief",
+    "Beta-HC",
+    "Caldecort",
+    "Cipro HC",
+    "Cortaid",
+    "Cortane-B",
+    "Cortef",
+    "Cortenema",
+    "Corticool",
+    "Cortifoam",
+    "Cortisporin",
+    "Cortisporin-TC",
+    "Cortizone",
+    "Dermacort",
+    "Dermazene",
+    "Dermtex HC",
+    "Epifoam",
+    "Evesse",
+    "Gynecort",
+    "Hemmorex",
+    "Hemorrodil Plus",
+    "Hemril",
+    "Instacort",
+    "Kera-HC",
+    "Khindivi",
+    "Locoid",
+    "Malacetic",
+    "MiCort-HC",
+    "Monistat Itch Relief",
+    "Neo-Polycin HC",
+    "Novacort",
+    "Nucort",
+    "Oticin HC",
+    "Pandel",
+    "Pramosone",
+    "Procort 1.85/1.15",
+    "Procto-Kit",
+    "Procto-Med",
+    "Procto-Pak",
+    "Proctocort",
+    "Proctofoam-HC",
+    "Proctosol",
+    "Proctozone HC",
+    "Recort Plus",
+    "Sarnol-HC",
+    "Scalacort",
+    "Scalpicin Itch Relief",
+    "Solu-Cortef",
+    "Texacort",
+    "U-Cort",
+    "Vagisil Satin",
+    "Vanoxide-HC",
+    "Vytone",
+    "Westcort",
+    "Xerese"
    ],
    "ciel": [
     {

@@ -7985,6 +7985,30 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Whether every one of the patient's active orders resolves to one of {@code orderEntries} — the
+	 * entries this pass resolved her orders to — by {@link #resolvesFrom}, the same test the chip arms
+	 * ask of one order and one entry. Issue #469: an order the module READ and could not name leaves
+	 * "is she already taking it?" unanswerable, so the module does not answer for the model there.
+	 */
+	static boolean everyActiveOrderResolves(DrugReferenceService service, PatientClinicalContext context,
+			List<DrugReference> orderEntries) {
+		BridgedOrders bridged = BridgedOrders.of(service, context);
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean resolved = false;
+			for (DrugReference entry : orderEntries) {
+				if (resolvesFrom(entry, order, bridged)) {
+					resolved = true;
+					break;
+				}
+			}
+			if (!resolved) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * @return the active-order reference entry {@code i} NAMES — through {@link #identifies}, the same
 	 *         name-identity test the question-pair arm uses, so both arms agree about which entry a
 	 *         rule points at — or null when that order carries no entry in the loaded dataset.

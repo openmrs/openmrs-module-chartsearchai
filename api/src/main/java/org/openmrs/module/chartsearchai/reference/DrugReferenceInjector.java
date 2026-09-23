@@ -809,7 +809,9 @@ public class DrugReferenceInjector {
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& answersFromFindings(question, questionDrugs, screenedSubstances, findings,
-						context.chartReadForSafety())) {
+						context.chartReadForSafety()
+								&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
+										orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries))) {
 			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers);
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
@@ -2344,8 +2346,11 @@ public class DrugReferenceInjector {
 	 *     nothing of what the screen found.</li>
 	 * </ul>
 	 *
-	 * <p>Both need {@code chartRead}, the chart-read verdict this pass stamped: with the orders unread
-	 * "not already taking" cannot be asked, and a screen has only part of her list to relate.
+	 * <p>Both need {@code chartRead}: the chart-read verdict this pass stamped, AND every active order
+	 * resolved to an entry ({@code DrugSafetyValidator.everyActiveOrderResolves}). An order unread, or
+	 * read and written under a name the data does not carry (a warfarin brand it lacks), leaves "not
+	 * already taking" unanswerable — the module cannot tell her "Marevan" is the warfarin proposed — and
+	 * leaves a screen with only part of her list to relate.
 	 */
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, boolean chartRead) {
@@ -2374,11 +2379,11 @@ public class DrugReferenceInjector {
 		for (SafetyWarning finding : findings) {
 			// An INTERACTION the data RATES a reason to withhold — never an unrated rule, nor a class
 			// relationship folded onto a lower-rated row, both of which withhold only because they are
-			// not cautions — stating the proposal clause and never its current-medication counterpart,
-			// so a finding about the drug proposed. Not a contraindication: see this method's javadoc.
+			// not cautions. It is about the drug proposed and not one of her own: only the screening arm
+			// relates two of her own medications, and it stands down for a question that resolved a
+			// drug. Not a contraindication: see this method's javadoc.
 			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
-					&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())
-					&& STRENGTH_WITHHOLD.equals(strengthClause(finding))) {
+					&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())) {
 				return true;
 			}
 		}

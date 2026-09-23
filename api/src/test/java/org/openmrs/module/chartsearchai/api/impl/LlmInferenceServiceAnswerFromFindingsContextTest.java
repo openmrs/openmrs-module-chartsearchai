@@ -400,6 +400,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.isAnsweredByTheModule());
 	}
 
+	/**
+	 * Issue #402's shape where the module cannot SEE it: her warfarin is written as a brand the data does
+	 * not carry, so "not already taking it" cannot be asked of it. An order the module read and could
+	 * not resolve keeps the call.
+	 */
+	@Test
+	public void aProposalBesideAnOrderTheDataCannotNameStillAsksTheModel() throws Exception {
+		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
+		assertTheModelIsAsked("Can I give her warfarin?");
+	}
+
 	/** Issue #402's shape: a question naming a drug she already takes. The drug-in-play arm states a
 	 *  proposal clause for it, so composing would make that defect deterministic. */
 	@Test

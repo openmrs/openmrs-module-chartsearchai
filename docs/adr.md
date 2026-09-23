@@ -10363,7 +10363,12 @@ of its (drug, condition) keys name more than one note.
   fails the build when the shipped knowledge base stops being the one measured. Since #485 the join above
   is its own code, and it re-derives every recorded weight through it rather than reading one total from
   the sample file, so editing a number there no longer turns it green; its class javadoc lists what it
-  checks and what it does not. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
+  checks and what it does not. Since #496 it also pins every link's ranked weights to a SHA-256 in the
+  sample file, and the sampled items to the draw's recorded positions; the class run at `27e9cf40`, where
+  the figure was measured, hashes the same bytes as at the commit that recorded them. A run that ranks
+  the links writes them to `api/target/derived-tier-precision-ranked-links.tsv`, so a re-measurement
+  after a refresh starts from the test's own ranking and weights rather than from a script that re-ranks
+  them; each adjudicated link's cause drugs are not in it. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
   - one word of note 319: `everyAdjudicatedNoteIsTheTextItWasJudgedOn`;
   - the one Major rated side of link 1660 × Hyperbilirubinemia set to Moderate:
     `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and
@@ -10388,10 +10393,16 @@ of its (drug, condition) keys name more than one note.
   - Acetaminophen added to that link's `causeDrugs` in the sample file, a drug the knowledge base does
     not read that link through: the same test;
   - control note 2 × Acidosis, Lactic's two Abacavir rows re-pointed to Didanosine, already a cause drug
-    of that link: that test and `everyKeptChainJoinsTheOneRawRowItWasReadFrom`.
+    of that link: that test and `everyKeptChainJoinsTheOneRawRowItWasReadFrom`;
+  - all 128 rows of link 940 × Hypotension, which no item adjudicates, moved to note 1, #496's mutation,
+    which leaves every count above unchanged: `everyLinkCarriesTheWeightsThePopulationWasMeasuredWith`
+    alone;
+  - one of the sample file's recorded draw positions changed: `theSampledLinksAreTheRecordedDrawFromTheRest`.
 
-  The last three were run with `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor`
-  in the class, the rest before it was added.
+  The Flibanserin, Acetaminophen and Didanosine lines were run with
+  `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor` in the class, the lines above
+  them before it was added. The last two were run with #496's two tests in the class, and the lines above
+  them before those were added, so they do not say whether those two tests redden too.
 
 **Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
 stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the

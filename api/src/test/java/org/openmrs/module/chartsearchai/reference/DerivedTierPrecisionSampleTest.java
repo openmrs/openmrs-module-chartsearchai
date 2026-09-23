@@ -15,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -28,6 +30,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ModelManifest;
+import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,11 +67,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <li>the CENSUS — still the heaviest links, by the rule the sample file records;</li>
  * <li>the TEXT each verdict was given on — the SHA-256 of every adjudicated note, read from the raw
  * {@code disease_notes} table, which the module does not load. A rewritten note leaves every count
- * unchanged, which is why this is here.</li>
+ * unchanged, which is why this is here;</li>
+ * <li>the WHOLE POPULATION — one line per link in the census rule's order, its note id, condition, kept
+ * chains and distinct rated substances, against the SHA-256 the sample file records (issue #496), so a
+ * move of chains that changes those for a link no item adjudicates is reported where every count above
+ * still holds. A run that ranks the links writes the lines it hashes to {@code api/}{@value #RANKED_LINKS}
+ * and hashes that file, so a refresh that reddens it leaves the ranking and weights to re-measure from;</li>
+ * <li>the SAMPLE — its items are the links outside the census at the draw's positions the sample file
+ * records.</li>
  * </ul>
- * Not checked: whether the sampled links are still the ones {@code random.Random(480)} would draw from
- * the rest (Python's generator is not re-derived here), and a move of chains among links no item
- * adjudicates that keeps every count above.
+ * Not checked: that those positions are what the recorded {@code random.Random(480)} draw returns (Python's
+ * generator is not re-derived here); which rated substances a link's chains are read through where its
+ * counts hold; and, for a link no item adjudicates, which cause drugs, or anything else its line does not
+ * carry, where its counts hold.
  *
  * <p>It re-derives no verdict: those are data, recorded in
  * {@code api/src/test/resources/eval/derived-tier-precision-sample.json}, and nothing here judges a note.
@@ -76,6 +87,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class DerivedTierPrecisionSampleTest {
 
 	private static final String SAMPLE = "/eval/derived-tier-precision-sample.json";
+
+	/** Where a run that ranks the links writes the enumeration it hashes, under the {@code api} module. */
+	private static final String RANKED_LINKS = "target/derived-tier-precision-ranked-links.tsv";
 
 	private static JsonNode sample;
 
@@ -309,25 +323,8 @@ public class DerivedTierPrecisionSampleTest {
 
 	@Test
 	public void theCensusIsStillTheHeaviestLinks() {
-		// The file's own rule: most kept chains, ties by numeric note id then condition.
-		List<String> ranked = new ArrayList<String>(chainsByLink.keySet());
-		List<String> unordered = new ArrayList<String>();
-		for (String link : ranked) {
-			if (!link.substring(0, link.indexOf('\t')).matches("\\d+")) {
-				unordered.add(link);
-			}
-		}
-		assertTrue(unordered.isEmpty(), "links whose note id the census rule cannot order numerically;"
-				+ " re-measure (ADR Decision 111): " + unordered);
-		ranked.sort(Comparator.<String> comparingInt(l -> -chainsByLink.get(l))
-				.thenComparingLong(l -> Long.parseLong(l.substring(0, l.indexOf('\t'))))
-				.thenComparing(l -> l.substring(l.indexOf('\t') + 1)));
-		Set<String> census = new LinkedHashSet<String>();
-		for (JsonNode item : sample.path("items")) {
-			if ("census".equals(item.path("stratum").asText())) {
-				census.add(link(item));
-			}
-		}
+		List<String> ranked = rankedLinks();
+		Set<String> census = stratum("census");
 		assertTrue(ranked.size() >= census.size(), "precondition: at least as many links as census items");
 		Set<String> entered = new LinkedHashSet<String>(ranked.subList(0, census.size()));
 		entered.removeAll(census);
@@ -335,6 +332,47 @@ public class DerivedTierPrecisionSampleTest {
 		left.removeAll(ranked.subList(0, census.size()));
 		assertTrue(entered.isEmpty() && left.isEmpty(), "the census is no longer the " + census.size()
 				+ " heaviest links; re-measure (ADR Decision 111). Now among them: " + entered + "; no longer: " + left);
+	}
+
+	@Test
+	public void everyLinkCarriesTheWeightsThePopulationWasMeasuredWith() throws Exception {
+		StringBuilder lines = new StringBuilder();
+		for (String link : rankedLinks()) {
+			lines.append(link).append('\t').append(chainsByLink.get(link)).append('\t')
+					.append(ratedSubstancesByLink.get(link).size()).append('\n');
+		}
+		// Written before the assertion, so a refresh that reddens it leaves the list to re-measure from, and the
+		// file is what is hashed, so the list left behind is the one the assertion judged.
+		Path emitted = ModuleSourceRoot.apiRoot().resolve(RANKED_LINKS);
+		Files.createDirectories(emitted.getParent());
+		Files.write(emitted, lines.toString().getBytes(StandardCharsets.UTF_8));
+		assertEquals(sample.path("population").path("rankedLinks").path("sha256").asText(),
+			ModelManifest.sha256(Files.readAllBytes(emitted)), "the ranked (link, kept chains, rated substances) enumeration is not"
+					+ " the one the precision figure was measured over; re-measure (ADR Decision 111) from " + emitted);
+	}
+
+	@Test
+	public void theSampledLinksAreTheRecordedDrawFromTheRest() {
+		List<String> ranked = rankedLinks();
+		Set<String> census = stratum("census");
+		List<String> rest = ranked.subList(Math.min(census.size(), ranked.size()), ranked.size());
+		JsonNode positions = sample.path("population").path("sample").path("positions");
+		assertTrue(positions.isArray() && positions.size() > 0, "precondition: the recorded draw's positions");
+		Set<String> drawn = new LinkedHashSet<String>();
+		for (JsonNode position : positions) {
+			assertTrue(position.isInt(), "a recorded position that is not an integer: " + position);
+			assertTrue(position.asInt() >= 0 && position.asInt() < rest.size(),
+				"a recorded position outside the " + rest.size() + " links outside the census: " + position);
+			assertTrue(drawn.add(rest.get(position.asInt())), "a position recorded twice: " + position);
+		}
+		Set<String> sampled = stratum("sample");
+		Set<String> notDrawn = new LinkedHashSet<String>(sampled);
+		notDrawn.removeAll(drawn);
+		Set<String> notFiled = new LinkedHashSet<String>(drawn);
+		notFiled.removeAll(sampled);
+		assertTrue(notDrawn.isEmpty() && notFiled.isEmpty(), "the sample stratum is not the recorded draw from the"
+				+ " links outside the census; re-measure (ADR Decision 111). Filed but not drawn: " + notDrawn
+				+ "; drawn but not filed: " + notFiled);
 	}
 
 	@Test
@@ -360,6 +398,36 @@ public class DerivedTierPrecisionSampleTest {
 			}
 		}
 		return all;
+	}
+
+	/**
+	 * Every link, by the census rule the sample file records: most kept chains, ties by numeric note id
+	 * then condition.
+	 */
+	private static List<String> rankedLinks() {
+		List<String> ranked = new ArrayList<String>(chainsByLink.keySet());
+		List<String> unordered = new ArrayList<String>();
+		for (String link : ranked) {
+			if (!link.substring(0, link.indexOf('\t')).matches("\\d+")) {
+				unordered.add(link);
+			}
+		}
+		assertTrue(unordered.isEmpty(), "links whose note id the census rule cannot order numerically;"
+				+ " re-measure (ADR Decision 111): " + unordered);
+		ranked.sort(Comparator.<String> comparingInt(l -> -chainsByLink.get(l))
+				.thenComparingLong(l -> Long.parseLong(l.substring(0, l.indexOf('\t'))))
+				.thenComparing(l -> l.substring(l.indexOf('\t') + 1)));
+		return ranked;
+	}
+
+	private static Set<String> stratum(String name) {
+		Set<String> links = new LinkedHashSet<String>();
+		for (JsonNode item : sample.path("items")) {
+			if (name.equals(item.path("stratum").asText())) {
+				links.add(link(item));
+			}
+		}
+		return links;
 	}
 
 	private static String link(JsonNode item) {

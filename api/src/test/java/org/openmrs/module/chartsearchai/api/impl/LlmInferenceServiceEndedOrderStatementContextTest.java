@@ -56,6 +56,10 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 	/** R1's shape, on this dataset's drugs: the clinician lists the ended drug as current. */
 	private static final String QUESTION = "Her current medications are aspirin and ibuprofen. Any interactions?";
 
+	/** R1's shape again, on omeprazole. */
+	private static final String OMEPRAZOLE_QUESTION = "Her current medications are aspirin and omeprazole. "
+			+ "Any interactions?";
+
 	/**
 	 * Decision 110's recorded arm-C lead to R1, verbatim, with a marker — then naming the finding's
 	 * partner by the chip's own name for it, so ADR Decision 100's completion has nothing to add and
@@ -81,6 +85,10 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 
 	private static RecordMapping endedIbuprofen() {
 		return DrugReferenceTestSupport.drugOrderRecord(2, "Ibuprofen 400mg", Boolean.FALSE, STOPPED);
+	}
+
+	private static RecordMapping endedOmeprazole() {
+		return DrugReferenceTestSupport.drugOrderRecord(2, "Omeprazole 20mg", Boolean.FALSE, STOPPED);
 	}
 
 	private static TestableService serviceWith(String modelAnswer, RecordMapping... chartRecords) {
@@ -362,8 +370,7 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		String stated = "The order no longer in force is her Clarithromycin / Esomeprazole / Levofloxacin "
 				+ "combination kit [2]. Omeprazole interacts with her Acetylsalicylic acid (aspirin) [1].";
 		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
-			DrugReferenceTestSupport.drugOrderRecord(2, "Omeprazole 20mg", Boolean.FALSE, STOPPED))
-				.search(patient, "Her current medications are aspirin and omeprazole. Any interactions?");
+			endedOmeprazole()).search(patient, OMEPRAZOLE_QUESTION);
 
 		assertAnEndedChip(answer);
 		assertEquals(stated, answer.getAnswer(), "the kit's name is also this drug's, so nothing is appended");
@@ -379,8 +386,7 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		String stated = "Her Clarithromycin / Esomeprazole / Levofloxacin combination kit order is no longer in "
 				+ "force [2]. Omeprazole interacts with her Acetylsalicylic acid (aspirin) [1].";
 		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
-			DrugReferenceTestSupport.drugOrderRecord(2, "Omeprazole 20mg", Boolean.FALSE, STOPPED))
-				.search(patient, "Her current medications are aspirin and omeprazole. Any interactions?");
+			endedOmeprazole()).search(patient, OMEPRAZOLE_QUESTION);
 
 		assertAnEndedChip(answer);
 		assertEquals(stated, answer.getAnswer(), "the kit's name is also this drug's, so nothing is appended");
@@ -400,12 +406,11 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		String stated = "Her Clarithromycin / Esomeprazole / Levofloxacin combination kit/metformin order is no "
 				+ "longer in force [2]. Omeprazole interacts with her Acetylsalicylic acid (aspirin) [1].";
 		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
-			DrugReferenceTestSupport.drugOrderRecord(2, "Omeprazole 20mg", Boolean.FALSE, STOPPED))
-				.search(patient, "Her current medications are aspirin and omeprazole. Any interactions?");
+			endedOmeprazole()).search(patient, OMEPRAZOLE_QUESTION);
 
 		assertAnEndedChip(answer);
 		assertEquals(stated, answer.getAnswer(),
-				"the kit's name joined to metformin is also this drug's, so nothing is appended");
+				"the combination names this drug as well as metformin, so nothing is appended");
 	}
 
 	/** A hyphen inside a word joins a combination name, which names ibuprofen as well as the nearer metformin. */

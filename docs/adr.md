@@ -9807,7 +9807,9 @@ rating below `major` is a caution.** Nothing else about the split moves:
   every flipped cell still states its rating AND its class relationship, unlicensed verdicts stay
   0 → 0, and no other cell moves.
   - *The population*, over the shipped knowledge base (`DdiDrugReferenceSource.load()`) with the
-    bundled groups file. Through `DrugReference.atcSubgroups()` intersected, the partner by
+    bundled groups file, counted in interaction rows AS LOADED — one per orientation, since the parser
+    files each link under both of its drugs and either orientation can fold, so about twice the file's
+    own rows. Through `DrugReference.atcSubgroups()` intersected, the partner by
     `DrugReferenceService.lookupByToken` and `CrossReactivityGroup.sharedGroup`: **108 of the 24,690**
     Minor rows share a level-4 subgroup (the figure `licensesWithholding`'s javadoc records,
     reproduced) and none a curated group; **3,080 of the 378,830** Moderate rows share one or the
@@ -9815,9 +9817,9 @@ rating below `major` is a caution.** Nothing else about the split moves:
     on *"Can I give this patient {subject}?"* with the partner as the only active order — the rule
     chip at that row's rating carries the fold for **101** Minor and **3,015** Moderate rows
     (52 and 1,561 unordered display-name pairs), and `licensesWithholding` answers true for every
-    one. Calibration for that second figure: it was taken over a prefilter admitting only rows whose two
-    drugs share an ATC level-2 prefix or a curated group, and 3,000 rows sampled from outside it folded
-    none. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
+    one. Why the arm's figure is the smaller one was not investigated. Calibration for that second
+    figure: it was taken over a prefilter admitting only rows whose two drugs share an ATC level-2
+    prefix or a curated group, and 3,000 rows sampled from outside it folded none. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
   - *The A/B*, on the 3.7.1 standalone: `main` @ `27e9cf40` against the same tree with the
     `carriesUnratedRelationship()` leg removed, `capture_probe_safety.sh` over 21 cells (Kamwara
     `1530b813-…`, `23c54782-…` on Metronidazole and `83f95445-…` on Methotrexate × efavirenz,
@@ -9836,7 +9838,7 @@ rating below `major` is a caution.** Nothing else about the split moves:
     does not; the criterion was not written to excuse either.
 
   What is left is the same residue, now measured: by the arm's figure a fold of two cautions
-  withholds on 3,116 of the shipped knowledge base's 403,520 Minor and Moderate rows. A later
+  withholds on 3,116 of the 403,520 Minor and Moderate rows as loaded. A later
   proposal to grade it would have to show the caution-led answer stating both claims, which is a
   prompt question this measurement did not try to answer.
 - **The current-medication caution branch now asks for the rating, and opens as the change branch

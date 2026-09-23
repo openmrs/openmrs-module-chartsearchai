@@ -663,7 +663,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			this.text = text;
 		}
 
-		/** The record as the prompt carries it, so a precondition failing over a list reads as one. */
+		/** The record's number and text, so a precondition failing over a list reads as one. */
 		@Override
 		public String toString() {
 			return "[" + index + "] " + text;

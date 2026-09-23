@@ -46,4 +46,13 @@ public final class SafetyWarningFixtures {
 		return SafetyWarning.contraindication(drug, detail, true, false,
 			Collections.<String> emptySet());
 	}
+
+	/**
+	 * An interaction chip about a drug the chart records only as an order no longer in force — the
+	 * shape issue #472 is about — stated through {@code SafetyWarning.asAboutAnEndedOrder}, the one way
+	 * the drug-in-play arm states it.
+	 */
+	public static SafetyWarning endedOrderInteraction(String drug, String detail, String severity) {
+		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, drug, detail, severity).asAboutAnEndedOrder();
+	}
 }

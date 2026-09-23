@@ -114,6 +114,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
 - [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
 - [Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+- [Decision 110: A finding about a drug the chart records only as an ended order says so, rather than reading as a proposal](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -9699,3 +9700,68 @@ yes, and which questions the shapes refuse that the issue's cells expected answe
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest` — the real injector and validator on patient 7,
 both paths; mutate a conjunct of `answersFromFindings`, or delete a shape, and read the failures — and `ChartSearchAiAnsweredByTheModuleTest`.
+
+## Decision 110: A finding about a drug the chart records only as an ended order says so, rather than reading as a proposal
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#472](https://github.com/openmrs/openmrs-module-chartsearchai/issues/472).
+
+### Context
+
+On a RefApp 3.7.1 standalone (patient `2d384cef-da03-4a3b-beb1-632011eb8654`: active Lamivudine and
+Nevirapine, a discontinued Rifampicin), the interaction screen was scoped correctly — *"Check her current
+medications for drug interactions."* related only the active pair — but a question NAMING the stopped
+drug was not: *"Her current medications are lamivudine, nevirapine and rifampicin. Any interactions?"*
+and *"Why was her rifampicin stopped, and does it matter for her current medications?"* each raised a
+Major chip "Rifampicin interacts with active order Nevirapine", and the answers read *"a reason to
+withhold it"* and *"No — Rifampicin should not be given"*. The drug-in-play arm raises every finding
+about a question-named drug as a PROPOSAL, and nothing in it read the chart's own in-force stamp
+(`RecordMapping.getOrderActive()`, issue #317), which said the order was not in force. Retrieval was not the cause: the screen's
+medication list is `getActiveOrders` alone, and scoping retrieval would have removed the history the
+questions about it need.
+
+### Decision
+
+**A third REFERENT, beside a proposal and [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)'s current
+medication**: `SafetyWarning.isAboutAnEndedOrder()`, set by the drug-in-play arm for a substance in play
+that no active order resolves to, that no chart record stamped IN FORCE names, and that a record stamped
+NOT IN FORCE does name — the stamp's `null` is neither. Both classes, interaction and contraindication,
+because the condition is one condition. The record states one of two clauses in place of the proposal
+pair, the prompt's safety paragraph teaches both in their own words, the ranking sentence places the
+withholding one, and the chip publishes `aboutAnEndedOrder`.
+
+**The act is CONDITIONAL, and the referent is named in the prompt's existing words.** The first draft
+said "a reason not to restart it", and the plan's refutation gate cited Decision 72's own finding
+against it: an act that presupposes a proposal is what made the model manufacture one. So the clause
+reads "a reason against giving it should it be proposed again", and names the referent as the prompt
+already names such a record ("no longer in force", after `PatientChartSerializer.INACTIVE_ORDER_LABEL`)
+rather than as "stopped" — the stamp is also `FALSE` for a voided order, which was never stopped.
+
+**It composes with [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).**
+A question PROPOSING a drug the chart holds as ended is still one the module answers there: the
+ended-order withholding clause is ranked in its composer and carries the withholding lead, since the
+admitted question meets the condition that clause states its call under.
+
+### The measurement
+
+Recorded below from the two-build A/B this change was gated on.
+
+### Residues
+
+- A chart that did not RETRIEVE the ended record states nothing, and the finding stays a proposal as
+  before — the in-force question is the chart builder's, written in one place, and is not asked of
+  `OrderService` a second time here.
+- A record naming the drug outside its drug field (an order reason) is read as naming it — the echo
+  test's own residue, since it is the same predicate.
+- The question-PAIR arm and the dose arm state no ended-order referent; the chip's `detail` is
+  unchanged, so a client renders the referent only by reading `aboutAnEndedOrder`
+  (`openmrs-esm-chartsearchai`'s half). The chip carries no stop date: the record the finding rests on
+  states it, and `orderStopDates` publishes it where that record is cited.
+- Both clauses are longer than `ReferenceProseFidelityCheck`'s floor, so an answer paraphrasing one
+  mid-sentence can raise that WARN where the eight-word proposal clause could not — Decision 72's
+  recorded cost, one referent over.
+
+→ `EndedOrderFindingReferentTest` (the real injector and validator over querystore's real rendered
+order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and read the failures),
+`SafetyVerdictSeverityGradationTest.theEndedOrderBranchIsExactlyTheseWords`,
+`ChartSearchAiSafetyWarningSeverityWireTest`.

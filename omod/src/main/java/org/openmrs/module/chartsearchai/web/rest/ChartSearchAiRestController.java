@@ -1671,6 +1671,10 @@ public class ChartSearchAiRestController {
 			// non-JDK ChartOrderBridge marshals fine; what XStream refuses is java.util.Collections'
 			// immutable collection wrappers specifically.
 			map.put("restsOnAnUncorroboratedChartMatch", warning.restsOnAnUncorroboratedChartMatch());
+			// Issue #472: whether the chip is about a drug this patient's chart records only as an order
+			// no longer in force. false is no certificate that the drug is current:
+			// SafetyWarning.isAboutAnEndedOrder() says why.
+			map.put("aboutAnEndedOrder", warning.isAboutAnEndedOrder());
 			out.add(map);
 		}
 		return out;

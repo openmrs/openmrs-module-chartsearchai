@@ -101,6 +101,9 @@ public class SafetyWarning {
 	/** @see #restsOnSharedClassificationAlone() */
 	private final boolean restsOnSharedClassificationAlone;
 
+	/** @see #isAboutAnEndedOrder() */
+	private final boolean aboutAnEndedOrder;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -274,6 +277,18 @@ public class SafetyWarning {
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners) {
+		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
+				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, false);
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
+			List<String> namedPartners, boolean aboutAnEndedOrder) {
+		this.aboutAnEndedOrder = aboutAnEndedOrder;
 		// Copied and wrapped for the reason chartOrderBridges is. Never null, so no reader branches on
 		// absence; namedPartners()'s javadoc is the one place that says what empty covers.
 		this.namedPartners = namedPartners == null || namedPartners.isEmpty()
@@ -912,6 +927,38 @@ public class SafetyWarning {
 	 */
 	boolean isAboutACurrentMedication() {
 		return aboutACurrentMedication;
+	}
+
+	/**
+	 * Whether this finding is about a drug this patient's CHART records only as an order no longer in
+	 * force — the third REFERENT beside a proposal and {@link #isAboutACurrentMedication()} (issue
+	 * #472). Set by {@code DrugSafetyValidator}'s drug-in-play arm, through
+	 * {@link #asAboutAnEndedOrder}, and never read off the detail; the two referents are exclusive, so
+	 * a finding about a current medication never answers true here.
+	 *
+	 * <p><b>{@code false} is not a certificate that the drug is current.</b> It is also the answer
+	 * wherever the chart the module built carries no record of the ended order (a query-scoped slice
+	 * need not retrieve it), wherever the module could not say whether an order is in force (the stamp's
+	 * {@code null}, which {@code SerializedRecord.orderActive} enumerates), and for every arm but the
+	 * drug-in-play one. Published verbatim as the chip's {@code aboutAnEndedOrder} key.
+	 */
+	public boolean isAboutAnEndedOrder() {
+		return aboutAnEndedOrder;
+	}
+
+	/**
+	 * This warning, stated as about a drug the chart records only as an ended order (issue #472) — or
+	 * this very warning, unchanged, where it is already about a current medication: the two referents
+	 * are exclusive and the current-medication one is the arm's own statement, so it is never
+	 * overridden. Package-private: the drug-in-play arm is its only caller.
+	 */
+	SafetyWarning asAboutAnEndedOrder() {
+		if (aboutACurrentMedication) {
+			return this;
+		}
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, true);
 	}
 
 	/**

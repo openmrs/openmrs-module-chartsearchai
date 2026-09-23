@@ -867,7 +867,12 @@ public class DrugSafetyValidator {
 		// ContraindicationChips. It has to span them: one substance's route variants can arrive as
 		// several drugs in play, as several entries of one active order, or as some of each, and a
 		// collapse living inside one arm would still let the other emit the siblings.
-		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects);
+		// Which substances in play this patient's CHART holds only as an order no longer in force —
+		// issue #472. Decided ONCE for the pass, off the rows just resolved, and handed to the two
+		// places the drug-in-play arm's findings are built: the contraindication ledger below and
+		// addInteractionWarnings. A per-pass local, for issue #172's reason. See EndedOrders.
+		EndedOrders endedOrders = EndedOrders.of(inPlay, resolvedRows, orderEntries, mappings);
+		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects, endedOrders);
 
 		// Which substances may still owe the interaction arm and the dose arm their one call — "may",
 		// because since the widening these also carry the substances only the ORDERS resolved, which owe
@@ -991,7 +996,7 @@ public class DrugSafetyValidator {
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
 				int related = addInteractionWarnings(warnings, rows, subjects, context, severityFloor,
-						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
+						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, endedOrders);
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
 					questionDrugPairs += related;
@@ -2269,6 +2274,107 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Which substances IN PLAY this patient's chart holds only as an order no longer in force — the
+	 * third referent a drug-in-play finding can have, beside a proposal and a current medication
+	 * (issue #472). Decided once per {@code validate} pass and applied where that arm's findings are
+	 * built ({@link ContraindicationChips#add} and {@link #addInteractionWarnings}), so the chip and the
+	 * injected record the model reads state the same referent.
+	 *
+	 * <p><b>The in-force question is the chart builder's, never re-derived here</b>: a record is ENDED
+	 * where {@code RecordMapping.getOrderActive()} is {@code FALSE} and IN FORCE where it is
+	 * {@code TRUE}, and {@code null} — the module cannot say — is neither (root {@code CLAUDE.md}: that
+	 * stamp is written in one place). The identity question is {@link #namesAnyOf}, the prose predicate
+	 * the echo test asks of a chart record's text, over every row of the substance.
+	 *
+	 * <p>A substance qualifies only where no active order {@code findForActiveOrders} resolved is of it
+	 * AND no record stamped in force names it — the second for an order in force the reference data
+	 * could not resolve, which would otherwise read as ended beside an older record of the same drug.
+	 *
+	 * <p><b>What it cannot see</b>: an ended order the chart the module built does not carry — a
+	 * query-scoped slice need not retrieve it — states nothing, and the finding stays a proposal, as
+	 * before this issue. And a record naming the drug somewhere other than its drug field (an order
+	 * reason, say) is read as naming it, the echo test's own residue.
+	 *
+	 * <p>A per-pass value and never a field, for issue #172's reason.
+	 */
+	private static final class EndedOrders {
+
+		private static final EndedOrders NONE = new EndedOrders(Collections.<Object> emptySet());
+
+		/** The substance group keys this pass holds as recorded only in ended orders. */
+		private final Set<Object> substances;
+
+		private EndedOrders(Set<Object> substances) {
+			this.substances = substances;
+		}
+
+		/**
+		 * @param inPlay the pass's drugs in play — the question's, and the answer's the echo test kept
+		 * @param resolvedRows every row of each substance the pass resolved, keyed by
+		 *        {@code substanceGroupKey()}
+		 * @param orderEntries her active orders resolved by {@code findForActiveOrders}, the one list
+		 * @param mappings the chart's records, or {@code null} where the caller has none
+		 */
+		static EndedOrders of(Set<DrugReference> inPlay, Map<Object, List<DrugReference>> resolvedRows,
+				List<DrugReference> orderEntries, List<RecordMapping> mappings) {
+			if (mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
+				return NONE;
+			}
+			// Gated on the chart builder's in-force STAMP and never on a type name: it is non-null only
+			// for a drug-order record, and null — "the module cannot say" — is read as neither.
+			List<String> ended = new ArrayList<String>();
+			List<String> inForce = new ArrayList<String>();
+			for (RecordMapping mapping : mappings) {
+				if (mapping.getText() == null) {
+					continue;
+				}
+				if (Boolean.FALSE.equals(mapping.getOrderActive())) {
+					ended.add(mapping.getText().toLowerCase(Locale.ROOT));
+				} else if (Boolean.TRUE.equals(mapping.getOrderActive())) {
+					inForce.add(mapping.getText().toLowerCase(Locale.ROOT));
+				}
+			}
+			if (ended.isEmpty()) {
+				return NONE;
+			}
+			Set<Object> active = new HashSet<Object>();
+			for (DrugReference entry : orderEntries) {
+				active.add(entry.substanceGroupKey());
+			}
+			Set<Object> substances = new LinkedHashSet<Object>();
+			for (DrugReference ref : inPlay) {
+				Object substance = ref.substanceGroupKey();
+				List<DrugReference> rows = resolvedRows.get(substance);
+				// Two guards that she is ON it: an active order the reference data resolved to it, and a
+				// chart record the stamp says is in force naming it — the second for an order in force the
+				// data could not resolve, which would otherwise read as ended beside an older record.
+				if (rows != null && !active.contains(substance) && !namesAnyRow(inForce, rows)
+						&& namesAnyRow(ended, rows)) {
+					substances.add(substance);
+				}
+			}
+			return substances.isEmpty() ? NONE : new EndedOrders(substances);
+		}
+
+		/** Whether one of {@code texts} names one of a substance's rows — {@link #namesAnyOf}, the
+		 *  predicate the echo test asks of a cited chart record's text, over every row. */
+		private static boolean namesAnyRow(List<String> texts, List<DrugReference> rows) {
+			for (DrugReference row : rows) {
+				if (namesAnyOf(texts, row)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/** {@code chip} stated as about an ended order where its subject's substance is one this pass
+		 *  holds as ended, else {@code chip} itself. */
+		SafetyWarning stamp(DrugReference subject, SafetyWarning chip) {
+			return substances.contains(subject.substanceGroupKey()) ? chip.asAboutAnEndedOrder() : chip;
+		}
+	}
+
+	/**
 	 * Every contraindication chip one {@code validate} pass raises: <b>at most one per (substance,
 	 * recorded finding)</b>, whatever arm reaches it and however many reference rows the loaded
 	 * dataset files that substance as (issue #145).
@@ -2533,9 +2639,14 @@ public class DrugSafetyValidator {
 
 		private final Map<List<Object>, RaisedChip> raised = new LinkedHashMap<List<Object>, RaisedChip>();
 
-		ContraindicationChips(List<SafetyWarning> warnings, SubstanceSubjects subjects) {
+		/** @see EndedOrders */
+		private final EndedOrders endedOrders;
+
+		ContraindicationChips(List<SafetyWarning> warnings, SubstanceSubjects subjects,
+				EndedOrders endedOrders) {
 			this.warnings = warnings;
 			this.subjects = subjects;
+			this.endedOrders = endedOrders;
 		}
 
 		/**
@@ -2597,6 +2708,11 @@ public class DrugSafetyValidator {
 			// precise resolver needs: resolving the LABEL while keying per raising row gives 4 chips
 			// where 2 are correct (measured — see
 			// ContraindicationSubjectLabelTest.twoFindingsAboutOneSubjectStayTwoChips).
+			// Every contraindication chip passes through here, so this is the one place its REFERENT is
+			// stated for an ended order (issue #472) — before it is ledgered, so a replacement below
+			// carries it as the incumbent did. A no-op for the order-driven arm, whose subjects are her
+			// active substances and so never ones EndedOrders holds.
+			chip = endedOrders.stamp(subject, chip);
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
 			if (already == null) {
@@ -3536,7 +3652,7 @@ public class DrugSafetyValidator {
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
-			StatedInteractionChips statedChips, BridgedOrders bridgedOrders) {
+			StatedInteractionChips statedChips, BridgedOrders bridgedOrders, EndedOrders endedOrders) {
 		if (context == null) {
 			return 0;
 		}
@@ -3672,7 +3788,11 @@ public class DrugSafetyValidator {
 		int relatedPairs = ruleChips.size();
 		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements);
 		Collections.sort(stated, FINDING_STRENGTH_DESCENDING);
-		warnings.addAll(stated);
+		// The referent is stated here, on the chips this arm hands over, and not before the collapse or
+		// the stated-chip ledger: it cannot change which chips exist (issue #472, see EndedOrders).
+		for (SafetyWarning chip : stated) {
+			warnings.add(endedOrders.stamp(ref, chip));
+		}
 		for (String detail : classOnly) {
 			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
 			// relationship the reference data states without severity, which is why these chips are never
@@ -3683,7 +3803,7 @@ public class DrugSafetyValidator {
 			// authored it deliberately", and licensesWithholding grades the two differently. The public
 			// constructor this used to call cannot say which of the two it is, and read as the second it
 			// refused a standard two-NRTI regimen — see SafetyWarning.restsOnSharedClassificationAlone.
-			warnings.add(SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail));
+			warnings.add(endedOrders.stamp(ref, SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail)));
 		}
 		return relatedPairs;
 	}

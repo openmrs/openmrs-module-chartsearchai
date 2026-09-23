@@ -660,7 +660,7 @@ public final class DrugReferenceTestSupport {
 	 * ({@code STRENGTH_CHANGE_CURRENT_MEDICATION} and {@code STRENGTH_CAUTION_CURRENT_MEDICATION}), so
 	 * delimiting on {@code STRENGTH_WITHHOLD} alone returns the clause PLUS a call on every screening
 	 * arrangement — a bridge compared against a bridge plus a clause, whose diff reads as a bridge
-	 * defect. All four are searched and the earliest wins; a finding stating none still yields its
+	 * defect. All of them are searched (issue #472 added the ended-order pair) and the earliest wins; a finding stating none still yields its
 	 * whole tail, which is the pre-existing behaviour and is why callers that care assert the call
 	 * separately ({@code InteractionFindingChartOrderBridgeTest.callOf}).
 	 */
@@ -674,7 +674,9 @@ public final class DrugReferenceTestSupport {
 		for (String clause : Arrays.asList(DrugReferenceInjector.STRENGTH_WITHHOLD,
 			DrugReferenceInjector.STRENGTH_CAUTION,
 			DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION,
-			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION)) {
+			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION,
+			DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER,
+			DrugReferenceInjector.STRENGTH_CAUTION_ENDED_ORDER)) {
 			int found = finding.indexOf(clause, at);
 			if (found >= 0 && (end < 0 || found < end)) {
 				end = found;

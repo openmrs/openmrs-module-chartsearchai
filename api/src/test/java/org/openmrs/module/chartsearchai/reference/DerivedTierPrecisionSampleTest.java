@@ -45,17 +45,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@link DrugReference.ConditionMediatedRisk} carries plus the rated entry, and is itself checked —
  * each kept chain must match exactly one raw row. It filters no raw row on severity: which rows count
  * is decided by what the loader kept, so its {@code Major} gate is not restated. What it does have to
- * know of the loader is where an entry's id comes from (a drug row's own id or its rxcui); a drug row the
- * derived table names that resolves to no entry carrying its name, or to two, is reported rather than
- * guessed.
+ * know of the loader is where an entry's id comes from (a drug row's own id or its rxcui); a drug row two
+ * entries carrying its name could be is reported rather than guessed, and one no entry carries joins
+ * nothing, so a chain the loader kept through it is reported as unjoined.
  *
  * <p>Over that enumeration it checks:
  * <ul>
  * <li>the POPULATION — its kept chains, its links and its (link, rated substance) pairs, and that the
  * census and the sample partition it as the sample file says;</li>
  * <li>each adjudicated LINK's own weights — its kept chains and the distinct rated substances among
- * them ({@link DrugReference#substanceGroupKey()}), carried by every item and by no control, and for a
- * control that its link is still kept;</li>
+ * them ({@link DrugReference#substanceGroupKey()}), carried by every item and by no control, each item
+ * filed in the {@code census} or the {@code sample} stratum and no control in either, and for a control
+ * that its link is still kept;</li>
  * <li>the CENSUS — still the heaviest links, by the rule the sample file records;</li>
  * <li>the TEXT each verdict was given on — the SHA-256 of every adjudicated note, read from the raw
  * {@code disease_notes} table, which the module does not load. A rewritten note leaves every count
@@ -83,7 +84,7 @@ public class DerivedTierPrecisionSampleTest {
 	/** Kept chains that matched no raw row, or more than one, with how many they matched. */
 	private static Map<String, Integer> unjoinedChains;
 
-	/** Drug rows the derived table names that resolve to no built entry carrying their name, or to several. */
+	/** Drug rows that more than one built entry carrying their name could be. */
 	private static Set<String> unresolvedDrugs;
 
 	private static int keptChains;
@@ -115,18 +116,10 @@ public class DerivedTierPrecisionSampleTest {
 
 		// The file the loader reads, by the loader's own name for it.
 		JsonNode kb = read(DdiDrugReferenceSource.CLASSPATH_DEFAULT);
-		Set<String> named = new HashSet<String>();
-		for (JsonNode row : kb.path("derived_interactions")) {
-			named.add(row.path(0).asText());
-			named.add(row.path(4).asText());
-		}
 		Map<String, String> entryIdByRawId = new HashMap<String, String>();
 		unresolvedDrugs = new LinkedHashSet<String>();
 		for (JsonNode drug : kb.path("drugs")) {
 			String rawId = drug.path("id").asText();
-			if (!named.contains(rawId)) {
-				continue;
-			}
 			String name = drug.path("name").asText();
 			List<String> carrying = new ArrayList<String>(2);
 			for (String candidate : new String[] { rawId, drug.path("rxcui").asText() }) {
@@ -136,7 +129,7 @@ public class DerivedTierPrecisionSampleTest {
 			}
 			if (carrying.size() == 1) {
 				entryIdByRawId.put(rawId, carrying.get(0));
-			} else {
+			} else if (carrying.size() > 1) {
 				unresolvedDrugs.add(rawId + " (" + name + ") -> " + carrying);
 			}
 		}
@@ -185,10 +178,10 @@ public class DerivedTierPrecisionSampleTest {
 	public void everyKeptChainJoinsTheOneRawRowItWasReadFrom() {
 		assertTrue(keptChains > 0, "precondition: the shipped knowledge base carries derived chains");
 		assertTrue(unresolvedDrugs.isEmpty(),
-			"drug rows the derived table names that resolve to no built entry carrying their name, or to several: "
-					+ unresolvedDrugs);
+			"drug rows that several built entries carrying their name could be: " + unresolvedDrugs);
 		assertTrue(unjoinedChains.isEmpty(), "kept chains not matching exactly one raw derived_interactions row"
-				+ " (chain -> rows matched), so their link cannot be recovered: " + unjoinedChains);
+				+ " (chain -> rows matched), so their link cannot be recovered; re-measure (ADR Decision 111): "
+				+ unjoinedChains);
 	}
 
 	@Test
@@ -254,7 +247,7 @@ public class DerivedTierPrecisionSampleTest {
 				Integer chains = chainsByLink.get(link);
 				if (chains == null) {
 					wrong.add(link + ": no longer a link the loader keeps a chain for");
-				} else if (weighted) {
+				} else if (weighted && item.path("keptChains").isInt() && item.path("ratedSubstances").isInt()) {
 					int substances = ratedSubstancesByLink.get(link).size();
 					if (chains != item.path("keptChains").asInt()
 							|| substances != item.path("ratedSubstances").asInt()) {

@@ -9647,8 +9647,7 @@ chance of the two disagreeing.
   neuraxial anaesthesia. The prompt tells the model to lead "No" on exactly these findings too, but the
   model can weigh the mechanism text and the module does not, so the lead says only that the module's
   check found a reason to withhold the drug. Whether that is still too strong a first sentence for these
-  questions is the first thing the gate below must read. ([Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major) since made Moderate a caution, so
-  a Moderate row alone no longer licenses the module's answer.)
+  questions is the first thing the gate below must read. ([Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major) since made Moderate a caution.)
 - Where one substance is filed as several presentation rows, the finding stated is the one the arm
   elected, which can be a presentation other than the one the question named (*"Can I give her
   Acular?"* — ketorolac eye drops — stated the systemic row's rule).

@@ -19,8 +19,12 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * The knowledge base's DERIVED tier reaches the clinician (issues #391 Part B and #473): a drug in play
@@ -33,14 +37,31 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * <p>The arrangement is #359's row E, which the pairwise screen cannot reach: DDInter rates metformin
  * against stavudine and against lamivudine {@code Unknown}, with no mechanism text, below the default
  * severity floor. Every case runs the real validator over the shipped knowledge base.
+ *
+ * <p><b>Context-sensitive because the arm is gated, and OFF on a stock install</b> —
+ * {@code chartsearchai.drugSafety.derivedFindings}, ADR Decision 110, whose precision section is the
+ * reason. A contextless case runs with the property absent, which fails safe to the default, so it could
+ * not tell an arm that honours the switch from one that ignores it. {@link #setUp} turns it on for every
+ * case here; {@link #aStockInstallRaisesNoConditionMediatedFindingOnTheLinkTheReviewMeasuredFalse} and
+ * {@link #aValueTheSwitchDoesNotOfferRaisesNothing} turn it back, and they are what pin the gate.
  */
-public class ConditionMediatedFindingTest {
+public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest {
 
 	private static final String TYPE = "condition-mediated";
 
 	private static final String DISCLAIMER = "not a DDInter pairwise rating";
 
 	private static DrugReferenceService shipped;
+
+	@BeforeEach
+	public void setUp() {
+		derivedFindings(ChartSearchAiConstants.DERIVED_FINDINGS_MAJOR);
+	}
+
+	private static void derivedFindings(String value) {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS,
+			value);
+	}
 
 	private static synchronized DrugReferenceService shippedService() {
 		if (shipped == null) {
@@ -237,5 +258,164 @@ public class ConditionMediatedFindingTest {
 				+ DrugSafetyValidator.ACTIVE_ORDER_NOUN + " Stavudine (Liver Diseases, Major) names Acidosis, Lactic"),
 				"one partner, one note: " + chips.get(0).getDetail());
 		assertFalse(DrugSafetyValidator.licensesWithholding(chips.get(0)));
+	}
+
+	@Test
+	public void aStockInstallRaisesNoConditionMediatedFindingOnTheLinkTheReviewMeasuredFalse() {
+		// Metformin's drug-disease note names congestive heart failure only as a CONTRAINDICATION, and the
+		// knowledge base's matcher reads that sentence as causal, so the derived tier links metformin to
+		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 110). With the
+		// precision of the kept chains unmeasured, a stock install states none of them, and the
+		// interaction arm the same property does NOT gate still speaks.
+		derivedFindings(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS);
+
+		List<SafetyWarning> all = DrugReferenceTestSupport.validator(shippedService()).validate("",
+			"Can I give lisinopril?", onOrders("Metformin"));
+
+		assertTrue(DrugReferenceTestSupport.ofType(all, TYPE).isEmpty(), DrugReferenceTestSupport.details(all).toString());
+		assertFalse(DrugReferenceTestSupport.ofType(all, SafetyWarning.TYPE_INTERACTION).isEmpty(),
+			"the switch is the derived tier's own, and warnOnInteractions' pairwise chip stands: "
+					+ DrugReferenceTestSupport.details(all));
+		assertTrue(conditionMediated("Can I give metformin?", onOrders("Stavudine", "Lamivudine")).isEmpty(),
+			"and #473's own arrangement states nothing either");
+
+		derivedFindings(ChartSearchAiConstants.DERIVED_FINDINGS_MAJOR);
+		boolean heartFailure = false;
+		for (SafetyWarning chip : conditionMediated("Can I give lisinopril?", onOrders("Metformin"))) {
+			heartFailure |= chip.getDetail().contains("Heart Failure");
+		}
+		assertTrue(heartFailure, "precondition: switched on, the shipped data does raise the link the default"
+				+ " withholds, or this case pins nothing");
+	}
+
+	@Test
+	public void aValueTheSwitchDoesNotOfferRaisesNothing() {
+		// #391 proposed `all`; the loader keeps no non-Major rated side, so it is not offered, and a value
+		// the switch does not name reads as the default rather than as `major`.
+		derivedFindings("all");
+
+		assertTrue(conditionMediated("Can I give metformin?", onOrders("Stavudine", "Lamivudine")).isEmpty());
+	}
+
+	@Test
+	public void aDrugInPlayThatCausesTheConditionNamesEveryOtherOrderThatCausesItToo() {
+		// #473's N-drug finding is every order joined by derived edges on one condition. Asked about
+		// didanosine on stavudine and metformin: didanosine's note and stavudine's both name lactic
+		// acidosis, and metformin is rated Major for it — one finding naming both orders, whichever of the
+		// three the question is about.
+		List<SafetyWarning> lactic = new ArrayList<SafetyWarning>();
+		for (SafetyWarning chip : conditionMediated("Can I give didanosine?", onOrders("Stavudine", "Metformin"))) {
+			if (chip.getDetail().contains("Acidosis, Lactic")) {
+				lactic.add(chip);
+			}
+		}
+
+		assertEquals(1, lactic.size(), DrugReferenceTestSupport.details(lactic).toString());
+		String detail = lactic.get(0).getDetail();
+		assertTrue(detail.contains(", as does that of " + DrugSafetyValidator.ACTIVE_ORDER_NOUN
+				+ " Stavudine (Liver Diseases, Major), and " + DrugSafetyValidator.ACTIVE_ORDER_NOUN
+				+ " Metformin is rated Major in Acidosis, Lactic"), detail);
+		assertEquals(new LinkedHashSet<String>(Arrays.asList("Metformin", "Stavudine")),
+			new LinkedHashSet<String>(lactic.get(0).namedPartners()));
+	}
+
+	@Test
+	public void aDrugInPlayRatedForTheConditionNamesEveryOtherOrderRatedForItToo() {
+		// The same join from the rated side: lactic acid is rated Major in Acidosis, Lactic as metformin
+		// is, and stavudine's note links to both. The order is named as the co-medication ladder names it.
+		List<SafetyWarning> chips = conditionMediated("Can I give metformin?", onOrders("Stavudine", "Lactic acid"));
+		List<SafetyWarning> lactic = new ArrayList<SafetyWarning>();
+		for (SafetyWarning chip : chips) {
+			if (chip.getDetail().startsWith("Metformin is rated Major in Acidosis, Lactic")) {
+				lactic.add(chip);
+			}
+		}
+
+		assertEquals(1, lactic.size(), DrugReferenceTestSupport.details(chips).toString());
+		String detail = lactic.get(0).getDetail();
+		assertTrue(detail.startsWith("Metformin is rated Major in Acidosis, Lactic (DDInter drug-disease), as is "
+				+ DrugSafetyValidator.ACTIVE_ORDER_NOUN + " Lactic acid (lactate), and the DDInter drug-disease note of "
+				+ DrugSafetyValidator.ACTIVE_ORDER_NOUN + " Stavudine"), detail);
+		assertEquals(new LinkedHashSet<String>(Arrays.asList("Stavudine", "Lactic acid (lactate)")),
+			new LinkedHashSet<String>(lactic.get(0).namedPartners()));
+	}
+
+	@Test
+	public void anOrderOnBothSidesOfTheConditionIsNamedOnce() {
+		// Lisinopril and benazepril are each rated Major in Heart Failure AND each note names it, so each is
+		// a partner of a heart-failure chip about verapamil and, through the other, also a member of the
+		// subject's side. One order, one mention, in either direction.
+		for (String question : new String[] { "Can I give verapamil?", "Can I give metformin?" }) {
+			for (SafetyWarning chip : conditionMediated(question, onOrders("Lisinopril", "Benazepril"))) {
+				String detail = chip.getDetail();
+				for (String order : Arrays.asList("Lisinopril", "Benazepril")) {
+					String named = DrugSafetyValidator.ACTIVE_ORDER_NOUN + " " + order;
+					assertEquals(detail.indexOf(named), detail.lastIndexOf(named), question + ": " + detail);
+				}
+				assertEquals(new LinkedHashSet<String>(chip.namedPartners()).size(), chip.namedPartners().size(),
+					question + ": " + chip.namedPartners());
+			}
+		}
+	}
+
+	/**
+	 * One prescription, one name, across chip TYPES (#339, ADR Decision 110): every active order a
+	 * {@code condition-mediated} chip names is a name the response's interaction chips print, so a
+	 * combination prescription is never named by its display on one chip and by a constituent on another.
+	 * Held here, where the arm is switched on, over the two shipped-knowledge-base arrangements
+	 * {@code OneOrderNameAcrossOneResponseTest} was written about; reverting the partner name to the entry
+	 * rung reddens the combination case.
+	 */
+	private static void assertNamedAsTheInteractionChipsNameThem(List<SafetyWarning> all) {
+		List<SafetyWarning> derived = DrugReferenceTestSupport.ofType(all, TYPE);
+		assertFalse(derived.isEmpty(), "precondition: the arrangement must raise a derived chip, or this"
+				+ " pins nothing: " + DrugReferenceTestSupport.details(all));
+		// The names the interaction chips give an active order: a rule chip's namedPartners (a collapsed
+		// chip lists several after one noun), and the name a class chip prints after the noun.
+		List<SafetyWarning> interaction = DrugReferenceTestSupport.ofType(all, SafetyWarning.TYPE_INTERACTION);
+		List<String> named = DrugReferenceTestSupport.namedPartners(interaction);
+		StringBuilder printed = new StringBuilder();
+		for (SafetyWarning chip : interaction) {
+			printed.append(chip.getDetail()).append('\n');
+		}
+		for (SafetyWarning warning : derived) {
+			for (String partner : warning.namedPartners()) {
+				assertTrue(named.contains(partner)
+						|| printed.indexOf(DrugSafetyValidator.ACTIVE_ORDER_NOUN + " " + partner + " ") >= 0
+						|| printed.indexOf(DrugSafetyValidator.ACTIVE_ORDER_NOUN + " " + partner + "\n") >= 0,
+					"a condition-mediated chip names " + partner + " where the interaction chips name " + named
+							+ " and print " + printed + ": " + warning.getDetail());
+			}
+		}
+	}
+
+	@Test
+	public void aCombinationPrescriptionIsNamedAsTheInteractionChipsBesideItNameIt() {
+		String display = "Lisinopril / Hydrochlorothiazide";
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("C09BA03", "C03AA03");
+		PatientClinicalContext chart = shippedService().withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(display), codes, null, null, Arrays.asList(DrugReferenceTestSupport
+					.activeOrder("order-combination", display, DrugReferenceTestSupport.set(display), codes))));
+
+		assertNamedAsTheInteractionChipsNameThem(DrugReferenceTestSupport.validator(shippedService()).validate("",
+			"Can I give her lisinopril and amiodarone?", chart));
+	}
+
+	@Test
+	public void theNamingTicketsOwnArrangementNamesEachOrderAsTheInteractionChipsDo() {
+		String[] orders = { "Celecoxib", "Diclofenac", "Ibuprofen", "Dexamethasone", "Prednisone", "Budesonide",
+			"Methylprednisolone" };
+		List<PatientClinicalContext.ActiveDrugOrder> active = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		java.util.Set<String> codes = new LinkedHashSet<String>();
+		for (String order : orders) {
+			PatientClinicalContext.ActiveDrugOrder one = DrugReferenceTestSupport.activeOrderFor(shippedService(), order);
+			active.add(one);
+			codes.addAll(one.getAtcCodes());
+		}
+		PatientClinicalContext chart = shippedService().withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(orders), codes, null, null, active));
+
+		assertNamedAsTheInteractionChipsNameThem(DrugReferenceTestSupport.validator(shippedService()).validate("",
+			"Can I give her hydrocortisone?", chart));
 	}
 }

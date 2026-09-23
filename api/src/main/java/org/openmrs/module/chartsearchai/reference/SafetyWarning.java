@@ -74,7 +74,9 @@ public class SafetyWarning {
 	 * sentence the knowledge base reads as causal, and the other is rated {@code Major} for it (issues
 	 * #391 Part B, #473). One join: a drug IN PLAY against the patient's active orders, in either
 	 * direction. The active orders linked through one condition in one direction are named in ONE chip,
-	 * so one pair can still raise a chip per condition in each direction.
+	 * with the other orders on the drug in play's own side of it, so one pair can still raise a chip per
+	 * condition in each direction. Raised only where {@code chartsearchai.drugSafety.derivedFindings} is
+	 * {@code major}, which a stock install is not.
 	 *
 	 * <p>A type of its own so it is never confused with, folded into or ranked against a DDInter
 	 * pairwise rating: it carries no {@code severity} (the chain is not a rating of the pair), it is a caution and

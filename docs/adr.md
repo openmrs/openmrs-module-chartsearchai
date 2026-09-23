@@ -9757,6 +9757,19 @@ exactly that. The QT, hepatotoxicity and neuropathy groups need data this knowle
   as two active orders (#339). The first build named the constituents, and the shipped-knowledge-base
   cases below caught it. Worded through `ACTIVE_ORDER_NOUN`, carried in `namedPartners` for Decision
   100's repair, and attributed through the shared `chartOrderBridges`.
+- **The subject's side is named too** (`coMembers`, review round 1). The first build named only the
+  partners on the OTHER side, so *Can I give didanosine?* on Stavudine and Metformin named Metformin
+  alone, although Stavudine's note links to Metformin through the same condition: the three-drug set
+  was one finding only when the question asked about metformin. Every other order on the subject's
+  side that one of the chip's partners is linked to on that condition is now stated beside the subject
+  ("as is" a co-rated order, "as does that of" a co-cause) and carried in `namedPartners`.
+- **Its own switch, off by default** — `chartsearchai.drugSafety.derivedFindings`, `off` or `major`
+  (#391's name), read once per `validate` pass and only where `warnOnInteractions` is also on, so a site
+  can silence the derived tier without losing a DDInter pairwise chip. #391 suggested defaulting to
+  `major`; it ships `off` on the measurement under *Not on by default* below. `all` is not offered — the loader
+  keeps no non-`Major` rated side — and any value but `major` reads as the default. The chains are
+  loaded whatever it says, so flipping it takes effect on the next question without a reload; an install
+  with it off retains the chains' memory (the *Load* bullet's figure) for nothing.
 - **Its own type, `condition-mediated`, with no severity.** The chain is not a rating of the pair, so the chip
   cannot carry a rating and is never folded into, collapsed with or ranked against an `interaction`
   chip. Where DDInter also rates the pair, both chips stand: two claims from two tables.
@@ -9774,10 +9787,12 @@ exactly that. The QT, hepatotoxicity and neuropathy groups need data this knowle
 `aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay` and
 `theTicketsOwnArrangementOverTheShippedKnowledgeBaseNamesOneWay` — enumerated every chip of a response,
 and on both arrangements the shipped knowledge base now also raises a derived chip. Their expected values
-are unchanged and scoped to the `interaction` chips they were written about. Each gained an assertion
-that every order a `condition-mediated` chip names is a name the interaction chips print, so #339's
-property is held across chip types rather than dropped. Reverting the partner name to the entry rung
-reddens that assertion on the combination case.
+are unchanged and scoped to the `interaction` chips they were written about. The assertion that every
+order a `condition-mediated` chip names is a name the interaction chips print — #339's property held
+across chip types — lives in `ConditionMediatedFindingTest` over those two arrangements, where the arm
+is switched on, with a precondition that a derived chip was raised; in the contextless class, where the
+switch reads its default, it would pass on no chip at all. Reverting the partner name to the entry rung
+reddens it on the combination case.
 
 ### What it does not do
 
@@ -9789,10 +9804,22 @@ reddens that assertion on the combination case.
   arm), and the question-pair arm has no leg either.
 - **The source rows are not citable.** The chip states both halves in its own words; the drug-disease
   note texts are not injected as records.
-- **No switch of its own.** It rides `warnOnInteractions`, and the `Major` gate is fixed at load rather
-  than a global property (#391 proposed `off`/`major`/`all`).
-- **Its precision is unmeasured.** The one false link above is an example, not a rate. Being a caution
-  bounds what a false one costs; it does not remove it.
+- **Not on by default, and no rate behind turning it on.** Review round 1 measured a second false link,
+  on one of the commonest co-prescriptions there is: metformin's drug-disease note (575) names
+  congestive heart failure only inside the sentence making it a CONTRAINDICATION ("… is contraindicated
+  in patients with … congestive heart failure requiring pharmacologic treatment …; and any condition
+  associated with hypoxemia"), and the matcher reads it as causal on "associated with". Through the
+  loader (`DrugReferenceTestSupport.shippedEntries()`, measured at `18287a47`), 52 rated entries hold a
+  chain whose cause is Metformin and whose condition is *Heart Failure* — 50 substances by
+  `substanceGroupKey`, among them Lisinopril, Enalapril, Captopril, Ramipril, Perindopril, Atenolol,
+  Metoprolol, Carvedilol, Bisoprolol, Propranolol, Diltiazem and Verapamil. Switched on, *Can I give
+  lisinopril?* on a Metformin order states a chip saying metformin's note causally names Heart Failure,
+  which that note does not say. Being a caution bounds what a false link costs; it does not remove it,
+  and a clinician reading a false causal claim beside every ACE inhibitor and beta-blocker learns to
+  ignore the tier. So a stock install states none, and `major` is for a site that has judged these
+  chains on its own formulary. What would move the default is a precision figure over the kept chains,
+  which this decision does not have; the two false links above are examples, not a rate.
+- **The `Major` gate is fixed at load**, so `all` would need the loader to keep what it drops.
 - **Order among a drug's chips.** It is appended after the drug's pairwise chips, so it trails that drug's
   caution chips too rather than being ranked among them — the limit the class-only chips already carry
   (#346). Where Decision 108's composer writes the answer, it states the finding as a caution line, below

@@ -77,6 +77,19 @@ public class GlobalPropertyDefaultsTest {
 						+ "contextless test falls back to has to say the same thing config.xml ships");
 	}
 
+	/**
+	 * The derived tier's switch (issues #391 and #473, ADR Decision 110), for the same reason as the record
+	 * number flag above: the constant is what every contextless test falls back to, and
+	 * {@code config.xml}'s value is what an install runs. A drift would pin one install in the api suite
+	 * and ship another.
+	 */
+	@Test
+	public void theDerivedFindingsSwitchShipsTheDefaultItsConstantAsserts() throws Exception {
+		assertEquals(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS,
+				declaredDefaults().get(ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS),
+				"the derived tier is off until an install asks for it");
+	}
+
 	/** @return every {@code <property>} in {@code config.xml} that declares a {@code <defaultValue>}. */
 	private static Map<String, String> declaredDefaults() throws Exception {
 		Map<String, String> defaults = new LinkedHashMap<String, String>();

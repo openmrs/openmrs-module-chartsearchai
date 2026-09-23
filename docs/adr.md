@@ -10569,9 +10569,12 @@ Rifampicin (rifampin) are in active orders A and B — possible duplicate therap
 - **It relates no pair.** It is not counted into `PairChipExtent`. Nor does it admit a screen to
   Decision 108's module answer: `answersFromFindings` refuses a screen whose only interaction finding
   it is (`SafetyWarning.statesOrdersSharingASubstance`). A screen that related a pair is answered, and
-  lists it after every pair, where unrated it would otherwise lead by strength. Nor does it stand in
+  ranks it by strength with the pairs, as the prompt's ranking sentence has the model do: as a reason
+  to change her therapy it ranks beside a rated Major and ahead of a caution. Ordering it after every
+  pair instead was written in Phase 2 and reverted in its second pass, because the model path, the
+  default, would still lead with it and one chart would open two ways by global property. Nor does it stand in
   for a screen result at [Decision 87](#decision-87-a-screen-that-related-nothing-says-so-in-the-prompt-instead-of-reaching-the-model-as-an-empty-slice)'s
-  note: beside it, a screen that related nothing still says so (`everyFindingRelatesNoPair`). Both
+  note: beside it, a screen that related nothing still says so (`nothingButOrdersSharingASubstance`). Both
   were found in `/harden`'s Phase 2, after the pair gate alone had been written.
 
 ### Consequences
@@ -10590,6 +10593,9 @@ Rifampicin (rifampin) are in active orders A and B — possible duplicate therap
   `Codeine / paracetamol` raised nothing — a real duplicate this finding misses, whose cause this
   measurement does not establish. `Omeprazole 20mg` + `Esomeprazole 40mg` also raised nothing,
   as Decision 112's display rule intends.
-- Not measured on a model.
+- **Not measured on a model**, and two prompt arrangements are new with it: Decision 87's note ("No
+  interactions were found …") beside this finding's reason to change, on a screen that related no
+  pair; and, where it and another finding key on one `drug`, the #397 enumeration clause asking for a
+  severity this finding does not state (Decision 112's finding has that shape too).
 
 → `OrdersSharingASubstanceTest`, `OrdersSharingASubstanceModuleAnswerContextTest`.

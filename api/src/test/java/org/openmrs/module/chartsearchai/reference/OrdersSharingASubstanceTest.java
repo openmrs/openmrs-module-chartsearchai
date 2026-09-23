@@ -66,6 +66,8 @@ public class OrdersSharingASubstanceTest {
 		assertEquals(1, found.size(), "one finding for one set of orders: " + found);
 		SafetyWarning finding = found.get(0);
 		assertEquals(SHARED_BY_BOTH, finding.getDetail());
+		assertEquals("Isoniazid, Pyrazinamide and Rifampicin (rifampin)", finding.getDrug(),
+				"every substance it names, as the detail lists them — README's drug row");
 		assertEquals(Arrays.asList(RHZ, RHZE), finding.namedPartners());
 		assertEquals(SafetyWarning.TYPE_INTERACTION, finding.getType());
 		assertNull(finding.getSeverity(), "nothing rates this relationship");

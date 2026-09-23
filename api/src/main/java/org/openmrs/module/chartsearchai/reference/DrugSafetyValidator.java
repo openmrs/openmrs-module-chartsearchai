@@ -4334,12 +4334,8 @@ public class DrugSafetyValidator {
 			if (carriers.size() < 2) {
 				continue;
 			}
-			List<String> substances = shared.get(carriers);
-			if (substances == null) {
-				substances = new ArrayList<String>();
-				shared.put(carriers, substances);
-			}
-			substances.add(subjects.subjectOf(rows.get(0)).displayLabel());
+			shared.computeIfAbsent(carriers, k -> new ArrayList<String>())
+					.add(subjects.subjectOf(rows.get(0)).displayLabel());
 		}
 		for (Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> set : shared.entrySet()) {
 			List<String> substances = set.getValue();
@@ -10910,7 +10906,8 @@ public class DrugSafetyValidator {
 
 		/**
 		 * The patient's active orders whose DISPLAY names {@code substance} — the orders
-		 * {@link DrugSafetyValidator#alreadyInSeveralOrders} prints, in chart order (issue #477).
+		 * {@link DrugSafetyValidator#alreadyInSeveralOrders} and
+		 * {@link DrugSafetyValidator#addOrdersSharingASubstance} print, in chart order (issue #477).
 		 *
 		 * <p>The DISPLAY and nothing else the order records (issue #293), only for an order
 		 * {@link DrugSafetyValidator#displayNamesADrug} admits (issue #290), and deliberately narrower

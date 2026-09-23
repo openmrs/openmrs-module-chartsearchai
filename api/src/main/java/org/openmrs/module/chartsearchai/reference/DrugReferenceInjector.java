@@ -636,7 +636,7 @@ public class DrugReferenceInjector {
 		// come to disagree about whether this injection had anything to say.
 		boolean nothingResolved = matched.isEmpty() && findings.isEmpty() && namedClass == null;
 		boolean screenRelatedNothing = matched.isEmpty() && namedClass == null
-				&& everyFindingRelatesNoPair(findings) && questionDrugs.isEmpty()
+				&& nothingButOrdersSharingASubstance(findings) && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing) {
@@ -2485,11 +2485,11 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Whether none of {@code findings} relates anything: empty, or only the finding that two of her
-	 * orders share a substance (issue #477, {@code SafetyWarning.statesOrdersSharingASubstance}), which
+	 * Whether {@code findings} holds nothing but the finding that two of her orders share a substance
+	 * — empty included (issue #477, {@code SafetyWarning.statesOrdersSharingASubstance}), which
 	 * relates no pair. The #401 screen note's gate asks it.
 	 */
-	private static boolean everyFindingRelatesNoPair(List<SafetyWarning> findings) {
+	private static boolean nothingButOrdersSharingASubstance(List<SafetyWarning> findings) {
 		for (SafetyWarning finding : findings) {
 			if (!finding.statesOrdersSharingASubstance()) {
 				return false;
@@ -2504,9 +2504,10 @@ public class DrugReferenceInjector {
 	 *
 	 * <p><b>What was asked about comes first</b>: the findings about the drug the question PROPOSED,
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
-	 * question also raised — her allergy to a drug she is prescribed, say, or that two of her orders share
-	 * a substance (issue #477), which relates no pair and is unrated so would otherwise lead by strength
-	 * — so that such a finding cannot take the answer's first sentence and leave the question unanswered. One key does both,
+	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
+	 * cannot take the answer's first sentence and leave the question unanswered. A screen's finding that
+	 * her orders share a substance (issue #477) is an interaction finding and ranks by strength with the
+	 * pairs, as the prompt's ranking sentence has the model rank it, so the two paths open alike. One key does both,
 	 * because the two never meet: the screening arm stands down for a question that resolved a drug,
 	 * and the drug-in-play arm's finding about two of her own orders (issue #477) arises only for a
 	 * drug she already takes, which {@link #answersFromFindings} refuses to answer for. Within each
@@ -2543,8 +2544,7 @@ public class DrugReferenceInjector {
 			order.add(Integer.valueOf(i));
 		}
 		Collections.sort(order, Comparator.<Integer> comparingInt(i -> findings.get(i).isAboutACurrentMedication()
-				&& (!SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType())
-						|| findings.get(i).statesOrdersSharingASubstance()) ? 1 : 0)
+				&& !SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType()) ? 1 : 0)
 				.thenComparingInt(i -> strengthRank(clauses[i])));
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {

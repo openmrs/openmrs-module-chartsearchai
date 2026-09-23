@@ -46,30 +46,30 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 	}
 
 	@Test
-	public void aScreenThatRelatedAPairIsAnsweredByTheModuleAndStatesTheSharedSubstancesAfterThePairs() throws IOException {
-		// The four-drug combination beside an ethambutol order: the fixture rates ethambutol against
-		// isoniazid, and both orders carry ethambutol.
+	public void aScreenThatRelatedAPairIsAnsweredByTheModuleStrongestFirstAsThePromptRanksIt() throws IOException {
+		// The four-drug combination beside isoniazid and ethambutol orders: the fixture rates isoniazid
+		// against rifampicin (Minor) and against ethambutol (Moderate), both cautions about her current
+		// therapy, while two of her orders sharing a substance is a reason to change it. The prompt's
+		// ranking sentence has the model lead with that, so the module's answer does too.
 		PatientChart chart = screen(DrugReferenceTestSupport.activeOrder("order-rhze", RHZE),
 			DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid 300mg"),
 			DrugReferenceTestSupport.activeOrder("order-emb", "Ethambutol 400mg"));
 
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
-		// The pairs the screen found come first, and the shared substances after every one of them:
-		// unrated, this finding would otherwise lead by strength, and it is not what the screen found.
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		int lastPair = -1;
-		int firstShared = -1;
+		int lastShared = -1;
+		int firstPair = -1;
 		for (int i = 0; i < lines.size(); i++) {
-			if (lines.get(i).contains(" interacts with active order ")) {
-				lastPair = i;
+			if (lines.get(i).contains(" — possible duplicate therapy")) {
+				lastShared = i;
 			}
-			if (firstShared < 0 && lines.get(i).contains(" — possible duplicate therapy")) {
-				firstShared = i;
+			if (firstPair < 0 && lines.get(i).contains(" interacts with active order ")) {
+				firstPair = i;
 			}
 		}
-		assertTrue(lines.get(0).contains(" interacts with active order "), "a pair leads: " + answer);
-		assertTrue(firstShared > lastPair, "every shared-substance line after every pair: " + answer);
+		assertTrue(firstPair >= 0, "precondition: the pairs are in the answer: " + answer);
+		assertTrue(lastShared >= 0 && lastShared < firstPair, "the reasons to change lead the cautions: " + answer);
 		assertTrue(answer.contains("Isoniazid is in active orders " + RHZE + " and Isoniazid 300mg"
 				+ " — possible duplicate therapy"), "was: " + answer);
 		assertTrue(answer.contains("Ethambutol is in active orders " + RHZE + " and Ethambutol 400mg"

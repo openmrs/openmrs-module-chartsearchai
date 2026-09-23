@@ -1,0 +1,47 @@
+{
+ "version": "1.0",
+ "source": "hand-authored fixture for issue #469 — not shipped data",
+ "description": "Issue #469: a proposed drug carrying an interaction rule rated in a word this module does not recognise ('Serious', as in drug-reference-unrecognised-severity.json) and one rated Major, against two of patient 7's orders (aspirin order 111 and AnswerFromFindingsWarfarinOrderTestData.xml). DrugSafetyValidator.severityRank answers -1 for the word, so the rule withholds and FINDING_STRENGTH_DESCENDING orders it ahead of Major, as it does an unrated one; but it carries a rating, so only a key asking whether the rating is a reason to withhold, and not whether there is one, puts the Major rule under the 'No'. Aspirin and Warfarin carry no rule and exist only so her orders resolve.",
+ "entries": [
+  {
+   "id": "ibuprofen",
+   "name": "Ibuprofen",
+   "aliases": [
+    "ibuprofen"
+   ],
+   "interactions": [
+    {
+     "token": "aspirin",
+     "note": "Concurrent use may reduce the antiplatelet effect of aspirin.",
+     "severity": "Serious"
+    },
+    {
+     "token": "warfarin",
+     "atc": "B01AA03",
+     "severity": "Major",
+     "note": "Coadministration may increase the risk of bleeding."
+    }
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "Warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "atcCodes": [
+    "B01AA03"
+   ],
+   "source": "hand-authored fixture"
+  }
+ ]
+}

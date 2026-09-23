@@ -1,0 +1,44 @@
+{
+ "version": "1.0",
+ "source": "hand-authored fixture for issue #469 — not shipped data",
+ "description": "Issue #469: a screen of patient 7's three orders (aspirin order 111, AnswerFromFindingsWarfarinOrderTestData.xml and AnswerFromFindingsMetforminOrderTestData.xml) that relates two pairs, one Major (warfarin with aspirin) and one the data does not rate (metformin with aspirin). Both state the current-medication withholding clause, and only the Major one is a rating that would license a proposal's 'No', so the screen is where the composer's licensing key must not reorder anything.",
+ "entries": [
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "Warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "interactions": [
+    {
+     "token": "aspirin",
+     "severity": "Major",
+     "note": "Coadministration may increase the risk of bleeding."
+    }
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "metformin",
+   "name": "Metformin",
+   "aliases": [
+    "metformin"
+   ],
+   "interactions": [
+    {
+     "token": "aspirin",
+     "note": "Salicylates may enhance the hypoglycaemic effect."
+    }
+   ],
+   "source": "hand-authored fixture"
+  }
+ ]
+}

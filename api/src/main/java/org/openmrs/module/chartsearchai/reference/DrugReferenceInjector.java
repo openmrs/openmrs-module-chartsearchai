@@ -2080,6 +2080,13 @@ public class DrugReferenceInjector {
 			" This finding is a caution to note, not a reason to withhold it.";
 
 	/**
+	 * The REFERENT the two current-medication clauses state beside their strength (issue #348, ADR
+	 * Decision 72), spelled once so that {@link #COMPOSED_CURRENT_MEDICATION_REFERENT} states the very
+	 * words the record's clause does.
+	 */
+	private static final String CURRENT_MEDICATION = "a medication this patient is already taking";
+
+	/**
 	 * {@link #STRENGTH_WITHHOLD}'s counterpart for a finding about a medication the patient is ALREADY
 	 * TAKING (issue #348) — the same strength, stated as the act it actually licenses.
 	 *
@@ -2113,7 +2120,7 @@ public class DrugReferenceInjector {
 	 * paragraph, so it is load-bearing rather than stylistic.
 	 */
 	public static final String STRENGTH_CHANGE_CURRENT_MEDICATION =
-			" This finding is a reason to change a medication this patient is already taking.";
+			" This finding is a reason to change " + CURRENT_MEDICATION + ".";
 
 	/**
 	 * {@link #STRENGTH_CAUTION}'s counterpart for the same findings (issue #348).
@@ -2126,7 +2133,25 @@ public class DrugReferenceInjector {
 	 * measured inverting the call 5 of 6 times.
 	 */
 	public static final String STRENGTH_CAUTION_CURRENT_MEDICATION = " This finding is a caution about "
-			+ "a medication this patient is already taking, not a reason to change it.";
+			+ CURRENT_MEDICATION + ", not a reason to change it.";
+
+	/**
+	 * What a module-composed answer states, in place of its record's strength clause, for a
+	 * CONTRAINDICATION about a medication she already takes — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
+	 * Decision 113. That clause is prompt-facing and stays out of the answer, but it was the only
+	 * place such a finding's record said she takes the drug: the words the order-driven arm writes
+	 * into a detail — "The patient has a recorded allergy to X.", a class sentence, "X is
+	 * contraindicated by an active condition: " before a rule's own note — do not. So the line keeps
+	 * the clause's REFERENT and drops its call.
+	 *
+	 * <p><b>It names no drug</b>, as the clause it stands in for names none. The finding's drug is an
+	 * entry the order RESOLVED to, which an order's name can imply without naming (reference/CLAUDE.md,
+	 * {@code findNamedSubstances}); "X is a medication this patient is already taking" would assert what
+	 * only the order's name can, where "this finding is about" asserts only what the arm established.
+	 */
+	private static final String COMPOSED_CURRENT_MEDICATION_REFERENT = " This finding is about " + CURRENT_MEDICATION
+			+ ".";
 
 	/**
 	 * {@link #STRENGTH_WITHHOLD}'s counterpart for a finding about a drug this patient's CHART records
@@ -2424,12 +2449,23 @@ public class DrugReferenceInjector {
 			// stands down for a question that resolved a drug, and the drug-in-play arm's finding about
 			// two of her own orders (issue #477) is unrated, so this test refuses it. Not a
 			// contraindication: see this method's javadoc.
-			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
-					&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity())) {
+			if (licensesTheModulesNo(finding)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether {@code finding} is one that licenses the module's "No" — an INTERACTION the data RATES a
+	 * reason to withhold. One spelling for its two readers, which must not disagree: {@link
+	 * #answersFromFindings} admits a proposal only where some finding answers it, and {@link
+	 * #composeFromFindings} puts such a finding under the lead, so the sentence read as the reason for
+	 * the "No" is always one that licensed it (issue #469).
+	 */
+	private static boolean licensesTheModulesNo(SafetyWarning finding) {
+		return SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+				&& DrugSafetyValidator.ratedAReasonToWithhold(finding.getSeverity());
 	}
 
 	/**
@@ -2478,7 +2514,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The module's own answer to a question {@link #answersFromFindings} admitted: one line per
-	 * finding, each in its record's own words and cited by its own number — issue #469.
+	 * finding, each in its record's own words and cited by its own number — issue #469 — with the one
+	 * addition described below for a contraindication about a medication she already takes.
 	 *
 	 * <p><b>What was asked about comes first</b>: the findings about the drug the question PROPOSED,
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
@@ -2490,14 +2527,29 @@ public class DrugReferenceInjector {
 	 * group, strongest first — withhold, change a current medication, then the two cautions, the order
 	 * the prompt gives the model for the first three and this module's own choice between the last two
 	 * — read off {@link #strengthClause} and never off the severity word; stable, so the injection order
-	 * stands within a class.
+	 * stands within a class except for the key below.
 	 *
-	 * <p><b>That last sort is a defence nothing observes today.</b> The arms already append a
+	 * <p><b>The strength sort is a defence nothing observes today.</b> The arms already append a
 	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
 	 * then its interactions, which {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING} orders, in
-	 * every arrangement this change's tests and reviews built — so removing the sort leaves the suite
-	 * green. It stays because the lead is decided by the FIRST
-	 * line, and that must not depend on the order the arms happen to run in.
+	 * every arrangement this change's tests and reviews built. It stays because the lead is decided by
+	 * the FIRST line, and that must not depend on the order the arms happen to run in.
+	 *
+	 * <p><b>Within the withholding class, a finding that licensed the "No" comes first</b> — {@link
+	 * #licensesTheModulesNo}, the test {@link #answersFromFindings} admitted the question by. That same
+	 * append order is why this key is needed: a recorded allergy to the proposed drug, or an unrated
+	 * rule {@code FINDING_STRENGTH_DESCENDING} ranks above Major, states the same withholding clause
+	 * and arrives first, and would otherwise be the sentence read as the reason for a "No" it cannot
+	 * license (ADR Decision 108). It is scoped to that class, so a screen's order is untouched
+	 * ({@code .aScreensLinesKeepTheOrderTheArmRaisedThemIn}). Issue #469's review item;
+	 * {@code LlmInferenceServiceAnswerFromFindingsContextTest}
+	 * {@code .theLineUnderTheNoIsTheInteractionThatLicensedIt} and
+	 * {@code .aMajorInteractionLeadsAnUnratedRuleUnderTheNo}.
+	 *
+	 * <p><b>A contraindication about a medication she already takes carries its referent</b>, {@link
+	 * #COMPOSED_CURRENT_MEDICATION_REFERENT}, after its body: the strength clause stays out, and it
+	 * was the only words of such a record saying she takes the drug (ADR Decision 113). Not an
+	 * interaction's line, whose detail already names the partner as her active order.
 	 *
 	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
 	 * medications — a screen — opens with that finding: a lead saying which of two medications to
@@ -2521,10 +2573,17 @@ public class DrugReferenceInjector {
 		}
 		Collections.sort(order, Comparator.<Integer> comparingInt(i -> findings.get(i).isAboutACurrentMedication()
 				&& !SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType()) ? 1 : 0)
-				.thenComparingInt(i -> strengthRank(clauses[i])));
+				.thenComparingInt(i -> strengthRank(clauses[i]))
+				.thenComparingInt(i -> STRENGTH_WITHHOLD.equals(clauses[i]) && licensesTheModulesNo(findings.get(i))
+						? 0 : 1));
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {
-			lines.add(findingBody(findings.get(i), orderRecordNumbers, true) + " [" + numbers.get(i) + "]");
+			SafetyWarning finding = findings.get(i);
+			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
+					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
+			lines.add(findingBody(finding, orderRecordNumbers, true)
+					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
+					+ " [" + numbers.get(i) + "]");
 		}
 		SafetyWarning first = findings.get(order.get(0));
 		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
@@ -2560,7 +2619,8 @@ public class DrugReferenceInjector {
 	 * issue #469 because it is ALSO the words a module-composed answer states for the finding
 	 * ({@link #composeFromFindings}), and one method is what keeps that answer and the record the
 	 * chip beside it came from saying the same thing. The strength clause is not part of it: that
-	 * clause is prompt-facing only.
+	 * clause is prompt-facing only, and where it was the only words saying a contraindication is about
+	 * her own medication the composer adds its referent after this text (ADR Decision 113).
 	 *
 	 * @param clauseFollows whether the detail must end its sentence on a strength clause's account —
 	 *        {@link #renderFinding} passes whether it will append one; the composed answer passes

@@ -1,0 +1,46 @@
+{
+ "version": "1.0",
+ "source": "hand-authored fixture for issue #469 — not shipped data",
+ "description": "Issue #469: a proposed drug carrying BOTH an interaction rule the data does not rate and one it rates Major, against two of patient 7's orders (aspirin order 111 and AnswerFromFindingsWarfarinOrderTestData.xml). The Major rule licenses the module's answer; the unrated one withholds too, and DrugSafetyValidator.FINDING_STRENGTH_DESCENDING orders it ahead of Major, so the composed answer must not let it take the sentence under the 'No'. Aspirin and Warfarin carry no rule and exist only so her orders resolve, as in drug-reference-answer-from-findings-unrated-rule.json.",
+ "entries": [
+  {
+   "id": "ibuprofen",
+   "name": "Ibuprofen",
+   "aliases": [
+    "ibuprofen"
+   ],
+   "interactions": [
+    {
+     "token": "aspirin",
+     "note": "Concurrent use may reduce the antiplatelet effect of aspirin."
+    },
+    {
+     "token": "warfarin",
+     "atc": "B01AA03",
+     "severity": "Major",
+     "note": "Coadministration may increase the risk of bleeding."
+    }
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "Warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "atcCodes": [
+    "B01AA03"
+   ],
+   "source": "hand-authored fixture"
+  }
+ ]
+}

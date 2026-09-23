@@ -105,6 +105,12 @@ final class SourceScan {
 				+ "than guess");
 	}
 
+	/** @return the blanked text of {@code region}, braces included, for a guard that pins a whole
+	 *          body rather than forbidding one name inside it. */
+	String text(Region region) {
+		return source.substring(region.start(), region.end() + 1);
+	}
+
 	/** @return every offset of the literal {@code needle}. */
 	List<Integer> literalOffsets(String needle) {
 		List<Integer> found = new ArrayList<Integer>();

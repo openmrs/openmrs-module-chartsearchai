@@ -214,6 +214,25 @@ public class CurrentMedicationFindingStrengthTest {
 				"so it must not carry the proposal caution: " + finding);
 	}
 
+	/**
+	 * The withhold bar is the one {@code ratingLicensesWithholding} draws for a proposal, on this axis
+	 * too: a Moderate pair of her own prescriptions is a caution about them, not a reason to change one
+	 * (issue #471, ADR Decision 109). Lactulose × Spironolactone is Moderate in this excerpt.
+	 */
+	@Test
+	public void aScreenedModeratePairOfHerOwnMedicationsStatesTheCurrentMedicationCaution()
+			throws IOException {
+		String finding = onlyFinding(onTwoInteractingDrugs("Lactulose", "Spironolactone"),
+			SCREENING_QUESTION);
+
+		assertTrue(finding.toLowerCase().contains("moderate"),
+				"precondition: this is the Moderate-rated pair: " + finding);
+		assertTrue(finding.endsWith(CAUTION_CURRENT),
+				"a Moderate pair of her own prescriptions is a caution about them: " + finding);
+		assertFalse(finding.contains(CHANGE_CURRENT),
+				"and not a reason to change one: " + finding);
+	}
+
 	@Test
 	public void aFindingAboutADrugTheQuestionProposedStillStatesTheProposalCall() throws IOException {
 		String finding = onlyFinding(

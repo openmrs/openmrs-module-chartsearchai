@@ -516,8 +516,9 @@ to change.
 > comparing the rating in the answer against the ratings the chips for that drug carry. It is its own
 > column (`named a severity no chip carries`), it is in the flip condition, it appends a problem so
 > the arm exits 3, and it is **not** deducted from `verdict-led` — #299 is explicit that a Moderate
-> interaction reported as *"a Major problem"* is not a #283 violation: `moderate` withholds, so the
-> "No" was right and only the rating was wrong.
+> interaction reported as *"a Major problem"* is not a #283 violation: `moderate` withheld then, so the
+> "No" was the module's call and only the rating was wrong. (Since #471 — ADR Decision 109 — `moderate`
+> is a caution.)
 >
 > It changes neither expectation above. `wrong-partner` names no rating at all, so there is nothing
 > to compare — the PARTNER half is still unchecked. `caution-over-major` names the chip's own

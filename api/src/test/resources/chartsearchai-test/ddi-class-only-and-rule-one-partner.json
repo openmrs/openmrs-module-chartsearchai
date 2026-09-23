@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for issue #339 review round 1 \u2014 a CLASS-ONLY chip and a RULE chip naming ONE prescription. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among these drugs. Methylprednisolone is filed as two rows of one substance (one drugbank_id, one rxnorm_name) publishing the same ATC list, of which DrugReference.canonicalRow elects the unqualified one while a chart recording the topical presentation elects the other \u2014 the issue #187 shape, on the PARTNER slot. Prednisolone shares H02AB with it and their only KB rule is rated Unknown, which the shipped chartsearchai.drugSafety.minInteractionSeverity default filters, so that pair reaches the class arm alone; Warfarin shares no subgroup and its Moderate rule clears the floor, so that pair reaches the rule arm alone. One question naming both therefore produces one chip of each kind about one active order."
+  "note": "Verbatim DDInter 2.0 slice for issue #339 review round 1 \u2014 a CLASS-ONLY chip and a RULE chip naming ONE prescription. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among these drugs. Methylprednisolone is filed as two rows of one substance (one drugbank_id, one rxnorm_name) publishing the same ATC list, of which DrugReference.canonicalRow elects the unqualified one while a chart recording the topical presentation elects the other \u2014 the issue #187 shape, on the PARTNER slot. Prednisolone shares H02AB with it and their only KB rule is rated Unknown, which the shipped chartsearchai.drugSafety.minInteractionSeverity default filters, so that pair reaches the class arm alone; Warfarin shares no subgroup and its Moderate rule clears the floor, so that pair reaches the rule arm alone. One question naming both therefore produces one chip of each kind about one active order. Desmopressin (issue #471) is the slice's MAJOR-rated pair: rated Major against Methylprednisolone and Prednisolone, sharing no subgroup with either, so it is the rated control that still withholds now that Moderate is a caution."
  },
  "mechanisms": {
   "-1": {
@@ -11,6 +11,12 @@
    "text": "Corticosteroids and adrenocorticotropic agents may alter the pharmacologic effects of oral anticoagulants. Both increased anticoagulant dosage requirements as well as bleeding and increased anticoagulant sensitivity have been reported during concomitant corticosteroid therapy. Proposed mechanisms include blood hypercoagulability or diminished vascular integrity induced by corticosteroids.",
    "categories": [
     "others"
+   ]
+  },
+  "4265": {
+   "text": "Coadministration of desmopressin with loop diuretics or systemic or inhaled corticosteroids may increase the risk of severe hyponatremia. Loop diuretics and corticosteroids can potentiate the antidiuretic response to desmopressin by causing loss of sodium and water retention, respectively, thus coadministration may increase the risk of water intoxication and hyponatremia. Elderly patients may be particularly susceptible.",
+   "categories": [
+    "synergistic_effect"
    ]
   }
  },
@@ -236,6 +242,35 @@
      "name": "Warfarin sodium"
     }
    ]
+  },
+  {
+   "id": "DDInter507",
+   "name": "Desmopressin",
+   "rxcui": "3251",
+   "rxnorm_name": "desmopressin",
+   "drugbank_id": "DB00035",
+   "atc": [
+    "H01BA02"
+   ],
+   "brand_names": [
+    "DDAVP",
+    "Desmoda",
+    "Nocdurna",
+    "Noctiva",
+    "Stimate"
+   ],
+   "ciel": [
+    {
+     "code": "74291",
+     "uuid": "74291AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Deamino arginine vasopressin"
+    },
+    {
+     "code": "74558",
+     "uuid": "74558AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Desmopressin acetate"
+    }
+   ]
   }
  ],
  "interactions": [
@@ -252,10 +287,22 @@
    "217"
   ],
   [
+   "DDInter1191",
+   "DDInter507",
+   "Major",
+   "4265"
+  ],
+  [
    "DDInter1513",
    "DDInter1951",
    "Moderate",
    "217"
+  ],
+  [
+   "DDInter1513",
+   "DDInter507",
+   "Major",
+   "4265"
   ]
  ]
 }

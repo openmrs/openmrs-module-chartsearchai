@@ -685,8 +685,9 @@ def discordant_severity(cell):
     citation right, and the rating a clinician reads wrong.
 
     **Not a verdict defect, and deliberately not counted as one.** #299 is explicit that this is not
-    an issue #283 violation: `moderate` withholds, so "should not be given" was the correct call and
-    the cell stays in `verdict_led`. What is wrong is the rating NAMED beside it, which is why this
+    an issue #283 violation: `moderate` withheld then, so "should not be given" was the module's call
+    and the cell stays in `verdict_led`. (Since issue #471, ADR Decision 109, `moderate` is a caution;
+    the point stands — which rating is NAMED is this column's question, never the call's direction.) What is wrong is the rating NAMED beside it, which is why this
     is its own column rather than a deduction from that one and why it is not folded into
     `unlicensed_verdict` — that column is about the verdict's direction.
 

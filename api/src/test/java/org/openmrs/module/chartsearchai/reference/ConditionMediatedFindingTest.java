@@ -39,7 +39,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * severity floor. Every case runs the real validator over the shipped knowledge base.
  *
  * <p><b>Context-sensitive because the arm is gated, and OFF on a stock install</b> —
- * {@code chartsearchai.drugSafety.derivedFindings}, ADR Decision 111, whose precision section is the
+ * {@code chartsearchai.drugSafety.derivedFindings}, ADR Decision 111, whose *Not on by default* bullet is the
  * reason. A contextless case runs with the property absent, which fails safe to the default, so it could
  * not tell an arm that honours the switch from one that ignores it. {@link #setUp} turns it on for every
  * case here; {@link #aStockInstallRaisesNoConditionMediatedFindingOnTheLinkTheReviewMeasuredFalse} and
@@ -339,9 +339,9 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	public void aStockInstallRaisesNoConditionMediatedFindingOnTheLinkTheReviewMeasuredFalse() {
 		// Metformin's drug-disease note names congestive heart failure only as a CONTRAINDICATION, and the
 		// knowledge base's matcher reads that sentence as causal, so the derived tier links metformin to
-		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 111). With about a
-		// quarter of the kept chains resting on a note that does not state that the drug causes the condition
-		// (measured for #480), a stock install states none of them, and the
+		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 111). With its
+		// precision measured (ADR Decision 111, #480) and no decision taken against it, a stock install states
+		// none of them, and the
 		// interaction arm the same property does NOT gate still speaks.
 		derivedFindings(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS);
 

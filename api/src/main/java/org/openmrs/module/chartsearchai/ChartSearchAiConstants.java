@@ -625,9 +625,8 @@ public class ChartSearchAiConstants {
 	 * is {@code Major}, {@link #DERIVED_FINDINGS_OFF} states none. Ships OFF, on evidence: the chains are
 	 * a text match over drug-disease notes, and one of them links metformin to Heart Failure through a
 	 * sentence naming it only as a contraindication — which puts a false causal chip on metformin beside
-	 * every common ACE inhibitor and beta-blocker. The measured precision is in ADR Decision 111 (issue #480):
-	 * about a quarter of the kept chains rest on a note that does not state that the drug causes the
-	 * condition. {@code all} is not offered (#391 proposed it): the loader keeps no non-{@code Major}
+	 * every common ACE inhibitor and beta-blocker. Its precision over the bundled knowledge base is measured,
+	 * by model adjudication rather than clinician review, in ADR Decision 111 (issue #480). {@code all} is not offered (#391 proposed it): the loader keeps no non-{@code Major}
 	 * rated side. Any value other than {@code major} reads as off, the default.
 	 */
 	public static final String GP_DRUG_SAFETY_DERIVED_FINDINGS = "chartsearchai.drugSafety.derivedFindings";

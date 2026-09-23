@@ -10128,7 +10128,7 @@ exactly that. The QT, hepatotoxicity and neuropathy groups need data this knowle
   **Against #359's row E**, which (as quoted on #391) expects a Major alert for metformin in a patient on
   stavudine: the Major there is metformin's own drug-disease rating in lactic acidosis, and the chip states
   it verbatim; what no source row rates is the PAIR, which DDInter rates `Unknown`. So a site that turns
-  the tier on gets the caution-graded lead on exactly that arrangement (the one measured cell under *What
+  the tier on gets the caution-graded lead on exactly that arrangement (the first measured cell under *What
   it does not do*), not the withholding alert row E expected. That is chosen: neither ticket asks for a
   strength (#391 Part B says only that the chain gets no severity of its own), and both false links
   measured here pass the `Major` gate, so a withholding strength would put a refusal behind a text match
@@ -10198,11 +10198,11 @@ the combination case.
   the link with the strongest cause-side rating is kept. On the shipped knowledge base no such key
   carries two different cause ratings (measured through the loader, 2026-09-23), so no case can
   observe the choice; a refresh that introduces one is what would.
-- **What the model does with it: one cell, not a rate.** Each chip is also an injected `safety_finding`,
+- **What the model does with it: two cells, not a rate.** Each chip is also an injected `safety_finding`,
   and where the drug already had one finding it makes the drug's findings several, which is what gates
   the enumeration clause (`severalFindingsAboutOneDrug`, Decision 84). That clause asks the model to state
   each finding's severity, and the only rating words in a derived finding are drug-disease ratings, so
-  its closing sentence says it has no severity of its own. Measured once, by review round 1's verifier
+  its closing sentence says it has no severity of its own. First measured by review round 1's verifier
   at `3f362bf7` (a RefApp 3.7.1-era standalone, local Gemma E4B, `derivedFindings=major`, a patient on
   Stavudine and Lamivudine, *Can I give metformin?*): the answer led "Metformin can be given, with one
   caution: it is rated Major in Acidosis, Lactic based on the DDInter drug-disease notes of …", called it
@@ -10237,7 +10237,8 @@ of its (drug, condition) keys name more than one note.
     a sign of some other effect, an indication, a monitoring item, a negated or "not established"
     statement, or a condition the note does not name at all.
 - **Adjudication.** Two fresh agents on the same model as the author (Claude) each judged every item. They
-  were blind to the hypothesis and to six unmarked controls:
+  were not told the hypothesis, and six controls were mixed in unmarked, so neither knew which items
+  they were:
   - metformin note 575 × Heart Failure and × Hypotension, expected NOT_CAUSAL;
   - rivaroxaban note 1713 × Pulmonary Embolism, an indication, expected NOT_CAUSAL;
   - the NRTI note 2 × Acidosis, Lactic, expected CAUSES;
@@ -10250,12 +10251,15 @@ of its (drug, condition) keys name more than one note.
 - Every verdict, the note quote it rests on, the note's SHA-256 and the population counts are recorded in
   `api/src/test/resources/eval/derived-tier-precision-sample.json`. `DerivedTierPrecisionSampleTest`
   fails the build when the shipped knowledge base stops being the one measured: a different kept-chain
-  count, an adjudicated link that no longer exists, or a rewritten adjudicated note. Two mutations of the
+  count, an adjudicated link that no longer occurs anywhere in the raw `derived_interactions` table, or a
+  rewritten adjudicated note. Two mutations of the
   shipped file were each seen to redden it: one word of note 319, and one Major rated side set to Moderate.
 
 **Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
 stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the
-sampled links only.
+sampled links only (4,000 resamples, `random.Random(1)`). Each item in the sample file carries the counts
+every row is weighted by: its kept chains, and the distinct rated substances (`substanceGroupKey`) among
+them.
 
 | share of | strict | 95% | lenient | 95% |
 |---|---|---|---|---|

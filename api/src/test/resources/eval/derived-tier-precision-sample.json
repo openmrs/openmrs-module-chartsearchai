@@ -17,7 +17,9 @@
    "ofLinks": 988,
    "ofKeptChains": 17103,
    "rule": "Python random.Random(480).sample(rest, 100), rest being the other links in that same order"
-  }
+  },
+  "ratedSubstances": 17106,
+  "ratedSubstancesNote": "summed per link: the distinct substanceGroupKey values among each link's rated entries"
  },
  "adjudication": "two fresh same-model (Claude) agents, blind to the hypothesis and to which items were controls, each judging all items plus six unmarked controls against the rubric below, verbatim as they were given it; the two disagreements went to a third blind agent. Not a clinician review. Each item's quote is the first adjudicator's where the two agreed, and the third's where it decided.",
  "rubric": "# Adjudication rubric\n\nEach item is a drug-disease monograph NOTE (written about one drug, or about a drug class) and a\nCONDITION. Decide, from the note text alone, what the note says about the drug(s) it is written about\nand that CONDITION. Read the whole note. Treat synonyms and narrower/broader clinical terms of the\ncondition as naming it only where a clinician would (e.g. \"congestive heart failure\" names Heart\nFailure; \"hepatotoxicity\" does not by itself name Hepatitis unless the note says hepatitis).\n\nGive exactly one verdict:\n\n- **CAUSES** — the note states or reports that the drug(s) can cause, induce, precipitate or lead to\n  the CONDITION, or reports the CONDITION as an adverse effect/event occurring with the drug(s)\n  (including \"has been reported\", \"has been associated with\", \"may result in\"). A new occurrence,\n  onset or recurrence of the condition counts.\n- **WORSENS** — the note states only that the drug(s) may exacerbate, aggravate or worsen the\n  CONDITION in a patient who already has it, and does not state that the drug(s) can bring it on.\n- **NOT_CAUSAL** — anything else: the CONDITION is named only as a population in which the drug is\n  contraindicated or should be used with caution, as a risk factor, as a sign or symptom or consequence\n  of some OTHER effect or disease (not of the drug), as an indication for the drug, as something to\n  monitor for without saying the drug causes it, in a negated or \"not established\" statement, or it is\n  not named at all.\n\nIf a note says the drug causes effect X, and X in turn can lead to the CONDITION, that is CAUSES only\nwhere the note itself states that the CONDITION follows from the drug's effect; a list of the signs of\nX that happens to include the CONDITION is NOT_CAUSAL.\n\nOutput: a JSON array, one object per item, in item order:\n`{\"item\": \"I001\", \"verdict\": \"CAUSES|WORSENS|NOT_CAUSAL\", \"quote\": \"<the shortest note excerpt your verdict rests on, verbatim, or empty if not named>\"}`\n",
@@ -25,6 +27,7 @@
   {
    "stratum": "census",
    "keptChains": 1404,
+   "ratedSubstances": 50,
    "noteId": "319",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -64,6 +67,7 @@
   {
    "stratum": "census",
    "keptChains": 924,
+   "ratedSubstances": 77,
    "noteId": "256",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -88,6 +92,7 @@
   {
    "stratum": "census",
    "keptChains": 836,
+   "ratedSubstances": 77,
    "noteId": "309",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -111,6 +116,7 @@
   {
    "stratum": "census",
    "keptChains": 769,
+   "ratedSubstances": 77,
    "noteId": "462",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -133,6 +139,7 @@
   {
    "stratum": "census",
    "keptChains": 744,
+   "ratedSubstances": 91,
    "noteId": "197",
    "condition": "Infections",
    "causeDrugs": [
@@ -153,6 +160,7 @@
   {
    "stratum": "census",
    "keptChains": 702,
+   "ratedSubstances": 26,
    "noteId": "87",
    "condition": "Epilepsy",
    "causeDrugs": [
@@ -192,6 +200,7 @@
   {
    "stratum": "census",
    "keptChains": 693,
+   "ratedSubstances": 77,
    "noteId": "556",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -213,6 +222,7 @@
   {
    "stratum": "census",
    "keptChains": 624,
+   "ratedSubstances": 50,
    "noteId": "256",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -237,6 +247,7 @@
   {
    "stratum": "census",
    "keptChains": 616,
+   "ratedSubstances": 77,
    "noteId": "490",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -257,6 +268,7 @@
   {
    "stratum": "census",
    "keptChains": 561,
+   "ratedSubstances": 50,
    "noteId": "311",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -280,6 +292,7 @@
   {
    "stratum": "census",
    "keptChains": 560,
+   "ratedSubstances": 33,
    "noteId": "1502",
    "condition": "Glaucoma",
    "causeDrugs": [
@@ -308,6 +321,7 @@
   {
    "stratum": "census",
    "keptChains": 498,
+   "ratedSubstances": 6,
    "noteId": "18",
    "condition": "Diarrhea",
    "causeDrugs": [
@@ -403,6 +417,7 @@
   {
    "stratum": "census",
    "keptChains": 465,
+   "ratedSubstances": 91,
    "noteId": "1782",
    "condition": "Infections",
    "causeDrugs": [
@@ -420,6 +435,7 @@
   {
    "stratum": "census",
    "keptChains": 434,
+   "ratedSubstances": 30,
    "noteId": "297",
    "condition": "Seizures",
    "causeDrugs": [
@@ -446,6 +462,7 @@
   {
    "stratum": "census",
    "keptChains": 418,
+   "ratedSubstances": 37,
    "noteId": "195",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -469,6 +486,7 @@
   {
    "stratum": "census",
    "keptChains": 416,
+   "ratedSubstances": 50,
    "noteId": "296",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -489,6 +507,7 @@
   {
    "stratum": "census",
    "keptChains": 416,
+   "ratedSubstances": 50,
    "noteId": "1219",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -509,6 +528,7 @@
   {
    "stratum": "census",
    "keptChains": 374,
+   "ratedSubstances": 32,
    "noteId": "310",
    "condition": "Diabetes Mellitus",
    "causeDrugs": [
@@ -532,6 +552,7 @@
   {
    "stratum": "census",
    "keptChains": 372,
+   "ratedSubstances": 91,
    "noteId": "1696",
    "condition": "Infections",
    "causeDrugs": [
@@ -548,6 +569,7 @@
   {
    "stratum": "census",
    "keptChains": 371,
+   "ratedSubstances": 91,
    "noteId": "396",
    "condition": "Infections",
    "causeDrugs": [
@@ -564,6 +586,7 @@
   {
    "stratum": "census",
    "keptChains": 350,
+   "ratedSubstances": 33,
    "noteId": "673",
    "condition": "Glaucoma",
    "causeDrugs": [
@@ -586,6 +609,7 @@
   {
    "stratum": "census",
    "keptChains": 350,
+   "ratedSubstances": 33,
    "noteId": "1894",
    "condition": "Glaucoma",
    "causeDrugs": [
@@ -608,6 +632,7 @@
   {
    "stratum": "census",
    "keptChains": 341,
+   "ratedSubstances": 30,
    "noteId": "195",
    "condition": "Seizures",
    "causeDrugs": [
@@ -631,6 +656,7 @@
   {
    "stratum": "census",
    "keptChains": 341,
+   "ratedSubstances": 31,
    "noteId": "245",
    "condition": "Arrhythmias, Cardiac",
    "causeDrugs": [
@@ -654,6 +680,7 @@
   {
    "stratum": "census",
    "keptChains": 341,
+   "ratedSubstances": 30,
    "noteId": "1633",
    "condition": "Seizures",
    "causeDrugs": [
@@ -677,6 +704,7 @@
   {
    "stratum": "census",
    "keptChains": 319,
+   "ratedSubstances": 29,
    "noteId": "195",
    "condition": "Intracranial Hypertension",
    "causeDrugs": [
@@ -700,6 +728,7 @@
   {
    "stratum": "census",
    "keptChains": 308,
+   "ratedSubstances": 77,
    "noteId": "406",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -716,6 +745,7 @@
   {
    "stratum": "census",
    "keptChains": 308,
+   "ratedSubstances": 77,
    "noteId": "806",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -732,6 +762,7 @@
   {
    "stratum": "census",
    "keptChains": 308,
+   "ratedSubstances": 77,
    "noteId": "2280",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -748,6 +779,7 @@
   {
    "stratum": "census",
    "keptChains": 304,
+   "ratedSubstances": 37,
    "noteId": "490",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -768,6 +800,7 @@
   {
    "stratum": "census",
    "keptChains": 304,
+   "ratedSubstances": 77,
    "noteId": "982",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -784,6 +817,7 @@
   {
    "stratum": "census",
    "keptChains": 304,
+   "ratedSubstances": 37,
    "noteId": "1219",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -804,6 +838,7 @@
   {
    "stratum": "census",
    "keptChains": 300,
+   "ratedSubstances": 27,
    "noteId": "672",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -826,6 +861,7 @@
   {
    "stratum": "census",
    "keptChains": 280,
+   "ratedSubstances": 28,
    "noteId": "666",
    "condition": "Hemorrhage",
    "causeDrugs": [
@@ -848,6 +884,7 @@
   {
    "stratum": "census",
    "keptChains": 279,
+   "ratedSubstances": 30,
    "noteId": "559",
    "condition": "Seizures",
    "causeDrugs": [
@@ -869,6 +906,7 @@
   {
    "stratum": "census",
    "keptChains": 279,
+   "ratedSubstances": 91,
    "noteId": "2972",
    "condition": "Infections",
    "causeDrugs": [
@@ -884,6 +922,7 @@
   {
    "stratum": "census",
    "keptChains": 272,
+   "ratedSubstances": 271,
    "noteId": "343",
    "condition": "Liver Diseases",
    "causeDrugs": [
@@ -897,6 +936,7 @@
   {
    "stratum": "census",
    "keptChains": 272,
+   "ratedSubstances": 32,
    "noteId": "899",
    "condition": "Diabetes Mellitus",
    "causeDrugs": [
@@ -917,6 +957,7 @@
   {
    "stratum": "census",
    "keptChains": 270,
+   "ratedSubstances": 15,
    "noteId": "42",
    "condition": "Myocardial Infarction",
    "causeDrugs": [
@@ -947,6 +988,7 @@
   {
    "stratum": "census",
    "keptChains": 260,
+   "ratedSubstances": 50,
    "noteId": "75",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -964,6 +1006,7 @@
   {
    "stratum": "census",
    "keptChains": 250,
+   "ratedSubstances": 45,
    "noteId": "621",
    "condition": "Asthma",
    "causeDrugs": [
@@ -981,6 +1024,7 @@
   {
    "stratum": "census",
    "keptChains": 248,
+   "ratedSubstances": 31,
    "noteId": "296",
    "condition": "Arrhythmias, Cardiac",
    "causeDrugs": [
@@ -1001,6 +1045,7 @@
   {
    "stratum": "census",
    "keptChains": 231,
+   "ratedSubstances": 77,
    "noteId": "1020",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -1016,6 +1061,7 @@
   {
    "stratum": "census",
    "keptChains": 225,
+   "ratedSubstances": 15,
    "noteId": "299",
    "condition": "Myocardial Infarction",
    "causeDrugs": [
@@ -1043,6 +1089,7 @@
   {
    "stratum": "census",
    "keptChains": 210,
+   "ratedSubstances": 27,
    "noteId": "218",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -1062,6 +1109,7 @@
   {
    "stratum": "census",
    "keptChains": 190,
+   "ratedSubstances": 37,
    "noteId": "869",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -1079,6 +1127,7 @@
   {
    "stratum": "census",
    "keptChains": 186,
+   "ratedSubstances": 91,
    "noteId": "470",
    "condition": "Infections",
    "causeDrugs": [
@@ -1093,6 +1142,7 @@
   {
    "stratum": "census",
    "keptChains": 186,
+   "ratedSubstances": 91,
    "noteId": "1041",
    "condition": "Infections",
    "causeDrugs": [
@@ -1107,6 +1157,7 @@
   {
    "stratum": "census",
    "keptChains": 186,
+   "ratedSubstances": 91,
    "noteId": "1387",
    "condition": "Infections",
    "causeDrugs": [
@@ -1121,6 +1172,7 @@
   {
    "stratum": "census",
    "keptChains": 186,
+   "ratedSubstances": 31,
    "noteId": "1448",
    "condition": "Arrhythmias, Cardiac",
    "causeDrugs": [
@@ -1139,6 +1191,7 @@
   {
    "stratum": "census",
    "keptChains": 180,
+   "ratedSubstances": 27,
    "noteId": "503",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -1157,6 +1210,7 @@
   {
    "stratum": "census",
    "keptChains": 180,
+   "ratedSubstances": 27,
    "noteId": "536",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -1175,6 +1229,7 @@
   {
    "stratum": "census",
    "keptChains": 176,
+   "ratedSubstances": 16,
    "noteId": "245",
    "condition": "Myocardial Ischemia",
    "causeDrugs": [
@@ -1198,6 +1253,7 @@
   {
    "stratum": "census",
    "keptChains": 175,
+   "ratedSubstances": 25,
    "noteId": "680",
    "condition": "Coronary Artery Disease",
    "causeDrugs": [
@@ -1217,6 +1273,7 @@
   {
    "stratum": "census",
    "keptChains": 175,
+   "ratedSubstances": 33,
    "noteId": "2202",
    "condition": "Glaucoma",
    "causeDrugs": [
@@ -1234,6 +1291,7 @@
   {
    "stratum": "census",
    "keptChains": 168,
+   "ratedSubstances": 7,
    "noteId": "151",
    "condition": "Fibrosis",
    "causeDrugs": [
@@ -1270,6 +1328,7 @@
   {
    "stratum": "census",
    "keptChains": 168,
+   "ratedSubstances": 28,
    "noteId": "1176",
    "condition": "Hemorrhage",
    "causeDrugs": [
@@ -1288,6 +1347,7 @@
   {
    "stratum": "census",
    "keptChains": 162,
+   "ratedSubstances": 9,
    "noteId": "35",
    "condition": "Stevens-Johnson Syndrome",
    "causeDrugs": [
@@ -1318,6 +1378,7 @@
   {
    "stratum": "census",
    "keptChains": 156,
+   "ratedSubstances": 50,
    "noteId": "1453",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -1333,6 +1394,7 @@
   {
    "stratum": "census",
    "keptChains": 155,
+   "ratedSubstances": 30,
    "noteId": "321",
    "condition": "Seizures",
    "causeDrugs": [
@@ -1350,6 +1412,7 @@
   {
    "stratum": "census",
    "keptChains": 154,
+   "ratedSubstances": 77,
    "noteId": "846",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -1364,6 +1427,7 @@
   {
    "stratum": "census",
    "keptChains": 152,
+   "ratedSubstances": 37,
    "noteId": "1282",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -1380,6 +1444,7 @@
   {
    "stratum": "census",
    "keptChains": 148,
+   "ratedSubstances": 37,
    "noteId": "1318",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -1396,6 +1461,7 @@
   {
    "stratum": "census",
    "keptChains": 144,
+   "ratedSubstances": 7,
    "noteId": "34",
    "condition": "Thrombocytopenia",
    "causeDrugs": [
@@ -1426,6 +1492,7 @@
   {
    "stratum": "census",
    "keptChains": 140,
+   "ratedSubstances": 33,
    "noteId": "397",
    "condition": "Glaucoma",
    "causeDrugs": [
@@ -1442,6 +1509,7 @@
   {
    "stratum": "census",
    "keptChains": 132,
+   "ratedSubstances": 23,
    "noteId": "1448",
    "condition": "Hyperkalemia",
    "causeDrugs": [
@@ -1460,6 +1528,7 @@
   {
    "stratum": "census",
    "keptChains": 130,
+   "ratedSubstances": 10,
    "noteId": "430",
    "condition": "Neutropenia",
    "causeDrugs": [
@@ -1485,6 +1554,7 @@
   {
    "stratum": "census",
    "keptChains": 126,
+   "ratedSubstances": 18,
    "noteId": "900",
    "condition": "Pancreatitis",
    "causeDrugs": [
@@ -1504,6 +1574,7 @@
   {
    "stratum": "census",
    "keptChains": 125,
+   "ratedSubstances": 25,
    "noteId": "2202",
    "condition": "Glaucoma, Angle-Closure",
    "causeDrugs": [
@@ -1521,6 +1592,7 @@
   {
    "stratum": "census",
    "keptChains": 124,
+   "ratedSubstances": 30,
    "noteId": "639",
    "condition": "Seizures",
    "causeDrugs": [
@@ -1537,6 +1609,7 @@
   {
    "stratum": "census",
    "keptChains": 124,
+   "ratedSubstances": 31,
    "noteId": "706",
    "condition": "Arrhythmias, Cardiac",
    "causeDrugs": [
@@ -1553,6 +1626,7 @@
   {
    "stratum": "census",
    "keptChains": 124,
+   "ratedSubstances": 31,
    "noteId": "2280",
    "condition": "Arrhythmias, Cardiac",
    "causeDrugs": [
@@ -1569,6 +1643,7 @@
   {
    "stratum": "census",
    "keptChains": 124,
+   "ratedSubstances": 30,
    "noteId": "2849",
    "condition": "Seizures",
    "causeDrugs": [
@@ -1585,6 +1660,7 @@
   {
    "stratum": "census",
    "keptChains": 120,
+   "ratedSubstances": 15,
    "noteId": "1219",
    "condition": "Myocardial Infarction",
    "causeDrugs": [
@@ -1605,6 +1681,7 @@
   {
    "stratum": "census",
    "keptChains": 120,
+   "ratedSubstances": 27,
    "noteId": "2280",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -1621,6 +1698,7 @@
   {
    "stratum": "census",
    "keptChains": 114,
+   "ratedSubstances": 6,
    "noteId": "40",
    "condition": "Hepatitis",
    "causeDrugs": [
@@ -1652,6 +1730,7 @@
   {
    "stratum": "census",
    "keptChains": 114,
+   "ratedSubstances": 6,
    "noteId": "357",
    "condition": "Hepatitis",
    "causeDrugs": [
@@ -1683,6 +1762,7 @@
   {
    "stratum": "census",
    "keptChains": 114,
+   "ratedSubstances": 37,
    "noteId": "1358",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -1698,6 +1778,7 @@
   {
    "stratum": "census",
    "keptChains": 112,
+   "ratedSubstances": 28,
    "noteId": "2278",
    "condition": "Dehydration",
    "causeDrugs": [
@@ -1714,6 +1795,7 @@
   {
    "stratum": "census",
    "keptChains": 110,
+   "ratedSubstances": 10,
    "noteId": "307",
    "condition": "Anemia",
    "causeDrugs": [
@@ -1737,6 +1819,7 @@
   {
    "stratum": "census",
    "keptChains": 110,
+   "ratedSubstances": 10,
    "noteId": "307",
    "condition": "Neutropenia",
    "causeDrugs": [
@@ -1760,6 +1843,7 @@
   {
    "stratum": "census",
    "keptChains": 109,
+   "ratedSubstances": 28,
    "noteId": "527",
    "condition": "Hemorrhage",
    "causeDrugs": [
@@ -1776,6 +1860,7 @@
   {
    "stratum": "census",
    "keptChains": 108,
+   "ratedSubstances": 18,
    "noteId": "498",
    "condition": "Pancreatitis",
    "causeDrugs": [
@@ -1794,6 +1879,7 @@
   {
    "stratum": "census",
    "keptChains": 105,
+   "ratedSubstances": 7,
    "noteId": "230",
    "condition": "Bradycardia",
    "causeDrugs": [
@@ -1821,6 +1907,7 @@
   {
    "stratum": "census",
    "keptChains": 102,
+   "ratedSubstances": 6,
    "noteId": "231",
    "condition": "Diarrhea",
    "causeDrugs": [
@@ -1850,6 +1937,7 @@
   {
    "stratum": "census",
    "keptChains": 100,
+   "ratedSubstances": 45,
    "noteId": "522",
    "condition": "Asthma",
    "causeDrugs": [
@@ -1864,6 +1952,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 30,
    "noteId": "547",
    "condition": "Seizures",
    "causeDrugs": [
@@ -1879,6 +1968,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "717",
    "condition": "Infections",
    "causeDrugs": [
@@ -1892,6 +1982,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 30,
    "noteId": "1244",
    "condition": "Seizures",
    "causeDrugs": [
@@ -1907,6 +1998,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "1351",
    "condition": "Infections",
    "causeDrugs": [
@@ -1920,6 +2012,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "1395",
    "condition": "Infections",
    "causeDrugs": [
@@ -1933,6 +2026,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "1837",
    "condition": "Infections",
    "causeDrugs": [
@@ -1946,6 +2040,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 31,
    "noteId": "1948",
    "condition": "Arrhythmias, Cardiac",
    "causeDrugs": [
@@ -1961,6 +2056,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "2000",
    "condition": "Infections",
    "causeDrugs": [
@@ -1974,6 +2070,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "2695",
    "condition": "Infections",
    "causeDrugs": [
@@ -1987,6 +2084,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "3009",
    "condition": "Infections",
    "causeDrugs": [
@@ -2000,6 +2098,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "3134",
    "condition": "Infections",
    "causeDrugs": [
@@ -2013,6 +2112,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "3324",
    "condition": "Infections",
    "causeDrugs": [
@@ -2026,6 +2126,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "3524",
    "condition": "Infections",
    "causeDrugs": [
@@ -2039,6 +2140,7 @@
   {
    "stratum": "census",
    "keptChains": 93,
+   "ratedSubstances": 91,
    "noteId": "3931",
    "condition": "Infections",
    "causeDrugs": [
@@ -2052,6 +2154,7 @@
   {
    "stratum": "sample",
    "keptChains": 90,
+   "ratedSubstances": 15,
    "noteId": "536",
    "condition": "Myocardial Infarction",
    "causeDrugs": [
@@ -2070,6 +2173,7 @@
   {
    "stratum": "sample",
    "keptChains": 77,
+   "ratedSubstances": 77,
    "noteId": "1540",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -2083,6 +2187,7 @@
   {
    "stratum": "sample",
    "keptChains": 77,
+   "ratedSubstances": 77,
    "noteId": "2949",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -2096,6 +2201,7 @@
   {
    "stratum": "sample",
    "keptChains": 76,
+   "ratedSubstances": 76,
    "noteId": "3618",
    "condition": "Hypotension",
    "causeDrugs": [
@@ -2109,6 +2215,7 @@
   {
    "stratum": "sample",
    "keptChains": 75,
+   "ratedSubstances": 25,
    "noteId": "1243",
    "condition": "Coronary Artery Disease",
    "causeDrugs": [
@@ -2124,6 +2231,7 @@
   {
    "stratum": "sample",
    "keptChains": 72,
+   "ratedSubstances": 4,
    "noteId": "43",
    "condition": "Edema",
    "causeDrugs": [
@@ -2154,6 +2262,7 @@
   {
    "stratum": "sample",
    "keptChains": 70,
+   "ratedSubstances": 33,
    "noteId": "584",
    "condition": "Glaucoma",
    "causeDrugs": [
@@ -2168,6 +2277,7 @@
   {
    "stratum": "sample",
    "keptChains": 54,
+   "ratedSubstances": 27,
    "noteId": "3758",
    "condition": "Hemorrhage",
    "causeDrugs": [
@@ -2182,6 +2292,7 @@
   {
    "stratum": "sample",
    "keptChains": 52,
+   "ratedSubstances": 50,
    "noteId": "802",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -2195,6 +2306,7 @@
   {
    "stratum": "sample",
    "keptChains": 52,
+   "ratedSubstances": 50,
    "noteId": "3819",
    "condition": "Heart Failure",
    "causeDrugs": [
@@ -2208,6 +2320,7 @@
   {
    "stratum": "sample",
    "keptChains": 50,
+   "ratedSubstances": 23,
    "noteId": "763",
    "condition": "Hypersensitivity",
    "causeDrugs": [
@@ -2222,6 +2335,7 @@
   {
    "stratum": "sample",
    "keptChains": 50,
+   "ratedSubstances": 23,
    "noteId": "1370",
    "condition": "Hypersensitivity",
    "causeDrugs": [
@@ -2236,6 +2350,7 @@
   {
    "stratum": "sample",
    "keptChains": 48,
+   "ratedSubstances": 6,
    "noteId": "2",
    "condition": "Hepatitis",
    "causeDrugs": [
@@ -2256,6 +2371,7 @@
   {
    "stratum": "sample",
    "keptChains": 38,
+   "ratedSubstances": 37,
    "noteId": "1821",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -2269,6 +2385,7 @@
   {
    "stratum": "sample",
    "keptChains": 38,
+   "ratedSubstances": 37,
    "noteId": "2967",
    "condition": "Hypertension",
    "causeDrugs": [
@@ -2282,6 +2399,7 @@
   {
    "stratum": "sample",
    "keptChains": 35,
+   "ratedSubstances": 7,
    "noteId": "869",
    "condition": "Bradycardia",
    "causeDrugs": [
@@ -2299,6 +2417,7 @@
   {
    "stratum": "sample",
    "keptChains": 35,
+   "ratedSubstances": 33,
    "noteId": "3613",
    "condition": "Glaucoma",
    "causeDrugs": [
@@ -2312,6 +2431,7 @@
   {
    "stratum": "sample",
    "keptChains": 31,
+   "ratedSubstances": 30,
    "noteId": "2813",
    "condition": "Seizures",
    "causeDrugs": [
@@ -2325,6 +2445,7 @@
   {
    "stratum": "sample",
    "keptChains": 31,
+   "ratedSubstances": 30,
    "noteId": "3775",
    "condition": "Seizures",
    "causeDrugs": [
@@ -2338,6 +2459,7 @@
   {
    "stratum": "sample",
    "keptChains": 30,
+   "ratedSubstances": 2,
    "noteId": "58",
    "condition": "Tachycardia",
    "causeDrugs": [
@@ -2365,6 +2487,7 @@
   {
    "stratum": "sample",
    "keptChains": 30,
+   "ratedSubstances": 27,
    "noteId": "2539",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -2378,6 +2501,7 @@
   {
    "stratum": "sample",
    "keptChains": 30,
+   "ratedSubstances": 27,
    "noteId": "2899",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -2391,6 +2515,7 @@
   {
    "stratum": "sample",
    "keptChains": 30,
+   "ratedSubstances": 27,
    "noteId": "3246",
    "condition": "Thrombosis",
    "causeDrugs": [
@@ -2404,6 +2529,7 @@
   {
    "stratum": "sample",
    "keptChains": 28,
+   "ratedSubstances": 28,
    "noteId": "766",
    "condition": "Dehydration",
    "causeDrugs": [
@@ -2417,6 +2543,7 @@
   {
    "stratum": "sample",
    "keptChains": 27,
+   "ratedSubstances": 27,
    "noteId": "320",
    "condition": "Dehydration",
    "causeDrugs": [
@@ -2430,6 +2557,7 @@
   {
    "stratum": "sample",
    "keptChains": 25,
+   "ratedSubstances": 23,
    "noteId": "90",
    "condition": "Hypersensitivity",
    "causeDrugs": [
@@ -2443,6 +2571,7 @@
   {
    "stratum": "sample",
    "keptChains": 25,
+   "ratedSubstances": 24,
    "noteId": "1713",
    "condition": "Thromboembolism",
    "causeDrugs": [
@@ -2456,6 +2585,7 @@
   {
    "stratum": "sample",
    "keptChains": 24,
+   "ratedSubstances": 24,
    "noteId": "3392",
    "condition": "Liver Failure",
    "causeDrugs": [
@@ -2469,6 +2599,7 @@
   {
    "stratum": "sample",
    "keptChains": 22,
+   "ratedSubstances": 22,
    "noteId": "1963",
    "condition": "Hyperkalemia",
    "causeDrugs": [
@@ -2482,6 +2613,7 @@
   {
    "stratum": "sample",
    "keptChains": 21,
+   "ratedSubstances": 7,
    "noteId": "3695",
    "condition": "Fibrosis",
    "causeDrugs": [
@@ -2497,6 +2629,7 @@
   {
    "stratum": "sample",
    "keptChains": 20,
+   "ratedSubstances": 10,
    "noteId": "1954",
    "condition": "Neutropenia",
    "causeDrugs": [
@@ -2511,6 +2644,7 @@
   {
    "stratum": "sample",
    "keptChains": 20,
+   "ratedSubstances": 10,
    "noteId": "1980",
    "condition": "Anemia",
    "causeDrugs": [
@@ -2525,6 +2659,7 @@
   {
    "stratum": "sample",
    "keptChains": 18,
+   "ratedSubstances": 18,
    "noteId": "1047",
    "condition": "Pancreatitis",
    "causeDrugs": [
@@ -2538,6 +2673,7 @@
   {
    "stratum": "sample",
    "keptChains": 18,
+   "ratedSubstances": 9,
    "noteId": "2985",
    "condition": "Lupus Erythematosus, Systemic",
    "causeDrugs": [
@@ -2552,6 +2688,7 @@
   {
    "stratum": "sample",
    "keptChains": 16,
+   "ratedSubstances": 4,
    "noteId": "1318",
    "condition": "Edema",
    "causeDrugs": [
@@ -2568,6 +2705,7 @@
   {
    "stratum": "sample",
    "keptChains": 16,
+   "ratedSubstances": 16,
    "noteId": "2001",
    "condition": "Myocardial Ischemia",
    "causeDrugs": [
@@ -2581,6 +2719,7 @@
   {
    "stratum": "sample",
    "keptChains": 15,
+   "ratedSubstances": 15,
    "noteId": "3735",
    "condition": "Myocardial Infarction",
    "causeDrugs": [
@@ -2594,6 +2733,7 @@
   {
    "stratum": "sample",
    "keptChains": 15,
+   "ratedSubstances": 15,
    "noteId": "3784",
    "condition": "Myocardial Infarction",
    "causeDrugs": [
@@ -2607,6 +2747,7 @@
   {
    "stratum": "sample",
    "keptChains": 14,
+   "ratedSubstances": 2,
    "noteId": "873",
    "condition": "Coronary Vasospasm",
    "causeDrugs": [
@@ -2626,6 +2767,7 @@
   {
    "stratum": "sample",
    "keptChains": 12,
+   "ratedSubstances": 6,
    "noteId": "1238",
    "condition": "Hepatitis",
    "causeDrugs": [
@@ -2640,6 +2782,7 @@
   {
    "stratum": "sample",
    "keptChains": 12,
+   "ratedSubstances": 12,
    "noteId": "1401",
    "condition": "Hyperthyroidism",
    "causeDrugs": [
@@ -2653,6 +2796,7 @@
   {
    "stratum": "sample",
    "keptChains": 11,
+   "ratedSubstances": 11,
    "noteId": "3531",
    "condition": "Rhabdomyolysis",
    "causeDrugs": [
@@ -2666,6 +2810,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "280",
    "condition": "Anemia",
    "causeDrugs": [
@@ -2679,6 +2824,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "893",
    "condition": "Neutropenia",
    "causeDrugs": [
@@ -2692,6 +2838,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "1474",
    "condition": "Anemia",
    "causeDrugs": [
@@ -2705,6 +2852,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "1515",
    "condition": "Anemia",
    "causeDrugs": [
@@ -2718,6 +2866,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "1809",
    "condition": "Neutropenia",
    "causeDrugs": [
@@ -2731,6 +2880,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "2026",
    "condition": "Anemia",
    "causeDrugs": [
@@ -2744,6 +2894,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "2033",
    "condition": "Neutropenia",
    "causeDrugs": [
@@ -2757,6 +2908,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "2605",
    "condition": "Anemia",
    "causeDrugs": [
@@ -2770,6 +2922,7 @@
   {
    "stratum": "sample",
    "keptChains": 10,
+   "ratedSubstances": 10,
    "noteId": "2817",
    "condition": "Neutropenia",
    "causeDrugs": [
@@ -2783,6 +2936,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 7,
    "noteId": "45",
    "condition": "Thrombocytopenia",
    "causeDrugs": [
@@ -2796,6 +2950,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 8,
    "noteId": "1010",
    "condition": "Diabetic Ketoacidosis",
    "causeDrugs": [
@@ -2809,6 +2964,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 8,
    "noteId": "1255",
    "condition": "Diabetic Ketoacidosis",
    "causeDrugs": [
@@ -2822,6 +2978,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 8,
    "noteId": "1707",
    "condition": "Cardiotoxicity",
    "causeDrugs": [
@@ -2835,6 +2992,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 7,
    "noteId": "2817",
    "condition": "Thrombocytopenia",
    "causeDrugs": [
@@ -2848,6 +3006,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 8,
    "noteId": "2863",
    "condition": "Cardiotoxicity",
    "causeDrugs": [
@@ -2861,6 +3020,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 7,
    "noteId": "3134",
    "condition": "Thrombocytopenia",
    "causeDrugs": [
@@ -2874,6 +3034,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 7,
    "noteId": "3645",
    "condition": "Thrombocytopenia",
    "causeDrugs": [
@@ -2887,6 +3048,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 7,
    "noteId": "3706",
    "condition": "Thrombocytopenia",
    "causeDrugs": [
@@ -2900,6 +3062,7 @@
   {
    "stratum": "sample",
    "keptChains": 8,
+   "ratedSubstances": 7,
    "noteId": "3898",
    "condition": "Thrombocytopenia",
    "causeDrugs": [
@@ -2913,6 +3076,7 @@
   {
    "stratum": "sample",
    "keptChains": 7,
+   "ratedSubstances": 7,
    "noteId": "326",
    "condition": "Fibrosis",
    "causeDrugs": [
@@ -2926,6 +3090,7 @@
   {
    "stratum": "sample",
    "keptChains": 7,
+   "ratedSubstances": 7,
    "noteId": "505",
    "condition": "Bradycardia",
    "causeDrugs": [
@@ -2939,6 +3104,7 @@
   {
    "stratum": "sample",
    "keptChains": 7,
+   "ratedSubstances": 7,
    "noteId": "3138",
    "condition": "Fibrosis",
    "causeDrugs": [
@@ -2952,6 +3118,7 @@
   {
    "stratum": "sample",
    "keptChains": 6,
+   "ratedSubstances": 6,
    "noteId": "9",
    "condition": "Diarrhea",
    "causeDrugs": [
@@ -2965,6 +3132,7 @@
   {
    "stratum": "sample",
    "keptChains": 6,
+   "ratedSubstances": 1,
    "noteId": "112",
    "condition": "Lung Diseases, Interstitial",
    "causeDrugs": [
@@ -2983,6 +3151,7 @@
   {
    "stratum": "sample",
    "keptChains": 6,
+   "ratedSubstances": 1,
    "noteId": "536",
    "condition": "Pulmonary Embolism",
    "causeDrugs": [
@@ -3001,6 +3170,7 @@
   {
    "stratum": "sample",
    "keptChains": 6,
+   "ratedSubstances": 6,
    "noteId": "2206",
    "condition": "Hepatitis",
    "causeDrugs": [
@@ -3014,6 +3184,7 @@
   {
    "stratum": "sample",
    "keptChains": 6,
+   "ratedSubstances": 6,
    "noteId": "3198",
    "condition": "Hepatitis",
    "causeDrugs": [
@@ -3027,6 +3198,7 @@
   {
    "stratum": "sample",
    "keptChains": 4,
+   "ratedSubstances": 1,
    "noteId": "589",
    "condition": "Hepatic Encephalopathy",
    "causeDrugs": [
@@ -3043,6 +3215,7 @@
   {
    "stratum": "sample",
    "keptChains": 4,
+   "ratedSubstances": 2,
    "noteId": "760",
    "condition": "Tachycardia, Ventricular",
    "causeDrugs": [
@@ -3057,6 +3230,7 @@
   {
    "stratum": "sample",
    "keptChains": 4,
+   "ratedSubstances": 2,
    "noteId": "846",
    "condition": "Tachycardia",
    "causeDrugs": [
@@ -3071,6 +3245,7 @@
   {
    "stratum": "sample",
    "keptChains": 4,
+   "ratedSubstances": 4,
    "noteId": "867",
    "condition": "Edema",
    "causeDrugs": [
@@ -3084,6 +3259,7 @@
   {
    "stratum": "sample",
    "keptChains": 4,
+   "ratedSubstances": 4,
    "noteId": "919",
    "condition": "Edema",
    "causeDrugs": [
@@ -3097,6 +3273,7 @@
   {
    "stratum": "sample",
    "keptChains": 4,
+   "ratedSubstances": 2,
    "noteId": "1238",
    "condition": "Hepatitis, Autoimmune",
    "causeDrugs": [
@@ -3111,6 +3288,7 @@
   {
    "stratum": "sample",
    "keptChains": 4,
+   "ratedSubstances": 4,
    "noteId": "3844",
    "condition": "Cholestasis",
    "causeDrugs": [
@@ -3124,6 +3302,7 @@
   {
    "stratum": "sample",
    "keptChains": 3,
+   "ratedSubstances": 3,
    "noteId": "1115",
    "condition": "Pancytopenia",
    "causeDrugs": [
@@ -3137,6 +3316,7 @@
   {
    "stratum": "sample",
    "keptChains": 3,
+   "ratedSubstances": 3,
    "noteId": "1754",
    "condition": "Leukemia, Myeloid",
    "causeDrugs": [
@@ -3150,6 +3330,7 @@
   {
    "stratum": "sample",
    "keptChains": 3,
+   "ratedSubstances": 3,
    "noteId": "2178",
    "condition": "Agranulocytosis",
    "causeDrugs": [
@@ -3163,6 +3344,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 1,
    "noteId": "523",
    "condition": "Pulmonary Embolism",
    "causeDrugs": [
@@ -3177,6 +3359,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 2,
    "noteId": "953",
    "condition": "Tachycardia",
    "causeDrugs": [
@@ -3190,6 +3373,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 1,
    "noteId": "1215",
    "condition": "Anemia, Aplastic",
    "causeDrugs": [
@@ -3204,6 +3388,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 2,
    "noteId": "1821",
    "condition": "Tachycardia",
    "causeDrugs": [
@@ -3217,6 +3402,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 2,
    "noteId": "2369",
    "condition": "Hyponatremia",
    "causeDrugs": [
@@ -3230,6 +3416,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 2,
    "noteId": "2476",
    "condition": "Ileus",
    "causeDrugs": [
@@ -3243,6 +3430,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 2,
    "noteId": "3294",
    "condition": "Tachycardia, Ventricular",
    "causeDrugs": [
@@ -3256,6 +3444,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 1,
    "noteId": "3309",
    "condition": "Ischemia",
    "causeDrugs": [
@@ -3270,6 +3459,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 2,
    "noteId": "3644",
    "condition": "Stomatitis",
    "causeDrugs": [
@@ -3283,6 +3473,7 @@
   {
    "stratum": "sample",
    "keptChains": 2,
+   "ratedSubstances": 2,
    "noteId": "3856",
    "condition": "Tachycardia",
    "causeDrugs": [
@@ -3296,6 +3487,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "89",
    "condition": "Heart Block",
    "causeDrugs": [
@@ -3309,6 +3501,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "801",
    "condition": "Leukemia",
    "causeDrugs": [
@@ -3322,6 +3515,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "1660",
    "condition": "Hyperbilirubinemia",
    "causeDrugs": [
@@ -3335,6 +3529,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "2497",
    "condition": "Pulmonary Embolism",
    "causeDrugs": [
@@ -3348,6 +3543,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "2720",
    "condition": "Ischemia",
    "causeDrugs": [
@@ -3361,6 +3557,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "2805",
    "condition": "Malnutrition",
    "causeDrugs": [
@@ -3374,6 +3571,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "3009",
    "condition": "Endocarditis, Bacterial",
    "causeDrugs": [
@@ -3387,6 +3585,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "3139",
    "condition": "Cystitis",
    "causeDrugs": [
@@ -3400,6 +3599,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "3236",
    "condition": "Sepsis",
    "causeDrugs": [
@@ -3413,6 +3613,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "3263",
    "condition": "Lung Diseases, Interstitial",
    "causeDrugs": [
@@ -3426,6 +3627,7 @@
   {
    "stratum": "sample",
    "keptChains": 1,
+   "ratedSubstances": 1,
    "noteId": "3859",
    "condition": "Lung Diseases, Interstitial",
    "causeDrugs": [

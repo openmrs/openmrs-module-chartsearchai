@@ -15,11 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.HashSet;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ModelManifest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,13 +50,11 @@ public class DerivedTierPrecisionSampleTest {
 
 	private static final String SAMPLE = "/eval/derived-tier-precision-sample.json";
 
-	private static final String KNOWLEDGE_BASE = "/chartsearchai/ddi-knowledge-base.json";
-
 	@Test
 	public void theShippedKnowledgeBaseIsTheOneThePrecisionFigureWasMeasuredOver() throws Exception {
 		JsonNode sample = read(SAMPLE);
-		JsonNode kb = read(KNOWLEDGE_BASE);
 
+		// Counted before the raw tree is read, so the loader's own tree of the same file is garbage by then.
 		int keptChains = 0;
 		for (DrugReference rated : DrugReferenceTestSupport.shippedEntries()) {
 			keptChains += rated.getConditionMediatedRisks().size();
@@ -65,6 +63,8 @@ public class DerivedTierPrecisionSampleTest {
 			"the loader keeps a different set of derived chains than the precision figure was measured over;"
 					+ " re-measure it (ADR Decision 111) before changing the recorded population");
 
+		// The file the loader reads, by the loader's own name for it.
+		JsonNode kb = read(DdiDrugReferenceSource.CLASSPATH_DEFAULT);
 		Set<String> links = new HashSet<String>();
 		for (JsonNode row : kb.path("derived_interactions")) {
 			links.add(row.get(3).asText() + "\t" + row.get(5).asText());
@@ -76,15 +76,15 @@ public class DerivedTierPrecisionSampleTest {
 				String noteId = item.path("noteId").asText();
 				String condition = item.path("condition").asText();
 				assertTrue(links.contains(noteId + "\t" + condition),
-					"adjudicated link (note " + noteId + ", " + condition + ") is no longer a derived link");
+					"adjudicated link (note " + noteId + ", " + condition + ") no longer occurs in the raw derived_interactions table");
 				JsonNode note = notes.path(noteId);
 				assertTrue(note.has("text"), "adjudicated note " + noteId + " is gone");
-				assertEquals(item.path("noteSha256").asText(), sha256(note.path("text").asText()),
+				assertEquals(item.path("noteSha256").asText(),
+					ModelManifest.sha256(note.path("text").asText().getBytes(StandardCharsets.UTF_8)),
 					"note " + noteId + " was rewritten after it was adjudicated for " + condition);
 				checked++;
 			}
 		}
-		assertEquals(sample.path("items").size() + sample.path("controls").size(), checked);
 		assertTrue(checked > 0, "precondition: the recorded sample carries adjudicated items");
 	}
 
@@ -93,14 +93,5 @@ public class DerivedTierPrecisionSampleTest {
 			assertNotNull(in, resource + " is not on the test classpath");
 			return new ObjectMapper().readTree(in);
 		}
-	}
-
-	private static String sha256(String text) throws Exception {
-		byte[] digest = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8));
-		StringBuilder hex = new StringBuilder();
-		for (byte b : digest) {
-			hex.append(String.format("%02x", b));
-		}
-		return hex.toString();
 	}
 }

@@ -1186,11 +1186,9 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>The boundary is expressed against {@link #severityRank} rather than as a number, so it
 	 * cannot fall out of step with that switch: {@code major} withholds and every rating below it is a
-	 * caution, because that is where DDInter's own tiers put it (issue #471, ADR Decision 109). Only
-	 * its Major combinations "should be strictly avoided"; a Moderate one "may result in exacerbation
-	 * of the disease of the patient and/or change in therapy", and a Minor one usually does not
-	 * require a change at all ({@code unknown} carries no mechanism text, which is why the default
-	 * floor filters it out of the chips entirely).
+	 * caution, because that is where DDInter's own tiers put it — ADR Decision 109 quotes them (issue
+	 * #471). {@code unknown} carries no mechanism text, which is why the default floor filters it out of
+	 * the chips entirely.
 	 *
 	 * <p><b>Unrated withholds, and it is the case a "no rating means nothing serious" reading gets
 	 * backwards.</b> Null is not a low rating — see {@link SafetyWarning#getSeverity()} — and it
@@ -3877,7 +3875,7 @@ public class DrugSafetyValidator {
 	 * {@code Unknown} against a plain {@code Minor}. Each withholds and the caution does not, while the
 	 * rating ranks it lower. A folded {@code Minor} against a plain {@code Moderate} is reachable at the
 	 * shipped floor since issue #471 made {@code moderate} a caution; the {@code Unknown} pairs need a
-	 * lowered floor, and before #471 they were the only ones.
+	 * lowered floor, and before #471 the one against a plain {@code Minor} was the only pair.
 	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} is the guard, over the lowered-floor pair —
 	 * swap the two keys here and read its failure.
 	 *

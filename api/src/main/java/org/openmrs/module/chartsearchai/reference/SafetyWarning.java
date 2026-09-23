@@ -871,7 +871,7 @@ public class SafetyWarning {
 
 	/**
 	 * Whether this warning is about a medication the patient is ALREADY TAKING rather than about a
-	 * drug something proposed (issue #348) — which decides which COLUMN of the four strength clauses
+	 * drug something proposed (issue #348) — which decides which COLUMN of the strength clauses
 	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
 	 *
 	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> Only the two
@@ -933,8 +933,9 @@ public class SafetyWarning {
 	 * Whether this finding is about a drug this patient's CHART records only as an order no longer in
 	 * force — the third REFERENT beside a proposal and {@link #isAboutACurrentMedication()} (issue
 	 * #472). Set by {@code DrugSafetyValidator}'s drug-in-play arm, through
-	 * {@link #asAboutAnEndedOrder}, and never read off the detail; the two referents are exclusive, so
-	 * a finding about a current medication never answers true here.
+	 * {@link #asAboutAnEndedOrder}, and never read off the detail. It never answers true beside
+	 * {@link #isAboutACurrentMedication()}: that method's guard refuses it, a defence the arms do not
+	 * need today, since none states both of one chip.
 	 *
 	 * <p><b>{@code false} is not a certificate that the drug is current.</b> It is also the answer
 	 * wherever the chart the module built carries no record of the ended order (a query-scoped slice
@@ -948,9 +949,11 @@ public class SafetyWarning {
 
 	/**
 	 * This warning, stated as about a drug the chart records only as an ended order (issue #472) — or
-	 * this very warning, unchanged, where it is already about a current medication: the two referents
-	 * are exclusive and the current-medication one is the arm's own statement, so it is never
-	 * overridden. Package-private: the drug-in-play arm is its only caller.
+	 * this very warning, unchanged, where it is already about a current medication, which no caller
+	 * hands it today: the drug-in-play arm's chips never are, and the order-driven arm's subjects are
+	 * her active substances, which {@code DrugSafetyValidator.EndedOrders} never holds. Kept so the two
+	 * referents cannot both be stated whatever a later caller does. Package-private: the drug-in-play
+	 * arm is its only caller.
 	 */
 	SafetyWarning asAboutAnEndedOrder() {
 		if (aboutACurrentMedication) {

@@ -9724,8 +9724,13 @@ questions about it need.
 
 **A third REFERENT, beside a proposal and [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)'s current
 medication**: `SafetyWarning.isAboutAnEndedOrder()`, set by the drug-in-play arm for a substance in play
-that no active order resolves to, that no chart record stamped IN FORCE names, and that a record stamped
-NOT IN FORCE does name — the stamp's `null` is neither. Both classes, interaction and contraindication,
+that a record stamped NOT IN FORCE names, and only where the module can say she is not on it: no active
+order resolves to it, no drug-order record the stamp does not call ended names it (in force, or
+unstamped — `null` is "the module cannot say", and may be an order she is on), her active orders were
+read in full, and every one of them resolved (`DrugSafetyValidator.everyActiveOrderResolves`, the gate
+Decision 108 put on "not already taking"). The last two were raised in this change's hardening: without
+them an order under a brand the data lacks, beside an older ended record of the same drug, was told to
+the model as ended. Both classes, interaction and contraindication,
 because the condition is one condition. The record states one of two clauses in place of the proposal
 pair, the prompt's safety paragraph teaches both in their own words, the ranking sentence places the
 withholding one, and the chip publishes `aboutAnEndedOrder`.
@@ -9737,10 +9742,17 @@ reads "a reason against giving it should it be proposed again", and names the re
 already names such a record ("no longer in force", after `PatientChartSerializer.INACTIVE_ORDER_LABEL`)
 rather than as "stopped" — the stamp is also `FALSE` for a voided order, which was never stopped.
 
-**It composes with [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).**
-A question PROPOSING a drug the chart holds as ended is still one the module answers there: the
-ended-order withholding clause is ranked in its composer and carries the withholding lead, since the
-admitted question meets the condition that clause states its call under.
+**Not for the drug a question PROPOSES.** *"Can I give her rifampicin?"* supplies the proposal the
+withholding call needs, so it keeps that call; the referent is for the question that proposed nothing.
+Which questions propose is `QueryScopeRouter.asksWhetherToGiveADrug`, the closed grammar
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+admits a proposal by, over the same marking of the question's names — so the two paths cannot
+disagree: a question the module answers from its findings is one this change never re-refers. The
+first form of this change re-referred it and extended the composer's withholding lead to the new
+clause, and the hardening's integration review found the module path then leading with "No" where the
+prompt branch forbids the model to; the composer now answers `-1` for the new clauses, so an answer
+carrying one keeps the model call. A proposal phrased outside the grammar is read as none, and gets
+the conditional call.
 
 ### The measurement
 
@@ -9757,9 +9769,12 @@ Recorded below from the two-build A/B this change was gated on.
   unchanged, so a client renders the referent only by reading `aboutAnEndedOrder`
   (`openmrs-esm-chartsearchai`'s half). The chip carries no stop date: the record the finding rests on
   states it, and `orderStopDates` publishes it where that record is cited.
-- Both clauses are longer than `ReferenceProseFidelityCheck`'s floor, so an answer paraphrasing one
-  mid-sentence can raise that WARN where the eight-word proposal clause could not — Decision 72's
-  recorded cost, one referent over.
+- The ended-order WITHHOLDING clause is longer than `ReferenceProseFidelityCheck`'s
+  `MIN_REPRODUCED_WORDS`, so an answer paraphrasing it mid-sentence can raise that WARN where the
+  proposal clause it replaces could not — Decision 72's recorded cost, one referent over. The caution
+  clause replaces one that already cleared that floor.
+- A patient with any active order the data cannot resolve gets no ended-order referent at all, even for
+  a drug that order plainly is not — the price of the resolution gate.
 
 → `EndedOrderFindingReferentTest` (the real injector and validator over querystore's real rendered
 order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and read the failures),

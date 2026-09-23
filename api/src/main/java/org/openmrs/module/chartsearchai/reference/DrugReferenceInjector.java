@@ -2375,7 +2375,8 @@ public class DrugReferenceInjector {
 	 *     {@code QueryScopeRouter.asksWhetherToGiveADrug} with the drug's own name marked, where an
 	 *     interaction the data rates as a reason to withhold it relates it to one of her orders
 	 *     ({@link #STRENGTH_WITHHOLD} — the proposal clause, which only the drug-in-play arm states
-	 *     before there is an answer). Not already taking it, because the drug-in-play arm states a
+	 *     before there is an answer, and still the one it states for a drug her chart holds only as
+	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the drug-in-play arm states a
 	 *     proposal clause for a drug she does take (issue #402), and composing would make that defect
 	 *     certain — asked of {@code herSubstances}, the substances this pass resolved her orders to.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
@@ -2439,7 +2440,7 @@ public class DrugReferenceInjector {
 	 * ("Aleve Arthritis Pain" is one of diclofenac's names, and removing its words from any diclofenac
 	 * question once admitted "… for her arthritis pain").
 	 */
-	private static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
+	static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
 		String folded = DrugReference.foldedLower(question);
 		boolean[] named = new boolean[folded.length()];
 		for (DrugReference entry : entries) {
@@ -2471,11 +2472,10 @@ public class DrugReferenceInjector {
 	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
 	 * cannot take the answer's first sentence and leave the question unanswered. One key does both,
 	 * because the two never meet: only the screening arm relates two of her own medications, and it
-	 * stands down for a question that resolved a drug. Within each group, strongest first, by
-	 * {@link #strengthRank} — every withholding clause ahead of every caution, in the order the prompt's
-	 * ranking sentence names the withholding ones, and this module's own choice among the cautions —
-	 * read off {@link #strengthClause} and never off the severity word; stable, so the injection order
-	 * stands within a class.
+	 * stands down for a question that resolved a drug. Within each group, strongest first — withhold,
+	 * change a current medication, then the two cautions, the order the prompt gives the model for the
+	 * first three and this module's own choice between the last two — read off {@link #strengthClause}
+	 * and never off the severity word; stable, so the injection order stands within a class.
 	 *
 	 * <p><b>That last sort is a defence nothing observes today.</b> The arms already append a
 	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
@@ -2510,18 +2510,16 @@ public class DrugReferenceInjector {
 			lines.add(findingBody(findings.get(i), orderRecordNumbers, true) + " [" + numbers.get(i) + "]");
 		}
 		SafetyWarning first = findings.get(order.get(0));
-		// The ended-order withhold too (issue #472): answersFromFindings admitted a question PROPOSING the
-		// drug, which is the condition that clause states its call under.
-		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])
-				|| STRENGTH_WITHHOLD_ENDED_ORDER.equals(clauses[order.get(0)])) {
+		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
 			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
 		}
 		return String.join("\n", lines);
 	}
 
-	/** The prompt's ranking of the clauses a finding can state, strongest first, or {@code -1} for a
-	 *  finding stating none. Each withholding class outranks each caution, as the prompt's own ranking
-	 *  sentence says. */
+	/** The prompt's ranking of the four clauses a finding can state, strongest first, or {@code -1}
+	 *  for a finding stating none. The ended-order pair (issue #472) answers {@code -1} on purpose: it
+	 *  is never stated for the drug a question PROPOSES, which is the only question
+	 *  {@link #answersFromFindings} admits, so an answer carrying one keeps the model call. */
 	private static int strengthRank(String clause) {
 		if (STRENGTH_WITHHOLD.equals(clause)) {
 			return 0;
@@ -2529,17 +2527,11 @@ public class DrugReferenceInjector {
 		if (STRENGTH_CHANGE_CURRENT_MEDICATION.equals(clause)) {
 			return 1;
 		}
-		if (STRENGTH_WITHHOLD_ENDED_ORDER.equals(clause)) {
+		if (STRENGTH_CAUTION.equals(clause)) {
 			return 2;
 		}
-		if (STRENGTH_CAUTION.equals(clause)) {
-			return 3;
-		}
-		if (STRENGTH_CAUTION_ENDED_ORDER.equals(clause)) {
-			return 4;
-		}
 		if (STRENGTH_CAUTION_CURRENT_MEDICATION.equals(clause)) {
-			return 5;
+			return 3;
 		}
 		return -1;
 	}

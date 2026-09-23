@@ -668,8 +668,9 @@ public class SafetyVerdictSeverityGradationTest {
 	}
 
 	/**
-	 * Across the FOUR strength classes there is exactly ONE phrase that sits inside another's words,
-	 * and it is the one ADR Decision 37 already handles (issue #348).
+	 * Across the strength classes there is exactly ONE phrase that sits inside another's words, and it
+	 * is the one ADR Decision 37 already handles (issue #348; since #472 the walk covers the ended-order
+	 * pair too).
 	 *
 	 * <p>The hazard is that decision's own: "a reason to withhold it" occurs inside
 	 * {@code STRENGTH_CAUTION} too, negated, so a branch whose antecedent is that bare phrase is
@@ -678,7 +679,7 @@ public class SafetyVerdictSeverityGradationTest {
 	 * pins; the containment itself is left standing, deliberately, because the clauses read as
 	 * English.
 	 *
-	 * <p>Adding two more classes turns 2 ordered pairs into 12, and no behavioural test can see a
+	 * <p>Every class added multiplies the ordered pairs, and no behavioural test can see a
 	 * shallow read — the MODEL is what reads shallowly. So the whole product is walked and the one
 	 * admitted pair is named rather than skipped: a reword that introduced a SECOND containment
 	 * reddens here, and so does one that removed the admitted one without this case being re-read.

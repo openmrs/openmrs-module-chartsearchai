@@ -192,7 +192,7 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 			DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.curatedService()).injectRecords(
 				DrugReferenceTestSupport.chartOf(orderRecord(1, "Ibuprofen 400mg", Boolean.FALSE)),
 				DrugReferenceTestSupport.ctx(60, null, null, null, DrugReferenceTestSupport.set("ibuprofen"), null),
-				"Is it safe to give ibuprofen?")).getText();
+				"Why was her ibuprofen stopped?")).getText();
 
 		assertTrue(finding.toLowerCase(Locale.ROOT).contains("allerg"),
 				"precondition: this is the recorded-allergy contraindication finding: " + finding);
@@ -207,7 +207,7 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 			DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddinterServiceWithGroups())
 				.injectRecords(DrugReferenceTestSupport.chartOf(orderRecord(1, "Ibuprofen 400mg", Boolean.FALSE)),
 					DrugReferenceTestSupport.ctx(60, null, null, null, DrugReferenceTestSupport.set("Aspirin"), null),
-					"Is it safe to give ibuprofen?")).getText();
+					"Why was her ibuprofen stopped?")).getText();
 
 		assertTrue(finding.contains("cross-reactivity"),
 				"precondition: this is the cross-reactivity rung of the allergen arm: " + finding);
@@ -247,22 +247,21 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
-	 * A question PROPOSING a drug her chart holds only as an ended order is still answered by the
-	 * module where issue #469's answer is switched on: the ended-order withholding clause states its
-	 * call under exactly the condition that question meets, so it carries the same lead. Without it
-	 * placed in the composer's ranking the module composed nothing and the question silently went back
-	 * to the model.
+	 * A question PROPOSING a drug her chart holds only as an ended order keeps the proposal call: the
+	 * question supplies the proposal "withhold it" needs, so the finding is not re-referred, and where
+	 * issue #469's answer is switched on the module still answers it with its withholding lead — the
+	 * model path and the module path open alike.
 	 */
 	@Test
-	public void aProposalOfADrugTheChartHoldsOnlyAsAnEndedOrderIsStillAnsweredByTheModule() throws IOException {
+	public void aQuestionProposingADrugTheChartHoldsOnlyAsAnEndedOrderKeepsTheProposalCall() throws IOException {
 		Context.getAdministrationService().setGlobalProperty(
 			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(ddi()).injectRecords(
 			DrugReferenceTestSupport.chartOf(orderRecord(1, "Clarithromycin 500mg", Boolean.FALSE)),
 			onlyOn("Simvastatin"), "Can I give her clarithromycin?");
 
-		assertTrue(DrugReferenceTestSupport.findingTexts(chart).get(0).endsWith(WITHHOLD_ENDED),
-				"precondition: the finding states the ended-order call: " + chart.getText());
+		assertTrue(DrugReferenceTestSupport.findingTexts(chart).get(0).endsWith(WITHHOLD),
+				"the question proposes giving it, so the finding states the proposal call: " + chart.getText());
 		String answer = chart.getModuleAnswer();
 		assertTrue(answer != null && answer.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING),
 				"the question proposes the drug, so the module answers it and leads with the withholding "
@@ -283,11 +282,60 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 			DrugReferenceTestSupport.chartOf(orderRecord(1, "Prednisolone 5mg", Boolean.FALSE)),
 			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Methylprednisolone"),
 				DrugReferenceTestSupport.set("H02AB04"), null, null),
-			"Is it safe to give prednisolone?");
+			"Why was her prednisolone stopped?");
 
 		assertTrue(finding.contains("same ATC class (H02AB)"),
 				"precondition: this is the class arm's finding: " + finding);
 		assertTrue(finding.endsWith(CAUTION_ENDED),
 				"the class-only chip states the ended-order referent too: " + finding);
+	}
+
+	/**
+	 * A record the module could not say is in force or not — the stamp's {@code null} — beside an
+	 * ended one of the same drug leaves the proposal call: the unstamped order may be one she is on,
+	 * and "nothing is known" is not evidence it ended.
+	 */
+	@Test
+	public void anUnstampedOrderRecordBesideAnEndedOneOfTheSameDrugLeavesTheProposalCall() throws IOException {
+		String finding = onlyFinding(ddi(),
+			DrugReferenceTestSupport.chartOf(orderRecord(1, "Clarithromycin 500mg", Boolean.FALSE),
+				orderRecord(2, "Clarithromycin 250mg", null)),
+			onlyOn("Simvastatin"), "Her current medications are simvastatin and clarithromycin. Any interactions?");
+
+		assertTrue(finding.endsWith(WITHHOLD),
+				"an order record the module cannot place may be in force, so the drug is not stated as "
+						+ "ended: " + finding);
+	}
+
+	/**
+	 * An active order the reference data cannot resolve leaves the proposal call: it may be the very
+	 * drug under a name the data lacks, so "no active order of it" cannot be answered — the gate issue
+	 * #469 put on "not already taking", {@code everyActiveOrderResolves}.
+	 */
+	@Test
+	public void anActiveOrderTheDataCannotResolveLeavesTheProposalCall() throws IOException {
+		String finding = onlyFinding(ddi(),
+			DrugReferenceTestSupport.chartOf(orderRecord(1, "Clarithromycin 500mg", Boolean.FALSE)),
+			DrugReferenceTestSupport.ctx(40, null, DrugReferenceTestSupport.set("Simvastatin", "Zyxobrand 250mg"),
+				null, null, null, java.util.Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-simva", "Simvastatin"),
+					DrugReferenceTestSupport.activeOrder("order-brand", "Zyxobrand 250mg"))),
+			"Her current medications are simvastatin and clarithromycin. Any interactions?");
+
+		assertTrue(finding.endsWith(WITHHOLD),
+				"an order the data cannot name may be clarithromycin itself, so the drug is not stated as "
+						+ "ended: " + finding);
+	}
+
+	/** An active-order read the module could not complete leaves the proposal call, for the same reason. */
+	@Test
+	public void anIncompleteActiveOrderReadLeavesTheProposalCall() throws IOException {
+		String finding = onlyFinding(ddi(),
+			DrugReferenceTestSupport.chartOf(orderRecord(1, "Clarithromycin 500mg", Boolean.FALSE)),
+			DrugReferenceTestSupport.partiallyReadOrdersCtx(DrugReferenceTestSupport.set("Simvastatin")),
+			"Her current medications are simvastatin and clarithromycin. Any interactions?");
+
+		assertTrue(finding.endsWith(WITHHOLD),
+				"an order list the module could not read in full cannot say she is not on it: " + finding);
 	}
 }

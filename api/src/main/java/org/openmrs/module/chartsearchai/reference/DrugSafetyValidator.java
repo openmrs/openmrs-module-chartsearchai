@@ -871,7 +871,8 @@ public class DrugSafetyValidator {
 		// issue #472. Decided ONCE for the pass, off the rows just resolved, and handed to the two
 		// places the drug-in-play arm's findings are built: the contraindication ledger below and
 		// addInteractionWarnings. A per-pass local, for issue #172's reason. See EndedOrders.
-		EndedOrders endedOrders = EndedOrders.of(inPlay, resolvedRows, orderEntries, mappings);
+		EndedOrders endedOrders = EndedOrders.of(inPlay, questionDrugs, question, resolvedRows, orderEntries,
+				mappings, drugReferenceService, context);
 		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects, endedOrders);
 
 		// Which substances may still owe the interaction arm and the dose arm their one call — "may",
@@ -972,8 +973,9 @@ public class DrugSafetyValidator {
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
 				// FALSE at both, and not because the drug cannot also be a current medication — it often
 				// is. The question or the answer PROPOSED it, so what this finding licenses is a
-				// decision about that proposal (issue #348) — unless the chart holds it only as an
-				// ended order, which the ledger states on the chip itself (issue #472, EndedOrders).
+				// decision about that proposal (issue #348). Where the chart holds it only as an ended
+				// order, the ledger states that on the chip as a separate referent (issue #472,
+				// EndedOrders); this argument is false either way.
 				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier,
 					false);
 				addAllergyContraindications(contraindications, ref, recordedAllergens, false);
@@ -2287,14 +2289,25 @@ public class DrugSafetyValidator {
 	 * stamp is written in one place). The identity question is {@link #namesAnyOf}, the prose predicate
 	 * the echo test asks of a chart record's text, over every row of the substance.
 	 *
-	 * <p>A substance qualifies only where no active order {@code findForActiveOrders} resolved is of it
-	 * AND no record stamped in force names it — the second for an order in force the reference data
-	 * could not resolve, which would otherwise read as ended beside an older record of the same drug.
+	 * <p>A substance qualifies only where no active order {@code findForActiveOrders} resolved is of it,
+	 * AND no drug-order record the stamp does NOT call ended names it — in force, or unstamped, which
+	 * may be an order she is on — AND the module could say she is on nothing else: her active orders
+	 * were read in full ({@code PatientClinicalContext.activeDrugOrdersRead()}) and every one of them
+	 * resolved ({@link #everyActiveOrderResolves}), the gate issue #469 put on "not already taking" for
+	 * the same reason. An order under a name the data lacks may be this very drug.
+	 *
+	 * <p><b>Not for the drug a question PROPOSES</b> — {@code QueryScopeRouter.asksWhetherToGiveADrug},
+	 * the closed grammar issue #469 admits a proposal by. <em>"Can I give her rifampicin?"</em> supplies
+	 * the proposal the withholding call needs, so it keeps that call; the ended-order clause is for the
+	 * question that proposed nothing — a history question, or a medication list naming the drug as
+	 * current — where "withhold it" had no referent (ADR Decision 72's cause). A proposal phrased
+	 * outside that grammar is read as none, and gets the ended-order clause's conditional call.
 	 *
 	 * <p><b>What it cannot see</b>: an ended order the chart the module built does not carry — a
 	 * query-scoped slice need not retrieve it — states nothing, and the finding stays a proposal, as
 	 * before this issue. And a record naming the drug somewhere other than its drug field (an order
-	 * reason, say) is read as naming it, the echo test's own residue.
+	 * reason, say) is read as naming it, the echo test's own residue; an order that resolved to only
+	 * SOME of its substances passes the resolution gate, Decision 108's residue.
 	 *
 	 * <p>A per-pass value and never a field, for issue #172's reason.
 	 */
@@ -2311,50 +2324,76 @@ public class DrugSafetyValidator {
 
 		/**
 		 * @param inPlay the pass's drugs in play — the question's, and the answer's the echo test kept
+		 * @param questionDrugs the question's own, which are left PROPOSALS where the question asks
+		 *        whether to give one — see this class's javadoc
+		 * @param question the question, read by {@code QueryScopeRouter.asksWhetherToGiveADrug}
 		 * @param resolvedRows every row of each substance the pass resolved, keyed by
 		 *        {@code substanceGroupKey()}
 		 * @param orderEntries her active orders resolved by {@code findForActiveOrders}, the one list
 		 * @param mappings the chart's records, or {@code null} where the caller has none
+		 * @param service and {@code context}: what {@link #everyActiveOrderResolves} asks, and only where
+		 *        the chart holds an ended record at all, since that walk is the costlier half
 		 */
-		static EndedOrders of(Set<DrugReference> inPlay, Map<Object, List<DrugReference>> resolvedRows,
-				List<DrugReference> orderEntries, List<RecordMapping> mappings) {
-			if (mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
+		static EndedOrders of(Set<DrugReference> inPlay, Set<DrugReference> questionDrugs, String question,
+				Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
+				List<RecordMapping> mappings, DrugReferenceService service, PatientClinicalContext context) {
+			if (context == null || mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
 				return NONE;
 			}
-			// Gated on the chart builder's in-force STAMP and never on a type name: it is non-null only
-			// for a drug-order record, and null — "the module cannot say" — is read as neither.
-			List<String> ended = new ArrayList<String>();
-			List<String> inForce = new ArrayList<String>();
+			// ENDED is the chart builder's stamp saying FALSE — never re-derived, and never a type name,
+			// the stamp being FALSE only for a drug-order record. Everything else a drug-order record can
+			// be, in force or unstamped ("the module cannot say"), may be an order she is on.
+			List<RecordMapping> ended = new ArrayList<RecordMapping>();
+			List<RecordMapping> notEnded = new ArrayList<RecordMapping>();
 			for (RecordMapping mapping : mappings) {
 				if (mapping.getText() == null) {
 					continue;
 				}
 				if (Boolean.FALSE.equals(mapping.getOrderActive())) {
-					ended.add(mapping.getText().toLowerCase(Locale.ROOT));
-				} else if (Boolean.TRUE.equals(mapping.getOrderActive())) {
-					inForce.add(mapping.getText().toLowerCase(Locale.ROOT));
+					ended.add(mapping);
+				} else if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER.equals(mapping.getResourceType())) {
+					notEnded.add(mapping);
 				}
 			}
-			if (ended.isEmpty()) {
+			if (ended.isEmpty() || !context.activeDrugOrdersRead()
+					|| !everyActiveOrderResolves(service, context, orderEntries)) {
 				return NONE;
 			}
+			List<String> endedTexts = lowered(ended);
+			List<String> notEndedTexts = lowered(notEnded);
 			Set<Object> active = new HashSet<Object>();
 			for (DrugReference entry : orderEntries) {
 				active.add(entry.substanceGroupKey());
+			}
+			// A question PROPOSING the drug keeps it a proposal: there the call "withhold it" has its
+			// referent, which is exactly what the ended-order clause exists to supply where it has none.
+			// The admission grammar is issue #469's, over the same marking of the question's own names.
+			if (!questionDrugs.isEmpty() && QueryScopeRouter.asksWhetherToGiveADrug(
+					DrugReferenceInjector.wordsBesideItsNames(question, new ArrayList<DrugReference>(questionDrugs)))) {
+				for (DrugReference proposed : questionDrugs) {
+					active.add(proposed.substanceGroupKey());
+				}
 			}
 			Set<Object> substances = new LinkedHashSet<Object>();
 			for (DrugReference ref : inPlay) {
 				Object substance = ref.substanceGroupKey();
 				List<DrugReference> rows = resolvedRows.get(substance);
-				// Two guards that she is ON it: an active order the reference data resolved to it, and a
-				// chart record the stamp says is in force naming it — the second for an order in force the
-				// data could not resolve, which would otherwise read as ended beside an older record.
-				if (rows != null && !active.contains(substance) && !namesAnyRow(inForce, rows)
-						&& namesAnyRow(ended, rows)) {
+				// Two guards that she may be ON it: an active order the reference data resolved to it, and
+				// a drug-order record the stamp does not call ended naming it.
+				if (rows != null && !active.contains(substance) && namesAnyRow(endedTexts, rows)
+						&& !namesAnyRow(notEndedTexts, rows)) {
 					substances.add(substance);
 				}
 			}
 			return substances.isEmpty() ? NONE : new EndedOrders(substances);
+		}
+
+		private static List<String> lowered(List<RecordMapping> records) {
+			List<String> out = new ArrayList<String>(records.size());
+			for (RecordMapping record : records) {
+				out.add(record.getText().toLowerCase(Locale.ROOT));
+			}
+			return out;
 		}
 
 		/** Whether one of {@code texts} names one of a substance's rows — {@link #namesAnyOf}, the

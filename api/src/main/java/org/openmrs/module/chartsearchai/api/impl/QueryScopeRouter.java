@@ -267,7 +267,7 @@ public final class QueryScopeRouter {
 			"drug", "prescriptions", "interact", "interacts", "interacting", "interaction",
 			"interactions", "with", "each", "other", "one", "another", "between", "among", "together",
 			"taking", "on", "in", "have", "has", "i", "should", "know", "about", "all", "a", "an",
-			"check", "for", "safe", "stop", "change", "anything", "that", "which");
+			"check", "for", "anything", "that", "which");
 
 	/**
 	 * Whether a question proposes giving ONE drug and asks nothing else — "Can I give her ibuprofen?",
@@ -281,7 +281,8 @@ public final class QueryScopeRouter {
 	 * left must be one a bare proposal is made of, so a question carrying anything more — a dose or an
 	 * amount, a wh-word ("how", "when"), a negation, a concern ("risky"), an alternative ("instead"),
 	 * a condition ("for her kidneys"), a purpose ("for her knee pain"), a second drug the dataset does
-	 * not know — is not admitted. A question it does not admit keeps the model call it has always
+	 * not know — is not admitted. That holds of words OUTSIDE the list: a purpose spelled in the list's
+	 * own words ("… for her allergies") is admitted, and is a residue ADR Decision 108 names. A question it does not admit keeps the model call it has always
 	 * had, so a phrasing it misses costs nothing it did not cost before, and only an ADMISSION can go
 	 * wrong. That is why this may be a closed list where {@link #isInteractionScreening} had to be
 	 * widened after a list MISSED screens (ADR Decision 89): there a miss hid a hazard, here a miss
@@ -304,7 +305,11 @@ public final class QueryScopeRouter {
 	 * Whether a question asks to screen the patient's OWN medications against each other and nothing
 	 * else — "Are any of her current medications interacting with each other?", "Do any of her meds
 	 * interact?" — issue #469. {@link #isInteractionScreening} AND every word in a closed vocabulary,
-	 * for the reason {@link #asksWhetherToGiveADrug} gives. The second conjunct is what keeps a screen
+	 * for the reason {@link #asksWhetherToGiveADrug} gives. The vocabulary carries none of
+	 * {@link #MEDICATION_SAFETY_CUES}' words, deliberately: the screening trigger also fires on a
+	 * safety or change word (ADR Decision 89), and "Is there a change in her medications?" asks for her
+	 * order history, which an answer of interaction findings does not give — so what admits a screen
+	 * here is the {@code interact*} family alone. The second conjunct is what keeps a screen
 	 * that names something the dataset does not carry — a drug it does not know, a class, a food —
 	 * from being answered with findings about her own medications, which the screening arm still
 	 * raises for such a question.

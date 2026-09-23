@@ -481,6 +481,71 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/** With the property on, the model must still be asked, where the module did raise something for
+	 *  the question — so it is the gate, and not an empty finding list, that keeps the call. */
+	private void assertTheModelIsAsked(String question) {
+		assertFalse(findingsInThePromptFor(question).isEmpty(),
+				"precondition: the module raised something for " + question);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, question);
+		assertEquals(1, provider.calls, "the model must be asked: " + question);
+		assertFalse(answer.isAnsweredByTheModule(), question);
+	}
+
+	/**
+	 * A screen of her medications is answered by the module only where it relates at least one pair
+	 * of them: the order-driven arm also raises a finding about an allergy to something she is
+	 * prescribed on a medication question, and an answer that was only that finding would never say
+	 * what the screen found — nor could it, with the interaction arms switched off.
+	 */
+	@Test
+	public void aScreenWhoseOnlyFindingIsNotAnInteractionStillAsksTheModel() throws Exception {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		executeDataSet(METFORMIN_ORDER);
+		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(),
+				"precondition: her aspirin allergy against her aspirin order is a finding");
+		assertTheModelIsAsked(SCREEN);
+	}
+
+	@Test
+	public void aScreenWithTheInteractionArmsSwitchedOffStillAsksTheModel() throws Exception {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		executeDataSet(WARFARIN_ORDER);
+		Context.getAdministrationService()
+				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS, "false");
+		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(),
+				"precondition: the allergy finding is still raised with the interaction arms off");
+		assertTheModelIsAsked(SCREEN);
+	}
+
+	/** A question about her medications that carries a safety or change word but asks for no screen
+	 *  of them against each other. */
+	@Test
+	public void aMedicationQuestionThatIsNotAScreenStillAsksTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Is there a change in her medications?",
+				"Should I stop all her medications?", "Does she have any safe medications?" }) {
+			assertTheModelIsAsked(question);
+		}
+	}
+
+	/**
+	 * A proposal is answered by the module only where every arm that could have spoken against the drug
+	 * ran. With the contraindication arms off, her recorded allergy to the drug raises nothing and the
+	 * one finding left is a Minor caution — which the module would then state as "can be given".
+	 */
+	@Test
+	public void aProposalWithAnArmSwitchedOffStillAsksTheModel() {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Omeprazole");
+		String question = "Can I give her omeprazole?";
+		for (String toggle : new String[] { ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
+				ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS }) {
+			Context.getAdministrationService().setGlobalProperty(toggle, "false");
+			assertTheModelIsAsked(question);
+			Context.getAdministrationService().setGlobalProperty(toggle, "true");
+		}
+	}
+
 	private static final class Finding {
 
 		private final int index;

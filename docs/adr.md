@@ -9540,17 +9540,25 @@ builds (`PatientChart.getModuleAnswer()`), composing nothing while the property 
   `validateAnswers` or `warnOnInteractions` off the prompt still carries a note saying no interactions
   were found of a screen that never ran. That is the note's gate and not this change's, and it is left
   standing; what this change refuses is making that sentence the whole answer;
-- an interaction screen of her own medications that raised findings;
+- an interaction screen of her own medications that related at least one pair of them — an
+  INTERACTION finding, since a medication question also raises the order-driven arm's allergy finding
+  and an answer of that alone would say nothing of what the screen found;
 - a question proposing ONE substance she is not already taking, raising a finding about it, that
-  `QueryScopeRouter.asksWhetherToGiveADrug` admits once the drug's own names are taken out of it.
+  `QueryScopeRouter.asksWhetherToGiveADrug` admits once the drug's own names are taken out of it — on
+  an install where both the interaction and the contraindication arms run
+  (`DrugSafetyValidator.reportsInteractions`, `reportsContraindications`), or a Minor caution would be
+  stated as "can be given" beside an allergy to the drug nobody checked for.
 
-Both screen shapes also need a question naming no drug the dataset resolved, and
+Both screen shapes also need the interaction arms to run, a question naming no drug the dataset
+resolved, and
 `QueryScopeRouter.asksOnlyToScreenHerMedications` — `isInteractionScreening` and every word in a closed
 list. The screening arm keeps running for a screen that names something the dataset does not carry —
 a drug it does not know, a drug class, a food — and raises her own findings for it, so without the
 list *"Does zorblatine interact with any of her medications?"* was answered with her aspirin–warfarin
 finding. The list also keeps out a question about her medication LIST or her allergies, which widens
-the order-driven arm too, and a compound screen-and-list question.
+the order-driven arm too, a compound screen-and-list question, and — by carrying none of the screening
+trigger's safety or change words — *"Is there a change in her medications?"*, which the trigger reads
+as a screen (ADR Decision 89) and which asks for her order history.
 
 **Both predicates are closed vocabularies, and fail-CLOSED.** A question carrying any word outside
 its list keeps the model call. The first form of the proposal predicate was a list of REFUSING words (a
@@ -9575,9 +9583,8 @@ the first sentence of an answer about omeprazole — each group strongest first 
 gives the model (withhold, change a current medication, caution, caution about a current medication),
 read off `strengthClause`. A proposal that withholds leads *"No — X should not be given: this module's drug-safety check found a
 reason to withhold it."*; a proposal caution leads *"X can be given, with a caution to note: "* with the
-caution in the same sentence. A finding about her own medications gets no lead — its first sentence
-already names the medication, what it relates it to and its rating, and a lead naming the one to change
-would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
+caution in the same sentence. A finding about her own medications gets no lead: a lead naming the one to
+change would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
 is the finding record's text between its head and its strength clause (one method, `findingBody`, for
 both), cited by its own number. The strength clause stays out: it is prompt-facing only, and the issue
 counts its paste into an answer as a loss (R7, M4).
@@ -9612,15 +9619,21 @@ disagreeing.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.
 - With `chartsearchai.drugSafety.citeOrderRecords` off, as it ships, an interaction line cites no order
   record, where the model supplied one in 10 of the first check's 16 cells. A contraindication line's
-  chart record still arrives as `attachedByTheModule`.
+  allergy or condition record still arrives, as `attachedByTheModule: true`.
 - The composed lines are the REPORTED findings. On a capped screen, whether the list is complete is
   `interactionPairs`' to say, and the answer does not.
 - A phrasing either vocabulary does not carry keeps the call, the headline question of the issue
   included.
-- Every citation of a composed answer reads `attachedByTheModule: false`, that flag marking a citation
-  added beside the answer's markers; the answer's provenance is `answeredByTheModule`, and a scorer such
-  as `eval/drift-metric/metric_score.py`'s `model_cited` must read it before crediting those citations
-  to the model.
+- The citations of a composed answer's own markers read `attachedByTheModule: false`, that flag
+  marking a citation added beside the answer's markers; the answer's provenance is
+  `answeredByTheModule`, and a scorer such as `eval/drift-metric/metric_score.py`'s `model_cited` must
+  read it before crediting those citations to the model.
+- A purpose clause spelled in the proposal vocabulary's own words (*"… for her allergies"*) is admitted.
+- A proposal is answered where no condition rule could fire (`conditionRuleCoverage` absent, as on a
+  DDInter-only install); the condition half of the contraindication screen then had nothing to ask.
+- `ChartSearchServiceRouter`'s answer cache does not key on this property (nor on the other
+  `drugSafety` toggles), so with a cache TTL set, flipping it serves the other setting's answer until
+  the entry expires — which a both-arms gate must avoid by leaving the TTL at its default of 0.
 - The audit row records no model ran only as empty token counts, which an engine reporting no usage
   also writes; no column states it.
 

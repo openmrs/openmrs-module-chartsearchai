@@ -2319,8 +2319,9 @@ public class DrugReferenceInjector {
 	/**
 	 * Whether this injection resolved the question well enough to answer it from its own findings —
 	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
-	 * Decision 108. Asked once per injection, off the resolutions this pass already holds, and the ONE
-	 * place that is decided.
+	 * Decision 108. Asked once per injection, off the resolutions this pass already holds. The one
+	 * other way a question keeps the model call is {@link #composeFromFindings} declining a finding
+	 * that states no strength clause, which no reachable type does.
 	 *
 	 * <p><b>Three shapes, and anything else keeps the model call.</b>
 	 * <ul>
@@ -2329,8 +2330,12 @@ public class DrugReferenceInjector {
 	 *     arms run ({@link DrugSafetyValidator#reportsInteractions()}). That gate reads no toggle, so
 	 *     without the second conjunct a screen switched off would be answered "no interactions were
 	 *     found". Its answer is the note.</li>
-	 * <li>A screen of her own medications that raised findings.</li>
-	 * <li>A question PROPOSING one drug: exactly one substance, a substance she is not already taking,
+	 * <li>A screen of her own medications that related at least one pair of them — an INTERACTION
+	 *     finding, not only the order-driven arm's allergy or condition finding a medication question
+	 *     also raises, which would leave the answer saying nothing of what the screen found.</li>
+	 * <li>A question PROPOSING one drug, on an install where both the interaction and the
+	 *     contraindication arms run — a caution stated as "can be given" would otherwise stand beside
+	 *     a contraindication nobody checked: exactly one substance, a substance she is not already taking,
 	 *     a question {@code QueryScopeRouter.asksWhetherToGiveADrug} admits once the drug's own names
 	 *     are taken out of it, and a finding about that drug. A finding about it is one that is not
 	 *     {@link SafetyWarning#isAboutACurrentMedication()} — only the drug-in-play arm raises those
@@ -2341,7 +2346,8 @@ public class DrugReferenceInjector {
 	 *     resolution.</li>
 	 * </ul>
 	 *
-	 * <p>Both screen shapes need a question naming no drug the dataset resolved, and
+	 * <p>Both screen shapes need interaction arms that run ({@link DrugSafetyValidator#reportsInteractions()}),
+	 * a question naming no drug the dataset resolved, and
 	 * {@code QueryScopeRouter.asksOnlyToScreenHerMedications}: a closed vocabulary too, because the
 	 * screening arm keeps running for a question naming something the dataset does not carry — a drug
 	 * it does not know, a drug CLASS (whose note asks for a drug by name), a food — and would answer it
@@ -2354,10 +2360,24 @@ public class DrugReferenceInjector {
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, boolean screenRelatedNothing) {
 		if (questionDrugs.isEmpty()) {
-			if (!QueryScopeRouter.asksOnlyToScreenHerMedications(question)) {
+			if (!QueryScopeRouter.asksOnlyToScreenHerMedications(question)
+					|| !DrugSafetyValidator.reportsInteractions()) {
 				return false;
 			}
-			return screenRelatedNothing ? DrugSafetyValidator.reportsInteractions() : !findings.isEmpty();
+			if (screenRelatedNothing) {
+				return true;
+			}
+			for (SafetyWarning finding : findings) {
+				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+					return true;
+				}
+			}
+			return false;
+		}
+		// Every arm that could have spoken against the drug must have run, or a caution the arms that
+		// did run raised would be stated as "can be given" beside a contraindication nobody checked.
+		if (!DrugSafetyValidator.reportsInteractions() || !DrugSafetyValidator.reportsContraindications()) {
+			return false;
 		}
 		Set<Object> asked = new LinkedHashSet<Object>();
 		Set<String> namesOfIt = new HashSet<String>();
@@ -2399,9 +2419,8 @@ public class DrugReferenceInjector {
 	 * order stands within a class.
 	 *
 	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
-	 * medications — a screen — opens with that finding: its first sentence already names the
-	 * medication, what it relates it to and its rating, and a lead saying which of the two to change
-	 * would state a choice no finding makes, which issue #469 measured the model adding in three cells.
+	 * medications — a screen — opens with that finding: a lead saying which of two medications to
+	 * change would state a choice no finding makes, which issue #469 measured the model adding in three cells.
 	 *
 	 * @return the answer, or {@code null} where a finding states no strength clause — which no
 	 *         reachable type does today — so that such a question keeps the model call

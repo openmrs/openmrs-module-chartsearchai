@@ -147,13 +147,20 @@ public class OrdersSharingASubstanceTest {
 	}
 
 	@Test
-	public void aQuestionPuttingADrugInPlayRaisesNoneOfThem() throws IOException {
-		// The rifampicin question's finding list is SubstanceInSeveralActiveOrdersTest's; the Metformin
-		// question names neither order. Both stay with issue #477 (ADR Decision 113).
-		for (String question : Arrays.asList("Is it safe to give rifampicin?", "Is it safe to give metformin?")) {
-			List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(
-					DrugReferenceTestSupport.ddiFixtureService(FIXTURE)).validate("", question,
-						twoTuberculosisCombinations());
+	public void aQuestionPuttingADrugInPlayRaisesNoneOfThem() {
+		// The ticket's two questions over its six orders and the shipped knowledge base, where both put
+		// drugs in play: the rifampicin question's finding list is SubstanceInSeveralActiveOrdersTest's,
+		// and the Metformin question names neither combination. Both stay with issue #477 (ADR
+		// Decision 113).
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
+				"Lamivudine / zidovudine", "Efavirenz", "Cotrimoxazole 960mg", RHZ, RHZE, "Stavudine");
+		for (String drug : Arrays.asList("Rifampicin", "Metformin")) {
+			String question = "The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and"
+					+ " sulfamethoxazole is it safe to give " + drug + "?";
+			assertTrue(service.findImpliedByQuery(question).size() > 0, "precondition: drugs in play: " + question);
+			List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("", question, context);
 			assertEquals(0, shared(warnings).size(), question + " was: " + DrugReferenceTestSupport.details(warnings));
 		}
 	}

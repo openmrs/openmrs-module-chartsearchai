@@ -400,6 +400,43 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * The same for a rule an operator's dataset rates in a word this module does not recognise: {@code
+	 * DrugSafetyValidator.severityRank} reads it as unrated, so it withholds and is ordered ahead of Major,
+	 * but unlike an unrated rule it carries a rating. What puts the Major row under the "No" is that its
+	 * rating is a reason to withhold, not that it has one.
+	 */
+	@Test
+	public void aMajorInteractionLeadsARuleRatedInAWordTheModuleDoesNotRecogniseUnderTheNo() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceService reference = DrugReferenceTestSupport.curatedFixtureService(
+				"chartsearchai-test/drug-reference-answer-from-findings-unrecognised-rating-beside-major.json");
+		List<Finding> findings = findingsInThePromptFor(PROPOSAL, reference);
+		Finding major = null;
+		Finding unrecognised = null;
+		for (Finding finding : findings) {
+			if (finding.text.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "Warfarin")) {
+				major = finding;
+			} else if (finding.text.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "Aspirin")) {
+				unrecognised = finding;
+			}
+		}
+		assertTrue(major != null && unrecognised != null && unrecognised.index < major.index
+				&& unrecognised.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"precondition: the rule rated in an unrecognised word withholds too, and precedes the Major one "
+						+ "in the prompt: " + findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, reference).search(patient, PROPOSAL);
+
+		assertEquals(0, provider.calls, "the Major row licenses the module's answer");
+		String[] lines = answer.getAnswer().split("\n");
+		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		assertEquals(expectedLine(answer, major), lines[1],
+				"the sentence under the \"No\" is the interaction whose rating licensed it: " + answer.getAnswer());
+		assertCarriesEveryFinding(answer, findings);
+	}
+
+	/**
 	 * A contraindication about a medication she already takes says so in the composed answer. Its
 	 * record said so only in the strength clause, which stays out of the answer; what that clause
 	 * carries besides the call — its REFERENT, set by the arm (ADR Decision 72) — is a fact about her

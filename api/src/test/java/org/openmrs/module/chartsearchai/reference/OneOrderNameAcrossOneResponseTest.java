@@ -162,18 +162,6 @@ public class OneOrderNameAcrossOneResponseTest {
 			DrugReferenceTestSupport.ctx(60, null, names, codes, null, null, active));
 	}
 
-	/**
-	 * The {@code interaction} chips of a response — what the two shipped-knowledge-base cases above were
-	 * written about (the rule arm against the class arm, issue #339). Scoped since issues #391/#473 added a
-	 * fourth chip type to the same response (ADR Decision 110). That type's arm is switched off on a
-	 * contextless run, so its naming is held to THIS convention over these two arrangements where the arm
-	 * runs: {@code ConditionMediatedFindingTest.aCombinationPrescriptionIsNamedAsTheInteractionChipsBesideItNameIt}
-	 * and {@code .theNamingTicketsOwnArrangementNamesEachOrderAsTheInteractionChipsDo}.
-	 */
-	private static List<SafetyWarning> interactionChips(List<SafetyWarning> warnings) {
-		return DrugReferenceTestSupport.ofType(warnings, SafetyWarning.TYPE_INTERACTION);
-	}
-
 	/** @return every {@code active order <label>} this response printed, in chip order. */
 	private static List<String> orderNames(List<SafetyWarning> warnings) {
 		List<String> names = new ArrayList<String>();
@@ -321,11 +309,10 @@ public class OneOrderNameAcrossOneResponseTest {
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.shippedEntries());
 
-		List<SafetyWarning> all = DrugReferenceTestSupport.validator(service).validate("",
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
 			"Can I give her hydrocortisone?",
 			chart(service, "Celecoxib", "Diclofenac", "Ibuprofen", "Dexamethasone", "Prednisone",
 				"Budesonide", "Methylprednisolone"));
-		List<SafetyWarning> warnings = interactionChips(all);
 
 		// The ticket's seven prescriptions, in five statements: the three NSAIDs end on one mechanism at
 		// one rating, so they are stated once and named together. What this case pins is unchanged by
@@ -777,9 +764,8 @@ public class OneOrderNameAcrossOneResponseTest {
 					COMBINATION_ORDER_ON_SHIPPED_KB,
 					DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB), codes))));
 
-		List<SafetyWarning> all = DrugReferenceTestSupport.validator(service)
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
 				.validate("", "Can I give her lisinopril and amiodarone?", chart);
-		List<SafetyWarning> warnings = interactionChips(all);
 
 		assertEquals(2, warnings.size(),
 			"precondition: the shipped data must rule on this prescription from both subjects, or"

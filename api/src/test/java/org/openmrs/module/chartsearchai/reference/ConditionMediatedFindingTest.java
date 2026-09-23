@@ -250,6 +250,38 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	}
 
 	@Test
+	public void aCoMemberPrescriptionWhoseDisplayNamesNoSubstanceIsAttributedToTheSubstanceItIsToo() {
+		// The subject's side is named from its own loop (coMembers), so it takes its own chartOrderBridges
+		// call: asked about didanosine on two prescriptions known only by their ATC codes, metformin is the
+		// partner and stavudine the co-member, and the finding says which prescription EACH came from.
+		java.util.Set<String> names = DrugReferenceTestSupport.set("Metbrand", "Stavbrand");
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("A10BA02", "J05AF04");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null, names, codes, null, null,
+			Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-metbrand", "Metbrand",
+					DrugReferenceTestSupport.set("Metbrand"), DrugReferenceTestSupport.set("A10BA02")),
+				DrugReferenceTestSupport.activeOrder("order-stavbrand", "Stavbrand",
+					DrugReferenceTestSupport.set("Stavbrand"), DrugReferenceTestSupport.set("J05AF04"))));
+
+		List<SafetyWarning> lactic = new ArrayList<SafetyWarning>();
+		for (SafetyWarning chip : conditionMediated("Can I give didanosine?", chart)) {
+			if (chip.getDetail().contains("Acidosis, Lactic")) {
+				lactic.add(chip);
+			}
+		}
+
+		assertEquals(1, lactic.size(), DrugReferenceTestSupport.details(lactic).toString());
+		SafetyWarning chip = lactic.get(0);
+		assertTrue(chip.getDetail().contains(", as does that of " + DrugSafetyValidator.ACTIVE_ORDER_NOUN
+				+ " Stavudine"), "precondition: stavudine is the subject's co-member, or this case does not reach"
+						+ " that loop: " + chip.getDetail());
+		assertTrue(chip.chartOrderBridges().contains(new SafetyWarning.ChartOrderBridge("Metformin", "Metbrand")),
+			"the partner's prescription: " + chip.chartOrderBridges());
+		assertTrue(chip.chartOrderBridges().contains(new SafetyWarning.ChartOrderBridge("Stavudine", "Stavbrand")),
+			"the co-member's prescription must be attributed too, was: " + chip.chartOrderBridges());
+	}
+
+	@Test
 	public void aConditionMediatedFindingDoesNotLicenseWithholding() {
 		List<SafetyWarning> chips = conditionMediated("Can I give metformin?", onOrders("Stavudine"));
 

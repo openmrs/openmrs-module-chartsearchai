@@ -9781,18 +9781,30 @@ exactly that. The QT, hepatotoxicity and neuropathy groups need data this knowle
   `licensesWithholding` asks the type first (its unrated leg would otherwise withhold), and the wording
   says only what the knowledge base asserts — that the note names the condition "in a sentence the
   knowledge base reads as causal" — and ends on its provenance.
+  **Against #359's row E**, which (as quoted on #391) expects a Major alert for metformin in a patient on
+  stavudine: the Major there is metformin's own drug-disease rating in lactic acidosis, and the chip states
+  it verbatim; what no source row rates is the PAIR, which DDInter rates `Unknown`. So a site that turns
+  the tier on gets the caution-graded lead on exactly that arrangement (the one measured cell under *What
+  it does not do*), not the withholding alert row E expected. That is chosen: neither ticket asks for a
+  strength (#391 Part B says only that the chain gets no severity of its own), and both false links
+  measured here pass the `Major` gate, so a withholding strength would put a refusal behind a text match
+  known to misfire. A strength clause of the tier's own — neither withholding nor a permission lead — is
+  not added: that is a prompt-facing change with a prompt branch of its own to measure, and a site that
+  judges row E's chain a reason to withhold has no switch for it here.
 - **Not a pair the screen found.** `PairChipExtent` counts DDInter pairwise rule pairs; this is not one.
 
-**Spec changed deliberately.** Two cases in `OneOrderNameAcrossOneResponseTest` —
+**No case in `OneOrderNameAcrossOneResponseTest` is changed.** Two of its cases —
 `aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay` and
-`theTicketsOwnArrangementOverTheShippedKnowledgeBaseNamesOneWay` — enumerated every chip of a response,
-and on both arrangements the shipped knowledge base now also raises a derived chip. Their expected values
-are unchanged and scoped to the `interaction` chips they were written about. The assertion that every
-order a `condition-mediated` chip names is a name the interaction chips print — #339's property held
-across chip types — lives in `ConditionMediatedFindingTest` over those two arrangements, where the arm
-is switched on, with a precondition that a derived chip was raised; in the contextless class, where the
-switch reads its default, it would pass on no chip at all. Reverting the partner name to the entry rung
-reddens it on the combination case.
+`theTicketsOwnArrangementOverTheShippedKnowledgeBaseNamesOneWay` — enumerate every chip of a response,
+and on both arrangements the shipped knowledge base raises a derived chip once the tier is on. Round 1
+scoped them to their `interaction` chips while the tier defaulted on; review round 2 reverted that once
+it defaulted off, because the class is contextless, so the switch reads its default and the unscoped
+cases now also pin that a stock install raises no derived chip on either arrangement — forcing
+`statesDerivedFindings` true reddens both. The assertion that every order a `condition-mediated` chip
+names is a name the interaction chips print — #339's property held across chip types — lives in
+`ConditionMediatedFindingTest` over those two arrangements, where the arm is switched on, with a
+precondition that a derived chip was raised. Reverting the partner name to the entry rung reddens it on
+the combination case.
 
 ### What it does not do
 
@@ -9836,12 +9848,16 @@ reddens it on the combination case.
   the link with the strongest cause-side rating is kept. On the shipped knowledge base no such key
   carries two different cause ratings (measured through the loader, 2026-09-23), so no case can
   observe the choice; a refresh that introduces one is what would.
-- **What the model does with it is unmeasured.** Each chip is also an injected `safety_finding`, and
-  where the drug already had one finding it makes the drug's findings several, which is what gates the
-  enumeration clause (`severalFindingsAboutOneDrug`, Decision 84). That clause asks the model to state
+- **What the model does with it: one cell, not a rate.** Each chip is also an injected `safety_finding`,
+  and where the drug already had one finding it makes the drug's findings several, which is what gates
+  the enumeration clause (`severalFindingsAboutOneDrug`, Decision 84). That clause asks the model to state
   each finding's severity, and the only rating words in a derived finding are drug-disease ratings, so
-  its closing sentence says it has no severity of its own. Whether the model then states "Major" for it
-  anyway was not measured on a standalone by this change.
+  its closing sentence says it has no severity of its own. Measured once, by review round 1's verifier
+  at `3f362bf7` (a RefApp 3.7.1-era standalone, local Gemma E4B, `derivedFindings=major`, a patient on
+  Stavudine and Lamivudine, *Can I give metformin?*): the answer led "Metformin can be given, with one
+  caution: it is rated Major in Acidosis, Lactic based on the DDInter drug-disease notes of …", called it
+  "a caution to note, not a reason to withhold it", and used "Major" only for metformin's own
+  drug-disease rating. That is n=1 — no other question, patient or model was run.
 - **#391 Part A** — drug-disease rows as condition rules — is not done.
 
 → `ConditionMediatedFindingTest`.

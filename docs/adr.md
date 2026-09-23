@@ -117,6 +117,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 109: A Moderate interaction is a caution, because DDInter reserves avoid for Major](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)
 - [Decision 110: A finding about a drug the chart records only as an ended order says so, rather than reading as a proposal](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
 - [Decision 111: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)
+- [Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10373,3 +10374,92 @@ them.
   It measures the matcher's causal reading, not whether the rated drug's own Major rating is right.
 
 → `ConditionMediatedFindingTest`, `DerivedTierPrecisionSampleTest`.
+
+## Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close.
+
+### Context
+
+A patient on two active tuberculosis combinations that both contain rifampicin (`Isoniazid /
+pyrazinamide / rifampin`, `Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg`), asked
+whether rifampicin is safe, was told it interacts with the pyrazinamide and the isoniazid in those very
+combinations. Nothing said she already receives rifampicin, twice. Reproduced through the real
+`DrugSafetyValidator.validate` over the shipped knowledge base with the issue's six orders
+(`main` @ `3b4f1fec`, 2026-09-23).
+
+The class arm's restating-existing-therapy skip (`classRelationships`) is asked per CO-MEDICATION, and
+every order of one substance is one co-medication ([#186](https://github.com/openmrs/openmrs-module-chartsearchai/issues/186))
+— on the unnameable-code rung each order is its own partner and is skipped on its own. Either way the
+arm never counts ORDERS. The skip is right for the drug itself: negating its identity leg reddens the
+#185/#228/#392 cases, and none of them is about two orders.
+
+### The decision
+
+**`DrugSafetyValidator.alreadyInSeveralOrders` states, for the substance in play, the orders that
+already carry it — where there are two or more** — as *"Rifampicin (rifampin) is already in active
+orders A and B — possible duplicate therapy"*. One order states nothing: that is the drug itself
+(#185). Two orders recorded under one display are named once, with their count.
+
+- **Which orders carry it is decided on the DISPLAY, the name the finding prints**
+  (`CoMedications.ordersWhoseDisplayNames`, through `findNamedSubstances` over
+  `findImpliedByDrugName` folded to one row per substance — unfolded, two rows of one substance tie
+  and a brand such as `Acticlate` names nothing). Not on the order's other recorded names, which can name a different drug
+  ([#293](https://github.com/openmrs/openmrs-module-chartsearchai/issues/293)), and not on a shared ATC
+  code, which this knowledge base does not treat as identity (`Omeprazole` publishes esomeprazole's
+  `A02BC05`). The co-medication walk and `resolvesFrom` accept both, and may: they only withhold. This
+  answer backs a positive claim, so it is deliberately the narrower one.
+- **Its referent is its arm's, a proposal** (review round 1). The first version stated the
+  current-medication clause, on the ground that the finding is about two of her prescriptions. That made
+  it the one finding of the drug-in-play arm in the other column: on the reproduction the Major and the
+  Minor stated the proposal call and this finding the change call, and the prompt's ranking sentence puts
+  a reason to withhold first. The standalone verification of that version recorded the lead *"No —
+  Rifampicin should not be given: it interacts with active order Rifampicin isoniazid pyrazinamide and
+  ethamboult, a Major problem"* (the model's spelling), then this finding, given "a Major problem" it does
+  not carry. One site disagreeing with the rest is the first of the three reasons
+  [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402) gives for reverting its
+  one-site referent fix, and
+  [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)'s
+  holder re-labels every chip of a substance or none. In the proposal column the finding states what a
+  proposal needs: the drug is already given, in these orders, which is a reason to withhold a further
+  course. #402's defect is a refusal that does not say the drug is hers, and this finding's own sentence
+  says it.
+- **Re-labelling all of the drug's findings where two orders carry it was proposed and declined**
+  (review round 1). That is #402's reversal of the proposal rule, and #402 says that reversal owes
+  Decision 72's fourteen-cell A/B. Its two-order trigger also has no referent reason: one order makes the
+  drug as much a current medication as two, so on one order the arm would go on refusing in proposal
+  words. Decision 110's measurement records what the reversal can cost: its arm A re-referred a proposal
+  question (R3) and lost the proposal's refusal.
+- **Its strength is the unrated default** (withhold). Decision
+  86 graded down shared classification alone on measured evidence; this is an identity claim, not that.
+  A caution was proposed and refused at plan time: its prompt branch opens by stating the drug can be
+  given, a permission to add a third course.
+- **It trails the drug-in-play arm's rule chips**, beside the class-only chips, rather than entering
+  `FINDING_STRENGTH_DESCENDING`'s sort, where an unrated finding would head the rated ones. It is not a
+  rule pair and is not counted into `PairChipExtent`. Its `namedPartners` are the orders it names.
+
+### Consequences
+
+- The reproduction's rifampicin answer gains the fact that she already receives it, and in which
+  orders. The rule chips stand as they were — the finding is appended after them — so the Major
+  against pyrazinamide, the data's relationship with her regimen's other constituents, remains.
+- **No prompt sentence and no clause is new.** The finding states `STRENGTH_WITHHOLD`, which the
+  prompt's proposal branch already quotes. Beside a rated Major it is in the class the ranking sentence
+  puts first, not below it. Not measured on a model in this revision.
+- **It states no severity, and the prompt asks the answer to carry the finding's own.** The
+  verification above saw the model lend it a neighbouring finding's "Major". Every unrated class-only
+  chip has the same shape, and this change does not address it.
+- **Not delivered, and the reason `Refs` and not `Fixes`:** the issue's Direction asks, for a proposed
+  drug, that the answer say she already receives it and in which order(s), one order included, on the
+  #402 / #472 referent axis. That is #402's change: the drug-in-play arm states the proposal referent at
+  every site, for a drug she takes too, and #402 records what reversing it owes (every site, and
+  Decision 72's A/B). It is deferred to #402. What ships is the duplicate-therapy fact the class arm's
+  skip cannot state, which exists only where two or more orders carry the drug, so one order states
+  nothing here. Two of her orders sharing a substance nobody asked about (the issue's Metformin
+  question) state nothing either: this finding is raised only for a drug in play, and the screening arm,
+  which relates her own medications when no drug is in play, has no class leg.
+- An order whose display does not name the substance — a brand the data files under several
+  substances, or an order known only by its codes — is not counted.
+
+→ `SubstanceInSeveralActiveOrdersTest`.

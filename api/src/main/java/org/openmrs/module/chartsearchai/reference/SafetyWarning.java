@@ -284,6 +284,28 @@ public class SafetyWarning {
 				Collections.<ChartOrderBridge> emptyList(), false, null, true);
 	}
 
+	/**
+	 * The warning that the drug in play is already in two or more of the patient's own active orders
+	 * (issue #477). The one construction site is {@code DrugSafetyValidator.alreadyInSeveralOrders},
+	 * which is canonical for why the finding exists and why its referent is what it is.
+	 *
+	 * <p>A FACTORY for {@link #classOnlyInteraction}'s reason: every field of this shape but its type
+	 * and the three it takes is false or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart
+	 * record, no bridge (each order it names is named because its own display names the substance, so
+	 * there is nothing to bridge) — and {@link #isAboutACurrentMedication()} with them: the drug-in-play arm raises it, and that arm states
+	 * the proposal referent at every site (issue #402's one-site fix was reverted for making one site
+	 * disagree with the rest, ADR Decision 112). {@link #restsOnSharedClassificationAlone()} is false:
+	 * this is an identity claim, so {@code DrugSafetyValidator.licensesWithholding} answers by the
+	 * unrated default.
+	 *
+	 * @param orders the displays of the active orders the detail names, in the order it names them —
+	 *        {@link #namedPartners()}, which every interaction chip states
+	 */
+	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders) {
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), false, null, false, orders);
+	}
+
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
@@ -439,9 +461,11 @@ public class SafetyWarning {
 	 * "did the answer state all of them?" of.
 	 *
 	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
-	 * one — and so does every CONDITION-MEDIATED chip, one name per active order it links; so a reader
-	 * never has to tell a chip that carries no list from a chip that covers no order. It is the structural answer to "which of her orders is this chip about", and the reason
-	 * nothing downstream recovers that by matching a phrase in prose.
+	 * one or for the finding that a drug is already in several of her orders (issue #477), where a
+	 * display several orders carry appears once — and so does every CONDITION-MEDIATED chip, one name
+	 * per active order it links; so a reader never has to tell a chip that carries no list from a chip
+	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
+	 * and the reason nothing downstream recovers that by matching a phrase in prose.
 	 *
 	 * <p><b>Empty is the chip types that name no active order</b>: a contraindication, an overdose,
 	 * and the class-only interaction chip, whose partner is a class rather than an order. So empty is
@@ -931,7 +955,11 @@ public class SafetyWarning {
 	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because
 	 * a proposal is what was put to the module — unless the chart holds the drug only as an ended
-	 * order, which is {@link #isAboutAnEndedOrder()}'s referent and not this one (issue #472).
+	 * order, which is {@link #isAboutAnEndedOrder()}'s referent and not this one (issue #472). That
+	 * includes {@link #substanceInSeveralActiveOrders} (issue #477), though what it states is that two
+	 * of her orders already carry the drug: the arm's other findings about that drug state the proposal
+	 * call, and one finding stating the other column beside them is the one-site shape issue #402
+	 * recorded and reverted (ADR Decision 112).
 	 *
 	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and nothing
 	 * reads the second answer.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in

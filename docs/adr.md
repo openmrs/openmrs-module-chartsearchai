@@ -10346,10 +10346,38 @@ of its (drug, condition) keys name more than one note.
   Agents running on one model make correlated errors, so the agreement overstates reliability.
 - Every verdict, the note quote it rests on, the note's SHA-256 and the population counts are recorded in
   `api/src/test/resources/eval/derived-tier-precision-sample.json`. `DerivedTierPrecisionSampleTest`
-  fails the build when the shipped knowledge base stops being the one measured: a different kept-chain
-  count, an adjudicated link that no longer occurs anywhere in the raw `derived_interactions` table, or a
-  rewritten adjudicated note. Two mutations of the
-  shipped file were each seen to redden it: one word of note 319, and one Major rated side set to Moderate.
+  fails the build when the shipped knowledge base stops being the one measured. Since #485 the join above
+  is its own code, and it re-derives every recorded weight through it rather than reading one total from
+  the sample file, so editing a number there no longer turns it green; its class javadoc lists what it
+  checks and what it does not. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
+  - one word of note 319: `everyAdjudicatedNoteIsTheTextItWasJudgedOn`;
+  - the one Major rated side of link 1660 × Hyperbilirubinemia set to Moderate:
+    `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and
+    `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`;
+  - the same, with an unadjudicated Moderate row re-rated Major so the kept-chain count holds: the same
+    two. The guard before #485 stayed green on it;
+  - that link's condition renamed on all three of its rows, which leaves the loader's count unchanged
+    (the shape of #484's third): `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith`;
+  - one census item's `keptChains` edited in the sample file: that test and
+    `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`. The guard before #485 stayed green on it;
+  - a sampled item's `keptChains` and `ratedSubstances` deleted from the sample file:
+    `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith`;
+  - note 940's *Hypotension* rows re-filed under note 995, a note id the loader does not read:
+    `theCensusIsStillTheHeaviestLinks` and `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`;
+  - one kept row duplicated under another note id: `everyKeptChainJoinsTheOneRawRowItWasReadFrom`,
+    `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and
+    `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`;
+  - every row of sampled link 3618 × Hypotension re-pointed from its cause drug, Flibanserin, to
+    Acetaminophen, which leaves every count, stratum, census rank and note unchanged:
+    `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor`. The class without that
+    test stayed green on it;
+  - Acetaminophen added to that link's `causeDrugs` in the sample file, a drug the knowledge base does
+    not read that link through: the same test;
+  - control note 2 × Acidosis, Lactic's two Abacavir rows re-pointed to Didanosine, already a cause drug
+    of that link: that test and `everyKeptChainJoinsTheOneRawRowItWasReadFrom`.
+
+  The last three were run with `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor`
+  in the class, the rest before it was added.
 
 **Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
 stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the

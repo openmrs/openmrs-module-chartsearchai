@@ -341,8 +341,7 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 		// knowledge base's matcher reads that sentence as causal, so the derived tier links metformin to
 		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 111). With its
 		// precision measured (ADR Decision 111, #480) and no decision taken against it, a stock install states
-		// none of them, and the
-		// interaction arm the same property does NOT gate still speaks.
+		// none of them, and the interaction arm the same property does NOT gate still speaks.
 		derivedFindings(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS);
 
 		List<SafetyWarning> all = DrugReferenceTestSupport.validator(shippedService()).validate("",

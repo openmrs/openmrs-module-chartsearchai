@@ -10063,9 +10063,13 @@ rig on the machine held, and it was restored after the run.
   (*"Ibuprofen interacts with aspirin, but its order is no longer in force"*), this drug listed
   before another in one subject (*"Her ibuprofen and metformin orders are …"*), and, after the phrase,
   this drug listed after another or joined behind it in a combination name (*"The orders no longer in
-  force are her metformin and ibuprofen"*, *"… is her metformin/ibuprofen"*). Toward silence: a pronoun
-  reaching back past this drug to one named before it (*"Metformin interacts with ibuprofen, but its order
-  is no longer in force"*), and a nearer drug the loaded data does not carry. The drug test's own residue
+  force are her metformin and ibuprofen"*, *"… is her metformin/ibuprofen"*), and a phrase ahead of this
+  drug where another drug is named before the phrase (*"Aspirin is current; the order no longer in force
+  is her ibuprofen"*). Toward silence: a pronoun reaching back past this drug to one named before it
+  (*"Metformin interacts with ibuprofen, but its order is no longer in force"*), a nearer drug the loaded
+  data does not carry, and a phrase ahead of another drug where this one is named before the phrase
+  (*"Aspirin interacts with ibuprofen; the order no longer in force is her metformin"*) — the drug named
+  after the phrase is asked only where none is named before it (issue #489). The drug test's own residue
   also runs that way: an alias the substance shares with another (#209's shape) names it too, and a tie in position goes
   to this drug, so a sentence saying that other drug's order is no longer in force reads as saying it of
   this one.

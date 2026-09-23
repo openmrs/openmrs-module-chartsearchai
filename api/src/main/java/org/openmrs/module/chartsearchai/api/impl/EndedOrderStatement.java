@@ -44,9 +44,8 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * one sentence naming the drug anywhere and carrying the phrase anywhere was read as saying it. ADR
  * Decision 47's recorded live wording, <em>"Nevirapine was prescribed, but its order is no longer in
  * force"</em>, names no other drug before the phrase and still states it; where no drug at all is named
- * before the phrase, it is about the drug named nearest after it (issue #489), so <em>"The order no longer
- * in force is her isoniazid; rifampicin interacts with nevirapine."</em> does not state rifampicin's end
- * either. The drug is asked by
+ * before the phrase, the drug named after it decides (issue #489;
+ * {@link DrugSafetyValidator#isAboutTheEndedOrderDrug} states how). The drug is asked by
  * {@link DrugSafetyValidator#namesTheEndedOrderDrug}'s rows — the prose rule over every row of its
  * substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
  * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is

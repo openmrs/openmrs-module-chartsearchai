@@ -2300,11 +2300,8 @@ public class DrugReferenceInjector {
 	 * <p><b>It states what the finding states and no more</b>: that this module's check found a reason
 	 * to withhold the drug — the words of {@link #STRENGTH_WITHHOLD} — and never "should not be given",
 	 * a clinical directive the finding does not make. The difference is not cosmetic: what withholds
-	 * is a RATING and never a judgement about this patient. Until issue #471 a MODERATE rating
-	 * withheld, and the data gives Moderate to combinations given on purpose — a GP IIb/IIIa inhibitor
-	 * with aspirin, whose own mechanism text begins "Although aspirin is routinely given with…" — which
-	 * is the gap between a rating and a directive this wording keeps open. It opens "No" because that
-	 * is the call the prompt tells the model to lead with on this very clause, and because every shape
+	 * is the finding's STRENGTH, read off a rating or a relationship, and never a judgement about this
+	 * patient. It opens "No" because that is the call the prompt tells the model to lead with on this very clause, and because every shape
 	 * {@code QueryScopeRouter.asksWhetherToGiveADrug} admits is a question "No" answers.
 	 */
 	public static final String WITHHOLD_LEAD_OPENING =

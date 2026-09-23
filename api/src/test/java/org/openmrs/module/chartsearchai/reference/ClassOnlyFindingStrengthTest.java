@@ -60,8 +60,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@code chartsearchai.drugSafety.minInteractionSeverity} default filters out — so that pair reaches
  * the class arm alone, with no rule to fold. Desmopressin shares no subgroup and its Major rule clears
  * the floor, which is the rated control {@link #aRatedRuleInTheSameArrangementStillLicensesWithholding}
- * uses. (Warfarin's Moderate rule was that control until issue #471 made a Moderate rule a caution,
- * which the class-only change cannot be told apart from.)
+ * uses. (Warfarin's Moderate rule was that control until issue #471 made a Moderate rule a caution:
+ * a control that cautions no longer tells the class-only change apart from softening the whole arm.)
  */
 public class ClassOnlyFindingStrengthTest {
 

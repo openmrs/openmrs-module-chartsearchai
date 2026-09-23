@@ -9735,9 +9735,6 @@ interactions may result in exacerbation of the disease of the patient and/or cha
 therapy"*. Only Major says to avoid the combination, so a module that withholds on Moderate states a
 stronger call than the rating it reads. The module still encodes no clinical knowledge: it reads the
 dataset's definition of the dataset's word.
-[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
-had already recorded the cost from the other side: the data rates Moderate some combinations given on
-purpose — dual antiplatelet therapy, a GP IIb/IIIa inhibitor with aspirin.
 
 ### The decision
 

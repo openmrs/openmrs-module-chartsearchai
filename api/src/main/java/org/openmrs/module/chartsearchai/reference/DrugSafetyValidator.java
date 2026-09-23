@@ -1190,8 +1190,7 @@ public class DrugSafetyValidator {
 	 * its Major combinations "should be strictly avoided"; a Moderate one "may result in exacerbation
 	 * of the disease of the patient and/or change in therapy", and a Minor one usually does not
 	 * require a change at all ({@code unknown} carries no mechanism text, which is why the default
-	 * floor filters it out of the chips entirely). Moderate withheld until #471, which is what made
-	 * a reduced-efficacy or monitor-and-adjust interaction answer the way a Major one does.
+	 * floor filters it out of the chips entirely).
 	 *
 	 * <p><b>Unrated withholds, and it is the case a "no rating means nothing serious" reading gets
 	 * backwards.</b> Null is not a low rating — see {@link SafetyWarning#getSeverity()} — and it
@@ -1219,10 +1218,9 @@ public class DrugSafetyValidator {
 	 * counts as withholding because it is not a caution. Issue #469: the module states a withholding
 	 * answer without a model only where a rating says so, and an unrated rule is its author's note.
 	 *
-	 * <p><b>Asked THROUGH that method and never beside it</b> (issue #471): this was once its own
-	 * {@code >= severityRank("moderate")}, so moving the split left the module composing an answer
-	 * for a Moderate proposal whose finding the record already states as a caution — a caution-only
-	 * answer with no model, which ADR Decision 108 keeps the model call for.
+	 * <p><b>Asked THROUGH that method and never beside it</b> (issue #471): a boundary of its own
+	 * would let the module compose an answer, with no model, for a proposal whose finding the record
+	 * states as a caution — the caution-only answer ADR Decision 108 keeps the model call for.
 	 */
 	static boolean ratedAReasonToWithhold(String severity) {
 		return severityRank(severity) >= 0 && ratingLicensesWithholding(severity);
@@ -1249,9 +1247,9 @@ public class DrugSafetyValidator {
 	 * the drug ASKED about, so it covers both proposal cells; the current-medication WITHHOLD
 	 * sentence repeats it. The current-medication CAUTION sentence does not, and nothing else
 	 * reaches it, because those two branches are gated on the finding's clause rather than on the
-	 * question (Decision 72). So a {@code minor}-rated finding about a drug the patient is already
-	 * taking — reachable at the shipped floor — can be rendered exactly as the prompt asked and
-	 * still be reported. That cell was found by a review pass and is recorded rather than closed:
+	 * question (Decision 72). So a {@code minor}- or {@code moderate}-rated finding about a drug the
+	 * patient is already taking — reachable at the shipped floor, {@code moderate} since issue #471 —
+	 * can be rendered exactly as the prompt asked and still be reported. That cell was found by a review pass and is recorded rather than closed:
 	 * narrowing here would need the REFERENT axis, which the record does not carry, and widening the
 	 * prompt is a change measured elsewhere. Do not restate this as "the prompt asks for it either
 	 * way", which is what an earlier draft said.

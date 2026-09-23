@@ -2540,8 +2540,9 @@ public class DrugReferenceInjector {
 	 * append order is why this key is needed: a recorded allergy to the proposed drug, or an unrated
 	 * rule {@code FINDING_STRENGTH_DESCENDING} ranks above Major, states the same withholding clause
 	 * and arrives first, and would otherwise be the sentence read as the reason for a "No" it cannot
-	 * license (ADR Decision 108). It is scoped to that class, so a screen's order is untouched. Issue
-	 * #469's review item; {@code LlmInferenceServiceAnswerFromFindingsContextTest}
+	 * license (ADR Decision 108). It is scoped to that class, so a screen's order is untouched
+	 * ({@code .aScreensLinesKeepTheOrderTheArmRaisedThemIn}). Issue #469's review item;
+	 * {@code LlmInferenceServiceAnswerFromFindingsContextTest}
 	 * {@code .theLineUnderTheNoIsTheInteractionThatLicensedIt} and
 	 * {@code .aMajorInteractionLeadsAnUnratedRuleUnderTheNo}.
 	 *

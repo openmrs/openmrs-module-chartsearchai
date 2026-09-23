@@ -10600,4 +10600,5 @@ Two other routes were rejected:
 - No model is involved, so this was not measured on one. Decision 108's gate is still not run.
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest.theLineUnderTheNoIsTheInteractionThatLicensedIt`,
-`.aMajorInteractionLeadsAnUnratedRuleUnderTheNo`, `.aContraindicationAboutAMedicationSheAlreadyTakesSaysSo`.
+`.aMajorInteractionLeadsAnUnratedRuleUnderTheNo`, `.aScreensLinesKeepTheOrderTheArmRaisedThemIn`,
+`.aContraindicationAboutAMedicationSheAlreadyTakesSaysSo`.

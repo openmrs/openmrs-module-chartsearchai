@@ -751,11 +751,9 @@ public class DrugReferenceInjector {
 		// LAST for the reason the class note is: it is about what this response's SCREEN did rather
 		// than about any entry, so it reads after everything the response resolved — which, when it
 		// fires, is nothing. Its gate is resolved above, once, beside the resolutions it reads.
-		String moduleAnswer = null;
+		// The screen note's record number, for the module-composed answer below (issue #469).
+		int screenNoteNumber = index;
 		if (screenRelatedNothing) {
-			// The note IS the answer to the screen that asked for it (issue #469), cited by the number
-			// it is given here; composed now, while that number is in hand.
-			moduleAnswer = interactionScreenNoteBody(screenedSubstances.size()) + " [" + index + "]";
 			String rendered = renderInteractionScreenNote(screenedSubstances.size());
 			mappings.add(new RecordMapping(index,
 					ChartSearchAiConstants.RESOURCE_TYPE_INTERACTION_SCREEN_NOTE,
@@ -805,8 +803,13 @@ public class DrugReferenceInjector {
 					unrepresented.size(), matched.size(), referenceCharacters(mappings), findings.size(),
 					namedClass == null ? 0 : 1, slice.getRecords(), slice.getCharacters(), question);
 		}
-		if (moduleAnswer == null && answersFromFindings(question, questionDrugs, orderEntries, findings)) {
-			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers);
+		String moduleAnswer = null;
+		if (answersFromFindings(question, questionDrugs, orderEntries, findings, screenRelatedNothing)) {
+			// A screen that related nothing is answered by its own note, qualifier included, cited by
+			// the number it was given above; everything else by the findings.
+			moduleAnswer = screenRelatedNothing
+					? interactionScreenNoteBody(screenedSubstances.size()) + " [" + screenNoteNumber + "]"
+					: composeFromFindings(findings, findingNumbers, orderRecordNumbers);
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -2306,11 +2309,13 @@ public class DrugReferenceInjector {
 	/**
 	 * Whether this injection resolved the question well enough to answer it from its own findings —
 	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
-	 * Decision 108. Asked once per injection, off the resolutions this pass already holds. A screen
-	 * that related nothing is decided at its own gate, above, and does not reach here.
+	 * Decision 108. Asked once per injection, off the resolutions this pass already holds, and the ONE
+	 * place that is decided.
 	 *
-	 * <p><b>Two shapes, and anything else keeps the model call.</b>
+	 * <p><b>Three shapes, and anything else keeps the model call.</b>
 	 * <ul>
+	 * <li>An interaction screen that related nothing — {@code screenRelatedNothing}, the note's own
+	 *     gate (ADR Decision 87), read and not re-derived. Its answer is the note.</li>
 	 * <li>An interaction SCREEN of her own medications that raised findings: no drug in the question,
 	 *     and {@code QueryScopeRouter.isInteractionScreening}. That conjunct and not the absence of a
 	 *     drug alone, because a question about her medication LIST or her allergies widens the
@@ -2332,7 +2337,10 @@ public class DrugReferenceInjector {
 	 * miss costs the model call it always cost, and only an admission can be wrong.
 	 */
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
-			List<DrugReference> orderEntries, List<SafetyWarning> findings) {
+			List<DrugReference> orderEntries, List<SafetyWarning> findings, boolean screenRelatedNothing) {
+		if (screenRelatedNothing) {
+			return true;
+		}
 		if (findings.isEmpty()) {
 			return false;
 		}

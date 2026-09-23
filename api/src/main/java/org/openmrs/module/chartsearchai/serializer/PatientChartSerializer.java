@@ -602,6 +602,10 @@ public class PatientChartSerializer {
 		 * top-K chart is neither of those shapes and declares nothing, so it would answer as a full
 		 * chart; nothing consults it, and nothing should.
 		 */
+		public boolean isCompleteFor(String resourceType) {
+			return !queryScoped || completeResourceTypes.contains(resourceType);
+		}
+
 		/** Records the answer {@code DrugReferenceInjector} composed from its own findings — issue
 		 *  #469, and that class is the only caller. */
 		public void markModuleAnswer(String answer) {
@@ -609,8 +613,8 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * The answer the drug-reference layer composed from its own safety findings, every one cited by
-		 * its record number in this chart, or {@code null} where the question is not one it resolved —
+		 * The answer the drug-reference layer composed from its own records, each cited by its record
+		 * number in this chart, or {@code null} where the question is not one it resolved —
 		 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>.
 		 * Which questions those are is {@code DrugReferenceInjector.answersFromFindings}'s; whether
 		 * the answer is used instead of asking the model is {@code chartsearchai.drugSafety
@@ -618,10 +622,6 @@ public class PatientChartSerializer {
 		 */
 		public String getModuleAnswer() {
 			return moduleAnswer;
-		}
-
-		public boolean isCompleteFor(String resourceType) {
-			return !queryScoped || completeResourceTypes.contains(resourceType);
 		}
 
 		/** The types declared via {@link #markCompleteFor}, so a caller rebuilding this chart can

@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -20,7 +22,6 @@ import java.util.List;
 import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.DrugOrder;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -70,6 +71,11 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 
 	private static final Date STOPPED = new Date(1767225600000L);
 
+	/** 2025-06-01 and 2025-09-01 UTC, both earlier than {@link #STOPPED} (2026-01-01 UTC). */
+	private static final Date JUNE_2025 = new Date(1748736000000L);
+
+	private static final Date SEPTEMBER_2025 = new Date(1756684800000L);
+
 	/**
 	 * A chart record for an order of {@code drugName}, carrying the text querystore's real serializer
 	 * renders for such an order and the in-force stamp {@code orderActive} — {@code FALSE} for an order
@@ -77,14 +83,8 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 	 * The standard dataset's drug order, renamed in memory and never saved.
 	 */
 	private RecordMapping orderRecord(int index, String drugName, Boolean orderActive) {
-		DrugOrder order = DrugReferenceTestSupport.standardDatasetDrugOrder();
-		order.getDrug().setName(drugName);
-		String text = DrugReferenceTestSupport.querystoreRenderedText(order);
-		assertTrue(text.toLowerCase(Locale.ROOT).contains(drugName.toLowerCase(Locale.ROOT)),
-				"precondition: querystore's rendered text for the order names its drug, or no case "
-						+ "here is about a record that names it: " + text);
-		return new RecordMapping(index, "drug_order", order.getUuid() + "-" + index, null, text, null, 0,
-				orderActive, Boolean.FALSE.equals(orderActive) ? STOPPED : null, null, null, null, null);
+		return DrugReferenceTestSupport.drugOrderRecord(index, drugName, orderActive,
+			Boolean.FALSE.equals(orderActive) ? STOPPED : null);
 	}
 
 	private static PatientClinicalContext onlyOn(String activeDrug, String... allergies) {
@@ -243,7 +243,110 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 		assertFalse(chips.isEmpty(), "precondition: the pair raises a chip");
 		for (SafetyWarning chip : chips) {
 			assertFalse(chip.isAboutAnEndedOrder(), "no record holds the drug as ended: " + chip.getDetail());
+			assertNull(chip.getEndedOrderStopDate(),
+					"and a chip that is not about an ended order states no date: " + chip.getDetail());
 		}
+	}
+
+	/**
+	 * The chip carries the date the ended order stopped being in force — the chart builder's
+	 * {@code RecordMapping.getOrderStopDate()} on the ended record naming the drug, in the spelling the
+	 * wire gives every date — so a client rendering {@code aboutAnEndedOrder} can say WHEN without the
+	 * model having cited that record. Of several ended records naming the drug, the latest date, which
+	 * is the ONLY one sitting between two earlier ones here, so neither a first-wins nor a last-wins
+	 * reading passes.
+	 */
+	@Test
+	public void theChipCarriesTheLatestDateAnEndedOrderOfTheDrugStopped() throws IOException {
+		PatientChart chart = DrugReferenceTestSupport.chartOf(
+			DrugReferenceTestSupport.drugOrderRecord(1, "Clarithromycin 250mg", Boolean.FALSE, JUNE_2025),
+			DrugReferenceTestSupport.drugOrderRecord(2, "Clarithromycin 500mg", Boolean.FALSE, STOPPED),
+			DrugReferenceTestSupport.drugOrderRecord(3, "Clarithromycin 125mg", Boolean.FALSE, SEPTEMBER_2025));
+		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(ddi()).validate(
+			"Clarithromycin interacts with simvastatin.",
+			"Her current medications are simvastatin and clarithromycin. Any interactions?",
+			onlyOn("Simvastatin"), chart.getMappings(), null, null);
+
+		SafetyWarning ended = null;
+		for (SafetyWarning chip : chips) {
+			if (chip.isAboutAnEndedOrder()) {
+				ended = chip;
+			}
+		}
+		assertNotNull(ended, "precondition: the clarithromycin chip is about an ended order: " + chips);
+		assertEquals("2026-01-01", ended.getEndedOrderStopDate(),
+				"the chip states the latest date an ended order of the drug stopped: " + ended.getDetail());
+	}
+
+	/**
+	 * The question-PAIR arm (issue #114) raises its own chip for two drugs a question names, and a
+	 * history question naming two drugs her chart holds only as ended orders proposed neither: the
+	 * finding must state the ended-order call and not "a reason to withhold it", whose missing
+	 * referent is what the answer supplied and refused (ADR Decision 110). Her only active order is
+	 * Spironolactone, so neither drug is hers now, and the pair is this arm's to report.
+	 */
+	@Test
+	public void aQuestionPairFindingAboutTwoDrugsTheChartHoldsOnlyAsEndedOrdersStatesTheEndedOrderCall()
+			throws IOException {
+		PatientChart chart = DrugReferenceTestSupport.chartOf(orderRecord(1, "Simvastatin 20mg", Boolean.FALSE),
+			orderRecord(2, "Clarithromycin 500mg", Boolean.FALSE));
+		String pairFinding = null;
+		for (String finding : findings(ddi(), chart, onlyOn("Spironolactone"),
+			"Why were her simvastatin and clarithromycin stopped?")) {
+			if (finding.contains("also named in the question")) {
+				pairFinding = finding;
+			}
+		}
+		assertNotNull(pairFinding, "precondition: the question-pair arm raised its finding");
+		assertTrue(pairFinding.endsWith(WITHHOLD_ENDED),
+				"both drugs are held only as ended orders and the question proposes neither, so the pair "
+						+ "finding states the ended-order call: " + pairFinding);
+		assertFalse(pairFinding.contains(WITHHOLD), "and not the proposal call: " + pairFinding);
+	}
+
+	/** The same arm's CHIP states the referent, so the wire says what the record the model read says. */
+	@Test
+	public void theQuestionPairChipCarriesTheReferent() throws IOException {
+		PatientChart chart = DrugReferenceTestSupport.chartOf(orderRecord(1, "Simvastatin 20mg", Boolean.FALSE),
+			orderRecord(2, "Clarithromycin 500mg", Boolean.FALSE));
+		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(ddi()).validate("",
+			"Why were her simvastatin and clarithromycin stopped?", onlyOn("Spironolactone"),
+			chart.getMappings(), null, null);
+
+		SafetyWarning pair = null;
+		for (SafetyWarning chip : chips) {
+			if (chip.getDetail().contains("also named in the question")) {
+				pair = chip;
+			}
+		}
+		assertNotNull(pair, "precondition: the question-pair arm raised its chip: " + chips);
+		assertTrue(pair.isAboutAnEndedOrder(), "the pair chip is about an ended order: " + pair.getDetail());
+		assertEquals("2026-01-01", pair.getEndedOrderStopDate(), "and carries its date: " + pair.getDetail());
+	}
+
+	/**
+	 * The proposal gate's grammar ({@code QueryScopeRouter.asksWhetherToGiveADrug}) admits a proposal
+	 * of ONE drug, and the question-pair arm needs two, so a question proposing the ended PAIR is read
+	 * as proposing nothing and takes the ended-order call's CONDITIONAL act — ADR Decision 110's
+	 * recorded residue for a proposal worded outside that grammar. Pinned so that widening the grammar
+	 * to two drugs, which would hand this question the proposal call, is a visible change.
+	 */
+	@Test
+	public void aQuestionProposingTheEndedPairIsOutsideTheOneDrugGrammarAndTakesTheConditionalCall()
+			throws IOException {
+		PatientChart chart = DrugReferenceTestSupport.chartOf(orderRecord(1, "Simvastatin 20mg", Boolean.FALSE),
+			orderRecord(2, "Clarithromycin 500mg", Boolean.FALSE));
+		String pairFinding = null;
+		for (String finding : findings(ddi(), chart, onlyOn("Spironolactone"),
+			"Can I give her simvastatin with clarithromycin?")) {
+			if (finding.contains("also named in the question")) {
+				pairFinding = finding;
+			}
+		}
+		assertNotNull(pairFinding, "precondition: the question-pair arm raised its finding");
+		assertTrue(pairFinding.endsWith(WITHHOLD_ENDED),
+				"a two-drug proposal fits no one-drug shape, so the finding states the conditional call: "
+						+ pairFinding);
 	}
 
 	/**

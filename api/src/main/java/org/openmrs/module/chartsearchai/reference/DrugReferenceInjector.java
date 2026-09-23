@@ -2898,7 +2898,8 @@ public class DrugReferenceInjector {
 	 * <p>Since issue #472 a third pair, {@link #STRENGTH_WITHHOLD_ENDED_ORDER} and
 	 * {@link #STRENGTH_CAUTION_ENDED_ORDER}, for a finding about a drug the chart records only as an
 	 * order no longer in force — {@link SafetyWarning#isAboutAnEndedOrder()}, set by the drug-in-play
-	 * arm and exclusive with the current-medication referent. Same strengths again; ADR Decision 110.
+	 * and question-pair arms and exclusive with the current-medication referent. Same strengths again;
+	 * ADR Decision 110.
 	 */
 	private static String strengthClause(SafetyWarning finding) {
 		// The REFERENT axis, asked first because it is orthogonal to the strength axis below and

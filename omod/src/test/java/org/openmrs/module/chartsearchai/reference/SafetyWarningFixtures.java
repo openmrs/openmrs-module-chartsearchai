@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.Collections;
+import java.util.Date;
 
 /**
  * Builds a {@link SafetyWarning} through a factory {@code SafetyWarning} keeps package-private, for
@@ -48,11 +49,13 @@ public final class SafetyWarningFixtures {
 	}
 
 	/**
-	 * An interaction chip about a drug the chart records only as an order no longer in force — the
-	 * shape issue #472 is about — stated through {@code SafetyWarning.asAboutAnEndedOrder}, the one way
-	 * the drug-in-play arm states it.
+	 * An interaction chip about a drug the chart records only as an order no longer in force, which
+	 * stopped on {@code stopDate} — the shape issue #472 is about — stated through
+	 * {@code SafetyWarning.asAboutAnEndedOrder}, the one way the question-driven arms state it.
 	 */
-	public static SafetyWarning endedOrderInteraction(String drug, String detail, String severity) {
-		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, drug, detail, severity).asAboutAnEndedOrder();
+	public static SafetyWarning endedOrderInteraction(String drug, String detail, String severity,
+			Date stopDate) {
+		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, drug, detail, severity)
+				.asAboutAnEndedOrder(stopDate);
 	}
 }

@@ -172,7 +172,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       chip 8/9 pair cannot reach by itself.</li>
 	 *   <li>10 and 11 — the same pair shape for {@code SafetyWarning.isAboutAnEndedOrder()} (issue
 	 *       #472): one sentence, differing only in that answer, so neither a hardcoded {@code false}
-	 *       nor a value re-derived from another field agrees with every chip.</li>
+	 *       nor a value re-derived from another field agrees with every chip. Chip 10 also carries
+	 *       {@code getEndedOrderStopDate()}, so a hardcoded {@code null} for that key disagrees with
+	 *       it.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -238,9 +240,11 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 						UNCORROBORATED_CONTRAINDICATION),
 				// Chips 10 and 11: one sentence, differing only in SafetyWarning.isAboutAnEndedOrder()
 				// (issue #472) — the pair the #374 comment above explains, one key over. Mutate the put
-				// to `false` and read this class's failure.
+				// to `false` and read this class's failure. Chip 10 carries a stop date and chip 11 none,
+				// so a hardcoded null endedOrderStopDate disagrees with chip 10.
 				SafetyWarningFixtures.endedOrderInteraction("Rifampicin",
-						"Rifampicin interacts with active order Nevirapine — Major.", "Major"),
+						"Rifampicin interacts with active order Nevirapine — Major.", "Major",
+						new java.util.Date(1767225600000L)),
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Rifampicin",
 						"Rifampicin interacts with active order Nevirapine — Major.", "Major"));
 	}

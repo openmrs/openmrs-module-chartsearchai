@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -868,9 +869,10 @@ public class DrugSafetyValidator {
 		// several drugs in play, as several entries of one active order, or as some of each, and a
 		// collapse living inside one arm would still let the other emit the siblings.
 		// Which substances in play this patient's CHART holds only as an order no longer in force —
-		// issue #472. Decided ONCE for the pass, off the rows just resolved, and handed to the two
-		// places the drug-in-play arm's findings are built: the contraindication ledger below and
-		// addInteractionWarnings. A per-pass local, for issue #172's reason. See EndedOrders.
+		// issue #472. Decided ONCE for the pass, off the rows just resolved, and handed to the places
+		// the question-driven findings are built: the contraindication ledger below,
+		// addInteractionWarnings and addQuestionPairInteractions. A per-pass local, for issue #172's
+		// reason. See EndedOrders.
 		EndedOrders endedOrders = EndedOrders.of(inPlay, questionDrugs, question, resolvedRows, orderEntries,
 				mappings, bridgedOrders, context);
 		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects, endedOrders);
@@ -1047,7 +1049,7 @@ public class DrugSafetyValidator {
 		PairChipExtent pairExtent = null;
 		if (warnInteractions) {
 			pairExtent = addQuestionPairInteractions(warnings, questionDrugs, subjects, context,
-					severityFloor);
+					severityFloor, endedOrders);
 		}
 		// Interaction screening (issue #113). A question that asks to be SCREENED names no drug, so
 		// neither question-driven arm above has an anchor and the whole feature stayed silent for the
@@ -2279,9 +2281,10 @@ public class DrugSafetyValidator {
 	/**
 	 * Which substances IN PLAY this patient's chart holds only as an order no longer in force — the
 	 * third referent a drug-in-play finding can have, beside a proposal and a current medication
-	 * (issue #472). Decided once per {@code validate} pass and applied where that arm's findings are
-	 * built ({@link ContraindicationChips#add} and {@link #addInteractionWarnings}), so the chip and the
-	 * injected record the model reads state the same referent.
+	 * (issue #472). Decided once per {@code validate} pass and applied where the drug-in-play arm's
+	 * findings are built ({@link ContraindicationChips#add} and {@link #addInteractionWarnings}) and
+	 * where the question-pair arm emits its chips ({@link #addQuestionPairInteractions}, on the chip's
+	 * subject), so the chip and the injected record the model reads state the same referent.
 	 *
 	 * <p><b>The in-force question is the chart builder's, never re-derived here</b>: a record is ENDED
 	 * where {@code RecordMapping.getOrderActive()} is {@code FALSE} and IN FORCE where it is
@@ -2313,12 +2316,17 @@ public class DrugSafetyValidator {
 	 */
 	private static final class EndedOrders {
 
-		private static final EndedOrders NONE = new EndedOrders(Collections.<Object> emptySet());
+		private static final EndedOrders NONE = new EndedOrders(Collections.<Object, Date> emptyMap());
 
-		/** The substance group keys this pass holds as recorded only in ended orders. */
-		private final Set<Object> substances;
+		/**
+		 * The substance group keys this pass holds as recorded only in ended orders, each to the LATEST
+		 * {@code RecordMapping.getOrderStopDate()} among the ended records naming it — {@code null}
+		 * where none of them carries one, which that stamp's own javadoc says a record marked not in
+		 * force may do.
+		 */
+		private final Map<Object, Date> substances;
 
-		private EndedOrders(Set<Object> substances) {
+		private EndedOrders(Map<Object, Date> substances) {
 			this.substances = substances;
 		}
 
@@ -2373,15 +2381,31 @@ public class DrugSafetyValidator {
 					active.add(proposed.substanceGroupKey());
 				}
 			}
-			Set<Object> substances = new LinkedHashSet<Object>();
+			Map<Object, Date> substances = new LinkedHashMap<Object, Date>();
 			for (DrugReference ref : inPlay) {
 				Object substance = ref.substanceGroupKey();
 				List<DrugReference> rows = resolvedRows.get(substance);
 				// Two guards that she may be ON it: an active order the reference data resolved to it, and
 				// a drug-order record the stamp does not call ended naming it.
-				if (rows != null && !active.contains(substance) && namesAnyRow(endedTexts, rows)
-						&& !namesAnyRow(notEndedTexts, rows)) {
-					substances.add(substance);
+				if (rows == null || active.contains(substance) || substances.containsKey(substance)
+						|| namesAnyRow(notEndedTexts, rows)) {
+					continue;
+				}
+				// Asked per ENDED record, so the date is the one on a record that names the substance;
+				// the latest of them, and never a date off a record naming something else.
+				boolean named = false;
+				Date latest = null;
+				for (int i = 0; i < ended.size(); i++) {
+					if (namesAnyRow(Collections.singletonList(endedTexts.get(i)), rows)) {
+						named = true;
+						Date stopped = ended.get(i).getOrderStopDate();
+						if (stopped != null && (latest == null || stopped.after(latest))) {
+							latest = stopped;
+						}
+					}
+				}
+				if (named) {
+					substances.put(substance, latest);
 				}
 			}
 			// The costlier question last, and only where there is a candidate to ask it for.
@@ -2411,10 +2435,11 @@ public class DrugSafetyValidator {
 			return false;
 		}
 
-		/** {@code chip} stated as about an ended order where its subject's substance is one this pass
-		 *  holds as ended, else {@code chip} itself. */
+		/** {@code chip} stated as about an ended order, with the date its order stopped, where its
+		 *  subject's substance is one this pass holds as ended, else {@code chip} itself. */
 		SafetyWarning stamp(DrugReference subject, SafetyWarning chip) {
-			return substances.contains(subject.substanceGroupKey()) ? chip.asAboutAnEndedOrder() : chip;
+			Object substance = subject.substanceGroupKey();
+			return substances.containsKey(substance) ? chip.asAboutAnEndedOrder(substances.get(substance)) : chip;
 		}
 	}
 
@@ -5879,7 +5904,7 @@ public class DrugSafetyValidator {
 	 */
 	private PairChipExtent addQuestionPairInteractions(List<SafetyWarning> warnings,
 			Set<DrugReference> questionDrugs, SubstanceSubjects subjects, PatientClinicalContext context,
-			int severityFloor) {
+			int severityFloor, EndedOrders endedOrders) {
 		if (questionDrugs.size() < 2) {
 			// The arm did not run: one drug is not a pair, so there is no candidate list to state the
 			// extent of. Null, never a zero — see PairChipExtent for what the two say differently. It is
@@ -5971,7 +5996,11 @@ public class DrugSafetyValidator {
 					+ "severe last: {}", shown, found.size(), cap, drugs.size(), withheld);
 		}
 		for (PairFinding finding : found.subList(0, shown)) {
-			warnings.add(finding.warning);
+			// The referent of the chip's SUBJECT — finding.row is of its substance — stated after the
+			// sort and the cap, which it cannot move (issue #472, see EndedOrders). A question naming
+			// two drugs her chart holds only as ended orders proposed neither, and "withhold it" had
+			// no referent there either.
+			warnings.add(endedOrders.stamp(finding.row, finding.warning));
 		}
 		return PairChipExtent.of(found.size(), shown);
 	}

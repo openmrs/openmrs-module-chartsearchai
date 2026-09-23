@@ -9723,8 +9723,9 @@ questions about it need.
 ### Decision
 
 **A third REFERENT, beside a proposal and [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)'s current
-medication**: `SafetyWarning.isAboutAnEndedOrder()`, set by the drug-in-play arm for a substance in play
-that a record stamped NOT IN FORCE names, and only where the module can say she is not on it: no active
+medication**: `SafetyWarning.isAboutAnEndedOrder()`, set by the drug-in-play arm, and by the question-pair
+arm for its chip's subject (added in review, below), for a substance in play that a record stamped NOT IN
+FORCE names, and only where the module can say she is not on it: no active
 order resolves to it, no drug-order record the stamp does not call ended names it (in force, or
 unstamped — `null` is "the module cannot say", and may be an order she is on), her active orders were
 read in full, and every one of them resolved (`DrugSafetyValidator.everyActiveOrderResolves`, the gate
@@ -9754,6 +9755,23 @@ clause, and the hardening's integration review found the module path then leadin
 prompt branch forbids the model to; `strengthRank` now answers `-1` for the new clauses, so
 `composeFromFindings` composes nothing and an answer carrying one keeps the model call. A proposal phrased outside the grammar is read as none, and gets
 the conditional call.
+
+**The answer states it too, and the module writes that sentence** (review round 1). The measurement below
+recorded R1's shipped answer still opening *"Yes, there are interactions recorded for these medications."*:
+the refusal gone, the false premise confirmed, and the referent only on a chip key no client renders yet.
+So the chip also carries the date (`SafetyWarning.getEndedOrderStopDate()`, the latest
+`RecordMapping.getOrderStopDate()` among the ended records naming the drug, published as
+`endedOrderStopDate`), and `EndedOrderStatement.withEndedOrdersStated` appends, where no sentence of the
+MODEL's answer names the drug beside "no longer in force", *"The chart records Rifampicin only as an order
+no longer in force (ended 2026-01-01), not as a current medication."* — Decision 100's mechanism, at its
+three call sites, appending and never replacing. It changes no prompt and no clause, so it does not reopen
+the measurement below; it is clinician-visible text that measurement did not see. The date is held on the
+chip as the published `yyyy-MM-dd` string, so the chip's value and the wire's are one spelling.
+
+**The question-pair arm too** (review round 1). A question naming two drugs the chart holds only as ended
+orders — *"Why were her simvastatin and clarithromycin stopped?"* — reached that arm, which stated
+*"a reason to withhold it"* with the chip answering `false`: the same missing referent. It now stamps its
+chips off the same holder, on the chip's SUBJECT.
 
 ### The measurement
 
@@ -9810,18 +9828,23 @@ is settled by this run.
 
 ### Residues
 
-- R1 opens *"Yes"* on a question that states the ended drug as current, and does not say its order has
-  ended. The chip states it (`aboutAnEndedOrder: true`) and the answer does not.
-
+- R1's MODEL prose still opens *"Yes"* and does not say the order has ended; the module's appended
+  sentence says it. Whether the answer "said it" is containment — a sentence naming the chip's drug beside
+  "no longer in force" — so a paraphrase, or the drug named another way, gets the sentence as well: said
+  twice rather than not at all.
+- The appended sentence is not on the early `done` of async grounding, which is emitted before the chips
+  exist — Decision 100's completion shares that, and async grounding ships off.
 - A chart that did not RETRIEVE the ended record states nothing, and the finding stays a proposal as
   before — the in-force question is the chart builder's, written in one place, and is not asked of
   `OrderService` a second time here.
 - A record naming the drug outside its drug field (an order reason) is read as naming it — the echo
   test's own residue, since it is the same predicate.
-- The question-PAIR arm and the dose arm state no ended-order referent; the chip's `detail` is
-  unchanged, so a client renders the referent only by reading `aboutAnEndedOrder`
-  (`openmrs-esm-chartsearchai`'s half). The chip carries no stop date: the record the finding rests on
-  states it, and `orderStopDates` publishes it where that record is cited.
+- The dose arm states no ended-order referent. The question-pair arm states its chip SUBJECT's, so a pair
+  whose subject she was never prescribed keeps the proposal call though its partner is held as ended. Its
+  proposal gate is the one-drug grammar, so a question proposing the PAIR (*"Can I give her simvastatin
+  with clarithromycin?"*) is read as proposing nothing and takes the conditional call. The chip's `detail`
+  is unchanged, so a client renders the chip's referent only by reading `aboutAnEndedOrder` and
+  `endedOrderStopDate` (`openmrs-esm-chartsearchai`'s half).
 - The ended-order WITHHOLDING clause is longer than `ReferenceProseFidelityCheck`'s
   `MIN_REPRODUCED_WORDS`, so an answer paraphrasing it mid-sentence can raise that WARN where the
   proposal clause it replaces could not — Decision 72's recorded cost, one referent over. The caution
@@ -9835,6 +9858,9 @@ is settled by this run.
   it, as issue #238 did for naming; nothing in the suite discriminates that change, so it was not made.
 
 → `EndedOrderFindingReferentTest` (the real injector and validator over querystore's real rendered
-order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and read the failures),
+order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and read the failures;
+`.aQuestionPairFindingAboutTwoDrugsTheChartHoldsOnlyAsEndedOrdersStatesTheEndedOrderCall`,
+`.theChipCarriesTheLatestDateAnEndedOrderOfTheDrugStopped`),
+`LlmInferenceServiceEndedOrderStatementContextTest` (the appended sentence, both answer paths),
 `SafetyVerdictSeverityGradationTest.theEndedOrderBranchIsExactlyTheseWords`,
 `ChartSearchAiSafetyWarningSeverityWireTest`.

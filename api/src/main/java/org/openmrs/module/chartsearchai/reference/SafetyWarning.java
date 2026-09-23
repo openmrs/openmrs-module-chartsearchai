@@ -12,9 +12,12 @@ package org.openmrs.module.chartsearchai.reference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 
 /**
  * A non-blocking advisory raised by {@link DrugSafetyValidator} after the LLM
@@ -103,6 +106,9 @@ public class SafetyWarning {
 
 	/** @see #isAboutAnEndedOrder() */
 	private final boolean aboutAnEndedOrder;
+
+	/** @see #getEndedOrderStopDate() */
+	private final String endedOrderStopDate;
 
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
@@ -279,7 +285,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false);
+				restsOnSharedClassificationAlone, namedPartners, false, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -287,8 +293,9 @@ public class SafetyWarning {
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
-			List<String> namedPartners, boolean aboutAnEndedOrder) {
+			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate) {
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
+		this.endedOrderStopDate = aboutAnEndedOrder ? endedOrderStopDate : null;
 		// Copied and wrapped for the reason chartOrderBridges is. Never null, so no reader branches on
 		// absence; namedPartners()'s javadoc is the one place that says what empty covers.
 		this.namedPartners = namedPartners == null || namedPartners.isEmpty()
@@ -933,13 +940,13 @@ public class SafetyWarning {
 	/**
 	 * Whether this finding is about a drug this patient's CHART records only as an order no longer in
 	 * force — the third REFERENT beside a proposal and {@link #isAboutACurrentMedication()} (issue
-	 * #472). Set by {@code DrugSafetyValidator}'s drug-in-play arm, through
+	 * #472). Set by {@code DrugSafetyValidator}'s drug-in-play and question-pair arms, through
 	 * {@link #asAboutAnEndedOrder}, and never read off the detail. It never answers true beside
 	 * {@link #isAboutACurrentMedication()}: {@link #asAboutAnEndedOrder}'s guard refuses it, a defence the arms do not
 	 * need today, since none states both of one chip.
 	 *
 	 * <p><b>{@code false} is not a certificate that the drug is current.</b> It is also the answer for
-	 * a drug the question proposes giving, for every arm but the drug-in-play one, and wherever the
+	 * a drug the question proposes giving, for every arm but those two, and wherever the
 	 * module could not rule out that she is on it — the conditions are {@code DrugSafetyValidator}'s
 	 * {@code EndedOrders} javadoc's to enumerate, not this one's. Published verbatim as the chip's
 	 * {@code aboutAnEndedOrder} key.
@@ -949,20 +956,37 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * This warning, stated as about a drug the chart records only as an ended order (issue #472) — or
-	 * this very warning, unchanged, where it is already about a current medication, which no caller
-	 * hands it today: the drug-in-play arm's chips never are, and the order-driven arm's subjects are
-	 * her active substances, which {@code DrugSafetyValidator.EndedOrders} never holds. Kept so the two
-	 * referents cannot both be stated whatever a later caller does. Package-private: the drug-in-play
-	 * arm is its only caller.
+	 * This warning, stated as about a drug the chart records only as an ended order (issue #472), its
+	 * order having stopped on {@code stopDate} ({@code null} where no ended record naming it carries a
+	 * date) — or this very warning, unchanged, where it is already about a current medication, which no
+	 * caller hands it today: the two question-driven arms' chips never are, and the order-driven arm's
+	 * subjects are her active substances, which {@code DrugSafetyValidator.EndedOrders} never holds.
+	 * Kept so the two referents cannot both be stated whatever a later caller does. Package-private:
+	 * {@code EndedOrders.stamp} is its only caller.
 	 */
-	SafetyWarning asAboutAnEndedOrder() {
+	SafetyWarning asAboutAnEndedOrder(Date stopDate) {
 		if (aboutACurrentMedication) {
 			return this;
 		}
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, true);
+				restsOnSharedClassificationAlone, namedPartners, true,
+				stopDate == null ? null : DateFormatUtil.formatDate(stopDate));
+	}
+
+	/**
+	 * The date the ended order behind {@link #isAboutAnEndedOrder()} stopped being in force, spelled as
+	 * {@code DateFormatUtil.formatDate} spells every date this module publishes ({@code yyyy-MM-dd},
+	 * UTC), or {@code null} (issue #472). The latest {@code RecordMapping.getOrderStopDate()} among the
+	 * ended records naming the drug, read off the chart and never off a record's text; {@code null} on
+	 * every chip that is not about an ended order, and on one whose ended records carry no date, which
+	 * {@code SerializedRecord.orderStopDate}'s javadoc says a record not in force may do. Held as the
+	 * published string rather than a {@code Date}, so what a client reads as the chip's
+	 * {@code endedOrderStopDate} key and what the module states in the answer (ADR Decision 110) are one
+	 * spelling.
+	 */
+	public String getEndedOrderStopDate() {
+		return endedOrderStopDate;
 	}
 
 	/**

@@ -1675,6 +1675,9 @@ public class ChartSearchAiRestController {
 			// no longer in force. false is no certificate that the drug is current:
 			// SafetyWarning.isAboutAnEndedOrder() says why.
 			map.put("aboutAnEndedOrder", warning.isAboutAnEndedOrder());
+			// And the date that order stopped, already spelled as every published date is — so the
+			// accessor's value IS the wire's, and a client can say when without the model citing it.
+			map.put("endedOrderStopDate", warning.getEndedOrderStopDate());
 			out.add(map);
 		}
 		return out;

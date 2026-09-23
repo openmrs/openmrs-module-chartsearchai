@@ -391,7 +391,9 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 	 * to the kit's name, which this drug shares with Clarithromycin. The combination walk meets the two
 	 * occurrences of the kit's name ending at one position, and the tie goes to this drug, so nothing is
 	 * appended. Two tie rules hold it, each enough alone: the walk's own comparison, and the loop condition
-	 * the walk returns to (see {@code nearestIsOwn}), so the case reddens only where both are broken.
+	 * the walk returns to (see {@code nearestIsOwn}). Giving the tie away at either one alone — the loop's
+	 * {@code >} made {@code >=}, or the walk's {@code >=} made {@code >} — leaves this case green, and at
+	 * both reddens it.
 	 */
 	@Test
 	public void aNameThisDrugSharesWithAnotherJoinedToANearerDrugStatesIt() {

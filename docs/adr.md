@@ -9821,13 +9821,14 @@ rating below `major` is a caution.** Nothing else about the split moves:
     one. The count depends on that shape. Re-measured for
     [#488](https://github.com/openmrs/openmrs-module-chartsearchai/issues/488) at `adb0f178`
     (September 2026), through the same arm and over the prefilter and calibration described below:
-    adding one `ActiveDrugOrder` for the partner that carries those codes leaves 101 / 3,015; an order
-    carrying no ATC map, over a chart ATC set left empty, gives 101 / 3,018 (52 / 1,563 pairs); the
-    names alone fold none. The arm's rows are not a subset of the population above: all 101 Minor
+    with or without one `ActiveDrugOrder` for the partner carrying those codes it is 101 / 3,015; an
+    order carrying no ATC map gives 101 / 3,017 (52 / 1,562 pairs) over that chart ATC set and
+    101 / 3,018 (52 / 1,563) over one left empty; the names alone fold none. The arm's rows are not a subset of the population above: all 101 Minor
     rows are among the 108, but 10 of the 3,015 Moderate rows share neither a level-4 subgroup nor a
-    curated group, so 3,005 lie inside the 3,080. Calibration for that second
-    figure: it was taken over a prefilter admitting only rows whose two drugs share an ATC level-2
-    prefix or a curated group, and 3,000 rows sampled from outside it folded none. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
+    curated group, so 3,005 lie inside the 3,080; why those 10 fold was not investigated. Calibration
+    for the arm's figures: each was taken over a prefilter admitting only rows whose two drugs share an
+    ATC level-2 prefix or a curated group, and 3,000 rows sampled from outside it folded none, in every
+    shape at the re-measurement. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
   - *The A/B*, on the 3.7.1 standalone: `main` @ `27e9cf40` against the same tree with the
     `carriesUnratedRelationship()` leg removed, `capture_probe_safety.sh` over 21 cells (Kamwara
     `1530b813-…`, `23c54782-…` on Metronidazole and `83f95445-…` on Methotrexate × efavirenz,

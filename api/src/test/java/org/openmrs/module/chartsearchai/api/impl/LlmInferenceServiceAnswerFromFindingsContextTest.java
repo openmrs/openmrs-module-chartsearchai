@@ -98,9 +98,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** The finding records production put in the prompt for {@code question}, read with the property
 	 *  off so the model really is handed them. */
 	private List<Finding> findingsInThePromptFor(String question) {
+		return findingsInThePromptFor(question, DrugReferenceTestSupport.ddinterServiceWithGroups());
+	}
+
+	private List<Finding> findingsInThePromptFor(String question, DrugReferenceService reference) {
 		answerFromFindings(false);
 		RecordingProvider recorder = new RecordingProvider();
-		serviceWith(recorder).search(patient, question);
+		serviceWith(recorder, reference).search(patient, question);
 		assertEquals(1, recorder.calls, "precondition: with the property off the model is asked");
 		List<Finding> findings = new ArrayList<Finding>();
 		Matcher matcher = FINDING_LINE.matcher(recorder.lastRecords);
@@ -374,30 +378,60 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * An interaction the data does not RATE is not what licenses the module's "No": on the curated
-	 * dataset paracetamol's rule against warfarin carries no severity, which withholds only because an
-	 * unrated rule is not a caution (ADR Decision 37) — a rule's author's note, the same objection that
-	 * keeps contraindications from deciding the answer.
+	 * An interaction the data does not RATE is not what licenses the module's "No": paracetamol's rule
+	 * against warfarin carries no severity (the curated seed's own rule), which withholds only because
+	 * an unrated rule is not a caution (ADR Decision 37) — a rule's author's note, the same objection
+	 * that keeps contraindications from deciding the answer.
+	 *
+	 * <p>Over a dataset that resolves EVERY one of her orders, so the gate is refused by its rating
+	 * conjunct and not by one it asks first: the curated seed carries neither aspirin nor warfarin, and
+	 * over it this case once passed because her orders did not resolve. The positive control is what
+	 * holds that: on the same dataset and the same two orders, ibuprofen's rule against warfarin — rated
+	 * Major — is answered by the module, so nothing but the rating separates the two questions.
 	 */
 	@Test
 	public void anUnratedInteractionRuleStillAsksTheModel() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
-		DrugReferenceService curated = DrugReferenceTestSupport.curatedService();
+		DrugReferenceService curated = DrugReferenceTestSupport
+				.curatedFixtureService("chartsearchai-test/drug-reference-answer-from-findings-unrated-rule.json");
+		assertTheModuleAnswers("Can I give her ibuprofen?", curated);
+
 		String question = "Can I give her paracetamol?";
+		List<Finding> findings = findingsInThePromptFor(question, curated);
+		assertEquals(1, findings.size(), "precondition: one finding, the unrated rule, was: " + findings);
+		assertTrue(findings.get(0).text.startsWith("Paracetamol interacts with active order")
+				&& findings.get(0).text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"precondition: an unrated interaction withholds paracetamol, finding was: " + findings.get(0).text);
 
-		answerFromFindings(false);
-		RecordingProvider recorder = new RecordingProvider();
-		serviceWith(recorder, curated).search(patient, question);
-		assertTrue(recorder.lastRecords.contains("Paracetamol interacts with active order")
-				&& recorder.lastRecords.contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
-				"precondition: an unrated interaction withholds paracetamol, chart was: " + recorder.lastRecords);
+		assertTheModelIsAsked(question, curated);
+	}
 
-		answerFromFindings(true);
-		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider, curated).search(patient, question);
+	/**
+	 * Nor is a class relationship FOLDED onto a row the data rates below Moderate: methylphenidate's
+	 * DDInter row against her modafinil is rated Minor, and both publish {@code N06BA}, so the drug-in-play
+	 * arm appends the class sentence to the rated rule and the finding withholds
+	 * ({@code SafetyWarning.carriesUnratedRelationship}) while no rating the data gives says so.
+	 *
+	 * <p>Over a slice carrying her aspirin too, so every order resolves and the rating conjunct is what
+	 * refuses; the positive control is warfarin, which that slice rates Major against her aspirin and
+	 * which the module answers over the same two orders.
+	 */
+	@Test
+	public void aClassRelationshipFoldedOntoAMinorRowStillAsksTheModel() throws Exception {
+		executeDataSet("AnswerFromFindingsModafinilOrderTestData.xml");
+		DrugReferenceService ddinter = DrugReferenceTestSupport
+				.ddiFixtureService("chartsearchai-test/ddi-folded-minor-class-pair-every-order-resolved.json");
+		assertTheModuleAnswers("Can I give her warfarin?", ddinter);
 
-		assertEquals(1, provider.calls, "no rating the data gives supports the No");
-		assertFalse(answer.isAnsweredByTheModule());
+		String question = "Can I give her methylphenidate?";
+		List<Finding> findings = findingsInThePromptFor(question, ddinter);
+		assertEquals(1, findings.size(), "precondition: one finding, the folded Minor row, was: " + findings);
+		assertTrue(findings.get(0).text.contains("Minor") && findings.get(0).text.contains("N06BA")
+				&& findings.get(0).text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"precondition: a Minor row carrying the N06BA class sentence withholds methylphenidate, finding "
+						+ "was: " + findings.get(0).text);
+
+		assertTheModelIsAsked(question, ddinter);
 	}
 
 	/**
@@ -532,12 +566,27 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** With the property on, the model must still be asked, where the module did raise something for
 	 *  the question — so it is the gate, and not an empty finding list, that keeps the call. */
 	private void assertTheModelIsAsked(String question) {
-		assertFalse(findingsInThePromptFor(question).isEmpty(),
+		assertTheModelIsAsked(question, DrugReferenceTestSupport.ddinterServiceWithGroups());
+	}
+
+	private void assertTheModelIsAsked(String question, DrugReferenceService reference) {
+		assertFalse(findingsInThePromptFor(question, reference).isEmpty(),
 				"precondition: the module raised something for " + question);
 		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, question);
+		ChartAnswer answer = serviceWith(provider, reference).search(patient, question);
 		assertEquals(1, provider.calls, "the model must be asked: " + question);
 		assertFalse(answer.isAnsweredByTheModule(), question);
+	}
+
+	/** The positive control: over {@code reference} and this patient's orders, {@code question} is answered
+	 *  by the module with the withholding call and no model call. */
+	private void assertTheModuleAnswers(String question, DrugReferenceService reference) {
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, reference).search(patient, question);
+		assertEquals(0, provider.calls, "positive control, the module answers: " + question);
+		assertTrue(answer.isAnsweredByTheModule(), question);
+		assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
 	}
 
 	/**

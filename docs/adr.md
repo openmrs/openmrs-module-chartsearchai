@@ -9660,9 +9660,16 @@ chance of the two disagreeing.
   combination under every constituent.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.
 - A phrasing no shape carries keeps the call, the headline question of the issue included.
-- With `chartsearchai.drugSafety.citeOrderRecords` off, as it ships, an interaction line cites no order
-  record, where the model supplied one in 10 of the first check's 16 cells. A contraindication line's
-  allergy or condition record still arrives, as `attachedByTheModule: true`.
+- An interaction line cites none of her order records, where the model supplied one in 10 of the first
+  check's 16 cells. The one order-record number the module writes is the one `chartOrderClause` appends
+  to a chart-order bridge item, and only with `chartsearchai.drugSafety.citeOrderRecords` on (it ships
+  off); a finding about an order whose own display names the substance carries no bridge, so that
+  property adds no citation to it either. Read off the records the real `LlmInferenceService.search`
+  handed its provider with that property on, over the DDInter excerpt: patient 7's `ASPIRIN` and
+  `Warfarin` orders, asked about ibuprofen, omeprazole and a screen, gained no order-record number.
+  Resolving the numbers for the composed answer alone would reach only bridged findings and make
+  their line differ from the record it cites. A contraindication line's allergy or condition record
+  still arrives, as `attachedByTheModule: true`.
 - The composed lines are the REPORTED findings. On a capped screen, whether the list is complete is
   `interactionPairs`' to say, and the answer does not.
 - The citations of a composed answer's own markers read `attachedByTheModule: false`, that flag
@@ -9681,8 +9688,13 @@ chance of the two disagreeing.
 
 The gate the issue names, not run in this change: the probe-safety corpus
 (`eval/drift-metric/score_probe_safety.py`, including its abstention controls) and the thirty-nine cells
-of the issue's three comments, both arms on one build, with only this property between them. What the
-arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
+of the issue's three comments, both arms on one build, with only this property between them. **The scorer cannot run that A/B as it
+stands**: on the ON arm every module-answered cell publishes `findingCitations` and
+`unstatedFindingSeverities` as `null`, and `score_probe_safety.py`'s `main` refuses, exiting 3, any
+pair whose arms disagree about which cells measured either key (`has_extent_measurement`,
+`has_rating_measurement`). It has to read `answeredByTheModule` first — comparing those cells on the
+verdict and the lead, and leaving them out of both refusals — before the gate can be run as written.
+What the arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
 yes, and which questions the shapes refuse that the issue's cells expected answered.
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest` — the real injector and validator on patient 7,

@@ -1338,7 +1338,7 @@ public final class DrugReferenceTestSupport {
 	 * together: {@link #serviceWith} pins the groups EMPTY through its {@code setEntries} seam, so a
 	 * fixture service built without the second call silently cannot raise a curated-group chip.
 	 */
-	static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
+	public static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
 		return serviceWithGroups(ddiFixtureEntries(classpathResource));
 	}
 

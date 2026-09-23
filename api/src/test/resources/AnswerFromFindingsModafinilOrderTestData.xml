@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #469: a second active drug order for patient 7 of the standard test dataset, whose only
+  active order is order 111 (ASPIRIN, concept 88). Modafinil is chosen for what the DDInter slice
+  chartsearchai-test/ddi-folded-minor-class-pair-every-order-resolved.json relates it to
+  methylphenidate by: a Minor row onto which the drug-in-play arm folds the two drugs' shared N06BA
+  class, so a question proposing methylphenidate raises a finding that withholds while the data
+  rates it Minor.
+
+  A concept, its one name and a drug are supplied because the standard dataset carries no modafinil
+  of any kind. The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<concept concept_id="9473" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9473aaaa-0000-4000-8000-00000009473a" />
+	<concept_name concept_name_id="9473" concept_id="9473" name="Modafinil" locale="en_GB" locale_preferred="1"
+	              concept_name_type="FULLY_SPECIFIED" creator="1" date_created="2008-08-15 00:00:00.0"
+	              voided="false" uuid="9473bbbb-0000-4000-8000-00000009473a" />
+	<drug drug_id="9473" concept_id="9473" name="Modafinil" combination="false" creator="1"
+	      date_created="2008-08-15 00:00:00.0" retired="false" uuid="9473cccc-0000-4000-8000-00000009473a" />
+	<orders order_id="9473" order_type_id="1" order_number="ORD-9473" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9473" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9473dddd-0000-4000-8000-00000009473a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9473" drug_inventory_id="9473" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

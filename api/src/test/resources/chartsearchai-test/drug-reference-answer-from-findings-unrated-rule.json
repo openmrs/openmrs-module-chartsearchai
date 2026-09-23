@@ -1,0 +1,64 @@
+{
+ "version": "1.0",
+ "source": "hand-authored fixture for issue #469 — not shipped data",
+ "description": "Issue #469: an interaction rule the data does not RATE, on a dataset that resolves every active order of patient 7 once she also carries a warfarin order (aspirin order 111 and AnswerFromFindingsWarfarinOrderTestData.xml), so the answer-from-findings gate is refused by its rating conjunct and not by an order it cannot resolve. Paracetamol's warfarin rule is the curated seed's own, unrated. Ibuprofen's warfarin rule is hand-authored and rated Major: the positive control that this chart and these orders are otherwise answered by the module. Aspirin and Warfarin carry no rule and exist only so her orders resolve.",
+ "entries": [
+  {
+   "id": "paracetamol",
+   "name": "Paracetamol",
+   "aliases": [
+    "paracetamol",
+    "acetaminophen",
+    "panadol",
+    "tylenol",
+    "calpol"
+   ],
+   "atcCodes": [
+    "N02BE01"
+   ],
+   "interactions": [
+    {
+     "token": "warfarin",
+     "atc": "B01AA03",
+     "note": "prolonged high-dose use may potentiate anticoagulant effect"
+    }
+   ],
+   "source": "the curated seed's own entry, its dosing bands and contraindications left out"
+  },
+  {
+   "id": "ibuprofen",
+   "name": "Ibuprofen",
+   "aliases": [
+    "ibuprofen"
+   ],
+   "interactions": [
+    {
+     "token": "warfarin",
+     "atc": "B01AA03",
+     "severity": "Major",
+     "note": "Coadministration may increase the risk of bleeding."
+    }
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "Warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "atcCodes": [
+    "B01AA03"
+   ],
+   "source": "hand-authored fixture"
+  }
+ ]
+}

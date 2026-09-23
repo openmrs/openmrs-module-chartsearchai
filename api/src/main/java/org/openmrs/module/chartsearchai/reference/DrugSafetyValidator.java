@@ -4041,6 +4041,15 @@ public class DrugSafetyValidator {
 		for (SafetyWarning chip : stated) {
 			warnings.add(endedOrders.stamp(ref, chip));
 		}
+		// After the rule chips and outside their sort: unrated, it would otherwise head the list above
+		// the rated findings a clinician asked about, the reason the class-only chips below trail too
+		// (see FINDING_STRENGTH_DESCENDING). Not a pair, so not in relatedPairs (issue #477). Not
+		// stamped by endedOrders: it is raised only where active orders carry the drug, which is the
+		// case that stamp refuses.
+		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications);
+		if (alreadyTaken != null) {
+			warnings.add(alreadyTaken);
+		}
 		for (String detail : classOnly) {
 			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
 			// relationship the reference data states without severity, which is why these chips are never
@@ -4204,6 +4213,54 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The finding that the substance in play is ALREADY in two or more of the patient's own active
+	 * orders — issue #477 — or null where fewer than two carry it.
+	 *
+	 * <p><b>Why the class arm cannot say this.</b> Its restating-existing-therapy skip
+	 * ({@link #classRelationships}) is asked per CO-MEDICATION, and every order of one substance is one
+	 * co-medication (issue #186) — or, on the unnameable-code rung, each is skipped on its own. Either
+	 * way the arm never counts ORDERS, so two tuberculosis combinations both containing rifampicin were
+	 * silent about each other while the rule arm related rifampicin to their other constituents. The
+	 * skip is right for the one order and stays; this states what it cannot.
+	 *
+	 * <p><b>One order says nothing</b>: that is the drug itself, and a drug does not duplicate itself
+	 * (issue #185). Which orders count is {@link CoMedications#ordersWhoseDisplayNames}, and the
+	 * sentence names each by that same display, so the evidence and the printed name are one string.
+	 *
+	 * <p><b>Its REFERENT is its arm's, a proposal</b>, like every other finding this arm raises about the
+	 * drug in play: stated beside them in the current-medication column (issue #348), one response would
+	 * refuse the drug as a proposal and call it a medication to change, the one-site shape issue #402
+	 * recorded and reverted. Its STRENGTH is the unrated default, so on a proposal it withholds a further
+	 * course of a drug two orders already carry. ADR Decision 112 carries why of both.
+	 */
+	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications) {
+		List<PatientClinicalContext.ActiveDrugOrder> carriers =
+				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey());
+		if (carriers.size() < 2) {
+			return null;
+		}
+		// Each distinct display once, with how many orders carry it where that is more than one: two
+		// orders recorded under one name would otherwise print that name twice, which a clinician cannot
+		// tell from a name pasted twice, and would count it twice into findingPartners. The count says
+		// "orders" and never ACTIVE_ORDER_NOUN: ActiveOrderCitationFidelityCheck counts one claim per
+		// occurrence of that noun, so a second one would split this sentence into two claims.
+		Map<String, Integer> ordersByDisplay = new LinkedHashMap<String, Integer>();
+		for (PatientClinicalContext.ActiveDrugOrder order : carriers) {
+			Integer n = ordersByDisplay.get(order.getDisplay());
+			ordersByDisplay.put(order.getDisplay(), n == null ? 1 : n + 1);
+		}
+		List<String> labels = new ArrayList<String>(ordersByDisplay.size());
+		for (Map.Entry<String, Integer> display : ordersByDisplay.entrySet()) {
+			labels.add(display.getValue() == 1 ? display.getKey()
+					: display.getKey() + " (" + display.getValue() + " orders)");
+		}
+		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
+			ref.displayLabel() + " is already in " + ACTIVE_ORDER_NOUN + "s " + joinPartners(labels)
+					+ " — possible duplicate therapy",
+			new ArrayList<String>(ordersByDisplay.keySet()));
+	}
+
+	/**
 	 * Orders this arm's rule chips strongest first, on the FINDING and not on its rating.
 	 *
 	 * <p><b>Why the finding.</b> This is the only interaction arm that FOLDS, and a folded chip's
@@ -4242,7 +4299,9 @@ public class DrugSafetyValidator {
 	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} is the guard, over the lowered-floor pair —
 	 * swap the two keys here and read its failure.
 	 *
-	 * <p><b>What it deliberately does not order</b>: the unrated class-only chips appended after these.
+	 * <p><b>What it deliberately does not order</b>: the unrated class-only chips appended after these,
+	 * and {@link #alreadyInSeveralOrders}' finding appended between the two (issue #477), for the same
+	 * reason.
 	 * They state a relationship the reference data does not rate at all, so by this method's own key —
 	 * where unrated leads — they would come to head the whole list; they stay where they have always
 	 * been so that the sentences the class arm produces alone do not overtake the rated findings a
@@ -4250,7 +4309,7 @@ public class DrugSafetyValidator {
 	 * <b>Not every unrated finding, which is the misreading to guard against</b>: a RULE the source
 	 * rates nothing for — a hand-authored {@code json} or curated rule — is one of this arm's own rule
 	 * chips, so it is ordered here, and by the paragraph above it leads the withholding side ahead of
-	 * every {@code major}. Only the class-only chips are exempt.
+	 * every {@code major}. Only those two unrated shapes, neither of which carries a rule, are exempt.
 	 */
 	private static final Comparator<SafetyWarning> FINDING_STRENGTH_DESCENDING =
 			new Comparator<SafetyWarning>() {
@@ -10506,6 +10565,12 @@ public class DrugSafetyValidator {
 		 *  above. */
 		private final Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
 
+		/** {@link DrugReferenceService#findImpliedByDrugName(String, Map)}'s cache, held for the PASS so
+		 *  that {@link #substancesItsDisplayNames} reuses what {@link DrugSafetyValidator#orderPartners}
+		 *  already resolved (issue #477). Bounded by the dataset's aliases, so the singleton reason
+		 *  alone. */
+		private final Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
+
 		private List<OrderPartner> partners;
 
 		CoMedications(PatientClinicalContext context) {
@@ -10528,7 +10593,7 @@ public class DrugSafetyValidator {
 			if (partners == null) {
 				partners = context == null
 						? Collections.<OrderPartner> emptyList()
-						: orderPartners(context, entryByCode);
+						: orderPartners(context, entryByCode, impliedByName);
 			}
 			return partners;
 		}
@@ -10744,6 +10809,59 @@ public class DrugSafetyValidator {
 				partnersBySubstance.put(substance, partner);
 			}
 		}
+
+		/** {@link #substancesItsDisplayNames}' memo, keyed on a per-request order — so a pass-scoped
+		 *  local and never a bean field (issue #172's unbounded-key reason). */
+		private final Map<PatientClinicalContext.ActiveDrugOrder, Set<Object>> substancesByDisplay =
+				new HashMap<PatientClinicalContext.ActiveDrugOrder, Set<Object>>();
+
+		/**
+		 * The patient's active orders whose DISPLAY names {@code substance} — the orders
+		 * {@link DrugSafetyValidator#alreadyInSeveralOrders} prints, in chart order (issue #477).
+		 *
+		 * <p>The DISPLAY and nothing else the order records (issue #293), only for an order
+		 * {@link DrugSafetyValidator#displayNamesADrug} admits (issue #290), and deliberately narrower
+		 * than the co-medication walk and {@link DrugSafetyValidator#resolvesFrom}, which also accept a
+		 * shared ATC code or a bridged concept. ADR Decision 112 carries why, and what it gives up.
+		 * Empty for a chart of fewer than two orders, which cannot raise the finding, without resolving
+		 * anything.
+		 */
+		List<PatientClinicalContext.ActiveDrugOrder> ordersWhoseDisplayNames(Object substance) {
+			if (context == null || context.getActiveDrugOrders().size() < 2) {
+				return Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList();
+			}
+			List<PatientClinicalContext.ActiveDrugOrder> carriers =
+					new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+				if (displayNamesADrug(order) && substancesItsDisplayNames(order).contains(substance)) {
+					carriers.add(order);
+				}
+			}
+			return carriers;
+		}
+
+		/**
+		 * The substances {@code order}'s display NAMES, as {@link DrugReference#substanceGroupKey()}
+		 * values: {@link DrugReferenceService#findNamedSubstances} over {@link #onePerSubstance} of
+		 * {@link DrugReferenceService#findImpliedByDrugName} — the ranked accessor the co-medication walk
+		 * reads an order's name with, and not {@code findImpliedSubstances}, which resolves neither
+		 * tuberculosis combination display of issue #477 to anything (measured through
+		 * {@code SubstanceInSeveralActiveOrdersTest}). The implied set alone is additive on purpose and
+		 * would admit a substance the display does not name.
+		 */
+		private Set<Object> substancesItsDisplayNames(PatientClinicalContext.ActiveDrugOrder order) {
+			Set<Object> named = substancesByDisplay.get(order);
+			if (named == null) {
+				named = new LinkedHashSet<Object>();
+				String display = order.getDisplay();
+				for (DrugReference row : drugReferenceService.findNamedSubstances(display, onePerSubstance(
+						substanceRows(drugReferenceService.findImpliedByDrugName(display, impliedByName))))) {
+					named.add(row.substanceGroupKey());
+				}
+				substancesByDisplay.put(order, named);
+			}
+			return named;
+		}
 	}
 
 	/**
@@ -10856,10 +10974,10 @@ public class DrugSafetyValidator {
 	 * {@link DrugReferenceInjector#preAnswerFindings}, post-answer through {@code LlmInferenceService}),
 	 * so a query pays it twice. What that per-order memo cannot save is a name REPEATED across orders,
 	 * which is a separate cache and is threaded as one. And because this method now runs once per pass,
-	 * "per call" and "per pass" are the same scope for the three memos below.
+	 * "per call" and "per pass" are the same scope for the two memos declared below.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context,
-			Map<String, DrugReference> entryByCode) {
+			Map<String, DrugReference> entryByCode, Map<Object, Set<Object>> impliedByName) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
 		// Memos, never fields. Each covers a dataset sweep this loop would otherwise repeat:
 		// entryForAtcCode is a full scan of getAll() and the rung added by issue #186 asks it once per
@@ -10874,19 +10992,18 @@ public class DrugSafetyValidator {
 		// The other two are bounded and take only the singleton reason — entryByCode by the ATC code
 		// space, impliedByName by the dataset's own aliases (see findImpliedByDrugName(String, Map)).
 		// Four between two owners since issue #256: entryByCode is the CALLER's, a parameter rather than
-		// a local, because ruleAbout reads it after this method has returned (see CoMedications); the
-		// three declared below are this method's own, and since that issue this method runs once per
-		// pass, so per-call and per-pass have become the same scope for them.
+		// a local, because ruleAbout reads it after this method has returned (see CoMedications) — and
+		// since issue #477 so is impliedByName, which CoMedications.substancesItsDisplayNames asks again
+		// for each order's display; the two declared below are this method's own, and since #256 this
+		// method runs once per pass, so per-call and per-pass have become the same scope for them.
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> rowsByOrderName =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>>();
-		// The fourth, and the one keyed on a NAME rather than on an order: what the third cannot save is
-		// the same name asked twice from two different orders, which is the common shape (a family's
-		// orders share aliases). Handed to the service's own cache-taking overload, which is where that
-		// sharing is defined — see findImpliedByDrugName(String, Map). A local for the same reason as
-		// the others.
-		Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
+		// The fourth, impliedByName, is keyed on a NAME rather than on an order: what the third cannot
+		// save is the same name asked twice from two different orders, which is the common shape (a
+		// family's orders share aliases). Handed to the service's own cache-taking overload, which is
+		// where that sharing is defined — see findImpliedByDrugName(String, Map).
 		for (String orderCode : context.getActiveDrugAtcCodes()) {
 			DrugReference entry = entryForAtcCode(orderCode, entryByCode);
 			PatientClinicalContext.ActiveDrugOrder order = null;
@@ -11202,11 +11319,8 @@ public class DrugSafetyValidator {
 	 *         which of the substances a recorded name implies it actually NAMES, and asked here before
 	 *         a chip prints one of them as a SECOND prescription.
 	 *
-	 *         <p><b>One row per substance, elected with {@link DrugReference#canonicalRow}</b>, which is
-	 *         that accessor's own contract for the candidate list and the same fold
-	 *         {@code substancesNamedByBridge} makes over its bridged answer. Unfolded, two rows of one
-	 *         substance tie with each other and the unique-strongest-claimant clause refuses a name
-	 *         nothing else contests.
+	 *         <p><b>One row per substance</b> — {@link #onePerSubstance}, which carries why, and the
+	 *         same fold {@code substancesNamedByBridge} makes over its bridged answer.
 	 *
 	 *         <p><b>Read by the restating-existing-therapy skip alone</b>
 	 *         ({@link OrderPartner#readingsOfOneOrder}) and deliberately not by
@@ -11225,6 +11339,23 @@ public class DrugSafetyValidator {
 		if (rowsBySubstance.size() < 2) {
 			return Collections.emptySet();
 		}
+		List<DrugReference> candidates = onePerSubstance(rowsBySubstance);
+		Set<Object> unnamed = new LinkedHashSet<Object>(rowsBySubstance.keySet());
+		for (String name : order.getNames()) {
+			for (DrugReference named : drugReferenceService.findNamedSubstances(name, candidates)) {
+				unnamed.remove(named.substanceGroupKey());
+			}
+		}
+		return unnamed;
+	}
+
+	/**
+	 * One row per substance of {@code rowsBySubstance}, the one {@link DrugReference#canonicalRow} elects
+	 * — the candidate set {@link DrugReferenceService#findNamedSubstances} takes. Unfolded, two rows of
+	 * one substance tie with each other and its unique-strongest-claimant clause refuses a name nothing
+	 * else contests.
+	 */
+	private static List<DrugReference> onePerSubstance(Map<Object, List<DrugReference>> rowsBySubstance) {
 		List<DrugReference> candidates = new ArrayList<DrugReference>(rowsBySubstance.size());
 		for (List<DrugReference> rows : rowsBySubstance.values()) {
 			DrugReference elected = null;
@@ -11233,13 +11364,7 @@ public class DrugSafetyValidator {
 			}
 			candidates.add(elected);
 		}
-		Set<Object> unnamed = new LinkedHashSet<Object>(rowsBySubstance.keySet());
-		for (String name : order.getNames()) {
-			for (DrugReference named : drugReferenceService.findNamedSubstances(name, candidates)) {
-				unnamed.remove(named.substanceGroupKey());
-			}
-		}
-		return unnamed;
+		return candidates;
 	}
 
 	/**

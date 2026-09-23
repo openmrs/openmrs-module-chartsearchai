@@ -89,6 +89,8 @@ package org.openmrs.module.chartsearchai.reference;
  * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a
  * curated cross-reactivity group — are chips and are deliberately NOT counted here, because neither
  * pairwise arm has a class leg at all and one wire key must not mean two things by question shape.
+ * Nor is that arm's finding that the drug is already in several of her orders (issue #477), which
+ * relates it to no partner substance.
  * The three differ in what they draw pairs FROM, exactly as the two pairwise arms already did.
  *
  * <p><b>Precedence, never a sum.</b> The two pairwise gates are mutually exclusive, so at most one

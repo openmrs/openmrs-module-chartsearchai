@@ -1,0 +1,235 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #477 - a substance carried by more than one of the patient's active orders. Rows are field-for-field their rows in the shipped ddi-knowledge-base.json, in KB order, and the interaction rows are every KB pair among these four drugs, with the mechanisms they cite. The four first-line TB substances, one KB row each, so the two fixed-dose combinations of the reproduction (Isoniazid / pyrazinamide / rifampin; Rifampicin isoniazid pyrazinamide and ethambutol) both resolve, by name, to rifampicin."
+ },
+ "mechanisms": {
+  "80": {
+   "text": "A two-month regimen consisting of rifampin (RIF) and pyrazinamide (PZA) for the treatment of latent tuberculosis infection (LTBI) has been associated with liver injury resulting in high rates of hospitalization and death. The exact mechanism of interaction is unknown, although both agents are individually hepatotoxic and may have additive effects on the liver during coadministration.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "4220": {
+   "text": "The risk of hepatotoxicity is greater when rifampin and isoniazid are given concomitantly than when either drug is given alone. Rifampin appears to alter the metabolism of isoniazid and increase the amount of toxic metabolites. Theoretically, a similar reaction may occur with rifabutin and isoniazid. Patients who are elderly, have hepatic impairment, are slow acetylators of isoniazid, drink alcohol daily, are female, or are taking other strong CYP450-inducing agents may be at greater risk of hepatotoxicity.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "5119": {
+   "text": "The risk of peripheral neuropathy may be increased during concurrent use of two or more agents that are associated with this adverse effect. Patient risk factors include diabetes and age older than 60 years.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1547",
+   "name": "Pyrazinamide",
+   "rxcui": "8987",
+   "rxnorm_name": "pyrazinamide",
+   "drugbank_id": "DB00339",
+   "atc": [
+    "J04AK01"
+   ],
+   "brand_names": [],
+   "ciel": [
+    {
+     "code": "1131",
+     "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+    },
+    {
+     "code": "768",
+     "uuid": "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / pyrazinamide / rifampin"
+    },
+    {
+     "code": "82900",
+     "uuid": "82900AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pyrazinamide"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1590",
+   "name": "Rifampicin",
+   "rxcui": "9384",
+   "rxnorm_name": "rifampin",
+   "drugbank_id": "DB01045",
+   "atc": [
+    "J04AB02"
+   ],
+   "brand_names": [
+    "Rifadin"
+   ],
+   "ciel": [
+    {
+     "code": "104943",
+     "uuid": "104943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / rifampin"
+    },
+    {
+     "code": "1131",
+     "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+    },
+    {
+     "code": "1194",
+     "uuid": "1194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin and isoniazid"
+    },
+    {
+     "code": "159851",
+     "uuid": "159851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid and ethambutol"
+    },
+    {
+     "code": "767",
+     "uuid": "767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin"
+    },
+    {
+     "code": "768",
+     "uuid": "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / pyrazinamide / rifampin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter689",
+   "name": "Ethambutol",
+   "rxcui": "4110",
+   "rxnorm_name": "ethambutol",
+   "drugbank_id": "DB00330",
+   "atc": [
+    "J04AK02"
+   ],
+   "brand_names": [
+    "Myambutol"
+   ],
+   "ciel": [
+    {
+     "code": "1108",
+     "uuid": "1108AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethambutol and isoniazid"
+    },
+    {
+     "code": "1131",
+     "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+    },
+    {
+     "code": "159851",
+     "uuid": "159851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid and ethambutol"
+    },
+    {
+     "code": "75948",
+     "uuid": "75948AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethambutol"
+    },
+    {
+     "code": "75949",
+     "uuid": "75949AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethambutol hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter986",
+   "name": "Isoniazid",
+   "rxcui": "6038",
+   "rxnorm_name": "isoniazid",
+   "drugbank_id": "DB00951",
+   "atc": [
+    "J04AC01"
+   ],
+   "brand_names": [],
+   "ciel": [
+    {
+     "code": "104943",
+     "uuid": "104943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / rifampin"
+    },
+    {
+     "code": "104944",
+     "uuid": "104944AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / vitamin B6"
+    },
+    {
+     "code": "1108",
+     "uuid": "1108AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ethambutol and isoniazid"
+    },
+    {
+     "code": "1131",
+     "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+    },
+    {
+     "code": "1194",
+     "uuid": "1194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin and isoniazid"
+    },
+    {
+     "code": "159851",
+     "uuid": "159851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid and ethambutol"
+    },
+    {
+     "code": "768",
+     "uuid": "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / pyrazinamide / rifampin"
+    },
+    {
+     "code": "78280",
+     "uuid": "78280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1547",
+   "DDInter1590",
+   "Major",
+   "80"
+  ],
+  [
+   "DDInter1547",
+   "DDInter689",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1547",
+   "DDInter986",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1590",
+   "DDInter689",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1590",
+   "DDInter986",
+   "Minor",
+   "4220"
+  ],
+  [
+   "DDInter689",
+   "DDInter986",
+   "Moderate",
+   "5119"
+  ]
+ ]
+}

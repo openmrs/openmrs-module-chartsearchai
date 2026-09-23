@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -764,6 +765,44 @@ public class ActiveOrderCitationFidelityTest {
 		assertEquals(0, claims.getUncited(),
 				"and it is not counted uncited either — a record the module could not read is one "
 						+ "it cannot say anything about, in EITHER direction");
+	}
+
+	@Test
+	public void theModulesOwnAlreadyInSeveralOrdersSentenceIsOneClaim() throws IOException {
+		// Issue #477's finding names several of her orders in ONE sentence, and this check counts a
+		// claim per occurrence of the active-order noun, bounding each claim's markers at the next. So
+		// the sentence must carry that noun once, including where one display stands for two orders
+		// and the sentence prints a count: a second noun there made the copied sentence two claims,
+		// the first with no markers of its own. Read off the validator, so the words are the ones
+		// production writes.
+		int order = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER);
+		for (String[] displays : new String[][] {
+				{ "Isoniazid / pyrazinamide / rifampin",
+						"Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg" },
+				{ "Rifampicin 150mg", "Rifampicin 150mg" } }) {
+			String sentence = alreadyInSeveralOrders(DrugReferenceTestSupport.chipsOverOrders(
+				"chartsearchai-test/ddi-substance-in-several-orders.json", "Is it safe to give rifampicin?",
+				displays));
+			service.setLlmProvider(answering("No. " + sentence + " [" + order + "]."));
+
+			ActiveOrderClaims claims = service.search(patient(), QUESTION).getActiveOrderClaims();
+
+			assertEquals(1, claims.getStated(), "one sentence, one claim: " + sentence);
+			assertEquals(0, claims.getUncited(), "and its chart citation is its own: " + sentence);
+		}
+	}
+
+	/** The one detail among {@code warnings} that is issue #477's finding. */
+	private static String alreadyInSeveralOrders(List<SafetyWarning> warnings) {
+		String found = null;
+		for (SafetyWarning warning : warnings) {
+			if (warning.getDetail().contains(" is already in " + DrugSafetyValidator.ACTIVE_ORDER_NOUN)) {
+				assertEquals(null, found, "one such finding: " + warnings);
+				found = warning.getDetail();
+			}
+		}
+		assertTrue(found != null, "the arrangement raises the finding: " + warnings);
+		return found;
 	}
 
 	/** "Clarithromycin interacts with active order X [chart] [finding]" — production's own phrase,

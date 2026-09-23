@@ -748,7 +748,11 @@ public class SafetyVerdictSeverityGradationTest {
 	 *
 	 * <p><b>And it is a tripwire rather than an over-strict guard.</b> These two sentences are prompt
 	 * surface whose effect nothing in this repository can see, so ADR Decision 72's two-build A/B is
-	 * what licensed the words that are here. Any legitimate reword re-opens that A/B, which means
+	 * what licensed the words that are here, and ADR Decision 109's live runs licensed the CAUTION
+	 * branch's current words (issue #471): the wording before them, which asked for the severity
+	 * beside "the caution in the same sentence", was measured drawing the proposal branch's
+	 * permission lead for a medication already taken while every case here was green. Any
+	 * legitimate reword re-opens that measurement, which means
 	 * failing loudly on one is the WANTED behaviour: the failure tells the next maintainer a live
 	 * measurement is owed, and that is exactly why
 	 * {@code DrugClassQuestionNoteTest.theRenderedNoteIsExactlyTheseWords} pins its own rendered note
@@ -779,8 +783,9 @@ public class SafetyVerdictSeverityGradationTest {
 					+ "refusing to give a drug.",
 			"A finding that says it is a caution about a medication this patient is already taking, "
 					+ "not a reason to change it, is not evidence against that medication: open by "
-					+ "naming it and the caution in the same sentence, carry the finding's severity, "
-					+ "and never open by refusing to give a drug."),
+					+ "naming that medication and what the finding relates it to, say that it is a "
+					+ "caution, carry the finding's severity, and never open by refusing to give a "
+					+ "drug."),
 			branches,
 			"these two sentences are what a clinician's answer opens from, and nothing in this "
 					+ "repository can see what a model makes of them — ADR Decision 72's two-build "

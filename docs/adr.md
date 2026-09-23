@@ -9749,7 +9749,7 @@ rating below `major` is a caution.** Nothing else about the split moves:
   not this one. A contraindication states a withholding-class clause whatever rates it.
 - The chip, its `severity`, the floor and `statableRating` are untouched. The prompt keys on the
   record's clause and never on the rating word, so the call moves with no change to how the prompt
-  reads a clause; the one prompt edit is the severity clause below.
+  reads a clause; the one prompt edit is the current-medication caution branch below.
 - The REFERENT axis moves with it (Decision 72): a Moderate pair of her own prescriptions states the
   current-medication caution, not a reason to change one.
 - **`ratedAReasonToWithhold` is now asked THROUGH `ratingLicensesWithholding`** —
@@ -9796,12 +9796,38 @@ rating below `major` is a caution.** Nothing else about the split moves:
   on `main`. An earlier round of this change removed the fold leg and turned both into a caution lead,
   and it was reverted as outside the issue. `FoldedFindingStrengthTest.aModerateRuleFoldedWithAClassRelationshipStillStatesTheStrongerClaim`
   pins the arrangement over a verbatim slice of those rows.
-- **The current-medication caution branch now asks for the rating.** The issue requires a Moderate
-  finding to be stated with its rating (#299, #337), and moving Moderate to the caution moved a
-  screened Moderate pair of her own prescriptions from the branch that says *"carry the finding's
-  severity"* to one that did not. The caution branch now says it too, closing the cell Decision 78
-  recorded as a residue. **Owed: a live A/B over a Moderate screening cell** before and after this
-  prompt edit. None has been run; the Kamwara arm above asks proposal questions only.
+- **The current-medication caution branch now asks for the rating, and opens as the change branch
+  does.** The issue requires a Moderate finding to be stated with its rating (#299, #337) and not as a
+  permission or a "Yes" (#107 arm C), and moving Moderate to the caution moved a screened Moderate
+  pair of her own prescriptions from the branch that says *"carry the finding's severity"* to one
+  that did not, closing the cell Decision 78 recorded as a residue once the branch says it too. Where
+  the words go was measured, not argued: on the 3.7.1 standalone running this change's omod at
+  `ccf3955e`, the prompt set through `chartsearchai.llm.systemPrompt` to the compiled
+  `DEFAULT_SYSTEM_PROMPT` with only that sentence's instruction replaced (review calibrated that
+  override as byte-identical to the default), patient `b65f951f-…`, *"Are there any drug interactions
+  with his current medications?"*, one Moderate chip (Salicylic acid × Enalapril). Read off each
+  response: (a) the lead is neither a permission nor a refusal, (b) the prose says "Moderate",
+  (c) `unstatedFindingSeverities` is `[]`.
+
+  | the branch's instruction after "not evidence against that medication:" | n | lead | (b) | (c) |
+  |---|---|---|---|---|
+  | `main`'s wording: *open by naming it and the caution in the same sentence, and never open by refusing to give a drug* | 2 | *Enalapril has a caution regarding Salicylic acid: …* | no | `[Moderate]` |
+  | round 1: the same, plus *carry the finding's severity,* | 3 | *Enalapril can be given, with one caution: …* — the proposal branch's permission | yes | `[]` |
+  | **shipped**: *open by naming that medication and what the finding relates it to, say that it is a caution, carry the finding's severity, and never open by refusing to give a drug* | 4 | *Enalapril is a medication the patient is already taking, and the records state that Salicylic acid interacts with active order Enalapril, a Moderate caution: …* | yes | `[]` |
+
+  Review round 3 ran the first row twice and the second twice; the fix round ran the second once more
+  and the third four times. The shipped wording was the first candidate tried, and its four answers
+  were byte-identical. Its instruction is the change branch's plus "say that it is a caution", so the two
+  current-medication branches open alike and neither borrows "in the same sentence" from the
+  proposal branch; which of those two differences removed the permission lead is not separated. Its
+  answer cites only the finding (`[134]`), where round 1's also cited the order (`[3]`). Controls,
+  three runs each under the same override on patient Kamwara: *Can I give this patient Amlodipine?*
+  still leads *"Amlodipine can be given, with one caution: … a Moderate problem [8]."*, and
+  *Rifampicin* still leads *"No — Rifampicin should not be given: … — Major."*, both with
+  `unstatedFindingSeverities` `[]`. The Kamwara `capture_probe_safety.sh` arm above ran before this
+  edit; these controls, not that arm, are what cover the shipped prompt. `main`'s own answer on the
+  screening cell, as recorded by review, is *"The finding relates Salicylic acid to Enalapril, … a
+  Moderate finding [134]"*: there the pair reached the change branch.
 - `ratedAReasonToWithhold`'s body is pinned by source, since the parallel boundary it replaced
   (`>= severityRank("major")`, equal to today's) leaves every behavioural case green.
 
@@ -9810,4 +9836,5 @@ rating below `major` is a caution.** Nothing else about the split moves:
 `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel`,
 `FoldedFindingStrengthTest.aModerateRuleFoldedWithAClassRelationshipStillStatesTheStrongerClaim`,
 `SafetyVerdictSeverityGradationTest.everyCurrentMedicationBranchAsksForTheFindingsSeverity`,
+`SafetyVerdictSeverityGradationTest.theTwoCurrentMedicationBranchesAreExactlyTheseWords`,
 `SafetyFindingSeverityStrengthTest.theModulesOwnWithholdingAnswerAsksTheOneRatingBoundaryAndNoSecond`.

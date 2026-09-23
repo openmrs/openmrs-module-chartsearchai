@@ -1245,7 +1245,10 @@ public class DrugSafetyValidator {
 	 * branches are gated on the finding's clause rather than on the question (Decision 72), and each
 	 * says "carry the finding's severity". The CAUTION branch did not until issue #471, which moved
 	 * {@code moderate} into that cell beside {@code minor} and added the clause in its review round 1:
-	 * until then a finding there could be rendered exactly as the prompt asked and still be reported. So a reword dropping the
+	 * until then a finding there could be rendered exactly as the prompt asked and still be reported.
+	 * The words around the clause are measured rather than free: beside "the caution in the same
+	 * sentence" it drew the proposal branch's permission lead, so the branch now opens as the change
+	 * branch does (ADR Decision 109). So a reword dropping the
 	 * clause from any of the three reopens that cell —
 	 * {@code SafetyVerdictSeverityGradationTest.everyCurrentMedicationBranchAsksForTheFindingsSeverity}
 	 * holds the two branches.

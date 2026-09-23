@@ -3136,6 +3136,19 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Whether this install's interaction arms run at all — both toggles they read, as
+	 * {@link #reportsContraindications()} is for the contraindication arms. Issue #469 asks it before
+	 * answering a screen with the note that the screen related nothing: that note's gate reads no
+	 * toggle, and a screen switched off relates nothing because it never ran.
+	 */
+	static boolean reportsInteractions() {
+		return toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)
+				&& toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS);
+	}
+
+	/**
 	 * @return what the loaded dataset publishes for the hand-authored CONDITION-rule arm of the
 	 *         contraindication screen — the statement {@code ChartAnswer.getConditionRuleCoverage()}
 	 *         carries and the {@code conditionRuleCoverage} key publishes (issue

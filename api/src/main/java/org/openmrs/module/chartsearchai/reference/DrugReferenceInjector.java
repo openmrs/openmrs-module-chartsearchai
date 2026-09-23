@@ -2315,7 +2315,10 @@ public class DrugReferenceInjector {
 	 * <p><b>Three shapes, and anything else keeps the model call.</b>
 	 * <ul>
 	 * <li>An interaction screen that related nothing — {@code screenRelatedNothing}, the note's own
-	 *     gate (ADR Decision 87), read and not re-derived. Its answer is the note.</li>
+	 *     gate (ADR Decision 87), read and not re-derived — on an install whose interaction arms run
+	 *     ({@link DrugSafetyValidator#reportsInteractions()}). That gate reads no toggle, so without the
+	 *     second conjunct a screen switched off would be answered "no interactions were found". Its
+	 *     answer is the note.</li>
 	 * <li>An interaction SCREEN of her own medications that raised findings: no drug in the question,
 	 *     and {@code QueryScopeRouter.isInteractionScreening}. That conjunct and not the absence of a
 	 *     drug alone, because a question about her medication LIST or her allergies widens the
@@ -2339,7 +2342,7 @@ public class DrugReferenceInjector {
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
 			List<DrugReference> orderEntries, List<SafetyWarning> findings, boolean screenRelatedNothing) {
 		if (screenRelatedNothing) {
-			return true;
+			return DrugSafetyValidator.reportsInteractions();
 		}
 		if (findings.isEmpty()) {
 			return false;

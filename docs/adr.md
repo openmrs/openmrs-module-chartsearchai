@@ -9535,7 +9535,11 @@ one method when the property is on.
 **Three shapes, and every other question keeps the model call** (`answersFromFindings`):
 
 - an interaction screen of her own medications that related nothing, answered with the screen note's
-  own words (ADR Decision 87), qualifier included;
+  own words (ADR Decision 87), qualifier included — only where the interaction arms run at all
+  (`DrugSafetyValidator.reportsInteractions`). The note's own gate reads no toggle, so with
+  `validateAnswers` or `warnOnInteractions` off the prompt still carries a note saying no interactions
+  were found of a screen that never ran. That is the note's gate and not this change's, and it is left
+  standing; what this change refuses is making that sentence the whole answer;
 - an interaction screen that raised findings — no drug in the question and
   `QueryScopeRouter.isInteractionScreening`, which is what keeps a medication-list or allergy question
   (which widens the order-driven arm too) from being answered with a finding alone;

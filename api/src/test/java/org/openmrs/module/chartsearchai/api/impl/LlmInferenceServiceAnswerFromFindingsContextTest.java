@@ -379,6 +379,35 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(answer.isAnsweredByTheModule());
 	}
 
+	/**
+	 * The screen note is injected whether or not the screen could run — its gate reads no toggle — so
+	 * with the interaction arm switched off it says no interactions were found of a screen that never
+	 * happened. That is the note's own gate and outside this change; what this change must not do is
+	 * make that sentence the module's whole answer. Each toggle the screening arm needs is turned off
+	 * in turn, and the precondition checks the note really is in the prompt.
+	 */
+	@Test
+	public void aScreenNoteIsNotTheAnswerWhereTheScreenCouldNotHaveRun() throws Exception {
+		executeDataSet(METFORMIN_ORDER);
+		for (String toggle : new String[] { ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
+				ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS }) {
+			Context.getAdministrationService().setGlobalProperty(toggle, "false");
+			answerFromFindings(false);
+			RecordingProvider recorder = new RecordingProvider();
+			serviceWith(recorder).search(patient, SCREEN);
+			assertTrue(recorder.lastRecords.contains(DrugReferenceInjector.FINDING_PREFIX + "interaction screen."),
+					"precondition, with " + toggle + " off: the note is still injected");
+
+			answerFromFindings(true);
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+
+			assertEquals(1, provider.calls, "with " + toggle + " off no screen ran, so the model is asked");
+			assertFalse(answer.isAnsweredByTheModule());
+			Context.getAdministrationService().setGlobalProperty(toggle, "true");
+		}
+	}
+
 	private static final class Finding {
 
 		private final int index;

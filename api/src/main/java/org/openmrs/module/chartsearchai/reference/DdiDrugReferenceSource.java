@@ -83,9 +83,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * which meant an install that enabled the feature and configured nothing got four curated drugs. Measured
  * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar for
  * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes (read off the built api jar's entry
- * for it with {@code unzip -v}); all but about 40 KB of the increase is the three tables nothing reads yet,
- * {@code disease_notes}, {@code disease_interactions} and {@code derived_interactions} (issue #391), so
- * retained memory does not move with it.
+ * for it with {@code unzip -v}); all but about 40 KB of the increase is three tables the schema 1.0 file
+ * did not have, {@code disease_notes}, {@code disease_interactions} and {@code derived_interactions}
+ * (issue #391). Of those, only {@code derived_interactions} is read, and only its rows whose rated side is
+ * {@code Major} (see {@link #attachConditionMediatedRisks}): 43,670 chains on 892 entries, measured
+ * 2026-09-23 through this parser on the shipped file, retaining about 1 MB more (heap in use after a
+ * collection, with and without the chains). The other two tables stay unread.
  * The excerpt survives as a test fixture ({@code DrugReferenceTestSupport.DDI_EXCERPT}) because a case
  * asserting "this record renders exactly these partners" needs a dataset whose partner lists it can
  * state — lisinopril alone has 730 here.
@@ -95,9 +98,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * allergy/condition rules — see the scope note below, and {@code ShippedDrugReferenceDefaultTest}, which
  * pins the bound rather than leaving it to be discovered.
  *
- * <p><b>Scope.</b> V1 carries drug-drug interactions only: entries expose {@code interactions},
- * never {@code ageBands} or {@code contraindications} (dosing and drug-allergy/condition are
- * out of scope). {@code management} is not a discrete DDInter field, so whatever management prose
+ * <p><b>Scope.</b> Entries expose {@code interactions} and, since issue #391 Part B, the derived tier's
+ * condition-mediated chains ({@link DrugReference#getConditionMediatedRisks()}) — never {@code ageBands} or
+ * {@code contraindications} (dosing and drug-allergy/condition rules are out of scope; the drug-disease
+ * rows as condition rules are #391's Part A, not done). {@code management} is not a discrete DDInter field, so whatever management prose
  * the mechanism text carries is folded into the interaction note rather than invented — save for
  * the residual field markers below, which are dropped because they carry no management content
  * to fold.
@@ -293,6 +297,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 
 		// build one entry per drug, in dataset order
 		List<DrugReference> out = new ArrayList<DrugReference>();
+		Map<String, DrugReference> entryById = new HashMap<String, DrugReference>();
 		for (DrugRow row : order) {
 			List<Link> links = partners.get(row.id);
 			DrugReference ref = new DrugReference();
@@ -334,9 +339,71 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			ref.setInteractions(interactionsFor(links, byId));
 			ref.setSource(SOURCE);
 			out.add(ref);
+			entryById.put(row.id, ref);
 		}
+		attachConditionMediatedRisks(root.path("derived_interactions"), byId, entryById, substanceIds,
+				severityCache);
 		log.info("Parsed {} DDInter drug-reference entries", out.size());
 		return out;
+	}
+
+	/**
+	 * Read the knowledge base's derived tier (issues #391 Part B, #473) onto the RATED drug's entry, as
+	 * {@link DrugReference.ConditionMediatedRisk}s. A row is
+	 * {@code [cause_drug, cause_condition, cause_severity, cause_note, rated_drug, condition, rated_severity,
+	 * rated_note]}: the knowledge base's own matcher found a sentence in the cause drug's drug-disease note
+	 * that names {@code condition} with a causal cue, and the rated drug is rated for {@code condition}.
+	 * It is an inference over two DDInter drug-disease rows and never a DDInter pairwise rating; the
+	 * knowledge base's metadata says so, and so does every finding built on it.
+	 *
+	 * <p><b>Only chains whose RATED side is {@code Major} are kept</b> — the default #391 proposed, which
+	 * is where the rated drug's own rating says the condition matters most. Kept at the parse rather than
+	 * filtered at the arm so that the rows no finding can read are never retained. Condition and
+	 * severity strings are interned for the reason the interaction severities are above: one per row,
+	 * tens of thousands of rows, a vocabulary of a few hundred.
+	 *
+	 * <p>Rows joining two rows of ONE substance are dropped by {@link #isSelfPair}, the guard the
+	 * interaction rows take, so "one substance" means the same thing on both tables. No chip observes the
+	 * guard: the arm reading these chains excludes the drug in play's own substance from its partners
+	 * anyway, so what the guard buys is that those rows are never retained. The note ids are
+	 * not read: no finding renders the note text (the {@code disease_notes} table stays unread).
+	 *
+	 * <p>A document that does not declare the table — the schema 1.0 file, a curated excerpt — loads as it
+	 * always did, with no finding: the table is optional in the knowledge base's own schema history.
+	 */
+	private static void attachConditionMediatedRisks(JsonNode derived, Map<String, DrugRow> byId,
+			Map<String, DrugReference> entryById, Map<String, String> substanceIds,
+			Map<String, String> strings) {
+		if (!derived.isArray()) {
+			return;
+		}
+		Map<DrugReference, List<DrugReference.ConditionMediatedRisk>> byRated =
+				new HashMap<DrugReference, List<DrugReference.ConditionMediatedRisk>>();
+		for (JsonNode row : derived) {
+			if (row == null || !row.isArray() || row.size() < 7) {
+				continue;
+			}
+			String ratedSeverity = row.get(6).asText();
+			if (!"Major".equals(ratedSeverity)) {
+				continue;
+			}
+			String causeId = row.get(0).asText();
+			String ratedId = row.get(4).asText();
+			DrugReference cause = entryById.get(causeId);
+			DrugReference rated = entryById.get(ratedId);
+			if (cause == null || rated == null || isSelfPair(byId.get(causeId), byId.get(ratedId), substanceIds)) {
+				continue;
+			}
+			byRated.computeIfAbsent(rated, k -> new ArrayList<DrugReference.ConditionMediatedRisk>())
+					.add(new DrugReference.ConditionMediatedRisk(cause,
+							strings.computeIfAbsent(row.get(1).asText(), v -> v),
+							strings.computeIfAbsent(row.get(2).asText(), v -> v),
+							strings.computeIfAbsent(row.get(5).asText(), v -> v),
+							strings.computeIfAbsent(ratedSeverity, v -> v)));
+		}
+		for (Map.Entry<DrugReference, List<DrugReference.ConditionMediatedRisk>> e : byRated.entrySet()) {
+			e.getKey().setConditionMediatedRisks(e.getValue());
+		}
 	}
 
 	/**

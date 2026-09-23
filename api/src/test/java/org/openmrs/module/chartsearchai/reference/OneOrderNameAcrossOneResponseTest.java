@@ -162,6 +162,31 @@ public class OneOrderNameAcrossOneResponseTest {
 			DrugReferenceTestSupport.ctx(60, null, names, codes, null, null, active));
 	}
 
+	/**
+	 * The {@code interaction} chips of a response — what the two shipped-knowledge-base cases above were
+	 * written about (the rule arm against the class arm, issue #339). Scoped since issues #391/#473 added a
+	 * fourth chip type to the same response (ADR Decision 110); its naming is held to THIS convention by
+	 * {@link #assertConditionMediatedChipsNameOrdersAsTheInteractionChipsDo} rather than dropped.
+	 */
+	private static List<SafetyWarning> interactionChips(List<SafetyWarning> warnings) {
+		return DrugReferenceTestSupport.ofType(warnings, SafetyWarning.TYPE_INTERACTION);
+	}
+
+	/**
+	 * One prescription, one name, across chip TYPES: every active order a {@code condition-mediated} chip
+	 * names is a name the response's interaction chips print for an active order, so a combination
+	 * prescription is never named by its display on one chip and by a constituent on another.
+	 */
+	private static void assertConditionMediatedChipsNameOrdersAsTheInteractionChipsDo(List<SafetyWarning> all) {
+		List<String> interactionNames = DrugReferenceTestSupport.namedPartners(interactionChips(all));
+		for (SafetyWarning warning : DrugReferenceTestSupport.ofType(all, SafetyWarning.TYPE_CONDITION_MEDIATED)) {
+			for (String partner : warning.namedPartners()) {
+				assertTrue(interactionNames.contains(partner), "a condition-mediated chip names " + partner
+						+ " where the interaction chips name " + interactionNames + ": " + warning.getDetail());
+			}
+		}
+	}
+
 	/** @return every {@code active order <label>} this response printed, in chip order. */
 	private static List<String> orderNames(List<SafetyWarning> warnings) {
 		List<String> names = new ArrayList<String>();
@@ -309,10 +334,12 @@ public class OneOrderNameAcrossOneResponseTest {
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.shippedEntries());
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+		List<SafetyWarning> all = DrugReferenceTestSupport.validator(service).validate("",
 			"Can I give her hydrocortisone?",
 			chart(service, "Celecoxib", "Diclofenac", "Ibuprofen", "Dexamethasone", "Prednisone",
 				"Budesonide", "Methylprednisolone"));
+		List<SafetyWarning> warnings = interactionChips(all);
+		assertConditionMediatedChipsNameOrdersAsTheInteractionChipsDo(all);
 
 		// The ticket's seven prescriptions, in five statements: the three NSAIDs end on one mechanism at
 		// one rating, so they are stated once and named together. What this case pins is unchanged by
@@ -764,8 +791,10 @@ public class OneOrderNameAcrossOneResponseTest {
 					COMBINATION_ORDER_ON_SHIPPED_KB,
 					DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB), codes))));
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+		List<SafetyWarning> all = DrugReferenceTestSupport.validator(service)
 				.validate("", "Can I give her lisinopril and amiodarone?", chart);
+		List<SafetyWarning> warnings = interactionChips(all);
+		assertConditionMediatedChipsNameOrdersAsTheInteractionChipsDo(all);
 
 		assertEquals(2, warnings.size(),
 			"precondition: the shipped data must rule on this prescription from both subjects, or"

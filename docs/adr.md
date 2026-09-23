@@ -114,6 +114,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
 - [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
 - [Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+- [Decision 110: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution](#decision-110-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -9699,3 +9700,121 @@ yes, and which questions the shapes refuse that the issue's cells expected answe
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest` — the real injector and validator on patient 7,
 both paths; mutate a conjunct of `answersFromFindings`, or delete a shape, and read the failures — and `ChartSearchAiAnsweredByTheModuleTest`.
+
+## Decision 110: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution
+
+**Status: Accepted** (September 2026) — issues [#473](https://github.com/openmrs/openmrs-module-chartsearchai/issues/473)
+and [#391](https://github.com/openmrs/openmrs-module-chartsearchai/issues/391) Part B. It closes neither: see
+*What it does not do*.
+
+### Context
+
+#473 reported that additive-effect risks — metformin with stavudine or didanosine (lactic acidosis), three
+QT-prolonging drugs, stacked hepatotoxicity or neuropathy — are never raised as one finding, and at best
+appear as separate pairwise chips. Every screen here is pairwise, and the one merge step
+(`collapseSharedMechanisms`, Decision 99) joins chips whose note text is identical — mechanism identity,
+not a shared effect. DDInter writes a QT note from one drug's side, so one effect arrives under several
+notes, and its only mechanism label, `categories`, reads `synergistic_effect` for all of them.
+
+#473 named the knowledge base's derived tier (#391) as the only table that records an effect as a causal
+link: a row exists where a sentence in one drug's drug-disease note names a condition with a causal cue,
+and another drug is rated for that condition. Its first open question was whether those edges connect the
+reported groups at all. **Measured 2026-09-23 through `DdiDrugReferenceSource` on the shipped file** (a
+throwaway test over the loaded entries, identity by `substanceGroupKey`), keeping rows whose rated side is
+`Major`:
+
+- among Haloperidol, Ondansetron, Azithromycin, Citalopram and Methadone the derived tier holds one edge,
+  Haloperidol → Methadone through *Hypotension*. No QT edge. (Read with `jq` from tables this module does
+  not load, so a lead rather than a loader figure: all ten of their pairs carry a pairwise row, nine of
+  them QT text; and only Ondansetron is rated `Major` for its QT condition — Haloperidol, Azithromycin
+  and Citalopram are `Moderate` for *Long QT Syndrome*, Methadone `Moderate` for *Arrhythmias, Cardiac* —
+  so an upstream matcher fix alone would still not reach four of them under this gate);
+- among Stavudine, Didanosine, Isoniazid, Nevirapine, Lamivudine, Zidovudine, Metformin, Rifampicin and
+  Fluconazole, the edges are exactly {Stavudine, Didanosine, Lamivudine, Zidovudine} → Metformin through
+  *Acidosis, Lactic* — no liver-injury or neuropathy edge.
+
+So the derived tier can carry an N-drug finding only for the family it connects, and this decision builds
+exactly that. The QT, hepatotoxicity and neuropathy groups need data this knowledge base does not have.
+
+### Decision
+
+- **Load.** `DdiDrugReferenceSource.attachConditionMediatedRisks` reads `derived_interactions` onto the
+  RATED drug's entry (`DrugReference.getConditionMediatedRisks()`), keeping only a `Major` rated side —
+  #391's suggested default — and dropping a row joining two rows of one substance through the same
+  `isSelfPair` guard the pairwise rows take. The cause is the built entry, so identity is its
+  `substanceGroupKey()` and never a name. 43,670 chains on 892 entries, about 1 MB retained, same
+  measurement. `disease_notes` and `disease_interactions` stay unread.
+- **One join, both directions.** The drug-in-play arm, for each substance in play, against the
+  substances `findForActiveOrders` resolves: the drug in play rated for a condition a partner's note
+  names, or its note naming a condition a partner is rated for.
+- **One chip per direction and condition, naming every partner** — #473's ask, and the one place this
+  departs from #391, which proposed one chip per pair. Each partner is stated once with the rating that
+  links it, so the collapse drops no partner and moves no rating (Decision 99's invariant); a substance
+  whose rows link it several times keeps its strongest cause-side link. Partners are named by the
+  co-medication ladder a class-only chip uses (`CoMedications.partnerNaming` → `classPartnerName`), so a
+  prescription is named as the interaction chips beside it name it — a combination such as
+  `Lisinopril / Hydrochlorothiazide` by its display, once, carrying each constituent's rating, and never
+  as two active orders (#339). The first build named the constituents, and the shipped-knowledge-base
+  cases below caught it. Worded through `ACTIVE_ORDER_NOUN`, carried in `namedPartners` for Decision
+  100's repair, and attributed through the shared `chartOrderBridges`.
+- **Its own type, `condition-mediated`, with no severity.** The chain is not a rating of the pair, so the chip
+  cannot carry a rating and is never folded into, collapsed with or ranked against an `interaction`
+  chip. Where DDInter also rates the pair, both chips stand: two claims from two tables.
+- **A caution, never a reason to withhold.** Decision 86's criterion is the rule: a relationship nobody
+  authored, inferred from the data rather than rated by it, is the weakest claim this layer makes. A
+  derived chain is a text match over two drug-disease rows, not a rating of the pair.
+  That match is also imprecise, measured at plan time: metformin's lactic-acidosis note links
+  to methadone's *Hypotension* rating through a sentence listing hypotension as a SIGN of acidosis. So
+  `licensesWithholding` asks the type first (its unrated leg would otherwise withhold), and the wording
+  says only what the knowledge base asserts — that the note names the condition "in a sentence the
+  knowledge base reads as causal" — and ends on its provenance.
+- **Not a pair the screen found.** `PairChipExtent` counts DDInter pairwise rule pairs; this is not one.
+
+**Spec changed deliberately.** Two cases in `OneOrderNameAcrossOneResponseTest` —
+`aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay` and
+`theTicketsOwnArrangementOverTheShippedKnowledgeBaseNamesOneWay` — enumerated every chip of a response,
+and on both arrangements the shipped knowledge base now also raises a derived chip. Their expected values
+are unchanged and scoped to the `interaction` chips they were written about. Each gained an assertion
+that every order a `condition-mediated` chip names is a name the interaction chips print, so #339's
+property is held across chip types rather than dropped. Reverting the partner name to the entry rung
+reddens that assertion on the combination case.
+
+### What it does not do
+
+- **QT, hepatotoxicity and neuropathy** stay pairwise-only (above). Grouping them needs an effect label
+  on the knowledge base's pairwise rows, or a drug-disease matcher that equates *QT interval prolongation*
+  with *Long QT Syndrome* together with a different severity gate — an upstream change to
+  openmrs-ddi-knowledge-base, reported on #473.
+- **Only the drug-in-play join.** #391 also puts an active order in play against another (the screening
+  arm), and the question-pair arm has no leg either.
+- **The source rows are not citable.** The chip states both halves in its own words; the drug-disease
+  note texts are not injected as records.
+- **No switch of its own.** It rides `warnOnInteractions`, and the `Major` gate is fixed at load rather
+  than a global property (#391 proposed `off`/`major`/`all`).
+- **Its precision is unmeasured.** The one false link above is an example, not a rate. Being a caution
+  bounds what a false one costs; it does not remove it.
+- **Order among a drug's chips.** It is appended after the drug's pairwise chips, so it trails that drug's
+  caution chips too rather than being ranked among them — the limit the class-only chips already carry
+  (#346). Where Decision 108's composer writes the answer, it states the finding as a caution line, below
+  any withholding one; that path is not pinned by a case.
+- **One chip per condition and DIRECTION, so a pair can raise several.** Two drugs each rated for, and
+  each naming, the same conditions raise a chip per condition in each direction: a review agent measured
+  four for *Can I give Trandolapril?* on a Perindopril order at `26005a6b` (Heart Failure and Hypotension,
+  both ways). Folding the two directions of one condition is not done here.
+- **Nothing bounds the number per drug.** A second review agent measured at `26005a6b`, through
+  `injectRecords`, +408 to +933 characters of finding text on realistic regimens (one or two chips), and 12
+  chips carrying 5,988 of 10,154 chip characters on a constructed worst case of twenty heavily-linked
+  orders. Those counts were measured before the wording was revised.
+- **The strongest-link choice is unpinned.** Where one partner is linked to one condition several times,
+  the link with the strongest cause-side rating is kept. On the shipped knowledge base no such key
+  carries two different cause ratings (measured through the loader, 2026-09-23), so no case can
+  observe the choice; a refresh that introduces one is what would.
+- **What the model does with it is unmeasured.** Each chip is also an injected `safety_finding`, and
+  where the drug already had one finding it makes the drug's findings several, which is what gates the
+  enumeration clause (`severalFindingsAboutOneDrug`, Decision 84). That clause asks the model to state
+  each finding's severity, and the only rating words in a derived finding are drug-disease ratings, so
+  its closing sentence says it has no severity of its own. Whether the model then states "Major" for it
+  anyway was not measured on a standalone by this change.
+- **#391 Part A** — drug-disease rows as condition rules — is not done.
+
+→ `ConditionMediatedFindingTest`.

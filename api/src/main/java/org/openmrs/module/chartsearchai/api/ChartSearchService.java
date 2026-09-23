@@ -983,7 +983,7 @@ public interface ChartSearchService {
 
 		/**
 		 * Non-blocking drug-safety advisories raised by the post-answer validator
-		 * (overdose / interaction / contraindication). Empty when the drug-reference
+		 * (overdose / interaction / contraindication / condition-mediated). Empty when the drug-reference
 		 * feature is disabled or nothing was flagged. These annotate the answer; they
 		 * never alter or suppress it.
 		 */

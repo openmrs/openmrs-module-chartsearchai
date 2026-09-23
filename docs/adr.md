@@ -9616,7 +9616,9 @@ X."* — what the finding states, and never "X should not be given", a directive
 make (see the residue on deliberate combinations); a screen gets no lead, since a lead naming which of her medications to change
 would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
 is the finding record's text between its head and its strength clause (one method, `findingBody`, for
-both), cited by its own number. The strength clause stays out: it is prompt-facing only, and the issue
+both), cited by its own number. ([Decision 113](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)
+adds the clause's referent to a contraindication about her own medication, and puts a licensing finding
+under the lead.) The strength clause stays out: it is prompt-facing only, and the issue
 counts its paste into an answer as a loss (R7, M4).
 
 **What is published beside it.** `answeredByTheModule: true`, because the keys that judge a model's

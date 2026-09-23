@@ -2514,7 +2514,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The module's own answer to a question {@link #answersFromFindings} admitted: one line per
-	 * finding, each in its record's own words and cited by its own number — issue #469.
+	 * finding, each in its record's own words and cited by its own number — issue #469 — with the one
+	 * addition described below for a contraindication about a medication she already takes.
 	 *
 	 * <p><b>What was asked about comes first</b>: the findings about the drug the question PROPOSED,
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
@@ -2526,7 +2527,7 @@ public class DrugReferenceInjector {
 	 * group, strongest first — withhold, change a current medication, then the two cautions, the order
 	 * the prompt gives the model for the first three and this module's own choice between the last two
 	 * — read off {@link #strengthClause} and never off the severity word; stable, so the injection order
-	 * stands within a class.
+	 * stands within a class except for the key below.
 	 *
 	 * <p><b>The strength sort is a defence nothing observes today.</b> The arms already append a
 	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
@@ -2618,7 +2619,8 @@ public class DrugReferenceInjector {
 	 * issue #469 because it is ALSO the words a module-composed answer states for the finding
 	 * ({@link #composeFromFindings}), and one method is what keeps that answer and the record the
 	 * chip beside it came from saying the same thing. The strength clause is not part of it: that
-	 * clause is prompt-facing only.
+	 * clause is prompt-facing only, and where it was the only words saying a contraindication is about
+	 * her own medication the composer adds its referent after this text (ADR Decision 113).
 	 *
 	 * @param clauseFollows whether the detail must end its sentence on a strength clause's account —
 	 *        {@link #renderFinding} passes whether it will append one; the composed answer passes

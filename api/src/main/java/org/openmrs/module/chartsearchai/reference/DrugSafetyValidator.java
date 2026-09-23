@@ -1860,10 +1860,10 @@ public class DrugSafetyValidator {
 	 * {@link DrugReferenceService#findImpliedByQuery}, the prose accessor for which substances a text puts
 	 * in play, and never a scan of this class's own. {@code false} where no dataset is wired.
 	 *
-	 * <p>Asked by {@code EndedOrderStatement} of the clause an answer's "no longer in force" sits in,
+	 * <p>Asked by {@code EndedOrderStatement} of each clause back from an answer's "no longer in force",
 	 * AFTER {@link #namesTheEndedOrderDrug} has said that clause does not name the chip's drug (issue
-	 * #482): a clause naming a drug is about that drug, one naming none ("but its order is") is about the
-	 * drug its sentence names. So a drug found here is another one, unless the clause names this
+	 * #482): the nearest clause naming a drug is the one the phrase is about, and one naming none ("but its
+	 * order is") is read through. So a drug found here is another one, unless the clause names this
 	 * substance by an alias none of the chip's rows carries — read as another, and stated twice. An
 	 * instance method because the question needs the dataset, which {@link #namesTheEndedOrderDrug} does
 	 * not: that one asks only of the rows the chip carries.
@@ -2396,11 +2396,8 @@ public class DrugSafetyValidator {
 	 * query-scoped slice need not retrieve it — states nothing, and the finding stays a proposal, as
 	 * before this issue. And a record naming the drug somewhere other than its drug field (an order
 	 * reason, say) is read as naming it, the echo test's own residue; an order that resolved to only
-	 * SOME of its substances passes the resolution gate, Decision 108's residue. Asking her active-order
-	 * NAMES too would not close that: they already reach the resolution through
-	 * {@code findImpliedByDrugName}, whose primitive resolves each constituent a combination name names,
-	 * and the residue's own case is a name naming no missing constituent — ADR Decision 110 records the
-	 * measurement (issue #482).
+	 * SOME of its substances passes the resolution gate, Decision 108's residue; why asking her
+	 * active-order NAMES as well would not close it is ADR Decision 110's measurement (issue #482).
 	 *
 	 * <p>A per-pass value and never a field, for issue #172's reason.
 	 */

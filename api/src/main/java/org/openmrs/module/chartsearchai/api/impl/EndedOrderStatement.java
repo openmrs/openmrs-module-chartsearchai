@@ -37,13 +37,14 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * <p><b>What "the answer said so" is</b>: some sentence of the answer
  * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) contains {@link #NO_LONGER_IN_FORCE}, the words the
  * prompt's ended-order branch tells the model to use, ABOUT the chip's drug. An occurrence is about the
- * drug its own clause names ahead of it — the text back to the nearest of {@link #CLAUSE_BOUNDARIES} —
- * and, where that clause names no drug at all ({@code "Nevirapine was prescribed, but its order is no
- * longer in force"}, ADR Decision 47's recorded live wording), about the drug its sentence names. So
- * <em>"Rifampicin interacts with nevirapine; her isoniazid order is no longer in force."</em> does not
- * state rifampicin's end (issue #482): until then one sentence naming the drug anywhere and carrying the
- * phrase anywhere was read as saying it. Whether the clause names some OTHER drug is
- * {@link DrugSafetyValidator#namesADrug}, over the loaded dataset. The
+ * drug named NEAREST before it, asked clause by clause back from the phrase ({@link #clauseStart}): the
+ * first clause that names any drug decides, so a clause naming none ({@code "Nevirapine was prescribed,
+ * but its order is no longer in force"}, ADR Decision 47's recorded live wording) is read through, and so
+ * is a fragment a comma or a dose range left inside another drug's clause. So <em>"Rifampicin interacts
+ * with nevirapine; her isoniazid order is no longer in force."</em> does not state rifampicin's end (issue
+ * #482): until then one sentence naming the drug anywhere and carrying the phrase anywhere was read as
+ * saying it. Whether a clause names some OTHER drug is {@link DrugSafetyValidator#namesADrug}, over the
+ * loaded dataset; where no clause before the phrase names any drug, the sentence rule stands. The
  * drug is asked by {@link DrugSafetyValidator#namesTheEndedOrderDrug} — the prose rule over every row of
  * its substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
  * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is
@@ -65,7 +66,7 @@ public final class EndedOrderStatement {
 	 * which drug a phrase already inside one sentence is read as being ABOUT, and it can only take a
 	 * "stated" reading away, never add one. Wider than {@code ActiveOrderCitationFidelityCheck.clauseBound}'s
 	 * comma and semicolon on purpose: there a colon introduces the very marker run being attributed, and
-	 * cutting it would lose the claim's citations; here nothing after the phrase is read at all.
+	 * cutting it would lose the claim's citations; here no citation is attributed.
 	 */
 	static final String CLAUSE_BOUNDARIES = ",;:\u2013\u2014";
 
@@ -100,21 +101,41 @@ public final class EndedOrderStatement {
 			DrugSafetyValidator validator) {
 		for (String sentence : sentences) {
 			String lower = sentence.toLowerCase(Locale.ROOT);
+			// A clause is a piece of its sentence, so a sentence not naming the drug has no clause that does.
+			if (!lower.contains(NO_LONGER_IN_FORCE)
+					|| !DrugSafetyValidator.namesTheEndedOrderDrug(lower, warning)) {
+				continue;
+			}
 			for (int at = lower.indexOf(NO_LONGER_IN_FORCE); at >= 0;
 					at = lower.indexOf(NO_LONGER_IN_FORCE, at + 1)) {
-				String clause = lower.substring(clauseStart(lower, at), at);
-				if (DrugSafetyValidator.namesTheEndedOrderDrug(clause, warning)) {
-					return true;
-				}
-				// A clause naming no drug is about the drug its sentence names; one naming another is not. The
-				// sentence first: it is the cheaper question, and the dataset sweep is owed only where it holds.
-				if (DrugSafetyValidator.namesTheEndedOrderDrug(lower, warning)
-						&& (validator == null || !validator.namesADrug(clause))) {
+				if (aboutTheDrug(lower, at, warning, validator)) {
 					return true;
 				}
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Whether the occurrence of {@link #NO_LONGER_IN_FORCE} at {@code at} of {@code sentence}, a sentence
+	 * naming the chip's drug, is about that drug: walking back clause by clause, the first that names this
+	 * drug says yes and the first that names any other says no; where none before the phrase names a drug,
+	 * yes, the sentence rule.
+	 */
+	private static boolean aboutTheDrug(String sentence, int at, SafetyWarning warning,
+			DrugSafetyValidator validator) {
+		for (int end = at; end > 0;) {
+			int start = clauseStart(sentence, end);
+			String clause = sentence.substring(start, end);
+			if (DrugSafetyValidator.namesTheEndedOrderDrug(clause, warning)) {
+				return true;
+			}
+			if (validator != null && validator.namesADrug(clause)) {
+				return false;
+			}
+			end = start - 1;
+		}
+		return true;
 	}
 
 	/**

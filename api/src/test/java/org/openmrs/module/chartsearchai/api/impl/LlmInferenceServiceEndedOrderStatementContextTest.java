@@ -209,6 +209,39 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		}
 	}
 
+	/**
+	 * A boundary INSIDE the other drug's clause — an appositive, a dose range, a thousands comma, a
+	 * parenthesis — leaves a fragment naming no drug. The phrase is about the nearest drug named before
+	 * it, metformin, and not about the drug the sentence named first.
+	 */
+	@Test
+	public void aBoundaryInsideTheOtherDrugsClauseStillLeavesThePhraseAboutThatDrug() {
+		for (String tail : new String[] { "; her metformin order, started in 2024, is no longer in force.",
+				"; her metformin 500 - 1000 mg order is no longer in force.",
+				"; her metformin 1,000 mg order is no longer in force.",
+				"; her metformin order (500 mg, twice daily) is no longer in force." }) {
+			String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+					+ "with Acetylsalicylic acid (aspirin) [1]" + tail;
+			ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				endedIbuprofen()).search(patient, QUESTION);
+
+			assertAnEndedChip(completed);
+			assertEquals(answer + STATEMENT, completed.getAnswer(), "the phrase is about metformin: " + tail);
+		}
+	}
+
+	/** Where no clause before the phrase names a drug, the sentence naming it after the phrase still states it. */
+	@Test
+	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStatedByItsSentence() {
+		String stated = "The order no longer in force is her ibuprofen [2]. It interacts with her "
+				+ "Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the sentence says it of ibuprofen, so nothing is appended");
+	}
+
 	/** A hyphen inside a word is not a dash: the clause runs back past it to the drug it names. */
 	@Test
 	public void aHyphenInsideAWordDoesNotEndTheClause() {
@@ -236,7 +269,7 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 	/**
 	 * ADR Decision 47's recorded live wording, a pronoun after a clause boundary — the form the prompt
 	 * teaches ("say in the same sentence that its order is no longer in force"). Its clause names no
-	 * drug, so it is about the drug its sentence names, and nothing is appended.
+	 * drug, so it is read through to the clause before it, which names ibuprofen, and nothing is appended.
 	 */
 	@Test
 	public void aPronounAfterAClauseBoundaryStillStatesTheDrugItsSentenceNames() {

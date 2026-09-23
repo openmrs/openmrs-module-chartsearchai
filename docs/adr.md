@@ -9904,8 +9904,8 @@ the refusal gone, the false premise confirmed, and the referent only on a chip k
 So the chip also carries the date (`SafetyWarning.getEndedOrderStopDate()`, the latest
 `RecordMapping.getOrderStopDate()` among the ended records naming the drug, published as
 `endedOrderStopDate`), and `EndedOrderStatement.withEndedOrdersStated` appends, where no sentence of the
-MODEL's answer names the drug beside "no longer in force" (since issue #482, beside it in that phrase's
-own clause — the first residue below says how), *"The chart records Rifampicin (rifampin) only as
+MODEL's answer names the drug beside "no longer in force" (since issue #482, as the drug named nearest
+before that phrase — the first residue below says how), *"The chart records Rifampicin (rifampin) only as
 an order no longer in force (ended …), not as a current medication."* — the drug printed as the chip's
 label, which appends a generic name wherever it diverges from the display name — Decision 100's
 mechanism, at its three call sites, appending and never replacing. Whether a sentence names the drug is
@@ -10007,10 +10007,10 @@ rig on the machine held, and it was restored after the run.
 ### Residues
 
 - R1's MODEL prose still opens *"Yes"* and does not say the order has ended; the module's appended
-  sentence says it. Whether the answer "said it" is an occurrence of "no longer in force" whose own
-  clause (back to the nearest `EndedOrderStatement.CLAUSE_BOUNDARIES` character, or a hyphen written as
-  a dash) names the drug by `namesTheEndedOrderDrug`,
-  or names no drug at all (`DrugSafetyValidator.namesADrug`) inside a sentence that does — so Decision
+  sentence says it. Whether the answer "said it" is an occurrence of "no longer in force" about the drug:
+  walking back clause by clause (at `EndedOrderStatement.CLAUSE_BOUNDARIES` or a hyphen written as a
+  dash), the first clause naming this drug by `namesTheEndedOrderDrug` says yes and the first naming any
+  other (`DrugSafetyValidator.namesADrug`) says no; where none names a drug, the sentence rule — so Decision
   47's recorded *"Nevirapine was prescribed, but its order is no longer in force"* reads as said, and
   *"Rifampicin interacts with nevirapine; her isoniazid order is no longer in force."* does not (issue
   #482; until then any sentence naming the drug and carrying the phrase was read as saying it). A
@@ -10018,9 +10018,9 @@ rig on the machine held, and it was restored after the run.
   comma-enumerated subject (*"Her simvastatin, clarithromycin and warfarin orders are …"*) get the
   sentence as well: said twice rather than not at all. Toward silence: a clause about another drug
   joined with no boundary (*"… and her isoniazid order is …"*, a parenthesis), one naming a drug the
-  loaded data does not carry, and a clause naming no drug whose pronoun points at ANOTHER drug its
-  sentence names (*"… interacts with nevirapine, whose order is no longer in force"*) — the pronoun
-  fallback reads that as about the drug. The drug test's own residue
+  loaded data does not carry, and a pronoun pointing at another drug named in the same clause as this one
+  (*"… interacts with nevirapine, whose order is no longer in force"*), which walking back reads as about
+  the drug. The drug test's own residue
   also runs that way: an alias the substance shares with another (#209's shape) names it too, so a
   sentence saying that other drug's order is no longer in force reads as saying it of this one.
 - The appended sentence is not on the early `done` of async grounding, which is emitted before the chips

@@ -193,19 +193,32 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 				"the phrase is about metformin, so the answer never said ibuprofen's order ended");
 	}
 
-	/** A colon or a dash ends the clause as a semicolon does. */
+	/** A colon or a dash ends the clause as a semicolon does — a hyphen too, where it is written as one. */
 	@Test
 	public void aPhraseAfterAColonOrADashNamingAnotherDrugDoesNotStateThisOnesEnd() {
-		for (String boundary : new String[] { ":", " —", " –" }) {
+		for (String boundary : new String[] { ":", " —", " –", " -", " --" }) {
 			String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
 					+ "with Acetylsalicylic acid (aspirin) [1]" + boundary + " her metformin order is no longer "
 					+ "in force.";
 			ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
 				endedIbuprofen()).search(patient, QUESTION);
 
+			assertAnEndedChip(completed);
 			assertEquals(answer + STATEMENT, completed.getAnswer(),
 					"after '" + boundary + "' the phrase is about metformin");
 		}
+	}
+
+	/** A hyphen inside a word is not a dash: the clause runs back past it to the drug it names. */
+	@Test
+	public void aHyphenInsideAWordDoesNotEndTheClause() {
+		String stated = "Her ibuprofen-metformin order is no longer in force [2]. It interacts with her "
+				+ "Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the clause names ibuprofen, so nothing is appended");
 	}
 
 	/** Every occurrence of the phrase is asked, not only the first one in its sentence. */

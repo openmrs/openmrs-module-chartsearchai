@@ -49,12 +49,8 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is
  * containment, so a paraphrase ("it was discontinued") reads as unstated and the sentence is appended
  * beside it — the residue runs toward saying it twice rather than toward silence, the direction
- * Decision 100 chose for the same reason. So does a comma-enumerated subject: in <em>"Her simvastatin,
- * clarithromycin and warfarin orders are no longer in force"</em> only the last clause is read, which
- * names other drugs, and the earlier two are stated again. Toward silence runs a clause about another
- * drug joined with no boundary ({@code "… interacts with nevirapine and her isoniazid order is no longer
- * in force"}), or one naming a drug the loaded data does not carry, which reads as naming none. The drug
- * predicate's own residue runs the other way too, and that method's javadoc states it.
+ * Decision 100 chose for the same reason. What this reading still gets wrong, in each direction, is ADR
+ * Decision 110's first residue.
  */
 public final class EndedOrderStatement {
 
@@ -63,11 +59,13 @@ public final class EndedOrderStatement {
 
 	/**
 	 * Where the clause an occurrence of {@link #NO_LONGER_IN_FORCE} sits in begins, within a sentence
-	 * {@code SENTENCE_BOUNDARY} already cut: comma, semicolon, colon, en and em dash. It shares no
-	 * character with {@code ChartSearchAiUtils.SENTENCE_TERMINATORS} and is not a claim unit — it splits
-	 * nothing grounding or a fidelity check judges, as {@code CitationGroundingVerifier}'s clause markers
-	 * do. It only decides which drug a phrase already inside one sentence is read as being ABOUT, and it
-	 * can only take a "stated" reading away, never add one.
+	 * {@code SENTENCE_BOUNDARY} already cut: these characters, and a hyphen written as a dash
+	 * ({@link #clauseStart}). It shares no character with {@code ChartSearchAiUtils.SENTENCE_TERMINATORS}
+	 * and is not a claim unit — it splits nothing grounding or a fidelity check judges. It only decides
+	 * which drug a phrase already inside one sentence is read as being ABOUT, and it can only take a
+	 * "stated" reading away, never add one. Wider than {@code ActiveOrderCitationFidelityCheck.clauseBound}'s
+	 * comma and semicolon on purpose: there a colon introduces the very marker run being attributed, and
+	 * cutting it would lose the claim's citations; here nothing after the phrase is read at all.
 	 */
 	static final String CLAUSE_BOUNDARIES = ",;:\u2013\u2014";
 
@@ -108,9 +106,10 @@ public final class EndedOrderStatement {
 				if (DrugSafetyValidator.namesTheEndedOrderDrug(clause, warning)) {
 					return true;
 				}
-				// A clause naming no drug is about the drug its sentence names; one naming another is not.
-				boolean aboutAnotherDrug = validator != null && validator.namesADrug(clause);
-				if (!aboutAnotherDrug && DrugSafetyValidator.namesTheEndedOrderDrug(lower, warning)) {
+				// A clause naming no drug is about the drug its sentence names; one naming another is not. The
+				// sentence first: it is the cheaper question, and the dataset sweep is owed only where it holds.
+				if (DrugSafetyValidator.namesTheEndedOrderDrug(lower, warning)
+						&& (validator == null || !validator.namesADrug(clause))) {
 					return true;
 				}
 			}
@@ -118,14 +117,28 @@ public final class EndedOrderStatement {
 		return false;
 	}
 
-	/** Where the clause holding position {@code at} of {@code sentence} begins — see {@link #CLAUSE_BOUNDARIES}. */
+	/**
+	 * Where the clause holding position {@code at} of {@code sentence} begins — after the last of
+	 * {@link #CLAUSE_BOUNDARIES} before it, or after a hyphen standing for a dash: one with whitespace on
+	 * both sides ({@code " - "}) or doubled ({@code "--"}). A hyphen inside a word ({@code co-trimoxazole})
+	 * is neither, and does not end a clause.
+	 */
 	private static int clauseStart(String sentence, int at) {
 		for (int i = at - 1; i >= 0; i--) {
-			if (CLAUSE_BOUNDARIES.indexOf(sentence.charAt(i)) >= 0) {
+			char c = sentence.charAt(i);
+			if (CLAUSE_BOUNDARIES.indexOf(c) >= 0 || c == '-' && isADash(sentence, i)) {
 				return i + 1;
 			}
 		}
 		return 0;
+	}
+
+	private static boolean isADash(String sentence, int i) {
+		boolean spaced = i > 0 && i + 1 < sentence.length() && Character.isWhitespace(sentence.charAt(i - 1))
+				&& Character.isWhitespace(sentence.charAt(i + 1));
+		boolean doubled = i > 0 && sentence.charAt(i - 1) == '-' || i + 1 < sentence.length()
+				&& sentence.charAt(i + 1) == '-';
+		return spaced || doubled;
 	}
 
 	/**

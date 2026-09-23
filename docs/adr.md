@@ -10008,7 +10008,8 @@ rig on the machine held, and it was restored after the run.
 
 - R1's MODEL prose still opens *"Yes"* and does not say the order has ended; the module's appended
   sentence says it. Whether the answer "said it" is an occurrence of "no longer in force" whose own
-  clause (back to the nearest comma, semicolon, colon or dash) names the drug by `namesTheEndedOrderDrug`,
+  clause (back to the nearest `EndedOrderStatement.CLAUSE_BOUNDARIES` character, or a hyphen written as
+  a dash) names the drug by `namesTheEndedOrderDrug`,
   or names no drug at all (`DrugSafetyValidator.namesADrug`) inside a sentence that does — so Decision
   47's recorded *"Nevirapine was prescribed, but its order is no longer in force"* reads as said, and
   *"Rifampicin interacts with nevirapine; her isoniazid order is no longer in force."* does not (issue
@@ -10016,7 +10017,10 @@ rig on the machine held, and it was restored after the run.
   paraphrase of that phrase, a name no row of the substance carries, or the earlier members of a
   comma-enumerated subject (*"Her simvastatin, clarithromycin and warfarin orders are …"*) get the
   sentence as well: said twice rather than not at all. Toward silence: a clause about another drug
-  joined with no boundary, or naming a drug the loaded data does not carry. The drug test's own residue
+  joined with no boundary (*"… and her isoniazid order is …"*, a parenthesis), one naming a drug the
+  loaded data does not carry, and a clause naming no drug whose pronoun points at ANOTHER drug its
+  sentence names (*"… interacts with nevirapine, whose order is no longer in force"*) — the pronoun
+  fallback reads that as about the drug. The drug test's own residue
   also runs that way: an alias the substance shares with another (#209's shape) names it too, so a
   sentence saying that other drug's order is no longer in force reads as saying it of this one.
 - The appended sentence is not on the early `done` of async grounding, which is emitted before the chips

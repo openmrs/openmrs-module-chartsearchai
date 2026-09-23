@@ -62,8 +62,9 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * short answer being written; replacing it is available on {@code search} and on that path only, and
  * two answer paths that differ in what they do with a repair is the divergence this package's rules
  * warn about throughout. A continuation is the one shape both paths can carry, and it keeps the
- * answer wholly model-authored — this module never writes clinical prose into an answer, which is
- * what {@code safetyWarnings} exists to do instead.
+ * answer wholly model-authored: the repair writes no clinical prose of its own, which is what
+ * {@code safetyWarnings} exists to carry instead (ADR Decision 108 is where the module later came
+ * to write an answer itself, within a bound).
  *
  * <p><b>What this class does NOT establish.</b> That the repair improves the corpus. It pins the
  * mechanism — that the omitted findings are named, that a second call is made only when one is

@@ -509,6 +509,12 @@ public class PatientChartSerializer {
 		 *  routing from the question. */
 		private Set<String> completeResourceTypes = Collections.emptySet();
 
+		/** The answer the drug-reference layer composed from its own findings for the question this
+		 *  chart was built for, or {@code null} where it composed none (issue #469). NOT a builder stamp
+		 *  and never carried across a rebuild: {@code DrugReferenceInjector} is the only writer and it
+		 *  sets this on the chart it builds, which is the last one. */
+		private String moduleAnswer;
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -598,6 +604,24 @@ public class PatientChartSerializer {
 		 */
 		public boolean isCompleteFor(String resourceType) {
 			return !queryScoped || completeResourceTypes.contains(resourceType);
+		}
+
+		/** Records the answer {@code DrugReferenceInjector} composed from its own findings — issue
+		 *  #469, and that class is the only caller. */
+		public void markModuleAnswer(String answer) {
+			this.moduleAnswer = answer;
+		}
+
+		/**
+		 * The answer the drug-reference layer composed from its own records, each cited by its record
+		 * number in this chart, or {@code null} where the question is not one it resolved —
+		 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>.
+		 * Which questions those are is {@code DrugReferenceInjector.answersFromFindings}'s, and it
+		 * composes one only with {@code chartsearchai.drugSafety.answerFromFindings} on; where this is
+		 * non-null, {@code LlmInferenceService} asks no model.
+		 */
+		public String getModuleAnswer() {
+			return moduleAnswer;
 		}
 
 		/** The types declared via {@link #markCompleteFor}, so a caller rebuilding this chart can

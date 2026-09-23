@@ -113,6 +113,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 105: A streaming query that reached inference is audited however the stream ends](#decision-105-a-streaming-query-that-reached-inference-is-audited-however-the-stream-ends)
 - [Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
 - [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
+- [Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -6531,7 +6532,7 @@ it looks like across a standalone restart, and what the cell counts in its table
 
 ## Decision 85: An answer short of the findings its prompt carried is repaired by asking again, not by another wording
 
-**Status: Accepted** (September 2026) — implemented, issue [#398](https://github.com/openmrs/openmrs-module-chartsearchai/issues/398).
+**Status: Accepted** (September 2026) — implemented, issue [#398](https://github.com/openmrs/openmrs-module-chartsearchai/issues/398). Its refusal of deterministic finding text in the answer is reversed, within a bound, by [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).
 
 ### Context
 
@@ -7046,8 +7047,9 @@ prevent repeating.
 
 ### Rejected alternatives
 
-- **Deterministic finding text written into the answer.** Still refused, and Decision 85's reason
-  stands: this module does not write clinical prose into an answer. The argument that the module's
+- **Deterministic finding text written into the answer.** Refused here, on Decision 85's reason
+  that this module does not write clinical prose into an answer — a refusal since reversed within a
+  bound by [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them). The argument that the module's
   prose "already reaches the clinician corrupted" is weak and rests on a non-default install — without
   the repair it does not reach the answer at all.
 - **Leaving it an operator flip.** It is a strict improvement over the shipped arm on every scored
@@ -9499,3 +9501,201 @@ child's environment — so
 `LlmEndpointTestSupport.isReachable` now asks the completions route rather than only `/health`
 (public, per row 5), which turns what would have been a 401 error per case into a clean skip, and
 `chartsearchai.test.llm.apiKey` points those suites at a keyed server of the tester's own.
+
+## Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them
+
+**Status: Accepted** (September 2026) — implemented behind `chartsearchai.drugSafety.answerFromFindings`,
+shipping OFF, issue [#469](https://github.com/openmrs/openmrs-module-chartsearchai/issues/469). The gate
+the issue names has not been run; see the last section.
+
+### Context
+
+Where a question names a drug the pre-answer pass relates to one of the patient's active orders, the
+answer is decided before the model runs: the injected `safety_finding` record states the call
+(`licensesWithholding`, through the strength clause `renderFinding` appends, #283), and the prompt tells
+the model to open with it. What the model call then adds is a restatement of that record, and the issue
+measured what the restatement costs. Over thirty-nine cells on a RefApp 3.7.1 standalone (the issue's
+three comments: withhold, mixed withhold-and-caution, caution-only and no-finding questions, one model
+and one rig), **no answer used a chart fact the module does not encode**, while the restatement dropped
+findings (`findingCitations` 1 of 3, 6 of 20, 0 of 2), a caution, a rating, the source's own hedge
+(*"data from pharmacokinetic studies are inconsistent and conflicting"*), the sentence naming renal
+impairment for a patient recorded with oliguria, and led *"No —"* on a question whose answer is yes —
+several of them with every answer-judging key reading clean. The system prompt forbids adding
+information not in the records, so on a question the module resolved, the call can only restate the
+module's records or emit the no-address sentence.
+
+### The decision
+
+**Where a finding positively answers the question, the answer is composed from the findings and no
+model is asked** — not for the answer, a repair, a preview or grounding. `DrugReferenceInjector`
+decides it once per injection (`answersFromFindings`), off the resolutions that pass already holds, and
+stamps the answer on the chart it builds (`PatientChart.getModuleAnswer()`), composing nothing while the
+property is off; `LlmInferenceService` serves that stamp on both answer paths through one method.
+
+**The module states only what a finding positively says, and never a clearance or a negative.**
+"Can be given", or "no interactions were found", is true only where every arm ran over a chart read in
+full whose every record the data could resolve, and nothing in this module can establish that. The
+first form of this change composed both, and fresh reviewers found each one false in turn: an allergy
+list the module could not read, an allergen recorded as a class (*"Proton pump inhibitors"*) or a brand
+the data does not carry, a switched-off arm, a screen naming a food. Those questions keep the model
+call. Two shapes are answered:
+
+- **A question proposing ONE substance she is not already taking, where an INTERACTION the data rates
+  as a reason to withhold it relates it to one of her orders** (`STRENGTH_WITHHOLD`). The question is
+  admitted by `QueryScopeRouter.asksWhetherToGiveADrug` with the drug's own
+  name marked in the question — the spans `DrugReference.namedOccurrences` reports, so only the name
+  the question wrote is marked and never another of the entry's names (removing every word of every
+  alias once admitted *"Can I give her diclofenac for her arthritis pain?"*, `Aleve Arthritis Pain`
+  being one of diclofenac's names). "Not already taking" is issue #402: the drug-in-play arm states a
+  proposal clause for a drug she takes, and composing would make that defect certain.
+- **A request to screen her own medications against each other that related at least one pair** — an
+  INTERACTION finding, naming no drug the dataset resolved, admitted by
+  `QueryScopeRouter.asksOnlyToScreenHerMedications`. An interaction finding and not any finding,
+  because a medication question also raises the order-driven arm's allergy finding, and an answer of
+  that alone says nothing of what the screen found.
+
+**The "No" is licensed by an interaction, never by a contraindication.** An interaction finding is a
+relationship the dataset RATES between two substances this module resolved; a contraindication finding
+is a curated rule's token matched against her records' free text, under a note the rule's author wrote.
+Review drove three false categorical "No"s through contraindications in turn: a token inside a longer
+word the module flags as uncorroborated (`opium` in an allergy recorded as `Tiotropium`), a class token
+doing the same with no flag (`egg` in `Eggplant` — `restsOnAnUncorroboratedChartMatch` is `false` for
+a rule that is not self-named, and its own javadoc says `false` is no certificate), and the shipped
+curated seed's own gentamicin note, *"significant renal impairment (dose adjustment required)"*, under
+the lead's earlier wording, "should not be given". A contraindication a question also raised is still stated as a line of the
+answer; it does not decide it. **And the interaction must be RATED a reason to withhold**
+(`DrugSafetyValidator.ratedAReasonToWithhold`, Moderate or above): an unrated curated rule, and an ATC
+or cross-reactivity class relationship folded onto a lower-rated row, both withhold under Decision 37
+only because neither is a caution, and the first is its author's note — the objection above, one rule
+type over. Review found both licensing a "No": paracetamol's unrated curated rule against warfarin, and
+methylphenidate's Minor row against modafinil carrying the N06BA class sentence. So a drug withheld by a contraindication alone — her recorded allergy
+to the very drug included — keeps the model call.
+
+Both need the chart-read verdict the injector stamped (`chartReadForSafety`), and every active order
+resolved to at least one entry (`DrugSafetyValidator.everyActiveOrderResolves`): an order unread, or
+read and written under a name the data does not carry — a warfarin brand it lacks — leaves "not
+already taking" unanswerable, and a screen with only part of her list to relate. An order resolved to
+only some of its substances satisfies that gate; see the residues.
+
+**Both question predicates are closed GRAMMARS, and fail-CLOSED.** Each is a short list of question
+shapes over the question's words, with the proposed drug's name marked where it stood
+(`QueryScopeRouter.PROPOSAL_SHAPES`, `SCREEN_SHAPES`); a question fitting none keeps the model call. So a
+dose, a wh-question, a negation, a purpose or condition (*"… for her knee pain"*, *"… safe for her
+kidneys?"*), a second question joined to the first, a second drug, a class, a food or an unknown drug is
+left to the model — and so is *"Is there a change in her medications?"*, which the screening trigger
+reads as a screen (ADR Decision 89) and which asks for her order history, and *"Does this drug interact
+with her medications?"*, which asks about some other drug. **Grammars and not word lists, because two
+word lists were defeated in turn.** The first listed REFUSING words and a review drove wh-questions and a
+condition through it; the second listed ADMITTED words and reviews drove through it questions built of
+admitted words in an order it did not mean — *"Can I give her omeprazole, and is she allergic?"*, *"Does
+this drug interact with any of her medications?"* A bag of words cannot state order; a shape can. ADR
+Decision 89 had to widen a positive list, and the difference is the direction of a miss: there a missed
+phrasing hid a hazard; here it keeps the call the question always had.
+[Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
+declined a gate on "the question proposes giving a drug" as a second hand-picked vocabulary with nothing
+measured behind it, and that description fits these too; what differs is what the gate protects. There,
+gating would have withheld a harmless note from some questions; here, not gating would replace the
+model's answer to a dosing, current-use or wh-question with a refusal. The shapes are unmeasured, and
+their misses are the first thing the gate below should read — beginning with the issue's own headline
+question, *"Can I give her ibuprofen for her knee pain?"*, which its purpose clause keeps with the model.
+
+**The composed text.** What was asked about first — the proposed drug's findings, or on a screen her
+interactions — then any other finding about her own medications a widened question also raised, each
+group strongest first by the ranking the prompt gives the model
+(withhold, change a current medication, then the two cautions — the prompt orders the first three,
+and the order between the two cautions is this module's), read off `strengthClause`. A proposal leads *"No — this module's drug-safety check found a reason to withhold
+X."* — what the finding states, and never "X should not be given", a directive the finding does not
+make (see the residue on deliberate combinations); a screen gets no lead, since a lead naming which of her medications to change
+would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
+is the finding record's text between its head and its strength clause (one method, `findingBody`, for
+both), cited by its own number. The strength clause stays out: it is prompt-facing only, and the issue
+counts its paste into an answer as a loss (R7, M4).
+
+**What is published beside it.** `answeredByTheModule: true`, because the keys that judge a model's
+prose — `unfaithfullyRenderedCitations`, `misattributedOrderCitations`, `activeOrderClaims`,
+`unstatedFindingSeverities`, `unstatedDosingCeilings`, `findingCitations`, `findingPartners` — state
+`null` and a null alone could mean a check that failed. The chips pass is handed the empty answer, as
+the pass that raised the findings was, so the chips beside the answer are the findings it states; scoping
+the order-driven arm by text the module itself just wrote would be circular (the issue's M8 and N5 are a
+model's wording raising a chip the question alone does not). No test pins that input: handing the
+chips pass the composed text instead leaves the suite green, and no arrangement built in review
+widened the chips through it. The references, `orderStopDates`, the chips
+and `interactionPairs` are produced as on the model's path. The token counts are zero, which the audit
+row already writes as null.
+
+### What it reverses
+
+Decision 85 refused deterministic text in the answer — *"this module never writes clinical prose into an
+answer"* — and Decision 90 repeated that refusal. Decision 100 already appends a module sentence. This
+goes further, and within a bound: the module writes the WHOLE answer, only where a finding positively
+answers the question, in its records' own words behind at most one fixed lead sentence. Decision 85's
+second reason — that two checks would report on prose no model wrote — is met by not running them. The
+duplication with `findingsRenderedByClient`'s "Safety checks" block (Decision 90) is real: a client
+rendering both shows the same findings twice, and README says to render one; what it removes is the
+chance of the two disagreeing.
+
+### Residues, stated
+
+- A proposal no finding withholds keeps the call — caution-only, and nothing raised — and so does a
+  screen that related nothing, and a proposal withheld by a contraindication alone. The issue's widening to those cases asked for a wording that must not
+  read as a clearance; this change found none that the module can support, and left them to the model.
+- **The withhold class is #283's rating split, and the module now states it without a model.** Moderate
+  withholds, and the data rates Moderate some combinations given on purpose: dual antiplatelet therapy
+  (clopidogrel, prasugrel, ticagrelor with her aspirin), a GP IIb/IIIa inhibitor whose own mechanism
+  text begins *"Although aspirin is routinely given with…"*, and heparin; enoxaparin's Major row is about
+  neuraxial anaesthesia. The prompt tells the model to lead "No" on exactly these findings too, but the
+  model can weigh the mechanism text and the module does not, so the lead says only that the module's
+  check found a reason to withhold the drug. Whether that is still too strong a first sentence for these
+  questions is the first thing the gate below must read.
+- Where one substance is filed as several presentation rows, the finding stated is the one the arm
+  elected, which can be a presentation other than the one the question named (*"Can I give her
+  Acular?"* — ketorolac eye drops — stated the systemic row's rule).
+- A question about a drug she already takes (R3, D6) keeps the call, and with it #402 — where her order
+  resolves to that drug. An order the data resolves to only SOME of its substances passes both the
+  order-resolution gate and "not already taking" with the rest unseen: the shipped knowledge base
+  files `Bactrim` and CIEL's sulfamethoxazole/trimethoprim code under trimethoprim alone, so on a chart
+  carrying co-trimoxazole *"Can I give her sulfamethoxazole?"* is answered by the module (#402's
+  defect, stated by the finding's own clause), and a screen relates only the resolved half. The
+  module cannot tell such an order from a single-substance one; the data can, by filing the
+  combination under every constituent.
+- The allergy-question cells R7 and R8 are not screens, so they keep the call.
+- A phrasing no shape carries keeps the call, the headline question of the issue included.
+- An interaction line cites none of her order records, where the model supplied one in 10 of the first
+  check's 16 cells. The one order-record number the module writes is the one `chartOrderClause` appends
+  to a chart-order bridge item, and only with `chartsearchai.drugSafety.citeOrderRecords` on (it ships
+  off); a finding about an order whose own display names the substance carries no bridge, so that
+  property adds no citation to it either. Read off the records the real `LlmInferenceService.search`
+  handed its provider with that property on, over the DDInter excerpt: patient 7's `ASPIRIN` and
+  `Warfarin` orders, asked about ibuprofen, omeprazole and a screen, gained no order-record number.
+  Resolving the numbers for the composed answer alone would reach only bridged findings and make
+  their line differ from the record it cites. A contraindication line's allergy or condition record
+  still arrives, as `attachedByTheModule: true`.
+- The composed lines are the REPORTED findings. On a capped screen, whether the list is complete is
+  `interactionPairs`' to say, and the answer does not.
+- The citations of a composed answer's own markers read `attachedByTheModule: false`, that flag
+  marking a citation added beside the answer's markers; the answer's provenance is
+  `answeredByTheModule`, and a scorer such as `eval/drift-metric/metric_score.py`'s `model_cited` must
+  read it before crediting those citations to the model.
+- The response's `disclaimer` still calls the answer AI-generated where `answeredByTheModule` is
+  true; its advice to verify against the records holds either way.
+- The audit row records no model ran only as empty token counts, which an engine reporting no usage
+  also writes; no column states it.
+- `ChartSearchServiceRouter`'s answer cache does not key on this property (nor on the other
+  `drugSafety` toggles), so with a cache TTL set, flipping it serves the other setting's answer until
+  the entry expires — which a both-arms gate must avoid by leaving the TTL at its default of 0.
+
+### What gates turning it on
+
+The gate the issue names, not run in this change: the probe-safety corpus
+(`eval/drift-metric/score_probe_safety.py`, including its abstention controls) and the thirty-nine cells
+of the issue's three comments, both arms on one build, with only this property between them. **The scorer cannot run that A/B as it
+stands**: on the ON arm every module-answered cell publishes `findingCitations` and
+`unstatedFindingSeverities` as `null`, and `score_probe_safety.py`'s `main` refuses, exiting 3, any
+pair whose arms disagree about which cells measured either key (`has_extent_measurement`,
+`has_rating_measurement`). It has to read `answeredByTheModule` first — comparing those cells on the
+verdict and the lead, and leaving them out of both refusals — before the gate can be run as written.
+What the arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
+yes, and which questions the shapes refuse that the issue's cells expected answered.
+
+→ `LlmInferenceServiceAnswerFromFindingsContextTest` — the real injector and validator on patient 7,
+both paths; mutate a conjunct of `answersFromFindings`, or delete a shape, and read the failures — and `ChartSearchAiAnsweredByTheModuleTest`.

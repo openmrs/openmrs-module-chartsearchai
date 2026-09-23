@@ -571,6 +571,20 @@ public class ChartSearchAiConstants {
 	public static final boolean DEFAULT_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION = false;
 
 	/**
+	 * Whether a drug-safety question the module has itself resolved is answered from the module's own
+	 * findings, with no model call — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
+	 * Decision 108. Which questions that is, is decided once per injection by
+	 * {@code DrugReferenceInjector}, which composes nothing while it is off — it reads it before any
+	 * of the composition runs; the answer is carried on the chart as {@code PatientChart.getModuleAnswer()}.
+	 * Ships OFF: the gate the issue names — the probe-safety corpus and the issue's thirty-nine cells, both
+	 * arms on one build — has not been run, and the decision records what it has to measure.
+	 */
+	public static final String GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS = "chartsearchai.drugSafety.answerFromFindings";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS = false;
+
+	/**
 	 * Whether the answer's prose is asked to SUMMARISE the safety findings rather than enumerate
 	 * them, on the grounds that the client already renders every finding in full — issue #403.
 	 *

@@ -3011,8 +3011,9 @@ public class DrugReference {
 
 	/**
 	 * One occurrence of one of an entry's own names in a clause: how far it sits from a position, and the
-	 * span it covers there. Immutable, and package-private because the only question it answers is the
-	 * dose arm's (issue #270).
+	 * span it covers there. Immutable, and package-private because its readers are this package's: the
+	 * dose arm's distance question (issue #270), and since issue #469 the span a proposal question's
+	 * drug name occupies.
 	 */
 	static final class NamedOccurrence {
 
@@ -3030,6 +3031,17 @@ public class DrugReference {
 
 		int getDistance() {
 			return distance;
+		}
+
+		/** Where the occurrence starts in the text it was found in — issue #469's
+		 *  {@code DrugReferenceInjector.wordsBesideItsNames}, which marks the name in a question. */
+		int getStart() {
+			return start;
+		}
+
+		/** Where it ends, exclusive. */
+		int getEnd() {
+			return end;
 		}
 
 		/**

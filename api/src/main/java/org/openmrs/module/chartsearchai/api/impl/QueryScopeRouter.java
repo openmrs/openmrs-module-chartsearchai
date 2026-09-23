@@ -9,11 +9,14 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -199,6 +202,139 @@ public final class QueryScopeRouter {
 	private static boolean asksForADrugSafetyReading(String question) {
 		return INTERACTION_CUES.matcher(question).find()
 				|| MEDICATION_SAFETY_CUES.matcher(question).find();
+	}
+
+	/** One word of a question, as {@link #words} splits it: letters and digits, with a trailing
+	 *  apostrophe suffix kept attached so "can't" and "patient's" are words of their own. */
+	private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+(?:['’][\\p{L}]+)?");
+
+	/**
+	 * The word {@code DrugReferenceInjector} puts where a question names the drug it proposes, so
+	 * {@link #asksWhetherToGiveADrug} can read WHERE the name stood — issue #469. A question that
+	 * spells it literally yields it as a word too, and is then refused: every shape has exactly one
+	 * mark, and the drug the injector resolved adds its own.
+	 */
+	public static final String DRUG_NAME = "_drug_";
+
+	/**
+	 * The words of {@code text}, lower-cased, in order — the ONE tokenizer both question grammars
+	 * below read. {@link #DRUG_NAME} is kept as a word. Issue #469.
+	 */
+	public static List<String> words(String text) {
+		List<String> words = new ArrayList<String>();
+		if (text == null) {
+			return words;
+		}
+		String[] parts = text.toLowerCase(Locale.ROOT).split(Pattern.quote(DRUG_NAME), -1);
+		for (int p = 0; p < parts.length; p++) {
+			if (p > 0) {
+				words.add(DRUG_NAME);
+			}
+			Matcher matcher = WORD.matcher(parts[p]);
+			while (matcher.find()) {
+				words.add(matcher.group().replace('\u2019', '\''));
+			}
+		}
+		return words;
+	}
+
+	private static final String PATIENT = "(?:her|him|them|the patient|this patient)";
+
+	private static final String POSSESSIVE = "(?:her|his|their|the patient's|this patient's)";
+
+	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions)";
+
+	private static final String D = Pattern.quote(DRUG_NAME);
+
+	/**
+	 * The question shapes a proposal of ONE drug may take, over {@link #words} joined by single spaces
+	 * with the drug's name marked {@link #DRUG_NAME} — issue #469. A GRAMMAR and not a word list: two
+	 * forms of this predicate were bags of words, and each was defeated by words it admitted in an
+	 * order it did not mean — a second question joined to the proposal, a purpose or a first-person
+	 * question built from admitted words. A shape states word ORDER, so a question carrying anything
+	 * a shape does not name is not admitted.
+	 */
+	private static final List<Pattern> PROPOSAL_SHAPES = shapes(
+			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give
+			// ibuprofen to her?"
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer|add) (?:"
+					+ PATIENT + " )?(?:on )?" + D + "(?: to " + PATIENT + ")?(?: now| today)?",
+			// "Can this patient take warfarin?", "Can she take ibuprofen?"
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on) "
+					+ D + "(?: now| today)?",
+			// "Is it safe to give her ibuprofen?", "Is it safe to start her on clarithromycin?"
+			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
+					+ PATIENT + " )?(?:on )?|take )" + D + "(?: now| today)?",
+			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?"
+			"is " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: now| today)?",
+			// "Would ibuprofen be appropriate for her?"
+			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?");
+
+	/**
+	 * The question shapes a request to screen the patient's OWN medications against each other may
+	 * take — issue #469. A grammar for the reason {@link #PROPOSAL_SHAPES} is: the word list it
+	 * replaced admitted "Does this drug interact with her medications?", every word of which was on
+	 * it, and answered it with her own pairs.
+	 */
+	private static final List<Pattern> SCREEN_SHAPES = shapes(
+			// "Are there any drug interactions with her current medications?"
+			"(?:are|is) there (?:any )?(?:drug )?interactions? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
+			// "Are any of her current medications interacting with each other?", "Do any of her meds
+			// interact?", "Do her medications interact with each other?"
+			"(?:are|do) (?:any of )?" + POSSESSIVE + " " + MEDICATIONS + " (?:interact|interacting)"
+					+ "(?: with (?:each other|one another))?",
+			// "Does she have any drug interactions I should know about?"
+			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?interactions?"
+					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?(?: i should know about)?");
+
+	private static List<Pattern> shapes(String... shapes) {
+		List<Pattern> patterns = new ArrayList<Pattern>(shapes.length);
+		for (String shape : shapes) {
+			patterns.add(Pattern.compile(shape));
+		}
+		return Collections.unmodifiableList(patterns);
+	}
+
+	private static boolean fitsAShape(List<String> words, List<Pattern> shapes) {
+		if (words == null || words.isEmpty()) {
+			return false;
+		}
+		String joined = String.join(" ", words);
+		for (Pattern shape : shapes) {
+			if (shape.matcher(joined).matches()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether a question proposes giving ONE drug and asks nothing else — asked of its {@link #words}
+	 * with the drug's own name already marked {@link #DRUG_NAME}. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>: it bounds
+	 * which proposals {@code DrugReferenceInjector} answers with a withholding "No", which is the
+	 * polarity of every shape in {@link #PROPOSAL_SHAPES}.
+	 *
+	 * <p><b>A closed grammar, and fail-CLOSED, and the direction is the whole design.</b> A question
+	 * fitting no shape keeps the model call it has always had, so a phrasing it misses costs nothing it
+	 * did not cost before; only an ADMISSION can go wrong. That is why this may be a closed list where
+	 * {@link #isInteractionScreening} had to be widened after a list MISSED screens (ADR Decision 89):
+	 * there a miss hid a hazard, here a miss hides nothing.
+	 */
+	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);
+	}
+
+	/**
+	 * Whether a question naming no drug asks to screen the patient's OWN medications against each other
+	 * and nothing else — one of {@link #SCREEN_SHAPES}, for the reason {@link #asksWhetherToGiveADrug}
+	 * gives. Issue #469. It does not ask {@link #isInteractionScreening} as well, and the reason is its
+	 * one caller: {@code DrugReferenceInjector} admits a screen only where an interaction finding was
+	 * raised for a question naming no drug, and only the screening arm, gated on that very predicate,
+	 * raises one.
+	 */
+	public static boolean asksOnlyToScreenHerMedications(String question) {
+		return fitsAShape(words(question), SCREEN_SHAPES);
 	}
 
 	/**

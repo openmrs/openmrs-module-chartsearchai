@@ -1236,7 +1236,7 @@ public final class DrugReferenceTestSupport {
 	 * curated-group chip or admit a group-related active order. Silently: nothing fails, the case just
 	 * stops testing what it says it tests.
 	 */
-	static DrugReferenceService ddinterServiceWithGroups() {
+	public static DrugReferenceService ddinterServiceWithGroups() {
 		return serviceWithGroups(ddinterEntries());
 	}
 
@@ -1272,6 +1272,12 @@ public final class DrugReferenceTestSupport {
 		DrugReferenceService svc = new DrugReferenceService();
 		svc.setEntries(entries);
 		return svc;
+	}
+
+	/** A service over a curated fixture's entries, for a caller outside this package — the same
+	 *  {@link #serviceWith} over {@link #fixtureEntries} this package's own cases compose. */
+	public static DrugReferenceService curatedFixtureService(String classpathResource) throws IOException {
+		return serviceWith(fixtureEntries(classpathResource));
 	}
 
 	/**
@@ -1332,7 +1338,7 @@ public final class DrugReferenceTestSupport {
 	 * together: {@link #serviceWith} pins the groups EMPTY through its {@code setEntries} seam, so a
 	 * fixture service built without the second call silently cannot raise a curated-group chip.
 	 */
-	static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
+	public static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
 		return serviceWithGroups(ddiFixtureEntries(classpathResource));
 	}
 

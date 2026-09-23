@@ -1210,6 +1210,16 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Whether the data itself RATES a relationship a reason to withhold — a rating of {@code moderate}
+	 * or above, and never an unrated one, which {@link #ratingLicensesWithholding} counts as
+	 * withholding because it is not a caution. Issue #469: the module states a withholding answer
+	 * without a model only where a rating says so, and an unrated rule is its author's note.
+	 */
+	static boolean ratedAReasonToWithhold(String severity) {
+		return severityRank(severity) >= severityRank("moderate");
+	}
+
+	/**
 	 * The rating a finding carries where an ANSWER stating that finding ought to state the rating
 	 * too, or {@code null} where there is no such word — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>. The one
@@ -7972,6 +7982,33 @@ public class DrugSafetyValidator {
 		// returns true on its own, so which one answers is immaterial (the same reading
 		// PatientClinicalContext.hasActiveDrug's own arm ordering carries).
 		return bridged.joins(ref, order);
+	}
+
+	/**
+	 * Whether every one of the patient's active orders resolves to one of {@code orderEntries} — the
+	 * entries this pass resolved her orders to — by {@link #resolvesFrom}, the same test the chip arms
+	 * ask of one order and one entry. Issue #469: an order the module READ and could not name leaves
+	 * "is she already taking it?" unanswerable, so the module does not answer for the model there.
+	 * It asks for AT LEAST ONE entry per order, so a combination the data files under one constituent
+	 * satisfies it with the others unseen — a residue ADR Decision 108 names, which only the data can
+	 * close.
+	 */
+	static boolean everyActiveOrderResolves(DrugReferenceService service, PatientClinicalContext context,
+			List<DrugReference> orderEntries) {
+		BridgedOrders bridged = BridgedOrders.of(service, context);
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			boolean resolved = false;
+			for (DrugReference entry : orderEntries) {
+				if (resolvesFrom(entry, order, bridged)) {
+					resolved = true;
+					break;
+				}
+			}
+			if (!resolved) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

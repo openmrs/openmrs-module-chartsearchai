@@ -158,6 +158,16 @@ public class LlmInferenceService implements ChartSearchService {
 			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
+			// Issue #469: a question the module resolved itself is answered from its own findings, and
+			// the model is not asked to restate them. One method for both paths, so they cannot differ.
+			if (answersFromTheModule(chart)) {
+				ChartAnswer answer = answerFromTheModule(patient, question, chart, searchMode,
+						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage,
+						token -> { }, refs -> { }, ungrounded -> { });
+				outcome = "ok";
+				return answer;
+			}
+
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
 					chart.getFocusIndices(), question, enumerateFindings);
@@ -272,7 +282,7 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage);
+					findingPartnerCoverage, false);
 			outcome = "ok";
 			return answer;
 		}
@@ -591,6 +601,17 @@ public class LlmInferenceService implements ChartSearchService {
 			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
+			// Issue #469, the same branch as search()'s and through the same method. Ahead of the
+			// progressive-reasoning preview deliberately: that preview is a model pass, and there is no
+			// model answer here for it to be a preview of.
+			if (answersFromTheModule(chart)) {
+				ChartAnswer answer = answerFromTheModule(patient, question, chart, searchMode,
+						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage,
+						tokenConsumer, citationsConsumer, ungroundedAnswerConsumer);
+				outcome = "ok";
+				return answer;
+			}
+
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
 			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the
 			// gate is off. Runs after the full chart is built so the patient's querystore index is
@@ -661,7 +682,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
-					chartRead.stated(), conditionRuleCoverage, orderStopDates, null));
+					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -756,7 +777,7 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage);
+					findingPartnerCoverage, false);
 			outcome = "ok";
 			return answer;
 		}
@@ -766,6 +787,74 @@ public class LlmInferenceService implements ChartSearchService {
 					buildMs, previewMs, llmMs, groundMs, buildMs + previewMs + llmMs + groundMs,
 					inputTokens, cachedTokens, outcome);
 		}
+	}
+
+	/** Whether this chart's question is answered by the module: the injector composed an answer for
+	 *  it, which it does only with {@code chartsearchai.drugSafety.answerFromFindings} on (issue #469).
+	 *  The stamp alone and no second read of the property, so the pass that composed the answer and
+	 *  the one that serves it cannot disagree about it. */
+	private static boolean answersFromTheModule(PatientChart chart) {
+		return chart.getModuleAnswer() != null;
+	}
+
+	/**
+	 * The answer to a question the module resolved itself, composed by {@code DrugReferenceInjector}
+	 * from its own findings — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
+	 * Decision 108. BOTH answer paths reach it, which is what keeps them from differing.
+	 *
+	 * <p><b>No model is asked, for any part of it.</b> Not for the answer, not for a repair (every
+	 * finding is cited by construction, so none is owed), not for a preview, and not for grounding —
+	 * Tier-2 is a model call, and grading a citation against text the module wrote would be circular —
+	 * so every reference carries no verdict, exactly as with grounding off.
+	 *
+	 * <p><b>The checks of what a model WROTE are not run</b>: the class-code check logs nothing, and the
+	 * prose, active-order, finding-severity, finding-citation and dosing-ceiling keys and
+	 * {@code findingPartners} state null, no measurement. ADR Decision 85 already said two of them would otherwise
+	 * report on prose no model wrote. {@code answeredByTheModule} says why they are null, since a null
+	 * alone could mean a check that failed. The statements that are not judgements of prose are made
+	 * as on the model's path: the references (inline markers, and the chart records a cited finding
+	 * derives from), {@code orderStopDates}, the chips and their pair extent.
+	 *
+	 * <p><b>The chips pass reads the question alone, as the pass that raised the findings did</b> —
+	 * {@code validate} is handed the EMPTY answer. The composed text names her own orders, and scoping
+	 * the order-driven contraindication arm by text the module itself just wrote would be circular:
+	 * the ticket's M8 and N5 cells are a model's answer raising a chip the question alone does not.
+	 * So the chips beside this answer are the findings it states. The partner completion (ADR Decision
+	 * 100) still runs over it and finds nothing to add where the findings name every order.
+	 *
+	 * <p>The streaming consumers are handed the same things in the same order as on the model's path —
+	 * the text once, then the citations, then the early answer — so a streaming client sees an answer
+	 * arrive rather than a {@code done} with no tokens before it.
+	 */
+	private ChartAnswer answerFromTheModule(Patient patient, String question, PatientChart chart,
+			String searchMode, ChartSearchAiUtils.ReferenceSlice referenceSlice,
+			String unresolvedDrugClass, Boolean chartReadForSafety,
+			DrugReferenceLoad.Coverage conditionRuleCoverage, Consumer<String> tokenConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+		String composed = chart.getModuleAnswer();
+		List<RecordMapping> mappings = chart.getMappings();
+		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
+		List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate("", question, patient,
+				mappings, pairExtent);
+		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
+				FindingPartnerCoverageCheck.unstatedPartners(composed, safetyWarnings));
+		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
+		List<ChartSearchService.OrderStopDate> orderStopDates =
+				ChartSearchAiUtils.orderStopDates(answer, references, mappings);
+		log.info("Answered from the module's own safety findings, no model call (issue #469) "
+				+ "patient={} findings={}", patient == null ? null : patient.getPatientId(),
+				ChartSearchAiUtils.safetyFindingMappings(mappings).size());
+		tokenConsumer.accept(answer);
+		citationsConsumer.accept(references);
+		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
+				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
+				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
+				conditionRuleCoverage, orderStopDates, null, true));
+		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
+				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
+				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true);
 	}
 
 	/**

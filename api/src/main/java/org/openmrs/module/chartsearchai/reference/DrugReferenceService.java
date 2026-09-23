@@ -1016,11 +1016,15 @@ public class DrugReferenceService {
 	 * A caller building a candidate set from it would silently drop the substances a recorded name
 	 * implies without naming — which is every comparison this module makes about a shared class.
 	 *
-	 * <p><b>Two production callers since issue #353 review round 2</b>, both printing rather than
-	 * resolving: {@code DrugSafetyValidator.addAllergyContraindications}, which asks it of an allergy as
-	 * the chart records it, and {@link #substancesNamedByBridge}, which asks it of the name the dataset's
-	 * dictionary bridge records for a concept before a finding prints one of that concept's substances
-	 * as a prescription's. The second one's candidate set is the bridged answer folded to one row per
+	 * <p><b>Three production callers</b>, all printing rather than resolving:
+	 * {@code DrugSafetyValidator.addAllergyContraindications}, which asks it of an allergy as the chart
+	 * records it; {@link #substancesNamedByBridge} (issue #353 review round 2), which asks it of the
+	 * name the dataset's dictionary bridge records for a concept before a finding prints one of that
+	 * concept's substances as a prescription's; and {@code DrugSafetyValidator.alreadyInSeveralOrders}
+	 * (issue #477), which asks it of an active order's display before printing that order as carrying
+	 * the drug in play, over {@link #findImpliedByDrugName}'s answer for that display — so, like the
+	 * bridge's folded set, not the {@code findImpliedSubstances} resolution the parameter below
+	 * describes. The second one's candidate set is the bridged answer folded to one row per
 	 * substance — this method's own contract, and its javadoc records what handing over the unfolded
 	 * rows would cost.
 	 *

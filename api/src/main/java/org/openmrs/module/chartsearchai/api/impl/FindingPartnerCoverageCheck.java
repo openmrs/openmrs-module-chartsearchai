@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Whether the answer stated every active order a MERGED finding names.
+ * Whether the answer stated every active order the response's findings name.
  *
  * <p><b>The gap this closes.</b> ADR Decision 99 collapsed one mechanism onto one chip naming every
  * order it covers, and moved a shortfall with it: before, a finding the answer left out went uncited
@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
  * of them, dropping Dexamethasone, while every published key read clean.
  *
  * <p><b>It reads the names structurally</b> — {@link SafetyWarning#namedPartners()}, written where the
- * merge decided them — and never by parsing the detail the module itself composed them into, which is
+ * chip was worded — and never by parsing the detail the module itself composed them into, which is
  * the two-resolutions-that-agree shape issue #151 forbids.
  *
  * <p><b>What it does NOT establish.</b> Containment over the answer's prose is the test, so a name the
@@ -41,8 +41,9 @@ import org.slf4j.LoggerFactory;
  * rather than toward silence, which is the safe direction for a diagnostic and the opposite of
  * {@code findingCitations}'s. It says nothing about whether the answer's claim ABOUT a partner is
  * right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the partner was named
- * at all. And it is scoped to merged chips: an ordinary chip names one partner and has no list to
- * under-state, so it is outside the population rather than passing it.
+ * at all. Its population is every chip that names an order: an ordinary chip carries a one-name list
+ * and is measured like the rest, while the merged chip and, since issue #477, the finding that a drug
+ * is already in several of her orders are where a list can be under-stated in part.
  */
 public final class FindingPartnerCoverageCheck {
 
@@ -121,7 +122,7 @@ public final class FindingPartnerCoverageCheck {
 	 * @param answer the model's answer; blank states no measurement, since an answer that does not
 	 *        exist has not omitted anything
 	 * @param warnings the chips this pass raised
-	 * @return how many partners the merged findings NAME and how many of those the answer STATED, or
+	 * @return how many partners the response's findings NAME and how many of those the answer STATED, or
 	 *         {@code null} where the check itself failed — a broken diagnostic must not read as one
 	 *         that found nothing
 	 */
@@ -144,7 +145,7 @@ public final class FindingPartnerCoverageCheck {
 				}
 			}
 			if (named == 0) {
-				// No merged finding in this response, so there is no list anything could be short of.
+				// No finding in this response names an order, so there is no list anything could be short of.
 				// Absence of the population and not a measurement of none — see FindingPartnerCoverage.
 				return null;
 			}

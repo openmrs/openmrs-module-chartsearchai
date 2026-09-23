@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice for issue #471 review round 1 — the FOLDED chip on a MODERATE rule. Efavirenz and Nevirapine are the shipped KB's own rows, their interaction row is the KB's own (rated Moderate), and both publish J05AG, so DrugSafetyValidator.interactionWarning appends the class arm's duplicate-therapy sentence to the rated rule's chip. The pair was reported by review of PR #474, where the fold went on stating STRENGTH_WITHHOLD for a Moderate rule after Decision 109 made Moderate a caution; the fold itself is asserted by driving the production injector."
+  "note": "Verbatim DDInter 2.0 slice for issue #471 — the FOLDED chip on a MODERATE rule. Efavirenz and Nevirapine are the shipped KB's own rows, their interaction row is the KB's own (rated Moderate), and both publish J05AG, so DrugSafetyValidator.interactionWarning appends the class arm's duplicate-therapy sentence to the rated rule's chip. Decision 109 made a Moderate RATING a caution and left the fold's class leg alone (Decision 86), so this finding still states STRENGTH_WITHHOLD; the fold itself is asserted by driving the production injector."
  },
  "mechanisms": {
   "831": {

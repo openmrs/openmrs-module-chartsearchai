@@ -1200,9 +1200,7 @@ public class DrugSafetyValidator {
 	 * all: it withholds here because that is the behaviour it already had, and softening a
 	 * relationship no dataset rates would be a change nothing has measured. Neither is a caution, but
 	 * do not carry the curated argument over to the join — the second is the weaker claim, and a
-	 * later decision to grade those joins should be made on its own evidence. ADR Decision 86 is that
-	 * decision: {@link #licensesWithholding(SafetyWarning)} grades such a join a caution, standing alone
-	 * or folded onto a rule.
+	 * later decision to grade those joins should be made on its own evidence.
 	 *
 	 * @param severity the source-assigned severity, or null where the source rates nothing
 	 * @return true when the finding licenses withholding the drug
@@ -1245,9 +1243,9 @@ public class DrugSafetyValidator {
 	 * governing safety sentence — "then the finding itself, carrying its own severity" — is gated on a
 	 * finding naming the drug ASKED about, so it covers both proposal cells; the two current-medication
 	 * branches are gated on the finding's clause rather than on the question (Decision 72), and each
-	 * says "carry the finding's severity". The CAUTION branch did not until issue #471's review round
-	 * 1, which is when {@code moderate} joined {@code minor} in that cell: until then a finding there
-	 * could be rendered exactly as the prompt asked and still be reported. So a reword dropping the
+	 * says "carry the finding's severity". The CAUTION branch did not until issue #471, which moved
+	 * {@code moderate} into that cell beside {@code minor} and added the clause in its review round 1:
+	 * until then a finding there could be rendered exactly as the prompt asked and still be reported. So a reword dropping the
 	 * clause from any of the three reopens that cell —
 	 * {@code SafetyVerdictSeverityGradationTest.everyCurrentMedicationBranchAsksForTheFindingsSeverity}
 	 * holds the two branches.
@@ -1293,20 +1291,17 @@ public class DrugSafetyValidator {
 	 * <p>A finding can assert more than its rating covers. Issue #171's fold puts the class arm's
 	 * duplicate-therapy or cross-reactivity sentence onto a rated rule's chip when both arms are about
 	 * one co-medication, and {@link SafetyWarning#getSeverity()} keeps reporting the RULE's rating there
-	 * on purpose — folding must not move what the pair is rated. Issue #283 had the fold take the
-	 * stronger of the two claims while that relationship alone licensed withholding, so a folded Minor
-	 * withheld. Since issue #400 that relationship is a caution where it stands alone (ADR Decision
-	 * 86), so the stronger of the two is the rule's, and a fold states what its rating does. Review of PR #474 found the difference: after
-	 * issue #471 made Moderate a caution, Efavirenz folded with Nevirapine (Moderate, both J05AG) went
-	 * on withholding on the class leg alone — a call neither half licenses.
+	 * on purpose — folding must not move what the pair is rated. So a Minor rule folded with a class
+	 * relationship read as a caution while that relationship alone licenses withholding: the fold
+	 * silently lowered a claim, and it also changed behaviour beyond what #283 set out to change, since
+	 * every finding refused before it. Taking the stronger of the two leaves those pairs where they were.
 	 *
 	 * <p>Measured over the shipped knowledge base through the production predicates (the real
 	 * {@link DdiDrugReferenceSource#parse}, {@link DrugReference#atcSubgroups()},
 	 * {@link DrugReferenceService#lookupByToken}): <b>108 of the 24,690</b> Minor-rated interaction
-	 * ROWS pair two drugs sharing a level-4 ATC subgroup — the rows the fold's class leg decided the
-	 * strength of before issue #471, taken for issue #283; the Moderate rows were not counted. So this
-	 * is a shape the data really carries rather than a constructed one. The count carries its base
-	 * deliberately — quoting one without it is the defect #261 exists to stop — and the ROW is the unit the fold turns on, because a chip is
+	 * ROWS pair two drugs sharing a level-4 ATC subgroup. So this is a shape the data really carries
+	 * rather than a constructed one. The count carries its base deliberately — quoting one without it
+	 * is the defect #261 exists to stop — and the ROW is the unit the fold turns on, because a chip is
 	 * raised per subject so either orientation can fold.
 	 *
 	 * <p><b>Do not restate that as a pair count by halving it.</b> This javadoc said "i.e. 54 unordered
@@ -1326,19 +1321,15 @@ public class DrugSafetyValidator {
 		// FIRST, and it can only ever lower the answer (issue #400). A finding whose only evidence is
 		// that two drugs share a classification is the weakest claim this layer makes: nobody authored
 		// it, and the data it comes from says two drugs sit in one subgroup rather than anything about
-		// giving them together. The rating leg below would answer true for it, because it is unrated,
-		// so the guard is what separates "nobody rated this" from "an implementation authored this".
-		// See SafetyWarning.restsOnSharedClassificationAlone for the answer it refused on the
-		// standalone, and ratingLicensesWithholding's javadoc for the split this takes the second half
-		// of.
+		// giving them together. Both legs below would answer true for it — the rating leg because
+		// unrated, and never the fold leg, which needs a rule this shape has none of — so the guard is
+		// what separates "nobody rated this" from "an implementation authored this". See
+		// SafetyWarning.restsOnSharedClassificationAlone for the answer it refused on the standalone,
+		// and ratingLicensesWithholding's javadoc for the split this takes the second half of.
 		if (finding.restsOnSharedClassificationAlone()) {
 			return false;
 		}
-		// A FOLDED finding's class relationship is that same claim, so it adds a caution and never a
-		// withholding call: the stronger of the fold's two claims is the rule's (issue #471, review
-		// round 1 of PR #474). SafetyWarning.carriesUnratedRelationship is not asked here for that
-		// reason.
-		return ratingLicensesWithholding(finding.getSeverity());
+		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();
 	}
 
 	/** @return the floor rank for the GP value, falling back to the default floor when the
@@ -3850,22 +3841,41 @@ public class DrugSafetyValidator {
 	/**
 	 * Orders this arm's rule chips strongest first, on the FINDING and not on its rating.
 	 *
-	 * <p><b>Why the finding.</b> {@link #licensesWithholding(SafetyWarning)} is the one definition of
-	 * how strongly a finding speaks, and asking it first is what keeps the answer's strength and the
-	 * chip's ordering from disagreeing in the one list whose order decides what a truncated answer
-	 * keeps. This is the only interaction arm that FOLDS, and from issue #283 to issue #471's review
-	 * round 1 a fold made a finding withhold below its rating — a folded {@code Minor} withheld, and
-	 * sorted ahead of the cautions its rating ranks above. A class relationship is a caution now (ADR
-	 * Decision 86), so {@link #licensesWithholding(SafetyWarning)} asks this arm's rule chips their rating
-	 * alone, and {@link #ratingLicensesWithholding} is true exactly at the top of
-	 * {@link #severityPriority} (unrated, then {@code major}). So the two keys agree on every chip this
-	 * arm sorts and no case can observe which is asked first; the first stays so that the order follows
-	 * the finding if a finding's strength departs from its rating again.
-	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} pins that a fold no longer lifts a row.
+	 * <p><b>Why the finding.</b> This is the only interaction arm that FOLDS, and a folded chip's
+	 * rating deliberately understates it: {@link SafetyWarning#getSeverity()} keeps reporting the
+	 * RULE's rating while {@link SafetyWarning#carriesUnratedRelationship()} carries the class arm's
+	 * unrated relationship across, so a Minor rule folded with a class join answers
+	 * {@link #licensesWithholding(SafetyWarning)} and states {@code STRENGTH_WITHHOLD} in the record
+	 * the model reads. Ordered on {@link SafetyWarning#getSeverity()} alone that chip would sit below
+	 * every caution it outranks, in the one list whose order decides what a truncated answer keeps —
+	 * which is the ordering error {@code README.md} tells CLIENTS not to make with the published severity, and it
+	 * would be worse made here, where the answer's own strength is what the order is protecting.
+	 * {@link #licensesWithholding(SafetyWarning)} is the one definition of that split precisely so the
+	 * answer's strength and the chip's ordering cannot disagree.
 	 *
 	 * <p><b>Then {@link #severityPriority} within each of the two, which is where unrated sits above
 	 * Major</b> — the same ordering {@link #PAIR_SEVERITY_DESCENDING} and
-	 * {@link #SCREENED_PAIR_SEVERITY_DESCENDING} give the two pairwise arms, which rank on it alone.
+	 * {@link #SCREENED_PAIR_SEVERITY_DESCENDING} give the two pairwise arms. That is the whole of what
+	 * the three share: those two rank on it alone, because neither can fold, so this arm agrees with
+	 * them on every chip whose strength its rating already states and departs from them on exactly the
+	 * chips where it does not. A folded Minor therefore sorts below every rated
+	 * withholding finding above it and still ahead of every caution — it withholds, so it may not fall
+	 * below one. It is not necessarily the LAST withholding finding: a folded {@code Unknown} row
+	 * withholds on the same OR and ranks below {@code minor}, which an operator reaches by lowering
+	 * {@code minInteractionSeverity} to {@code unknown}.
+	 *
+	 * <p><b>That shape is also what makes the ORDER of the two keys observable</b>, so it is what pins
+	 * this comparator's central claim rather than an ornament of it. Read off the ranks: a withholding
+	 * finding that was not folded rates {@code major} or unrated, each of which already sits at or
+	 * above every caution, and a folded row ties a plain one of its own rating — so asking the rating
+	 * first and asking the finding first disagree exactly where a FOLDED row is rated BELOW a plain
+	 * caution: a folded {@code Minor} or {@code Unknown} against a plain {@code Moderate}, and a folded
+	 * {@code Unknown} against a plain {@code Minor}. Each withholds and the caution does not, while the
+	 * rating ranks it lower. A folded {@code Minor} against a plain {@code Moderate} is reachable at the
+	 * shipped floor since issue #471 made {@code moderate} a caution; the {@code Unknown} pairs need a
+	 * lowered floor, and before #471 the one against a plain {@code Minor} was the only pair.
+	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} is the guard, over the lowered-floor pair —
+	 * swap the two keys here and read its failure.
 	 *
 	 * <p><b>What it deliberately does not order</b>: the unrated class-only chips appended after these.
 	 * They state a relationship the reference data does not rate at all, so by this method's own key —
@@ -4456,11 +4466,9 @@ public class DrugSafetyValidator {
 	 * ADR Decision 63 carries that trade.
 	 *
 	 * <p><b>The key is every field the chip's SENTENCE is made of</b>, not the detail alone: the
-	 * {@code type}, {@code drug}, {@code detail} and {@code severity} it renders with, plus two
-	 * booleans: {@link SafetyWarning#restsOnAnUncorroboratedChartMatch()}, which decides a clause
-	 * {@code DrugReferenceInjector.renderFinding} adds to the injected record, and
-	 * {@link SafetyWarning#carriesUnratedRelationship()}, which decided the strength clause until issue
-	 * #471's review round 1 and is kept, a folded chip's detail differing from an unfolded one's anyway.
+	 * {@code type}, {@code drug}, {@code detail} and {@code severity} it renders with, plus the two
+	 * booleans deciding the clauses {@link #licensesWithholding(SafetyWarning)} and
+	 * {@code DrugReferenceInjector.renderFinding} add to the injected record.
 	 *
 	 * <p><b>{@link SafetyWarning#chartOrderBridges()} is deliberately left OUT of that key</b> (issue
 	 * #349), and it was added here and reverted, so the omission is a decision rather than an
@@ -6403,9 +6411,9 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>They do differ deliberately, and since issue #339 it is the {@code alsoSameClass} ARGUMENT
 	 * rather than the overload that says so — both arms call the overload now, to name their partner.
-	 * Only the drug-in-play arm can fold. From issue #283 to issue #471's review round 1 the fold also
-	 * moved the strength the injected record states; its class sentence is a caution (ADR Decision 86),
-	 * so it moves the wording alone — see {@link #licensesWithholding(SafetyWarning)}.
+	 * Only the drug-in-play arm can fold, and since issue #283 the fold reaches the strength the
+	 * injected record states rather than its wording alone — see
+	 * {@link SafetyWarning#carriesUnratedRelationship()}.
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
 			List<SafetyWarning.ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
@@ -6472,10 +6480,10 @@ public class DrugSafetyValidator {
 		// The rule's own rating travels with the chip (issue #207). Null for a curated hand-authored
 		// rule, which is unrated by design — see SafetyWarning.getSeverity, and note that a FOLDED chip
 		// still reports the RULE's rating: the class sentence appended to it carries none, so folding
-		// cannot lower or raise what the pair is rated. Nor does it move the strength the injected
-		// record states, since issue #471's review round 1: the class sentence is a caution (ADR
-		// Decision 86), so licensesWithholding(SafetyWarning) asks the rating alone. The flag travels
-		// beside the rating for StatedInteractionChips' key — see SafetyWarning.carriesUnratedRelationship.
+		// cannot lower or raise what the pair is rated. What the fold DOES move is the strength the
+		// injected record states — the class sentence is unrated, so a folded warning asserts more
+		// than its rating does — which is why it travels beside the rating rather than inside it: see
+		// SafetyWarning.carriesUnratedRelationship and licensesWithholding(SafetyWarning) (#283).
 		// The RECORD's name for this partner travels on the chip that decided it (issue #297) — see
 		// SafetyWarning.reconciledPartnerNoteName, which is also where the rule-identity condition the
 		// note has to satisfy before it may take that name lives. Null wherever nothing reconciled,
@@ -7107,10 +7115,9 @@ public class DrugSafetyValidator {
 	 * {@link #addInteractionWarnings} also folds the class arm's sentence in (issue #171) and this arm
 	 * cannot, because {@link #classRelationships} runs per IN-PLAY substance and a screening question
 	 * names none. Only a folded warning carries {@link SafetyWarning#carriesUnratedRelationship()},
-	 * which decided the strength the injected record states from #283 until issue #471's review round
-	 * 1, so one Minor-rated pair read as a caution here and as a reason to withhold there. A class
-	 * relationship being a caution, both arms now state one strength for it —
-	 * {@code FoldedFindingStrengthTest.theScreeningArmStatesTheSameStrengthForTheSamePair}.
+	 * which since #283 decides the strength the injected record states, so one Minor-rated pair reads
+	 * as a caution here and as a reason to withhold there. The measurement, and the reason it is left
+	 * rather than closed, are on that method.
 	 *
 	 * <p>Three things this arm must get right that the question-driven arm never faced:
 	 * <ul>

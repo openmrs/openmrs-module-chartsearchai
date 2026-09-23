@@ -424,12 +424,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * Nor is a class relationship FOLDED onto a row the data rates below Major: methylphenidate's
+	 * Nor is a class relationship FOLDED onto a row the data rates below Moderate: methylphenidate's
 	 * DDInter row against her modafinil is rated Minor, and both publish {@code N06BA}, so the drug-in-play
-	 * arm appends the class sentence to the rated rule. The finding withheld on that fold until issue
-	 * #471's review round 1, while no rating the data gives said so; it now states the caution its rule's
-	 * rating does, a shared classification being a caution (ADR Decision 86), and the model is asked
-	 * either way.
+	 * arm appends the class sentence to the rated rule and the finding withholds
+	 * ({@code SafetyWarning.carriesUnratedRelationship}) while no rating the data gives says so.
 	 *
 	 * <p>Over a slice carrying her aspirin too, so every order resolves and the rating conjunct is what
 	 * refuses; the positive control is warfarin, which that slice rates Major against her aspirin and
@@ -446,9 +444,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		List<Finding> findings = findingsInThePromptFor(question, ddinter);
 		assertEquals(1, findings.size(), "precondition: one finding, the folded Minor row, was: " + findings);
 		assertTrue(findings.get(0).text.contains("Minor") && findings.get(0).text.contains("N06BA")
-				&& findings.get(0).text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION),
-				"precondition: a Minor row carrying the N06BA class sentence is a caution about methylphenidate, "
-						+ "finding was: " + findings.get(0).text);
+				&& findings.get(0).text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"precondition: a Minor row carrying the N06BA class sentence withholds methylphenidate, finding "
+						+ "was: " + findings.get(0).text);
 
 		assertTheModelIsAsked(question, ddinter);
 	}

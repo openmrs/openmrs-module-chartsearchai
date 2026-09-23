@@ -93,18 +93,26 @@ public class DrugInPlayFindingStrengthOrderTest {
 	}
 
 	/**
-	 * A FOLDED chip ranks where its rating puts it (issue #471, review round 1 of PR #474).
+	 * The half that decides what "strongest" MEANS: an arrangement in which ordering on the rating and
+	 * ordering on the finding disagree, because the ratings cannot separate the two chips at all.
 	 *
-	 * <p>This is the arm that FOLDS: the chip goes on reporting the RULE's rating while the class arm's
-	 * unrated duplicate-therapy relationship rides along beside it. Until that review the fold made a
-	 * Minor rule a reason to withhold, and {@code FINDING_STRENGTH_DESCENDING} promoted it above a plain
-	 * Minor the dataset files ahead of it. A shared classification is a caution (ADR Decision 86), so the
-	 * folded Minor is a caution like the plain one, and the two keep the dataset's order. Simvastatin is
-	 * rated Minor against both of this case's partners and the dataset files metformin first. Restore
-	 * the fold leg in {@code licensesWithholding} and this case reddens.
+	 * <p>This is the arm that FOLDS, and a folded chip's rating deliberately understates it: the chip
+	 * goes on reporting the RULE's rating while the class arm's unrated duplicate-therapy relationship
+	 * rides along beside it, so a Minor rule folded with a class join states {@code STRENGTH_WITHHOLD}
+	 * in the record the model reads. Simvastatin is rated Minor against both of this case's partners
+	 * and the dataset files metformin first, so the ratings cannot separate the two chips and a
+	 * severity-only sort leaves them as they came; only asking {@code licensesWithholding} promotes the finding that is
+	 * actually a reason to withhold. Delete that branch of {@code FINDING_STRENGTH_DESCENDING} and
+	 * this case reddens.
+	 *
+	 * <p><b>What it does not pin is which of the two keys is asked FIRST.</b> The ratings TIE here, so
+	 * a comparator ranking on {@code severityPriority} and consulting the fold only as a tiebreak
+	 * satisfies this case too. That is {@code DrugInPlayFindingStrengthKeyOrderContextTest}'s, over an
+	 * arrangement in which the two orders disagree (a folded row rated below a plain caution — the
+	 * comparator's javadoc names each such pair).
 	 */
 	@Test
-	public void aFoldedCautionDoesNotOutrankAPlainOne() throws Exception {
+	public void aFoldedCautionOutranksAPlainOne() throws Exception {
 		List<SafetyWarning> warnings = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
 						.ddiFixtureEntries(DrugReferenceTestSupport.DDI_FOLDED_CAUTION_ORDER)))
@@ -114,15 +122,19 @@ public class DrugInPlayFindingStrengthOrderTest {
 
 		assertEquals(2, warnings.size(), "two active partners must raise two chips, was: " + warnings);
 		assertEquals("Minor", warnings.get(0).getSeverity(),
-			"the knowledge base rates both pairs Minor, was: " + warnings);
+			"the knowledge base rates both pairs Minor, so the RATING cannot be what ordered them, was: "
+					+ warnings);
 		assertEquals("Minor", warnings.get(1).getSeverity(),
-			"the knowledge base rates both pairs Minor, was: " + warnings);
-		assertTrue(warnings.get(0).getDetail().contains("Metformin"),
-			"both chips are cautions, so the plain Minor the dataset files first keeps the lead, was: "
+			"the knowledge base rates both pairs Minor, so the RATING cannot be what ordered them, was: "
+					+ warnings);
+		assertTrue(warnings.get(0).getDetail().contains("Atorvastatin"),
+			"the folded chip states a relationship the data does not rate, which is a reason to withhold"
+					+ " rather than a caution, so it leads a plain Minor the dataset files ahead of it,"
+					+ " was: " + warnings.get(0).getDetail());
+		assertTrue(warnings.get(0).carriesUnratedRelationship(),
+			"and it leads BECAUSE of the fold, so the fold must be what this chip carries, was: "
 					+ warnings.get(0).getDetail());
-		assertTrue(warnings.get(1).getDetail().contains("Atorvastatin")
-				&& warnings.get(1).carriesUnratedRelationship(),
-			"and the folded Minor follows it — the fold must be what that chip carries, or this case is "
-					+ "about two plain chips, was: " + warnings.get(1).getDetail());
+		assertTrue(warnings.get(1).getDetail().contains("Metformin"),
+			"the plain Minor caution follows it, was: " + warnings.get(1).getDetail());
 	}
 }

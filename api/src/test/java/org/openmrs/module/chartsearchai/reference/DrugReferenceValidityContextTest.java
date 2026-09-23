@@ -1357,8 +1357,9 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * enantiomer or a prodrug's parent, ten stray CIEL cross-walk links, {@code Fluoroestradiol f-18}
 	 * keyed as {@code estradiol}, and four more {@code rxnorm_name}s the dataset's own bridge contradicts,
 	 * {@code Sulfamethoxazole}'s {@code sulfamethazine} among them and {@code Calcium saccharate}'s synonym
-	 * {@code calcium glucarate} too — and issues #196 and #476 record the remedy for the defects among these
-	 * as an upstream handoff. Thirteen of them sit in {@code rxnorm_name}, which is the field
+	 * {@code calcium glucarate} too. Issue #196 records the remedy for the defects it names as an upstream
+	 * handoff and issue #476 for {@code Sulfamethoxazole}'s; the remaining new rows are named by no issue.
+	 * Thirteen of them sit in {@code rxnorm_name}, which is the field
 	 * {@link DrugReference#substanceKey()} is built from, so correcting them here would re-partition
 	 * substances on our own authority; that is why ADR Decision 36 ships the file byte-identical and
 	 * scopes the log level instead.

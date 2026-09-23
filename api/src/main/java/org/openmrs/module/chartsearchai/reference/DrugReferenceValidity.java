@@ -1253,7 +1253,9 @@ public final class DrugReferenceValidity {
 	 * </ul>
 	 * Both compared through {@link DrugReference#normalizeName}, the identity between two reference
 	 * strings; never through {@link DrugReference#isNamed}, which reads the row's aliases, and those
-	 * include the very substance name under test.
+	 * include the very substance name under test. The row side is its display STEM and the concept side
+	 * is not, so an ingredient the bridge spells with a trailing qualifier matches no row — a missed
+	 * report, never a false one.
 	 *
 	 * <p>The rule reads only the loaded model, so it runs over any dataset publishing a bridge. The
 	 * curated and {@code atc} schemas publish none and it is silent there by construction.

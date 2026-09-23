@@ -9980,7 +9980,25 @@ measured against the shipped strength rules. A re-run on the merged base is reco
 
 ### Re-check on the merged base
 
-To be recorded by the post-merge verifier run.
+The shipped arm only, on the head that merges Decision 109 (`5db3ccc7`), the same standalone and
+patients, each cell twice. No baseline arm was re-run on the merged base, so this measures what ships
+and not a new A/B. Both runs were byte-identical on every cell, and the chip lists matched the
+candidate arms' above.
+
+- **R1** opens *"Yes, there are interactions recorded for these medications."* and now ends with the
+  module's sentence *"The chart records Rifampicin (rifampin) only as an order no longer in force
+  (ended 2026-09-23), not as a current medication."* That date is the order's `date_stopped`.
+- **R2** states the ended order once, in the model's own words, and the module appends nothing.
+- **R3** keeps the proposal call, *"No — Rifampicin should not be given …"*, with `aboutAnEndedOrder`
+  false.
+- **§3a** opens *"Methotrexate is related to a Major interaction with Salicylic acid …"*.
+- **§3b**, now a caution under Decision 109, opens *"Salicylic acid is a caution regarding its
+  interaction with Enalapril …"*.
+
+Neither current-medication cell opens with a bare *"No —"* on the merged base. That is fewer than any
+arm above, and fewer than the pre-109 baseline's one; the selection criterion the Result used is no
+longer tipped by §3b. For the run, the rig's local-LLM port global property was moved off one another
+rig on the machine held, and it was restored after the run.
 
 ### Residues
 

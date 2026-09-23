@@ -10345,6 +10345,8 @@ of its (drug, condition) keys name more than one note.
     (the shape of #484's third): `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith`;
   - one census item's `keptChains` edited in the sample file: that test and
     `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`. The guard before #485 stayed green on it;
+  - a sampled item's `keptChains` and `ratedSubstances` deleted from the sample file:
+    `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith`;
   - note 940's *Hypotension* rows re-filed under note 995, a note id the loader does not read:
     `theCensusIsStillTheHeaviestLinks` and `theLoaderKeepsThePopulationThePrecisionFigureWasMeasuredOver`;
   - one kept row duplicated under another note id: `everyKeptChainJoinsTheOneRawRowItWasReadFrom`,

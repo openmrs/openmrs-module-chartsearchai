@@ -43,25 +43,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code derived_interactions} row it was read from, because the loader does not keep the
  * {@code cause_note_id} a LINK is keyed on. The join is on everything a
  * {@link DrugReference.ConditionMediatedRisk} carries plus the rated entry, and is itself checked —
- * each kept chain must match exactly one raw row. It asks nothing of a raw row's severity: which rows
- * count is decided by what the loader kept, so its {@code Major} gate is not restated. What it does have
- * to know of the loader is where an entry's id comes from (a drug row's own id or its rxcui); a raw drug
- * row resolving to no entry carrying its name, or to two, is reported rather than guessed.
+ * each kept chain must match exactly one raw row. It filters no raw row on severity: which rows count
+ * is decided by what the loader kept, so its {@code Major} gate is not restated. What it does have to
+ * know of the loader is where an entry's id comes from (a drug row's own id or its rxcui); a drug row the
+ * derived table names that resolves to no entry carrying its name, or to two, is reported rather than
+ * guessed.
  *
  * <p>Over that enumeration it checks:
  * <ul>
  * <li>the POPULATION — its kept chains, its links and its (link, rated substance) pairs, and that the
  * census and the sample partition it as the sample file says;</li>
  * <li>each adjudicated LINK's own weights — its kept chains and the distinct rated substances among
- * them ({@link DrugReference#substanceGroupKey()}), and for a control that its link is still kept;</li>
+ * them ({@link DrugReference#substanceGroupKey()}), carried by every item and by no control, and for a
+ * control that its link is still kept;</li>
  * <li>the CENSUS — still the heaviest links, by the rule the sample file records;</li>
  * <li>the TEXT each verdict was given on — the SHA-256 of every adjudicated note, read from the raw
  * {@code disease_notes} table, which the module does not load. A rewritten note leaves every count
  * unchanged, which is why this is here.</li>
  * </ul>
  * Not checked: whether the sampled links are still the ones {@code random.Random(480)} would draw from
- * the rest (Python's generator is not re-derived here), and a move of chains among links neither
- * adjudicated nor in the census that keeps every count above.
+ * the rest (Python's generator is not re-derived here), and a move of chains among links no item
+ * adjudicates that keeps every count above.
  *
  * <p>It re-derives no verdict: those are data, recorded in
  * {@code api/src/test/resources/eval/derived-tier-precision-sample.json}, and nothing here judges a note.
@@ -81,7 +83,7 @@ public class DerivedTierPrecisionSampleTest {
 	/** Kept chains that matched no raw row, or more than one, with how many they matched. */
 	private static Map<String, Integer> unjoinedChains;
 
-	/** Raw drug rows whose id resolves to no built entry carrying their name, or to more than one. */
+	/** Drug rows the derived table names that resolve to no built entry carrying their name, or to several. */
 	private static Set<String> unresolvedDrugs;
 
 	private static int keptChains;
@@ -93,7 +95,9 @@ public class DerivedTierPrecisionSampleTest {
 	public static void enumerateTheLinksTheLoaderKeeps() throws Exception {
 		sample = read(SAMPLE);
 
-		// Read off the entries before the raw tree is parsed, keeping only ids, names and substance keys.
+		// Read off the entries before the raw tree is parsed, keeping only ids, names and substance keys. An
+		// entry publishing no substance keys on ITSELF, so its id stands in for it: the ids are unique, and a
+		// String cannot equal the List a substance key is, so the distinct count is unchanged.
 		Map<String, String> entryNames = new HashMap<String, String>();
 		List<String> chainKeys = new ArrayList<String>();
 		List<Object> chainSubstances = new ArrayList<Object>();
@@ -102,17 +106,26 @@ public class DerivedTierPrecisionSampleTest {
 			for (DrugReference.ConditionMediatedRisk risk : rated.getConditionMediatedRisks()) {
 				chainKeys.add(chainKey(rated.getId(), risk.getCause().getId(), risk.getCauseCondition(),
 					risk.getCauseSeverity(), risk.getCondition(), risk.getSeverity()));
-				chainSubstances.add(rated.substanceGroupKey());
+				Object substance = rated.substanceGroupKey();
+				chainSubstances.add(substance instanceof DrugReference ? rated.getId() : substance);
 			}
 		}
 		keptChains = chainKeys.size();
 
 		// The file the loader reads, by the loader's own name for it.
 		JsonNode kb = read(DdiDrugReferenceSource.CLASSPATH_DEFAULT);
+		Set<String> named = new HashSet<String>();
+		for (JsonNode row : kb.path("derived_interactions")) {
+			named.add(row.path(0).asText());
+			named.add(row.path(4).asText());
+		}
 		Map<String, String> entryIdByRawId = new HashMap<String, String>();
 		unresolvedDrugs = new LinkedHashSet<String>();
 		for (JsonNode drug : kb.path("drugs")) {
 			String rawId = drug.path("id").asText();
+			if (!named.contains(rawId)) {
+				continue;
+			}
 			String name = drug.path("name").asText();
 			List<String> carrying = new ArrayList<String>(2);
 			for (String candidate : new String[] { rawId, drug.path("rxcui").asText() }) {
@@ -171,7 +184,8 @@ public class DerivedTierPrecisionSampleTest {
 	public void everyKeptChainJoinsTheOneRawRowItWasReadFrom() {
 		assertTrue(keptChains > 0, "precondition: the shipped knowledge base carries derived chains");
 		assertTrue(unresolvedDrugs.isEmpty(),
-			"raw drug rows resolving to no built entry carrying their name, or to several: " + unresolvedDrugs);
+			"drug rows the derived table names that resolve to no built entry carrying their name, or to several: "
+					+ unresolvedDrugs);
 		assertTrue(unjoinedChains.isEmpty(), "kept chains not matching exactly one raw derived_interactions row"
 				+ " (chain -> rows matched), so their link cannot be recovered: " + unjoinedChains);
 	}
@@ -201,7 +215,7 @@ public class DerivedTierPrecisionSampleTest {
 			if ("census".equals(item.path("stratum").asText())) {
 				censusChains += item.path("keptChains").asInt();
 				censusLinks++;
-			} else {
+			} else if ("sample".equals(item.path("stratum").asText())) {
 				sampledLinks++;
 			}
 		}
@@ -219,21 +233,34 @@ public class DerivedTierPrecisionSampleTest {
 	public void everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith() {
 		List<String> wrong = new ArrayList<String>();
 		Set<String> seen = new HashSet<String>();
-		for (JsonNode item : adjudicated()) {
-			String link = link(item);
-			if (!seen.add(link)) {
-				wrong.add(link + ": adjudicated twice");
-			}
-			Integer chains = chainsByLink.get(link);
-			if (chains == null) {
-				wrong.add(link + ": no longer a link the loader keeps a chain for");
-			} else if (item.has("keptChains")) {
-				int substances = ratedSubstancesByLink.get(link).size();
-				if (chains != item.path("keptChains").asInt()
-						|| substances != item.path("ratedSubstances").asInt()) {
-					wrong.add(link + ": recorded " + item.path("keptChains").asInt() + " chains / "
-							+ item.path("ratedSubstances").asInt() + " rated substances, the loader keeps " + chains
-							+ " / " + substances);
+		for (String group : new String[] { "items", "controls" }) {
+			// Decided by the group an entry is filed in, never by which fields it happens to carry, so a
+			// weight deleted from an item is reported rather than skipped.
+			boolean weighted = "items".equals(group);
+			for (JsonNode item : sample.path(group)) {
+				String link = link(item);
+				if (!seen.add(link)) {
+					wrong.add(link + ": adjudicated twice");
+				}
+				String stratum = item.path("stratum").asText(null);
+				if (weighted ? !"census".equals(stratum) && !"sample".equals(stratum) : stratum != null) {
+					wrong.add(link + ": stratum " + stratum);
+				}
+				if (weighted ? !item.path("keptChains").isInt() || !item.path("ratedSubstances").isInt()
+						: item.has("keptChains") || item.has("ratedSubstances")) {
+					wrong.add(link + (weighted ? ": an item without both weights" : ": a control carrying a weight"));
+				}
+				Integer chains = chainsByLink.get(link);
+				if (chains == null) {
+					wrong.add(link + ": no longer a link the loader keeps a chain for");
+				} else if (weighted) {
+					int substances = ratedSubstancesByLink.get(link).size();
+					if (chains != item.path("keptChains").asInt()
+							|| substances != item.path("ratedSubstances").asInt()) {
+						wrong.add(link + ": recorded " + item.path("keptChains").asInt() + " chains / "
+								+ item.path("ratedSubstances").asInt() + " rated substances, the loader keeps " + chains
+								+ " / " + substances);
+					}
 				}
 			}
 		}
@@ -245,6 +272,14 @@ public class DerivedTierPrecisionSampleTest {
 	public void theCensusIsStillTheHeaviestLinks() {
 		// The file's own rule: most kept chains, ties by numeric note id then condition.
 		List<String> ranked = new ArrayList<String>(chainsByLink.keySet());
+		List<String> unordered = new ArrayList<String>();
+		for (String link : ranked) {
+			if (!link.substring(0, link.indexOf('\t')).matches("\\d+")) {
+				unordered.add(link);
+			}
+		}
+		assertTrue(unordered.isEmpty(), "links whose note id the census rule cannot order numerically;"
+				+ " re-measure (ADR Decision 111): " + unordered);
 		ranked.sort(Comparator.<String> comparingInt(l -> -chainsByLink.get(l))
 				.thenComparingLong(l -> Long.parseLong(l.substring(0, l.indexOf('\t'))))
 				.thenComparing(l -> l.substring(l.indexOf('\t') + 1)));

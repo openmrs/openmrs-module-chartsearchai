@@ -9572,9 +9572,10 @@ methylphenidate's Minor row against modafinil carrying the N06BA class sentence.
 to the very drug included — keeps the model call.
 
 Both need the chart-read verdict the injector stamped (`chartReadForSafety`), and every active order
-resolved to an entry (`DrugSafetyValidator.everyActiveOrderResolves`): an order unread, or read and
-written under a name the data does not carry — a warfarin brand it lacks — leaves "not already
-taking" unanswerable, and a screen with only part of her list to relate.
+resolved to at least one entry (`DrugSafetyValidator.everyActiveOrderResolves`): an order unread, or
+read and written under a name the data does not carry — a warfarin brand it lacks — leaves "not
+already taking" unanswerable, and a screen with only part of her list to relate. An order resolved to
+only some of its substances satisfies that gate; see the residues.
 
 **Both question predicates are closed GRAMMARS, and fail-CLOSED.** Each is a short list of question
 shapes over the question's words, with the proposed drug's name marked where it stood
@@ -9649,7 +9650,14 @@ chance of the two disagreeing.
 - Where one substance is filed as several presentation rows, the finding stated is the one the arm
   elected, which can be a presentation other than the one the question named (*"Can I give her
   Acular?"* — ketorolac eye drops — stated the systemic row's rule).
-- A question about a drug she already takes (R3, D6) keeps the call, and with it #402.
+- A question about a drug she already takes (R3, D6) keeps the call, and with it #402 — where her order
+  resolves to that drug. An order the data resolves to only SOME of its substances passes both the
+  order-resolution gate and "not already taking" with the rest unseen: the shipped knowledge base
+  files `Bactrim` and CIEL's sulfamethoxazole/trimethoprim code under trimethoprim alone, so on a chart
+  carrying co-trimoxazole *"Can I give her sulfamethoxazole?"* is answered by the module (#402's
+  defect, stated by the finding's own clause), and a screen relates only the resolved half. The
+  module cannot tell such an order from a single-substance one; the data can, by filing the
+  combination under every constituent.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.
 - A phrasing no shape carries keeps the call, the headline question of the issue included.
 - With `chartsearchai.drugSafety.citeOrderRecords` off, as it ships, an interaction line cites no order

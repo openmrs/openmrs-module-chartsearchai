@@ -3034,7 +3034,7 @@ public class DrugReference {
 		}
 
 		/** Where the occurrence starts in the text it was found in — issue #469's
-		 *  {@code DrugReferenceInjector.wordsBesideItsNames}, which takes the name out of a question. */
+		 *  {@code DrugReferenceInjector.wordsBesideItsNames}, which marks the name in a question. */
 		int getStart() {
 			return start;
 		}

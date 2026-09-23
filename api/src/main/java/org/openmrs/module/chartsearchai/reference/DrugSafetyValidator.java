@@ -7989,6 +7989,9 @@ public class DrugSafetyValidator {
 	 * entries this pass resolved her orders to — by {@link #resolvesFrom}, the same test the chip arms
 	 * ask of one order and one entry. Issue #469: an order the module READ and could not name leaves
 	 * "is she already taking it?" unanswerable, so the module does not answer for the model there.
+	 * It asks for AT LEAST ONE entry per order, so a combination the data files under one constituent
+	 * satisfies it with the others unseen — a residue ADR Decision 108 names, which only the data can
+	 * close.
 	 */
 	static boolean everyActiveOrderResolves(DrugReferenceService service, PatientClinicalContext context,
 			List<DrugReference> orderEntries) {

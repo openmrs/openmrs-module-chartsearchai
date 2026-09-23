@@ -2350,7 +2350,9 @@ public class DrugReferenceInjector {
 	 * resolved to an entry ({@code DrugSafetyValidator.everyActiveOrderResolves}). An order unread, or
 	 * read and written under a name the data does not carry (a warfarin brand it lacks), leaves "not
 	 * already taking" unanswerable — the module cannot tell her "Marevan" is the warfarin proposed — and
-	 * leaves a screen with only part of her list to relate.
+	 * leaves a screen with only part of her list to relate. An order resolved to only SOME of its
+	 * substances — a combination the data files under one constituent — passes, with the rest unseen;
+	 * ADR Decision 108 names that residue.
 	 */
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, boolean chartRead) {

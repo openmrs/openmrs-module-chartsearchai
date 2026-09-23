@@ -130,6 +130,9 @@ public class SafetyWarning {
 	/** @see #endedOrderRows() */
 	private final List<DrugReference> endedOrderRows;
 
+	/** @see #statesOrdersSharingASubstance() */
+	private final boolean ordersSharingASubstance;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -306,6 +309,23 @@ public class SafetyWarning {
 				Collections.<ChartOrderBridge> emptyList(), false, null, false, orders);
 	}
 
+	/**
+	 * The warning that two or more of the patient's own active orders carry the same substances, raised
+	 * on a screen of her medications (issue #477). The one construction site is
+	 * {@code DrugSafetyValidator.addOrdersSharingASubstance}, canonical for why it exists and when.
+	 *
+	 * <p>{@link #substanceInSeveralActiveOrders}' shape, with two differences: both sides are her own
+	 * prescriptions and nothing is proposed, so {@link #isAboutACurrentMedication()} is TRUE; and it
+	 * answers {@link #statesOrdersSharingASubstance()}.
+	 *
+	 * @param drug the substances the detail names, as it names them
+	 * @param orders the displays of the orders the detail names — {@link #namedPartners()}
+	 */
+	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true);
+	}
+
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
@@ -341,7 +361,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null, null);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null, false);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -350,7 +370,8 @@ public class SafetyWarning {
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
-			List<DrugReference> endedOrderRows) {
+			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance) {
+		this.ordersSharingASubstance = ordersSharingASubstance;
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
 		this.endedOrderStopDate = aboutAnEndedOrder ? endedOrderStopDate : null;
 		this.endedOrderRows = !aboutAnEndedOrder || endedOrderRows == null || endedOrderRows.isEmpty()
@@ -1039,7 +1060,18 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
-				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows);
+				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance);
+	}
+
+	/**
+	 * Whether this is {@link #ordersSharingASubstance(String, String, List)}' finding — that two of her own orders carry one
+	 * substance — rather than a relationship between two substances. An INTERACTION finding that
+	 * relates no PAIR, so {@code DrugReferenceInjector.answersFromFindings} asks this to keep a screen
+	 * the module answers itself one that related at least one pair (ADR Decision 108). Package-private,
+	 * matching the factory: it is on neither the wire nor either collapse key.
+	 */
+	boolean statesOrdersSharingASubstance() {
+		return ordersSharingASubstance;
 	}
 
 	/**

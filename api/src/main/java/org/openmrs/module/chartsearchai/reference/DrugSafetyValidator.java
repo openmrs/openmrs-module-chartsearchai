@@ -1091,6 +1091,8 @@ public class DrugSafetyValidator {
 				&& QueryScopeRouter.isInteractionScreening(question)) {
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
+			// After the pairs and outside their extent: it relates no pair (issue #477).
+			addOrdersSharingASubstance(warnings, context, orderEntries, subjects, coMedications);
 		}
 		// And where neither of them STATED one, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
@@ -4264,25 +4266,108 @@ public class DrugSafetyValidator {
 		if (carriers.size() < 2) {
 			return null;
 		}
-		// Each distinct display once, with how many orders carry it where that is more than one: two
-		// orders recorded under one name would otherwise print that name twice, which a clinician cannot
-		// tell from a name pasted twice, and would count it twice into findingPartners. The count says
-		// "orders" and never ACTIVE_ORDER_NOUN: ActiveOrderCitationFidelityCheck counts one claim per
-		// occurrence of that noun, so a second one would split this sentence into two claims.
+		Map<String, Integer> ordersByDisplay = ordersByDisplay(carriers);
+		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
+			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
+					+ " — possible duplicate therapy",
+			new ArrayList<String>(ordersByDisplay.keySet()));
+	}
+
+	/**
+	 * Each distinct display of {@code carriers} once, in chart order, with how many orders carry it —
+	 * the one reading of a carrier list both of issue #477's findings print. Two orders recorded under
+	 * one name would otherwise print that name twice, which a clinician cannot tell from a name pasted
+	 * twice, and would count it twice into findingPartners.
+	 */
+	private static Map<String, Integer> ordersByDisplay(List<PatientClinicalContext.ActiveDrugOrder> carriers) {
 		Map<String, Integer> ordersByDisplay = new LinkedHashMap<String, Integer>();
 		for (PatientClinicalContext.ActiveDrugOrder order : carriers) {
 			Integer n = ordersByDisplay.get(order.getDisplay());
 			ordersByDisplay.put(order.getDisplay(), n == null ? 1 : n + 1);
 		}
+		return ordersByDisplay;
+	}
+
+	/**
+	 * "active orders A and B", a display several orders carry followed by their count. The count says
+	 * "orders" and never {@link #ACTIVE_ORDER_NOUN}: {@code ActiveOrderCitationFidelityCheck} counts one
+	 * claim per occurrence of that noun, so a second one would split the sentence into two claims.
+	 */
+	private static String ordersNamed(Map<String, Integer> ordersByDisplay) {
 		List<String> labels = new ArrayList<String>(ordersByDisplay.size());
 		for (Map.Entry<String, Integer> display : ordersByDisplay.entrySet()) {
 			labels.add(display.getValue() == 1 ? display.getKey()
 					: display.getKey() + " (" + display.getValue() + " orders)");
 		}
-		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
-			ref.displayLabel() + " is already in " + ACTIVE_ORDER_NOUN + "s " + joinPartners(labels)
-					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()));
+		return ACTIVE_ORDER_NOUN + "s " + joinPartners(labels);
+	}
+
+	/**
+	 * On a screen of her medications, one finding per set of two or more of the patient's own active
+	 * orders that carry the same substances, naming every substance the set shares — issue #477's
+	 * remaining shape after {@link #alreadyInSeveralOrders}, which states it only for a drug in play.
+	 * A screening question puts none in play, and the screening arm relates substances PAIRWISE and has
+	 * no identity leg, so two tuberculosis combinations sharing three substances raised nothing saying
+	 * they duplicate each other.
+	 *
+	 * <p><b>Which orders carry a substance is #483's predicate</b>,
+	 * {@link CoMedications#ordersWhoseDisplayNames}, and the substances asked about are the ones this
+	 * pass resolved her orders to ({@code orderEntries}, which {@code validate} already holds), so the
+	 * candidates are never built from {@link DrugReferenceService#findNamedSubstances}. Substances are
+	 * named by the row this response names them by ({@link SubstanceSubjects#subjectOf}) and listed in
+	 * label order; sets in the chart order of their orders.
+	 *
+	 * <p><b>Raised on a screening question and nowhere else</b> — the screening arm's own gate, read off
+	 * the question alone, so both {@code validate} passes of a request agree. Not on a question putting a
+	 * drug in play, whose finding list is its arm's, and not on the standing chart alerts. Its referent
+	 * is a current medication, and it is unrated, so the model reads it as a reason to change her
+	 * therapy. It relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decision 113
+	 * carries the scope and what it leaves open.
+	 */
+	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, PatientClinicalContext context,
+			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications) {
+		if (context == null) {
+			return;
+		}
+		Map<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> shared =
+				new LinkedHashMap<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>();
+		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
+			List<PatientClinicalContext.ActiveDrugOrder> carriers =
+					coMedications.ordersWhoseDisplayNames(rows.get(0).substanceGroupKey());
+			if (carriers.size() < 2) {
+				continue;
+			}
+			List<String> substances = shared.get(carriers);
+			if (substances == null) {
+				substances = new ArrayList<String>();
+				shared.put(carriers, substances);
+			}
+			substances.add(subjects.subjectOf(rows.get(0)).displayLabel());
+		}
+		List<Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>> sets =
+				new ArrayList<Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>>(
+						shared.entrySet());
+		final List<PatientClinicalContext.ActiveDrugOrder> chartOrder = context.getActiveDrugOrders();
+		Collections.sort(sets, (a, b) -> {
+			for (int i = 0; i < Math.min(a.getKey().size(), b.getKey().size()); i++) {
+				int byPosition = Integer.compare(chartOrder.indexOf(a.getKey().get(i)),
+					chartOrder.indexOf(b.getKey().get(i)));
+				if (byPosition != 0) {
+					return byPosition;
+				}
+			}
+			return Integer.compare(a.getKey().size(), b.getKey().size());
+		});
+		for (Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> set : sets) {
+			List<String> substances = set.getValue();
+			Collections.sort(substances, String.CASE_INSENSITIVE_ORDER);
+			Map<String, Integer> ordersByDisplay = ordersByDisplay(set.getKey());
+			String named = joinPartners(substances);
+			warnings.add(SafetyWarning.ordersSharingASubstance(named,
+				named + (substances.size() == 1 ? " is in " : " are in ") + ordersNamed(ordersByDisplay)
+						+ " — possible duplicate therapy",
+				new ArrayList<String>(ordersByDisplay.keySet())));
+		}
 	}
 
 	/**

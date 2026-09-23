@@ -2403,7 +2403,11 @@ public class DrugReferenceInjector {
 				return false;
 			}
 			for (SafetyWarning finding : findings) {
-				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				// A PAIR the screen related: two of her orders sharing a substance (issue #477) is an
+				// interaction finding that relates none, and a screen answered from it alone would say
+				// nothing of what the screen found, which is why an allergy finding is refused too.
+				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+						&& !finding.statesOrdersSharingASubstance()) {
 					return true;
 				}
 			}

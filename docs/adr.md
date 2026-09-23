@@ -9830,6 +9830,13 @@ rating below `major` is a caution.** Nothing else about the split moves:
     for the arm's figures: each was taken over a prefilter admitting only rows whose two drugs share an
     ATC level-2 prefix or a curated group, and 3,000 rows sampled from outside it folded none, in every
     shape at the re-measurement. Efavirenz × Nevirapine and Zidovudine × Stavudine are in it; Amlodipine × Nevirapine is not.
+    Every figure above reproduced unchanged at `903e5047`, which carries Decision 112's change to this
+    arm (`2fde7e5c`), re-run by the #488 test extended to print its chip counts
+    ([#491](https://github.com/openmrs/openmrs-module-chartsearchai/issues/491)). Decision 112's own
+    finding needs two active orders and no shape here builds more than one, so what this rules out is
+    a change on a chart of at most one order. The names-only shape raises a chip at the row's rating on 1,281 of
+    the 1,300 Minor and 26,331 of the 26,606 Moderate rows the prefilter admits, and none of them
+    carries the fold.
   - *The A/B*, on the 3.7.1 standalone: `main` @ `27e9cf40` against the same tree with the
     `carriesUnratedRelationship()` leg removed, `capture_probe_safety.sh` over 21 cells (Kamwara
     `1530b813-…`, `23c54782-…` on Metronidazole and `83f95445-…` on Methotrexate × efavirenz,

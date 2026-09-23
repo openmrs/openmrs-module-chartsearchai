@@ -163,6 +163,52 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		assertEquals(stated, answer.getAnswer(), "the answer already states it of both, so nothing is appended");
 	}
 
+	/**
+	 * Issue #482 item 1: the answer's "no longer in force" is about ANOTHER drug, named in the phrase's
+	 * own clause. Asked as co-occurrence in one sentence, the ended ibuprofen read as stated and nothing
+	 * was appended about it.
+	 */
+	@Test
+	public void aPhraseWhoseClauseNamesAnotherDrugDoesNotStateThisOnesEnd() {
+		String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+				+ "with Acetylsalicylic acid (aspirin) [1]; her metformin order is no longer in force.";
+		ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(completed);
+		assertEquals(answer + STATEMENT, completed.getAnswer(),
+				"the phrase is about metformin, so the answer never said ibuprofen's order ended");
+	}
+
+	/** The same, where a comma and a conjunction join the clause about the other drug. */
+	@Test
+	public void aPhraseInACommaJoinedClauseNamingAnotherDrugDoesNotStateThisOnesEnd() {
+		String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+				+ "with Acetylsalicylic acid (aspirin) [1], and her metformin order is no longer in force.";
+		ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(completed);
+		assertEquals(answer + STATEMENT, completed.getAnswer(),
+				"the phrase is about metformin, so the answer never said ibuprofen's order ended");
+	}
+
+	/**
+	 * ADR Decision 47's recorded live wording, a pronoun after a clause boundary — the form the prompt
+	 * teaches ("say in the same sentence that its order is no longer in force"). Its clause names no
+	 * drug, so it is about the drug its sentence names, and nothing is appended.
+	 */
+	@Test
+	public void aPronounAfterAClauseBoundaryStillStatesTheDrugItsSentenceNames() {
+		String stated = "Ibuprofen was prescribed, but its order is no longer in force [2]. It interacts "
+				+ "with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the answer already states it, so nothing is appended");
+	}
+
 	@Test
 	public void aChartHoldingNoEndedOrderOfTheDrugAddsNothing() {
 		ChartAnswer answer = serviceWith(MODEL_ANSWER, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"))

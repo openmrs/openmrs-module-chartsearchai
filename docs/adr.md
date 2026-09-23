@@ -10006,11 +10006,18 @@ rig on the machine held, and it was restored after the run.
 ### Residues
 
 - R1's MODEL prose still opens *"Yes"* and does not say the order has ended; the module's appended
-  sentence says it. Whether the answer "said it" is a sentence containing "no longer in force" that names
-  the drug by `namesTheEndedOrderDrug` — so a paraphrase of that phrase, or a name no row of the substance
-  carries, gets the sentence as well: said twice rather than not at all. The drug test's own residue runs
-  the other way: an alias the substance shares with another (#209's shape) names it too, so a sentence
-  saying that other drug's order is no longer in force reads as saying it of this one.
+  sentence says it. Whether the answer "said it" is an occurrence of "no longer in force" whose own
+  clause (back to the nearest comma, semicolon, colon or dash) names the drug by `namesTheEndedOrderDrug`,
+  or names no drug at all (`DrugSafetyValidator.namesADrug`) inside a sentence that does — so Decision
+  47's recorded *"Nevirapine was prescribed, but its order is no longer in force"* reads as said, and
+  *"Rifampicin interacts with nevirapine; her isoniazid order is no longer in force."* does not (issue
+  #482; until then any sentence naming the drug and carrying the phrase was read as saying it). A
+  paraphrase of that phrase, a name no row of the substance carries, or the earlier members of a
+  comma-enumerated subject (*"Her simvastatin, clarithromycin and warfarin orders are …"*) get the
+  sentence as well: said twice rather than not at all. Toward silence: a clause about another drug
+  joined with no boundary, or naming a drug the loaded data does not carry. The drug test's own residue
+  also runs that way: an alias the substance shares with another (#209's shape) names it too, so a
+  sentence saying that other drug's order is no longer in force reads as saying it of this one.
 - The appended sentence is not on the early `done` of async grounding, which is emitted before the chips
   exist — Decision 100's completion shares that, and async grounding ships off.
 - A chart that did not RETRIEVE the ended record states nothing, and the finding stays a proposal as
@@ -10030,6 +10037,21 @@ rig on the machine held, and it was restored after the run.
   clause replaces one that already cleared that floor.
 - A patient with any active order the data cannot resolve gets no ended-order referent at all, even for
   a drug that order plainly is not — the price of the resolution gate.
+- An active order the data resolves to only SOME of its substances (Decision 108's residue) passes the
+  resolution gate, and where its own chart record is outside the built chart nothing reads its name.
+  Asking the context's active-order NAMES as well (issue #482 item 2) was measured and not added,
+  2026-09-23: a throwaway test drove the real `DrugReferenceService.findForActiveOrders` over the shipped
+  knowledge base, with every one of its 1629 combination-shaped aliases (containing "/", " and ", ", ",
+  "+" or " with ") used as an active order's name, and asked which entries the order's name names
+  that the resolution left out — by the order-name rule (`PatientClinicalContext.hasActiveDrug`) and by
+  the prose rule the issue proposed (`DrugReference.matchesText` over `getActiveDrugNames()`). Both
+  answered the same 4 of the 1629 names, and all 4 named a DIFFERENT substance (iodine → Iodide I-131,
+  isosorbide → Isosorbide mononitrate, a Moderna vaccine name → Tozinameran rows): no constituent the
+  resolution dropped. The reason is structural: an order's names go through `findImpliedByDrugName`,
+  whose primitive resolves each constituent a combination name names, and only #209's ranking can
+  remove one. Decision 108's own case, `Bactrim`,
+  resolves to Trimethoprim alone and its name names neither constituent, so the guard would not reach it
+  either. The population is the knowledge base's own aliases, not a dictionary's order displays.
 - The chips pass judges a substance over every row the pass resolved, and the ANSWER can add a row of a
   question's substance the pre-answer pass did not have. Where an ended record names that substance only
   by an alias the added row alone carries, the chip can state the referent while the record the model

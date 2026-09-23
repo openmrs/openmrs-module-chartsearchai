@@ -35,20 +35,41 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * left unnamed: appended by the module, with no model asked and no prompt changed.
  *
  * <p><b>What "the answer said so" is</b>: some sentence of the answer
- * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) names the chip's drug and contains
- * {@link #NO_LONGER_IN_FORCE}, the words the prompt's ended-order branch tells the model to use. The
+ * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) contains {@link #NO_LONGER_IN_FORCE}, the words the
+ * prompt's ended-order branch tells the model to use, ABOUT the chip's drug. An occurrence is about the
+ * drug its own clause names ahead of it — the text back to the nearest of {@link #CLAUSE_BOUNDARIES} —
+ * and, where that clause names no drug at all ({@code "Nevirapine was prescribed, but its order is no
+ * longer in force"}, ADR Decision 47's recorded live wording), about the drug its sentence names. So
+ * <em>"Rifampicin interacts with nevirapine; her isoniazid order is no longer in force."</em> does not
+ * state rifampicin's end (issue #482): until then one sentence naming the drug anywhere and carrying the
+ * phrase anywhere was read as saying it. Whether the clause names some OTHER drug is
+ * {@link DrugSafetyValidator#namesADrug}, over the loaded dataset. The
  * drug is asked by {@link DrugSafetyValidator#namesTheEndedOrderDrug} — the prose rule over every row of
  * its substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
  * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is
  * containment, so a paraphrase ("it was discontinued") reads as unstated and the sentence is appended
  * beside it — the residue runs toward saying it twice rather than toward silence, the direction
- * Decision 100 chose for the same reason. The drug predicate's own residue runs the other way, and that
- * method's javadoc states it.
+ * Decision 100 chose for the same reason. So does a comma-enumerated subject: in <em>"Her simvastatin,
+ * clarithromycin and warfarin orders are no longer in force"</em> only the last clause is read, which
+ * names other drugs, and the earlier two are stated again. Toward silence runs a clause about another
+ * drug joined with no boundary ({@code "… interacts with nevirapine and her isoniazid order is no longer
+ * in force"}), or one naming a drug the loaded data does not carry, which reads as naming none. The drug
+ * predicate's own residue runs the other way too, and that method's javadoc states it.
  */
 public final class EndedOrderStatement {
 
 	/** The prompt's words for such an order, after {@code PatientChartSerializer.INACTIVE_ORDER_LABEL}. */
 	static final String NO_LONGER_IN_FORCE = "no longer in force";
+
+	/**
+	 * Where the clause an occurrence of {@link #NO_LONGER_IN_FORCE} sits in begins, within a sentence
+	 * {@code SENTENCE_BOUNDARY} already cut: comma, semicolon, colon, en and em dash. It shares no
+	 * character with {@code ChartSearchAiUtils.SENTENCE_TERMINATORS} and is not a claim unit — it splits
+	 * nothing grounding or a fidelity check judges, as {@code CitationGroundingVerifier}'s clause markers
+	 * do. It only decides which drug a phrase already inside one sentence is read as being ABOUT, and it
+	 * can only take a "stated" reading away, never add one.
+	 */
+	static final String CLAUSE_BOUNDARIES = ",;:\u2013\u2014";
 
 	private EndedOrderStatement() {
 	}
@@ -57,7 +78,8 @@ public final class EndedOrderStatement {
 	 * The chips about an ended order whose drug {@code answer} does not state as one — one per drug, in
 	 * chip order, however many findings are about it.
 	 */
-	public static List<SafetyWarning> unstatedEndedOrders(String answer, List<SafetyWarning> warnings) {
+	public static List<SafetyWarning> unstatedEndedOrders(String answer, List<SafetyWarning> warnings,
+			DrugSafetyValidator validator) {
 		List<SafetyWarning> unstated = new ArrayList<SafetyWarning>();
 		if (warnings == null || ChartSearchAiUtils.isBlank(answer)) {
 			return unstated;
@@ -68,21 +90,42 @@ public final class EndedOrderStatement {
 			if (!warning.isAboutAnEndedOrder() || ChartSearchAiUtils.isBlank(warning.getDrug())) {
 				continue;
 			}
-			if (seen.add(warning.getDrug().toLowerCase(Locale.ROOT)) && !statesItEnded(sentences, warning)) {
+			if (seen.add(warning.getDrug().toLowerCase(Locale.ROOT))
+					&& !statesItEnded(sentences, warning, validator)) {
 				unstated.add(warning);
 			}
 		}
 		return unstated;
 	}
 
-	private static boolean statesItEnded(String[] sentences, SafetyWarning warning) {
+	private static boolean statesItEnded(String[] sentences, SafetyWarning warning,
+			DrugSafetyValidator validator) {
 		for (String sentence : sentences) {
-			if (sentence.toLowerCase(Locale.ROOT).contains(NO_LONGER_IN_FORCE)
-					&& DrugSafetyValidator.namesTheEndedOrderDrug(sentence, warning)) {
-				return true;
+			String lower = sentence.toLowerCase(Locale.ROOT);
+			for (int at = lower.indexOf(NO_LONGER_IN_FORCE); at >= 0;
+					at = lower.indexOf(NO_LONGER_IN_FORCE, at + 1)) {
+				String clause = lower.substring(clauseStart(lower, at), at);
+				if (DrugSafetyValidator.namesTheEndedOrderDrug(clause, warning)) {
+					return true;
+				}
+				// A clause naming no drug is about the drug its sentence names; one naming another is not.
+				boolean aboutAnotherDrug = validator != null && validator.namesADrug(clause);
+				if (!aboutAnotherDrug && DrugSafetyValidator.namesTheEndedOrderDrug(lower, warning)) {
+					return true;
+				}
 			}
 		}
 		return false;
+	}
+
+	/** Where the clause holding position {@code at} of {@code sentence} begins — see {@link #CLAUSE_BOUNDARIES}. */
+	private static int clauseStart(String sentence, int at) {
+		for (int i = at - 1; i >= 0; i--) {
+			if (CLAUSE_BOUNDARIES.indexOf(sentence.charAt(i)) >= 0) {
+				return i + 1;
+			}
+		}
+		return 0;
 	}
 
 	/**

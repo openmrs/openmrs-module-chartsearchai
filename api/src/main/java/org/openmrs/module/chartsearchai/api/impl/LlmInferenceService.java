@@ -278,7 +278,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
 			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
-					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings));
+					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
+							drugSafetyValidator));
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -777,7 +778,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
 			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
-					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings));
+					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
+							drugSafetyValidator));
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -852,7 +854,8 @@ public class LlmInferenceService implements ChartSearchService {
 		// about an ended order today: strengthRank refuses the ended-order clauses, so a question whose
 		// findings carry one keeps the model call.
 		answer = EndedOrderStatement.withEndedOrdersStated(answer,
-				EndedOrderStatement.unstatedEndedOrders(composed, safetyWarnings));
+				EndedOrderStatement.unstatedEndedOrders(composed, safetyWarnings,
+						drugSafetyValidator));
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);

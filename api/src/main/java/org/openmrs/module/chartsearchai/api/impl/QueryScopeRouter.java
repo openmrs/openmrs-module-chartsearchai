@@ -207,115 +207,137 @@ public final class QueryScopeRouter {
 
 	/** One word of a question, as {@link #words} splits it: letters and digits, with a trailing
 	 *  apostrophe suffix kept attached so "can't" and "patient's" are words of their own. */
-	private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+(?:['\u2019][\\p{L}]+)?");
+	private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+(?:['’][\\p{L}]+)?");
 
 	/**
-	 * The words of {@code text}, lower-cased, in order — the ONE tokenizer both closed-vocabulary
-	 * predicates below read, and the one {@code DrugReferenceInjector} splits a question and a drug's
-	 * names with before asking {@link #asksWhetherToGiveADrug}, so the words it removes are the words
-	 * the predicate would have seen. Issue #469.
+	 * The word {@code DrugReferenceInjector} puts where a question names the drug it proposes, so
+	 * {@link #asksWhetherToGiveADrug} can read WHERE the name stood — issue #469. No question word
+	 * can spell it: {@link #words} never yields an underscore.
+	 */
+	public static final String DRUG_NAME = "_drug_";
+
+	/**
+	 * The words of {@code text}, lower-cased, in order — the ONE tokenizer both question grammars
+	 * below read. {@link #DRUG_NAME} is kept as a word. Issue #469.
 	 */
 	public static List<String> words(String text) {
 		List<String> words = new ArrayList<String>();
 		if (text == null) {
 			return words;
 		}
-		Matcher matcher = WORD.matcher(text.toLowerCase(Locale.ROOT));
-		while (matcher.find()) {
-			words.add(matcher.group().replace('\u2019', '\''));
+		String[] parts = text.toLowerCase(Locale.ROOT).split(Pattern.quote(DRUG_NAME), -1);
+		for (int p = 0; p < parts.length; p++) {
+			if (p > 0) {
+				words.add(DRUG_NAME);
+			}
+			Matcher matcher = WORD.matcher(parts[p]);
+			while (matcher.find()) {
+				words.add(matcher.group().replace('\u2019', '\''));
+			}
 		}
 		return words;
 	}
 
-	private static boolean allIn(List<String> words, Set<String> vocabulary) {
-		return !words.isEmpty() && vocabulary.containsAll(words);
+	private static final String PATIENT = "(?:her|him|them|the patient|this patient)";
+
+	private static final String POSSESSIVE = "(?:her|his|their|the patient's|this patient's)";
+
+	private static final String MEDICATION_WORD = "(?:medications|meds|medicines|prescriptions)";
+
+	private static final String MEDICATIONS = "(?:current |active )?" + MEDICATION_WORD;
+
+	private static final String D = Pattern.quote(DRUG_NAME);
+
+	/**
+	 * The question shapes a proposal of ONE drug may take, over {@link #words} joined by single spaces
+	 * with the drug's name marked {@link #DRUG_NAME} — issue #469. A GRAMMAR and not a word list: two
+	 * forms of this predicate were bags of words, and each was defeated by words it admitted in an
+	 * order it did not mean — a second question joined to the proposal, a purpose or a first-person
+	 * question built from admitted words. A shape states word ORDER, so a question carrying anything
+	 * a shape does not name is not admitted.
+	 */
+	private static final List<Pattern> PROPOSAL_SHAPES = shapes(
+			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give
+			// ibuprofen to her?", "Can I give her omeprazole, given her allergies?"
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer|add) (?:"
+					+ PATIENT + " )?(?:on )?" + D + "(?: to " + PATIENT + ")?(?: now| today)?"
+					+ "(?: given " + POSSESSIVE + " (?:allergies|allergy|" + MEDICATION_WORD + "))?",
+			// "Can this patient take warfarin?", "Can she take ibuprofen?"
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on) "
+					+ D + "(?: now| today)?",
+			// "Is it safe to give her ibuprofen?", "Is it safe to start her on clarithromycin?"
+			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:give|start|prescribe|administer|add|take) (?:"
+					+ PATIENT + " )?(?:on )?" + D + "(?: now| today)?",
+			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?"
+			"is " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: now| today)?",
+			// "Would ibuprofen be appropriate for her?"
+			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?");
+
+	/**
+	 * The question shapes a request to screen the patient's OWN medications against each other may
+	 * take — issue #469. A grammar for the reason {@link #PROPOSAL_SHAPES} is: the word list it
+	 * replaced admitted "Does this drug interact with her medications?", every word of which was on
+	 * it, and answered it with her own pairs.
+	 */
+	private static final List<Pattern> SCREEN_SHAPES = shapes(
+			// "Are there any drug interactions with her current medications?"
+			"(?:are|is) there (?:any )?(?:drug )?interactions? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
+			// "Are any of her current medications interacting with each other?", "Do any of her meds
+			// interact?", "Do her medications interact with each other?"
+			"(?:are|do) (?:any of )?" + POSSESSIVE + " " + MEDICATIONS + " (?:interact|interacting)"
+					+ "(?: with (?:each other|one another))?",
+			// "Does she have any drug interactions I should know about?"
+			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?interactions?"
+					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?(?: i should know about)?");
+
+	private static List<Pattern> shapes(String... shapes) {
+		List<Pattern> patterns = new ArrayList<Pattern>(shapes.length);
+		for (String shape : shapes) {
+			patterns.add(Pattern.compile(shape));
+		}
+		return Collections.unmodifiableList(patterns);
 	}
 
-	private static Set<String> vocabulary(String... words) {
-		return Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(words)));
-	}
-
-	/**
-	 * Every word a question proposing a drug may carry beside the drug's own names — issue #469. A
-	 * CLOSED list, and that is the design: see {@link #asksWhetherToGiveADrug}.
-	 */
-	private static final Set<String> PROPOSAL_VOCABULARY = vocabulary("i", "we", "you", "can", "could",
-			"may", "should", "would", "is", "it", "ok", "okay", "to", "be", "give", "start", "take",
-			"prescribe", "administer", "add", "safe", "safely", "appropriate", "her", "him", "his", "she",
-			"he", "them", "they", "their", "the", "this", "patient", "patient's", "a", "an", "on", "for",
-			"now", "today", "with", "given", "allergy", "allergies", "allergic", "medications",
-			"medication", "meds", "medicines", "current", "currently", "and");
-
-	/** A modal a proposal is asked with. */
-	private static final Set<String> PROPOSAL_MODALS = vocabulary("can", "could", "may", "should",
-			"would", "ok", "okay");
-
-	/** A verb proposing to put the patient on a drug. */
-	private static final Set<String> PROPOSAL_VERBS = vocabulary("give", "start", "take", "prescribe",
-			"administer", "add");
-
-	/** Asking after a drug's suitability without a verb. */
-	private static final Set<String> SUITABILITY_WORDS = vocabulary("safe", "safely", "appropriate");
-
-	/**
-	 * Every word a request to screen her OWN medications against each other may carry — issue #469.
-	 * Closed, for the reason {@link #PROPOSAL_VOCABULARY} is. No word that makes some OTHER drug the
-	 * subject ("drugs", "which", "anything", "that") is in it: "Which drugs interact with her
-	 * medications?" asks about drugs she is not on, which a screen of her own does not answer.
-	 */
-	private static final Set<String> SCREEN_VOCABULARY = vocabulary("are", "is", "do", "does", "there",
-			"any", "of", "her", "his", "their", "the", "this", "patient", "patient's", "she", "he", "they",
-			"current", "currently", "active", "medications", "medication", "meds", "medicines",
-			"prescriptions", "drug", "interact", "interacting", "interaction", "interactions", "with",
-			"each", "other", "one", "another", "between", "among", "together", "taking", "on", "in",
-			"have", "has", "i", "should", "know", "about", "all", "a", "an", "check", "for");
-
-	/**
-	 * Whether a question proposes giving ONE drug and asks nothing else — "Can I give her ibuprofen?",
-	 * "Is it safe to start clarithromycin?", "Can this patient take warfarin?" — asked of the
-	 * question's {@link #words} with the drug's own names already removed. Issue
-	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>: it bounds
-	 * which questions {@code DrugReferenceInjector} answers from its own findings, where a finding that
-	 * withholds makes the answer "No".
-	 *
-	 * <p><b>A closed vocabulary, and fail-CLOSED, and the direction is the whole design.</b> Every word
-	 * left must be one a bare proposal is made of, so a question carrying anything more — a dose or an
-	 * amount, a wh-word ("how", "when"), a negation, a concern ("risky"), an alternative ("instead"),
-	 * a condition ("for her kidneys"), a purpose ("for her knee pain"), a second drug the dataset does
-	 * not know — is not admitted. That holds of words OUTSIDE the list: a purpose spelled in the list's
-	 * own words ("… for her allergies") is admitted, and is a residue ADR Decision 108 names. A question it does not admit keeps the model call it has always
-	 * had, so a phrasing it misses costs nothing it did not cost before, and only an ADMISSION can go
-	 * wrong. That is why this may be a closed list where {@link #isInteractionScreening} had to be
-	 * widened after a list MISSED screens (ADR Decision 89): there a miss hid a hazard, here a miss
-	 * hides nothing. The first form of this was a list of REFUSING words, and a review drove four
-	 * questions through it that it should have refused; an open list of refusals cannot be finished.
-	 *
-	 * <p>Beside the vocabulary it needs a proposal: a modal with a proposal verb, or a suitability
-	 * word.
-	 */
-	public static boolean asksWhetherToGiveADrug(List<String> wordsOtherThanTheDrugsNames) {
-		List<String> words = wordsOtherThanTheDrugsNames;
-		if (words == null || !allIn(words, PROPOSAL_VOCABULARY)) {
+	private static boolean fitsAShape(List<String> words, List<Pattern> shapes) {
+		if (words == null || words.isEmpty()) {
 			return false;
 		}
-		return (!Collections.disjoint(words, PROPOSAL_MODALS) && !Collections.disjoint(words, PROPOSAL_VERBS))
-				|| !Collections.disjoint(words, SUITABILITY_WORDS);
+		String joined = String.join(" ", words);
+		for (Pattern shape : shapes) {
+			if (shape.matcher(joined).matches()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether a question proposes giving ONE drug and asks nothing else — asked of its {@link #words}
+	 * with the drug's own name already marked {@link #DRUG_NAME}. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>: it bounds
+	 * which proposals {@code DrugReferenceInjector} answers with a withholding "No", which is the
+	 * polarity of every shape in {@link #PROPOSAL_SHAPES}.
+	 *
+	 * <p><b>A closed grammar, and fail-CLOSED, and the direction is the whole design.</b> A question
+	 * fitting no shape keeps the model call it has always had, so a phrasing it misses costs nothing it
+	 * did not cost before; only an ADMISSION can go wrong. That is why this may be a closed list where
+	 * {@link #isInteractionScreening} had to be widened after a list MISSED screens (ADR Decision 89):
+	 * there a miss hid a hazard, here a miss hides nothing.
+	 */
+	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);
 	}
 
 	/**
 	 * Whether a question naming no drug asks to screen the patient's OWN medications against each other
-	 * and nothing else — "Are any of her current medications interacting with each other?", "Do any of
-	 * her meds interact?" — issue #469: every word in a closed vocabulary, for the reason
-	 * {@link #asksWhetherToGiveADrug} gives. It does not ask {@link #isInteractionScreening} as well,
-	 * and the reason is its one caller: {@code DrugReferenceInjector} admits a screen only where an
-	 * interaction finding was raised for a question naming no drug, and only the screening arm, gated on
-	 * that very predicate, raises one. The vocabulary carries none of {@link #MEDICATION_SAFETY_CUES}'
-	 * words, deliberately: the screening trigger also fires on a safety or change word (ADR Decision
-	 * 89), and "Is there a change in her medications?" asks for her order history, which an answer of
-	 * interaction findings does not give.
+	 * and nothing else — one of {@link #SCREEN_SHAPES}, for the reason {@link #asksWhetherToGiveADrug}
+	 * gives. Issue #469. It does not ask {@link #isInteractionScreening} as well, and the reason is its
+	 * one caller: {@code DrugReferenceInjector} admits a screen only where an interaction finding was
+	 * raised for a question naming no drug, and only the screening arm, gated on that very predicate,
+	 * raises one.
 	 */
 	public static boolean asksOnlyToScreenHerMedications(String question) {
-		return allIn(words(question), SCREEN_VOCABULARY);
+		return fitsAShape(words(question), SCREEN_SHAPES);
 	}
 
 	/**

@@ -577,7 +577,7 @@ public class ChartSearchAiConstants {
 	 * Decision 108. Which questions that is, is decided once per injection by
 	 * {@code DrugReferenceInjector}, which composes nothing while it is off — it reads it before any
 	 * of the composition runs; the answer is carried on the chart as {@code PatientChart.getModuleAnswer()}.
-	 * Ships OFF: the gate the issue names — the probe-safety corpus and its thirty-nine cells, both
+	 * Ships OFF: the gate the issue names — the probe-safety corpus and the issue's thirty-nine cells, both
 	 * arms on one build — has not been run, and the decision records what it has to measure.
 	 */
 	public static final String GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS = "chartsearchai.drugSafety.answerFromFindings";

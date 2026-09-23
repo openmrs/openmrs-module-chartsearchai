@@ -172,12 +172,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertNotNull(answer.getPairChipExtent(), "and so is the pair extent");
 	}
 
-	/** A question asking only whether the drug is SAFE or APPROPRIATE, with no proposal verb, is a
-	 *  proposal too. */
+	/** Every shape of proposal the grammar admits, each answered with the withholding call — delete a
+	 *  shape and its question here goes to the model. */
 	@Test
 	public void aSuitabilityQuestionIsAnsweredFromTheFindingsToo() {
 		answerFromFindings(true);
-		for (String question : new String[] { "Is ibuprofen safe for her?", "Is ibuprofen appropriate for her?" }) {
+		for (String question : new String[] { "Is ibuprofen safe for her?", "Is ibuprofen appropriate for her?",
+				"Can this patient take ibuprofen?", "Is it safe to give her ibuprofen?",
+				"Would ibuprofen be appropriate for her?", "Can I give ibuprofen to her?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question);
@@ -301,7 +303,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			// a proposal cue beside a concern or a negation: "No" would answer it backwards
 			"Can I give her ibuprofen, or is it risky?",
 			"Can I give her ibuprofen or not?",
-			"Can I give her ibuprofen if she can't have aspirin?",
+			// a second question joined to the proposal, in words a proposal is made of
+			"Can I give her ibuprofen, and is she allergic?",
+			"Is she allergic, and can I give her ibuprofen?",
+			// the speaker, not the patient
+			"Can I take ibuprofen?",
 			// wh-questions, whose answer is neither yes nor no
 			"How should I give her ibuprofen?",
 			"When can I start her on ibuprofen?",
@@ -415,13 +421,37 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Is grapefruit juice safe with her medications?",
 				"Do NSAIDs interact with any of her medications?",
 				"Which drugs interact with her medications?",
-				"Is there anything that interacts with her medications?" }) {
+				"Is there anything that interacts with her medications?",
+				"Does this drug interact with any of her medications?",
+				"Does the drug interact with her medications?",
+				"Do any of her medications interact with another drug?",
+				"Is there any drug interacting with her medications?" }) {
 			assertFalse(findingsInThePromptFor(question).isEmpty(),
 					"precondition: the screening arm raises her findings for " + question);
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(1, provider.calls, "the model must be asked: " + question);
 			assertFalse(answer.isAnsweredByTheModule(), question);
+		}
+	}
+
+	/** Every shape of screen the grammar admits — delete a shape and its question here goes to the
+	 *  model — and a screen's answer puts her interactions ahead of any other finding about her own
+	 *  medications, since interactions are what it asked about. */
+	@Test
+	public void everyScreenShapeIsAnsweredWithTheInteractionFirst() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		answerFromFindings(true);
+		for (String question : new String[] { SCREEN,
+				"Are any of her current medications interacting with each other?",
+				"Do her medications interact with each other?",
+				"Does she have any drug interactions I should know about?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question);
+			assertTrue(answer.getAnswer().startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
+					"the interaction leads, not the allergy finding: " + answer.getAnswer());
 		}
 	}
 

@@ -2294,8 +2294,8 @@ public class DrugReferenceInjector {
 	 * The lead of a module-composed answer whose strongest finding about the PROPOSED drug withholds it —
 	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. The
 	 * drug is spelled between the two halves. It opens with "No" because {@link #answersFromFindings}
-	 * admits a proposal only in {@code QueryScopeRouter.asksWhetherToGiveADrug}'s closed vocabulary —
-	 * no wh-word, negation or concern — where "No" is the polarity of the answer.
+	 * admits a proposal only in one of {@code QueryScopeRouter.asksWhetherToGiveADrug}'s shapes, each
+	 * a question whose answer "No" is.
 	 */
 	public static final String WITHHOLD_LEAD_OPENING = "No — ";
 
@@ -2367,37 +2367,55 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The question's words once every place it NAMES one of {@code entries} is taken out — the spans
+	 * The question's words with every place it NAMES one of {@code entries} marked
+	 * {@code QueryScopeRouter.DRUG_NAME} — the spans
 	 * {@link DrugReference#namedOccurrences} reports, the one accessor for WHERE a prose match sits, so
-	 * the words removed are exactly the name the question wrote and never another alias's words
+	 * the words marked are exactly the name the question wrote and never another alias's words
 	 * ("Aleve Arthritis Pain" is one of diclofenac's names, and removing its words from any diclofenac
 	 * question once admitted "… for her arthritis pain").
 	 */
 	private static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
 		String folded = DrugReference.foldedLower(question);
-		char[] text = folded.toCharArray();
+		boolean[] named = new boolean[folded.length()];
 		for (DrugReference entry : entries) {
 			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
 				for (int k = occurrence.getStart(); k < occurrence.getEnd(); k++) {
-					text[k] = ' ';
+					named[k] = true;
 				}
 			}
 		}
-		return QueryScopeRouter.words(new String(text));
+		// One mark per run of named characters, so overlapping names ("aspirin" inside "acetylsalicylic
+		// acid (aspirin)") are one name, and two separate mentions are two.
+		StringBuilder marked = new StringBuilder();
+		for (int k = 0; k < folded.length(); k++) {
+			if (!named[k]) {
+				marked.append(folded.charAt(k));
+			} else if (k == 0 || !named[k - 1]) {
+				marked.append(' ').append(QueryScopeRouter.DRUG_NAME).append(' ');
+			}
+		}
+		return QueryScopeRouter.words(marked.toString());
 	}
 
 	/**
 	 * The module's own answer to a question {@link #answersFromFindings} admitted: one line per
 	 * finding, each in its record's own words and cited by its own number — issue #469.
 	 *
-	 * <p><b>The findings about the drug the question PROPOSED come first</b>, and the first of them
-	 * decides the lead, because that drug is what was asked about: a finding about one of her own
-	 * medications that a widened question also raised must not take the answer's first sentence and
-	 * leave the question unanswered. Within each group, strongest first by the ranking the prompt gives
-	 * the model — a reason to withhold, a reason to change a medication she is already taking, a
-	 * caution, a caution about one she is taking — read off {@link #strengthClause}, the one
-	 * definition of which a finding states, and never off the severity word. Stable, so the injection
-	 * order stands within a class.
+	 * <p><b>What was asked about comes first</b>: the findings about the drug the question PROPOSED,
+	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
+	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
+	 * cannot take the answer's first sentence and leave the question unanswered. One key does both,
+	 * because the two never meet: only the screening arm relates two of her own medications, and it
+	 * stands down for a question that resolved a drug. Within each group, strongest first by the
+	 * ranking the prompt gives the model, read off {@link #strengthClause} and never off the severity
+	 * word; stable, so the injection order stands within a class.
+	 *
+	 * <p><b>That last sort is a defence nothing observes today.</b> The arms already append a
+	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
+	 * then its interactions, which {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING} orders, in
+	 * every arrangement this change's tests and reviews built — so removing the sort leaves the suite
+	 * green. It stays because the lead is decided by the FIRST
+	 * line, and that must not depend on the order the arms happen to run in.
 	 *
 	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
 	 * medications — a screen — opens with that finding: a lead saying which of two medications to
@@ -2417,7 +2435,8 @@ public class DrugReferenceInjector {
 			}
 			order.add(Integer.valueOf(i));
 		}
-		Collections.sort(order, Comparator.<Integer> comparingInt(i -> findings.get(i).isAboutACurrentMedication() ? 1 : 0)
+		Collections.sort(order, Comparator.<Integer> comparingInt(i -> findings.get(i).isAboutACurrentMedication()
+				&& !SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType()) ? 1 : 0)
 				.thenComparingInt(i -> strengthRank(clauses[i])));
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {

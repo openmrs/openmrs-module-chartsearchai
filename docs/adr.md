@@ -9542,9 +9542,9 @@ the data does not carry, a switched-off arm, a screen naming a food. Those quest
 call. Two shapes are answered:
 
 - **A question proposing ONE substance she is not already taking, where a finding about it withholds
-  it** (`STRENGTH_WITHHOLD`), admitted by `QueryScopeRouter.asksWhetherToGiveADrug` once the drug's own
-  names are taken out of the question — the spans `DrugReference.namedOccurrences` reports, so only the
-  name the question wrote goes and never another of the entry's names (removing every word of every
+  it** (`STRENGTH_WITHHOLD`), admitted by `QueryScopeRouter.asksWhetherToGiveADrug` with the drug's own
+  name marked in the question — the spans `DrugReference.namedOccurrences` reports, so only the name
+  the question wrote is marked and never another of the entry's names (removing every word of every
   alias once admitted *"Can I give her diclofenac for her arthritis pain?"*, `Aleve Arthritis Pain`
   being one of diclofenac's names). "Not already taking" is issue #402: the drug-in-play arm states a
   proposal clause for a drug she takes, and composing would make that defect certain.
@@ -9557,27 +9557,31 @@ call. Two shapes are answered:
 Both need the chart-read verdict the injector stamped (`chartReadForSafety`): with the orders unread
 "not already taking" cannot be asked, and a screen has only part of her list to relate.
 
-**Both question predicates are closed vocabularies, and fail-CLOSED.** A question carrying any word
-outside its list keeps the model call, so a dose, a wh-question, a negation, a purpose or condition in
-words outside the list (*"… for her knee pain"*, *"… safe for her kidneys?"*), a second drug, a class, a
-food or an unknown drug is left to the model — and so is *"Is there a change in her medications?"*,
-which the screening trigger reads as a screen (ADR Decision 89) and which asks for her order history:
-the screen vocabulary carries none of that trigger's safety or change words, nor a word making some
-other drug the subject (*"Which drugs interact with her medications?"*). The first form of the proposal
-predicate was a list of REFUSING words, and a review drove questions through it that it should have
-refused; a list of refusals is open-ended where a list of admissions fails closed. ADR Decision 89 had
-to widen a positive list, and the difference is the direction of a miss: there a missed phrasing hid a
-hazard; here it keeps the call the question always had.
+**Both question predicates are closed GRAMMARS, and fail-CLOSED.** Each is a short list of question
+shapes over the question's words, with the proposed drug's name marked where it stood
+(`QueryScopeRouter.PROPOSAL_SHAPES`, `SCREEN_SHAPES`); a question fitting none keeps the model call. So a
+dose, a wh-question, a negation, a purpose or condition (*"… for her knee pain"*, *"… safe for her
+kidneys?"*), a second question joined to the first, a second drug, a class, a food or an unknown drug is
+left to the model — and so is *"Is there a change in her medications?"*, which the screening trigger
+reads as a screen (ADR Decision 89) and which asks for her order history, and *"Does this drug interact
+with her medications?"*, which asks about some other drug. **Grammars and not word lists, because two
+word lists were defeated in turn.** The first listed REFUSING words and a review drove wh-questions and a
+condition through it; the second listed ADMITTED words and reviews drove through it questions built of
+admitted words in an order it did not mean — *"Can I give her omeprazole, and is she allergic?"*, *"Does
+this drug interact with any of her medications?"* A bag of words cannot state order; a shape can. ADR
+Decision 89 had to widen a positive list, and the difference is the direction of a miss: there a missed
+phrasing hid a hazard; here it keeps the call the question always had.
 [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
 declined a gate on "the question proposes giving a drug" as a second hand-picked vocabulary with nothing
 measured behind it, and that description fits these too; what differs is what the gate protects. There,
 gating would have withheld a harmless note from some questions; here, not gating would replace the
-model's answer to a dosing, current-use or wh-question with a refusal. The lists are unmeasured, and
+model's answer to a dosing, current-use or wh-question with a refusal. The shapes are unmeasured, and
 their misses are the first thing the gate below should read — beginning with the issue's own headline
-question, *"Can I give her ibuprofen for her knee pain?"*, which a purpose clause keeps with the model.
+question, *"Can I give her ibuprofen for her knee pain?"*, which its purpose clause keeps with the model.
 
-**The composed text.** The findings about the proposed drug first, then any about her own medications a
-widened question also raised, each group strongest first by the ranking the prompt gives the model
+**The composed text.** What was asked about first — the proposed drug's findings, or on a screen her
+interactions — then any other finding about her own medications a widened question also raised, each
+group strongest first by the ranking the prompt gives the model
 (withhold, change a current medication, caution, caution about a current medication), read off
 `strengthClause`. A proposal leads *"No — X should not be given: this module's drug-safety check found a
 reason to withhold it."*; a screen gets no lead, since a lead naming which of her medications to change
@@ -9614,9 +9618,7 @@ chance of the two disagreeing.
   read as a clearance; this change found none that the module can support, and left them to the model.
 - A question about a drug she already takes (R3, D6) keeps the call, and with it #402.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.
-- A phrasing either vocabulary does not carry keeps the call, the headline question of the issue
-  included; a purpose spelled in the proposal vocabulary's own words (*"… for her allergies"*) is
-  admitted.
+- A phrasing no shape carries keeps the call, the headline question of the issue included.
 - With `chartsearchai.drugSafety.citeOrderRecords` off, as it ships, an interaction line cites no order
   record, where the model supplied one in 10 of the first check's 16 cells. A contraindication line's
   allergy or condition record still arrives, as `attachedByTheModule: true`.
@@ -9638,8 +9640,7 @@ The gate the issue names, not run in this change: the probe-safety corpus
 (`eval/drift-metric/score_probe_safety.py`, including its abstention controls) and the thirty-nine cells
 of the issue's three comments, both arms on one build, with only this property between them. What the
 arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
-yes, and which questions the vocabularies refuse that the issue's cells expected answered.
+yes, and which questions the shapes refuse that the issue's cells expected answered.
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest` — the real injector and validator on patient 7,
-both paths; mutate a conjunct of `answersFromFindings` or of the two vocabulary predicates and read the
-failures — and `ChartSearchAiAnsweredByTheModuleTest`.
+both paths; mutate a conjunct of `answersFromFindings`, or delete a shape, and read the failures — and `ChartSearchAiAnsweredByTheModuleTest`.

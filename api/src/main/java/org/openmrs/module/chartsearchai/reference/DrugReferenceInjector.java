@@ -2578,9 +2578,8 @@ public class DrugReferenceInjector {
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {
 			SafetyWarning finding = findings.get(i);
-			boolean currentMedicationContraindication = SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
-					&& (STRENGTH_CHANGE_CURRENT_MEDICATION.equals(clauses[i])
-							|| STRENGTH_CAUTION_CURRENT_MEDICATION.equals(clauses[i]));
+			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
+					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
 			lines.add(findingBody(finding, orderRecordNumbers, true)
 					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 					+ " [" + numbers.get(i) + "]");

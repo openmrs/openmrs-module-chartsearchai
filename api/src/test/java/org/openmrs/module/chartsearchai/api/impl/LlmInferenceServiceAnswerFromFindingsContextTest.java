@@ -430,6 +430,33 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertCarriesEveryFinding(answer, findings);
 	}
 
+	/**
+	 * The licensing key is scoped to the withholding CLASS a proposal states, so a screen's lines keep
+	 * the order the screening arm raised them in: here an unrated rule and a Major one between her own
+	 * orders both state the current-medication withholding clause, and only the Major one is a rating
+	 * that licenses a proposal's "No".
+	 */
+	@Test
+	public void aScreensLinesKeepTheOrderTheArmRaisedThemIn() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		executeDataSet(METFORMIN_ORDER);
+		DrugReferenceService reference = DrugReferenceTestSupport.curatedFixtureService(
+				"chartsearchai-test/drug-reference-answer-from-findings-screen-unrated-beside-major.json");
+		List<Finding> findings = findingsInThePromptFor(SCREEN, reference);
+		assertEquals(2, findings.size(), "precondition: the screen relates two pairs: " + findings);
+		assertTrue(findings.get(0).text.startsWith("Metformin" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE)
+				&& findings.get(1).text.startsWith("Warfarin" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE),
+				"precondition: the arm raises the unrated pair ahead of the Major one: " + findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, reference).search(patient, SCREEN);
+
+		assertEquals(0, provider.calls);
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(expectedLine(answer, findings.get(0)), lines[0], answer.getAnswer());
+		assertEquals(expectedLine(answer, findings.get(1)), lines[1], answer.getAnswer());
+	}
+
 	@Test
 	public void withThePropertyOffTheModelIsAskedAsBefore() {
 		answerFromFindings(false);

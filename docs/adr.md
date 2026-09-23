@@ -2401,7 +2401,7 @@ Bundled byte-identical to the upstream release, so it can be verified rather tha
 - **+** A knowledge-base refresh is a file copy, and provenance is checkable by hash.
 - **−** The dose-excess arm is dormant by default; an install that needs dose ceilings must select `sourceFormat=json` or supply a dosing dataset.
 - **−** The module becomes a redistributor of a third-party academic dataset, with the attribution, NC licence terms and governance caveat that carries.
-- **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff.
+- **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff — and since #476 the rows the content rules name come to 23, one of them a synonym (see the note under the table above).
 - **−** +3.8 MB of packed jar (4,031,048 bytes for the entry, schema 1.3 — see the measurement above), ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover the same 3.8 MB and is untouched here.)
 
 ## Decision 55: Each operand of the name scan is folded once where it is produced

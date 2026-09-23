@@ -237,7 +237,24 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	@Test
 	public void aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
-		assertTheModelIsAsked("Can I give her omeprazole?");
+		String question = "Can I give her omeprazole?";
+		// The finding the case is about must reach the prompt, as a caution, beside nothing that
+		// withholds: without her warfarin order the model is asked for want of any finding, and the
+		// assertion below would pass for that reason instead (issue #479).
+		boolean moderateWarfarinCaution = false;
+		List<Finding> findings = findingsInThePromptFor(question);
+		for (Finding finding : findings) {
+			assertFalse(finding.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
+					"precondition: no finding withholds omeprazole, was: " + finding.text);
+			if (finding.text.contains("Warfarin") && finding.text.contains("Moderate")
+					&& finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION)) {
+				moderateWarfarinCaution = true;
+			}
+		}
+		assertTrue(moderateWarfarinCaution,
+				"precondition: the Moderate warfarin finding reached the prompt as a caution, findings were: "
+						+ findings);
+		assertTheModelIsAsked(question);
 	}
 
 	/**
@@ -644,6 +661,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			this.index = index;
 			this.drug = drug;
 			this.text = text;
+		}
+
+		/** The record as the prompt carries it, so a precondition failing over a list reads as one. */
+		@Override
+		public String toString() {
+			return "[" + index + "] " + text;
 		}
 	}
 

@@ -239,8 +239,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		executeDataSet(WARFARIN_ORDER);
 		String question = "Can I give her omeprazole?";
 		// The finding the case is about must reach the prompt, as a caution, beside nothing that
-		// withholds: without her warfarin order the model is asked for want of any finding, and the
-		// assertion below would pass for that reason instead (issue #479).
+		// withholds: without her warfarin order a finding is still raised, so the model is still asked and
+		// the assertion below would pass with the Moderate finding it is about absent (issue #479).
 		boolean moderateWarfarinCaution = false;
 		List<Finding> findings = findingsInThePromptFor(question);
 		for (Finding finding : findings) {

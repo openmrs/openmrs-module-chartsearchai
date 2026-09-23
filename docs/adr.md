@@ -9836,8 +9836,9 @@ rating below `major` is a caution.** Nothing else about the split moves:
     does not; the criterion was not written to excuse either.
 
   What is left is the same residue, now measured: by the arm's figure a fold of two cautions
-  withholds on 3,116 of the shipped knowledge base's 403,520 Minor and Moderate rows. A later proposal to grade it would have to show the caution-led answer stating both
-  claims, which is a prompt question this measurement did not try to answer.
+  withholds on 3,116 of the shipped knowledge base's 403,520 Minor and Moderate rows. A later
+  proposal to grade it would have to show the caution-led answer stating both claims, which is a
+  prompt question this measurement did not try to answer.
 - **The current-medication caution branch now asks for the rating, and opens as the change branch
   does.** The issue requires a Moderate finding to be stated with its rating (#299, #337) and not as a
   permission or a "Yes" (#107 arm C), and moving Moderate to the caution moved a screened Moderate

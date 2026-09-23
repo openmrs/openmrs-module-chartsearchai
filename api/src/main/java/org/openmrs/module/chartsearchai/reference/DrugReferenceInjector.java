@@ -803,10 +803,18 @@ public class DrugReferenceInjector {
 					unrepresented.size(), matched.size(), referenceCharacters(mappings), findings.size(),
 					namedClass == null ? 0 : 1, slice.getRecords(), slice.getCharacters(), question);
 		}
+		// Read only where there is something it could decide, and HERE rather than where the answer is
+		// used, so that with the property off none of the composition runs at all (issue #469).
 		String moduleAnswer = null;
-		if (answersFromFindings(question, questionDrugs, orderEntries, findings, screenRelatedNothing)) {
+		if ((screenRelatedNothing || !findings.isEmpty())
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& answersFromFindings(question, questionDrugs, screenedSubstances, findings,
+						screenRelatedNothing)) {
 			// A screen that related nothing is answered by its own note, qualifier included, cited by
-			// the number it was given above; everything else by the findings.
+			// the number it was given above; everything else by the findings. Stamped only where the
+			// property is on, so LlmInferenceService reads the stamp alone and reads no property.
 			moduleAnswer = screenRelatedNothing
 					? interactionScreenNoteBody(screenedSubstances.size()) + " [" + screenNoteNumber + "]"
 					: composeFromFindings(findings, findingNumbers, orderRecordNumbers);
@@ -2289,10 +2297,11 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The lead of a module-composed answer whose strongest finding withholds a proposed drug — issue
-	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. The drug
-	 * is spelled between the two halves. It opens with "No" because {@link #answersFromFindings}
-	 * admits only a question asking whether to give the drug, where "No" is the right polarity.
+	 * The lead of a module-composed answer whose strongest finding about the PROPOSED drug withholds it —
+	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. The
+	 * drug is spelled between the two halves. It opens with "No" because {@link #answersFromFindings}
+	 * admits a proposal only in {@code QueryScopeRouter.asksWhetherToGiveADrug}'s closed vocabulary —
+	 * no wh-word, negation or concern — where "No" is the polarity of the answer.
 	 */
 	public static final String WITHHOLD_LEAD_OPENING = "No — ";
 
@@ -2300,8 +2309,8 @@ public class DrugReferenceInjector {
 			" should not be given: this module's drug-safety check found a reason to withhold it.";
 
 	/**
-	 * The graded lead of a module-composed answer whose strongest finding is a caution about a proposed
-	 * drug, the drug before it and the caution itself after it — in the same sentence, which is what
+	 * The graded lead of a module-composed answer whose strongest finding about the PROPOSED drug is a
+	 * caution, the drug before it and the caution itself after it — in the same sentence, which is what
 	 * the prompt's own caution branch asks of the model, so the caution is never dropped.
 	 */
 	public static final String CAUTION_LEAD = " can be given, with a caution to note: ";
@@ -2314,55 +2323,58 @@ public class DrugReferenceInjector {
 	 *
 	 * <p><b>Three shapes, and anything else keeps the model call.</b>
 	 * <ul>
-	 * <li>An interaction screen that related nothing — {@code screenRelatedNothing}, the note's own
-	 *     gate (ADR Decision 87), read and not re-derived — on an install whose interaction arms run
-	 *     ({@link DrugSafetyValidator#reportsInteractions()}). That gate reads no toggle, so without the
-	 *     second conjunct a screen switched off would be answered "no interactions were found". Its
-	 *     answer is the note.</li>
-	 * <li>An interaction SCREEN of her own medications that raised findings: no drug in the question,
-	 *     and {@code QueryScopeRouter.isInteractionScreening}. That conjunct and not the absence of a
-	 *     drug alone, because a question about her medication LIST or her allergies widens the
-	 *     order-driven arm too, and an answer that was only its finding would drop the list.</li>
-	 * <li>A question PROPOSING one drug: exactly one substance, a finding about it, a substance she is
-	 *     not already taking, and a question {@code QueryScopeRouter.asksWhetherToGiveADrug} admits.
-	 *     A finding about it is one that is not {@link SafetyWarning#isAboutACurrentMedication()} —
-	 *     only the drug-in-play arm raises those before there is an answer, and with one substance in
-	 *     play it is about that one. Not already taking it, because the drug-in-play arm states a
-	 *     PROPOSAL clause for a drug she does take (issue #402), and composing would make that defect
-	 *     certain rather than possible. The suitability predicate because this arm runs for any
-	 *     question naming the drug — a dosing question, one about current use, one asking whether it
-	 *     is risky — and a withholding answer would answer a different question, or this one
-	 *     backwards.</li>
+	 * <li>A screen of her own medications that related nothing — {@code screenRelatedNothing}, the
+	 *     note's own gate (ADR Decision 87), read and not re-derived — on an install whose interaction
+	 *     arms run ({@link DrugSafetyValidator#reportsInteractions()}). That gate reads no toggle, so
+	 *     without the second conjunct a screen switched off would be answered "no interactions were
+	 *     found". Its answer is the note.</li>
+	 * <li>A screen of her own medications that raised findings.</li>
+	 * <li>A question PROPOSING one drug: exactly one substance, a substance she is not already taking,
+	 *     a question {@code QueryScopeRouter.asksWhetherToGiveADrug} admits once the drug's own names
+	 *     are taken out of it, and a finding about that drug. A finding about it is one that is not
+	 *     {@link SafetyWarning#isAboutACurrentMedication()} — only the drug-in-play arm raises those
+	 *     before there is an answer, and with one substance in play it is about that one. Not already
+	 *     taking it, because the drug-in-play arm states a PROPOSAL clause for a drug she does take
+	 *     (issue #402), and composing would make that defect certain rather than possible — asked of
+	 *     {@code herSubstances}, the substances this pass resolved her orders to, and not of a second
+	 *     resolution.</li>
 	 * </ul>
+	 *
+	 * <p>Both screen shapes need a question naming no drug the dataset resolved, and
+	 * {@code QueryScopeRouter.asksOnlyToScreenHerMedications}: a closed vocabulary too, because the
+	 * screening arm keeps running for a question naming something the dataset does not carry — a drug
+	 * it does not know, a drug CLASS (whose note asks for a drug by name), a food — and would answer it
+	 * with her own findings. No class term is in that vocabulary, so no class question passes it.
 	 *
 	 * <p>What is left out keeps today's path: a named drug that raised nothing, two named drugs, and
 	 * every question neither predicate recognises. Both predicates are FAIL-CLOSED, so a phrasing they
 	 * miss costs the model call it always cost, and only an admission can be wrong.
 	 */
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
-			List<DrugReference> orderEntries, List<SafetyWarning> findings, boolean screenRelatedNothing) {
-		if (screenRelatedNothing) {
-			return DrugSafetyValidator.reportsInteractions();
-		}
-		if (findings.isEmpty()) {
-			return false;
+			Set<Object> herSubstances, List<SafetyWarning> findings, boolean screenRelatedNothing) {
+		if (questionDrugs.isEmpty()) {
+			if (!QueryScopeRouter.asksOnlyToScreenHerMedications(question)) {
+				return false;
+			}
+			return screenRelatedNothing ? DrugSafetyValidator.reportsInteractions() : !findings.isEmpty();
 		}
 		Set<Object> asked = new LinkedHashSet<Object>();
+		Set<String> namesOfIt = new HashSet<String>();
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
-		}
-		if (asked.isEmpty()) {
-			return QueryScopeRouter.isInteractionScreening(question);
-		}
-		if (asked.size() != 1 || !QueryScopeRouter.asksWhetherToGiveADrug(question)) {
-			return false;
-		}
-		if (orderEntries != null) {
-			for (DrugReference entry : orderEntries) {
-				if (asked.contains(entry.substanceGroupKey())) {
-					return false;
+			for (String alias : entry.getAliases()) {
+				if (alias != null) {
+					namesOfIt.addAll(QueryScopeRouter.words(DrugReference.foldedLower(alias)));
 				}
 			}
+		}
+		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)) {
+			return false;
+		}
+		List<String> rest = QueryScopeRouter.words(DrugReference.foldedLower(question));
+		rest.removeAll(namesOfIt);
+		if (!QueryScopeRouter.asksWhetherToGiveADrug(rest)) {
+			return false;
 		}
 		for (SafetyWarning finding : findings) {
 			if (!finding.isAboutACurrentMedication()) {
@@ -2374,49 +2386,54 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The module's own answer to a question {@link #answersFromFindings} admitted: one line per
-	 * finding, strongest first, each in its record's own words and cited by its own number, led by the
-	 * call the strongest states — issue #469.
+	 * finding, each in its record's own words and cited by its own number — issue #469.
 	 *
-	 * <p><b>Strongest first, by the ranking the prompt gives the model</b>: a reason to withhold, then
-	 * a reason to change a medication she is already taking, then a caution, then a caution about one
-	 * she is taking — read off {@link #strengthClause}, the one definition of which a finding states,
-	 * and never off the severity word. Stable within a class, so the injection order stands there.
+	 * <p><b>The findings about the drug the question PROPOSED come first</b>, and the first of them
+	 * decides the lead, because that drug is what was asked about: a finding about one of her own
+	 * medications that a widened question also raised must not take the answer's first sentence and
+	 * leave the question unanswered. Within each group, strongest first by the ranking the prompt gives
+	 * the model — a reason to withhold, a reason to change a medication she is already taking, a
+	 * caution, a caution about one she is taking — read off {@link #strengthClause}, the one
+	 * definition of which a finding states, and never off the severity word. Stable, so the injection
+	 * order stands within a class.
 	 *
-	 * <p><b>Only the proposal classes carry a lead.</b> A finding about her own medications opens the
-	 * answer itself: its first sentence already names the medication, what it relates it to and its
-	 * rating, and a lead saying which of the two to change would state a choice no finding makes —
-	 * which issue #469 measured the model adding, in three cells.
+	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
+	 * medications — a screen — opens with that finding: its first sentence already names the
+	 * medication, what it relates it to and its rating, and a lead saying which of the two to change
+	 * would state a choice no finding makes, which issue #469 measured the model adding in three cells.
 	 *
-	 * @return the answer, or {@code null} where a finding states no strength clause, which no
-	 *         reachable type does today and which must not be answered for rather than composed wrong
+	 * @return the answer, or {@code null} where a finding states no strength clause — which no
+	 *         reachable type does today — so that such a question keeps the model call
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers) {
+		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
-		final int[] rank = new int[findings.size()];
 		for (int i = 0; i < findings.size(); i++) {
-			rank[i] = strengthRank(strengthClause(findings.get(i)));
-			if (rank[i] < 0) {
+			clauses[i] = strengthClause(findings.get(i));
+			if (strengthRank(clauses[i]) < 0) {
 				return null;
 			}
 			order.add(Integer.valueOf(i));
 		}
-		Collections.sort(order, Comparator.comparingInt(i -> rank[i]));
+		Collections.sort(order, Comparator.<Integer> comparingInt(i -> findings.get(i).isAboutACurrentMedication() ? 1 : 0)
+				.thenComparingInt(i -> strengthRank(clauses[i])));
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {
-			lines.add(composedFindingLine(findings.get(i), numbers.get(i), orderRecordNumbers));
+			lines.add(findingBody(findings.get(i), orderRecordNumbers, true) + " [" + numbers.get(i) + "]");
 		}
-		SafetyWarning strongest = findings.get(order.get(0));
-		int strongestRank = rank[order.get(0)];
-		if (strongestRank == 0) {
-			lines.add(0, WITHHOLD_LEAD_OPENING + strongest.getDrug() + WITHHOLD_LEAD_CLOSING);
-		} else if (strongestRank == 2) {
-			lines.set(0, strongest.getDrug() + CAUTION_LEAD + lines.get(0));
+		SafetyWarning first = findings.get(order.get(0));
+		String firstClause = clauses[order.get(0)];
+		if (STRENGTH_WITHHOLD.equals(firstClause)) {
+			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
+		} else if (STRENGTH_CAUTION.equals(firstClause)) {
+			lines.set(0, first.getDrug() + CAUTION_LEAD + lines.get(0));
 		}
 		return String.join("\n", lines);
 	}
 
-	/** The ranking {@link #composeFromFindings} orders by, over the clause a finding states. */
+	/** The prompt's ranking of the four clauses a finding can state, strongest first, or {@code -1}
+	 *  for a finding stating none. */
 	private static int strengthRank(String clause) {
 		if (STRENGTH_WITHHOLD.equals(clause)) {
 			return 0;
@@ -2433,24 +2450,17 @@ public class DrugReferenceInjector {
 		return -1;
 	}
 
-	/** One finding as a line of a module-composed answer: its record's words, without the record head
-	 *  or the prompt-facing strength clause, then its own record number (issue #469). */
-	private static String composedFindingLine(SafetyWarning finding, Integer number,
-			Map<String, Integer> orderRecordNumbers) {
-		return findingBody(finding, orderRecordNumbers, !strengthClause(finding).isEmpty()) + " [" + number
-				+ "]";
-	}
-
 	/**
 	 * A finding's record text between its head and its strength clause — the detail, then what the
 	 * names inside it stand for in this chart, then how a rule reached the chart. Its own method since
 	 * issue #469 because it is ALSO the words a module-composed answer states for the finding
-	 * ({@link #composedFindingLine}), and one method is what keeps that answer and the record the chip
-	 * beside it came from saying the same thing. The strength clause is not part of it: that clause is
-	 * prompt-facing only.
+	 * ({@link #composeFromFindings}), and one method is what keeps that answer and the record the
+	 * chip beside it came from saying the same thing. The strength clause is not part of it: that
+	 * clause is prompt-facing only.
 	 *
-	 * @param clauseFollows whether a strength clause will follow, which is one of the three things
-	 *        that decide whether the detail must end its sentence (see {@link #renderFinding})
+	 * @param clauseFollows whether the detail must end its sentence on a strength clause's account —
+	 *        {@link #renderFinding} passes whether it will append one; the composed answer passes
+	 *        {@code true}, so its line ends the sentence exactly where the record does
 	 */
 	private static String findingBody(SafetyWarning finding, Map<String, Integer> orderRecordNumbers,
 			boolean clauseFollows) {

@@ -789,21 +789,12 @@ public class LlmInferenceService implements ChartSearchService {
 		}
 	}
 
-	/**
-	 * Whether {@code chartsearchai.drugSafety.answerFromFindings} is on — issue #469, shipping OFF.
-	 * {@code protected} for the reason {@link #resolveFindingEnumerationRepair()} is.
-	 */
-	protected boolean resolveAnswerFromFindings() {
-		return ChartSearchAiUtils.getBooleanGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
-				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS);
-	}
-
 	/** Whether this chart's question is answered by the module: the injector composed an answer for
-	 *  it, and the install uses such answers. The chart first, so the property is read only where
-	 *  there is something for it to decide. */
-	private boolean answersFromTheModule(PatientChart chart) {
-		return chart.getModuleAnswer() != null && resolveAnswerFromFindings();
+	 *  it, which it does only with {@code chartsearchai.drugSafety.answerFromFindings} on (issue #469).
+	 *  The stamp alone and no second read of the property, so the pass that composed the answer and
+	 *  the one that serves it cannot disagree about it. */
+	private static boolean answersFromTheModule(PatientChart chart) {
+		return chart.getModuleAnswer() != null;
 	}
 
 	/**
@@ -817,9 +808,9 @@ public class LlmInferenceService implements ChartSearchService {
 	 * Tier-2 is a model call, and grading a citation against text the module wrote would be circular —
 	 * so every reference carries no verdict, exactly as with grounding off.
 	 *
-	 * <p><b>The keys that judge what a model WROTE state null, no measurement</b>: the class-code, prose,
-	 * active-order, finding-severity, finding-citation and dosing-ceiling checks and
-	 * {@code findingPartners}' measurement. ADR Decision 85 already said two of them would otherwise
+	 * <p><b>The checks of what a model WROTE are not run</b>: the class-code check logs nothing, and the
+	 * prose, active-order, finding-severity, finding-citation and dosing-ceiling keys and
+	 * {@code findingPartners} state null, no measurement. ADR Decision 85 already said two of them would otherwise
 	 * report on prose no model wrote. {@code answeredByTheModule} says why they are null, since a null
 	 * alone could mean a check that failed. The statements that are not judgements of prose are made
 	 * as on the model's path: the references (inline markers, and the chart records a cited finding

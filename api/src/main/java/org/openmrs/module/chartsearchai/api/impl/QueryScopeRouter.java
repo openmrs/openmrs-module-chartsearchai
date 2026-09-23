@@ -9,11 +9,15 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -124,27 +128,6 @@ public final class QueryScopeRouter {
 	 *  unrelated question is worse than missing a phrasing. */
 	private static final Pattern INTERACTION_CUES = cues("interact(?:s|ed|ing|ion|ions)?");
 
-	/** The half of {@link #MEDICATION_SAFETY_CUES} that asks whether a drug is SAFE — the only half a
-	 *  question proposing a drug can carry and still take a "No" for its answer (issue #469, see
-	 *  {@link #asksWhetherToGiveADrug}). */
-	private static final String[] SAFETY_WORDS = { "safe", "safety" };
-
-	/** The rest of {@link #MEDICATION_SAFETY_CUES}: a concern, a risk, or a change to a medication.
-	 *  Split out, not re-listed, so the screening trigger and {@link #asksWhetherToGiveADrug} read one
-	 *  vocabulary. */
-	private static final String[] CONCERN_WORDS = { "unsafe", "danger(?:ous)?", "harmful", "risk(?:s|y)?",
-			"worry", "worried", "worrying", "concern(?:s|ed|ing)?",
-			"problem(?:s|atic)?", "wrong",
-			"stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
-			"change(?:d|s)?", "adjust(?:ed|ment|ments)?" };
-
-	private static String[] concat(String[] first, String[] second) {
-		String[] all = new String[first.length + second.length];
-		System.arraycopy(first, 0, all, 0, first.length);
-		System.arraycopy(second, 0, all, first.length, second.length);
-		return all;
-	}
-
 	/**
 	 * The SECOND way a question asks for an interaction screen: it asks after the SAFETY of the
 	 * medications the patient is already on, or after CHANGING them, without using the word
@@ -169,7 +152,12 @@ public final class QueryScopeRouter {
 	 * bare "check". Both carry everyday non-medication senses in a chart question, which is the
 	 * reason {@link #INTERACTION_CUES} gives for excluding "conflict" and "interfere".
 	 */
-	private static final Pattern MEDICATION_SAFETY_CUES = cues(concat(SAFETY_WORDS, CONCERN_WORDS));
+	private static final Pattern MEDICATION_SAFETY_CUES = cues(
+			"safe", "unsafe", "safety", "danger(?:ous)?", "harmful", "risk(?:s|y)?",
+			"worry", "worried", "worrying", "concern(?:s|ed|ing)?",
+			"problem(?:s|atic)?", "wrong",
+			"stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
+			"change(?:d|s)?", "adjust(?:ed|ment|ments)?");
 
 	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
@@ -217,65 +205,112 @@ public final class QueryScopeRouter {
 				|| MEDICATION_SAFETY_CUES.matcher(question).find();
 	}
 
-	/** A modal a proposal is asked with ("can I", "should we", "is it ok"). */
-	private static final Pattern PROPOSAL_MODAL_CUES = cues("can", "could", "may", "should", "ok", "okay");
-
-	/** A verb proposing to put the patient on a drug. */
-	private static final Pattern PROPOSAL_VERB_CUES = cues("give", "start", "take", "prescribe",
-			"administer", "add");
-
-	/** Asking after the drug's suitability rather than proposing it with a verb. */
-	private static final Pattern SAFETY_CUES = cues(concat(SAFETY_WORDS, new String[] { "appropriate" }));
-
-	private static final Pattern CONCERN_CUES = cues(CONCERN_WORDS);
-
-	/** A question the right answer to which reverses when a finding withholds, or which asks about
-	 *  something else as well: a negation, an alternative, a contraindication in its own words. */
-	private static final Pattern INVERTING_CUES = cues("not", "no", "never", "\\w+n['\u2019]t", "avoid",
-			"contraindicat(?:ed|ion|ions)?", "instead", "alternatives?", "other than", "besides",
-			"without");
-
-	/** A dose, a quantity or a schedule — which the drug's reference record may address and its
-	 *  findings do not. */
-	private static final Pattern DOSE_CUES = cues("doses?", "dosing", "dosage", "how much", "how many",
-			"maximum", "max", "often", "frequency");
-
-	/** An amount with its unit. Not built with {@link #cues}: its word boundary would fall between
-	 *  the digit and the unit of {@code 400mg}, where there is none. */
-	private static final Pattern DOSE_AMOUNT = Pattern.compile(
-			"\\d\\s*(?:mg|mcg|\u00b5g|g|ml|units?)\\b", Pattern.CASE_INSENSITIVE);
+	/** One word of a question, as {@link #words} splits it: letters and digits, with a trailing
+	 *  apostrophe suffix kept attached so "can't" and "patient's" are words of their own. */
+	private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+(?:['\u2019][\\p{L}]+)?");
 
 	/**
-	 * Whether {@code question} asks whether to put the patient on a drug — "Can I give her
-	 * ibuprofen?", "Is it safe to start clarithromycin?", "Can this patient take warfarin?" — and
-	 * nothing else. Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">
-	 * #469</a>: it bounds which questions {@code DrugReferenceInjector} answers from its own findings,
-	 * where a withholding finding makes the answer "No".
-	 *
-	 * <p><b>Fail-CLOSED, and the direction is the whole design.</b> A question it does not admit keeps
-	 * the model call it has always had, so a phrasing it misses costs nothing it did not cost before;
-	 * only an ADMISSION can go wrong. That is why this is a positive list, where
-	 * {@link #isInteractionScreening} had to be widened after a positive list MISSED screens (ADR
-	 * Decision 89): there a miss hid a hazard, here a miss hides nothing.
-	 *
-	 * <p>Admitted: a proposal modal with a proposal verb, or a question asking whether the drug is safe
-	 * or appropriate. Refused whatever else it carries: a concern or risk word
-	 * ({@link #CONCERN_WORDS}, shared with the screening trigger), an interaction word, a negation or an
-	 * alternative, and a dose or an amount — each a question to which "No — should not be given" is
-	 * the wrong answer or not the whole one.
+	 * The words of {@code text}, lower-cased, in order — the ONE tokenizer both closed-vocabulary
+	 * predicates below read, and the one {@code DrugReferenceInjector} splits a question and a drug's
+	 * names with before asking {@link #asksWhetherToGiveADrug}, so the words it removes are the words
+	 * the predicate would have seen. Issue #469.
 	 */
-	public static boolean asksWhetherToGiveADrug(String question) {
-		if (question == null) {
+	public static List<String> words(String text) {
+		List<String> words = new ArrayList<String>();
+		if (text == null) {
+			return words;
+		}
+		Matcher matcher = WORD.matcher(text.toLowerCase(Locale.ROOT));
+		while (matcher.find()) {
+			words.add(matcher.group().replace('\u2019', '\''));
+		}
+		return words;
+	}
+
+	private static boolean allIn(List<String> words, Set<String> vocabulary) {
+		return !words.isEmpty() && vocabulary.containsAll(words);
+	}
+
+	private static Set<String> vocabulary(String... words) {
+		return Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(words)));
+	}
+
+	/**
+	 * Every word a question proposing a drug may carry beside the drug's own names — issue #469. A
+	 * CLOSED list, and that is the design: see {@link #asksWhetherToGiveADrug}.
+	 */
+	private static final Set<String> PROPOSAL_VOCABULARY = vocabulary("i", "we", "you", "can", "could",
+			"may", "should", "would", "is", "it", "ok", "okay", "to", "be", "give", "start", "take",
+			"prescribe", "administer", "add", "safe", "safely", "appropriate", "her", "him", "his", "she",
+			"he", "them", "they", "their", "the", "this", "patient", "patient's", "a", "an", "on", "for",
+			"now", "today", "with", "given", "allergy", "allergies", "allergic", "medications",
+			"medication", "meds", "medicines", "current", "currently", "and");
+
+	/** A modal a proposal is asked with. */
+	private static final Set<String> PROPOSAL_MODALS = vocabulary("can", "could", "may", "should",
+			"would", "ok", "okay");
+
+	/** A verb proposing to put the patient on a drug. */
+	private static final Set<String> PROPOSAL_VERBS = vocabulary("give", "start", "take", "prescribe",
+			"administer", "add");
+
+	/** Asking after a drug's suitability without a verb. */
+	private static final Set<String> SUITABILITY_WORDS = vocabulary("safe", "safely", "appropriate");
+
+	/**
+	 * Every word a request to screen her OWN medications against each other may carry — issue #469.
+	 * Closed, for the reason {@link #PROPOSAL_VOCABULARY} is.
+	 */
+	private static final Set<String> SCREEN_VOCABULARY = vocabulary("are", "is", "do", "does", "there",
+			"any", "of", "her", "his", "their", "the", "this", "patient", "patient's", "she", "he", "they",
+			"current", "currently", "active", "medications", "medication", "meds", "medicines", "drugs",
+			"drug", "prescriptions", "interact", "interacts", "interacting", "interaction",
+			"interactions", "with", "each", "other", "one", "another", "between", "among", "together",
+			"taking", "on", "in", "have", "has", "i", "should", "know", "about", "all", "a", "an",
+			"check", "for", "safe", "stop", "change", "anything", "that", "which");
+
+	/**
+	 * Whether a question proposes giving ONE drug and asks nothing else — "Can I give her ibuprofen?",
+	 * "Is it safe to start clarithromycin?", "Can this patient take warfarin?" — asked of the
+	 * question's {@link #words} with the drug's own names already removed. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>: it bounds
+	 * which questions {@code DrugReferenceInjector} answers from its own findings, where a finding that
+	 * withholds makes the answer "No".
+	 *
+	 * <p><b>A closed vocabulary, and fail-CLOSED, and the direction is the whole design.</b> Every word
+	 * left must be one a bare proposal is made of, so a question carrying anything more — a dose or an
+	 * amount, a wh-word ("how", "when"), a negation, a concern ("risky"), an alternative ("instead"),
+	 * a condition ("for her kidneys"), a purpose ("for her knee pain"), a second drug the dataset does
+	 * not know — is not admitted. A question it does not admit keeps the model call it has always
+	 * had, so a phrasing it misses costs nothing it did not cost before, and only an ADMISSION can go
+	 * wrong. That is why this may be a closed list where {@link #isInteractionScreening} had to be
+	 * widened after a list MISSED screens (ADR Decision 89): there a miss hid a hazard, here a miss
+	 * hides nothing. The first form of this was a list of REFUSING words, and a review drove four
+	 * questions through it that it should have refused; an open list of refusals cannot be finished.
+	 *
+	 * <p>Beside the vocabulary it needs a proposal: a modal with a proposal verb, or a suitability
+	 * word.
+	 */
+	public static boolean asksWhetherToGiveADrug(List<String> wordsOtherThanTheDrugsNames) {
+		List<String> words = wordsOtherThanTheDrugsNames;
+		if (words == null || !allIn(words, PROPOSAL_VOCABULARY)) {
 			return false;
 		}
-		boolean proposes = (PROPOSAL_MODAL_CUES.matcher(question).find()
-				&& PROPOSAL_VERB_CUES.matcher(question).find())
-				|| SAFETY_CUES.matcher(question).find();
-		return proposes && !CONCERN_CUES.matcher(question).find()
-				&& !INTERACTION_CUES.matcher(question).find()
-				&& !INVERTING_CUES.matcher(question).find()
-				&& !DOSE_CUES.matcher(question).find()
-				&& !DOSE_AMOUNT.matcher(question).find();
+		return (!Collections.disjoint(words, PROPOSAL_MODALS) && !Collections.disjoint(words, PROPOSAL_VERBS))
+				|| !Collections.disjoint(words, SUITABILITY_WORDS);
+	}
+
+	/**
+	 * Whether a question asks to screen the patient's OWN medications against each other and nothing
+	 * else — "Are any of her current medications interacting with each other?", "Do any of her meds
+	 * interact?" — issue #469. {@link #isInteractionScreening} AND every word in a closed vocabulary,
+	 * for the reason {@link #asksWhetherToGiveADrug} gives. The second conjunct is what keeps a screen
+	 * that names something the dataset does not carry — a drug it does not know, a class, a food —
+	 * from being answered with findings about her own medications, which the screening arm still
+	 * raises for such a question.
+	 */
+	public static boolean asksOnlyToScreenHerMedications(String question) {
+		return isInteractionScreening(question) && allIn(words(question), SCREEN_VOCABULARY);
 	}
 
 	/**

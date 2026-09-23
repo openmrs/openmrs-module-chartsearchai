@@ -616,9 +616,9 @@ public class PatientChartSerializer {
 		 * The answer the drug-reference layer composed from its own records, each cited by its record
 		 * number in this chart, or {@code null} where the question is not one it resolved —
 		 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>.
-		 * Which questions those are is {@code DrugReferenceInjector.answersFromFindings}'s; whether
-		 * the answer is used instead of asking the model is {@code chartsearchai.drugSafety
-		 * .answerFromFindings}, read by {@code LlmInferenceService}.
+		 * Which questions those are is {@code DrugReferenceInjector.answersFromFindings}'s, and it
+		 * composes one only with {@code chartsearchai.drugSafety.answerFromFindings} on; where this is
+		 * non-null, {@code LlmInferenceService} asks no model.
 		 */
 		public String getModuleAnswer() {
 			return moduleAnswer;

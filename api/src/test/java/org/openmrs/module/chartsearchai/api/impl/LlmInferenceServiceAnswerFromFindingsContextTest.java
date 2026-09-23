@@ -164,6 +164,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertNoModelProseWasJudged(answer);
 		assertTrue(answer.isAnsweredByTheModule(), "and the answer says no model wrote it");
 		assertFalse(answer.getSafetyWarnings().isEmpty(), "the chips are produced as before");
+		for (org.openmrs.module.chartsearchai.reference.SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertTrue(answer.getAnswer().contains(chip.getDetail()),
+					"the chips pass reads the question alone, as the pass that raised the findings did, so "
+							+ "every chip beside the answer is a finding it states. Missing: " + chip.getDetail());
+		}
 		assertNotNull(answer.getPairChipExtent(), "and so is the pair extent");
 	}
 
@@ -207,11 +212,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A set of findings of different strengths is one answer led by the STRONGEST, the order the
-	 * prompt gives the model: a reason to withhold, then a reason to change a medication she is
-	 * already taking, then a caution. Omeprazole relates Moderate to her warfarin (withhold) and Minor
-	 * to her aspirin (a caution), and the allergy question widens the order-driven arm to her aspirin
-	 * allergy against her aspirin prescription (a reason to change a current medication).
+	 * A set of findings of different strengths: the findings about the PROPOSED drug first, strongest
+	 * first, and the strongest of them leading; then the ones about her own medications. Omeprazole
+	 * relates Moderate to her warfarin (withhold) and Minor to her aspirin (a caution), and the allergy
+	 * question widens the order-driven arm to her aspirin allergy against her aspirin prescription (a
+	 * reason to change a current medication, which by the prompt's own ranking outranks a caution —
+	 * but is not what was asked about).
 	 */
 	@Test
 	public void findingsOfDifferentStrengthsAreLedByTheStrongestAndOrderedByStrength() throws Exception {
@@ -242,8 +248,40 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		String text = answer.getAnswer();
 		assertTrue(text.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Omeprazole"
 				+ DrugReferenceInjector.WITHHOLD_LEAD_CLOSING), "the strongest leads: " + text);
-		assertTrue(text.indexOf(withhold) < text.indexOf(change) && text.indexOf(change) < text.indexOf(caution),
-				"then the findings in the prompt's own order of strength: " + text);
+		assertTrue(text.indexOf(withhold) < text.indexOf(caution) && text.indexOf(caution) < text.indexOf(change),
+				"then the proposed drug's findings by strength, then her own medications': " + text);
+		assertCarriesEveryFinding(answer, findings);
+	}
+
+	/**
+	 * The proposed drug is answered for even where a finding about her own medications is stronger:
+	 * omeprazole's only finding is a Minor caution against her aspirin, and the allergy question raises
+	 * a reason to change that aspirin. Led by the stronger, the answer would open on her aspirin and say
+	 * nothing of whether omeprazole can be given.
+	 */
+	@Test
+	public void theProposedDrugIsAnsweredForBeforeAStrongerFindingAboutHerOwnMedication() {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		String question = "Can I give her omeprazole, given her allergies?";
+		List<Finding> findings = findingsInThePromptFor(question);
+		Finding caution = null;
+		boolean change = false;
+		for (Finding finding : findings) {
+			if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION)) {
+				caution = finding;
+			}
+			change |= finding.text.endsWith(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION);
+		}
+		assertTrue(caution != null && change, "precondition: a proposal caution beside a stronger finding "
+				+ "about her own medication, findings were: " + findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+		assertEquals(0, provider.calls);
+		assertTrue(answer.getAnswer().startsWith("Omeprazole" + DrugReferenceInjector.CAUTION_LEAD
+				+ answerFacingBody(caution) + " [" + caution.index + "]"),
+				"the drug asked about leads, with its caution in the same sentence: " + answer.getAnswer());
 		assertCarriesEveryFinding(answer, findings);
 	}
 
@@ -277,7 +315,21 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			// current use, not a proposal
 			"Does she take ibuprofen?",
 			// two drugs: each would need its own answer
-			"Can I give her ibuprofen or omeprazole?",
+			"Can I give her ibuprofen and omeprazole?",
+			// no proposal at all, in words a proposal is made of
+			"Is she on ibuprofen?",
+			// a proposal cue beside a concern or a negation: "No" would answer it backwards
+			"Can I give her ibuprofen, or is it risky?",
+			"Can I give her ibuprofen or not?",
+			"Can I give her ibuprofen if she can't have aspirin?",
+			// wh-questions, whose answer is neither yes nor no
+			"How should I give her ibuprofen?",
+			"When can I start her on ibuprofen?",
+			"How long can she take ibuprofen?",
+			"What can I give her instead of ibuprofen?",
+			// a condition or a purpose the findings may not address
+			"Is ibuprofen safe for her kidneys?",
+			"Can I give her ibuprofen for her knee pain?",
 		};
 		for (String question : questions) {
 			RecordingProvider provider = new RecordingProvider();
@@ -357,6 +409,27 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 						+ answer.getAnswer());
 		assertCarriesEveryFinding(answer, findings);
 		assertTrue(answer.isAnsweredByTheModule());
+	}
+
+	/**
+	 * The screening arm keeps running for a screen that names something the dataset does not carry,
+	 * and raises her own medications' findings for it; an answer made of those would answer a question
+	 * nobody asked. A drug class resolves nothing either, and its note asks for a drug by name.
+	 */
+	@Test
+	public void aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(), "precondition: her own orders interact");
+		for (String question : new String[] { "Does zorblatine interact with any of her medications?",
+				"Is grapefruit juice safe with her medications?",
+				"Do NSAIDs interact with any of her medications?" }) {
+			assertFalse(findingsInThePromptFor(question).isEmpty(),
+					"precondition: the screening arm raises her findings for " + question);
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(1, provider.calls, "the model must be asked: " + question);
+			assertFalse(answer.isAnsweredByTheModule(), question);
+		}
 	}
 
 	@Test

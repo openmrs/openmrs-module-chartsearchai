@@ -237,46 +237,4 @@ public class QueryScopeRouterTest {
 				QueryScopeRouter.typedSlice(EnumSet.of(Intent.MEDICATIONS, Intent.ALLERGIES)));
 		assertTrue(QueryScopeRouter.typedSlice(EnumSet.noneOf(Intent.class)).isEmpty());
 	}
-
-	/**
-	 * Issue #469: the phrasings the suitability predicate admits — the probe corpus's own template and
-	 * the ticket's proposal cells — so a module-composed "No" can reach them at all.
-	 */
-	@Test
-	public void asksWhetherToGiveADrug_shouldAdmitAQuestionProposingADrug() {
-		assertTrue(QueryScopeRouter.asksWhetherToGiveADrug("Can this patient take Ibuprofen?"),
-				"the probe-safety corpus's default phrasing");
-		assertTrue(QueryScopeRouter.asksWhetherToGiveADrug("Can I give her ibuprofen for her knee pain?"));
-		assertTrue(QueryScopeRouter.asksWhetherToGiveADrug("Is it safe to start her on clarithromycin?"));
-		assertTrue(QueryScopeRouter.asksWhetherToGiveADrug("Is ibuprofen safe for her?"));
-		assertTrue(QueryScopeRouter.asksWhetherToGiveADrug("Is amlodipine appropriate for him?"));
-	}
-
-	/**
-	 * Each refusing family on its own, beside a proposal cue that would otherwise admit the question —
-	 * so deleting any one family reddens its line. Every one is a question a withholding "No" answers
-	 * backwards, or answers only half of.
-	 */
-	@Test
-	public void asksWhetherToGiveADrug_shouldRefuseWhatAWithholdingNoWouldAnswerWrongly() {
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("Is it risky to give her ibuprofen?"),
-				"a concern word: the answer to it is yes");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("Can ibuprofen interact if I give it?"),
-				"an interaction word");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("Is there any reason not to give her ibuprofen?"),
-				"a negation");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("Can I give her ibuprofen if she can't have aspirin?"),
-				"a contracted negation");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("What can I give her instead of ibuprofen?"),
-				"an alternative");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("What dose of ibuprofen can I give her?"),
-				"a dose");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("Can I give her ibuprofen 400mg?"),
-				"an amount, whose unit shares no word boundary with its number");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("Does she take ibuprofen?"),
-				"current use, not a proposal: no modal");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug("Is it unsafe to give her ibuprofen?"),
-				"unsafe is a concern word, and safe does not match inside it");
-		assertFalse(QueryScopeRouter.asksWhetherToGiveADrug(null));
-	}
 }

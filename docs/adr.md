@@ -9529,8 +9529,8 @@ the module resolved, the call can only restate the module's records or emit the 
 **Where the module resolved the question itself, the answer is composed from its findings and no model
 is asked** — not for the answer, a repair, a preview or grounding. `DrugReferenceInjector` decides it
 once per injection, off the resolutions that pass already holds, and stamps the answer on the chart it
-builds (`PatientChart.getModuleAnswer()`); `LlmInferenceService` uses it on both answer paths through
-one method when the property is on.
+builds (`PatientChart.getModuleAnswer()`), composing nothing while the property is off;
+`LlmInferenceService` serves that stamp on both answer paths through one method.
 
 **Three shapes, and every other question keeps the model call** (`answersFromFindings`):
 
@@ -9540,30 +9540,40 @@ one method when the property is on.
   `validateAnswers` or `warnOnInteractions` off the prompt still carries a note saying no interactions
   were found of a screen that never ran. That is the note's gate and not this change's, and it is left
   standing; what this change refuses is making that sentence the whole answer;
-- an interaction screen that raised findings — no drug in the question and
-  `QueryScopeRouter.isInteractionScreening`, which is what keeps a medication-list or allergy question
-  (which widens the order-driven arm too) from being answered with a finding alone;
+- an interaction screen of her own medications that raised findings;
 - a question proposing ONE substance she is not already taking, raising a finding about it, that
-  `QueryScopeRouter.asksWhetherToGiveADrug` admits.
+  `QueryScopeRouter.asksWhetherToGiveADrug` admits once the drug's own names are taken out of it.
 
-That last predicate is new, and it is a positive list where ADR Decision 89 had to widen one. The
-difference is the direction of a miss: there, a missed phrasing hid a hazard; here it keeps the call
-the question always had, so only an admission can be wrong. [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
+Both screen shapes also need a question naming no drug the dataset resolved, and
+`QueryScopeRouter.asksOnlyToScreenHerMedications` — `isInteractionScreening` and every word in a closed
+list. The screening arm keeps running for a screen that names something the dataset does not carry —
+a drug it does not know, a drug class, a food — and raises her own findings for it, so without the
+list *"Does zorblatine interact with any of her medications?"* was answered with her aspirin–warfarin
+finding. The list also keeps out a question about her medication LIST or her allergies, which widens
+the order-driven arm too, and a compound screen-and-list question.
+
+**Both predicates are closed vocabularies, and fail-CLOSED.** A question carrying any word outside
+its list keeps the model call. The first form of the proposal predicate was a list of REFUSING words (a
+concern, a negation, a dose), and a review drove four questions through it that it should have refused
+— wh-questions (*"How should I give her ibuprofen?"*), a condition (*"… safe for her kidneys?"*) — and a list
+of refusals is open-ended where a list of admissions fails closed. ADR Decision
+89 had to widen a positive list, and the difference is the direction of a miss: there a missed phrasing
+hid a hazard; here it keeps the call the question always had, so only an admission can be wrong.
+[Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
 declined a gate on "the question proposes giving a drug" as a second hand-picked vocabulary with nothing
-measured behind it, and that description fits this one too; what differs is what the gate protects.
-There, gating would have withheld a harmless note from some questions; here, NOT gating would replace
-the model's answer to a dosing or current-use question with a refusal, which the gate pass of this
-change constructed (*"What dose of ibuprofen can I give her?"*). The vocabulary is still unmeasured,
-and its misses are the first thing the gate below should read. It admits a proposal modal with a proposal
-verb, or a question asking whether the drug is safe or appropriate, and refuses a concern word (shared
-with the screening trigger rather than re-listed), an interaction word, a negation or alternative, and
-a dose or an amount — each a question the withholding "No" would answer backwards, or only half of.
+measured behind it, and that description fits these too; what differs is what the gate protects. There,
+gating would have withheld a harmless note from some questions; here, NOT gating would replace the
+model's answer to a dosing, current-use or wh-question with a refusal. The lists are unmeasured, and
+their misses are the first thing the gate below should read — beginning with the issue's own headline
+question, *"Can I give her ibuprofen for her knee pain?"*, which a purpose clause keeps with the model.
 "Not already taking" is issue #402: the drug-in-play arm states a proposal clause for a drug she takes,
 and composing would make that defect certain.
 
-**The composed text.** Lines strongest first, ranked as the prompt ranks them for the model (withhold,
-change a current medication, caution, caution about a current medication), read off `strengthClause`.
-A proposal that withholds leads *"No — X should not be given: this module's drug-safety check found a
+**The composed text.** The findings about the proposed drug first, then any about her own
+medications that a widened question also raised — so a stronger finding about her aspirin cannot take
+the first sentence of an answer about omeprazole — each group strongest first by the ranking the prompt
+gives the model (withhold, change a current medication, caution, caution about a current medication),
+read off `strengthClause`. A proposal that withholds leads *"No — X should not be given: this module's drug-safety check found a
 reason to withhold it."*; a proposal caution leads *"X can be given, with a caution to note: "* with the
 caution in the same sentence. A finding about her own medications gets no lead — its first sentence
 already names the medication, what it relates it to and its rating, and a lead naming the one to change
@@ -9600,14 +9610,19 @@ disagreeing.
   own reference record does address, such as its dose.
 - A question about a drug she already takes (R3, D6) keeps the call, and with it #402.
 - The allergy-question cells R7 and R8 are not screens, so they keep the call.
-- A compound question that is both a screen and a list (*"what is she taking, and do any interact?"*)
-  passes `isInteractionScreening`, and the composed answer states only the screen.
 - With `chartsearchai.drugSafety.citeOrderRecords` off, as it ships, an interaction line cites no order
   record, where the model supplied one in 10 of the first check's 16 cells. A contraindication line's
   chart record still arrives as `attachedByTheModule`.
 - The composed lines are the REPORTED findings. On a capped screen, whether the list is complete is
   `interactionPairs`' to say, and the answer does not.
-- A phrasing the suitability predicate does not recognise keeps the call.
+- A phrasing either vocabulary does not carry keeps the call, the headline question of the issue
+  included.
+- Every citation of a composed answer reads `attachedByTheModule: false`, that flag marking a citation
+  added beside the answer's markers; the answer's provenance is `answeredByTheModule`, and a scorer such
+  as `eval/drift-metric/metric_score.py`'s `model_cited` must read it before crediting those citations
+  to the model.
+- The audit row records no model ran only as empty token counts, which an engine reporting no usage
+  also writes; no column states it.
 
 ### What gates turning it on
 
@@ -9618,5 +9633,5 @@ arm should be read for, beyond the scorer: whether a withholding lead reaches a 
 yes, and which questions the predicate refuses that the issue's cells expected answered.
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest` (the real injector and validator on patient 7,
-both paths, each gate conjunct reddening its own case), `QueryScopeRouterTest.asksWhetherToGiveADrug_*`,
-`ChartSearchAiAnsweredByTheModuleTest`.
+both paths, each conjunct of `answersFromFindings` and of the two vocabulary predicates reddening a case
+of its own), `ChartSearchAiAnsweredByTheModuleTest`.

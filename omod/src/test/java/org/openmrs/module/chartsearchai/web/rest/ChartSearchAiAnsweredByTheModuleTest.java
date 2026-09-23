@@ -104,7 +104,7 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 
 		JsonNode done = SseEvents.dataOfType(out, "done", MAPPER);
 		assertTrue(done.get("answeredByTheModule").asBoolean(),
-				"the early done is what a streaming user sees, and it is known before anything runs");
+				"the early done is what a streaming user sees, and the flag is known as soon as the chart is built");
 		assertTrue(SseEvents.dataOfType(out, "grounded", MAPPER).get("answeredByTheModule").asBoolean());
 	}
 

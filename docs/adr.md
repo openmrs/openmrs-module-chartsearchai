@@ -114,6 +114,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 106: A model file is fetched from an immutable revision and refused unless it matches a digest committed here](#decision-106-a-model-file-is-fetched-from-an-immutable-revision-and-refused-unless-it-matches-a-digest-committed-here)
 - [Decision 107: The local llama-server is launched with a secret it shares with nothing else, and a listener on its port is not the server until it proves it holds that secret](#decision-107-the-local-llama-server-is-launched-with-a-secret-it-shares-with-nothing-else-and-a-listener-on-its-port-is-not-the-server-until-it-proves-it-holds-that-secret)
 - [Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+- [Decision 109: A Moderate interaction is a caution, because DDInter reserves avoid for Major](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -2513,7 +2514,7 @@ Same harness, the same box, run against each head's production code in turn, on 
 
 ## Decision 37: A safety answer's call is as strong as the finding's rating
 
-**Status: Accepted** (August 2026) — implemented. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
+**Status: Accepted** (August 2026) — implemented. Extends [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation). **Its `moderate` boundary is superseded by [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)**: `moderate` is now a caution.
 
 ### Context
 
@@ -2535,7 +2536,7 @@ It was also never the severity that decided the strength — the wording was. Th
 
 | | |
 |---|---|
-| `DrugSafetyValidator.licensesWithholding(SafetyWarning)` (over the rating-only `ratingLicensesWithholding`) | the one definition of the split: `minor` and `unknown` are cautions, `moderate` and `major` withhold, and **unrated withholds** |
+| `DrugSafetyValidator.licensesWithholding(SafetyWarning)` (over the rating-only `ratingLicensesWithholding`) | the one definition of the split: `minor` and `unknown` are cautions, `moderate` and `major` withhold, and **unrated withholds** (`moderate` moved to the cautions in [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)) |
 | `DrugReferenceInjector.renderFinding` | appends `STRENGTH_WITHHOLD` / `STRENGTH_CAUTION` to **every** finding it renders, breaking the sentence with the `endSentence` rule the chip detail already uses |
 | `LlmProvider.DEFAULT_SYSTEM_PROMPT` | the evidence-against claim becomes conditional on what the finding says, and the caution class is **demonstrated** beside the existing Major refusal — both clauses taken from the production constants, for the reason `FINDING_PREFIX` is |
 
@@ -2577,7 +2578,7 @@ Because a "Yes" here was measured wrong before. Issue #107's arm C let the addre
 - **+** The strength of a clinical call now rests on the rating the deterministic layer assigned, and both halves of the mapping are pinned by tests over the real pipeline (`SafetyFindingSeverityStrengthTest` drives the real injector over real datasets, one case per rating INCLUDING the `moderate` boundary itself; the full api suite is green at 1301 tests).
 - **+** Nothing changes for `major`, `moderate` or unrated findings, which is where the refusals that matter live.
 - **+** Measured on the drift-metric safety probe (`capture_probe_safety.sh`, 20 cells over 4 patients, both arms captured on this standalone with everything but the module identical): **verdict-led 6/7 → 6/7, abstained-on-an-ANSWER-cell 1 → 0, abstention held 11/13 → 11/13, unlicensed verdicts 0 → 0**, on one class flip. That flip is `agnes__safety-aspirin`, her own active order and no chip, where the baseline abstains — the defect the probe's fourth blind spot is about — and this branch does not. Reading that gate needed a fix of its own: it counted only YES and NO as verdict-led, so the caution lead scored as the #107 hedge and the same A/B read **verdict-led 6 → 5**, a regression against a branch that had not regressed. `score_probe_safety.py` now carries the caution class, and `fixtures/probe-safety/caution-lead/` pins it from a live capture of this build. Counting the lead needs the licence check beside it (`unsupported_caution`) *and* the whole shape the prompt teaches, which took three rounds to state. Matching only "the drug can be given" credited four hedges that fit a 40-character window and that neither `classify` nor `ABSTAINED` catches ("I cannot determine whether warfarin can be given" among them), which is the #107 hedge scored as its own fix, so the lead also requires the caution to be named in the same sentence; a hedge can name one itself (*"It is unclear whether warfarin can be given, so caution is advised"*), so a subordinating marker in front of the verb phrase is refused as well. That marker list was still a blacklist of the shapes seen, and review measured **eleven** more registers it did not see, every one scoring verdict-led — *"It is possible that warfarin can be given, with caution"* and the same frame under may / uncertain / doubtful / questionable / could-be-argued / nothing-states / insufficient-data / unsure, plus *"It seems …"* and *"Presumably …"*, the last two subordinating nothing at all, so no list of any length reaches them. What closes it is the half of the prompt's own shape the regex was not using: every lead it teaches opens **on the drug**, and the scorer already resolves each cell's drug through `_aliases` to filter `chips`, `own_drug` and `findings`. Anchored there a hedge cannot get in front of the call at all, whatever register it is written in, and the marker list is **gone**, replaced by a second positive rule rather than by one: the one span the anchor leaves open, between the drug name and the modal, is now stated positively by what a real lead needs it for — only NAME MATERIAL may stand there, whitespace and hyphens or a few more words of the name followed by a bracketed synonym (`Acetylsalicylic acid (aspirin) can be given`). One rule in place of four, and it subsumes them: a subordinating clause, a comma-delimited aside, a pre-modal adverb and a dose apposition are all bare words, commas or digits, none of which is name material. Getting there took three falsified claims, each measured rather than argued — nine markers of which eight could not fire, then three complementizers that missed *"Warfarin, unable to say, can be given"*, then a comma ban that missed *"Warfarin possibly can be given"* — which is why the span is no longer defended by a list at all. What it does not close is stated with it: a bracketed *epistemic* aside (*"Warfarin (uncertain) can be given"*) is shaped exactly like a synonym and still counts, and closing that means enumerating bracket contents. Every part of the rule is pinned by mutation, and the mutations also settle which rule does what — which is not what this decision first claimed. Drop the anchor and **only positives redden**: the real leads stop counting, because the span will not absorb `Ibuprofen ` either. Loosen the span to a bare 30-character window and **only hedges redden**. So the two cover the hedges redundantly and each uniquely holds the other half — the anchor admits the drug name, the span refuses everything that is not name material — and the evidence does not single out either as "the" fix. Per-mutation counts are deliberately not published: three revisions of this bullet carried a tally and each went stale when the rule moved, which is Decision 33's own lesson one level down. `CAUTION_LEAD_CASES` holds at least one case per part (including the KB display name in `DRUG_ALIASES`, without which ` acid ` would stand in front of the modal and a real aspirin lead would stop counting), the selftest names the case that breaks, and CI runs it. Two terms in `caution_led` are redundant under the anchor and say so rather than passing for guards: dropping `classify(...) == "NONE"` or `not abstained(...)` reddens nothing, since either needs a lead that opens on the cell's drug *and* on "yes"/"no"/"cannot"/"the records". Counting the lead inside `verdict-led` also made that column a UNION, which cost the A/B a comparison rather than a count: two arms tie on it while one leads with a refusal and the other with a permission, so a Major refusal rewritten as *"Clarithromycin can be given, with one caution"* printed no flip line and A=B on every column, where the scorer before this change printed `A:NO -> B:NONE` and moved verdict-led 3 → 2. The flip condition now compares `caution_led` as well, the A/B prints `of which the lead is a caution, not a refusal` beside the column, and `fixtures/probe-safety/caution-over-major/` pins both. Naming the class needs no rating, which is the point: whether the rating licenses the caution is still not asked, because a second copy of `licensesWithholding` in Python is the drift `adverse_finding` refuses, and that boundary now has a fixture of its own beside `wrong-partner/` rather than only a sentence. None of the three anchor rules costs a fixture, every arm's printed numbers are byte-identical across the anchor change, and all three under-count rather than over-count — "Warfarin can be given, but monitor INR" stops counting, and so does a lead that does not open on the drug ("The patient can be given ibuprofen, with one caution"), which is the safe direction for a gate whose other failure is fail-open.
-- **−** `moderate` still refuses. Whether it should qualify instead is a clinical judgement this decision deliberately does not take: the reported defect is Minor, and DDInter's own Moderate tier carries mechanisms that a refusal does not misrepresent.
+- **−** `moderate` still refuses. Whether it should qualify instead is a clinical judgement this decision deliberately does not take: the reported defect is Minor, and DDInter's own Moderate tier carries mechanisms that a refusal does not misrepresent. **Superseded by [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)**, which reads DDInter's own definition of the tier rather than a judgement about its mechanisms.
 - **−** The prompt grows. The few-shot gains one record and one demonstration, and every finding carries an extra sentence. Measured on the standalone against a 32768-token context, `main` @ `b0cfe545` to this branch: the gentamicin question **8009 → 8309** (audit rows 6460, 6499–6501) and the ibuprofen control **11905 → 12254** (rows 6449/6451, 6502). The fixed few-shot is most of both and is paid on every query, safety-related or not, so its size is stated as its own measurement rather than derived from those deltas: read off `LlmProvider.DEFAULT_SYSTEM_PROMPT.length()` (a throwaway case in the api module, three builds compiled in turn), the constant is **6256** characters on `main` @ `b0cfe545` and **7637** here, so it grows by **1381**. That corrects the **1065** this bullet published, which no version of the constant produces: the growth to the build the token deltas were taken on was already **1173** (7429 characters, the prompt unchanged between that commit and the one before this round), and the mixed-set rule adds the remaining 208. The per-finding cost is 10 tokens, measured directly rather than divided out — Betty's ibuprofen question, which injects exactly one more clause than before, went **8474 → 8484**. Neither figure moved when the clause was extended to contraindications, because both questions inject only interaction findings *before* the answer exists — the contraindication chips beside them are raised by the post-answer pass and are never rendered into the prompt. **The three token figures predate the mixed-set rule** and are 208 characters of fixed prompt light; re-measuring them needs the standalone, and it has not been re-run, so they are left attributed to the build that produced them rather than adjusted on paper.
 - **−** The guarantee is that the **evidence states its own strength**, not that the answer obeys it. The model can still write a refusal over a caution clause; what changed is that doing so now contradicts a sentence in the record it cites, which the answer-quality gate and a reader can both see.
 
@@ -6062,7 +6063,7 @@ Measured on 2026-09-07 by calling `SafetyFindingSeverityFidelityCheck.reportUnst
 
 **Reconcile the answer against the `safetyWarnings` chips.** Refused. The chips come from the post-answer `validate` pass and the injected findings from the pre-answer one, so they are two populations, and the chip carries no citation index to join on. Comparing the answer against the record it actually cites is both sounder and simpler.
 
-**Scope it to withholding-class ratings** (`moderate`, `major`). Refused: it would borrow `licensesWithholding`'s split for a question about vocabulary rather than about a clinical call, and the rating of a caution is as much a datum as a withholding one. (Not "the prompt asks for it on a caution too" — see the residue named above.)
+**Scope it to withholding-class ratings** (then `moderate` and `major`; `major` alone since Decision 109). Refused: it would borrow `licensesWithholding`'s split for a question about vocabulary rather than about a clinical call, and the rating of a caution is as much a datum as a withholding one. (Not "the prompt asks for it on a caution too" — see the residue named above.)
 
 ### What this does not do
 
@@ -9564,7 +9565,7 @@ a rule that is not self-named, and its own javadoc says `false` is no certificat
 curated seed's own gentamicin note, *"significant renal impairment (dose adjustment required)"*, under
 the lead's earlier wording, "should not be given". A contraindication a question also raised is still stated as a line of the
 answer; it does not decide it. **And the interaction must be RATED a reason to withhold**
-(`DrugSafetyValidator.ratedAReasonToWithhold`, Moderate or above): an unrated curated rule, and an ATC
+(`DrugSafetyValidator.ratedAReasonToWithhold`, Moderate or above when this was written; Major since [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)): an unrated curated rule, and an ATC
 or cross-reactivity class relationship folded onto a lower-rated row, both withhold under Decision 37
 only because neither is a caution, and the first is its author's note — the objection above, one rule
 type over. Review found both licensing a "No": paracetamol's unrated curated rule against warfarin, and
@@ -9646,7 +9647,8 @@ chance of the two disagreeing.
   neuraxial anaesthesia. The prompt tells the model to lead "No" on exactly these findings too, but the
   model can weigh the mechanism text and the module does not, so the lead says only that the module's
   check found a reason to withhold the drug. Whether that is still too strong a first sentence for these
-  questions is the first thing the gate below must read.
+  questions is the first thing the gate below must read. ([Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major) since made Moderate a caution, so
+  these Moderate rows are no longer answered by the module at all.)
 - Where one substance is filed as several presentation rows, the finding stated is the one the arm
   elected, which can be a presentation other than the one the question named (*"Can I give her
   Acular?"* — ketorolac eye drops — stated the systemic row's rule).
@@ -9699,3 +9701,94 @@ yes, and which questions the shapes refuse that the issue's cells expected answe
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest` — the real injector and validator on patient 7,
 both paths; mutate a conjunct of `answersFromFindings`, or delete a shape, and read the failures — and `ChartSearchAiAnsweredByTheModuleTest`.
+
+## Decision 109: A Moderate interaction is a caution, because DDInter reserves avoid for Major
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#471](https://github.com/openmrs/openmrs-module-chartsearchai/issues/471). Supersedes
+[Decision 37](#decision-37-a-safety-answers-call-is-as-strong-as-the-findings-rating)'s `moderate`
+boundary and nothing else of it.
+
+### Context
+
+External testing of drug-safety questions reported that almost every answer was a flat *"should not be
+given"*, including for interactions that are monitorable, that reduce efficacy, or that can be managed
+with an alternative. Reproduced on the 3.7.1 standalone, `main` @ `997099a6` (patient Kamwara
+`1530b813-…`, active orders Lamivudine, Nevirapine and Stavudine; `sourceFormat=ddinter`; each question
+raises exactly one chip):
+
+| question | chip | answer |
+|---|---|---|
+| Can I give this patient Amlodipine? | interaction, Moderate | *No — Amlodipine should not be given: it interacts with active order Nevirapine, a Moderate finding [8].* |
+| Can I give this patient Fluconazole? | interaction, Moderate | *No — Fluconazole should not be given: it interacts with active order Nevirapine, a Moderate problem [8].* |
+| Can I give this patient Rifampicin? | interaction, Major | *No — Rifampicin should not be given: it interacts with active order Nevirapine, a Major problem [8].* |
+
+The Moderate and the Major answer are the same call. That is Decision 37 working as written: its split
+made `moderate` withhold, and its own "−" bullet declined to move it as "a clinical judgement this
+decision deliberately does not take".
+
+It is not one. The source defines its own tiers ([Xiong et al., *DDInter*, NAR 2022,
+50(D1):D1200](https://academic.oup.com/nar/article/50/D1/D1200/6389535)): *"major interactions were
+highly clinically significant and the drug combinations should be strictly avoided"*; *"moderate
+interactions may result in exacerbation of the disease of the patient and/or change in therapy"*;
+*"minor interactions were minimally clinically significant and usually they do not require changes in
+therapy"*. Only Major says to avoid the combination, so a module that withholds on Moderate states a
+stronger call than the rating it reads. The module still encodes no clinical knowledge: it reads the
+dataset's definition of the dataset's word.
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+had already recorded the cost from the other side: the data rates Moderate some combinations given on
+purpose — dual antiplatelet therapy, a GP IIb/IIIa inhibitor with aspirin.
+
+### The decision
+
+**`DrugSafetyValidator.ratingLicensesWithholding` withholds on `major` and on an unrated rule; every
+rating below `major` is a caution.** Nothing else about the split moves:
+
+- `licensesWithholding(SafetyWarning)` still takes the stronger claim of a FOLDED finding, so a
+  Moderate rule folded with a class relationship withholds through `carriesUnratedRelationship`, as a
+  folded Minor already did. A relationship on shared classification alone stays a caution (Decision 86),
+  and a contraindication states a withholding-class clause whatever rates it.
+- The chip, its `severity`, the floor, `statableRating` and the prompt are untouched. The prompt keys on
+  the record's clause and never on the rating word, so the call moves with no prompt change.
+- The REFERENT axis moves with it (Decision 72): a Moderate pair of her own prescriptions states the
+  current-medication caution, not a reason to change one.
+- **`ratedAReasonToWithhold` is now asked THROUGH `ratingLicensesWithholding`** —
+  `severityRank(severity) >= 0 && ratingLicensesWithholding(severity)` — where it was a second
+  `>= severityRank("moderate")`. Moving one of the two alone would have had the module compose an
+  answer, with no model, for a Moderate proposal its own record states as a caution: the caution-only
+  answer Decision 108 keeps the model call for.
+
+### Consequences
+
+- A proposal whose strongest interaction is Moderate now leads with the caution shape. Measured on the
+  same standalone with the branch omod, every chip, pair extent and reference byte-identical across the
+  two builds: Amlodipine → *"Amlodipine can be given, with one caution: it interacts with active order
+  Nevirapine [4], a Moderate interaction [8]."*, Fluconazole likewise, Rifampicin unchanged. With
+  `answerFromFindings` on for one request each, Amlodipine was answered by the model
+  (`answeredByTheModule: false`) and Rifampicin by the module, under `WITHHOLD_LEAD_OPENING`.
+- Measured with `eval/drift-metric/capture_probe_safety.sh` and `score_probe_safety.py`, both arms on
+  that standalone. The default 20-cell matrix, whose change arm ran an intermediate build of this change,
+  holds no Moderate cell and flips nothing: verdict-led 6/7 → 6/7, unlicensed verdicts 0 → 0. Its Betty cells lack patient context
+  in both arms, which the scorer flags, exiting 3. A Kamwara arm
+  (`PROBE_DRUGS="amlodipine fluconazole rifampicin isoniazid trimethoprim"`), re-run on this change's
+  final build with only the omod between the arms, flips exactly the three
+  Moderate cells, each from `NO` to the caution lead. Rifampicin (Major) keeps `NO`, Trimethoprim
+  (Minor) keeps its caution. Unlicensed verdicts stay 0 → 0, every cell still states its chip's rating,
+  and the scorer exits 0.
+- `FINDING_STRENGTH_DESCENDING`'s two keys now also disagree at the shipped floor — a folded Minor
+  against a plain Moderate — where before only an `Unknown` pair under a lowered floor did. The
+  comparator's javadoc names each pair; `DrugInPlayFindingStrengthKeyOrderContextTest` still pins the
+  key order, over the lowered-floor pair.
+- Tests that used a Moderate pair as their WITHHOLDING exemplar were re-aimed at a Major one, keeping
+  every assertion, because what each specifies is not "Moderate withholds":
+  `ClassOnlyFindingStrengthTest`'s rated control (its verbatim slice gained Desmopressin, Major against
+  both corticosteroids), and two cases of `LlmInferenceServiceAnswerFromFindingsContextTest`.
+- **What this does not do**: give a Major finding the management the source has. A Major interaction
+  DDInter offers a management option for (fluconazole + efavirenz: use an alternative to efavirenz) still
+  reaches the clinician as a withholding call and nothing more, because the shipped knowledge base keeps
+  no management field. That is [#358](https://github.com/openmrs/openmrs-module-chartsearchai/issues/358),
+  a change to the knowledge-base build first.
+
+→ `SafetyFindingSeverityStrengthTest.aModerateRatedInteractionIsACautionAndSaysItIsNotAReasonToWithholdTheDrug`,
+`CurrentMedicationFindingStrengthTest.aScreenedModeratePairOfHerOwnMedicationsStatesTheCurrentMedicationCaution`,
+`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel`.

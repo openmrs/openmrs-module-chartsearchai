@@ -58,9 +58,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * own note already establishes the arrangement this file needs: Prednisolone and Methylprednisolone
  * share {@code H02AB} and their only knowledge-base rule is rated {@code Unknown}, which the shipped
  * {@code chartsearchai.drugSafety.minInteractionSeverity} default filters out — so that pair reaches
- * the class arm alone, with no rule to fold. Warfarin shares no subgroup and its Moderate rule clears
+ * the class arm alone, with no rule to fold. Desmopressin shares no subgroup and its Major rule clears
  * the floor, which is the rated control {@link #aRatedRuleInTheSameArrangementStillLicensesWithholding}
- * uses.
+ * uses. (Warfarin's Moderate rule was that control until issue #471 made a Moderate rule a caution,
+ * which the class-only change cannot be told apart from.)
  */
 public class ClassOnlyFindingStrengthTest {
 
@@ -73,8 +74,8 @@ public class ClassOnlyFindingStrengthTest {
 	 *  above-floor rule between them. */
 	private static final String CLASS_ONLY_SUBJECT = "prednisolone";
 
-	/** The subject of the RATED pair in the same fixture: no shared subgroup, one Moderate rule. */
-	private static final String RATED_SUBJECT = "warfarin";
+	/** The subject of the RATED pair in the same fixture: no shared subgroup, one Major rule. */
+	private static final String RATED_SUBJECT = "desmopressin";
 
 	private static final String CO_MEDICATION = "Methylprednisolone";
 
@@ -152,13 +153,13 @@ public class ClassOnlyFindingStrengthTest {
 	public void aRatedRuleInTheSameArrangementStillLicensesWithholding() throws IOException {
 		String finding = onlyFinding("Is it safe to give " + RATED_SUBJECT + "?", null);
 
-		assertTrue(finding.toLowerCase().contains("moderate"),
+		assertTrue(finding.toLowerCase().contains("major"),
 				"precondition: this is the fixture's rated pair: " + finding);
 		assertFalse(finding.contains(CLASS_SENTENCE),
 				"precondition: and it shares no subgroup, so no class sentence is folded in: " + finding);
 
 		assertTrue(finding.contains(WITHHOLD),
-				"a Moderate rule is a reason to withhold, and this case is what stops the class-only "
+				"a Major rule is a reason to withhold, and this case is what stops the class-only "
 						+ "change reaching the rated rules: " + finding);
 	}
 

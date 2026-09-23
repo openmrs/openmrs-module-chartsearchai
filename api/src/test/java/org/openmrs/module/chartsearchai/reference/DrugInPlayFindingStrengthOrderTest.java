@@ -107,8 +107,9 @@ public class DrugInPlayFindingStrengthOrderTest {
 	 *
 	 * <p><b>What it does not pin is which of the two keys is asked FIRST.</b> The ratings TIE here, so
 	 * a comparator ranking on {@code severityPriority} and consulting the fold only as a tiebreak
-	 * satisfies this case too. That is {@code DrugInPlayFindingStrengthKeyOrderContextTest}'s, over the
-	 * one arrangement in which the two orders disagree.
+	 * satisfies this case too. That is {@code DrugInPlayFindingStrengthKeyOrderContextTest}'s, over an
+	 * arrangement in which the two orders disagree (a folded row rated below a plain caution — the
+	 * comparator's javadoc names each such pair).
 	 */
 	@Test
 	public void aFoldedCautionOutranksAPlainOne() throws Exception {

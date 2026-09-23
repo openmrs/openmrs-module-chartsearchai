@@ -33,8 +33,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * `main` @ b0cfe545: "Is gentamicin appropriate for this patient?" answered *"No — gentamicin should
  * not be given"* on a finding whose own mechanism text ends "No special precautions are necessary."
  *
- * <p><b>Why the ratings split where they do.</b> {@code minor} and {@code unknown} are the ratings
- * DDInter itself calls minimally significant; {@code moderate} and {@code major} are not.
+ * <p><b>Why the ratings split where they do.</b> {@code major} is the only rating whose combinations
+ * DDInter itself says "should be strictly avoided"; {@code moderate}, {@code minor} and
+ * {@code unknown} are cautions (issue #471 moved {@code moderate} there — ADR Decision 109).
  * <b>Unrated is not low-rated</b> — a null severity is a curated hand-authored rule, which
  * {@code DrugSafetyValidator.severityPriority} already sorts ABOVE {@code major} for exactly that
  * reason — so an unrated rule must license withholding, and this is the case a "no rating means
@@ -103,23 +104,22 @@ public class SafetyFindingSeverityStrengthTest {
 	}
 
 	@Test
-	public void aModerateRatedInteractionSaysItIsAReasonToWithholdTheDrug() {
+	public void aModerateRatedInteractionIsACautionAndSaysItIsNotAReasonToWithholdTheDrug() {
 		String finding = findingFor(DrugReferenceTestSupport.ddinterServiceWithGroups(),
 				"Is it safe to give omeprazole?", "Simvastatin");
 
 		assertTrue(finding.toLowerCase().contains("moderate"),
 				"the fixture pair must be the Moderate-rated one this case is about: " + finding);
 		// THE BOUNDARY, and the reason this case exists separately from the Major one beside it.
-		// ratingLicensesWithholding splits on `rank >= severityRank("moderate")`, and moving that to
-		// "major" — i.e. softening Moderate to a caution — left the whole suite green: Minor, Major,
-		// Unknown, unrated, the fold and the contraindication were all covered and the boundary
-		// itself was not. ADR Decision 37 decides Moderate deliberately ("moderate still refuses.
-		// Whether it should qualify instead is a clinical judgement this decision does not take"),
-		// so it is a decision, not an accident, and it is pinned here.
-		assertTrue(finding.contains(WITHHOLD),
-				"a Moderate-rated finding must say it is a reason to withhold: " + finding);
-		assertFalse(finding.contains(CAUTION),
-				"the caution side of the split is minor and unknown only: " + finding);
+		// DDInter's own tiers put it here: only Major combinations "should be strictly avoided", and
+		// a Moderate one "may result in exacerbation of the disease of the patient and/or change in
+		// therapy" (issue #471, ADR Decision 109, which supersedes Decision 37's "moderate still
+		// refuses"). Move ratingLicensesWithholding's boundary back down and read what reddens.
+		assertTrue(finding.contains(CAUTION),
+				"a Moderate-rated finding must say it is a caution rather than a reason to withhold: "
+						+ finding);
+		assertFalse(finding.contains(WITHHOLD),
+				"the withholding side of the split is major and an authored unrated rule: " + finding);
 	}
 
 	@Test

@@ -10015,12 +10015,14 @@ rig on the machine held, and it was restored after the run.
   *"Rifampicin interacts with nevirapine; her isoniazid order is no longer in force."* does not (issue
   #482; until then any sentence naming the drug and carrying the phrase was read as saying it). A
   paraphrase of that phrase, a name no row of the substance carries, or the earlier members of a
-  comma-enumerated subject (*"Her simvastatin, clarithromycin and warfarin orders are …"*) get the
-  sentence as well: said twice rather than not at all. Toward silence: a clause about another drug
+  comma-enumerated subject (*"Her simvastatin, clarithromycin and warfarin orders are …"*), and a pronoun
+  reaching back past another drug's clause (*"She was on rifampicin, which interacts with nevirapine, but
+  its order is no longer in force"*) get the sentence as well: said twice rather than not at all. Toward silence: a clause about another drug
   joined with no boundary (*"… and her isoniazid order is …"*, a parenthesis), one naming a drug the
   loaded data does not carry, and a pronoun pointing at another drug named in the same clause as this one
   (*"… interacts with nevirapine, whose order is no longer in force"*), which walking back reads as about
-  the drug. The drug test's own residue
+  the drug, and a phrase ahead of the drug it is about in a sentence naming this one elsewhere (*"The order
+  no longer in force is her metformin; ibuprofen …"*), which the sentence rule reads as stated. The drug test's own residue
   also runs that way: an alias the substance shares with another (#209's shape) names it too, so a
   sentence saying that other drug's order is no longer in force reads as saying it of this one.
 - The appended sentence is not on the early `done` of async grounding, which is emitted before the chips

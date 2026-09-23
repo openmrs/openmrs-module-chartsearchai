@@ -132,6 +132,9 @@ public class DrugReference {
 
 	private List<Interaction> interactions = Collections.emptyList();
 
+	/** @see #getConditionMediatedRisks() */
+	private List<ConditionMediatedRisk> conditionMediatedRisks = Collections.emptyList();
+
 	private List<Contraindication> contraindications = Collections.emptyList();
 
 	private String source;
@@ -2110,6 +2113,26 @@ public class DrugReference {
 		this.interactions = interactions != null ? interactions : Collections.<Interaction> emptyList();
 	}
 
+	/**
+	 * @return the knowledge base's DERIVED chains in which THIS entry is the rated drug (issues #391
+	 *         Part B, #473): another drug's DDInter drug-disease note names a condition, in a sentence the
+	 *         knowledge base reads as causal, that this entry is rated for. Filed on the rated side only,
+	 *         so a caller reaches the other direction through the cause's own entry. Only the
+	 *         {@code ddinter} source writes it, and only for chains whose rated side is {@code Major} —
+	 *         see {@code DdiDrugReferenceSource}. Never a DDInter pairwise rating, and never read as one.
+	 */
+	@JsonIgnore
+	public List<ConditionMediatedRisk> getConditionMediatedRisks() {
+		return conditionMediatedRisks;
+	}
+
+	@JsonIgnore
+	public void setConditionMediatedRisks(List<ConditionMediatedRisk> risks) {
+		this.conditionMediatedRisks = risks == null || risks.isEmpty()
+				? Collections.<ConditionMediatedRisk> emptyList()
+				: Collections.unmodifiableList(new ArrayList<ConditionMediatedRisk>(risks));
+	}
+
 	public List<Contraindication> getContraindications() {
 		return contraindications;
 	}
@@ -3230,6 +3253,60 @@ public class DrugReference {
 
 		public void setSeverity(String severity) {
 			this.severity = severity;
+		}
+	}
+
+	/**
+	 * One derived chain, filed on the RATED drug's entry (see {@link #getConditionMediatedRisks()}): the
+	 * CAUSE entry, the drug-disease row of the cause whose note names the condition (its condition and
+	 * rating), and this entry's own rating for that condition. The cause is the built entry itself
+	 * rather than a name, so identity is asked of it through {@link #substanceGroupKey()} and never
+	 * re-derived from a string. Immutable: every value is the knowledge base's own.
+	 */
+	public static final class ConditionMediatedRisk {
+
+		private final DrugReference cause;
+
+		private final String causeCondition;
+
+		private final String causeSeverity;
+
+		private final String condition;
+
+		private final String severity;
+
+		public ConditionMediatedRisk(DrugReference cause, String causeCondition, String causeSeverity,
+				String condition, String severity) {
+			this.cause = cause;
+			this.causeCondition = causeCondition;
+			this.causeSeverity = causeSeverity;
+			this.condition = condition;
+			this.severity = severity;
+		}
+
+		/** The entry whose drug-disease note names {@link #getCondition()}. */
+		public DrugReference getCause() {
+			return cause;
+		}
+
+		/** The condition the cause's naming drug-disease row is filed under, verbatim. */
+		public String getCauseCondition() {
+			return causeCondition;
+		}
+
+		/** That row's DDInter rating. */
+		public String getCauseSeverity() {
+			return causeSeverity;
+		}
+
+		/** The condition the rated entry is rated for, verbatim (DDInter's MeSH-style term). */
+		public String getCondition() {
+			return condition;
+		}
+
+		/** The rated entry's DDInter rating for {@link #getCondition()}. */
+		public String getSeverity() {
+			return severity;
 		}
 	}
 

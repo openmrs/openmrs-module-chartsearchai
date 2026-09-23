@@ -621,6 +621,9 @@ public class DrugReferenceInjector {
 		//     describe, and the failure this note exists to stop is the model describing an EMPTY slice
 		//     as the records not addressing interactions. A screen that related nothing beside a
 		//     contraindication finding therefore states no note — a stated residue, not an oversight.
+		//     The finding that two of her orders share a substance (issue #477) does not count as
+		//     something here: it relates no pair, so beside it the screen still ran and related nothing,
+		//     and without the note the model can present the duplicate as the interaction it found.
 		//
 		// → ADR Decision 87; InteractionScreenSilenceNoteTest.
 		Set<Object> screenedSubstances = new LinkedHashSet<Object>();
@@ -632,7 +635,8 @@ public class DrugReferenceInjector {
 		// Resolved once and read by both the note's gate and the early return below, so the two cannot
 		// come to disagree about whether this injection had anything to say.
 		boolean nothingResolved = matched.isEmpty() && findings.isEmpty() && namedClass == null;
-		boolean screenRelatedNothing = nothingResolved && questionDrugs.isEmpty()
+		boolean screenRelatedNothing = matched.isEmpty() && namedClass == null
+				&& everyFindingRelatesNoPair(findings) && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing) {
@@ -2405,9 +2409,7 @@ public class DrugReferenceInjector {
 				return false;
 			}
 			for (SafetyWarning finding : findings) {
-				// A PAIR the screen related: two of her orders sharing a substance (issue #477) is an
-				// interaction finding that relates none, and a screen answered from it alone would say
-				// nothing of what the screen found, which is why an allergy finding is refused too.
+				// A PAIR the screen related — see this method's javadoc (issue #477).
 				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
 						&& !finding.statesOrdersSharingASubstance()) {
 					return true;
@@ -2483,13 +2485,28 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * Whether none of {@code findings} relates anything: empty, or only the finding that two of her
+	 * orders share a substance (issue #477, {@code SafetyWarning.statesOrdersSharingASubstance}), which
+	 * relates no pair. The #401 screen note's gate asks it.
+	 */
+	private static boolean everyFindingRelatesNoPair(List<SafetyWarning> findings) {
+		for (SafetyWarning finding : findings) {
+			if (!finding.statesOrdersSharingASubstance()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * The module's own answer to a question {@link #answersFromFindings} admitted: one line per
 	 * finding, each in its record's own words and cited by its own number — issue #469.
 	 *
 	 * <p><b>What was asked about comes first</b>: the findings about the drug the question PROPOSED,
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
-	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
-	 * cannot take the answer's first sentence and leave the question unanswered. One key does both,
+	 * question also raised — her allergy to a drug she is prescribed, say, or that two of her orders share
+	 * a substance (issue #477), which relates no pair and is unrated so would otherwise lead by strength
+	 * — so that such a finding cannot take the answer's first sentence and leave the question unanswered. One key does both,
 	 * because the two never meet: the screening arm stands down for a question that resolved a drug,
 	 * and the drug-in-play arm's finding about two of her own orders (issue #477) arises only for a
 	 * drug she already takes, which {@link #answersFromFindings} refuses to answer for. Within each
@@ -2526,7 +2543,8 @@ public class DrugReferenceInjector {
 			order.add(Integer.valueOf(i));
 		}
 		Collections.sort(order, Comparator.<Integer> comparingInt(i -> findings.get(i).isAboutACurrentMedication()
-				&& !SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType()) ? 1 : 0)
+				&& (!SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType())
+						|| findings.get(i).statesOrdersSharingASubstance()) ? 1 : 0)
 				.thenComparingInt(i -> strengthRank(clauses[i])));
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {

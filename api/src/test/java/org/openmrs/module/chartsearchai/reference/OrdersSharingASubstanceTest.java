@@ -20,6 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -179,8 +180,34 @@ public class OrdersSharingASubstanceTest {
 				rated++;
 			}
 		}
+		// Rated chips stand for pairs here because this fixture's screen collapses no mechanism.
 		assertTrue(rated > 0, "precondition: the screen related pairs: " + warnings);
 		assertEquals(rated, sink.stated().getFound(), "the rated pairs and nothing else");
+	}
+
+	@Test
+	public void aScreenThatRelatedNoPairStillStatesThatItRanBesideThisFinding() {
+		// Issue #401's note says the screen ran and related nothing. This finding relates no pair either,
+		// so it must not stand in for a screen result and take the note's place: over the shipped
+		// knowledge base the two orders' substances, amlodipine and valsartan, relate nothing.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(),
+			DrugReferenceTestSupport.contextNaming(service, 60, null, "Amlodipine", "Amlodipine / valsartan"),
+			DrugReferenceTestSupport.SCREENING_QUESTION);
+
+		List<String> findings = DrugReferenceTestSupport.findingTexts(chart);
+		assertEquals(1, findings.size(), "precondition: this finding and no pair: " + findings);
+		assertTrue(findings.get(0).contains("Amlodipine is in active orders Amlodipine and Amlodipine / valsartan"),
+				"was: " + findings.get(0));
+		int notes = 0;
+		for (RecordMapping mapping : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_INTERACTION_SCREEN_NOTE.equals(mapping.getResourceType())) {
+				notes++;
+			}
+		}
+		assertEquals(1, notes, "the screen's own statement that it ran and related nothing: " + chart.getText());
 	}
 
 	@Test
@@ -208,14 +235,12 @@ public class OrdersSharingASubstanceTest {
 				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION, context);
 	}
 
-	/** This finding among {@code warnings}: recognised by its phrase, "in active orders" with no
-	 *  "already", which #483's proposal-worded sentence carries. */
+	/** This finding among {@code warnings}, recognised by the flag its factory sets, so a reword of
+	 *  the sentence cannot leave a negative case asserting the absence of a string nobody emits. */
 	private static List<SafetyWarning> shared(List<SafetyWarning> warnings) {
 		List<SafetyWarning> found = new ArrayList<SafetyWarning>();
 		for (SafetyWarning warning : warnings) {
-			String detail = warning.getDetail();
-			if ((detail.contains(" are in active orders ") || detail.contains(" is in active orders "))
-					&& !detail.contains(" already in ")) {
+			if (warning.statesOrdersSharingASubstance()) {
 				found.add(warning);
 			}
 		}

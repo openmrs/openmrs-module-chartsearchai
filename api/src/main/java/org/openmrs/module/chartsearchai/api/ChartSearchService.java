@@ -228,7 +228,7 @@ public interface ChartSearchService {
 	 * before it. That is a residue rather than a rounding: the module's own recogniser is the phrase,
 	 * and a second rule for the conjunction would be a second recogniser.
 	 * The module's own finding that a drug is already in several of her orders (issue #477) is counted
-	 * too, once: {@code ActiveOrderCitationFidelityCheck} anchors on
+	 * too, once, and so is a screen's finding that several of her orders share a substance: {@code ActiveOrderCitationFidelityCheck} anchors on
 	 * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, which that finding's sentence carries. Where it names
 	 * three or more orders its list commas bound the claim's clause, so a marker after the list is not
 	 * the claim's and a verbatim copy citing the right order still counts uncited — the comma residue

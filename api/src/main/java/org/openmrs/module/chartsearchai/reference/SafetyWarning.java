@@ -482,7 +482,7 @@ public class SafetyWarning {
 	 * "did the answer state all of them?" of.
 	 *
 	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
-	 * one or for the finding that a drug is already in several of her orders (issue #477), where a
+	 * one or for the two findings that a substance is in several of her orders (issue #477), where a
 	 * display several orders carry appears once — and so does every CONDITION-MEDIATED chip, one name
 	 * per active order it links; so a reader never has to tell a chip that carries no list from a chip
 	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
@@ -967,8 +967,8 @@ public class SafetyWarning {
 	 * drug something proposed (issue #348) — which decides which COLUMN of the strength clauses
 	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
 	 *
-	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> Only the two
-	 * ORDER-DRIVEN arms ever answer true: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
+	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> The two
+	 * ORDER-DRIVEN arms answer true: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
 	 * (issue #113), whose subject is drawn from the resolved active-order entries and whose partner is
 	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
 	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries — and that
@@ -1068,8 +1068,8 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * Whether this is {@link #ordersSharingASubstance(String, String, List)}' finding — that two of
-	 * her own orders carry one substance — rather than a relationship between two substances. An INTERACTION finding that
+	 * Whether this is {@link #ordersSharingASubstance(String, String, List)}' finding — that two or
+	 * more of her own orders carry the same substances — rather than a relationship between two. An INTERACTION finding that
 	 * relates no PAIR, so {@code DrugReferenceInjector.answersFromFindings} asks this to keep a screen
 	 * the module answers itself one that related at least one pair (ADR Decision 108). Package-private,
 	 * matching the factory: it is on neither the wire nor either collapse key.

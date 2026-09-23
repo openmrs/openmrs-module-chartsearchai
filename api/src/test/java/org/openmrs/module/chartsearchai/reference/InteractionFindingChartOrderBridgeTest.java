@@ -100,6 +100,10 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 
 	private static final String WITHHOLD = DrugReferenceInjector.STRENGTH_WITHHOLD;
 
+	/** The drug-in-play arm's other call. The FOLDED arrangement below states it since issue #471's
+	 *  review round 1, its rule being rated Minor and its class relationship a caution. */
+	private static final String CAUTION = DrugReferenceInjector.STRENGTH_CAUTION;
+
 	/** The call the SCREENING arrangements below state since issue #348: both drugs of a screened pair
 	 *  are the patient's own prescriptions, so the finding licenses a change of therapy rather than a
 	 *  refusal of a proposal nobody made. The drug-in-play arrangements still state {@link #WITHHOLD},
@@ -193,8 +197,9 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	}
 
 	/**
-	 * @return the strength call {@code finding} ends with — {@link #WITHHOLD} for the drug-in-play
-	 *         arrangements below and {@link #CHANGE_CURRENT} for the screening ones (issue #348).
+	 * @return the strength call {@code finding} ends with — {@link #WITHHOLD} or {@link #CAUTION} for
+	 *         the drug-in-play arrangements below and {@link #CHANGE_CURRENT} for the screening ones
+	 *         (issue #348).
 	 *
 	 *         <p>Asserted rather than assumed. This class mixes both question shapes, and
 	 *         {@link DrugReferenceTestSupport#bridgeOf} stops at whichever strength clause the record
@@ -207,6 +212,9 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	private static String callOf(String finding) {
 		if (finding.endsWith(CHANGE_CURRENT)) {
 			return CHANGE_CURRENT;
+		}
+		if (finding.endsWith(CAUTION)) {
+			return CAUTION;
 		}
 		assertTrue(finding.endsWith(WITHHOLD),
 			"every finding here states one of the two calls its arm can state, was: " + finding);
@@ -447,9 +455,8 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 
 	@Test
 	public void aFoldedChipsPartnerIsBridgedToo() throws Exception {
-		// The FOLDED chip is the highest-consequence record here — a rated rule carrying the class
-		// arm's duplicate-therapy sentence and STRENGTH_WITHHOLD — and it is worded at its own call
-		// site. Until this case that site could be neutered to an empty list with the whole build
+		// The FOLDED chip — a rated rule carrying the class arm's duplicate-therapy sentence, and a
+		// caution since the rule is rated Minor (issue #471) — is worded at its own call site. Until this case that site could be neutered to an empty list with the whole build
 		// green, which is the blind spot this module's own probe cells already have for folded chips.
 		String finding = onlyFinding(FOLDED_CLASS_PAIR, chartNaming("order-moda", "Modabrand"),
 			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Modabrand"),

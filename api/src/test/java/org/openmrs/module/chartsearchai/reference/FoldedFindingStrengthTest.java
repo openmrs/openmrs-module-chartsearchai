@@ -22,28 +22,27 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * A FOLDED finding — one chip asserting a rated interaction AND an unrated class relationship — states
- * the stronger of the two strengths (issue #283).
+ * the stronger of the two strengths (issue #283), and since issue #471's review round 1 the class
+ * relationship's strength is a caution, so the fold states what its rule's rating does.
  *
  * <p><b>Why this exists.</b> Issue #171's fold puts the class arm's duplicate-therapy sentence onto the
  * rated rule's chip when both arms are about the same co-medication, so one finding carries two claims
  * while {@link SafetyWarning#getSeverity()} keeps reporting the RULE's rating (deliberately — see
- * {@code interactionWarning}: folding must not raise or lower what the pair is rated). Grading the
- * strength clause off that rating alone made the fold LOWER the claim: a Minor-rated rule folded with a
- * duplicate-therapy relationship rendered "a caution to note", while the same relationship on its own
- * renders "a reason to withhold" because it is unrated. Same clinical facts, two strengths, decided by
- * whether a rated row happened to exist beside them.
- *
- * <p>It is also a behaviour change beyond what #283 set out to make. Before that issue every finding
- * produced a refusal, so a folded Minor pair refused; softening it was not measured and is not what the
- * report was about. The fold therefore takes the stronger claim, which leaves those pairs exactly where
- * they were and keeps #283 confined to findings whose only claim is the rated rule.
+ * {@code interactionWarning}: folding must not raise or lower what the pair is rated). Issue #283 made
+ * the fold take the stronger claim, and at the time the class relationship on its own was a reason to
+ * withhold, so a folded Minor withheld. Issue #400 (ADR Decision 86) graded that relationship a caution
+ * where it stands alone, and issue #471 made Moderate a caution; each half of a folded Minor or
+ * Moderate finding is then a caution, and a fold that went on withholding stated a call neither half
+ * licenses. Review of PR #474 measured it on the shipped knowledge base — Efavirenz with Nevirapine,
+ * rated Moderate and both in J05AG, read "This finding is a reason to withhold it."
  *
  * <p><b>Not hypothetical.</b> Measured over the shipped knowledge base through the production
  * predicates — the real {@link DdiDrugReferenceSource#parse}, {@link DrugReference#atcSubgroups()} for
  * the subgroup test and {@link DrugReferenceService#lookupByToken} for the partner — <b>108 of the
  * 24,690</b> Minor-rated interaction ROWS the parsed model carries pair two drugs whose subgroups
- * intersect. The ROW is the honest unit here because a chip is raised per subject, so either
- * orientation can fold. The fixture is one of them, sliced verbatim (Methylphenidate × Modafinil,
+ * intersect (a count taken for issue #283, before Moderate was a caution; the Moderate rows were not
+ * counted). The ROW is the honest unit here because a chip is raised per subject, so either
+ * orientation can fold. The Minor fixture is one of them, sliced verbatim (Methylphenidate × Modafinil,
  * rated Minor, both publishing {@code N06BA} — a subgroup named for a pharmacological action, so the
  * duplicate-therapy claim is licensed rather than vetoed by #183's bar).
  *
@@ -53,10 +52,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * one side only, with multiplicities of 1, 2, 3 and 5 from the multi-row families. 54 was 108/2 and
  * not a second count, so the reconciliation with a raw-file scan that this paragraph claimed never
  * existed. The fixture pair itself is one of the 32 symmetric ones.
+ *
+ * <p>Restore the fold leg — {@code || finding.carriesUnratedRelationship()} in
+ * {@code licensesWithholding} — and {@link #aModerateRuleFoldedWithAClassRelationshipIsACaution},
+ * {@link #aFoldedMinorFindingIsACautionBecauseNeitherOfItsClaimsWithholds} and
+ * {@link #theScreeningArmStatesTheSameStrengthForTheSamePair} redden.
  */
 public class FoldedFindingStrengthTest {
 
 	private static final String FIXTURE = "chartsearchai-test/ddi-folded-minor-class-pair.json";
+
+	/** Efavirenz and Nevirapine, rated Moderate and both filed under J05AG — see the file's own note. */
+	private static final String MODERATE_FIXTURE = "chartsearchai-test/ddi-folded-moderate-class-pair.json";
 
 	private static final String QUESTION = "Is it safe to give methylphenidate?";
 
@@ -77,10 +84,8 @@ public class FoldedFindingStrengthTest {
 
 	private static final String CAUTION = "This finding is a caution to note, not a reason to withhold it.";
 
-	/** The SCREENING arm's caution since issue #348. The divergence this file is about is unchanged —
-	 *  the screen still states the weaker claim for the identical pair — but the vocabulary it states
-	 *  it in is the current-medication one, because both of a screened pair's drugs are the patient's
-	 *  own prescriptions and nothing proposed either of them. */
+	/** The SCREENING arm's caution since issue #348 — the current-medication vocabulary, because both
+	 *  of a screened pair's drugs are the patient's own prescriptions and nothing proposed either. */
 	private static final String CAUTION_CURRENT = "This finding is a caution about a medication this "
 			+ "patient is already taking, not a reason to change it.";
 
@@ -101,6 +106,40 @@ public class FoldedFindingStrengthTest {
 		return findings.get(0).getText();
 	}
 
+	/**
+	 * A MODERATE rule folded with a class relationship is a caution (issue #471, review round 1 of
+	 * PR #474). Each half is a caution on its own — the rule's rating by ADR Decision 109, the shared
+	 * classification by Decision 86 — so the stronger of the two claims is a caution, and a fold that
+	 * withheld here would state a call neither half licenses. Efavirenz and Nevirapine are the shipped
+	 * knowledge base's own rows, rated Moderate and both filed under J05AG; the review drove this very
+	 * arrangement over the shipped KB and read "This finding is a reason to withhold it."
+	 */
+	@Test
+	public void aModerateRuleFoldedWithAClassRelationshipIsACaution() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(MODERATE_FIXTURE);
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(40, null, DrugReferenceTestSupport.set("Nevirapine"),
+						DrugReferenceTestSupport.set("J05AG01"), null, null),
+				"Can I give this patient efavirenz?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		assertEquals(1, findings.size(),
+				"the fold is the arrangement under test: two arms about one co-medication must be ONE "
+						+ "finding, was: " + chart.getText());
+		String finding = findings.get(0).getText();
+		assertTrue(finding.contains("Moderate"), "precondition: the rated half is the Moderate rule: "
+				+ finding);
+		assertTrue(finding.contains("same ATC class (J05AG)"),
+				"precondition: the unrated half is the duplicate-therapy sentence the fold appends: "
+						+ finding);
+
+		assertTrue(finding.contains(CAUTION),
+				"a Moderate rule is a caution and so is a shared classification, so the fold of the two "
+						+ "is a caution — the finding must not state a call neither half licenses: "
+						+ finding);
+		assertFalse(finding.contains(WITHHOLD), "and it must not withhold: " + finding);
+	}
+
 	@Test
 	public void theFoldedFindingReallyCarriesBothClaims() throws IOException {
 		String finding = foldedFinding();
@@ -113,31 +152,26 @@ public class FoldedFindingStrengthTest {
 	}
 
 	@Test
-	public void aFoldedFindingStatesTheStrongerClaimRatherThanTheRatedOne() throws IOException {
+	public void aFoldedMinorFindingIsACautionBecauseNeitherOfItsClaimsWithholds() throws IOException {
 		String finding = foldedFinding();
 
-		assertTrue(finding.contains(WITHHOLD),
-				"a finding that also asserts an unrated class relationship licenses withholding, or the "
-						+ "fold silently downgrades a claim the same relationship makes on its own: "
+		assertTrue(finding.contains(CAUTION),
+				"a Minor rule is a caution and so is a shared classification (ADR Decision 86), so the "
+						+ "stronger of the fold's two claims is a caution: " + finding);
+		assertFalse(finding.contains(WITHHOLD),
+				"and it must not withhold on a relationship that is a caution where it stands alone: "
 						+ finding);
-		assertFalse(finding.contains(CAUTION),
-				"and it must not read as a mere caution: " + finding);
 	}
 
 	/**
-	 * The same two drugs on the same chart, reached by the SCREENING arm instead, state the weaker
-	 * claim. What differs is which arm asked, not anything in the data.
-	 *
-	 * <p>Why the two arms differ, and why that is left rather than closed, is argued once on
-	 * {@link SafetyWarning#carriesUnratedRelationship()}. What this case adds is that it is CHECKED:
-	 * before #283 neither record stated a strength and the prompt refused on either, so the arms
-	 * differed only in detail text and nothing here could see it. Reddens on the mutation it is about
-	 * — {@code carriesUnratedRelationship()} returning true unconditionally fails this case and
-	 * neither of the two above it.
+	 * The same two drugs on the same chart, reached by the SCREENING arm instead, state the same
+	 * STRENGTH, each in its own arm's vocabulary. The screen runs no class arm, so its finding carries
+	 * the rule alone; until issue #471's review round 1 the drug-in-play arm's fold withheld on the
+	 * class sentence the screen never raises, so one pair was a caution or a reason to withhold by
+	 * which arm asked. A class relationship being a caution closes that.
 	 */
 	@Test
-	public void theScreeningArmStatesTheWeakerClaimForTheSamePairBecauseItRunsNoClassArm()
-			throws IOException {
+	public void theScreeningArmStatesTheSameStrengthForTheSamePair() throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
 				DrugReferenceTestSupport.oneRecordChart(),
@@ -154,9 +188,9 @@ public class FoldedFindingStrengthTest {
 		assertTrue(screened.toLowerCase().contains("minor"),
 				"precondition: it is the same rated row the folded case is about: " + screened);
 		assertFalse(screened.contains(CLASS_SENTENCE),
-				"precondition: the screen raises no class sentence, which is WHY the strengths differ "
-						+ "— if this ever fails, the fold reached this arm and the assertion below is "
-						+ "the one to re-read: " + screened);
+				"precondition: the screen raises no class sentence, which is what made the strengths "
+						+ "differ before a class relationship was a caution — if this ever fails, the fold "
+						+ "reached this arm and the assertions below are the ones to re-read: " + screened);
 
 		assertTrue(screened.contains(CAUTION_CURRENT),
 				"the screened finding carries the rating alone, so it states a caution — the screening "
@@ -164,8 +198,8 @@ public class FoldedFindingStrengthTest {
 		assertFalse(screened.contains(CAUTION),
 				"and never the PROPOSAL caution, whose prompt branch opens by stating that the drug "
 						+ "can be given: " + screened);
-		assertTrue(foldedFinding().contains(WITHHOLD),
-				"while the drug-in-play arm states withholding for the identical pair — the divergence "
-						+ "this case exists to keep visible");
+		assertTrue(foldedFinding().contains(CAUTION),
+				"and the drug-in-play arm states a caution for the identical pair too — the class sentence "
+						+ "only it raises must not make the pair a reason to withhold");
 	}
 }

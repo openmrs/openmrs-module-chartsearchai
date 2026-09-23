@@ -2377,9 +2377,10 @@ public class DrugReferenceInjector {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
-			// An INTERACTION the data RATES a reason to withhold — never an unrated rule, nor a class
-			// relationship folded onto a lower-rated row, both of which withhold only because they are
-			// not cautions. It is about the drug proposed and not one of her own: only the screening arm
+			// An INTERACTION the data RATES a reason to withhold — never an unrated rule, which withholds
+			// only because it is not a caution. A class relationship folded onto a lower-rated row is
+			// answered by that row's rating here, and is a caution in the record too since issue #471's
+			// review round 1. It is about the drug proposed and not one of her own: only the screening arm
 			// relates two of her own medications, and it stands down for a question that resolved a
 			// drug. Not a contraindication: see this method's javadoc.
 			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())

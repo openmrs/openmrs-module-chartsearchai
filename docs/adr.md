@@ -2563,11 +2563,11 @@ An **overdose** finding is the one that genuinely wants neither clause, being a 
 
 **The chip and the wire are unchanged.** The clause is prompt-facing evidence about how far a rating reaches, not a clinical instruction to put in front of a clinician, and `safetyWarnings` is a published shape.
 
-**A folded finding takes the stronger claim.** Issue #171's fold puts the class arm's duplicate-therapy or cross-reactivity sentence onto a rated rule's chip when both arms are about one co-medication, so one finding asserts two things while `SafetyWarning.getSeverity()` keeps reporting the *rule's* rating — deliberately, because folding must not move what the pair is rated. Keying the clause on that rating alone made the fold lower a claim: a Minor rule folded with duplicate therapy read as "a caution", while the same relationship standing alone reads as "a reason to withhold" because it is unrated. That would also have been a behaviour change beyond this decision's scope, since before it every finding produced a refusal. So `licensesWithholding` is asked of the **finding** (`ratingLicensesWithholding` is the rating-only primitive underneath it), and `SafetyWarning.carriesUnratedRelationship()` carries the fold to it. Measured over the shipped knowledge base through the production predicates (the real `DdiDrugReferenceSource.parse`, `DrugReference.atcSubgroups()`, `DrugReferenceService.lookupByToken`): **108 of the 24,690** Minor-rated interaction ROWS the parsed model carries pair two drugs whose subgroups intersect, and the ROW is the unit that matters because a chip is raised per subject so either orientation can fold. So the shape is in the data rather than constructed for the test.
+**A folded finding takes the stronger claim.** Issue #171's fold puts the class arm's duplicate-therapy or cross-reactivity sentence onto a rated rule's chip when both arms are about one co-medication, so one finding asserts two things while `SafetyWarning.getSeverity()` keeps reporting the *rule's* rating — deliberately, because folding must not move what the pair is rated. Keying the clause on that rating alone made the fold lower a claim: a Minor rule folded with duplicate therapy read as "a caution", while the same relationship standing alone reads as "a reason to withhold" because it is unrated. That would also have been a behaviour change beyond this decision's scope, since before it every finding produced a refusal. So `licensesWithholding` is asked of the **finding** (`ratingLicensesWithholding` is the rating-only primitive underneath it), and `SafetyWarning.carriesUnratedRelationship()` carries the fold to it. **Superseded by [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)'s review round 1**: [Decision 86](#decision-86-a-relationship-resting-on-shared-classification-alone-is-a-caution-not-a-reason-to-withhold) made that relationship a caution where it stands alone, so the stronger of a fold's two claims is the rule's, `licensesWithholding` no longer asks the fold flag, and a folded Minor is a caution. Measured over the shipped knowledge base through the production predicates (the real `DdiDrugReferenceSource.parse`, `DrugReference.atcSubgroups()`, `DrugReferenceService.lookupByToken`): **108 of the 24,690** Minor-rated interaction ROWS the parsed model carries pair two drugs whose subgroups intersect, and the ROW is the unit that matters because a chip is raised per subject so either orientation can fold. So the shape is in the data rather than constructed for the test.
 
 This paragraph added "54 unordered pairs, each held by both entries", attributed to a raw-JSON scan reading the same population on a different counting base, and review measured that wrong. Through the same three predicates the 108 rows are **56** unordered pairs of display names (44 by `DrugReference.substanceGroupKey()`, 60 keyed on the raw entry-name/token strings), and they are not two rows each: 32 pairs contribute 2 rows, 18 contribute 1, 2 contribute 3 and 4 contribute 5, so 18 of the 56 are held from one side only. The multiplicity is the multi-row families — `Amphotericin B` has three presentation rows beside the plain one, so `Amphotericin B | Clotrimazole` contributes five rows while `Amphotericin B (liposomal) | Clotrimazole` contributes one, because clotrimazole's own row names the token `amphotericin b` and `lookupByToken` answers with the plain row. 54 was 108/2 and not a second measurement, so there were never two counting bases to reconcile. Decision 33's rule stands; what it forbids is exactly this — a derived figure published beside a measured one with no base of its own.
 
-**The fold flag is arm-scoped, so one pair can state two strengths.** `SafetyWarning.carriesUnratedRelationship()` is set only by `addInteractionWarnings`, because `classRelationships` runs per IN-PLAY substance and the interaction SCREEN (#113) answers a question naming no drug: the screen builds through the narrow `interactionWarning` overload (whose arity has grown twice since this was written; read its parameters rather than a count here) and never sets it. So the same Minor-rated pair, on the same two active orders, states *"a reason to withhold it"* from the drug-in-play arm and *"a caution to note"* from the screen — a property of which arm ran rather than of the pair. Measured through the real `injectRecords` over `chartsearchai-test/ddi-folded-minor-class-pair.json`, whose two drugs share `N06BA`. It is left there deliberately — giving the screen the class arm's sentence would change the DETAIL of a published `safetyWarnings` chip, which #113 and #171 would both have to re-measure, and it is outside what this decision set out to do. The chip is unchanged either way, and the graded branch is gated on a finding naming the drug asked about, which a screening question does not, so no verdict is decided by it today. What was missing is that nothing said so and nothing checked it: before this decision neither record stated a strength and the prompt refused on either, so the two arms differed in detail text alone and the divergence was not a difference in the CALL. `FoldedFindingStrengthTest.theScreeningArmStatesTheWeakerClaimForTheSamePairBecauseItRunsNoClassArm` pins it, non-vacuously by mutation — `carriesUnratedRelationship()` returning true unconditionally reddens that case and neither of the two beside it — so moving either arm is visible. The question-pair arm does not set it either, so its finding always states the strength its rating licenses; the fold happens only inside `addInteractionWarnings`, so a class relationship that does hold for one of those drugs is never folded into the pair finding and reaches the model as its own unrated warning instead. This paragraph first said the question-pair arm has "no co-medication for a class relationship to hold against" because its two drugs need not be on the chart, and that does not follow — the patient can be on one of them; the narrower statement is what the flag actually needs.
+**The fold flag is arm-scoped, so one pair can state two strengths.** (No longer since [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)'s review round 1, which took the flag out of the strength: both arms state one strength for the pair, and the case below is now `FoldedFindingStrengthTest.theScreeningArmStatesTheSameStrengthForTheSamePair`.) `SafetyWarning.carriesUnratedRelationship()` is set only by `addInteractionWarnings`, because `classRelationships` runs per IN-PLAY substance and the interaction SCREEN (#113) answers a question naming no drug: the screen builds through the narrow `interactionWarning` overload (whose arity has grown twice since this was written; read its parameters rather than a count here) and never sets it. So the same Minor-rated pair, on the same two active orders, states *"a reason to withhold it"* from the drug-in-play arm and *"a caution to note"* from the screen — a property of which arm ran rather than of the pair. Measured through the real `injectRecords` over `chartsearchai-test/ddi-folded-minor-class-pair.json`, whose two drugs share `N06BA`. It is left there deliberately — giving the screen the class arm's sentence would change the DETAIL of a published `safetyWarnings` chip, which #113 and #171 would both have to re-measure, and it is outside what this decision set out to do. The chip is unchanged either way, and the graded branch is gated on a finding naming the drug asked about, which a screening question does not, so no verdict is decided by it today. What was missing is that nothing said so and nothing checked it: before this decision neither record stated a strength and the prompt refused on either, so the two arms differed in detail text alone and the divergence was not a difference in the CALL. `FoldedFindingStrengthTest.theScreeningArmStatesTheWeakerClaimForTheSamePairBecauseItRunsNoClassArm` pins it, non-vacuously by mutation — `carriesUnratedRelationship()` returning true unconditionally reddens that case and neither of the two beside it — so moving either arm is visible. The question-pair arm does not set it either, so its finding always states the strength its rating licenses; the fold happens only inside `addInteractionWarnings`, so a class relationship that does hold for one of those drugs is never folded into the pair finding and reaches the model as its own unrated warning instead. This paragraph first said the question-pair arm has "no co-medication for a class relationship to hold against" because its two drugs need not be on the chart, and that does not follow — the patient can be on one of them; the narrower statement is what the flag actually needs.
 
 ### Why the caution branch is not a "Yes"
 
@@ -6025,7 +6025,7 @@ And **`unknown`** has a word that says nothing. This is the one the plan for thi
 
 The same rawness still reaches the wire as each chip's `severity`, which predates this change and is untouched by it.
 
-**It makes no strength judgement, and must not be given one.** `licensesWithholding` answers how strongly a finding licenses a clinical call; this asks whether there is a word whose absence means something. A caution's rating is as much wanted as a withholding one, so a `minor` finding's rating is carried like the rest. **Not because "the prompt asks for it either way"** — that wording is measured false and `statableRating`'s javadoc forbids restating it: the governing safety sentence is gated on a finding naming the drug ASKED about, and the current-medication CAUTION branch is gated on the finding's clause instead, so nothing asks for the rating in that one cell. It is a named residue there, and that javadoc is its home.
+**It makes no strength judgement, and must not be given one.** `licensesWithholding` answers how strongly a finding licenses a clinical call; this asks whether there is a word whose absence means something. A caution's rating is as much wanted as a withholding one, so a `minor` finding's rating is carried like the rest. **Not because "the prompt asks for it either way"** — that wording is measured false and `statableRating`'s javadoc forbids restating it: the governing safety sentence is gated on a finding naming the drug ASKED about, and the current-medication CAUTION branch is gated on the finding's clause instead, so nothing asks for the rating in that one cell. It is a named residue there, and that javadoc is its home. (Closed in [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)'s review round 1, when `moderate` joined that cell: the current-medication caution branch now asks for the finding's severity too.)
 
 ### The unit is the whole answer
 
@@ -6632,7 +6632,7 @@ names the caution.
 the one construction site — `addInteractionWarnings`' `classOnly` loop — and
 `SafetyWarning.restsOnSharedClassificationAlone()` the one reader. A detail scan would be wrong in a
 reachable way: the FOLDED chip prints the identical *"same ATC class (…)"* sentence beside a rated
-rule, and it must go on stating the stronger of its two claims (`FoldedFindingStrengthTest`).
+rule, and it must go on stating the stronger of its two claims (`FoldedFindingStrengthTest`) — which, this decision having made the class half a caution, is its rule's ([Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major), review round 1).
 A FACTORY rather than a flag on the public constructor, following `recordedAllergenContraindication`:
 every other field of this shape is false or empty by construction, and a caller must not be able to
 set the flag on a chip that carries a rule.
@@ -9740,12 +9740,15 @@ dataset's definition of the dataset's word.
 **`DrugSafetyValidator.ratingLicensesWithholding` withholds on `major` and on an unrated rule; every
 rating below `major` is a caution.** Nothing else about the split moves:
 
-- `licensesWithholding(SafetyWarning)` still takes the stronger claim of a FOLDED finding, so a
-  Moderate rule folded with a class relationship withholds through `carriesUnratedRelationship`, as a
-  folded Minor already did. A relationship on shared classification alone stays a caution (Decision 86),
-  and a contraindication states a withholding-class clause whatever rates it.
-- The chip, its `severity`, the floor, `statableRating` and the prompt are untouched. The prompt keys on
-  the record's clause and never on the rating word, so the call moves with no prompt change.
+- `licensesWithholding(SafetyWarning)` still takes the stronger claim of a FOLDED finding, and the
+  class relationship's claim is a caution (Decision 86), so a folded finding states what its rule's
+  rating does: a Moderate or Minor rule folded with a class relationship is a caution, a Major or an
+  unrated authored rule folded with one withholds. The first version of this change left the fold leg
+  (`|| carriesUnratedRelationship()`) in place and review of PR #474 measured the result — see *Review
+  round 1* below. A contraindication states a withholding-class clause whatever rates it.
+- The chip, its `severity`, the floor and `statableRating` are untouched. The prompt keys on the
+  record's clause and never on the rating word, so the call moves with no change to how the prompt
+  reads a clause; the one prompt edit is the severity clause below.
 - The REFERENT axis moves with it (Decision 72): a Moderate pair of her own prescriptions states the
   current-medication caution, not a reason to change one.
 - **`ratedAReasonToWithhold` is now asked THROUGH `ratingLicensesWithholding`** —
@@ -9771,10 +9774,11 @@ rating below `major` is a caution.** Nothing else about the split moves:
   Moderate cells, each from `NO` to the caution lead. Rifampicin (Major) keeps `NO`, Trimethoprim
   (Minor) keeps its caution. Unlicensed verdicts stay 0 → 0, every cell still states its chip's rating,
   and the scorer exits 0.
-- `FINDING_STRENGTH_DESCENDING`'s two keys now also disagree at the shipped floor — a folded Minor
-  against a plain Moderate — where before only an `Unknown` pair under a lowered floor did. The
-  comparator's javadoc names each pair; `DrugInPlayFindingStrengthKeyOrderContextTest` still pins the
-  key order, over the lowered-floor pair.
+- `FINDING_STRENGTH_DESCENDING`'s two keys no longer disagree on any chip that arm sorts, a fold no
+  longer moving strength; the comparator keeps asking `licensesWithholding` first so the order follows
+  the finding if the two diverge again. `DrugInPlayFindingStrengthKeyOrderContextTest` and
+  `DrugInPlayFindingStrengthOrderTest.aFoldedCautionDoesNotOutrankAPlainOne` pin that a fold no longer
+  lifts a row.
 - Tests that used a Moderate pair as their WITHHOLDING exemplar were re-aimed at a Major one, keeping
   every assertion (the second-drug case also gained a positive control), because what each specifies
   is not "Moderate withholds":
@@ -9786,6 +9790,39 @@ rating below `major` is a caution.** Nothing else about the split moves:
   no management field. That is [#358](https://github.com/openmrs/openmrs-module-chartsearchai/issues/358),
   a change to the knowledge-base build first.
 
+### Review round 1
+
+Review of PR #474 found two gaps, both fixed in this decision rather than left as residues.
+
+- **A folded Moderate still withheld.** The fold leg made a Moderate rule sharing an ATC subgroup with
+  the co-medication state `STRENGTH_WITHHOLD`, on the class relationship alone. Review drove the real
+  `injectRecords` over the shipped knowledge base, and a throwaway case over the same path reproduced
+  it with the leg in place and read the caution in every cell without it: Efavirenz with Nevirapine (J05AG), simvastatin
+  with Atorvastatin (C10AA), fluoxetine with Sertraline (N06AB) and zidovudine with Stavudine (J05AF)
+  each ended *"This finding is a reason to withhold it."*, while amlodipine with Nevirapine (Moderate, no
+  shared class) ended in the caution. Each half of such a fold is a caution on its own — the rating by
+  this decision, the shared classification by Decision 86 — so the fold leg is gone: the stronger of
+  the two claims is the rule's. **Folded Minor findings change too**, by the same reasoning: they
+  withheld on that leg since #283, which predates Decision 86, and keeping the leg for Minor alone would
+  have a folded Minor withhold while a folded Moderate cautions. The issue's own words bind it: *"the
+  strength of the call comes from the rating alone"*. The cases that pinned a withholding fold were
+  re-specified — `FoldedFindingStrengthTest`'s folded-Minor and screening cases, the two ordering
+  cases, one precondition in `LlmInferenceServiceAnswerFromFindingsContextTest`, and
+  `InteractionFindingChartOrderBridgeTest.callOf`, which now admits the caution call. The two arms'
+  strengths for one pair, which Decision 37 recorded as diverging, now agree.
+- **The current-medication caution branch did not ask for the rating.** The issue requires a Moderate
+  finding to be stated with its rating (#299, #337), and moving Moderate to the caution moved a screened
+  Moderate pair of her own prescriptions from the branch that says *"carry the finding's severity"* to
+  one that did not. The caution branch now says it too, closing the cell Decision 78 recorded as a
+  residue. This is a prompt change: it needs a live Moderate screening cell before and after, which
+  this change has not had.
+
+`ratedAReasonToWithhold`'s body is pinned by source, since the parallel boundary it replaced
+(`>= severityRank("major")`, equal to today's) leaves every behavioural case green.
+
 → `SafetyFindingSeverityStrengthTest.aModerateRatedInteractionIsACautionAndSaysItIsNotAReasonToWithholdTheDrug`,
 `CurrentMedicationFindingStrengthTest.aScreenedModeratePairOfHerOwnMedicationsStatesTheCurrentMedicationCaution`,
-`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel`.
+`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel`,
+`FoldedFindingStrengthTest.aModerateRuleFoldedWithAClassRelationshipIsACaution`,
+`SafetyVerdictSeverityGradationTest.everyCurrentMedicationBranchAsksForTheFindingsSeverity`,
+`SafetyFindingSeverityStrengthTest.theModulesOwnWithholdingAnswerAsksTheOneRatingBoundaryAndNoSecond`.

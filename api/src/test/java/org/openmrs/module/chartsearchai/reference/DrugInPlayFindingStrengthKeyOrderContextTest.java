@@ -21,20 +21,16 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
- * Which of {@code FINDING_STRENGTH_DESCENDING}'s two keys is asked FIRST (issue #346).
+ * A folded finding rated BELOW a plain caution stays below it (issue #471, review round 1 of PR #474).
  *
- * <p><b>Why this needs a case of its own.</b>
- * {@link DrugInPlayFindingStrengthOrderTest#aFoldedCautionOutranksAPlainOne} shows that the fold is
- * consulted at all, but it does so over two pairs the knowledge base rates alike, and a comparator
- * that asked {@code severityPriority} first and the fold only as a TIEBREAK satisfies it — the two
- * ratings tie, so the fold decides either way. The two key orders answer differently only where a
- * finding WITHHOLDS while rating BELOW one that does not. Since issue #471 the ratings that do not
- * withhold are {@code moderate}, {@code minor} and {@code unknown}, so a folded {@code minor} or
- * {@code unknown} below a plain {@code moderate} does that, and so does a folded {@code unknown} below
- * a plain {@code minor} — {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING}'s javadoc names the
- * pairs. This case is the last: a rule rated {@code unknown} folded with a class join, which answers
- * {@code licensesWithholding} on the fold and renders {@code STRENGTH_WITHHOLD} in the record the
- * model reads while its rating sorts it last.
+ * <p><b>What this case pinned before.</b> {@code FINDING_STRENGTH_DESCENDING} asks
+ * {@code licensesWithholding} first and {@code severityPriority} second, and the two keys answered
+ * differently only where a finding withheld while rating below one that did not — a rule rated
+ * {@code unknown} folded with a class join, which withheld on the fold. This case pinned that key
+ * order over that arrangement. A class relationship is a caution now (ADR Decision 86), so the fold
+ * no longer moves a finding's strength, the two keys agree on every chip this arm sorts, and the
+ * same arrangement pins the consequence instead: the folded {@code Unknown} is a caution and follows
+ * the plain {@code Minor} its rating ranks above it.
  *
  * <p><b>Why a context.</b> {@code unknown} is the one rating the SHIPPED configuration filters out
  * entirely — the default {@code chartsearchai.drugSafety.minInteractionSeverity} is {@code minor} —
@@ -44,11 +40,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * floor the Unknown-rated rule raises no rule chip at all, which is what proves the floor write took
  * effect rather than the arrangement having been there all along.
  *
- * <p>Swap the comparator's two keys — rank on {@code severityPriority} and consult
- * {@code licensesWithholding} only where the priorities tie — and
- * {@link #withTheFloorLoweredAFoldedUnknownLeadsAPlainMinorThatOutranksItOnRating} reddens: the plain
- * Minor caution takes the lead, which is issue #346's own failure one rung down, since a truncated
- * answer then keeps the caution and drops the finding that withholds.
+ * <p>Restore the fold leg — {@code || finding.carriesUnratedRelationship()} in
+ * {@code licensesWithholding} — and
+ * {@link #withTheFloorLoweredAFoldedUnknownFollowsThePlainMinorItsRatingRanksAbove} reddens.
  */
 public class DrugInPlayFindingStrengthKeyOrderContextTest extends BaseModuleContextSensitiveTest {
 
@@ -88,22 +82,20 @@ public class DrugInPlayFindingStrengthKeyOrderContextTest extends BaseModuleCont
 	}
 
 	@Test
-	public void withTheFloorLoweredAFoldedUnknownLeadsAPlainMinorThatOutranksItOnRating()
+	public void withTheFloorLoweredAFoldedUnknownFollowsThePlainMinorItsRatingRanksAbove()
 			throws Exception {
 		Context.getAdministrationService().setGlobalProperty(
 			ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "unknown");
 
 		List<SafetyWarning> warnings = chips();
 		assertEquals(Arrays.asList(
-			"interaction | Unknown | Simvastatin interacts with active order Pravastatin",
-			"interaction | Minor | Simvastatin interacts with active order Metformin"),
+			"interaction | Minor | Simvastatin interacts with active order Metformin",
+			"interaction | Unknown | Simvastatin interacts with active order Pravastatin"),
 			DrugReferenceTestSupport.chipLeads(warnings),
-			"the Unknown-rated pravastatin finding folds a class join, so it is a reason to withhold "
-					+ "and must lead the plain Minor caution — which its RATING sorts it below, so a "
-					+ "comparator asking severityPriority first reverses this list (issue #346)");
-		assertTrue(warnings.get(0).carriesUnratedRelationship(),
-			"and it leads BECAUSE of the fold rather than because of anything its rating says, so the "
-					+ "leading chip must be the one carrying the unrated relationship, was: "
-					+ warnings.get(0).getDetail());
+			"the Unknown-rated pravastatin finding folds a class join, which is a caution, so the fold "
+					+ "does not lift it over the plain Minor caution its rating ranks below");
+		assertTrue(warnings.get(1).carriesUnratedRelationship(),
+			"and the trailing chip must be the one carrying the fold, or this case is about two plain "
+					+ "chips, was: " + warnings.get(1).getDetail());
 	}
 }

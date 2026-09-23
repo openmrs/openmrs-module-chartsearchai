@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -298,5 +299,25 @@ public class SafetyFindingSeverityStrengthTest {
 		assertTrue(sawWithhold && sawCaution,
 				"and this arrangement is a proposal question, so both PROPOSAL strengths must be "
 						+ "reached or the sweep above ran over one class: " + findings);
+	}
+
+	/**
+	 * {@code ratedAReasonToWithhold} asks {@code ratingLicensesWithholding} and adds nothing but the
+	 * exclusion of an unrated rule (issue #471, review round 1 of PR #474). A boundary of its own — its
+	 * pre-#471 shape was a second {@code >= severityRank("moderate")} — is how the two came apart once
+	 * already, and the parallel copy that equals today's boundary ({@code >= severityRank("major")})
+	 * leaves every behavioural case green, so the BODY is pinned. A reword that keeps the rule re-reads
+	 * this case; one that adds a second boundary is the drift it exists to stop.
+	 */
+	@Test
+	public void theModulesOwnWithholdingAnswerAsksTheOneRatingBoundaryAndNoSecond() throws IOException {
+		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
+				+ "DrugSafetyValidator.java");
+		String body = scan.text(scan.body("static boolean ratedAReasonToWithhold(String severity)"))
+				.replaceAll("\\s+", " ");
+		assertEquals("{ return severityRank(severity) >= 0 && ratingLicensesWithholding(severity); }", body,
+				"the module's own withholding answer (ADR Decision 108) must be ratingLicensesWithholding "
+						+ "less the unrated rule, and never a boundary beside it — a second one lets the "
+						+ "module compose a withholding answer for a finding its record states as a caution");
 	}
 }

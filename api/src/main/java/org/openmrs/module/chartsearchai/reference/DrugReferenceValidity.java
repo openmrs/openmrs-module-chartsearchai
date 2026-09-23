@@ -12,12 +12,15 @@ package org.openmrs.module.chartsearchai.reference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.slf4j.Logger;
@@ -80,8 +83,8 @@ import org.slf4j.Logger;
  *
  * <p><b>What is scoped is the LEVEL, and only in the log.</b> "Every finding is loud" was true while every
  * dataset the module shipped was one it authored; since ADR Decision 36 the default is a third-party
- * knowledge base, and a data finding about THAT names something no operator can fix — 19 of its 2283 rows
- * trip two of the rules below, and reporting them at WARN on every install of every deployment is the
+ * knowledge base, and a data finding about THAT names something no operator can fix — ADR Decision 36
+ * carries the rows it trips — and reporting them at WARN on every install of every deployment is the
  * noise this class exists to avoid. So {@link #logTo(Logger, String)} reports a DATA finding about the
  * dataset the module ships at INFO and everything else at WARN, while the status channel stays identical
  * either way. The level says who can act; the status says what is true. A CONFIGURATION finding is never
@@ -146,6 +149,12 @@ public final class DrugReferenceValidity {
 	 *  #196 item 4. */
 	public static final String DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE =
 			"derivative-merged-with-its-parent-substance";
+
+	/** A row whose substance name and display name do not carry each other as a word, while the dataset's
+	 *  own bridge names that display name as an ingredient of concepts it files on other rows and not on
+	 *  this one — issue #476. */
+	public static final String SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE =
+			"substance-name-contradicted-by-the-bridge";
 
 	/** A document that omits a table the parser reading it requires, so content it does carry is
 	 *  discarded — issue #242. */
@@ -354,7 +363,7 @@ public final class DrugReferenceValidity {
 	 * SHIPS — since ADR Decision 36 that is the default — and no operator can fix it: the remedy is the
 	 * upstream handoff issue #196 records, so it is INFO. Reporting it at WARN on every install of every
 	 * deployment is the "noise every install learns to ignore" this whole class is written to avoid, and
-	 * the shipped knowledge base trips two of these rules on 19 of its 2283 rows.
+	 * the shipped knowledge base trips several of these rules (ADR Decision 36 carries the measured rows).
 	 *
 	 * <p><b>A finding about the CONFIGURATION never scales.</b> It names a choice the operator made and
 	 * can unmake, so it is WARN wherever the entries came from — and keying the softening on the rule
@@ -411,7 +420,8 @@ public final class DrugReferenceValidity {
 			new LinkedHashSet<String>(Arrays.asList(BLANK_ALIAS, NULL_LIST_ELEMENT,
 					ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES,
 					RULES_WITHOUT_A_SUBSTANCE_IDENTITY, ALIAS_NAMES_ANOTHER_SUBSTANCE,
-					DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE, DATASET_MISSING_A_REQUIRED_TABLE,
+					DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE, SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE,
+					DATASET_MISSING_A_REQUIRED_TABLE,
 					NO_LINE_YIELDED_AN_ENTRY, SELF_PAIRED_INTERACTION_ROWS)));
 
 	/**
@@ -671,6 +681,7 @@ public final class DrugReferenceValidity {
 		reportRulesWithoutASubstanceIdentity(entries);
 		reportAliasesNamingAnotherSubstance(entries);
 		reportDerivativesMergedWithTheirParent(entries);
+		reportSubstanceNamesContradictedByTheBridge(entries);
 	}
 
 	/**
@@ -1137,8 +1148,8 @@ public final class DrugReferenceValidity {
 	 * <ul>
 	 *   <li>the family must hold a row the derivative could have been merged WITH — one that is not
 	 *       itself a derivative of the same claim ({@link #holdsAParent}). That excludes both a lone row
-	 *       claiming a substance name, which confuses nothing and whose wrong {@code rxnorm_name} is the
-	 *       shape issue #196 records as undetectable from inside the file, and a derivative the module
+	 *       claiming a substance name, which confuses nothing here and whose wrong {@code rxnorm_name} is
+	 *       {@link #reportSubstanceNamesContradictedByTheBridge}'s subject instead, and a derivative the module
 	 *       has correctly kept APART from its parent that has route variants of its OWN;</li>
 	 *   <li>the name must carry the substance's own name as a bounded WORD to be excluded, so every
 	 *       presentation, salt and ester is read as what it is rather than as a derivative. That is not
@@ -1211,6 +1222,114 @@ public final class DrugReferenceValidity {
 							+ "the parent's substance: in a DDInter-shaped file by giving it its own "
 							+ "drugbank_id, which is what keeps every derivative this module already "
 							+ "separates apart, and in a curated file by giving it its own substanceName. "
+							+ sample(details));
+		}
+	}
+
+	/**
+	 * The check for issue #476: a row whose published substance name is another substance's. Neither
+	 * sibling sees the shipped case — the dataset has no row of that other substance for
+	 * {@link #reportAliasesNamingAnotherSubstance} to collide with, and nothing merged for
+	 * {@link #reportDerivativesMergedWithTheirParent} to find. That case: {@code Sulfamethoxazole}
+	 * publishes {@code rxnorm_name: sulfamethazine} and
+	 * sulfamethazine's CIEL concepts, and {@link DdiDrugReferenceSource} reads that field as the row's
+	 * substance name, its chip-label synonym and the token every rule about it carries — so a
+	 * cotrimoxazole order reaches a clinician as "sulfamethazine".
+	 *
+	 * <p><b>What contradicts it is a field neither sibling reads: the dataset's own bridge.</b> The
+	 * concepts naming {@code sulfamethoxazole} as an ingredient ({@code Sulfamethoxazole / trimethoprim}
+	 * and two more) are filed on {@code Trimethoprim} and {@code Phenazopyridine} and not on the row whose
+	 * display name that ingredient IS. So a row is reported when BOTH:
+	 * <ul>
+	 *   <li>its substance name and its display stem do not carry each other as a word
+	 *       ({@link DrugReference#containsWord}, the relation both siblings read a presentation, salt or
+	 *       ester by). Where one carries the other the rule is silent, reading the pair as a presentation
+	 *       of one substance rather than a row keyed to another;</li>
+	 *   <li>the bridge names that display stem as an ingredient
+	 *       ({@link DrugReference#combinationConstituents}, or the whole concept name where it lists
+	 *       none) of a concept it files on other rows and NOT on this one. This is the half that keeps a
+	 *       synonym such as {@code Acetylsalicylic acid} publishing {@code aspirin} silent in the shipped
+	 *       KB: no concept filed elsewhere names {@code acetylsalicylic acid}.</li>
+	 * </ul>
+	 * Both compared through {@link DrugReference#normalizeName}, the identity between two reference
+	 * strings; never through {@link DrugReference#isNamed}, which reads the row's aliases, and those
+	 * include the very substance name under test. The row side is its display STEM and the concept side
+	 * is not, so an ingredient the bridge spells with a trailing qualifier matches no row — a missed
+	 * report, never a false one.
+	 *
+	 * <p>The rule reads only the loaded model, so it runs over any dataset publishing a bridge. The
+	 * curated and {@code atc} schemas publish none and it is silent there by construction.
+	 *
+	 * <p><b>REPORTED</b>, for the reason both siblings give: the module can only choose which of the
+	 * row's own names to believe, and dropping the value or the row fails closed, silently, to fix a
+	 * fail-loud. The fix is upstream, and this is the check that finds the rows to hand there.
+	 *
+	 * <p>Measured over the shipped KB 2026-09-23, by this method through
+	 * {@link DrugReferenceService#getLoadStatus()}: six rows — {@code Sulfamethoxazole} (filed as
+	 * {@code sulfamethazine}), {@code Chlorpheniramine} ({@code chlorine}), {@code Methionine}
+	 * ({@code n-acetylmethionine}), {@code Omeprazole} ({@code esomeprazole}), {@code Hyoscyamine}
+	 * ({@code atropine}) and {@code Calcium saccharate} ({@code calcium glucarate}). The last is a
+	 * synonym (glucarate and saccharate name one anion), so the rule is not a certificate that every row
+	 * it names is wrong; {@code Omeprazole} and {@code Hyoscyamine} are also among
+	 * {@link #reportAliasesNamingAnotherSubstance}'s findings, because their substance name is another
+	 * row's display name. Re-measure before relying on the figures.
+	 */
+	private void reportSubstanceNamesContradictedByTheBridge(List<DrugReference> entries) {
+		Map<String, Set<String>> conceptsNaming = new HashMap<String, Set<String>>();
+		Map<String, String> conceptNames = new HashMap<String, String>();
+		for (DrugReference entry : entries) {
+			for (DrugReference.BridgedConcept concept : entry.getBridgedConcepts()) {
+				String uuid = concept.getConceptUuid();
+				String name = concept.getConceptName();
+				if (uuid == null || name == null) {
+					continue;
+				}
+				conceptNames.put(uuid, name);
+				List<String> ingredients = DrugReference.combinationConstituents(name);
+				for (String ingredient : ingredients.isEmpty() ? Collections.singletonList(name) : ingredients) {
+					String key = DrugReference.normalizeName(ingredient);
+					if (key != null) {
+						conceptsNaming.computeIfAbsent(key, k -> new HashSet<String>()).add(uuid);
+					}
+				}
+			}
+		}
+		int contradicted = 0;
+		Set<String> details = new LinkedHashSet<String>();
+		for (DrugReference row : entries) {
+			String substance = DrugReference.normalizeName(row.getSubstanceName());
+			String stem = DrugReference.displayStem(row.getName());
+			if (substance == null || !namesAnything(substance) || stem.isEmpty()
+					|| DrugReference.containsWord(stem, substance) || DrugReference.containsWord(substance, stem)) {
+				continue;
+			}
+			Set<String> naming = conceptsNaming.get(stem);
+			if (naming == null) {
+				continue;
+			}
+			Set<String> own = new HashSet<String>();
+			for (DrugReference.BridgedConcept concept : row.getBridgedConcepts()) {
+				own.add(concept.getConceptUuid());
+			}
+			Set<String> elsewhere = new TreeSet<String>();
+			for (String uuid : naming) {
+				if (!own.contains(uuid)) {
+					elsewhere.add(conceptNames.get(uuid));
+				}
+			}
+			if (elsewhere.isEmpty()) {
+				continue;
+			}
+			contradicted++;
+			details.add(row.getName() + " is filed as '" + substance + "', but the bridge files "
+					+ sample(elsewhere) + " on other rows and not on it");
+		}
+		if (contradicted > 0) {
+			report(SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE, Remedy.REPORTED, contradicted,
+					contradicted + " row(s) publish a substance name their own display name does not carry, "
+							+ "while this dataset's bridge names that display name as an ingredient of "
+							+ "concepts it files on other rows and not on them — so the substance name may be "
+							+ "another substance's. The data is left as loaded — the fix is in the dataset. "
 							+ sample(details));
 		}
 	}

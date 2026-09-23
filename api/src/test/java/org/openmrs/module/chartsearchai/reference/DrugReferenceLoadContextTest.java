@@ -131,7 +131,7 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 	/**
 	 * A HEALTHY operator file, which means one with nothing for a rule to report: the 16-drug DDInter
 	 * excerpt rather than the shipped knowledge base, because that knowledge base is not healthy in this
-	 * sense — it trips two content rules on 19 of its rows (ADR Decision 36), and read from the
+	 * sense — it trips several content rules (ADR Decision 36 carries the rows), and read from the
 	 * application data directory it is an operator's file, so those findings are correctly LOUD. Using it
 	 * here would have this case assert that a dataset with known defects is quiet, which is the opposite
 	 * of what the rule says and would have to be weakened again the next time a rule was added.

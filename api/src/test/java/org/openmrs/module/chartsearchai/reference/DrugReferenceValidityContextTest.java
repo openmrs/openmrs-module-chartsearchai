@@ -82,6 +82,12 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	private static final String DERIVATIVE_RULE_EDGES_FIXTURE =
 			"chartsearchai-test/ddi-derivative-rule-edges.json";
 
+	private static final String SUBSTANCE_NAME_CONTRADICTED_FIXTURE =
+			"chartsearchai-test/ddi-substance-name-contradicted-by-the-bridge.json";
+
+	private static final String SUBSTANCE_NAME_CONTRADICTED_EDGES_FIXTURE =
+			"chartsearchai-test/ddi-substance-name-contradicted-edges.json";
+
 	/**
 	 * The corpus the sweep enumerates, and the one file in it that is deliberately in the shape issue
 	 * #242 reports — both DERIVED from the shared constant rather than spelled again.
@@ -740,6 +746,91 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	// ------------------------------------------------------------------
+	// #476 — a substance name the dataset's own bridge contradicts
+	// ------------------------------------------------------------------
+
+	/**
+	 * Issue #476, over a verbatim slice of the shipped knowledge base. {@code Sulfamethoxazole}
+	 * publishes {@code rxnorm_name: sulfamethazine}, and the module reads that field as the row's
+	 * substance name, its chip-label synonym and the token every rule about it carries — so a
+	 * cotrimoxazole order is named "sulfamethazine" to a clinician. Neither sibling rule can see it: no
+	 * row is called {@code Sulfamethazine}, so no published name collides with another row's, and the row
+	 * is a family of one, so nothing was merged.
+	 *
+	 * <p>What contradicts it is the dataset's own CIEL bridge, which files the concepts naming
+	 * {@code sulfamethoxazole} as an ingredient on {@code Trimethoprim} and {@code Phenazopyridine} and
+	 * not on the row whose display name that ingredient IS. Each control is silent on one half of the
+	 * rule: see the fixture's own note for which half each one holds.
+	 *
+	 * <p>Reported and not repaired, for the reason its siblings give: the module can only choose which
+	 * of the row's names to believe, and dropping the value or the row fails closed, silently, to fix a
+	 * fail-loud. The fix is upstream.
+	 */
+	@Test
+	public void aSubstanceNameTheDatasetsOwnBridgeContradictsIsReportedAndTheDataIsLeftAlone()
+			throws IOException {
+		DrugReferenceService service = loading(SUBSTANCE_NAME_CONTRADICTED_FIXTURE, "h476-slice.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceLoad status;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			status = service.getLoadStatus();
+			// Asked of THIS rule's line, not of any WARN: logTo logs every finding, so a sibling rule firing
+			// on the slice would satisfy hasEventAtOrAbove(WARN) with this rule deleted outright.
+			assertTrue(capture.messagesAt(Level.WARN).stream().anyMatch(
+					m -> m.contains(DrugReferenceValidity.SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE)),
+					"a row whose substance name is another drug's is the content defect this check exists "
+							+ "to be loud about. Captured: " + capture.describeAll());
+		}
+
+		DrugReferenceValidity.Finding found = finding(status,
+				DrugReferenceValidity.SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE);
+		assertEquals(DrugReferenceValidity.Remedy.REPORTED, found.getRemedy());
+		assertEquals(1, found.getOccurrences(),
+				"exactly the one row in this slice, and not the controls beside it. Detail was: "
+						+ found.getDetail());
+		assertTrue(found.getDetail().contains("Sulfamethoxazole is filed as 'sulfamethazine'"),
+				"the row, and the substance name the bridge contradicts. Detail was: " + found.getDetail());
+		assertTrue(found.getDetail().contains("Sulfamethoxazole / trimethoprim"),
+				"and the concept that contradicts it, so an operator can check the claim. Detail was: "
+						+ found.getDetail());
+		for (String control : Arrays.asList("Sulfadiazine is filed as", "Isosorbide is filed as",
+				"Licorice is filed as", "Acetylsalicylic acid is filed as", "Azelaic acid is filed as",
+				"Azelaic acid (topical) is filed as")) {
+			assertFalse(found.getDetail().contains(control),
+					"a control is reported: " + control + ". Detail was: " + found.getDetail());
+		}
+
+		List<DrugReference> all = service.getAll();
+		assertEquals(11, all.size(), "every row is still loaded; nothing was dropped");
+		assertEquals("sulfamethazine", DrugReferenceTestSupport.row(all, "Sulfamethoxazole").getSubstanceName(),
+				"and nothing was repaired: choosing the display name over the published substance name "
+						+ "would be the module deciding a fact the data contradicts itself about");
+	}
+
+	/**
+	 * The edge of that rule the shipped file cannot reach, in a hand-authored dataset: a row whose own
+	 * display stem carries its substance name as a WORD is an ester, salt or presentation filed under its
+	 * parent, which both sibling rules read as legitimate, so the bridge leaving its name out of a concept
+	 * is not a contradiction. The positive beside it is what keeps an absence assertion from passing on a
+	 * load where the rule raised nothing.
+	 */
+	@Test
+	public void aRowWhoseNameExtendsItsSubstanceNameByAWordIsNotReported() throws IOException {
+		DrugReferenceService service = loading(SUBSTANCE_NAME_CONTRADICTED_EDGES_FIXTURE, "h476-edges.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceValidity.Finding found = finding(service.getLoadStatus(),
+				DrugReferenceValidity.SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE);
+		assertEquals(1, found.getOccurrences(), "the positive, and not the ester. Detail was: " + found.getDetail());
+		assertTrue(found.getDetail().contains("Examplazole is filed as 'otherazine'"),
+				"the positive is the row reported. Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Basecillin butyrate is filed as"),
+				"an ester filed under its parent is not another substance's row. Detail was: " + found.getDetail());
+		assertEquals(3, service.getAll().size(), "every row is still loaded; nothing was dropped");
+	}
+
+	// ------------------------------------------------------------------
 	// #152/#164 — rows the parser dropped as self-paired
 	// ------------------------------------------------------------------
 
@@ -1260,11 +1351,15 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 
 	/**
 	 * The dataset the module REDISTRIBUTES cannot be held to that bar, and this is the honest statement of
-	 * what replaces it. The shipped DDInter knowledge base trips two content rules on 19 of its 2283 rows
+	 * what replaces it. The shipped DDInter knowledge base trips three content rules on 23 of its 2283
+	 * rows (measured 2026-09-23 through {@link DrugReferenceService#getLoadStatus()})
 	 * — {@code Omeprazole} publishing {@code esomeprazole}, four more {@code rxnorm_name}s naming an
-	 * enantiomer or a prodrug's parent, ten stray CIEL cross-walk links, and {@code Fluoroestradiol f-18}
-	 * keyed as {@code estradiol} — and issue #196 records the remedy for exactly these as an upstream
-	 * handoff. Nine of them sit in {@code rxnorm_name}, which is the field
+	 * enantiomer or a prodrug's parent, ten stray CIEL cross-walk links, {@code Fluoroestradiol f-18}
+	 * keyed as {@code estradiol}, and four more {@code rxnorm_name}s the dataset's own bridge contradicts,
+	 * {@code Sulfamethoxazole}'s {@code sulfamethazine} among them and {@code Calcium saccharate}'s synonym
+	 * {@code calcium glucarate} too. Issue #196 records the remedy for the defects it names as an upstream
+	 * handoff and issue #476 for {@code Sulfamethoxazole}'s; the remaining new rows are named by no issue.
+	 * Thirteen of them sit in {@code rxnorm_name}, which is the field
 	 * {@link DrugReference#substanceKey()} is built from, so correcting them here would re-partition
 	 * substances on our own authority; that is why ADR Decision 36 ships the file byte-identical and
 	 * scopes the log level instead.
@@ -1274,7 +1369,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * without being loud. A CONFIGURATION finding here would mean the softening had swallowed something
 	 * that names an operator's own choice, which is the regression that would otherwise be invisible.
 	 *
-	 * <p><b>What this deliberately does not pin is the COUNT.</b> Pinning 18/1/28 would break the build on
+	 * <p><b>What this deliberately does not pin is the COUNT.</b> Pinning 18/1/6/28 would break the build on
 	 * any knowledge-base refresh, including one that FIXES these rows, and Decision 36 chose not to couple
 	 * the suite to a third party's data. The counts are reported on
 	 * {@code GET /chartsearchai/drugreferencestatus}, which is where a maintainer reads them; what is

@@ -299,6 +299,25 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 				"the combination names metformin and warfarin, not ibuprofen");
 	}
 
+	/**
+	 * Issue #505: this drug's name, joined to the nearer warfarin, ends after metformin, another drug named
+	 * earlier in the sentence and not joined to either. The joiner the combination walk reads follows
+	 * whichever name ends later, so it reads the slash after ibuprofen and nothing is appended. Read after
+	 * the earlier metformin instead ({@code Math.max} in {@code nearestIsOwn} replaced by the other drug's
+	 * end), " and ibuprofen/" is no joiner and the statement is appended.
+	 */
+	@Test
+	public void aCombinationNameIncludingThisDrugAfterAnotherDrugNamedEarlierStatesIt() {
+		String stated = "Her metformin and ibuprofen/warfarin order is no longer in force [2]. It interacts with "
+				+ "her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(),
+				"the combination names ibuprofen as well as warfarin, so nothing is appended");
+	}
+
 	/** Where no drug is named before the phrase, this drug named nearest after it still states it. */
 	@Test
 	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStated() {

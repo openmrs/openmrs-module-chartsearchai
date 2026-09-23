@@ -11,6 +11,30 @@
       "rxnorm_name": "lactate",
       "drugbank_id": "DB04398",
       "atc": [],
+      "brand_names": [
+        "4XLA Activator",
+        "AmLactin AP",
+        "Amlactin",
+        "Astri-UC",
+        "Atrac-Tain",
+        "Dermaplex",
+        "Dianeal Low Calcium 1.5",
+        "Dianeal Low Calcium 2.5",
+        "Dianeal Low Calcium 4.25",
+        "Dianeal PD-2/1.5",
+        "Dianeal PD-2/2.5",
+        "Dianeal PD-2/4.25",
+        "Extraneal",
+        "Geri-Hydrolac",
+        "Ionosol-MB",
+        "Lac-Hydrin",
+        "Lacticare",
+        "Lactinol",
+        "Oxy Gard",
+        "Phexx",
+        "Phexxi",
+        "U-Lactin"
+      ],
       "ciel": [
         {
           "code": "103987",
@@ -60,6 +84,15 @@
         "S01AE03",
         "S02AA15",
         "S03AA07"
+      ],
+      "brand_names": [
+        "Cetraxal",
+        "Ciloxan",
+        "Cipro",
+        "Cipro HC",
+        "Ciprodex",
+        "Otovel",
+        "Proquin"
       ],
       "ciel": [
         {

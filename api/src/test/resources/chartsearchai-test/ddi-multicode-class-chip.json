@@ -25,6 +25,13 @@
         "M01AE03",
         "M02AA10"
       ],
+      "brand_names": [
+        "Draxxin KP",
+        "Ketofen",
+        "Ketomed",
+        "Kiprofen",
+        "Orudis"
+      ],
       "ciel": [
         {
           "code": "78479",
@@ -50,6 +57,19 @@
         "G01AF01",
         "J01XD01",
         "P01AB01"
+      ],
+      "brand_names": [
+        "Flagyl",
+        "Likmez",
+        "MetroCream",
+        "MetroGel",
+        "MetroLotion",
+        "Noritate",
+        "Nuvessa",
+        "Nydamax",
+        "Pylera",
+        "Rosadan",
+        "Vandazole"
       ],
       "ciel": [
         {
@@ -102,6 +122,19 @@
         "J01XD01",
         "P01AB01"
       ],
+      "brand_names": [
+        "Flagyl",
+        "Likmez",
+        "MetroCream",
+        "MetroGel",
+        "MetroLotion",
+        "Noritate",
+        "Nuvessa",
+        "Nydamax",
+        "Pylera",
+        "Rosadan",
+        "Vandazole"
+      ],
       "ciel": [
         {
           "code": "104492",
@@ -151,6 +184,9 @@
         "J01XD02",
         "P01AB02"
       ],
+      "brand_names": [
+        "Tindamax"
+      ],
       "ciel": [
         {
           "code": "85151",
@@ -171,6 +207,24 @@
         "M01AE01",
         "M02AA13",
         "R02AX02"
+      ],
+      "brand_names": [
+        "Addaprin",
+        "Advil",
+        "Caldolor",
+        "Combogesic",
+        "Counteract IB",
+        "Duexis",
+        "Genpril",
+        "Ibudone",
+        "Ibuprohm",
+        "Motrin",
+        "Motrin PM",
+        "Neoprofen",
+        "Proprinal",
+        "Reprexain",
+        "Vicoprofen",
+        "Wal-Profen"
       ],
       "ciel": [
         {

@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "schema_version": "1.0",
+  "schema_version": "1.3",
   "title": "Test fixture: one substance's rows carry DIFFERENT severities for one partner (issues #189/#175)",
   "note": "A verbatim slice of the full DDInter KB - the induced subgraph over Insulin human, Insulin human (inhalation, rapid acting), Fluticasone and Fluticasone (topical), in KB row order. The two insulin rows are ONE substance (shared rxnorm_name 'insulin, regular, human' and drugbank_id DB00030) and the two fluticasone rows are one partner substance (shared rxnorm_name 'fluticasone'), so every rule here carries the token 'fluticasone'. What makes the slice the shape #189 and #175 need is the ASYMMETRY: the family's FIRST row reaches that partner only through a Minor rule, while its second row reaches it through a Moderate one - so keeping the first row to reach the pair is not the same as keeping the most severe rule. And the second row's own name is the only alias that names it, so a text saying 'insulin human' resolves the FIRST row alone while an order named 'Insulin human (inhalation, rapid acting)' resolves both - which is what lets the drug-in-play arm see a strictly smaller row set than the chart did. Both mechanism texts are real and different lengths, so which rule survives is visible in the chip's prose as well as in its rating. Parsed by the real DdiDrugReferenceSource.",
   "source": {
@@ -40,6 +40,26 @@
     "R01AD08",
     "R03BA05"
    ],
+   "brand_names": [
+    "Advair",
+    "AirDuo",
+    "Aller-Flo",
+    "Armonair",
+    "Arnuity",
+    "Beser",
+    "Breo",
+    "Clarispray",
+    "Cutivate",
+    "Dymista",
+    "Flonase",
+    "Flonase Sensimist",
+    "Flovent",
+    "Fluticare",
+    "Nasopro 24",
+    "Trelegy",
+    "Wixela",
+    "Xhance"
+   ],
    "ciel": [
     {
      "code": "104676",
@@ -73,6 +93,26 @@
     "D07AC17",
     "R01AD08",
     "R03BA05"
+   ],
+   "brand_names": [
+    "Advair",
+    "AirDuo",
+    "Aller-Flo",
+    "Armonair",
+    "Arnuity",
+    "Beser",
+    "Breo",
+    "Clarispray",
+    "Cutivate",
+    "Dymista",
+    "Flonase",
+    "Flonase Sensimist",
+    "Flovent",
+    "Fluticare",
+    "Nasopro 24",
+    "Trelegy",
+    "Wixela",
+    "Xhance"
    ],
    "ciel": [
     {
@@ -110,6 +150,14 @@
     "A10AE01",
     "A10AF01"
    ],
+   "brand_names": [
+    "Afrezza",
+    "Humulin",
+    "Humulin R",
+    "Myxredlin",
+    "Novolin",
+    "Novolin R"
+   ],
    "ciel": [
     {
      "code": "104914",
@@ -145,6 +193,14 @@
     "A10AD01",
     "A10AE01",
     "A10AF01"
+   ],
+   "brand_names": [
+    "Afrezza",
+    "Humulin",
+    "Humulin R",
+    "Myxredlin",
+    "Novolin",
+    "Novolin R"
    ],
    "ciel": [
     {

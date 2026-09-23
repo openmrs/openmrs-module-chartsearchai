@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "schema_version": "1.0",
+  "schema_version": "1.3",
   "note": "Verbatim DDInter 2.0 slice for issue #193 - a recorded drug name that denotes SEVERAL substances. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among them. Three shapes. (1) One constituent claims the combination name and the others only occur inside it: 'sulfamethoxazole / trimethoprim' is one of Trimethoprim's own CIEL names (claim rank NAME_IS_ANOTHER_NAME) while Sulfamethoxazole merely occurs inside it as a bounded token (NAME_TOKEN_INSIDE_A_NAME), so issue #192's ranked resolution answers Trimethoprim alone and the sulfa moiety - the one that drives that allergy - is never compared: J01EA in place of J01EB. Sulfisoxazole is the J01EB sibling that lets the class arm be observed against the sulfa moiety and not only the identity arm. 'omeprazole / sodium bicarbonate' is the same shape with more at stake: it is one of Sodium bicarbonate's CIEL names, so the answer is B05CB/B05XA and the PPI class A02BC is lost entirely; Pantoprazole is the A02BC sibling it has to be compared against. Esomeprazole is present because Omeprazole's rxnorm_name IS 'esomeprazole' - without it that substance-name family would name one drugbank_id instead of two and the fixture's substance identities would stop matching the shipped KB's (issue #187). (2) SEVERAL constituents claim the name equally: 'abacavir / lamivudine' is a CIEL name of both Abacavir and Lamivudine, which is the 1367-name population issue #193 measures, and both are J05AF - so Zidovudine (J05AF01) shares a class with BOTH and is the subject that shows one recorded name still raises one chip. (3) Three legs of the resolution that the cases above leave unpinned, each with the rows its own measurement needs. 'amoxicillin and clavulanic acid' carries NO '/' and no trailing qualifier, so neither the constituent leg nor the moiety leg can reach it: it is a CIEL name of both Amoxicillin and Clavulanic acid at the alias rank, and only the equal-claimant leg reaches the amoxicillin the patient is allergic to. 'potassium citrate/potassium gluconate' joins its ingredients with a BARE separator and names both of them, which is the shape a structural 'only a spaced separator counts' split would stop reaching. It does NOT isolate that split from the equal-claimant leg - both rows publish the name, so the leg reaches the second ingredient without it, and reverting the split to ' / ' leaves the suite green. See DrugReference.combinationConstituents, which records that measured honestly rather than claiming a pin it does not have. 'benzocaine / clove oil' is the same split's lower bound: the constituent 'clove oil' reaches the Clove row only by CONTAINMENT, which is the rank the gate refuses, and Benzocaine (topical) is the constituent that does resolve, so the case cannot pass by the fixture being inert. 'ketorolac tromethamine' is the equal-claimant leg's own condition: Tromethamine claims that name only by CONTAINMENT, which is the rank issue #192 established is a false claim on a name, and the leg admits only entries making the SAME claim as the strongest, so the buffer is held back; relax that to 'any match' and a patient allergic to the ketorolac salt is told they are allergic to the buffer. Ketorolac (ophthalmic) is present because it shares Ketorolac's substance and must not chip twice.",
   "source": {
    "name": "DDInter 2.0",
@@ -74,6 +74,12 @@
    "atc": [
     "J05AF06"
    ],
+   "brand_names": [
+    "Epzicom",
+    "Triumeq",
+    "Trizivir",
+    "Ziagen"
+   ],
    "ciel": [
     {
      "code": "103166",
@@ -112,6 +118,12 @@
     "M01AB15",
     "S01BC05"
    ],
+   "brand_names": [
+    "Acular",
+    "Acuvail",
+    "Omidria",
+    "Sprix"
+   ],
    "ciel": [
     {
      "code": "78481",
@@ -135,6 +147,12 @@
     "M01AB15",
     "S01BC05"
    ],
+   "brand_names": [
+    "Acular",
+    "Acuvail",
+    "Omidria",
+    "Sprix"
+   ],
    "ciel": [
     {
      "code": "78481",
@@ -156,6 +174,18 @@
    "drugbank_id": "DB00709",
    "atc": [
     "J05AF05"
+   ],
+   "brand_names": [
+    "Cimduo",
+    "Combivir",
+    "Delstrigo",
+    "Dovato",
+    "Epivir",
+    "Epzicom",
+    "Symfi",
+    "Temixys",
+    "Triumeq",
+    "Trizivir"
    ],
    "ciel": [
     {
@@ -244,6 +274,10 @@
    "atc": [
     "A02BC05"
    ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
+   ],
    "ciel": [
     {
      "code": "167977",
@@ -281,6 +315,9 @@
    "atc": [
     "A02BC02"
    ],
+   "brand_names": [
+    "Protonix"
+   ],
    "ciel": [
     {
      "code": "81550",
@@ -302,6 +339,11 @@
    "drugbank_id": "DB09125",
    "atc": [
     "A12BA02"
+   ],
+   "brand_names": [
+    "Cytra-3",
+    "Cytra-K",
+    "Urocit-K"
    ],
    "ciel": [
     {
@@ -375,6 +417,10 @@
    "atc": [
     "A12BA05"
    ],
+   "brand_names": [
+    "RenaKare",
+    "Renaplus"
+   ],
    "ciel": [
     {
      "code": "105200",
@@ -407,6 +453,23 @@
    "atc": [
     "B05CB04",
     "B05XA02"
+   ],
+   "brand_names": [
+    "Alka-Seltzer",
+    "Bromo Seltzer Antacid Pain Reliever",
+    "Ceo-Two",
+    "Desempacho",
+    "E-Z-Gas II",
+    "GaviLyte-C",
+    "GaviLyte-N",
+    "Gavilyte-G",
+    "Gavilyte-H",
+    "Golytely",
+    "Konvomep",
+    "Neut brand of sodium bicarbonate",
+    "Sinucleanse",
+    "TriLyte",
+    "Zegerid Reformulated Aug 2006"
    ],
    "ciel": [
     {
@@ -500,6 +563,7 @@
    "atc": [
     "J01EB03"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "105280",
@@ -523,6 +587,7 @@
     "J01EB05",
     "S01AB02"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "104594",
@@ -562,6 +627,61 @@
     "D04AB04",
     "N01BA05",
     "R02AD01"
+   ],
+   "brand_names": [
+    "Alpha-caine",
+    "Americaine",
+    "Americaine Hemorrhoidal",
+    "Anacaine",
+    "Anbesol",
+    "Anbesol Cold Sore Therapy",
+    "Bactimicina Sore Throat",
+    "Bencocaine",
+    "Benz-O-Sthetic",
+    "Benzo-Jel",
+    "Benzodent",
+    "Bucalsep",
+    "Candee Caine",
+    "Cepacol",
+    "Cepacol Sore Throat Pain Relief",
+    "Cepacol Sore Throat Plus Cough",
+    "Cepastat Sore Throat & Cough",
+    "Cetacaine",
+    "Chloraseptic",
+    "Chloraseptic Sore Throat",
+    "Chloraseptic Sore Throat + Cough",
+    "Comfort Caine",
+    "Dermawound Benzocaine",
+    "Dermoplast",
+    "Dermoplast Antibacterial",
+    "Dermoplast Pain",
+    "Enemeez Plus",
+    "Finafta Multi Oral",
+    "Foille",
+    "Freez Eez",
+    "Gelato Anesthetic",
+    "Gingicaine",
+    "Hurricaine",
+    "Kolorz Anesthetic",
+    "Lanacane",
+    "Little Ouchies",
+    "LolliCaine",
+    "Medicaine Sting",
+    "Medicone",
+    "Monistat Care",
+    "Numstat",
+    "OraMagic Plus",
+    "Orabase",
+    "Orajel",
+    "Orasep Reformulated Dec 2013",
+    "Outgro Pain Relief",
+    "Salinocaine",
+    "Solarcaine Plus Aloe",
+    "StingX",
+    "Tanac Liquid",
+    "Topicale",
+    "Vagisil Original Formula",
+    "Zilactin B"
    ],
    "ciel": [
     {
@@ -815,6 +935,13 @@
    "atc": [
     "J01EA01"
    ],
+   "brand_names": [
+    "Bactrim",
+    "Equisul SDT",
+    "Primsol",
+    "Sulfatrim",
+    "Uniprim"
+   ],
    "ciel": [
     {
      "code": "105145",
@@ -863,6 +990,7 @@
     "B05BB03",
     "B05XX02"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "85590",
@@ -879,6 +1007,11 @@
    "drugbank_id": "DB00495",
    "atc": [
     "J05AF01"
+   ],
+   "brand_names": [
+    "Combivir",
+    "Retrovir",
+    "Trizivir"
    ],
    "ciel": [
     {
@@ -920,6 +1053,14 @@
    "rxnorm_name": "clavulanate",
    "drugbank_id": "DB00766",
    "atc": [],
+   "brand_names": [
+    "Augmentin",
+    "Betacilin",
+    "Clavacillin",
+    "Clavamox",
+    "Kesium",
+    "Umbrellin"
+   ],
    "ciel": [
     {
      "code": "104331",
@@ -955,6 +1096,7 @@
    "rxnorm_name": "clove preparation",
    "drugbank_id": "DB10672",
    "atc": [],
+   "brand_names": [],
    "ciel": []
   },
   {
@@ -965,6 +1107,10 @@
    "drugbank_id": "DB00736",
    "atc": [
     "A02BC05"
+   ],
+   "brand_names": [
+    "Nexium",
+    "Vimovo"
    ],
    "ciel": [
     {
@@ -1002,6 +1148,20 @@
    "drugbank_id": "DB01060",
    "atc": [
     "J01CA04"
+   ],
+   "brand_names": [
+    "Amoxi Drop",
+    "Amoxi-tabs",
+    "Augmentin",
+    "Betacilin",
+    "Biomox",
+    "Clavacillin",
+    "Clavamox",
+    "Kesium",
+    "Moxatag",
+    "Talicia",
+    "Trimox",
+    "Umbrellin"
    ],
    "ciel": [
     {

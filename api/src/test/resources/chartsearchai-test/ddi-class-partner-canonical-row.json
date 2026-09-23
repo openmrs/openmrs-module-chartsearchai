@@ -22,6 +22,11 @@
         "D11AH01",
         "L04AD02"
       ],
+      "brand_names": [
+        "Astagraf",
+        "Envarsus",
+        "Prograf"
+      ],
       "ciel": [
         {
           "code": "71307",
@@ -50,6 +55,20 @@
         "L04AD01",
         "S01XA18"
       ],
+      "brand_names": [
+        "Atopica",
+        "Cequa",
+        "Cyclavance",
+        "Gengraf",
+        "Modulis",
+        "Neoral",
+        "Optimmune",
+        "Restasis",
+        "Sandimmune",
+        "Sporimune",
+        "Verkazia",
+        "Vevye"
+      ],
       "ciel": [
         {
           "code": "74125",
@@ -77,6 +96,20 @@
       "atc": [
         "L04AD01",
         "S01XA18"
+      ],
+      "brand_names": [
+        "Atopica",
+        "Cequa",
+        "Cyclavance",
+        "Gengraf",
+        "Modulis",
+        "Neoral",
+        "Optimmune",
+        "Restasis",
+        "Sandimmune",
+        "Sporimune",
+        "Verkazia",
+        "Vevye"
       ],
       "ciel": [
         {

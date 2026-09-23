@@ -97,6 +97,12 @@
    "atc": [
     "A06AD11"
    ],
+   "brand_names": [
+    "Constulose",
+    "Enulose",
+    "Generlac",
+    "Kristalose"
+   ],
    "ciel": [
     {
      "code": "78632",
@@ -115,6 +121,7 @@
     "A07DA02",
     "N02AA02"
    ],
+   "brand_names": [],
    "ciel": [
     {
      "code": "103692",
@@ -167,6 +174,11 @@
    "atc": [
     "C10AA01"
    ],
+   "brand_names": [
+    "Flolipid",
+    "Vytorin",
+    "Zocor"
+   ],
    "ciel": [
     {
      "code": "104633",
@@ -188,6 +200,11 @@
    "drugbank_id": "DB00421",
    "atc": [
     "C03DA01"
+   ],
+   "brand_names": [
+    "Aldactone",
+    "Cardalis",
+    "Carospir"
    ],
    "ciel": [
     {
@@ -219,6 +236,10 @@
    "rxnorm_name": "tiotropium",
    "drugbank_id": "DB01409",
    "atc": [],
+   "brand_names": [
+    "Spiriva",
+    "Stiolto"
+   ],
    "ciel": [
     {
      "code": "85157",
@@ -236,6 +257,28 @@
    "atc": [
     "B05BC02",
     "D02AE01"
+   ],
+   "brand_names": [
+    "Aluvea",
+    "Aquaphilic with Urea",
+    "Atrac-Tain",
+    "CEM-Urea",
+    "Carmol",
+    "Epimide 50",
+    "Gormel",
+    "Gormel 10",
+    "Hydrasyn25",
+    "Kera Nail",
+    "Kera-42",
+    "Keralac",
+    "Nutraplus",
+    "U-Kera",
+    "U-Lactin",
+    "Umecta",
+    "Uramaxin",
+    "Ureacin-10",
+    "Ureacin-20",
+    "Utopic"
    ],
    "ciel": [
     {
@@ -294,6 +337,10 @@
    "atc": [
     "B01AA03"
    ],
+   "brand_names": [
+    "Coumadin",
+    "Jantoven"
+   ],
    "ciel": [
     {
      "code": "86415",
@@ -322,6 +369,39 @@
     "A01AD05",
     "B01AC06",
     "N02BA01"
+   ],
+   "brand_names": [
+    "Alka-Seltzer",
+    "Anacin",
+    "Anacin Advanced Headache Formula",
+    "Anacin Aspirin Regimen",
+    "Arthriten Inflammatory Pain",
+    "Ascomp",
+    "Aspergum",
+    "Aspi-Cor",
+    "BC Arthritis",
+    "BC Original Formula",
+    "Backaid IPF",
+    "Bayer Aspirin",
+    "Bromo Seltzer Antacid Pain Reliever",
+    "Bufferin",
+    "Durlaza",
+    "Ecotrin",
+    "Equagesic",
+    "Exaprin",
+    "Exaprin Plus",
+    "Excedrin",
+    "Excedrin PM Triple Action",
+    "Miniprin",
+    "Norgesic",
+    "Norwich Aspirin",
+    "Orphengesic",
+    "Pamprin Max Formula",
+    "Saleto",
+    "St. Joseph Aspirin",
+    "Stanback Headache Powder Reformulated Jan 2011",
+    "Vazalore",
+    "Yosprala"
    ],
    "ciel": [
     {
@@ -646,6 +726,78 @@
     "D01AE12",
     "S01BC08"
    ],
+   "brand_names": [
+    "AcneWorx",
+    "Acneclir",
+    "Acnevir",
+    "Ala Seb T",
+    "Bensal",
+    "Broda Acne Spa",
+    "Clearskin Blemish",
+    "Clearskin Pore Penetrating Black Mineral Mask",
+    "Clearskin Professional Daily Correcting",
+    "Clenziderm",
+    "Cornstick",
+    "Cystex",
+    "DHS Salicylic Acid 3%",
+    "Denorex Extra Strength Reformulated Aug 2012",
+    "DermalZone",
+    "Dermoneen",
+    "Differin Acne Clearing",
+    "Dream Pure BB",
+    "Duofilm",
+    "Duoplant",
+    "Everclean",
+    "Fostex Bar",
+    "Freezone",
+    "Glycylic",
+    "Gordofilm",
+    "Inova 8-2",
+    "Ionil Plus",
+    "Keralyt",
+    "Keralyt 5",
+    "Kleer Plex",
+    "MG217 Psoriasis Salicylic Acid",
+    "Mediplast",
+    "Mosco Corn & Callus Remover",
+    "Mosco One Step Corn Remover",
+    "Nizoral Psoriasis",
+    "Noxzema Clean",
+    "Pernox Scrub Cleanser",
+    "Phisoderm Clear Confidence Body Wash",
+    "Phisoderm Clear Confidence Daily Gel Face Wash",
+    "Propa P.H.",
+    "Propa P.H. Acne Mask",
+    "Psoriasin Wash",
+    "Rayasal",
+    "Rogaine Anti-Dandruff",
+    "Salinocaine",
+    "Salvax",
+    "Salycim",
+    "Salyntra",
+    "Scalpicin Scalp Relief",
+    "Sebasorb",
+    "Sebex",
+    "Sebobalance",
+    "Sebulex",
+    "Selsun Blue Naturals",
+    "Skinmedica Purifying Foaming Wash",
+    "St. Ives Blemish & Blackhead Control",
+    "Stri-Dex",
+    "Stri-Dex Clear Gel",
+    "Stridex",
+    "Ultrasal",
+    "Verruguin",
+    "Verrustat",
+    "Versiclear",
+    "Virasal",
+    "WARTICIDE",
+    "Wartstick",
+    "X-Seb T Pearl",
+    "Xalix",
+    "Zapzyt Acne Wash",
+    "Zit Stick"
+   ],
    "ciel": [
     {
      "code": "103162",
@@ -868,6 +1020,9 @@
    "atc": [
     "J01FA09"
    ],
+   "brand_names": [
+    "Biaxin"
+   ],
    "ciel": [
     {
      "code": "167978",
@@ -899,6 +1054,12 @@
    "drugbank_id": "DB01005",
    "atc": [
     "L01XX05"
+   ],
+   "brand_names": [
+    "Droxia",
+    "Hydrea",
+    "Siklos",
+    "Xromi"
    ],
    "ciel": [
     {

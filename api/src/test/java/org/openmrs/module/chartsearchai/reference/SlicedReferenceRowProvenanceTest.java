@@ -29,15 +29,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * A listed test fixture that calls itself a verbatim slice of the shipped knowledge base still is one.
  *
- * <p><b>Why a case rather than trust.</b> The cases that read such a slice build their answers out of
- * the record the injector renders from it and compare them against that same record, so they are
+ * <p><b>Why a case rather than trust.</b> The cases that read such a slice build their answers out
+ * of the record the injector renders from it and compare them against that same record, so they are
  * self-relative: edit a row and they stay green while the record they were written about no longer
- * exists. That matters because a decision can quote the rendered record — ADR Decision 59 quotes the
- * one this file's slice produces, character for character — so an edit here can make a published
- * measurement false on a green build. Measured: editing a row's {@code rxcui} leaves every case in
- * {@code ReferenceProseFidelityTest} green, because it changes nothing the injector renders. Some
- * edits those cases DO catch — an ATC code, because it changes the sentence they are built around —
- * which is why the claim is about the file being a slice and not about the cases being blind.
+ * exists. That matters because a decision can quote the rendered record — ADR Decision 59 quotes
+ * the one {@code ddi-issue338-allergy-cross-reactivity.json} produces, character for character — so
+ * an edit to a slice can make a published measurement false on a green build. Measured: editing a
+ * row's {@code rxcui} leaves every case in {@code ReferenceProseFidelityTest} green, because it
+ * changes nothing the injector renders. Some edits those cases DO catch — an ATC code, because it
+ * changes the sentence they are built around — which is why the claim is about the file being a
+ * slice and not about the cases being blind.
  *
  * <p><b>Whole rows, not projections.</b> An earlier version of this compared four accessors and let
  * seven kinds of edit through — {@code rxcui}, {@code drugbank_id}, a {@code ciel} entry, the
@@ -68,7 +69,31 @@ public class SlicedReferenceRowProvenanceTest {
 	private static final List<String> SLICES = java.util.Arrays.asList(
 			"chartsearchai-test/ddi-issue338-allergy-cross-reactivity.json",
 			"chartsearchai-test/ddi-brand-name-aliases.json",
-			"chartsearchai-test/ddi-class-only-and-rule-one-partner.json");
+			"chartsearchai-test/ddi-class-only-and-rule-one-partner.json",
+			"chartsearchai-test/ddi-alias-drug-names.json",
+			"chartsearchai-test/ddi-alias-names-another-substance.json",
+			"chartsearchai-test/ddi-allergen-name-claim.json",
+			"chartsearchai-test/ddi-canonical-subject-label.json",
+			"chartsearchai-test/ddi-class-partner-canonical-row.json",
+			"chartsearchai-test/ddi-combination-allergen.json",
+			"chartsearchai-test/ddi-combination-two-rules-one-note.json",
+			"chartsearchai-test/ddi-contraindication-subject-label.json",
+			"chartsearchai-test/ddi-crossarm-canonical-duplicate.json",
+			"chartsearchai-test/ddi-duplicate-therapy-self.json",
+			"chartsearchai-test/ddi-folded-minor-class-pair.json",
+			"chartsearchai-test/ddi-folded-moderate-class-pair.json",
+			"chartsearchai-test/ddi-interaction-route-variants.json",
+			"chartsearchai-test/ddi-multicode-class-chip.json",
+			"chartsearchai-test/ddi-one-order-two-order-entries.json",
+			"chartsearchai-test/ddi-presentation-alias-gap.json",
+			"chartsearchai-test/ddi-presentation-moiety.json",
+			"chartsearchai-test/ddi-question-pair-subject.json",
+			"chartsearchai-test/ddi-residual-atc-bucket.json",
+			"chartsearchai-test/ddi-self-interaction.json",
+			"chartsearchai-test/ddi-substance-in-several-orders.json",
+			"chartsearchai-test/ddi-substance-name-contradicted-by-the-bridge.json",
+			"chartsearchai-test/ddi-substance-name-row.json",
+			"chartsearchai-test/ddi-substance-rule-asymmetry.json");
 
 	@Test
 	public void everySliceOnTheListIsFieldForFieldTheShippedDatasets() throws Exception {

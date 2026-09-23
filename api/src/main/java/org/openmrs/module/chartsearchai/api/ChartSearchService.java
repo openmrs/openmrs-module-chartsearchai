@@ -849,9 +849,9 @@ public interface ChartSearchService {
 		 *
 		 * <p><b>It is also the only form that grows.</b> A statement added to the answer takes a new
 		 * parameter HERE rather than a new overload, because a second constructor carrying the
-		 * coverage would fail that guard outright — which is what fixes the position of
-		 * {@code conditionRuleCoverage} last and puts each new statement before it, whether it is a
-		 * list or a value type of its own.
+		 * coverage would fail that guard outright. A new statement goes at the END of this list,
+		 * whether it is a list or a value type of its own; {@code conditionRuleCoverage} is no longer
+		 * last.
 		 *
 		 * <p>There is deliberately no twelve-argument overload beside it in either direction. Issues
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a> and

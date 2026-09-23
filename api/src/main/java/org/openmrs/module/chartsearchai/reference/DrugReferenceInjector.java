@@ -2274,7 +2274,7 @@ public class DrugReferenceInjector {
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
 	 * that type, so a provenance clause never arrives without a strength beside it; and only an
 	 * interaction can carry a BRIDGE, for which that method answers one unconditionally too. Said
-	 * rather than left to be rediscovered — mutating the guard to {@code strength.isEmpty()} alone
+	 * rather than left to be rediscovered — mutating the guard (in {@link #findingBody} since issue #469) to {@code !clauseFollows} alone
 	 * leaves the whole api suite green, and so does dropping the bridge term. All three are kept because
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
@@ -2291,9 +2291,9 @@ public class DrugReferenceInjector {
 	 * is spelled between the two halves. It opens with "No" because {@link #answersFromFindings}
 	 * admits only a question asking whether to give the drug, where "No" is the right polarity.
 	 */
-	static final String WITHHOLD_LEAD_OPENING = "No — ";
+	public static final String WITHHOLD_LEAD_OPENING = "No — ";
 
-	static final String WITHHOLD_LEAD_CLOSING =
+	public static final String WITHHOLD_LEAD_CLOSING =
 			" should not be given: this module's drug-safety check found a reason to withhold it.";
 
 	/**
@@ -2301,7 +2301,7 @@ public class DrugReferenceInjector {
 	 * drug, the drug before it and the caution itself after it — in the same sentence, which is what
 	 * the prompt's own caution branch asks of the model, so the caution is never dropped.
 	 */
-	static final String CAUTION_LEAD = " can be given, with a caution to note: ";
+	public static final String CAUTION_LEAD = " can be given, with a caution to note: ";
 
 	/**
 	 * Whether this injection resolved the question well enough to answer it from its own findings —

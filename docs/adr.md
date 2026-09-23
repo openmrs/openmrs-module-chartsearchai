@@ -6532,7 +6532,7 @@ it looks like across a standalone restart, and what the cell counts in its table
 
 ## Decision 85: An answer short of the findings its prompt carried is repaired by asking again, not by another wording
 
-**Status: Accepted** (September 2026) — implemented, issue [#398](https://github.com/openmrs/openmrs-module-chartsearchai/issues/398).
+**Status: Accepted** (September 2026) — implemented, issue [#398](https://github.com/openmrs/openmrs-module-chartsearchai/issues/398). Its refusal of deterministic finding text in the answer is reversed, within a bound, by [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).
 
 ### Context
 
@@ -7048,7 +7048,8 @@ prevent repeating.
 ### Rejected alternatives
 
 - **Deterministic finding text written into the answer.** Still refused, and Decision 85's reason
-  stands: this module does not write clinical prose into an answer. The argument that the module's
+  stands: this module does not write clinical prose into an answer. (Reversed within a bound by
+  [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).) The argument that the module's
   prose "already reaches the clinician corrupted" is weak and rests on a non-default install — without
   the repair it does not reach the answer at all.
 - **Leaving it an operator flip.** It is a strict improvement over the shipped arm on every scored

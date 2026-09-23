@@ -206,6 +206,47 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertCarriesEveryFinding(answer, findings);
 	}
 
+	/**
+	 * A set of findings of different strengths is one answer led by the STRONGEST, the order the
+	 * prompt gives the model: a reason to withhold, then a reason to change a medication she is
+	 * already taking, then a caution. Omeprazole relates Moderate to her warfarin (withhold) and Minor
+	 * to her aspirin (a caution), and the allergy question widens the order-driven arm to her aspirin
+	 * allergy against her aspirin prescription (a reason to change a current medication).
+	 */
+	@Test
+	public void findingsOfDifferentStrengthsAreLedByTheStrongestAndOrderedByStrength() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		String question = "Can I give her omeprazole, given her allergies?";
+		List<Finding> findings = findingsInThePromptFor(question);
+		String withhold = null;
+		String change = null;
+		String caution = null;
+		for (Finding finding : findings) {
+			String line = answerFacingBody(finding) + " [" + finding.index + "]";
+			if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD)) {
+				withhold = withhold == null ? line : withhold;
+			} else if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)) {
+				change = change == null ? line : change;
+			} else if (finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION)) {
+				caution = caution == null ? line : caution;
+			}
+		}
+		assertTrue(withhold != null && change != null && caution != null,
+				"precondition: all three strengths are raised, findings were: " + findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+		assertEquals(0, provider.calls);
+		String text = answer.getAnswer();
+		assertTrue(text.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Omeprazole"
+				+ DrugReferenceInjector.WITHHOLD_LEAD_CLOSING), "the strongest leads: " + text);
+		assertTrue(text.indexOf(withhold) < text.indexOf(change) && text.indexOf(change) < text.indexOf(caution),
+				"then the findings in the prompt's own order of strength: " + text);
+		assertCarriesEveryFinding(answer, findings);
+	}
+
 	@Test
 	public void withThePropertyOffTheModelIsAskedAsBefore() {
 		answerFromFindings(false);

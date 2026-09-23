@@ -2506,8 +2506,8 @@ public class DrugReferenceInjector {
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
 	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
 	 * cannot take the answer's first sentence and leave the question unanswered. A screen's finding that
-	 * her orders share a substance (issue #477) is an interaction finding and ranks by strength with
-	 * the pairs, as the prompt's ranking sentence has the model rank it, so the two paths open alike. One key does both,
+	 * her orders share a substance (issue #477) is an interaction finding and ranks by strength with the
+	 * pairs, as the prompt's ranking sentence has the model rank it, so the two paths open alike. One key does both,
 	 * because the two never meet: the screening arm stands down for a question that resolved a drug,
 	 * and the drug-in-play arm's finding about two of her own orders (issue #477) arises only for a
 	 * drug she already takes, which {@link #answersFromFindings} refuses to answer for. Within each

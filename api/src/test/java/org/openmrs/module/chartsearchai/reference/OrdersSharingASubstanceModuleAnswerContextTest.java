@@ -78,7 +78,7 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 	}
 
 	@Test
-	public void theSharedSubstanceTiesARatedMajorAndFollowsIt() throws IOException {
+	public void theSharedSubstanceFollowsARatedMajorAndPrecedesACaution() throws IOException {
 		// A Major pair about her current therapy and the shared-substance finding state the same clause,
 		// a reason to change it, so the strength sort ties them and keeps the order the arms raised them
 		// in: the screen's pairs, then this finding. Only a caution falls behind it.
@@ -88,7 +88,7 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
-		List<String> lines = Arrays.asList(answer.split("\\n"));
+		List<String> lines = Arrays.asList(answer.split("\n"));
 		assertEquals(3, lines.size(), "was: " + answer);
 		assertTrue(lines.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
 			"the Major leads: " + answer);

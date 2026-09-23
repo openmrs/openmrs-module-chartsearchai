@@ -507,7 +507,9 @@ public class SafetyWarning {
 	/**
 	 * The reference drug the warning is about — its display label, which may carry a parenthesized
 	 * generic synonym when the dataset's display name diverges from it, e.g.
-	 * {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}).
+	 * {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}). On
+	 * {@link #ordersSharingASubstance(String, String, List)}' finding it is every substance the
+	 * finding names, listed as its detail lists them (issue #477).
 	 *
 	 * <p>Since issue #206 this names a SUBSTANCE, not a finding, and not the dataset row an arm
 	 * happened to match. Several warnings about one substance therefore carry the same string by

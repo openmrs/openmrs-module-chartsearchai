@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,8 +34,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * `main` @ b0cfe545: "Is gentamicin appropriate for this patient?" answered *"No — gentamicin should
  * not be given"* on a finding whose own mechanism text ends "No special precautions are necessary."
  *
- * <p><b>Why the ratings split where they do.</b> {@code minor} and {@code unknown} are the ratings
- * DDInter itself calls minimally significant; {@code moderate} and {@code major} are not.
+ * <p><b>Why the ratings split where they do.</b> {@code major} withholds and {@code moderate},
+ * {@code minor} and {@code unknown} are cautions — ADR Decision 109, which moved {@code moderate}.
  * <b>Unrated is not low-rated</b> — a null severity is a curated hand-authored rule, which
  * {@code DrugSafetyValidator.severityPriority} already sorts ABOVE {@code major} for exactly that
  * reason — so an unrated rule must license withholding, and this is the case a "no rating means
@@ -103,23 +104,20 @@ public class SafetyFindingSeverityStrengthTest {
 	}
 
 	@Test
-	public void aModerateRatedInteractionSaysItIsAReasonToWithholdTheDrug() {
+	public void aModerateRatedInteractionIsACautionAndSaysItIsNotAReasonToWithholdTheDrug() {
 		String finding = findingFor(DrugReferenceTestSupport.ddinterServiceWithGroups(),
 				"Is it safe to give omeprazole?", "Simvastatin");
 
 		assertTrue(finding.toLowerCase().contains("moderate"),
 				"the fixture pair must be the Moderate-rated one this case is about: " + finding);
-		// THE BOUNDARY, and the reason this case exists separately from the Major one beside it.
-		// ratingLicensesWithholding splits on `rank >= severityRank("moderate")`, and moving that to
-		// "major" — i.e. softening Moderate to a caution — left the whole suite green: Minor, Major,
-		// Unknown, unrated, the fold and the contraindication were all covered and the boundary
-		// itself was not. ADR Decision 37 decides Moderate deliberately ("moderate still refuses.
-		// Whether it should qualify instead is a clinical judgement this decision does not take"),
-		// so it is a decision, not an accident, and it is pinned here.
-		assertTrue(finding.contains(WITHHOLD),
-				"a Moderate-rated finding must say it is a reason to withhold: " + finding);
-		assertFalse(finding.contains(CAUTION),
-				"the caution side of the split is minor and unknown only: " + finding);
+		// THE BOUNDARY, and the reason this case exists separately from the Major one beside it —
+		// ADR Decision 109 says why it sits here. Move ratingLicensesWithholding's boundary back down
+		// and read what reddens.
+		assertTrue(finding.contains(CAUTION),
+				"a Moderate-rated finding must say it is a caution rather than a reason to withhold: "
+						+ finding);
+		assertFalse(finding.contains(WITHHOLD),
+				"a Moderate rating alone does not withhold: " + finding);
 	}
 
 	@Test
@@ -301,5 +299,25 @@ public class SafetyFindingSeverityStrengthTest {
 		assertTrue(sawWithhold && sawCaution,
 				"and this arrangement is a proposal question, so both PROPOSAL strengths must be "
 						+ "reached or the sweep above ran over one class: " + findings);
+	}
+
+	/**
+	 * {@code ratedAReasonToWithhold} asks {@code ratingLicensesWithholding} and adds nothing but the
+	 * exclusion of an unrated rule (issue #471, review round 1 of PR #474). A boundary of its own — its
+	 * pre-#471 shape was a second {@code >= severityRank("moderate")} — is how the two came apart once
+	 * already, and the parallel copy that equals today's boundary ({@code >= severityRank("major")})
+	 * leaves every behavioural case green, so the BODY is pinned. A reword that keeps the rule re-reads
+	 * this case; one that adds a second boundary is the drift it exists to stop.
+	 */
+	@Test
+	public void theModulesOwnWithholdingAnswerAsksTheOneRatingBoundaryAndNoSecond() throws IOException {
+		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
+				+ "DrugSafetyValidator.java");
+		String body = scan.text(scan.body("static boolean ratedAReasonToWithhold(String severity)"))
+				.replaceAll("\\s+", " ");
+		assertEquals("{ return severityRank(severity) >= 0 && ratingLicensesWithholding(severity); }", body,
+				"the module's own withholding answer (ADR Decision 108) must be ratingLicensesWithholding "
+						+ "less the unrated rule, and never a boundary beside it — a second one lets the "
+						+ "module compose a withholding answer for a finding its record states as a caution");
 	}
 }

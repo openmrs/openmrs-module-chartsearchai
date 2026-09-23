@@ -717,7 +717,10 @@ or what reaches the model.
 - **A screening answer can read as a prescribing refusal** ([#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348)). [3a](#3a-one-major-pair-on-a-two-drug-chart)
   and [3b](#3b-a-moderate-pair) both lead with "should not be given" about a drug the patient is
   already taking. The verdict is correct; the framing suits the "can I give her X?" shape better
-  than the screening shape. **#348 has since given the two order-driven arms a counterpart strength
+  than the screening shape. (3b's withholding verdict no longer stands, since
+  [#471](https://github.com/openmrs/openmrs-module-chartsearchai/issues/471) on 2026-09-23: a Moderate
+  pair is a caution under [ADR Decision 109](adr.md), so its finding states the current-medication
+  caution rather than a reason to change either drug.) **#348 has since given the two order-driven arms a counterpart strength
   clause** (`DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION` and its caution twin, taught
   by `LlmProvider.DEFAULT_SYSTEM_PROMPT`'s own branches; [ADR Decision 72](adr.md)), so a finding
   about a medication the patient is already taking no longer states an act that presupposes a

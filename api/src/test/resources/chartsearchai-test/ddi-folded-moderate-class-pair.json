@@ -1,0 +1,84 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #471 — the FOLDED chip on a MODERATE rule. Efavirenz and Nevirapine are the shipped KB's own rows, their interaction row is the KB's own (rated Moderate), and both publish J05AG, so DrugSafetyValidator.interactionWarning appends the class arm's duplicate-therapy sentence to the rated rule's chip. Decision 109 made a Moderate RATING a caution and left the fold's class leg alone (Decision 86), so this finding still states STRENGTH_WITHHOLD; the fold itself is asserted by driving the production injector."
+ },
+ "mechanisms": {
+  "831": {
+   "text": "Coadministration of nevirapine and efavirenz has resulted in increased toxicity without additional therapeutic benefit over either agent alone. The mechanism of interaction has not been established, although this combination has exhibited strong antagonistic anti-HIV-1 activity in cell culture.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1285",
+   "name": "Nevirapine",
+   "rxcui": "53654",
+   "rxnorm_name": "nevirapine",
+   "drugbank_id": "DB00238",
+   "atc": [
+    "J05AG01"
+   ],
+   "brand_names": [
+    "Viramune"
+   ],
+   "ciel": [
+    {
+     "code": "1652",
+     "uuid": "1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / zidovudine"
+    },
+    {
+     "code": "792",
+     "uuid": "792AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / stavudine"
+    },
+    {
+     "code": "80586",
+     "uuid": "80586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Nevirapine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter624",
+   "name": "Efavirenz",
+   "rxcui": "195085",
+   "rxnorm_name": "efavirenz",
+   "drugbank_id": "DB00625",
+   "atc": [
+    "J05AG03"
+   ],
+   "brand_names": [
+    "Atripla",
+    "Symfi"
+   ],
+   "ciel": [
+    {
+     "code": "104565",
+     "uuid": "104565AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / emtricitabine / tenofovir disoproxil"
+    },
+    {
+     "code": "161361",
+     "uuid": "161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "75523",
+     "uuid": "75523AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1285",
+   "DDInter624",
+   "Moderate",
+   "831"
+  ]
+ ]
+}

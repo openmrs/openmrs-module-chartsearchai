@@ -229,14 +229,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * A proposed drug whose strongest interaction the data rates Moderate is answered by the model:
+	 * Moderate is a caution (issue #471, ADR Decision 109), so no finding withholds the drug, and the
+	 * module's answer would have to be the clearance {@link #aProposalNoInteractionWithholdsStillAsksTheModel}
+	 * refuses. Omeprazole relates Moderate to her warfarin and Minor to her aspirin.
+	 */
+	@Test
+	public void aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		assertTheModelIsAsked("Can I give her omeprazole?");
+	}
+
+	/**
 	 * A set of findings of different strengths is one answer led by the withholding call, the stronger
-	 * finding first: omeprazole relates Moderate to her warfarin (withhold) and Minor to her aspirin
+	 * finding first: ciprofloxacin relates Major to her warfarin (withhold) and Moderate to her aspirin
 	 * (a caution), and both are stated.
 	 */
 	@Test
 	public void findingsOfDifferentStrengthsAreLedByTheWithholdingCall() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
-		String question = "Can I give her omeprazole?";
+		String question = "Can I give her ciprofloxacin?";
 		List<Finding> findings = findingsInThePromptFor(question);
 		String withhold = null;
 		String caution = null;
@@ -255,7 +267,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls);
 		String text = answer.getAnswer();
-		assertTrue(text.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Omeprazole"
+		assertTrue(text.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ciprofloxacin"
 				+ DrugReferenceInjector.WITHHOLD_LEAD_CLOSING), "the withholding call leads: " + text);
 		assertTrue(text.indexOf(withhold) < text.indexOf(caution), "then the stronger finding first: " + text);
 		assertCarriesEveryFinding(answer, findings);
@@ -339,15 +351,20 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A second drug the question names keeps the call. Omeprazole's reference entry is also filed under
-	 * a combination name carrying amoxicillin, which is how an earlier form of the gate — removing every
-	 * word of every one of the drug's names — once admitted this as a question about omeprazole alone;
-	 * no proposal shape carries a second drug, which is what refuses it now.
+	 * A second drug the question names keeps the call. Clarithromycin's reference entry is also filed
+	 * under a combination name carrying amoxicillin, which is how an earlier form of the gate — removing
+	 * every word of every one of the drug's names — once admitted such a question as one about the
+	 * first drug alone; no proposal shape carries a second drug, which is what refuses it now. The
+	 * drug alone IS answered by the module — its Major interaction with her warfarin withholds it — so
+	 * it is the second drug, and not a finding too weak to answer from, that keeps the call. (This case
+	 * asked about omeprazole until issue #471 made its Moderate interaction a caution, which would have
+	 * kept the call whatever the gate did.)
 	 */
 	@Test
 	public void aSecondDrugInsideTheFirstsCombinationNameStillAsksTheModel() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
-		assertTheModelIsAsked("Can I give her omeprazole with amoxicillin?");
+		assertTheModuleAnswers("Can I give her clarithromycin?", DrugReferenceTestSupport.ddinterServiceWithGroups());
+		assertTheModelIsAsked("Can I give her clarithromycin with amoxicillin?");
 	}
 
 	/**

@@ -301,14 +301,19 @@ public class LlmProvider {
 			// cells KEEP that Yes lead with every finding, severity and citation, and ADR Decision
 			// 72's "The measurement" section records the run, its three residues and the arm above.
 			// Nothing in this repository can see what the model produces from these two sentences;
-			// SafetyVerdictSeverityGradationTest pins what they SAY.
+			// SafetyVerdictSeverityGradationTest pins what they SAY. The CAUTION branch's words are
+			// measured, not free (issue #471): worded "naming it and the caution in the same sentence"
+			// and asked for the severity, it drew the proposal-caution branch's permission lead
+			// ("Enalapril can be given, with one caution") for a medication already taken; ADR
+			// Decision 109 records each wording and what it produced.
 			+ "A finding that says it is a reason to change a medication this patient is already "
 			+ "taking is not about a drug anything proposed: open by naming that medication and what "
 			+ "the finding relates it to, carry the finding's severity, and never open by refusing to "
 			+ "give a drug. A finding that says it is a caution about a medication this patient is "
 			+ "already taking, not a reason to change it, is not evidence against that medication: "
-			+ "open by naming it and the caution in the same sentence, and never open by refusing to "
-			+ "give a drug. Where findings state calls of both kinds, the strongest still governs: a "
+			+ "open by naming that medication and what the finding relates it to, say that it is a "
+			+ "caution, carry the finding's severity, and never open by refusing to give a drug. Where "
+			+ "findings state calls of both kinds, the strongest still governs: a "
 			+ "finding that is a reason to withhold it leads, then one that is a reason to change a "
 			+ "medication this patient is already taking, then a caution. "
 			+ "The finding's mechanism is the evidence for the call it states: it belongs after the "

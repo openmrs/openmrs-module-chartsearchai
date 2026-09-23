@@ -58,6 +58,9 @@ public class FoldedFindingStrengthTest {
 
 	private static final String FIXTURE = "chartsearchai-test/ddi-folded-minor-class-pair.json";
 
+	/** Efavirenz and Nevirapine, rated Moderate and both filed under J05AG — see the file's own note. */
+	private static final String MODERATE_FIXTURE = "chartsearchai-test/ddi-folded-moderate-class-pair.json";
+
 	private static final String QUESTION = "Is it safe to give methylphenidate?";
 
 	private static final String CO_MEDICATION = "Modafinil";
@@ -110,6 +113,39 @@ public class FoldedFindingStrengthTest {
 		assertTrue(finding.contains(CLASS_SENTENCE),
 				"precondition: the unrated half is the duplicate-therapy sentence the fold appends — "
 						+ "without it this case would be an ordinary Minor finding: " + finding);
+	}
+
+	/**
+	 * A MODERATE rule folded with a class relationship withholds too (issue #471). #471 made Moderate a
+	 * caution through the RATING alone and left the fold's class leg as it was; ADR Decision 86 kept that
+	 * leg for a folded chip, which states the stronger of its two claims. So the Moderate half is a
+	 * caution and the finding still withholds, as a folded Minor does. Efavirenz and Nevirapine are the
+	 * shipped knowledge base's own rows, rated Moderate and both filed under J05AG. Grading a fold is a
+	 * separate decision with its own evidence (ADR Decision 109).
+	 */
+	@Test
+	public void aModerateRuleFoldedWithAClassRelationshipStillStatesTheStrongerClaim() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(MODERATE_FIXTURE);
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(40, null, DrugReferenceTestSupport.set("Nevirapine"),
+						DrugReferenceTestSupport.set("J05AG01"), null, null),
+				"Can I give this patient efavirenz?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		assertEquals(1, findings.size(),
+				"the fold is the arrangement under test: two arms about one co-medication must be ONE "
+						+ "finding, was: " + chart.getText());
+		String finding = findings.get(0).getText();
+		assertTrue(finding.contains("Moderate"), "precondition: the rated half is the Moderate rule: "
+				+ finding);
+		assertTrue(finding.contains("same ATC class (J05AG)"),
+				"precondition: the unrated half is the duplicate-therapy sentence the fold appends: "
+						+ finding);
+
+		assertTrue(finding.contains(WITHHOLD),
+				"a Moderate rule is a caution by its rating, but the fold states the stronger of its two "
+						+ "claims (ADR Decision 86), and #471 left the class leg alone: " + finding);
+		assertFalse(finding.contains(CAUTION), "and it must not read as a mere caution: " + finding);
 	}
 
 	@Test

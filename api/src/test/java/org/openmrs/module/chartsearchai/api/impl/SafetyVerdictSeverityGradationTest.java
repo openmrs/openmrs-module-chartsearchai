@@ -385,6 +385,31 @@ public class SafetyVerdictSeverityGradationTest {
 	}
 
 	/**
+	 * Both current-medication branches ask for the finding's rating (issue #471, review round 1 of
+	 * PR #474). #471 requires a Moderate finding to be stated with its rating (#299, #337), and moving
+	 * Moderate to the caution moved a screened Moderate pair of her own prescriptions from the WITHHOLD
+	 * current-medication branch, which asks for the severity, to the CAUTION one, which did not. The
+	 * proposal cells are covered by the governing sentence ("carrying its own severity"), which is
+	 * gated on a finding naming the drug asked about and so never reaches a screened pair.
+	 */
+	@Test
+	public void everyCurrentMedicationBranchAsksForTheFindingsSeverity() {
+		String change = clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION);
+		String caution = clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION);
+		int matched = 0;
+		for (String sentence : safetyParagraph().split("(?<=\\.)\\s+")) {
+			if ((sentence.contains(change) || sentence.contains(caution)) && sentence.contains("open")) {
+				matched++;
+				assertTrue(sentence.contains("carry the finding's severity"),
+						"a current-medication branch must ask for the finding's rating, or a finding it "
+								+ "governs can drop the rating while following the prompt exactly — "
+								+ "which #471 forbids for a Moderate one: " + sentence);
+			}
+		}
+		assertEquals(2, matched, "exactly the two current-medication branches must be read here");
+	}
+
+	/**
 	 * Asserts that some sentence of the safety paragraph is a BRANCH for the current-medication class
 	 * {@code core}: that it names the class, tells the model how to OPEN, and instructs the lead issue
 	 * #348 exists for rather than a verdict about giving a drug.
@@ -723,7 +748,11 @@ public class SafetyVerdictSeverityGradationTest {
 	 *
 	 * <p><b>And it is a tripwire rather than an over-strict guard.</b> These two sentences are prompt
 	 * surface whose effect nothing in this repository can see, so ADR Decision 72's two-build A/B is
-	 * what licensed the words that are here. Any legitimate reword re-opens that A/B, which means
+	 * what licensed the words that are here, and ADR Decision 109's live runs licensed the CAUTION
+	 * branch's current words (issue #471): the wording before them, which asked for the severity
+	 * beside "the caution in the same sentence", was measured drawing the proposal branch's
+	 * permission lead for a medication already taken while every case here was green. Any
+	 * legitimate reword re-opens that measurement, which means
 	 * failing loudly on one is the WANTED behaviour: the failure tells the next maintainer a live
 	 * measurement is owed, and that is exactly why
 	 * {@code DrugClassQuestionNoteTest.theRenderedNoteIsExactlyTheseWords} pins its own rendered note
@@ -754,8 +783,9 @@ public class SafetyVerdictSeverityGradationTest {
 					+ "refusing to give a drug.",
 			"A finding that says it is a caution about a medication this patient is already taking, "
 					+ "not a reason to change it, is not evidence against that medication: open by "
-					+ "naming it and the caution in the same sentence, and never open by refusing to "
-					+ "give a drug."),
+					+ "naming that medication and what the finding relates it to, say that it is a "
+					+ "caution, carry the finding's severity, and never open by refusing to give a "
+					+ "drug."),
 			branches,
 			"these two sentences are what a clinician's answer opens from, and nothing in this "
 					+ "repository can see what a model makes of them — ADR Decision 72's two-build "

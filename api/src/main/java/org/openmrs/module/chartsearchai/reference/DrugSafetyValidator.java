@@ -1194,9 +1194,10 @@ public class DrugSafetyValidator {
 	 * mechanism text ending "No special precautions are necessary".
 	 *
 	 * <p>The boundary is expressed against {@link #severityRank} rather than as a number, so it
-	 * cannot fall out of step with that switch: {@code minor} and {@code unknown} are cautions — the
-	 * ratings DDInter itself calls minimally significant, and {@code unknown} carries no mechanism
-	 * text at all, which is why the default floor filters it out of the chips entirely.
+	 * cannot fall out of step with that switch: {@code major} withholds and every rating below it is a
+	 * caution, because that is where DDInter's own tiers put it — ADR Decision 109 quotes them (issue
+	 * #471). {@code unknown} carries no mechanism text, which is why the default floor filters it out of
+	 * the chips entirely.
 	 *
 	 * <p><b>Unrated withholds, and it is the case a "no rating means nothing serious" reading gets
 	 * backwards.</b> Null is not a low rating — see {@link SafetyWarning#getSeverity()} — and it
@@ -1215,17 +1216,21 @@ public class DrugSafetyValidator {
 	 */
 	static boolean ratingLicensesWithholding(String severity) {
 		int rank = severityRank(severity);
-		return rank < 0 || rank >= severityRank("moderate");
+		return rank < 0 || rank >= severityRank("major");
 	}
 
 	/**
-	 * Whether the data itself RATES a relationship a reason to withhold — a rating of {@code moderate}
-	 * or above, and never an unrated one, which {@link #ratingLicensesWithholding} counts as
-	 * withholding because it is not a caution. Issue #469: the module states a withholding answer
-	 * without a model only where a rating says so, and an unrated rule is its author's note.
+	 * Whether the data itself RATES a relationship a reason to withhold — a rating
+	 * {@link #ratingLicensesWithholding} withholds for, and never an unrated one, which that method
+	 * counts as withholding because it is not a caution. Issue #469: the module states a withholding
+	 * answer without a model only where a rating says so, and an unrated rule is its author's note.
+	 *
+	 * <p><b>Asked THROUGH that method and never beside it</b> (issue #471): a boundary of its own
+	 * would let the module compose an answer, with no model, for a proposal whose finding the record
+	 * states as a caution — the caution-only answer ADR Decision 108 keeps the model call for.
 	 */
 	static boolean ratedAReasonToWithhold(String severity) {
-		return severityRank(severity) >= severityRank("moderate");
+		return severityRank(severity) >= 0 && ratingLicensesWithholding(severity);
 	}
 
 	/**
@@ -1243,18 +1248,19 @@ public class DrugSafetyValidator {
 	 * vocabulary, not about the call — so a caution's rating is as much wanted here as a withholding
 	 * one.
 	 *
-	 * <p><b>The prompt asks for the rating in three of its four cells, and the fourth is a named
-	 * residue rather than a claim this method makes.</b> {@code LlmProvider}'s governing safety
-	 * sentence — "then the finding itself, carrying its own severity" — is gated on a finding naming
-	 * the drug ASKED about, so it covers both proposal cells; the current-medication WITHHOLD
-	 * sentence repeats it. The current-medication CAUTION sentence does not, and nothing else
-	 * reaches it, because those two branches are gated on the finding's clause rather than on the
-	 * question (Decision 72). So a {@code minor}-rated finding about a drug the patient is already
-	 * taking — reachable at the shipped floor — can be rendered exactly as the prompt asked and
-	 * still be reported. That cell was found by a review pass and is recorded rather than closed:
-	 * narrowing here would need the REFERENT axis, which the record does not carry, and widening the
-	 * prompt is a change measured elsewhere. Do not restate this as "the prompt asks for it either
-	 * way", which is what an earlier draft said.
+	 * <p><b>The prompt asks for the rating in THREE sentences, one per gate.</b> {@code LlmProvider}'s
+	 * governing safety sentence — "then the finding itself, carrying its own severity" — is gated on a
+	 * finding naming the drug ASKED about, so it covers both proposal cells; the two current-medication
+	 * branches are gated on the finding's clause rather than on the question (Decision 72), and each
+	 * says "carry the finding's severity". The CAUTION branch did not until issue #471, which moved
+	 * {@code moderate} into that cell beside {@code minor} and added the clause in its review round 1:
+	 * until then a finding there could be rendered exactly as the prompt asked and still be reported.
+	 * The words around the clause are measured rather than free: beside "the caution in the same
+	 * sentence" it drew the proposal branch's permission lead, so the branch now opens as the change
+	 * branch does (ADR Decision 109). So a reword dropping the
+	 * clause from any of the three reopens that cell —
+	 * {@code SafetyVerdictSeverityGradationTest.everyCurrentMedicationBranchAsksForTheFindingsSeverity}
+	 * holds the two branches.
 	 *
 	 * <p><b>Two ratings answer null and they are not the same case.</b> An UNRATED finding — a
 	 * curated hand-authored rule, or an ATC-subgroup or cross-reactivity join — has no word at all;
@@ -3892,15 +3898,18 @@ public class DrugSafetyValidator {
 	 * withholds on the same OR and ranks below {@code minor}, which an operator reaches by lowering
 	 * {@code minInteractionSeverity} to {@code unknown}.
 	 *
-	 * <p><b>That shape is also the only one over which the ORDER of the two keys is observable</b>, so
-	 * it is what pins this comparator's central claim rather than an ornament of it. Read off the ranks:
-	 * a withholding finding that was not folded rates {@code moderate}, {@code major} or unrated, each
-	 * of which already sits at or above every caution, and a folded {@code Minor} ties a plain
-	 * {@code Minor} — so in every arrangement but one, asking the rating first and asking the finding
-	 * first agree. The exception is a folded {@code Unknown} against a plain {@code Minor}: it
-	 * withholds and the Minor does not, while the rating ranks it lower.
-	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} is the guard — swap the two keys here and
-	 * read its failure.
+	 * <p><b>That shape is also what makes the ORDER of the two keys observable</b>, so it is what pins
+	 * this comparator's central claim rather than an ornament of it. Read off the ranks: a withholding
+	 * finding that was not folded rates {@code major} or unrated, each of which already sits at or
+	 * above every caution, and a folded row ties a plain one of its own rating — so asking the rating
+	 * first and asking the finding first disagree exactly where a FOLDED row is rated BELOW a plain
+	 * caution: a folded {@code Minor} or {@code Unknown} against a plain {@code Moderate}, and a folded
+	 * {@code Unknown} against a plain {@code Minor}. Each withholds and the caution does not, while the
+	 * rating ranks it lower. A folded {@code Minor} against a plain {@code Moderate} is reachable at the
+	 * shipped floor since issue #471 made {@code moderate} a caution; the {@code Unknown} pairs need a
+	 * lowered floor, and before #471 the one against a plain {@code Minor} was the only pair.
+	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} is the guard, over the lowered-floor pair —
+	 * swap the two keys here and read its failure.
 	 *
 	 * <p><b>What it deliberately does not order</b>: the unrated class-only chips appended after these.
 	 * They state a relationship the reference data does not rate at all, so by this method's own key —

@@ -28,15 +28,17 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * consulted at all, but it does so over two pairs the knowledge base rates alike, and a comparator
  * that asked {@code severityPriority} first and the fold only as a TIEBREAK satisfies it — the two
  * ratings tie, so the fold decides either way. The two key orders answer differently only where a
- * finding WITHHOLDS while rating BELOW one that does not, and one rating can do that: the ratings
- * that do not withhold are {@code minor} and {@code unknown}, and of those only {@code unknown} sits
- * below the other on {@code severityPriority}. So the arrangement is a rule rated {@code unknown}
- * folded with a class join, which answers {@code licensesWithholding} on the fold and renders
- * {@code STRENGTH_WITHHOLD} in the record the model reads while its rating sorts it last.
+ * finding WITHHOLDS while rating BELOW one that does not. Since issue #471 the ratings that do not
+ * withhold are {@code moderate}, {@code minor} and {@code unknown}, so a folded {@code minor} or
+ * {@code unknown} below a plain {@code moderate} does that, and so does a folded {@code unknown} below
+ * a plain {@code minor} — {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING}'s javadoc names the
+ * pairs. This case is the last: a rule rated {@code unknown} folded with a class join, which answers
+ * {@code licensesWithholding} on the fold and renders {@code STRENGTH_WITHHOLD} in the record the
+ * model reads while its rating sorts it last.
  *
  * <p><b>Why a context.</b> {@code unknown} is the one rating the SHIPPED configuration filters out
  * entirely — the default {@code chartsearchai.drugSafety.minInteractionSeverity} is {@code minor} —
- * so the arrangement is reachable only where the property's own documentation points an operator,
+ * so this case's arrangement is reachable only where the property's own documentation points an operator,
  * which is the same configuration {@link UnknownSeverityFindingStrengthContextTest} needs and for the
  * same reason. Both directions are asserted, so the case cannot pass vacuously: under the default
  * floor the Unknown-rated rule raises no rule chip at all, which is what proves the floor write took

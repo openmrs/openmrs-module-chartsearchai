@@ -110,6 +110,9 @@ public class SafetyWarning {
 	/** @see #getEndedOrderStopDate() */
 	private final String endedOrderStopDate;
 
+	/** @see #endedOrderRows() */
+	private final List<DrugReference> endedOrderRows;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -285,7 +288,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -293,9 +296,13 @@ public class SafetyWarning {
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
-			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate) {
+			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
+			List<DrugReference> endedOrderRows) {
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
 		this.endedOrderStopDate = aboutAnEndedOrder ? endedOrderStopDate : null;
+		this.endedOrderRows = !aboutAnEndedOrder || endedOrderRows == null || endedOrderRows.isEmpty()
+				? Collections.<DrugReference> emptyList()
+				: Collections.unmodifiableList(new ArrayList<DrugReference>(endedOrderRows));
 		// Copied and wrapped for the reason chartOrderBridges is. Never null, so no reader branches on
 		// absence; namedPartners()'s javadoc is the one place that says what empty covers.
 		this.namedPartners = namedPartners == null || namedPartners.isEmpty()
@@ -962,16 +969,27 @@ public class SafetyWarning {
 	 * caller hands it today: the two question-driven arms' chips never are, and the order-driven arm's
 	 * subjects are her active substances, which {@code DrugSafetyValidator.EndedOrders} never holds.
 	 * Kept so the two referents cannot both be stated whatever a later caller does. Package-private:
-	 * {@code EndedOrders.stamp} is its only caller.
+	 * {@code EndedOrders.stamp} is its only caller, and {@code rows} are every row of the substance it
+	 * held as ended — see {@link #endedOrderRows()}.
 	 */
-	SafetyWarning asAboutAnEndedOrder(Date stopDate) {
+	SafetyWarning asAboutAnEndedOrder(Date stopDate, List<DrugReference> rows) {
 		if (aboutACurrentMedication) {
 			return this;
 		}
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
-				stopDate == null ? null : DateFormatUtil.formatDate(stopDate));
+				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows);
+	}
+
+	/**
+	 * Every reference row of the substance {@link #isAboutAnEndedOrder()} is about — empty on every
+	 * other chip, never null. Package-private and not a getter, so it reaches no wire: its one reader
+	 * is {@code DrugSafetyValidator.namesTheEndedOrderDrug}, which asks an answer's prose whether it
+	 * names this drug by any of its names rather than by the {@link #getDrug()} label (issue #472).
+	 */
+	List<DrugReference> endedOrderRows() {
+		return endedOrderRows;
 	}
 
 	/**

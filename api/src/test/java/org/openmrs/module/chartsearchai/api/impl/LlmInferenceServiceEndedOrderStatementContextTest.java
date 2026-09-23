@@ -136,6 +136,33 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		assertEquals(stated, answer.getAnswer(), "the answer already states it, so nothing is appended");
 	}
 
+	/**
+	 * Review round 2 of PR #478: the chip's drug is {@code DrugReference.displayLabel()}, which appends a
+	 * diverging generic — {@code "Acetylsalicylic acid (aspirin)"} here, {@code "Rifampicin (rifampin)"}
+	 * on the ticket's own reproduction — and no model writes that label. Asked as a SUBSTRING of the
+	 * sentence, an answer using exactly the prompt's words about "aspirin" read as unstated, and the
+	 * module said it a second time. Patient 6 holds no active order, so both drugs the question names
+	 * can be ones the chart records only as ended.
+	 */
+	@Test
+	public void anAnswerNamingTheEndedDrugByANameItsChipLabelOnlyAppendsIsReturnedByteForByte() {
+		String stated = "Aspirin's order is no longer in force, not as a current medication [2]. "
+				+ "Ibuprofen's order is no longer in force, not as a current medication [3].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			DrugReferenceTestSupport.drugOrderRecord(2, "Aspirin 81mg", Boolean.FALSE, STOPPED),
+			DrugReferenceTestSupport.drugOrderRecord(3, "Ibuprofen 400mg", Boolean.FALSE, STOPPED))
+				.search(Context.getPatientService().getPatient(6), QUESTION);
+
+		boolean labelledByTheGeneric = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			labelledByTheGeneric |= chip.isAboutAnEndedOrder()
+					&& "Acetylsalicylic acid (aspirin)".equals(chip.getDrug());
+		}
+		assertTrue(labelledByTheGeneric, "precondition: an ended-order chip is labelled by the name and "
+				+ "its appended generic, chips were: " + answer.getSafetyWarnings());
+		assertEquals(stated, answer.getAnswer(), "the answer already states it of both, so nothing is appended");
+	}
+
 	@Test
 	public void aChartHoldingNoEndedOrderOfTheDrugAddsNothing() {
 		ChartAnswer answer = serviceWith(MODEL_ANSWER, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"))

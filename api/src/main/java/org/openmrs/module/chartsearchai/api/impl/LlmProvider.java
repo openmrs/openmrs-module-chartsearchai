@@ -329,7 +329,10 @@ public class LlmProvider {
 			// A/B rather than by argument: of the three arms run, the one with no refusal on either
 			// reproduction cell and no more current-medication screening cells opening with a bare
 			// "No —" than the baseline. It did not leave them untouched — the decision records which
-			// cell moved.
+			// cell moved. That A/B ran on a base predating ADR Decision 109 (#474), so one of those two
+			// cells, the Moderate pair §3b, was read under a change clause and a current-medication
+			// caution branch this prompt no longer ships; Decision 110 records the re-run on the
+			// merged base.
 			+ "A finding that says it is a reason against giving it should it be proposed again; this "
 			+ "patient's chart records its order as no longer in force, not as a current medication, or "
 			+ "that it is a caution to weigh should it be proposed again; this patient's chart records "

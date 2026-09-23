@@ -1794,6 +1794,37 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Whether {@code prose} names the drug of {@code chip}, a chip about an order no longer in force
+	 * (issue #472) — {@code false} for any other chip. The PROSE rule ({@link DrugReference#matchesText},
+	 * through {@link #namesAnyOf}), over every row of the chip's substance: the predicate
+	 * {@link EndedOrders} asked of the chart's own ended record to decide the chip is about one, so the
+	 * answer and the record are asked one question of the same rows.
+	 *
+	 * <p><b>Never a substring of {@link SafetyWarning#getDrug()}</b> (PR #478, review round 2). That is
+	 * {@link DrugReference#displayLabel()}, which appends a diverging generic — {@code "Rifampicin
+	 * (rifampin)"}, {@code "Acetylsalicylic acid (aspirin)"} — and no answer writes the label, so for every
+	 * such drug an answer stating it ended read as silent and the module said it twice. Not
+	 * {@code DrugReference.labelNameOccursIn} either: that is the rule for a clinician-entered drug NAME,
+	 * and an answer's sentence is prose (reference {@code CLAUDE.md}, "Matching a drug name").
+	 *
+	 * <p>The residue is {@code matchesText}'s: an alias this substance shares with another (issue #209's
+	 * shape) names it here too, so a sentence saying that other drug's order is no longer in force
+	 * reads as saying it of this one.
+	 */
+	public static boolean namesTheEndedOrderDrug(String prose, SafetyWarning chip) {
+		if (prose == null || chip == null || !chip.isAboutAnEndedOrder()) {
+			return false;
+		}
+		String lower = prose.toLowerCase(Locale.ROOT);
+		for (DrugReference row : chip.endedOrderRows()) {
+			if (namesAnyOf(Collections.singletonList(lower), row)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * What THIS response is about: the question, and the patient's own CHART records the answer cited.
 	 *
 	 * <p><b>Not the answer's own prose, and not a cited reference record — issue #143's second half.</b>
@@ -2322,7 +2353,8 @@ public class DrugSafetyValidator {
 	 */
 	private static final class EndedOrders {
 
-		private static final EndedOrders NONE = new EndedOrders(Collections.<Object, Date> emptyMap());
+		private static final EndedOrders NONE = new EndedOrders(Collections.<Object, Date> emptyMap(),
+				Collections.<Object, List<DrugReference>> emptyMap());
 
 		/**
 		 * The substance group keys this pass holds as recorded only in ended orders, each to the LATEST
@@ -2332,8 +2364,16 @@ public class DrugSafetyValidator {
 		 */
 		private final Map<Object, Date> substances;
 
-		private EndedOrders(Map<Object, Date> substances) {
+		/**
+		 * Every row this pass resolved of each substance in {@link #substances} — the rows
+		 * {@link #namesAnyRow} asked the ended records about, handed to the chip so the answer is asked
+		 * the same question of the same rows ({@link DrugSafetyValidator#namesTheEndedOrderDrug}).
+		 */
+		private final Map<Object, List<DrugReference>> rows;
+
+		private EndedOrders(Map<Object, Date> substances, Map<Object, List<DrugReference>> rows) {
 			this.substances = substances;
+			this.rows = rows;
 		}
 
 		/**
@@ -2388,6 +2428,7 @@ public class DrugSafetyValidator {
 				}
 			}
 			Map<Object, Date> substances = new LinkedHashMap<Object, Date>();
+			Map<Object, List<DrugReference>> substanceRows = new LinkedHashMap<Object, List<DrugReference>>();
 			for (DrugReference ref : inPlay) {
 				Object substance = ref.substanceGroupKey();
 				List<DrugReference> rows = resolvedRows.get(substance);
@@ -2412,6 +2453,7 @@ public class DrugSafetyValidator {
 				}
 				if (named) {
 					substances.put(substance, latest);
+					substanceRows.put(substance, rows);
 				}
 			}
 			// The costlier question last, and only where there is a candidate to ask it for.
@@ -2419,7 +2461,7 @@ public class DrugSafetyValidator {
 					|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
 				return NONE;
 			}
-			return new EndedOrders(substances);
+			return new EndedOrders(substances, substanceRows);
 		}
 
 		private static List<String> lowered(List<RecordMapping> records) {
@@ -2445,7 +2487,9 @@ public class DrugSafetyValidator {
 		 *  subject's substance is one this pass holds as ended, else {@code chip} itself. */
 		SafetyWarning stamp(DrugReference subject, SafetyWarning chip) {
 			Object substance = subject.substanceGroupKey();
-			return substances.containsKey(substance) ? chip.asAboutAnEndedOrder(substances.get(substance)) : chip;
+			return substances.containsKey(substance)
+					? chip.asAboutAnEndedOrder(substances.get(substance), rows.get(substance))
+					: chip;
 		}
 	}
 

@@ -56,6 +56,6 @@ public final class SafetyWarningFixtures {
 	public static SafetyWarning endedOrderInteraction(String drug, String detail, String severity,
 			Date stopDate) {
 		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, drug, detail, severity)
-				.asAboutAnEndedOrder(stopDate);
+				.asAboutAnEndedOrder(stopDate, Collections.<DrugReference> emptyList());
 	}
 }

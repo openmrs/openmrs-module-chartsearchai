@@ -35,12 +35,15 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * left unnamed: appended by the module, with no model asked and no prompt changed.
  *
  * <p><b>What "the answer said so" is</b>: some sentence of the answer
- * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) contains the chip's drug and {@link #NO_LONGER_IN_FORCE},
- * the words the prompt's ended-order branch tells the model to use. Containment, so a paraphrase
- * ("it was discontinued") reads as unstated and the sentence is appended beside it — the residue runs
- * toward saying it twice rather than toward silence, the direction Decision 100 chose for the same
- * reason. The drug is the chip's own name for it, so an answer naming it another way reads as unstated
- * too.
+ * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) names the chip's drug and contains
+ * {@link #NO_LONGER_IN_FORCE}, the words the prompt's ended-order branch tells the model to use. The
+ * drug is asked by {@link DrugSafetyValidator#namesTheEndedOrderDrug} — the prose rule over every row of
+ * its substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
+ * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is
+ * containment, so a paraphrase ("it was discontinued") reads as unstated and the sentence is appended
+ * beside it — the residue runs toward saying it twice rather than toward silence, the direction
+ * Decision 100 chose for the same reason. The drug predicate's own residue runs the other way, and that
+ * method's javadoc states it.
  */
 public final class EndedOrderStatement {
 
@@ -59,26 +62,23 @@ public final class EndedOrderStatement {
 		if (warnings == null || ChartSearchAiUtils.isBlank(answer)) {
 			return unstated;
 		}
-		List<String> sentences = new ArrayList<String>();
-		for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(answer)) {
-			sentences.add(sentence.toLowerCase(Locale.ROOT));
-		}
+		String[] sentences = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(answer);
 		Set<String> seen = new LinkedHashSet<String>();
 		for (SafetyWarning warning : warnings) {
 			if (!warning.isAboutAnEndedOrder() || ChartSearchAiUtils.isBlank(warning.getDrug())) {
 				continue;
 			}
-			String drug = warning.getDrug().toLowerCase(Locale.ROOT);
-			if (seen.add(drug) && !statesItEnded(sentences, drug)) {
+			if (seen.add(warning.getDrug().toLowerCase(Locale.ROOT)) && !statesItEnded(sentences, warning)) {
 				unstated.add(warning);
 			}
 		}
 		return unstated;
 	}
 
-	private static boolean statesItEnded(List<String> sentences, String drug) {
+	private static boolean statesItEnded(String[] sentences, SafetyWarning warning) {
 		for (String sentence : sentences) {
-			if (sentence.contains(drug) && sentence.contains(NO_LONGER_IN_FORCE)) {
+			if (sentence.toLowerCase(Locale.ROOT).contains(NO_LONGER_IN_FORCE)
+					&& DrugSafetyValidator.namesTheEndedOrderDrug(sentence, warning)) {
 				return true;
 			}
 		}
@@ -90,7 +90,10 @@ public final class EndedOrderStatement {
 	 * there is none.
 	 *
 	 * <p><b>It APPENDS and never replaces</b>, Decision 100's contract: the verdict lead is the model's,
-	 * and an answer that already said it is returned byte for byte. It carries no citation marker — it
+	 * and an answer {@link #unstatedEndedOrders} reads as having said it of every drug is returned byte
+	 * for byte — one naming the drug by a name no row of its substance carries, or saying it in other
+	 * words, is not, and there the clinician reads it twice. The drug is printed as the chip's label, so for
+	 * {@code Rifampicin (rifampin)} the sentence names both. It carries no citation marker — it
 	 * offers no evidence the chips do not, and a marker would claim a record this text did not read —
 	 * and it states the date only where the chip carries one. It states what the chart RECORDS, never
 	 * that the drug may or may not be given: that is the finding's call, and the prompt's.

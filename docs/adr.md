@@ -9901,9 +9901,13 @@ the refusal gone, the false premise confirmed, and the referent only on a chip k
 So the chip also carries the date (`SafetyWarning.getEndedOrderStopDate()`, the latest
 `RecordMapping.getOrderStopDate()` among the ended records naming the drug, published as
 `endedOrderStopDate`), and `EndedOrderStatement.withEndedOrdersStated` appends, where no sentence of the
-MODEL's answer names the drug beside "no longer in force", *"The chart records Rifampicin only as an order
-no longer in force (ended 2026-01-01), not as a current medication."* — Decision 100's mechanism, at its
-three call sites, appending and never replacing. It changes no prompt and no clause, so it does not reopen
+MODEL's answer names the drug beside "no longer in force", *"The chart records Rifampicin (rifampin) only as
+an order no longer in force (ended …), not as a current medication."* — the drug printed as the chip's
+label, which appends a generic name wherever it diverges from the display name — Decision 100's
+mechanism, at its three call sites, appending and never replacing. Whether a sentence names the drug is
+`DrugSafetyValidator.namesTheEndedOrderDrug`, the prose rule over every row of the substance (review round
+2): until then it was a substring of that label, which no answer writes, so on the ticket's own R2 cell the
+answer said it and the module said it again. It changes no prompt and no clause, so it does not reopen
 the measurement below; it is clinician-visible text that measurement did not see. The date is held on the
 chip as the published `yyyy-MM-dd` string, so the chip's value and the wire's are one spelling.
 
@@ -9965,12 +9969,27 @@ in the same place. So the §3a/§3b swap cannot be attributed to the branch's co
 perturbation of the prompt. §3b's lead moved in every candidate arm and §3a's in A and C, and neither
 is settled by this run.
 
+**The base predates Decision 109** (review round 2). Baseline `997099a6` and all three candidates were
+built before [Decision 109](#decision-109-a-moderate-interaction-is-a-caution-because-ddinter-reserves-avoid-for-major)
+(#474) was merged into this branch. §3b is the Moderate pair Salicylic acid × Enalapril, and under
+Decision 109 its record states `STRENGTH_CAUTION_CURRENT_MEDICATION` in place of the change clause, and
+the prompt's current-medication caution branch was reworded. So §3b's recorded leads above — arm C's
+*"No — Enalapril should be changed …"* among them, which the Result's count rests on — describe a clause
+and a branch the merged head no longer ships, and for that cell the Result's selection criterion was not
+measured against the shipped strength rules. A re-run on the merged base is recorded below.
+
+### Re-check on the merged base
+
+To be recorded by the post-merge verifier run.
+
 ### Residues
 
 - R1's MODEL prose still opens *"Yes"* and does not say the order has ended; the module's appended
-  sentence says it. Whether the answer "said it" is containment — a sentence naming the chip's drug beside
-  "no longer in force" — so a paraphrase, or the drug named another way, gets the sentence as well: said
-  twice rather than not at all.
+  sentence says it. Whether the answer "said it" is a sentence containing "no longer in force" that names
+  the drug by `namesTheEndedOrderDrug` — so a paraphrase of that phrase, or a name no row of the substance
+  carries, gets the sentence as well: said twice rather than not at all. The drug test's own residue runs
+  the other way: an alias the substance shares with another (#209's shape) names it too, so a sentence
+  saying that other drug's order is no longer in force reads as saying it of this one.
 - The appended sentence is not on the early `done` of async grounding, which is emitted before the chips
   exist — Decision 100's completion shares that, and async grounding ships off.
 - A chart that did not RETRIEVE the ended record states nothing, and the finding stays a proposal as
@@ -10000,6 +10019,7 @@ is settled by this run.
 order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and read the failures;
 `.aQuestionPairFindingAboutTwoDrugsTheChartHoldsOnlyAsEndedOrdersStatesTheEndedOrderCall`,
 `.theChipCarriesTheLatestDateAnEndedOrderOfTheDrugStopped`),
-`LlmInferenceServiceEndedOrderStatementContextTest` (the appended sentence, both answer paths),
+`LlmInferenceServiceEndedOrderStatementContextTest` (the appended sentence, both answer paths;
+`.anAnswerNamingTheEndedDrugByANameItsChipLabelOnlyAppendsIsReturnedByteForByte` for the label),
 `SafetyVerdictSeverityGradationTest.theEndedOrderBranchIsExactlyTheseWords`,
 `ChartSearchAiSafetyWarningSeverityWireTest`.

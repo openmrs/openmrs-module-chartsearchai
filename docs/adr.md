@@ -10229,7 +10229,9 @@ of its (drug, condition) keys name more than one note.
   cause drugs is one link.
 - **Design.** The 100 heaviest links were censused. From the other 988 links (17,103 chains), 100 were
   sampled with `random.Random(480)`.
-- **Rubric.** For each link the question is what the note says about its drug(s) and the condition.
+- **Rubric**, abridged; the verbatim text the adjudicators were given, with its synonym rule and its
+  rule for an effect that leads to the condition, is the sample file's `rubric` field. For each link the
+  question is what the note says about its drug(s) and the condition.
   - **CAUSES:** the drug can cause, induce, precipitate or lead to the condition, or the condition is
     reported as an adverse event with it.
   - **WORSENS:** the note says only that the drug aggravates a condition the patient already has.
@@ -10265,7 +10267,7 @@ them.
 |---|---|---|---|---|
 | links (1,088) | 0.826 | 0.754–0.890 | 0.831 | 0.758–0.894 |
 | kept chains (43,670 rated entries) | 0.742 | 0.687–0.793 | 0.759 | 0.703–0.809 |
-| kept chains, one per rated substance (`substanceGroupKey`) | 0.737 | 0.628–0.831 | 0.751 | 0.643–0.845 |
+| (link, rated substance) pairs, a substance counted once per link it is rated through (17,106) | 0.737 | 0.628–0.831 | 0.751 | 0.643–0.845 |
 | census stratum alone (100 links, 26,567 chains) | 0.744 of chains | exact | 0.771 of chains | exact |
 
 - **Weighted by chain, about one chain in four rests on a note that does not state that the drug causes
@@ -10281,7 +10283,7 @@ them.
   census's 21 include an indication or treated population, a risk factor, a negated statement, and a term reached
   through a narrower one ("benign intracranial hypertension" read as Hypertension).
 - **Sensitivity.** The 1,404-chain link was one of the two items the first two agents split on. Read as
-  CAUSES, the strict chain figure rises to about 0.774. No other single verdict moves it by as much.
+  CAUSES, the strict chain figure rises to about 0.775. No other single verdict moves it by as much.
 - **What it is not.** It is a share of chains the loader keeps, not of chips a patient sees. A chip needs
   both ends on the patient's orders, so exposure depends on prescribing, and nothing here weights by it.
   It measures the matcher's causal reading, not whether the rated drug's own Major rating is right.

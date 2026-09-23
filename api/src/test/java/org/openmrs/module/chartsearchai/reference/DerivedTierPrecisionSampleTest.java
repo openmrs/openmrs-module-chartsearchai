@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -65,18 +65,24 @@ public class DerivedTierPrecisionSampleTest {
 
 		// The file the loader reads, by the loader's own name for it.
 		JsonNode kb = read(DdiDrugReferenceSource.CLASSPATH_DEFAULT);
-		Set<String> links = new HashSet<String>();
-		for (JsonNode row : kb.path("derived_interactions")) {
-			links.add(row.get(3).asText() + "\t" + row.get(5).asText());
+		// The adjudicated links, each removed as the raw table is walked; what is left no longer occurs there.
+		Set<String> missing = new LinkedHashSet<String>();
+		for (String group : new String[] { "items", "controls" }) {
+			for (JsonNode item : sample.path(group)) {
+				missing.add(item.path("noteId").asText() + "\t" + item.path("condition").asText());
+			}
 		}
+		for (JsonNode row : kb.path("derived_interactions")) {
+			missing.remove(row.get(3).asText() + "\t" + row.get(5).asText());
+		}
+		assertTrue(missing.isEmpty(),
+			"adjudicated links no longer occurring in the raw derived_interactions table: " + missing);
 		JsonNode notes = kb.path("disease_notes");
 		int checked = 0;
 		for (String group : new String[] { "items", "controls" }) {
 			for (JsonNode item : sample.path(group)) {
 				String noteId = item.path("noteId").asText();
 				String condition = item.path("condition").asText();
-				assertTrue(links.contains(noteId + "\t" + condition),
-					"adjudicated link (note " + noteId + ", " + condition + ") no longer occurs in the raw derived_interactions table");
 				JsonNode note = notes.path(noteId);
 				assertTrue(note.has("text"), "adjudicated note " + noteId + " is gone");
 				assertEquals(item.path("noteSha256").asText(),

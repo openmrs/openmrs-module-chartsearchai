@@ -24,6 +24,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -55,6 +56,10 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 	/** R1's shape, on this dataset's drugs: the clinician lists the ended drug as current. */
 	private static final String QUESTION = "Her current medications are aspirin and ibuprofen. Any interactions?";
 
+	/** R1's shape again, on omeprazole. */
+	private static final String OMEPRAZOLE_QUESTION = "Her current medications are aspirin and omeprazole. "
+			+ "Any interactions?";
+
 	/**
 	 * Decision 110's recorded arm-C lead to R1, verbatim, with a marker — then naming the finding's
 	 * partner by the chip's own name for it, so ADR Decision 100's completion has nothing to add and
@@ -82,14 +87,18 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		return DrugReferenceTestSupport.drugOrderRecord(2, "Ibuprofen 400mg", Boolean.FALSE, STOPPED);
 	}
 
+	private static RecordMapping endedOmeprazole() {
+		return DrugReferenceTestSupport.drugOrderRecord(2, "Omeprazole 20mg", Boolean.FALSE, STOPPED);
+	}
+
 	private static TestableService serviceWith(String modelAnswer, RecordMapping... chartRecords) {
 		TestableService service = new TestableService();
 		service.setChartBuildingStrategy(new StubStrategy(chartRecords));
 		service.setLlmProvider(new AnsweringProvider(modelAnswer));
-		service.setDrugReferenceInjector(
-			DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddinterServiceWithGroups()));
-		service.setDrugSafetyValidator(
-			DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterServiceWithGroups()));
+		// One service behind both, as production autowires it (injectorWithSafety's javadoc).
+		DrugReferenceService references = DrugReferenceTestSupport.ddinterServiceWithGroups();
+		service.setDrugReferenceInjector(DrugReferenceTestSupport.injectorWithSafety(references));
+		service.setDrugSafetyValidator(DrugReferenceTestSupport.validator(references));
 		return service;
 	}
 
@@ -361,11 +370,47 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		String stated = "The order no longer in force is her Clarithromycin / Esomeprazole / Levofloxacin "
 				+ "combination kit [2]. Omeprazole interacts with her Acetylsalicylic acid (aspirin) [1].";
 		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
-			DrugReferenceTestSupport.drugOrderRecord(2, "Omeprazole 20mg", Boolean.FALSE, STOPPED))
-				.search(patient, "Her current medications are aspirin and omeprazole. Any interactions?");
+			endedOmeprazole()).search(patient, OMEPRAZOLE_QUESTION);
 
 		assertAnEndedChip(answer);
 		assertEquals(stated, answer.getAnswer(), "the kit's name is also this drug's, so nothing is appended");
+	}
+
+	/**
+	 * Issue #498 item 1, the before-the-phrase twin of the case above: the kit's name, filed on both the
+	 * Omeprazole and the Clarithromycin rows, is the nearest name before the phrase, and this drug's and the
+	 * other drug's occurrences of it END at one position. The tie goes to this drug, so nothing is appended.
+	 */
+	@Test
+	public void aNameThisDrugSharesWithAnotherBeforeThePhraseStatesIt() {
+		String stated = "Her Clarithromycin / Esomeprazole / Levofloxacin combination kit order is no longer in "
+				+ "force [2]. Omeprazole interacts with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedOmeprazole()).search(patient, OMEPRAZOLE_QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the kit's name is also this drug's, so nothing is appended");
+	}
+
+	/**
+	 * Issue #498 item 2: the nearest name before the phrase is another drug's, metformin, joined by a slash
+	 * to the kit's name, which this drug shares with Clarithromycin. The combination walk meets the two
+	 * occurrences of the kit's name ending at one position, and the tie goes to this drug, so nothing is
+	 * appended. Two tie rules hold it, each enough alone: the walk's own comparison, and the loop condition
+	 * the walk returns to (see {@code nearestIsOwn}). Giving the tie away at either one alone — the loop's
+	 * {@code >} made {@code >=}, or the walk's {@code >=} made {@code >} — leaves this case green, and at
+	 * both reddens it.
+	 */
+	@Test
+	public void aNameThisDrugSharesWithAnotherJoinedToANearerDrugStatesIt() {
+		String stated = "Her Clarithromycin / Esomeprazole / Levofloxacin combination kit/metformin order is no "
+				+ "longer in force [2]. Omeprazole interacts with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedOmeprazole()).search(patient, OMEPRAZOLE_QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(),
+				"the combination names this drug as well as metformin, so nothing is appended");
 	}
 
 	/** A hyphen inside a word joins a combination name, which names ibuprofen as well as the nearer metformin. */

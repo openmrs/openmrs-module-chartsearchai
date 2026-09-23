@@ -88,6 +88,9 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	private static final String SUBSTANCE_NAME_CONTRADICTED_EDGES_FIXTURE =
 			"chartsearchai-test/ddi-substance-name-contradicted-edges.json";
 
+	private static final String SUBSTANCE_NAME_CONTRADICTED_QUALIFIER_FIXTURE =
+			"chartsearchai-test/ddi-substance-name-contradicted-qualifier-edges.json";
+
 	/**
 	 * The corpus the sweep enumerates, and the one file in it that is deliberately in the shape issue
 	 * #242 reports — both DERIVED from the shared constant rather than spelled again.
@@ -828,6 +831,45 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		assertFalse(found.getDetail().contains("Basecillin butyrate is filed as"),
 				"an ester filed under its parent is not another substance's row. Detail was: " + found.getDetail());
 		assertEquals(3, service.getAll().size(), "every row is still loaded; nothing was dropped");
+	}
+
+	/**
+	 * Issue #476's residue, in a hand-authored dataset: the rule compares a row's display STEM, so a
+	 * trailing qualifier on either side must not hide the contradiction. The shipped file offers neither
+	 * shape (the fixture's own note says what measured that).
+	 * <ul>
+	 *   <li>An ingredient the bridge spells with a trailing qualifier ({@code Trailexine (anhydrous)})
+	 *       still names the row {@code Trailexine}. Keyed by its whole normalized name it matched no
+	 *       row at all, so the row went unreported.</li>
+	 *   <li>A row whose own name carries the qualifier ({@code Qualifiedazole (oral)}) is compared by
+	 *       its stem, which is the ingredient the bridge names. Compared by its whole name it would match
+	 *       nothing, so this case is what pins which stem of the display name the rule reads.</li>
+	 *   <li>The control, {@code Ownqualine}, is named by a qualified ingredient too, but that concept is
+	 *       filed on the row itself, so the bridge does not contradict it. It holds the own-concept
+	 *       exclusion over a qualified key, so stripping the qualifier cannot bypass it.</li>
+	 * </ul>
+	 */
+	@Test
+	public void aTrailingQualifierOnEitherSideDoesNotHideASubstanceNameTheBridgeContradicts()
+			throws IOException {
+		DrugReferenceService service = loading(SUBSTANCE_NAME_CONTRADICTED_QUALIFIER_FIXTURE,
+				"h476-qualifier-edges.json", ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_DDINTER);
+
+		DrugReferenceValidity.Finding found = finding(service.getLoadStatus(),
+				DrugReferenceValidity.SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE);
+		assertTrue(found.getDetail().contains("Trailexine is filed as 'wrongazine'"),
+				"an ingredient the bridge spells with a trailing qualifier still names the row. Detail was: "
+						+ found.getDetail());
+		assertTrue(found.getDetail().contains("Trailexine (anhydrous) / partnerine"),
+				"and the qualified concept is what the detail names. Detail was: " + found.getDetail());
+		assertTrue(found.getDetail().contains("Qualifiedazole (oral) is filed as 'elsewherine'"),
+				"a row is compared by its display stem, not its whole name. Detail was: " + found.getDetail());
+		assertFalse(found.getDetail().contains("Ownqualine is filed as"),
+				"a concept filed on the row itself does not contradict it, qualified or not. Detail was: "
+						+ found.getDetail());
+		assertEquals(2, found.getOccurrences(), "the two positives, and not the control. Detail was: "
+				+ found.getDetail());
+		assertEquals(4, service.getAll().size(), "every row is still loaded; nothing was dropped");
 	}
 
 	// ------------------------------------------------------------------

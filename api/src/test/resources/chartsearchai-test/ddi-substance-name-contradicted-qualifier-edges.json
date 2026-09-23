@@ -1,0 +1,76 @@
+{
+ "metadata": {
+  "note": "HAND-AUTHORED edge dataset for the load-time validity check on issue #476 - NOT a slice of the shipped KB, which offers no row at these edges (measured 2026-09-24 by driving DrugReferenceService.getLoadStatus() over the shipped file with the bridge's ingredient keyed by its display stem: the reported rows did not change). TWO POSITIVES. Trailexine publishes rxnorm_name `wrongazine`, and the bridge files `Trailexine (anhydrous) / partnerine` on Partnerine and not on it - the ingredient carries a trailing qualifier. Qualifiedazole (oral) publishes rxnorm_name `elsewherine`, and the bridge files `Qualifiedazole / partnerine` on Partnerine and not on it - the ROW carries the qualifier, so the rule must compare the row's display stem and not its whole name. ONE CONTROL: Ownqualine publishes rxnorm_name `otherone`, and the one concept naming it, `Ownqualine (anhydrous) / partnerine`, is filed on Ownqualine itself as well as on Partnerine, so the bridge does not contradict it. The control must NOT be reported."
+ },
+ "mechanisms": {},
+ "drugs": [
+  {
+   "id": "QEDGE1",
+   "name": "Trailexine",
+   "rxcui": null,
+   "rxnorm_name": "wrongazine",
+   "drugbank_id": "DBX0101",
+   "atc": [],
+   "brand_names": [],
+   "ciel": []
+  },
+  {
+   "id": "QEDGE2",
+   "name": "Qualifiedazole (oral)",
+   "rxcui": null,
+   "rxnorm_name": "elsewherine",
+   "drugbank_id": "DBX0102",
+   "atc": [],
+   "brand_names": [],
+   "ciel": []
+  },
+  {
+   "id": "QEDGE3",
+   "name": "Ownqualine",
+   "rxcui": null,
+   "rxnorm_name": "otherone",
+   "drugbank_id": "DBX0103",
+   "atc": [],
+   "brand_names": [],
+   "ciel": [
+    {
+     "code": "900103",
+     "uuid": "900103AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ownqualine (anhydrous) / partnerine"
+    }
+   ]
+  },
+  {
+   "id": "QEDGE4",
+   "name": "Partnerine",
+   "rxcui": null,
+   "rxnorm_name": "partnerine",
+   "drugbank_id": "DBX0104",
+   "atc": [],
+   "brand_names": [],
+   "ciel": [
+    {
+     "code": "900101",
+     "uuid": "900101AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trailexine (anhydrous) / partnerine"
+    },
+    {
+     "code": "900102",
+     "uuid": "900102AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Qualifiedazole / partnerine"
+    },
+    {
+     "code": "900103",
+     "uuid": "900103AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ownqualine (anhydrous) / partnerine"
+    },
+    {
+     "code": "900104",
+     "uuid": "900104AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Partnerine"
+    }
+   ]
+  }
+ ],
+ "interactions": []
+}

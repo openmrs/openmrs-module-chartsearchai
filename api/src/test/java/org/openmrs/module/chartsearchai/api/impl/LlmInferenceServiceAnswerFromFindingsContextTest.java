@@ -33,6 +33,7 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
@@ -68,6 +69,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	private static final String[] STRENGTH_CLAUSES = { DrugReferenceInjector.STRENGTH_WITHHOLD,
 			DrugReferenceInjector.STRENGTH_CAUTION, DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION,
 			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION };
+
+	/** What a composed contraindication line about a medication she already takes states in place of
+	 *  its record's strength clause: the clause's referent, without its call — spelled out as the
+	 *  specification rather than read off production. */
+	private static final String CURRENT_MEDICATION_REFERENT =
+			" This finding is about a medication this patient is already taking.";
 
 	private Patient patient;
 
@@ -129,9 +136,34 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "states none: " + finding.text);
 	}
 
+	/**
+	 * The line a composed answer states for {@code finding}: its answer-facing body, then — for a
+	 * contraindication about a medication she already takes, whose record says so only in the strength
+	 * clause the answer leaves out — the referent that clause carried, then its own marker. Whether the
+	 * finding is a contraindication is read off the chip production raised for it, never off the prose.
+	 */
+	private static String expectedLine(ChartAnswer answer, Finding finding) {
+		String body = answerFacingBody(finding);
+		boolean current = finding.text.endsWith(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)
+				|| finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION);
+		return body + (current && isContraindication(answer, finding) ? CURRENT_MEDICATION_REFERENT : "")
+				+ " [" + finding.index + "]";
+	}
+
+	private static boolean isContraindication(ChartAnswer answer, Finding finding) {
+		String body = answerFacingBody(finding);
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			if (chip.getDrug().equals(finding.drug) && body.startsWith(chip.getDetail())) {
+				return SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType());
+			}
+		}
+		throw new IllegalStateException("no chip beside the answer is finding [" + finding.index + "]: "
+				+ finding.text + "\nChips: " + answer.getSafetyWarnings());
+	}
+
 	private static void assertCarriesEveryFinding(ChartAnswer answer, List<Finding> findings) {
 		for (Finding finding : findings) {
-			assertTrue(answer.getAnswer().contains(answerFacingBody(finding) + " [" + finding.index + "]"),
+			assertTrue(answer.getAnswer().contains(expectedLine(answer, finding)),
 					"the composed answer must carry finding [" + finding.index + "] in the record's own "
 							+ "words, cited by its own number. Finding: " + finding.text + "\nAnswer: "
 							+ answer.getAnswer());
@@ -288,6 +320,113 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(text.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ciprofloxacin"
 				+ DrugReferenceInjector.WITHHOLD_LEAD_CLOSING), "the withholding call leads: " + text);
 		assertTrue(text.indexOf(withhold) < text.indexOf(caution), "then the stronger finding first: " + text);
+		assertCarriesEveryFinding(answer, findings);
+	}
+
+	/**
+	 * The sentence under the "No" is the finding that licensed it. A recorded allergy to the proposed
+	 * drug states the same withholding clause as the Major interaction, and the drug-in-play arm
+	 * appends its contraindications first — but a contraindication never decides the module's "No"
+	 * (ADR Decision 108), so it must not be what reads as the reason for it. It is still stated, after.
+	 */
+	@Test
+	public void theLineUnderTheNoIsTheInteractionThatLicensedIt() {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Ibuprofen");
+		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
+		Finding interaction = null;
+		Finding allergy = null;
+		for (Finding finding : findings) {
+			if (!"Ibuprofen".equals(finding.drug)) {
+				continue;
+			}
+			if (finding.text.startsWith("Ibuprofen" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE)) {
+				interaction = interaction == null ? finding : interaction;
+			} else if (finding.text.startsWith("The patient has a recorded allergy to Ibuprofen.")) {
+				allergy = finding;
+			}
+		}
+		assertTrue(interaction != null && allergy != null && allergy.index < interaction.index
+				&& allergy.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"precondition: the identity allergy finding withholds too, and precedes the interaction in "
+						+ "the prompt: " + findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
+
+		assertEquals(0, provider.calls, "the Major interaction still licenses the module's answer");
+		String[] lines = answer.getAnswer().split("\n");
+		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		assertEquals(expectedLine(answer, interaction), lines[1],
+				"the sentence under the \"No\" is the interaction that licensed it: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(expectedLine(answer, allergy)),
+				"and the allergy is still stated: " + answer.getAnswer());
+		assertCarriesEveryFinding(answer, findings);
+	}
+
+	/**
+	 * The same for an interaction rule the data does not rate: it withholds, and
+	 * {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING} orders it ahead of Major, but only the
+	 * rated row licenses the module's "No".
+	 */
+	@Test
+	public void aMajorInteractionLeadsAnUnratedRuleUnderTheNo() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceService reference = DrugReferenceTestSupport
+				.curatedFixtureService("chartsearchai-test/drug-reference-answer-from-findings-unrated-beside-major.json");
+		List<Finding> findings = findingsInThePromptFor(PROPOSAL, reference);
+		Finding major = null;
+		Finding unrated = null;
+		for (Finding finding : findings) {
+			if (finding.text.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "Warfarin")) {
+				major = finding;
+			} else if (finding.text.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "Aspirin")) {
+				unrated = finding;
+			}
+		}
+		assertTrue(major != null && unrated != null && unrated.index < major.index
+				&& unrated.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"precondition: the unrated rule withholds too, and precedes the Major one in the prompt: "
+						+ findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, reference).search(patient, PROPOSAL);
+
+		assertEquals(0, provider.calls, "the Major row licenses the module's answer");
+		String[] lines = answer.getAnswer().split("\n");
+		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		assertEquals(expectedLine(answer, major), lines[1],
+				"the sentence under the \"No\" is the rated interaction that licensed it: " + answer.getAnswer());
+		assertCarriesEveryFinding(answer, findings);
+	}
+
+	/**
+	 * A contraindication about a medication she already takes says so in the composed answer. Its
+	 * record said so only in the strength clause, which stays out of the answer; what that clause
+	 * carries besides the call — its REFERENT, set by the arm (ADR Decision 72) — is a fact about her
+	 * chart, and the line keeps it, without naming a drug the clause never named either.
+	 */
+	@Test
+	public void aContraindicationAboutAMedicationSheAlreadyTakesSaysSo() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		List<Finding> findings = findingsInThePromptFor(SCREEN);
+		Finding allergy = null;
+		for (Finding finding : findings) {
+			if (finding.text.startsWith("The patient has a recorded allergy to ")) {
+				allergy = finding;
+			}
+		}
+		assertTrue(allergy != null && allergy.text.endsWith(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
+				"precondition: her aspirin allergy against her aspirin order is a current-medication finding: "
+						+ findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+
+		assertEquals(0, provider.calls);
+		assertTrue(answer.getAnswer().contains(answerFacingBody(allergy)
+				+ " This finding is about a medication this patient is already taking. [" + allergy.index + "]"),
+				"the allergy line says the drug is one she already takes: " + answer.getAnswer());
 		assertCarriesEveryFinding(answer, findings);
 	}
 

@@ -872,7 +872,7 @@ public class DrugSafetyValidator {
 		// places the drug-in-play arm's findings are built: the contraindication ledger below and
 		// addInteractionWarnings. A per-pass local, for issue #172's reason. See EndedOrders.
 		EndedOrders endedOrders = EndedOrders.of(inPlay, questionDrugs, question, resolvedRows, orderEntries,
-				mappings, drugReferenceService, context);
+				mappings, bridgedOrders, context);
 		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects, endedOrders);
 
 		// Which substances may still owe the interaction arm and the dose arm their one call — "may",
@@ -2326,17 +2326,18 @@ public class DrugSafetyValidator {
 		 * @param inPlay the pass's drugs in play — the question's, and the answer's the echo test kept
 		 * @param questionDrugs the question's own, which are left PROPOSALS where the question asks
 		 *        whether to give one — see this class's javadoc
-		 * @param question the question, read by {@code QueryScopeRouter.asksWhetherToGiveADrug}
+		 * @param question the question, read by {@code DrugReferenceInjector.questionProposes}
 		 * @param resolvedRows every row of each substance the pass resolved, keyed by
 		 *        {@code substanceGroupKey()}
 		 * @param orderEntries her active orders resolved by {@code findForActiveOrders}, the one list
 		 * @param mappings the chart's records, or {@code null} where the caller has none
-		 * @param service and {@code context}: what {@link #everyActiveOrderResolves} asks, and only where
-		 *        the chart holds an ended record at all, since that walk is the costlier half
+		 * @param bridgedOrders the pass's own bridged-concept holder, handed to
+		 *        {@link #everyActiveOrderResolves} rather than resolved a second time (issue #353)
+		 * @param context her clinical context
 		 */
 		static EndedOrders of(Set<DrugReference> inPlay, Set<DrugReference> questionDrugs, String question,
 				Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
-				List<RecordMapping> mappings, DrugReferenceService service, PatientClinicalContext context) {
+				List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context) {
 			if (context == null || mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
 				return NONE;
 			}
@@ -2355,8 +2356,7 @@ public class DrugSafetyValidator {
 					notEnded.add(mapping);
 				}
 			}
-			if (ended.isEmpty() || !context.activeDrugOrdersRead()
-					|| !everyActiveOrderResolves(service, context, orderEntries)) {
+			if (ended.isEmpty()) {
 				return NONE;
 			}
 			List<String> endedTexts = lowered(ended);
@@ -2368,8 +2368,7 @@ public class DrugSafetyValidator {
 			// A question PROPOSING the drug keeps it a proposal: there the call "withhold it" has its
 			// referent, which is exactly what the ended-order clause exists to supply where it has none.
 			// The admission grammar is issue #469's, over the same marking of the question's own names.
-			if (!questionDrugs.isEmpty() && QueryScopeRouter.asksWhetherToGiveADrug(
-					DrugReferenceInjector.wordsBesideItsNames(question, new ArrayList<DrugReference>(questionDrugs)))) {
+			if (DrugReferenceInjector.questionProposes(question, new ArrayList<DrugReference>(questionDrugs))) {
 				for (DrugReference proposed : questionDrugs) {
 					active.add(proposed.substanceGroupKey());
 				}
@@ -2385,7 +2384,12 @@ public class DrugSafetyValidator {
 					substances.add(substance);
 				}
 			}
-			return substances.isEmpty() ? NONE : new EndedOrders(substances);
+			// The costlier question last, and only where there is a candidate to ask it for.
+			if (substances.isEmpty() || !context.activeDrugOrdersRead()
+					|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
+				return NONE;
+			}
+			return new EndedOrders(substances);
 		}
 
 		private static List<String> lowered(List<RecordMapping> records) {
@@ -8155,7 +8159,13 @@ public class DrugSafetyValidator {
 	 */
 	static boolean everyActiveOrderResolves(DrugReferenceService service, PatientClinicalContext context,
 			List<DrugReference> orderEntries) {
-		BridgedOrders bridged = BridgedOrders.of(service, context);
+		return everyActiveOrderResolves(context, orderEntries, BridgedOrders.of(service, context));
+	}
+
+	/** As above, for a caller holding the pass's own bridged-concept resolution (issue #472's holder),
+	 *  so the pass does not resolve it twice. */
+	private static boolean everyActiveOrderResolves(PatientClinicalContext context,
+			List<DrugReference> orderEntries, BridgedOrders bridged) {
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			boolean resolved = false;
 			for (DrugReference entry : orderEntries) {

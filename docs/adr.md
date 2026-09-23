@@ -9751,8 +9751,8 @@ admits a proposal by, over the same marking of the question's names — so the t
 disagree: a question the module answers from its findings is one this change never re-refers. The
 first form of this change re-referred it and extended the composer's withholding lead to the new
 clause, and the hardening's integration review found the module path then leading with "No" where the
-prompt branch forbids the model to; the composer now answers `-1` for the new clauses, so an answer
-carrying one keeps the model call. A proposal phrased outside the grammar is read as none, and gets
+prompt branch forbids the model to; `strengthRank` now answers `-1` for the new clauses, so
+`composeFromFindings` composes nothing and an answer carrying one keeps the model call. A proposal phrased outside the grammar is read as none, and gets
 the conditional call.
 
 ### The measurement
@@ -9766,16 +9766,15 @@ alone. Cells: the ticket's two reproduction questions and a proposal of the same
 `2d384cef-da03-4a3b-beb1-632011eb8654` (R1 *"Her current medications are lamivudine, nevirapine and
 rifampicin. Any interactions?"*, R2 *"Why was her rifampicin stopped, and does it matter for her current
 medications?"*, R3 *"Can I give her rifampicin?"*) and its three clean controls;
-`docs/ddi-interaction-question-examples.md` §3a–§3d, the cells Decision 72 was licensed on; the ended-order
-cell Decision 47's gate ran (*"What are her current medications?"* on `dc8560c9-…`); and two §1 proposals.
+`docs/ddi-interaction-question-examples.md` §3a–§3d, the cells Decision 72 was licensed on; a medication-list
+question on §3d's patient (*"What are her current medications?"* on `dc8560c9-…`); and two §1 proposals.
 
 **Comparability.** In every arm, `interactionPairs` and the chip list (type, severity, drug) were
 identical to the baseline cell for cell. The global properties were snapshotted for the baseline and
 A and were identical; B and C were not snapshotted, and nothing in the run wrote one. Each arm's two runs
 were byte-identical on every cell except the baseline's §3d, whose two *"Yes"* leads name different
-interactions first. The candidate arms flagged `aboutAnEndedOrder` on
-Rifampicin in R1 and R2 and on no other cell. Candidate A's code predates the proposal gate, so it
-flagged R3 too.
+interactions first. B and C flagged `aboutAnEndedOrder` on Rifampicin in R1 and R2 and on no other cell; A, whose code
+predates the proposal gate, flagged R3 as well.
 
 **The leads** (run 1; run 2 identical):
 
@@ -9786,7 +9785,9 @@ flagged R3 too.
 - **R2.** Baseline: *"No — Rifampicin should not be given …"*. A, B and C: the reason is not recorded,
   *"Rifampicin's order is no longer in force, not as a current medication"*, then the Major finding; C
   also cites the stop date.
-- **R3.** Baseline, B and C: *"No — rifampicin should not be given …"*, the proposal call.
+- **R3.** Baseline, B and C: *"No — rifampicin should not be given …"*, the proposal call. A, which
+  re-referred it: *"Rifampicin's order is no longer in force, and the finding relates it to a Major
+  interaction …"* — the loss of a proposal's refusal that the proposal gate was added for.
 - **§3a / §3b**, the two current-medication cells. Baseline: §3a *"No — Methotrexate should be
   changed …"*, §3b *"Enalapril Co 10mg is related to Salicylic acid …"*. A: §3a a statement lead, §3b
   *"No — Enalapril should be changed …"*. B: both open with *"No — … should be changed"*. C: §3a *"Methotrexate
@@ -9796,17 +9797,16 @@ flagged R3 too.
   formatting. The screening control lost its second sentence (which states how many medications were
   compared) in B and C, and the medication list gained dose text in every candidate.
 
-**Result.** C ships. Every candidate removes the refusal from both reproduction cells except A's R1.
-C is the only arm leaving Decision 72's residue 1 on as many current-medication cells as the baseline.
-That residue is a bare *"No —"* on a screening question, and C has it on one cell of two, as the baseline
-does, though on §3b rather than §3a. B has it on both, and A adds a refusal on R1. So the ranking
-sentence does not name the new call. The
-plan's refutation gate asked for that naming, and it is declined on this measurement.
+**Result.** C ships: it is the only arm with no refusal on either reproduction cell AND no more
+current-medication screening cells opening with Decision 72's residue 1 — a bare *"No —"* — than the
+baseline, one of two, though on §3b rather than §3a. A matches that count but refuses on R1; B has the
+residue on both cells. So the ranking sentence does not name the new call: the plan's refutation gate
+asked for that naming, and it is declined on this measurement.
 
 **What this does not establish.** No null arm was run, meaning an unrelated sentence of the same length
 in the same place. So the §3a/§3b swap cannot be attributed to the branch's content rather than to any
-perturbation of the prompt. Those two cells moved in every candidate arm, in different directions, and
-neither is settled by this run.
+perturbation of the prompt. §3b's lead moved in every candidate arm and §3a's in A and C, and neither
+is settled by this run.
 
 ### Residues
 
@@ -9828,6 +9828,11 @@ neither is settled by this run.
   clause replaces one that already cleared that floor.
 - A patient with any active order the data cannot resolve gets no ended-order referent at all, even for
   a drug that order plainly is not — the price of the resolution gate.
+- The chips pass judges a substance over every row the pass resolved, and the ANSWER can add a row of a
+  question's substance the pre-answer pass did not have. Where an ended record names that substance only
+  by an alias the added row alone carries, the chip can state the referent while the record the model
+  read stated the proposal call, or the reverse. Judging it over the question's rows alone would close
+  it, as issue #238 did for naming; nothing in the suite discriminates that change, so it was not made.
 
 → `EndedOrderFindingReferentTest` (the real injector and validator over querystore's real rendered
 order text — mutate a guard of `DrugSafetyValidator`'s ended-order holder and read the failures),

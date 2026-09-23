@@ -291,7 +291,8 @@ public class LlmProvider {
 			// instruction in a paragraph of its own is #112's refuted shape. The other — putting
 			// these two branches AFTER the never-"Yes" token — has not been measured, and the
 			// argument against it is legibility only: the token's own scope becomes the thing a
-			// reader has to infer. Worth weighing rather than settled: one READING of ADR Decision
+			// reader has to infer (ADR Decision 110 later measured that placement for ITS branch, not
+			// for these two). Worth weighing rather than settled: one READING of ADR Decision
 			// 72's first residue — §3a still opening with a bare "No —" — is that this token plus the
 			// yes/no verdict paragraph above leave no other lead available on a screening question.
 			// That reading is not measured either, and no arm has tried the placement.
@@ -319,9 +320,10 @@ public class LlmProvider {
 			// the reasons the #348 comment above gives of its two; the same content rules bind it —
 			// open by naming the medication, forbid the refusal lead, instruct no permission. AFTER the
 			// never-"Yes" token and outside the ranking sentence, both chosen by ADR Decision 110's
-			// A/B rather than by argument: of the three placements run, this is the one that left as
-			// few current-medication screening cells opening with a bare "No —" as the baseline did.
-			// It did not leave them untouched — the decision records which cell moved.
+			// A/B rather than by argument: of the three arms run, the one with no refusal on either
+			// reproduction cell and no more current-medication screening cells opening with a bare
+			// "No —" than the baseline. It did not leave them untouched — the decision records which
+			// cell moved.
 			+ "A finding that says it is a reason against giving it should it be proposed again; this "
 			+ "patient's chart records its order as no longer in force, not as a current medication, or "
 			+ "that it is a caution to weigh should it be proposed again; this patient's chart records "

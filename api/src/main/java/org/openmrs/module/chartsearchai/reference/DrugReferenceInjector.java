@@ -2415,7 +2415,7 @@ public class DrugReferenceInjector {
 			asked.add(entry.substanceGroupKey());
 		}
 		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
-				|| !QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs))) {
+				|| !questionProposes(question, questionDrugs)) {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
@@ -2433,6 +2433,19 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * Whether {@code question} asks whether to GIVE the drug it names — {@code
+	 * QueryScopeRouter.asksWhetherToGiveADrug} over the question's words with its own names marked. One
+	 * spelling for its two callers, which must not disagree: {@link #answersFromFindings} admits a
+	 * proposal by it (issue #469), and {@code DrugSafetyValidator}'s ended-order holder keeps a proposed
+	 * drug a proposal by it (issue #472), so a question the module answers from its findings is one
+	 * whose drug is never re-referred.
+	 */
+	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
+		return !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherToGiveADrug(wordsBesideItsNames(question, questionDrugs));
+	}
+
+	/**
 	 * The question's words with every place it NAMES one of {@code entries} marked
 	 * {@code QueryScopeRouter.DRUG_NAME} — the spans
 	 * {@link DrugReference#namedOccurrences} reports, the one accessor for WHERE a prose match sits, so
@@ -2440,7 +2453,7 @@ public class DrugReferenceInjector {
 	 * ("Aleve Arthritis Pain" is one of diclofenac's names, and removing its words from any diclofenac
 	 * question once admitted "… for her arthritis pain").
 	 */
-	static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
+	private static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
 		String folded = DrugReference.foldedLower(question);
 		boolean[] named = new boolean[folded.length()];
 		for (DrugReference entry : entries) {
@@ -2488,8 +2501,10 @@ public class DrugReferenceInjector {
 	 * medications — a screen — opens with that finding: a lead saying which of two medications to
 	 * change would state a choice no finding makes, which issue #469 measured the model adding in three cells.
 	 *
-	 * @return the answer, or {@code null} where a finding states no strength clause — which no
-	 *         reachable type does today — so that such a question keeps the model call
+	 * @return the answer, or {@code null} where a finding states a clause {@link #strengthRank} does not
+	 *         rank — no strength clause at all, which no reachable type does today, or an ended-order
+	 *         clause (issue #472), which neither admitted shape should carry — so that such a question
+	 *         keeps the model call
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers) {

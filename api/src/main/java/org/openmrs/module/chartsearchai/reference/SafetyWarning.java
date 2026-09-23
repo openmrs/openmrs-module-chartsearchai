@@ -884,7 +884,8 @@ public class SafetyWarning {
 	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
 	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because
-	 * a proposal is what was put to the module.
+	 * a proposal is what was put to the module — unless the chart holds the drug only as an ended
+	 * order, which is {@link #isAboutAnEndedOrder()}'s referent and not this one (issue #472).
 	 *
 	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and nothing
 	 * reads the second answer.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in
@@ -934,7 +935,7 @@ public class SafetyWarning {
 	 * force — the third REFERENT beside a proposal and {@link #isAboutACurrentMedication()} (issue
 	 * #472). Set by {@code DrugSafetyValidator}'s drug-in-play arm, through
 	 * {@link #asAboutAnEndedOrder}, and never read off the detail. It never answers true beside
-	 * {@link #isAboutACurrentMedication()}: that method's guard refuses it, a defence the arms do not
+	 * {@link #isAboutACurrentMedication()}: {@link #asAboutAnEndedOrder}'s guard refuses it, a defence the arms do not
 	 * need today, since none states both of one chip.
 	 *
 	 * <p><b>{@code false} is not a certificate that the drug is current.</b> It is also the answer for

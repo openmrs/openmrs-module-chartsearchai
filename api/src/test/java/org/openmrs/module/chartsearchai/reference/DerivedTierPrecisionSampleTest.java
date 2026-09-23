@@ -1,0 +1,106 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS, LLC.  All Rights Reserved.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * The derived tier's precision figure (issue #480, ADR Decision 111) was measured over ONE knowledge
+ * base, and is only true of it. This fails the build on the three changes below, so a refresh that makes
+ * any of them re-opens the measurement instead of silently leaving a stale figure in the decision.
+ *
+ * <p>What each check reads:
+ * <ul>
+ * <li>the POPULATION — the chains the real loader keeps, counted through
+ * {@link DrugReferenceTestSupport#shippedEntries()};</li>
+ * <li>each adjudicated LINK still being one — its {@code (cause_note_id, condition)} pair still occurring in
+ * the raw {@code derived_interactions} table, which the loader reads the chain from but does not keep the
+ * note id of;</li>
+ * <li>the TEXT each verdict was given on — the SHA-256 of every adjudicated note, read from the raw
+ * {@code disease_notes} table, which the module does not load. A rewritten note leaves every count
+ * unchanged, which is why this is here.</li>
+ * </ul>
+ * A refresh that moves chains between links while keeping the total, or that changes which links are the
+ * heaviest, passes all three and would still change the figure; that is not checked.
+ *
+ * <p>It re-derives nothing: the verdicts are data, recorded in
+ * {@code api/src/test/resources/eval/derived-tier-precision-sample.json}, and nothing here judges a note.
+ */
+public class DerivedTierPrecisionSampleTest {
+
+	private static final String SAMPLE = "/eval/derived-tier-precision-sample.json";
+
+	private static final String KNOWLEDGE_BASE = "/chartsearchai/ddi-knowledge-base.json";
+
+	@Test
+	public void theShippedKnowledgeBaseIsTheOneThePrecisionFigureWasMeasuredOver() throws Exception {
+		JsonNode sample = read(SAMPLE);
+		JsonNode kb = read(KNOWLEDGE_BASE);
+
+		int keptChains = 0;
+		for (DrugReference rated : DrugReferenceTestSupport.shippedEntries()) {
+			keptChains += rated.getConditionMediatedRisks().size();
+		}
+		assertEquals(sample.path("population").path("keptChains").asInt(), keptChains,
+			"the loader keeps a different set of derived chains than the precision figure was measured over;"
+					+ " re-measure it (ADR Decision 111) before changing the recorded population");
+
+		Set<String> links = new HashSet<String>();
+		for (JsonNode row : kb.path("derived_interactions")) {
+			links.add(row.get(3).asText() + "\t" + row.get(5).asText());
+		}
+		JsonNode notes = kb.path("disease_notes");
+		int checked = 0;
+		for (String group : new String[] { "items", "controls" }) {
+			for (JsonNode item : sample.path(group)) {
+				String noteId = item.path("noteId").asText();
+				String condition = item.path("condition").asText();
+				assertTrue(links.contains(noteId + "\t" + condition),
+					"adjudicated link (note " + noteId + ", " + condition + ") is no longer a derived link");
+				JsonNode note = notes.path(noteId);
+				assertTrue(note.has("text"), "adjudicated note " + noteId + " is gone");
+				assertEquals(item.path("noteSha256").asText(), sha256(note.path("text").asText()),
+					"note " + noteId + " was rewritten after it was adjudicated for " + condition);
+				checked++;
+			}
+		}
+		assertEquals(sample.path("items").size() + sample.path("controls").size(), checked);
+		assertTrue(checked > 0, "precondition: the recorded sample carries adjudicated items");
+	}
+
+	private static JsonNode read(String resource) throws Exception {
+		try (InputStream in = DerivedTierPrecisionSampleTest.class.getResourceAsStream(resource)) {
+			assertNotNull(in, resource + " is not on the test classpath");
+			return new ObjectMapper().readTree(in);
+		}
+	}
+
+	private static String sha256(String text) throws Exception {
+		byte[] digest = MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8));
+		StringBuilder hex = new StringBuilder();
+		for (byte b : digest) {
+			hex.append(String.format("%02x", b));
+		}
+		return hex.toString();
+	}
+}

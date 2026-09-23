@@ -10164,7 +10164,7 @@ the combination case.
   arm), and the question-pair arm has no leg either.
 - **The source rows are not citable.** The chip states both halves in its own words; the drug-disease
   note texts are not injected as records.
-- **Not on by default, and no rate behind turning it on.** Review round 1 measured a second false link,
+- **Not on by default.** Review round 1 measured a second false link,
   on one of the commonest co-prescriptions there is: metformin's drug-disease note (575) names
   congestive heart failure only inside the sentence making it a CONTRAINDICATION ("… is contraindicated
   in patients with … congestive heart failure requiring pharmacologic treatment …; and any condition
@@ -10177,8 +10177,10 @@ the combination case.
   which that note does not say. Being a caution bounds what a false link costs; it does not remove it,
   and a clinician reading a false causal claim beside every ACE inhibitor and beta-blocker learns to
   ignore the tier. So a stock install states none, and `major` is for a site that has judged these
-  chains on its own formulary. What would move the default is a precision figure over the kept chains,
-  which this decision does not have; the two false links above are examples, not a rate.
+  chains on its own formulary. The precision figure over the kept chains is now measured (*Precision*,
+  below, #480): about a quarter of them rest on a note that does not state that the drug causes the
+  condition. The default stays `off`; moving it, or the strength, is a decision to take against that
+  figure, not one this measurement takes.
 - **The `Major` gate is fixed at load**, so `all` would need the loader to keep what it drops.
 - **Order among a drug's chips.** It is appended after the drug's pairwise chips, so it trails that drug's
   caution chips too rather than being ranked among them — the limit the class-only chips already carry
@@ -10205,7 +10207,79 @@ the combination case.
   Stavudine and Lamivudine, *Can I give metformin?*): the answer led "Metformin can be given, with one
   caution: it is rated Major in Acidosis, Lactic based on the DDInter drug-disease notes of …", called it
   "a caution to note, not a reason to withhold it", and used "Major" only for metformin's own
-  drug-disease rating. That is n=1 — no other question, patient or model was run.
+  drug-disease rating. A second cell, from the merging-head verifier on #475 (a pool-slot standalone, local
+  Gemma E4B, `derivedFindings=major`, a patient on Stavudine, Lamivudine and Lisinopril, the same question;
+  reported on #480), raised four chips, all cautions, and the answer's lead said metformin "is rated Major in
+  Heart Failure when combined with Lisinopril [10]": the known-false metformin → heart-failure link, and the
+  drug-disease rating stated as a rating of the pair despite the closing sentence. Two cells, not a rate.
 - **#391 Part A** — drug-disease rows as condition rules — is not done.
 
-→ `ConditionMediatedFindingTest`.
+
+### Precision (measured for #480)
+
+**Measured 2026-09-23 at `27e9cf40`, over the shipped knowledge base.** The population is every chain the
+loader keeps: 43,670, counted through `DrugReferenceTestSupport.shippedEntries()`. Each chain was joined
+back to its one raw `derived_interactions` row to recover `cause_note_id`, which the loader does not keep.
+The join matched every chain to exactly one row. `disease_interactions` is not the join key, because 158
+of its (drug, condition) keys name more than one note.
+
+- **The unit is the LINK**, (`cause_note_id`, condition): the matcher's decision that one drug-disease note
+  names one condition causally. A chain inherits its link's verdict. There are 1,088 links. They are
+  long-tailed: the 100 with the most kept chains carry 26,567 of the 43,670. A class note shared by several
+  cause drugs is one link.
+- **Design.** The 100 heaviest links were censused. From the other 988 links (17,103 chains), 100 were
+  sampled with `random.Random(480)`.
+- **Rubric.** For each link the question is what the note says about its drug(s) and the condition.
+  - **CAUSES:** the drug can cause, induce, precipitate or lead to the condition, or the condition is
+    reported as an adverse event with it.
+  - **WORSENS:** the note says only that the drug aggravates a condition the patient already has.
+  - **NOT_CAUSAL:** anything else. That covers a contraindication or caution population, a risk factor,
+    a sign of some other effect, an indication, a monitoring item, a negated or "not established"
+    statement, or a condition the note does not name at all.
+- **Adjudication.** Two fresh agents on the same model as the author (Claude) each judged every item. They
+  were blind to the hypothesis and to six unmarked controls:
+  - metformin note 575 × Heart Failure and × Hypotension, expected NOT_CAUSAL;
+  - rivaroxaban note 1713 × Pulmonary Embolism, an indication, expected NOT_CAUSAL;
+  - the NRTI note 2 × Acidosis, Lactic, expected CAUSES;
+  - pembrolizumab note 1255 × Diabetes Mellitus, Type 1, expected CAUSES;
+  - fenoldopam note 3585 × Hemorrhage, expected WORSENS.
+
+  Both agents returned every control as expected. They agreed on 204 of 206 items, and a third blind agent
+  decided the other two. **This is a model's reading against a stated rubric, not a clinician's review.**
+  Agents running on one model make correlated errors, so the agreement overstates reliability.
+- Every verdict, the note quote it rests on, the note's SHA-256 and the population counts are recorded in
+  `api/src/test/resources/eval/derived-tier-precision-sample.json`. `DerivedTierPrecisionSampleTest`
+  fails the build when the shipped knowledge base stops being the one measured: a different kept-chain
+  count, an adjudicated link that no longer exists, or a rewritten adjudicated note. Two mutations of the
+  shipped file were each seen to redden it: one word of note 319, and one Major rated side set to Moderate.
+
+**Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
+stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the
+sampled links only.
+
+| share of | strict | 95% | lenient | 95% |
+|---|---|---|---|---|
+| links (1,088) | 0.826 | 0.754–0.890 | 0.831 | 0.758–0.894 |
+| kept chains (43,670 rated entries) | 0.742 | 0.687–0.793 | 0.759 | 0.703–0.809 |
+| kept chains, one per rated substance (`substanceGroupKey`) | 0.737 | 0.628–0.831 | 0.751 | 0.643–0.845 |
+| census stratum alone (100 links, 26,567 chains) | 0.744 of chains | exact | 0.771 of chains | exact |
+
+- **Weighted by chain, about one chain in four rests on a note that does not state that the drug causes
+  the condition.** The
+  chain-weighted share sits below the per-link one in both strata — the census is 0.79 of its links and
+  0.744 of its chains, the sample 0.83 of its links and 0.74 of their chains — so a link that is not CAUSES
+  tends to carry more chains than one that is. The census holds 21 such links (16 NOT_CAUSAL, 5 WORSENS).
+  The heaviest link of all is one: the antipsychotic class note (319) × Heart Failure, 1,404 chains. It
+  names heart failure as a cause of death in elderly patients with dementia, followed by "A causal relationship with
+  antipsychotic use has not been established". Next come a fluoroquinolone note × Infections (744), an
+  anti-epileptic note × Epilepsy (702), an ACE-inhibitor note × Heart Failure (561; it names heart
+  failure as a population being treated), and a salicylate note × Infections (465). The shapes among the
+  census's 21 include an indication or treated population, a risk factor, a negated statement, and a term reached
+  through a narrower one ("benign intracranial hypertension" read as Hypertension).
+- **Sensitivity.** The 1,404-chain link was one of the two items the first two agents split on. Read as
+  CAUSES, the strict chain figure rises to about 0.774. No other single verdict moves it by as much.
+- **What it is not.** It is a share of chains the loader keeps, not of chips a patient sees. A chip needs
+  both ends on the patient's orders, so exposure depends on prescribing, and nothing here weights by it.
+  It measures the matcher's causal reading, not whether the rated drug's own Major rating is right.
+
+→ `ConditionMediatedFindingTest`, `DerivedTierPrecisionSampleTest`.

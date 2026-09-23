@@ -339,8 +339,9 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	public void aStockInstallRaisesNoConditionMediatedFindingOnTheLinkTheReviewMeasuredFalse() {
 		// Metformin's drug-disease note names congestive heart failure only as a CONTRAINDICATION, and the
 		// knowledge base's matcher reads that sentence as causal, so the derived tier links metformin to
-		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 111). With the
-		// precision of the kept chains unmeasured, a stock install states none of them, and the
+		// every drug rated Major in Heart Failure — lisinopril among them (ADR Decision 111). With about a
+		// quarter of the kept chains resting on a note that does not state that the drug causes the condition
+		// (measured for #480), a stock install states none of them, and the
 		// interaction arm the same property does NOT gate still speaks.
 		derivedFindings(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_DERIVED_FINDINGS);
 

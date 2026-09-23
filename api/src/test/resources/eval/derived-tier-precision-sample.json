@@ -1,0 +1,3521 @@
+{
+ "issue": "https://github.com/openmrs/openmrs-module-chartsearchai/issues/480",
+ "decision": "docs/adr.md, Decision 111",
+ "measuredAt": "27e9cf40",
+ "population": {
+  "keptChains": 43670,
+  "links": 1088,
+  "unit": "a LINK is (cause_note_id, condition): the cause-side drug-disease note the knowledge base matcher read as naming the condition causally; a kept CHAIN is one DrugReference.ConditionMediatedRisk the loader retains, and inherits its link verdict",
+  "enumeratedBy": "DrugReferenceTestSupport.shippedEntries() (the real DdiDrugReferenceSource load), each chain joined back to its one raw derived_interactions row for cause_note_id",
+  "census": {
+   "links": 100,
+   "keptChains": 26567,
+   "rule": "the 100 links with most kept chains, ties by numeric note id then condition"
+  },
+  "sample": {
+   "links": 100,
+   "ofLinks": 988,
+   "ofKeptChains": 17103,
+   "rule": "Python random.Random(480).sample(rest, 100), rest being the other links in that same order"
+  }
+ },
+ "adjudication": "two fresh same-model (Claude) agents, blind to the hypothesis and to which items were controls, each judging all items plus six unmarked controls against the rubric below, verbatim as they were given it; the two disagreements went to a third blind agent. Not a clinician review. Each item's quote is the first adjudicator's where the two agreed, and the third's where it decided.",
+ "rubric": "# Adjudication rubric\n\nEach item is a drug-disease monograph NOTE (written about one drug, or about a drug class) and a\nCONDITION. Decide, from the note text alone, what the note says about the drug(s) it is written about\nand that CONDITION. Read the whole note. Treat synonyms and narrower/broader clinical terms of the\ncondition as naming it only where a clinician would (e.g. \"congestive heart failure\" names Heart\nFailure; \"hepatotoxicity\" does not by itself name Hepatitis unless the note says hepatitis).\n\nGive exactly one verdict:\n\n- **CAUSES** — the note states or reports that the drug(s) can cause, induce, precipitate or lead to\n  the CONDITION, or reports the CONDITION as an adverse effect/event occurring with the drug(s)\n  (including \"has been reported\", \"has been associated with\", \"may result in\"). A new occurrence,\n  onset or recurrence of the condition counts.\n- **WORSENS** — the note states only that the drug(s) may exacerbate, aggravate or worsen the\n  CONDITION in a patient who already has it, and does not state that the drug(s) can bring it on.\n- **NOT_CAUSAL** — anything else: the CONDITION is named only as a population in which the drug is\n  contraindicated or should be used with caution, as a risk factor, as a sign or symptom or consequence\n  of some OTHER effect or disease (not of the drug), as an indication for the drug, as something to\n  monitor for without saying the drug causes it, in a negated or \"not established\" statement, or it is\n  not named at all.\n\nIf a note says the drug causes effect X, and X in turn can lead to the CONDITION, that is CAUSES only\nwhere the note itself states that the CONDITION follows from the drug's effect; a list of the signs of\nX that happens to include the CONDITION is NOT_CAUSAL.\n\nOutput: a JSON array, one object per item, in item order:\n`{\"item\": \"I001\", \"verdict\": \"CAUSES|WORSENS|NOT_CAUSAL\", \"quote\": \"<the shortest note excerpt your verdict rests on, verbatim, or empty if not named>\"}`\n",
+ "items": [
+  {
+   "stratum": "census",
+   "keptChains": 1404,
+   "noteId": "319",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Aripiprazole",
+    "Asenapine",
+    "Brexpiprazole",
+    "Cariprazine",
+    "Chlorpromazine",
+    "Clozapine",
+    "Fluphenazine",
+    "Haloperidol",
+    "Iloperidone",
+    "Lithium carbonate",
+    "Loxapine",
+    "Lumateperone",
+    "Lurasidone",
+    "Mesoridazine",
+    "Molindone",
+    "Olanzapine",
+    "Paliperidone",
+    "Perphenazine",
+    "Pimavanserin",
+    "Pimozide",
+    "Prochlorperazine",
+    "Quetiapine",
+    "Risperidone",
+    "Thioridazine",
+    "Thiothixene",
+    "Trifluoperazine",
+    "Ziprasidone"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "third",
+   "quote": "A causal relationship with antipsychotic use has not been established.",
+   "noteSha256": "1962077c89c04226446d1b582fe4fc195d6a6bd096b45d229ea1eb376c5fcb7b"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 924,
+   "noteId": "256",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Adenosine",
+    "Amiodarone",
+    "Bretylium",
+    "Disopyramide",
+    "Flecainide",
+    "Ibutilide",
+    "Lidocaine",
+    "Mexiletine",
+    "Moricizine",
+    "Procainamide",
+    "Quinidine",
+    "Tocainide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Antiarrhythmic agents can induce severe hypotension",
+   "noteSha256": "bcdee628ddcc6da0133b32e84b4a238b9848b76dad62890ce9ef1290cd099dc6"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 836,
+   "noteId": "309",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Benazepril",
+    "Captopril",
+    "Enalapril",
+    "Enalaprilat",
+    "Fosinopril",
+    "Lisinopril",
+    "Moexipril",
+    "Perindopril",
+    "Quinapril",
+    "Ramipril",
+    "Trandolapril"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "symptomatic and sometimes excessive hypotension can occur",
+   "noteSha256": "981ff25c1188541eb94b5bfaa4c38f8366e3a8edd79759d03b9906fdaf9989a7"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 769,
+   "noteId": "462",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Amitriptyline",
+    "Amoxapine",
+    "Clomipramine",
+    "Desipramine",
+    "Doxepin",
+    "Imipramine",
+    "Maprotiline",
+    "Nortriptyline",
+    "Protriptyline",
+    "Trimipramine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may cause orthostatic hypotension",
+   "noteSha256": "d6c4ed01fb0ddce0fc8d9f7eb1c2acb3403f6262f1d83e3772dafb9fa9d82876"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 744,
+   "noteId": "197",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Ciprofloxacin",
+    "Delafloxacin",
+    "Gemifloxacin",
+    "Levofloxacin",
+    "Moxifloxacin",
+    "Nalidixic acid",
+    "Norfloxacin",
+    "Ofloxacin"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "the latter may also occur due to infection alone",
+   "noteSha256": "910580768683a5afdf6f9a7aba036bd0e634e53498f281a595bd261d0d1465a9"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 702,
+   "noteId": "87",
+   "condition": "Epilepsy",
+   "causeDrugs": [
+    "Brivaracetam",
+    "Cannabidiol",
+    "Carbamazepine",
+    "Cenobamate",
+    "Clonazepam",
+    "Ethosuximide",
+    "Ethotoin",
+    "Ezogabine",
+    "Felbamate",
+    "Fenfluramine",
+    "Gabapentin",
+    "Gabapentin enacarbil",
+    "Lamotrigine",
+    "Methsuximide",
+    "Oxcarbazepine",
+    "Perampanel",
+    "Phenobarbital",
+    "Phenytoin",
+    "Pregabalin",
+    "Primidone",
+    "Stiripentol",
+    "Tiagabine",
+    "Topiramate",
+    "Trimethadione",
+    "Valproic acid",
+    "Vigabatrin",
+    "Zonisamide"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "epilepsy and many other conditions for which AEDs are prescribed",
+   "noteSha256": "8df6a162f17851b030a4c8255112e4653331e687f5b0e8075347c19132e319ad"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 693,
+   "noteId": "556",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Chlorpromazine",
+    "Fluphenazine",
+    "Mesoridazine",
+    "Perphenazine",
+    "Prochlorperazine",
+    "Promethazine",
+    "Thiethylperazine",
+    "Thioridazine",
+    "Trifluoperazine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Phenothiazines may cause hypotension",
+   "noteSha256": "f0ce919bf1ac1abd624fac184da81275bd8b70cdd25734cd6345f3658609b337"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 624,
+   "noteId": "256",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Adenosine",
+    "Amiodarone",
+    "Bretylium",
+    "Disopyramide",
+    "Flecainide",
+    "Ibutilide",
+    "Lidocaine",
+    "Mexiletine",
+    "Moricizine",
+    "Procainamide",
+    "Quinidine",
+    "Tocainide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "induce or worsen congestive heart failure (CHF)",
+   "noteSha256": "bcdee628ddcc6da0133b32e84b4a238b9848b76dad62890ce9ef1290cd099dc6"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 616,
+   "noteId": "490",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Brompheniramine",
+    "Clemastine",
+    "Cyproheptadine",
+    "Dexbrompheniramine",
+    "Doxylamine",
+    "Hydroxyzine",
+    "Meclizine",
+    "Triprolidine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "arrhythmias, hypotension, and hypertension have been reported",
+   "noteSha256": "5028a0578243ab37fce26f0ced9a196c261ad2ceb40b2cabd748a425221e7ee0"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 561,
+   "noteId": "311",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Benazepril",
+    "Captopril",
+    "Enalapril",
+    "Enalaprilat",
+    "Fosinopril",
+    "Lisinopril",
+    "Moexipril",
+    "Perindopril",
+    "Quinapril",
+    "Ramipril",
+    "Trandolapril"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "treated for congestive heart failure (CHF)",
+   "noteSha256": "fe6e399ec6e21c149b96cb2189aff804cd2db46f2261d903bfd31b9173f05e04"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 560,
+   "noteId": "1502",
+   "condition": "Glaucoma",
+   "causeDrugs": [
+    "Alclometasone (topical)",
+    "Amcinonide",
+    "Betamethasone (topical)",
+    "Clocortolone (topical)",
+    "Desonide (topical)",
+    "Desoximetasone (topical)",
+    "Diflorasone (topical)",
+    "Fluocinolone acetonide (ophthalmic)",
+    "Fluocinonide (topical)",
+    "Flurandrenolide (topical)",
+    "Fluticasone (topical)",
+    "Halcinonide (topical)",
+    "Hydrocortisone (topical)",
+    "Mometasone (nasal)",
+    "Prednicarbate (topical)",
+    "Ulobetasol (topical)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "elevated intraocular pressure, the latter of which may lead to glaucoma",
+   "noteSha256": "c761397660e6c279ecdcce9782f2c06873ebdef3e0d6614a21a70854430650a3"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 498,
+   "noteId": "18",
+   "condition": "Diarrhea",
+   "causeDrugs": [
+    "Amoxicillin",
+    "Ampicillin",
+    "Azithromycin",
+    "Aztreonam",
+    "Bacitracin",
+    "Benzylpenicillin",
+    "Benzylpenicillin (potassium)",
+    "Benzylpenicillin (sodium)",
+    "Cefaclor",
+    "Cefadroxil",
+    "Cefazolin",
+    "Cefditoren",
+    "Cefepime",
+    "Cefiderocol",
+    "Cefixime",
+    "Cefoperazone",
+    "Cefotaxime",
+    "Cefotetan",
+    "Cefoxitin",
+    "Cefpodoxime",
+    "Cefprozil",
+    "Cefradine",
+    "Ceftaroline fosamil",
+    "Ceftazidime",
+    "Ceftibuten",
+    "Ceftizoxime",
+    "Ceftriaxone",
+    "Cefuroxime",
+    "Cephalexin",
+    "Chloramphenicol",
+    "Ciprofloxacin",
+    "Clarithromycin",
+    "Clindamycin",
+    "Colistimethate",
+    "Cycloserine",
+    "Dalbavancin",
+    "Delafloxacin",
+    "Demeclocycline",
+    "Dicloxacillin",
+    "Doripenem",
+    "Doxycycline",
+    "Ertapenem",
+    "Fosfomycin",
+    "Furazolidone",
+    "Gatifloxacin",
+    "Gemifloxacin",
+    "Kanamycin",
+    "Levofloxacin",
+    "Lincomycin",
+    "Linezolid",
+    "Loracarbef",
+    "Meropenem",
+    "Metronidazole",
+    "Minocycline",
+    "Minocycline (topical)",
+    "Moxifloxacin",
+    "Nafcillin",
+    "Nalidixic acid",
+    "Neomycin",
+    "Nitrofurantoin",
+    "Norfloxacin",
+    "Ofloxacin",
+    "Omadacycline",
+    "Oritavancin",
+    "Oxacillin",
+    "Oxytetracycline",
+    "Paromomycin",
+    "Phenoxymethylpenicillin",
+    "Polymyxin B",
+    "Rifabutin",
+    "Rifampicin",
+    "Rifamycin",
+    "Rifapentine",
+    "Rifaximin",
+    "Sarecycline",
+    "Sulfadiazine",
+    "Sulfasalazine",
+    "Tedizolid",
+    "Telavancin",
+    "Telithromycin",
+    "Tetracycline",
+    "Tigecycline",
+    "Vancomycin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Clostridioides difficile-associated diarrhea (CDAD), formerly pseudomembranous colitis, has been reported with almost all antibacterial drugs",
+   "noteSha256": "fb0d72cd5149aa1a6fef896405a30b20b38b15add6658fdedd229db76140560a"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 465,
+   "noteId": "1782",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Acetylsalicylic acid",
+    "Bismuth subsalicylate",
+    "Diflunisal",
+    "Magnesium salicylate",
+    "Salsalate"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "in children with varicella infections or influenza-like illnesses",
+   "noteSha256": "83efb1d15c024b4dce2089a085c1f6639a303984171ae892275b014907b1e096"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 434,
+   "noteId": "297",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Amphetamine",
+    "Atomoxetine",
+    "Benzphetamine",
+    "Caffeine",
+    "Dexmethylphenidate",
+    "Dextroamphetamine",
+    "Diethylpropion",
+    "Lisdexamfetamine",
+    "Metamfetamine",
+    "Methylphenidate",
+    "Modafinil",
+    "Pemoline",
+    "Phendimetrazine",
+    "Phentermine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "therapy with CNS stimulant drugs may cause seizures",
+   "noteSha256": "b3e0850fe68c4027328e6b96e68a41461bf2de1e6993c79b04febd3377f7c0d9"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 418,
+   "noteId": "195",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Cinoxacin",
+    "Ciprofloxacin",
+    "Delafloxacin",
+    "Gatifloxacin",
+    "Gemifloxacin",
+    "Levofloxacin",
+    "Moxifloxacin",
+    "Nalidixic acid",
+    "Norfloxacin",
+    "Ofloxacin",
+    "Trovafloxacin"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "Benign intracranial hypertension has also been reported",
+   "noteSha256": "055c2146a1645c4e18d8130fa3e0a851f0531ee1d5d6c32049f03d56251efbdf"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 416,
+   "noteId": "296",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Amphetamine",
+    "Benzphetamine",
+    "Dextroamphetamine",
+    "Diethylpropion",
+    "Lisdexamfetamine",
+    "Metamfetamine",
+    "Phendimetrazine",
+    "Phentermine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "congestive heart failure has been reported during chronic amphetamine use",
+   "noteSha256": "f11a67ccdbd12a10cfd95d57f1ef5814c34b7e9dd2ec0b58f146bae50e84c569"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 416,
+   "noteId": "1219",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Interferon alfa-2a, Recombinant",
+    "Interferon alfa-2b",
+    "Interferon alfa-n3",
+    "Interferon alfacon-1",
+    "Interferon beta-1a",
+    "Interferon gamma-1b",
+    "Peginterferon alfa-2a",
+    "Peginterferon alfa-2b"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "congestive heart failure have been reported during interferon therapy",
+   "noteSha256": "8fdc43a03b0b7e12b293dcc31e13792d1aff835f03d76f9db2c4d30951e083ac"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 374,
+   "noteId": "310",
+   "condition": "Diabetes Mellitus",
+   "causeDrugs": [
+    "Benazepril",
+    "Captopril",
+    "Enalapril",
+    "Enalaprilat",
+    "Fosinopril",
+    "Lisinopril",
+    "Moexipril",
+    "Perindopril",
+    "Quinapril",
+    "Ramipril",
+    "Trandolapril"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "Risk factors for the development of hyperkalemia during ACE inhibitor therapy include renal insufficiency, diabetes mellitus",
+   "noteSha256": "1bc27158df81687ea755d3a536c0cbd54451f75934ac107904de3db4931081e8"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 372,
+   "noteId": "1696",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Alendronic acid",
+    "Ibandronate",
+    "Risedronic acid",
+    "Zoledronic acid"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "is generally associated with tooth extraction and/or local infection with delayed healing",
+   "noteSha256": "8c3f8d95e8cbafc94361e412f44016a0d47d70046e910beb70fddd149cf551db"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 371,
+   "noteId": "396",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Fluorometholone (ophthalmic)",
+    "Loteprednol (ophthalmic)",
+    "Prednisolone (ophthalmic)",
+    "Rimexolone (ophthalmic)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "encouraging the development of new or secondary infection",
+   "noteSha256": "af789c6184696989fd7df577c92ec390379ec1b5226ed5c2618bcdc0693fc5df"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 350,
+   "noteId": "673",
+   "condition": "Glaucoma",
+   "causeDrugs": [
+    "Betamethasone",
+    "Cortisone",
+    "Deflazacort",
+    "Dexamethasone",
+    "Fludrocortisone",
+    "Hydrocortisone",
+    "Methylprednisolone",
+    "Prednisolone",
+    "Prednisone",
+    "Triamcinolone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "elevated intraocular pressure, the latter of which may lead to glaucoma",
+   "noteSha256": "121de679236ffdd7767ac0c80f8cc33ddcf7f409720c200920052a1aebc7208b"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 350,
+   "noteId": "1894",
+   "condition": "Glaucoma",
+   "causeDrugs": [
+    "Beclomethasone dipropionate",
+    "Beclomethasone dipropionate (nasal)",
+    "Budesonide (nasal)",
+    "Ciclesonide",
+    "Ciclesonide (nasal)",
+    "Flunisolide",
+    "Flunisolide (nasal)",
+    "Fluticasone",
+    "Fluticasone (nasal)",
+    "Triamcinolone (nasal)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "elevated intraocular pressure, the latter of which may lead to glaucoma",
+   "noteSha256": "0f28bf26024898ddfaec08b2cd0ba980674770543ecc7df093e228fd7bf7f3fa"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 341,
+   "noteId": "195",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Cinoxacin",
+    "Ciprofloxacin",
+    "Delafloxacin",
+    "Gatifloxacin",
+    "Gemifloxacin",
+    "Levofloxacin",
+    "Moxifloxacin",
+    "Nalidixic acid",
+    "Norfloxacin",
+    "Ofloxacin",
+    "Trovafloxacin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "toxic psychosis, and/or seizures",
+   "noteSha256": "055c2146a1645c4e18d8130fa3e0a851f0531ee1d5d6c32049f03d56251efbdf"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 341,
+   "noteId": "245",
+   "condition": "Arrhythmias, Cardiac",
+   "causeDrugs": [
+    "Arformoterol",
+    "Formoterol",
+    "Indacaterol",
+    "Levosalbutamol",
+    "Olodaterol",
+    "Orciprenaline",
+    "Pirbuterol",
+    "Racepinephrine",
+    "Salbutamol",
+    "Salmeterol",
+    "Terbutaline"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "associated with precipitation or aggravation of angina, myocardial ischemia, and cardiac arrhythmias",
+   "noteSha256": "a12b4fc02d603ef84e197d572329e3460f1e4c53a34aa8d70366095f1af43790"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 341,
+   "noteId": "1633",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Ampicillin",
+    "Aztreonam",
+    "Benzylpenicillin (potassium)",
+    "Cefazolin",
+    "Cefepime",
+    "Cefiderocol",
+    "Cefotaxime",
+    "Cefotetan",
+    "Cefoxitin",
+    "Ceftazidime",
+    "Ceftizoxime"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Neurotoxic reactions (e.g., encephalopathy, asterixis, myoclonus, seizures, coma) have been reported",
+   "noteSha256": "d3fb84ac891fe7823c9ecab6da39de10355b969eeca27e8381a26fe74043d250"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 319,
+   "noteId": "195",
+   "condition": "Intracranial Hypertension",
+   "causeDrugs": [
+    "Cinoxacin",
+    "Ciprofloxacin",
+    "Delafloxacin",
+    "Gatifloxacin",
+    "Gemifloxacin",
+    "Levofloxacin",
+    "Moxifloxacin",
+    "Nalidixic acid",
+    "Norfloxacin",
+    "Ofloxacin",
+    "Trovafloxacin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Benign intracranial hypertension has also been reported",
+   "noteSha256": "055c2146a1645c4e18d8130fa3e0a851f0531ee1d5d6c32049f03d56251efbdf"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 308,
+   "noteId": "406",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Haloperidol",
+    "Loxapine",
+    "Molindone",
+    "Thiothixene"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Neuroleptic agents may cause hypotension",
+   "noteSha256": "52ce77ad49470891305c0cab91a2b5805bdeff40fbedc220d3d93650b462893c"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 308,
+   "noteId": "806",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Atracurium",
+    "Mivacurium",
+    "Rocuronium",
+    "Succinylcholine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "which can cause wheezing, bronchospasm, increased bronchial secretions, hypotension",
+   "noteSha256": "7e2e07036a42363fedd87630e89f1780a754171211b241fdc28844e63e826de9"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 308,
+   "noteId": "2280",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Bumetanide",
+    "Etacrynic acid",
+    "Furosemide",
+    "Torasemide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "which can result in acute hypotension",
+   "noteSha256": "f71025870da1b538708e4dad2a7d0158e83c4366c4be6eb883efde1641a2ed3a"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 304,
+   "noteId": "490",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Brompheniramine",
+    "Clemastine",
+    "Cyproheptadine",
+    "Dexbrompheniramine",
+    "Doxylamine",
+    "Hydroxyzine",
+    "Meclizine",
+    "Triprolidine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "hypotension, and hypertension have been reported",
+   "noteSha256": "5028a0578243ab37fce26f0ced9a196c261ad2ceb40b2cabd748a425221e7ee0"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 304,
+   "noteId": "982",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Amyl Nitrite",
+    "Isosorbide dinitrate",
+    "Isosorbide mononitrate",
+    "Nitroglycerin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "can cause life-threatening hypotension",
+   "noteSha256": "5c9815ffd01459f1ea0bbdaad614e36ce2dbf325708ad540c36461068de3c736"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 304,
+   "noteId": "1219",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Interferon alfa-2a, Recombinant",
+    "Interferon alfa-2b",
+    "Interferon alfa-n3",
+    "Interferon alfacon-1",
+    "Interferon beta-1a",
+    "Interferon gamma-1b",
+    "Peginterferon alfa-2a",
+    "Peginterferon alfa-2b"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Hypertension, arrhythmias, angina, myocardial infarction, cardiomyopathy, and congestive heart failure have been reported during interferon therapy",
+   "noteSha256": "8fdc43a03b0b7e12b293dcc31e13792d1aff835f03d76f9db2c4d30951e083ac"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 300,
+   "noteId": "672",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Betamethasone",
+    "Cortisone",
+    "Deflazacort",
+    "Dexamethasone",
+    "Fludrocortisone",
+    "Hydrocortisone",
+    "Methylprednisolone",
+    "Prednisolone",
+    "Prednisone",
+    "Triamcinolone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "associated with the development of intravascular thrombosis",
+   "noteSha256": "0a9d7da10ae496e4dd73804f0acd3e68c492408f8db25a87b5c495bb23efdde8"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 280,
+   "noteId": "666",
+   "condition": "Hemorrhage",
+   "causeDrugs": [
+    "Betamethasone",
+    "Cortisone",
+    "Deflazacort",
+    "Dexamethasone",
+    "Fludrocortisone",
+    "Hydrocortisone",
+    "Methylprednisolone",
+    "Prednisolone",
+    "Prednisone",
+    "Triamcinolone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Corticosteroids may cause peptic ulcer disease and gastrointestinal (GI) hemorrhage",
+   "noteSha256": "54f720d99a5859019b1c3e59ef278c9093b1de8e5eb9ea772d480ec3f2bba0f9"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 279,
+   "noteId": "559",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Chlorpromazine",
+    "Fluphenazine",
+    "Mesoridazine",
+    "Perphenazine",
+    "Prochlorperazine",
+    "Promethazine",
+    "Thiethylperazine",
+    "Thioridazine",
+    "Trifluoperazine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Phenothiazines can lower the seizure threshold and induce seizures",
+   "noteSha256": "4289eeb49fe2d123466ccea0583a926e1e0c952e935d0fc2ea71aa5faabec7d4"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 279,
+   "noteId": "2972",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Chloramphenicol",
+    "Chloramphenicol (ophthalmic)",
+    "Chloramphenicol (otic)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "results in aplastic anemia with a high rate of mortality, generally from hemorrhage or infection",
+   "noteSha256": "56f46371502dbcbf23701636b817910032b6fcef7b3111887009db26cdbbcaa0"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 272,
+   "noteId": "343",
+   "condition": "Liver Diseases",
+   "causeDrugs": [
+    "Lomitapide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Hepatic steatosis associated with the use of lomitapide",
+   "noteSha256": "b20831e87f0b2d71c3b79ac1bd07fd4f6287c2ed79dffd43f8666e1b263977b2"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 272,
+   "noteId": "899",
+   "condition": "Diabetes Mellitus",
+   "causeDrugs": [
+    "Atazanavir",
+    "Darunavir",
+    "Fosamprenavir",
+    "Indinavir",
+    "Nelfinavir",
+    "Ritonavir",
+    "Saquinavir",
+    "Tipranavir"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "New onset diabetes mellitus",
+   "noteSha256": "99f7be0895814a4a9947b03339db3a9373781c83042f10b03c7a4d7141e796bd"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 270,
+   "noteId": "42",
+   "condition": "Myocardial Infarction",
+   "causeDrugs": [
+    "Celecoxib",
+    "Diclofenac",
+    "Etodolac",
+    "Fenoprofen",
+    "Flurbiprofen",
+    "Ibuprofen",
+    "Indomethacin",
+    "Ketoprofen",
+    "Ketorolac",
+    "Meclofenamic acid",
+    "Mefenamic acid",
+    "Meloxicam",
+    "Nabumetone",
+    "Naproxen",
+    "Oxaprozin",
+    "Piroxicam",
+    "Sulindac",
+    "Tolmetin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "cause an increased risk of serious cardiovascular thrombotic events, including myocardial infarction",
+   "noteSha256": "f3535d76b640a339487beb5b4da56ed40a53884e1bd3d813b24d18f8391e157a"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 260,
+   "noteId": "75",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Lactic acid",
+    "Polyethylene glycol (3350 with electrolytes)",
+    "Sodium acetate",
+    "Sodium bicarbonate",
+    "Sodium citrate"
+   ],
+   "verdict": "WORSENS",
+   "decidedBy": "agreed",
+   "quote": "aggravation of congestive heart failure",
+   "noteSha256": "eab64b408492380a6b26ea83217a278a165087f6e4f76f78ff74482bbd8f06b8"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 250,
+   "noteId": "621",
+   "condition": "Asthma",
+   "causeDrugs": [
+    "Atropine",
+    "Belladonna",
+    "Hyoscyamine",
+    "Methscopolamine",
+    "Scopolamine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "contraindicated in the treatment of lower respiratory tract symptoms including asthma",
+   "noteSha256": "cdfbeb1c39eec5be03a1cd32a5e3761565cf70404414cd60bc779f2bace64617"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 248,
+   "noteId": "296",
+   "condition": "Arrhythmias, Cardiac",
+   "causeDrugs": [
+    "Amphetamine",
+    "Benzphetamine",
+    "Dextroamphetamine",
+    "Diethylpropion",
+    "Lisdexamfetamine",
+    "Metamfetamine",
+    "Phendimetrazine",
+    "Phentermine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "amphetamines may cause cardiovascular adverse effects such as palpitation, tachycardia, cardiac arrhythmias",
+   "noteSha256": "f11a67ccdbd12a10cfd95d57f1ef5814c34b7e9dd2ec0b58f146bae50e84c569"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 231,
+   "noteId": "1020",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Epinephrine",
+    "Isoprenaline",
+    "Norepinephrine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "infrequently associated with significant hypotension",
+   "noteSha256": "6c8a6cb356edd9f8bf02e11f380a0f67ce7adebecfad4800848e7c7f167b2bfa"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 225,
+   "noteId": "299",
+   "condition": "Myocardial Infarction",
+   "causeDrugs": [
+    "Amphetamine",
+    "Atomoxetine",
+    "Benzphetamine",
+    "Caffeine",
+    "Dexmethylphenidate",
+    "Dextroamphetamine",
+    "Diethylpropion",
+    "Doxapram",
+    "Lisdexamfetamine",
+    "Metamfetamine",
+    "Methylphenidate",
+    "Modafinil",
+    "Pemoline",
+    "Phendimetrazine",
+    "Phentermine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "stroke, myocardial infarction, chest pain, syncope, arrhythmias and other symptoms have been reported",
+   "noteSha256": "3a1f97c08f157dc601bbd0f043b4b312f1b6c19a65febbf510d05a067d56b3a4"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 210,
+   "noteId": "218",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Conjugated estrogens",
+    "Drospirenone",
+    "Esterified estrogens",
+    "Estradiol",
+    "Estradiol (topical)",
+    "Estrone sulfate",
+    "Levonorgestrel"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Estrogens and progestogens may cause retinal thrombosis",
+   "noteSha256": "8e1dda2bd2da415203fc35055bd0140ba5738af07c2e7ff5cd51309734d36050"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 190,
+   "noteId": "869",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Naphazoline (nasal)",
+    "Oxymetazoline (nasal)",
+    "Phenylephrine (nasal)",
+    "Phenylephrine (ophthalmic)",
+    "Propylhexedrine (nasal)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "arrhythmia, hypertension, reflex bradycardia",
+   "noteSha256": "6f702192a4afa3ab41c1a6fd8ee6c04582cbc53eeea46db22279492cefb769ea"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 186,
+   "noteId": "470",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Maprotiline",
+    "Mirtazapine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "with associated signs and symptoms,( e.g., fever, infection, etc.)",
+   "noteSha256": "b0c5e3ece3dd3e76a6bcf9ab28213696d510564ed9392e557a350d71bb342379"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 186,
+   "noteId": "1041",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Obinutuzumab",
+    "Ofatumumab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Serious infections, including reactivation of viral infections, have been reported",
+   "noteSha256": "7ee0ee39bbf1ab4be4d7753526fca6d509e5fd6e70438c4b666d8de5e7a79344"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 186,
+   "noteId": "1387",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Bethanechol",
+    "Pilocarpine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "The reflux of urine from the bladder can cause infection in the kidneys and upper urinary tract",
+   "noteSha256": "db627b2535d9a807a9d6d52774dd15eae56eb564c04a2d9a56eb3561cd451e6e"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 186,
+   "noteId": "1448",
+   "condition": "Arrhythmias, Cardiac",
+   "causeDrugs": [
+    "Polyethylene glycol (3350 with electrolytes)",
+    "Potassium acetate",
+    "Potassium bicarbonate",
+    "Potassium chloride",
+    "Potassium citrate",
+    "Potassium gluconate"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may produce hyperkalemia and cardiac arrhythmias or arrest",
+   "noteSha256": "54c40a0b85a388e8c08715771ee75b2a22e086528ff713f4eef4e069da48a1ad"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 180,
+   "noteId": "503",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Etonogestrel",
+    "Hydroxyprogesterone caproate",
+    "Medroxyprogesterone acetate",
+    "Megestrol acetate",
+    "Norethisterone",
+    "Progesterone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "an increased risk of nonfatal venous thrombosis has been associated with oral contraceptive combinations containing desogestrel or gestodene",
+   "noteSha256": "833214de88f3f2acda187cb7d1a9d50df58fc764618abecafeef46899889180e"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 180,
+   "noteId": "536",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Ardeparin",
+    "Dalteparin",
+    "Enoxaparin",
+    "Heparin",
+    "Heparin (flush)",
+    "Tinzaparin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "HIT may progress to the development of venous and arterial thromboses",
+   "noteSha256": "cc5b9974033a7688ab30c9a6894b07667ea35a80f8b5928899cf5a34663162c6"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 176,
+   "noteId": "245",
+   "condition": "Myocardial Ischemia",
+   "causeDrugs": [
+    "Arformoterol",
+    "Formoterol",
+    "Indacaterol",
+    "Levosalbutamol",
+    "Olodaterol",
+    "Orciprenaline",
+    "Pirbuterol",
+    "Racepinephrine",
+    "Salbutamol",
+    "Salmeterol",
+    "Terbutaline"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "precipitation or aggravation of angina, myocardial ischemia",
+   "noteSha256": "a12b4fc02d603ef84e197d572329e3460f1e4c53a34aa8d70366095f1af43790"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 175,
+   "noteId": "680",
+   "condition": "Coronary Artery Disease",
+   "causeDrugs": [
+    "Fluoxymesterone",
+    "Methyltestosterone",
+    "Nandrolone",
+    "Oxandrolone",
+    "Oxymetholone",
+    "Stanozolol",
+    "Testosterone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may significantly impact the risk of atherosclerosis and coronary artery disease",
+   "noteSha256": "d811893f55abc8f6e7fe509ca9efd43bcc04d7cc25ad5d84a981556b062fd5dc"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 175,
+   "noteId": "2202",
+   "condition": "Glaucoma",
+   "causeDrugs": [
+    "Aclidinium",
+    "Ipratropium",
+    "Ipratropium (nasal)",
+    "Tiotropium",
+    "Umeclidinium"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "precipitation or exacerbation of angle-closure glaucoma may also occur",
+   "noteSha256": "14538542429f2469b257e9162d1a45423febbdda29df534867269b08bb518dde"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 168,
+   "noteId": "151",
+   "condition": "Fibrosis",
+   "causeDrugs": [
+    "Abemaciclib",
+    "Afatinib",
+    "Alectinib",
+    "Axitinib",
+    "Cabozantinib",
+    "Ceritinib",
+    "Cobimetinib",
+    "Crizotinib",
+    "Dabrafenib",
+    "Ibrutinib",
+    "Idelalisib",
+    "Lenvatinib",
+    "Midostaurin",
+    "Nintedanib",
+    "Palbociclib",
+    "Ponatinib",
+    "Regorafenib",
+    "Ribociclib",
+    "Ruxolitinib",
+    "Sorafenib",
+    "Sunitinib",
+    "Trametinib",
+    "Vandetanib",
+    "Vemurafenib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "interstitial pneumonitis or pulmonary fibrosis have been reported",
+   "noteSha256": "e481880364c9f3a99dd809ac6b9f4cdbf3559e5e5c28659ac546cd9e88d9bc04"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 168,
+   "noteId": "1176",
+   "condition": "Hemorrhage",
+   "causeDrugs": [
+    "Citalopram",
+    "Escitalopram",
+    "Fluoxetine",
+    "Fluvoxamine",
+    "Paroxetine",
+    "Sertraline"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "gastrointestinal hemorrhage have been reported",
+   "noteSha256": "df47b767bc7bcd0893a6228fbbc70185759748049f2e1a8b1d8cb71b2df4aa92"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 162,
+   "noteId": "35",
+   "condition": "Stevens-Johnson Syndrome",
+   "causeDrugs": [
+    "Celecoxib",
+    "Diclofenac",
+    "Etodolac",
+    "Fenoprofen",
+    "Flurbiprofen",
+    "Ibuprofen",
+    "Indomethacin",
+    "Ketoprofen",
+    "Ketorolac",
+    "Meclofenamic acid",
+    "Mefenamic acid",
+    "Meloxicam",
+    "Nabumetone",
+    "Naproxen",
+    "Oxaprozin",
+    "Piroxicam",
+    "Sulindac",
+    "Tolmetin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "can cause serious skin adverse reactions (e.g., Stevens-Johnson syndrome",
+   "noteSha256": "017c890862f48e89ddf52a04794d5c8874365449c2c03eb336a8434ca00e23a4"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 156,
+   "noteId": "1453",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Caffeine",
+    "Sodium cellulose phosphate",
+    "Sodium chloride"
+   ],
+   "verdict": "WORSENS",
+   "decidedBy": "agreed",
+   "quote": "aggravation of congestive heart failure",
+   "noteSha256": "93f9e2ba3a8829ddb0033aef009329ed67ef6c56b008ed2ac647267e8ed4676f"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 155,
+   "noteId": "321",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Haloperidol",
+    "Lithium carbonate",
+    "Loxapine",
+    "Molindone",
+    "Pimozide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "trigger seizures in a dose-dependent manner",
+   "noteSha256": "88eb6d24ef82894a8cfddc0f50022de1f4fb85620c912ac774d1a1c1b582de68"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 154,
+   "noteId": "846",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Dronabinol",
+    "Nabilone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "associated with occasional hypotension",
+   "noteSha256": "cddbf70d161f325564da756ed67b8da22addc0371ae2443c15630ef9b80f4444"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 152,
+   "noteId": "1282",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Amobarbital",
+    "Pentobarbital",
+    "Phenobarbital",
+    "Secobarbital"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may produce severe cardiovascular reactions such as bradycardia, hypertension",
+   "noteSha256": "5e194304bc654eb681ddf118cc5874f408fbeafd245d2a2328154200ab531651"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 148,
+   "noteId": "1318",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Benzphetamine",
+    "Diethylpropion",
+    "Phendimetrazine",
+    "Phentermine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "increased risk of developing pulmonary hypertension",
+   "noteSha256": "60be2c7686998fd360c5806d4a784de7a579d2ca2baccec90f24e76fa8a536b5"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 144,
+   "noteId": "34",
+   "condition": "Thrombocytopenia",
+   "causeDrugs": [
+    "Diclofenac",
+    "Diclofenac (topical)",
+    "Diflunisal",
+    "Etodolac",
+    "Fenoprofen",
+    "Flurbiprofen",
+    "Ibuprofen",
+    "Indomethacin",
+    "Ketoprofen",
+    "Meclofenamic acid",
+    "Mefenamic acid",
+    "Meloxicam",
+    "Nabumetone",
+    "Naproxen",
+    "Oxaprozin",
+    "Piroxicam",
+    "Sulindac",
+    "Tolmetin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Thrombocytopenia has also been reported rarely during NSAID use",
+   "noteSha256": "42c95c81e45faff4fd6b71260d7219c80d9ffc078f6dd4c0b88266bb8848f463"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 140,
+   "noteId": "397",
+   "condition": "Glaucoma",
+   "causeDrugs": [
+    "Fluorometholone (ophthalmic)",
+    "Loteprednol (ophthalmic)",
+    "Prednisolone (ophthalmic)",
+    "Rimexolone (ophthalmic)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "elevated intraocular pressure, the latter of which may lead to glaucoma",
+   "noteSha256": "3149200cfd5d75d8920a32ed17ae8d0627635976a075200749b268fec2ddccb8"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 132,
+   "noteId": "1448",
+   "condition": "Hyperkalemia",
+   "causeDrugs": [
+    "Polyethylene glycol (3350 with electrolytes)",
+    "Potassium acetate",
+    "Potassium bicarbonate",
+    "Potassium chloride",
+    "Potassium citrate",
+    "Potassium gluconate"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may produce hyperkalemia",
+   "noteSha256": "54c40a0b85a388e8c08715771ee75b2a22e086528ff713f4eef4e069da48a1ad"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 130,
+   "noteId": "430",
+   "condition": "Neutropenia",
+   "causeDrugs": [
+    "Aripiprazole",
+    "Asenapine",
+    "Brexpiprazole",
+    "Cariprazine",
+    "Iloperidone",
+    "Lumateperone",
+    "Lurasidone",
+    "Olanzapine",
+    "Paliperidone",
+    "Pimavanserin",
+    "Quetiapine",
+    "Risperidone",
+    "Ziprasidone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Cases of leukopenia, neutropenia, and agranulocytosis have been reported",
+   "noteSha256": "190c02612543c21aff7c6e37b920b514b1e846cbea1c142f6b7ccbf37bf4394c"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 126,
+   "noteId": "900",
+   "condition": "Pancreatitis",
+   "causeDrugs": [
+    "Atazanavir",
+    "Fosamprenavir",
+    "Indinavir",
+    "Nelfinavir",
+    "Ritonavir",
+    "Saquinavir",
+    "Tipranavir"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Severe hyperlipidemia is known to sometimes cause pancreatitis",
+   "noteSha256": "56bc73d5da913c49080f8d490398570015774f506dace8266e7756ce43558c2e"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 125,
+   "noteId": "2202",
+   "condition": "Glaucoma, Angle-Closure",
+   "causeDrugs": [
+    "Aclidinium",
+    "Ipratropium",
+    "Ipratropium (nasal)",
+    "Tiotropium",
+    "Umeclidinium"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "precipitation or exacerbation of angle-closure glaucoma may also occur",
+   "noteSha256": "14538542429f2469b257e9162d1a45423febbdda29df534867269b08bb518dde"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 124,
+   "noteId": "639",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Ergocalciferol",
+    "Ergoloid mesylate",
+    "Ergotamine",
+    "Methylergometrine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Headaches, seizures, cerebrovascular accidents and death have been associated with the hypertensive episodes",
+   "noteSha256": "fc834824bfc81c820db839fb2b9f499ffb7af1fd2f80c1f93d763fc1deb7d544"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 124,
+   "noteId": "706",
+   "condition": "Arrhythmias, Cardiac",
+   "causeDrugs": [
+    "Chlorthalidone",
+    "Hydrochlorothiazide",
+    "Indapamide",
+    "Metolazone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Potassium and magnesium depletion may lead to cardiac arrhythmias",
+   "noteSha256": "9186cb6adc828eb4d8843414ca30e2015ce0022659cf1548a86ade566f62879e"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 124,
+   "noteId": "2280",
+   "condition": "Arrhythmias, Cardiac",
+   "causeDrugs": [
+    "Bumetanide",
+    "Etacrynic acid",
+    "Furosemide",
+    "Torasemide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Potassium and magnesium depletion may lead to cardiac arrhythmias",
+   "noteSha256": "f71025870da1b538708e4dad2a7d0158e83c4366c4be6eb883efde1641a2ed3a"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 124,
+   "noteId": "2849",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Adalimumab",
+    "Certolizumab pegol",
+    "Golimumab",
+    "Infliximab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "associated with rare cases of CNS manifestations of systemic vasculitis, seizure",
+   "noteSha256": "dc18fc3e8a92e8a319ba6c412ee10773403be232b3b72655b6fced60e649205e"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 120,
+   "noteId": "1219",
+   "condition": "Myocardial Infarction",
+   "causeDrugs": [
+    "Interferon alfa-2a, Recombinant",
+    "Interferon alfa-2b",
+    "Interferon alfa-n3",
+    "Interferon alfacon-1",
+    "Interferon beta-1a",
+    "Interferon gamma-1b",
+    "Peginterferon alfa-2a",
+    "Peginterferon alfa-2b"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "myocardial infarction",
+   "noteSha256": "8fdc43a03b0b7e12b293dcc31e13792d1aff835f03d76f9db2c4d30951e083ac"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 120,
+   "noteId": "2280",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Bumetanide",
+    "Etacrynic acid",
+    "Furosemide",
+    "Torasemide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "vascular thrombosis and embolism",
+   "noteSha256": "f71025870da1b538708e4dad2a7d0158e83c4366c4be6eb883efde1641a2ed3a"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 114,
+   "noteId": "40",
+   "condition": "Hepatitis",
+   "causeDrugs": [
+    "Celecoxib",
+    "Diclofenac",
+    "Diflunisal",
+    "Etodolac",
+    "Fenoprofen",
+    "Flurbiprofen",
+    "Ibuprofen",
+    "Indomethacin",
+    "Ketoprofen",
+    "Ketorolac",
+    "Meclofenamic acid",
+    "Mefenamic acid",
+    "Meloxicam",
+    "Nabumetone",
+    "Naproxen",
+    "Oxaprozin",
+    "Piroxicam",
+    "Sulindac",
+    "Tolmetin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "fulminant hepatitis have been reported",
+   "noteSha256": "33d665913089a52040dff366784acde6d72f6ac5e868b8d3aea186468d58d6c4"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 114,
+   "noteId": "357",
+   "condition": "Hepatitis",
+   "causeDrugs": [
+    "Cefaclor",
+    "Cefazolin",
+    "Cefditoren",
+    "Cefepime",
+    "Cefixime",
+    "Cefoperazone",
+    "Cefotaxime",
+    "Cefotetan",
+    "Cefoxitin",
+    "Cefpodoxime",
+    "Cefprozil",
+    "Ceftaroline fosamil",
+    "Ceftazidime",
+    "Ceftibuten",
+    "Ceftizoxime",
+    "Ceftriaxone",
+    "Cefuroxime",
+    "Cephalexin",
+    "Loracarbef"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Cases of hepatitis have been reported with the use of certain cephalosporins",
+   "noteSha256": "81b70ea1c7834ed9f3e46f704b0ce164574ec0bbb433426ff4ae754887839ea8"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 114,
+   "noteId": "1358",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Epinephrine",
+    "Phenylephrine",
+    "Pseudoephedrine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "arrhythmia, hypertension",
+   "noteSha256": "36888ec01465d9cadc7dff76d72c277cdec6939be3e131348e48a7a8de1f5bd6"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 112,
+   "noteId": "2278",
+   "condition": "Dehydration",
+   "causeDrugs": [
+    "Bumetanide",
+    "Etacrynic acid",
+    "Furosemide",
+    "Torasemide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "it may induce dehydration and hypovolemia",
+   "noteSha256": "b6bb25da1bb70fb1f1882fd36354160346ed6152b9e8db3b1e3fb30998dd591e"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 110,
+   "noteId": "307",
+   "condition": "Anemia",
+   "causeDrugs": [
+    "Benazepril",
+    "Captopril",
+    "Enalapril",
+    "Enalaprilat",
+    "Fosinopril",
+    "Lisinopril",
+    "Moexipril",
+    "Perindopril",
+    "Quinapril",
+    "Ramipril",
+    "Trandolapril"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "aplastic anemia, hemolytic anemia",
+   "noteSha256": "9c1ca0d4cbd47e25c7ef94e4320af71e562b633a121e3dcfd2f40c4c03cdf853"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 110,
+   "noteId": "307",
+   "condition": "Neutropenia",
+   "causeDrugs": [
+    "Benazepril",
+    "Captopril",
+    "Enalapril",
+    "Enalaprilat",
+    "Fosinopril",
+    "Lisinopril",
+    "Moexipril",
+    "Perindopril",
+    "Quinapril",
+    "Ramipril",
+    "Trandolapril"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Neutropenia, agranulocytosis, aplastic anemia, hemolytic anemia, eosinophilia and thrombocytopenia have been reported",
+   "noteSha256": "9c1ca0d4cbd47e25c7ef94e4320af71e562b633a121e3dcfd2f40c4c03cdf853"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 109,
+   "noteId": "527",
+   "condition": "Hemorrhage",
+   "causeDrugs": [
+    "Ardeparin",
+    "Dalteparin",
+    "Danaparoid",
+    "Enoxaparin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "The risk of hemorrhage may be increased in these patients",
+   "noteSha256": "8b1f7a8752d1a6f2ad713ebadff1d0756aa0fca832829a6b336081078c998344"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 108,
+   "noteId": "498",
+   "condition": "Pancreatitis",
+   "causeDrugs": [
+    "Conjugated estrogens",
+    "Esterified estrogens",
+    "Estradiol",
+    "Estradiol (topical)",
+    "Estrone sulfate",
+    "Medroxyprogesterone acetate"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Severe hyperlipidemia is known to sometimes cause pancreatitis",
+   "noteSha256": "449b608bd6ffb80448ec49cf2dc5e618390afaf1558a01a8cb9c7debde01b805"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 105,
+   "noteId": "230",
+   "condition": "Bradycardia",
+   "causeDrugs": [
+    "Alfentanil",
+    "Codeine",
+    "Dextropropoxyphene",
+    "Fentanyl",
+    "Hydrocodone",
+    "Hydromorphone",
+    "Levorphanol",
+    "Meperidine",
+    "Methadone",
+    "Morphine",
+    "Opium",
+    "Oxycodone",
+    "Oxymorphone",
+    "Remifentanil",
+    "Sufentanil"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may produce bradycardia and arrhythmia",
+   "noteSha256": "62e014a8747041ce535d2daf26e46aa8675245879d33b7bfae9a7a7ae60b4a20"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 102,
+   "noteId": "231",
+   "condition": "Diarrhea",
+   "causeDrugs": [
+    "Buprenorphine",
+    "Butorphanol",
+    "Codeine",
+    "Dextropropoxyphene",
+    "Fentanyl",
+    "Hydrocodone",
+    "Hydromorphone",
+    "Levorphanol",
+    "Meperidine",
+    "Methadone",
+    "Morphine",
+    "Nalbuphine",
+    "Opium",
+    "Oxycodone",
+    "Oxymorphone",
+    "Pentazocine",
+    "Tapentadol"
+   ],
+   "verdict": "WORSENS",
+   "decidedBy": "agreed",
+   "quote": "may prolong and/or worsen diarrhea",
+   "noteSha256": "8cef89faed572d78a8d0976f7e4db2dfe093254bada3d071010a41f2db6ee2e3"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 100,
+   "noteId": "522",
+   "condition": "Asthma",
+   "causeDrugs": [
+    "Menotropins",
+    "Urofollitropin"
+   ],
+   "verdict": "WORSENS",
+   "decidedBy": "agreed",
+   "quote": "exacerbation of asthma have been reported",
+   "noteSha256": "615073635d413afeae61e3db7adee71cadcc05afd2626c670e6fd6559bab2667"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "547",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Doripenem",
+    "Ertapenem",
+    "Meropenem"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "central nervous system adverse effects such as seizures",
+   "noteSha256": "280441639924ded952d7eaf233e26498eb8b749a6fb3d3c4dfc28893e98cc57c"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "717",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Metreleptin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "severe infection have been reported",
+   "noteSha256": "bb37093a4bb21bec041e0af237d1274470b9b4f672c547b9115980f594b2007f"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "1244",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Avanafil",
+    "Sildenafil",
+    "Vardenafil"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "has been associated with seizures",
+   "noteSha256": "da54b7b8f3ac5c45ba5d951d49dde6e70940c5d79950aac50eb4448bbaa9f58e"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "1351",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Phenoxybenzamine"
+   ],
+   "verdict": "WORSENS",
+   "decidedBy": "agreed",
+   "quote": "may aggravate the symptoms of respiratory infections",
+   "noteSha256": "db1c2371d59747e2eb4d6432d25e9e8a5df34fbf32508273122d0b6ea02f4832"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "1395",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Pimecrolimus (topical)"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "Although causal relationship has not been established, there is a concern about a potential risk of infections",
+   "noteSha256": "88270dbf2655c4b0d007ef1b023b38a21721640396aa5a580500bf9fc9c37457"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "1837",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Selinexor"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "Monitor patients for signs and symptoms of concomitant infection",
+   "noteSha256": "5b5d9dfc86b994d003bfad02b3dd1913660ce4e01a11e97dc985982ac238cabb"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "1948",
+   "condition": "Arrhythmias, Cardiac",
+   "causeDrugs": [
+    "Amiloride",
+    "Spironolactone",
+    "Triamterene"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "hyperkalemia, which may result in life-threatening cardiac arrhythmias",
+   "noteSha256": "79bd8d42585858d5153ec17425238798a74f8f628300b3d987a3dee13550bccb"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "2000",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Sunitinib"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "is generally associated with tooth extraction and/or local infection with delayed healing",
+   "noteSha256": "b2d84131d6c149eee328d1083df563001045180ba85329f6b68a5672d425e704"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "2695",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Bezlotoxumab"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "The causes of death varied and included cardiac failure, infections, and respiratory failure",
+   "noteSha256": "172abb35d84a7479c33658b76da580cd261ad32b3f00df09998d656d536b8bfa"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "3009",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Aldesleukin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "increase the risk of disseminated infections",
+   "noteSha256": "dc9df3b3c2020f9d4a1d37f672d3cbb9ddc50e69852005a33703217d90619a75"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "3134",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Cyclophosphamide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "severe immunosuppression which may lead to serious and sometimes fatal infections",
+   "noteSha256": "7c8321ffa5b6e0d29dd0ae2cb680983e5d55d2a3f08a9dc9c5108be2a2e11a75"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "3324",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Dimethyl fumarate"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "PML is an opportunistic viral infection of the brain",
+   "noteSha256": "b67bf4404a3427857c551e4982ecd82610e3a7a6cc15d526100228a4b8a87e39"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "3524",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Abemaciclib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Diarrhea, sometimes associated with dehydration and infection, has occurred in patients receiving abemaciclib",
+   "noteSha256": "7e87a883ad0ae1377b8fede79496523c66cbc66ca4d7727cb88830174e970891"
+  },
+  {
+   "stratum": "census",
+   "keptChains": 93,
+   "noteId": "3931",
+   "condition": "Infections",
+   "causeDrugs": [
+    "Itraconazole"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "treated for onychomycosis and/or systemic fungal infections",
+   "noteSha256": "5d886305cc26451e653cee8c745e3d899ccae85fdf17cff5e8c7e96e850634d4"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 90,
+   "noteId": "536",
+   "condition": "Myocardial Infarction",
+   "causeDrugs": [
+    "Ardeparin",
+    "Dalteparin",
+    "Enoxaparin",
+    "Heparin",
+    "Heparin (flush)",
+    "Tinzaparin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "stroke, myocardial infarction",
+   "noteSha256": "cc5b9974033a7688ab30c9a6894b07667ea35a80f8b5928899cf5a34663162c6"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 77,
+   "noteId": "1540",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Propofol"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Propofol can induce severe hypotension",
+   "noteSha256": "2e26764828829d2d9fdc7b0c5fe36edb6895444887abf6dc559babd10e0dad8a"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 77,
+   "noteId": "2949",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Ceritinib"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "a concomitant medication known to cause bradycardia or hypotension",
+   "noteSha256": "a79260b074df5761d4674681d1542a22cefbf0d68524919eebedae69af17590f"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 76,
+   "noteId": "3618",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Flibanserin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "it increases the risk of hypotension and syncope",
+   "noteSha256": "f0bfeffd6bb57c5ce10568cee88b3fe6c9a7395ec543b583c0f39a388c5e45c6"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 75,
+   "noteId": "1243",
+   "condition": "Coronary Artery Disease",
+   "causeDrugs": [
+    "Avanafil",
+    "Sildenafil",
+    "Vardenafil"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "unstable angina associated with cardiac failure or coronary artery disease",
+   "noteSha256": "c7c84a5cc49d9b24cb625fed962da97e7072b5eb2384b3feffcf597584afe5d8"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 72,
+   "noteId": "43",
+   "condition": "Edema",
+   "causeDrugs": [
+    "Diclofenac",
+    "Diflunisal",
+    "Etodolac",
+    "Fenoprofen",
+    "Flurbiprofen",
+    "Ibuprofen",
+    "Indomethacin",
+    "Ketoprofen",
+    "Ketorolac",
+    "Meclofenamic acid",
+    "Mefenamic acid",
+    "Meloxicam",
+    "Nabumetone",
+    "Naproxen",
+    "Oxaprozin",
+    "Piroxicam",
+    "Sulindac",
+    "Tolmetin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Fluid retention and edema have been reported in association with the use of nonsteroidal anti-inflammatory drugs",
+   "noteSha256": "7668991974649c06e52f95acec9acb15a5bb677438ef011914e28279fdbbe65f"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 70,
+   "noteId": "584",
+   "condition": "Glaucoma",
+   "causeDrugs": [
+    "Acetazolamide",
+    "Methazolamide"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "Carbonic anhydrase inhibitors may mask worsening glaucoma",
+   "noteSha256": "783f98659f10958dfa219dc7cf24803473f0cbcc60bb4c3eb650b9f4d3f96fe2"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 54,
+   "noteId": "3758",
+   "condition": "Hemorrhage",
+   "causeDrugs": [
+    "Heparin",
+    "Heparin (flush)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may be associated with an increased risk of germinal matrix intraventricular hemorrhage",
+   "noteSha256": "99a3384f6d1449824f59908857451d1c690789643292d0482eae376b158bb72c"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 52,
+   "noteId": "802",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Mitoxantrone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Mitoxantrone can cause myocardial toxicity leading to congestive heart failure (CHF)",
+   "noteSha256": "ed6c26ffdfc8d14d40a6d1ced5bc76c9838957c7348c3380a5c257052e6591a0"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 52,
+   "noteId": "3819",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Idarubicin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Idarubicin can cause myocardial toxicity leading to congestive heart failure",
+   "noteSha256": "418fabea9fad784a454e71e9e6322c78528d12a099a7f16f61aed93c617531f4"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 50,
+   "noteId": "763",
+   "condition": "Hypersensitivity",
+   "causeDrugs": [
+    "Amrinone",
+    "Milrinone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "clinical symptoms suggestive of idiosyncratic hypersensitivity",
+   "noteSha256": "7030185c6aa2e595a70298de45f39e53579b12f22db956a5e26de371ab8cf93c"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 50,
+   "noteId": "1370",
+   "condition": "Hypersensitivity",
+   "causeDrugs": [
+    "Ethotoin",
+    "Phenytoin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "has been associated with hepatotoxicity related to drug hypersensitivity",
+   "noteSha256": "8eb1b56cc1ebb440664fc45319deee5f02433e3732c3c705b1bc168c913995f1"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 48,
+   "noteId": "2",
+   "condition": "Hepatitis",
+   "causeDrugs": [
+    "Abacavir",
+    "Didanosine",
+    "Entecavir",
+    "Lamivudine",
+    "Stavudine",
+    "Tenofovir alafenamide",
+    "Tenofovir disoproxil",
+    "Zidovudine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "fulminant hepatitis",
+   "noteSha256": "c8a0f33c4594903bf96ef29ab0c8bd868094897cc97ab133126b201ddf48f476"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 38,
+   "noteId": "1821",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Selegiline"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "associated with cardiovascular events such as tachycardia, bradycardia, syncope, hypertension",
+   "noteSha256": "651366119da6d0230bc98c944995e915b274aaebb238c6247158a39ab1605d8f"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 38,
+   "noteId": "2967",
+   "condition": "Hypertension",
+   "causeDrugs": [
+    "Albendazole"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "precipitates seizures and cerebral hypertension",
+   "noteSha256": "ec6955771903af0f9ac6d56a752864b6999f6352b597fb0454130961afef577a"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 35,
+   "noteId": "869",
+   "condition": "Bradycardia",
+   "causeDrugs": [
+    "Naphazoline (nasal)",
+    "Oxymetazoline (nasal)",
+    "Phenylephrine (nasal)",
+    "Phenylephrine (ophthalmic)",
+    "Propylhexedrine (nasal)"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "reflex bradycardia",
+   "noteSha256": "6f702192a4afa3ab41c1a6fd8ee6c04582cbc53eeea46db22279492cefb769ea"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 35,
+   "noteId": "3613",
+   "condition": "Glaucoma",
+   "causeDrugs": [
+    "Flavoxate"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "result in angle-closure (narrow angle) glaucoma",
+   "noteSha256": "490bf69b3fe1ad8a752a49e1f5985f3fb613f7e4a0c3a0b8087d750afbb99631"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 31,
+   "noteId": "2813",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Busulfan"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Seizures have been reported in patients receiving high doses of busulfan",
+   "noteSha256": "477493378390346f9bc5e7b29f3fd565b48c0a1600f6cb8de7808896ada79279"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 31,
+   "noteId": "3775",
+   "condition": "Seizures",
+   "causeDrugs": [
+    "Human papillomavirus type 11 L1 capsid protein antigen"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "tonic-clonic movements and other seizure-like activity",
+   "noteSha256": "1eef125dd1ae988c8d98e3f69a1d9babacc168b4d2b7fe6a5396d9cc29278d69"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 30,
+   "noteId": "58",
+   "condition": "Tachycardia",
+   "causeDrugs": [
+    "Acebutolol",
+    "Atenolol",
+    "Betaxolol",
+    "Bisoprolol",
+    "Carvedilol",
+    "Esmolol",
+    "Labetalol",
+    "Metoprolol",
+    "Nadolol",
+    "Nebivolol",
+    "Penbutolol",
+    "Pindolol",
+    "Propranolol",
+    "Sotalol",
+    "Timolol"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "symptoms of hyperthyroidism such as tachycardia",
+   "noteSha256": "356f9944d34ede47e4c56585895e244fe96b7f074fec5d0d7626e9ed2e0ffae1"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 30,
+   "noteId": "2539",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Deucravacitinib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "third",
+   "quote": "reported higher rates of all-cause mortality, including sudden cardiovascular death, major adverse cardiovascular events, overall thrombosis",
+   "noteSha256": "2088b68bcd2cb58f20031fe3774e5fb361b927b465dc44d9cd2e9386b350e1e7"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 30,
+   "noteId": "2899",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Carfilzomib"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "should be used with caution in patients with a history of venous thromboembolic events, including deep venous thrombosis",
+   "noteSha256": "f3db7f370c5f138ef275378a300115e9b2ef3926b3fb89e60b13bd5fc91c4a7d"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 30,
+   "noteId": "3246",
+   "condition": "Thrombosis",
+   "causeDrugs": [
+    "Desmopressin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Rare cases of thrombotic events (thrombosis, acute cerebrovascular thrombosis, and acute myocardial infarction) have been reported following desmopressin injection",
+   "noteSha256": "54515a435b254a15cdb3fcb1c394c48d5b618a82b9d7f4c7937e3fe8e4f959c0"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 28,
+   "noteId": "766",
+   "condition": "Dehydration",
+   "causeDrugs": [
+    "Miltefosine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "patients should be advised to drink plenty of fluids to avoid dehydration",
+   "noteSha256": "3c5192273a1e04e2fc59e0e748c8ec650fb5f82af8a52490a42849bdbd05269e"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 27,
+   "noteId": "320",
+   "condition": "Dehydration",
+   "causeDrugs": [
+    "Lithium carbonate"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "Dehydration and sodium depletion may occur in these patients leading to lithium retention and toxicity",
+   "noteSha256": "3699fa52befa78e4de48772db98c726d810b1d05556983f9ff47af3c2c2f02fc"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 25,
+   "noteId": "90",
+   "condition": "Hypersensitivity",
+   "causeDrugs": [
+    "Lamotrigine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may or may not be associated with multi-organ hypersensitivity (also known as DRESS)",
+   "noteSha256": "c0758f57424d00c888a4672ef859976135c0307c8dc13eb4b21eb4d63f3f3d6b"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 25,
+   "noteId": "1713",
+   "condition": "Thromboembolism",
+   "causeDrugs": [
+    "Rivaroxaban"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "prophylaxis of venous thromboembolism in acutely ill medical patients",
+   "noteSha256": "45d6133adb99caca65ed18babd260171422ddc658603ddf8ad78b626e48a47c8"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 24,
+   "noteId": "3392",
+   "condition": "Liver Failure",
+   "causeDrugs": [
+    "Dronedarone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "acute liver failure has been reported in patients using dronedarone",
+   "noteSha256": "46a7f33737a2e9496842df2f34c5533401b20bf0dd0def41c1a3924ef62a8485"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 22,
+   "noteId": "1963",
+   "condition": "Hyperkalemia",
+   "causeDrugs": [
+    "Succinylcholine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "These patients are more likely to develop significant hyperkalemia",
+   "noteSha256": "54fcdfe5fa8b5852261c3e582268f90d57718a0178bb97ce4cb3aca28e269bf3"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 21,
+   "noteId": "3695",
+   "condition": "Fibrosis",
+   "causeDrugs": [
+    "Gadodiamide",
+    "Gadoteridol",
+    "Gadoversetamide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "GBCAs increase the risk for nephrogenic systemic fibrosis (NSF)",
+   "noteSha256": "ea6319370def808d60aee33319024850fe3d60fc45870a997ff078327cddae73"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 20,
+   "noteId": "1954",
+   "condition": "Neutropenia",
+   "causeDrugs": [
+    "Didanosine",
+    "Stavudine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Anemia, leukopenia, thrombocytopenia and neutropenia have been reported",
+   "noteSha256": "f3e895b4a00b3eb2da8aa2f25302f2ce48084be0f14ff517602519d6a9bf3a8e"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 20,
+   "noteId": "1980",
+   "condition": "Anemia",
+   "causeDrugs": [
+    "Sulfadiazine",
+    "Sulfasalazine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "hemolytic anemia, aplastic anemia",
+   "noteSha256": "8aaa75a0b41c848cf3213d38efa85933238227e643659d36cb5f5abfa128d8fa"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 18,
+   "noteId": "1047",
+   "condition": "Pancreatitis",
+   "causeDrugs": [
+    "Octreotide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Associated pancreatitis has been reported in rare cases",
+   "noteSha256": "3cb57d2a86a4d18b447653316ba692948a552134691e7fca2d2a042427b03ee0"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 18,
+   "noteId": "2985",
+   "condition": "Lupus Erythematosus, Systemic",
+   "causeDrugs": [
+    "Chloroquine",
+    "Hydroxychloroquine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "in the treatment of systemic lupus erythematosus",
+   "noteSha256": "2d98c437ee9d3927cfbd720208352175d0c5b3c1735b2dbec564eac94329db30"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 16,
+   "noteId": "1318",
+   "condition": "Edema",
+   "causeDrugs": [
+    "Benzphetamine",
+    "Diethylpropion",
+    "Phendimetrazine",
+    "Phentermine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "lower extremity edema suggest the possibility of occurrence of pulmonary hypertension",
+   "noteSha256": "60be2c7686998fd360c5806d4a784de7a579d2ca2baccec90f24e76fa8a536b5"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 16,
+   "noteId": "2001",
+   "condition": "Myocardial Ischemia",
+   "causeDrugs": [
+    "Sunitinib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "myocardial ischemia",
+   "noteSha256": "9f48a88d67bfb747ad88ca498d214d7b34d6d61cc34c9150c9180ad3688e741d"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 15,
+   "noteId": "3735",
+   "condition": "Myocardial Infarction",
+   "causeDrugs": [
+    "Goserelin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Increased risk of developing myocardial infarction",
+   "noteSha256": "cd06f29da81bc9a0d9259a28f538b299b79f0113f4ff2152de20b464b6ae2339"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 15,
+   "noteId": "3784",
+   "condition": "Myocardial Infarction",
+   "causeDrugs": [
+    "Hydralazine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Myocardial infarction has been associated with the use of hydralazine",
+   "noteSha256": "731b29f5c094468d9a839294bed6999ea7b28d8ff0ac50a62d0811eb1986dfc0"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 14,
+   "noteId": "873",
+   "condition": "Coronary Vasospasm",
+   "causeDrugs": [
+    "Almotriptan",
+    "Eletriptan",
+    "Frovatriptan",
+    "Naratriptan",
+    "Rizatriptan",
+    "Sumatriptan",
+    "Zolmitriptan"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "5-HT1 agonists can cause vasospastic reactions, including coronary vasospasm",
+   "noteSha256": "535b86d6c3ac4c7922d611775720f32e60db04dae8650559bf1cea0e3b4af2f3"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 12,
+   "noteId": "1238",
+   "condition": "Hepatitis",
+   "causeDrugs": [
+    "Interferon beta-1a",
+    "Peginterferon beta-1a"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Severe hepatic injury, including hepatitis",
+   "noteSha256": "b8581c732a21ab05b48bafc7901d946e751417d8265a371d0cf23af0663465cc"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 12,
+   "noteId": "1401",
+   "condition": "Hyperthyroidism",
+   "causeDrugs": [
+    "Axitinib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "hypothyroidism and hyperthyroidism have been reported with the use of axitinib",
+   "noteSha256": "26f88640dc47a54d8eadef91566eb1a0675010a0156ad3902e84893aa2c67594"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 11,
+   "noteId": "3531",
+   "condition": "Rhabdomyolysis",
+   "causeDrugs": [
+    "Aminocaproic acid"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "rhabdomyolysis has been reported rarely",
+   "noteSha256": "d533b578733b04f92d45fb00bc0b4eece6a5463636b5723415835f353d2f8020"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "280",
+   "condition": "Anemia",
+   "causeDrugs": [
+    "Linezolid"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Reversible myelosuppression, including anemia",
+   "noteSha256": "25f5279d58731242ff1e9a80f0470c50298a3f713f8cc0a9907da138ea3a1948"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "893",
+   "condition": "Neutropenia",
+   "causeDrugs": [
+    "Nelarabine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "neutropenia, including febrile neutropenia, have been associated with nelarabine therapy",
+   "noteSha256": "3663bd3e7fbc55bde5c87b75af784b1eddefd3c94bb1180e1f4e40d638603445"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "1474",
+   "condition": "Anemia",
+   "causeDrugs": [
+    "Azathioprine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "macrocytic anemia",
+   "noteSha256": "019a85b37dd5237a14a7b86edc47af55d79e2f320559d10df97added5490ae04"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "1515",
+   "condition": "Anemia",
+   "causeDrugs": [
+    "Probenecid"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Aplastic anemia, leukopenia, hemolytic anemia and other anemia have been reported",
+   "noteSha256": "13a046688992fccd123b0f4ffa642070b759a241d8e8d195f66f39f210831e06"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "1809",
+   "condition": "Neutropenia",
+   "causeDrugs": [
+    "Baricitinib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Treatment with baricitinib was associated with an increased incidence of neutropenia",
+   "noteSha256": "04faa872d53b3ace454e497e3d7bef24a77e893e7a0397dbd5a6b820f675db7e"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "2026",
+   "condition": "Anemia",
+   "causeDrugs": [
+    "Talazoparib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Myelosuppression consisting of anemia",
+   "noteSha256": "96d04f4a6d51e5d967041c77ba18f38e5e0ba35d4b2a671c3251f0c4dedd18c1"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "2033",
+   "condition": "Neutropenia",
+   "causeDrugs": [
+    "Tamoxifen"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "severe neutropenia and pancytopenia have been reported",
+   "noteSha256": "3dcb1c6367b7e892753f113e651f3f48458b3d137460458dde82bd5dcec1769f"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "2605",
+   "condition": "Anemia",
+   "causeDrugs": [
+    "Furazolidone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Furazolidone may cause mild, reversible hemolytic anemia",
+   "noteSha256": "01d529eb98529b5b5b7d00aecf3162c79d8b4d11be80429e8601a38f3d483a15"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 10,
+   "noteId": "2817",
+   "condition": "Neutropenia",
+   "causeDrugs": [
+    "Cabazitaxel"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "bone marrow suppression manifested as neutropenia",
+   "noteSha256": "32086dbf6f89744e5af9cc115f0b75b5a8818bd50e543ffa5a8c1c00f625fb0b"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "45",
+   "condition": "Thrombocytopenia",
+   "causeDrugs": [
+    "Ketorolac"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Thrombocytopenia has also been reported rarely during NSAID use",
+   "noteSha256": "f48e88f21a7dd9c5e900075fee8ba4b42ee64e56fb0a34347b686358c268c0bc"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "1010",
+   "condition": "Diabetic Ketoacidosis",
+   "causeDrugs": [
+    "Atezolizumab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "including diabetic ketoacidosis, have been reported in patients receiving atezolizumab",
+   "noteSha256": "3d5bccec8933b4710129f4f57657ae4106abbc5a07505ae5c317e1394239addb"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "1255",
+   "condition": "Diabetic Ketoacidosis",
+   "causeDrugs": [
+    "Pembrolizumab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "including diabetic ketoacidosis",
+   "noteSha256": "51a64c359b132ad8559dd91cfcbc2b8fcae4289ccbfd08d268cc00507261c4c8"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "1707",
+   "condition": "Cardiotoxicity",
+   "causeDrugs": [
+    "Rituximab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Cardiotoxicity has been reported in a few patients receiving rituximab",
+   "noteSha256": "653bdfcaa10babdfb14cb01e7ff36c01277d56f67814747f7071b2ebe0b238a7"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "2817",
+   "condition": "Thrombocytopenia",
+   "causeDrugs": [
+    "Cabazitaxel"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "bone marrow suppression manifested as neutropenia, anemia, thrombocytopenia",
+   "noteSha256": "32086dbf6f89744e5af9cc115f0b75b5a8818bd50e543ffa5a8c1c00f625fb0b"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "2863",
+   "condition": "Cardiotoxicity",
+   "causeDrugs": [
+    "Capecitabine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Capecitabine can cause cardiotoxicity",
+   "noteSha256": "b5a658aa4c82f23e2f67db8bc142e83d328622bdff8c41e1a7e1913ade3a9dae"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "3134",
+   "condition": "Thrombocytopenia",
+   "causeDrugs": [
+    "Cyclophosphamide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "myelosuppression (leukopenia, neutropenia, thrombocytopenia and anemia)",
+   "noteSha256": "7c8321ffa5b6e0d29dd0ae2cb680983e5d55d2a3f08a9dc9c5108be2a2e11a75"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "3645",
+   "condition": "Thrombocytopenia",
+   "causeDrugs": [
+    "Fluorouracil"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Fluorouracil (5- FU) induces myelosuppression, including thrombocytopenia",
+   "noteSha256": "1d4878d14631ddea8537c020b0221371bee853ba7edda43fa17d92fd532c903a"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "3706",
+   "condition": "Thrombocytopenia",
+   "causeDrugs": [
+    "Ganciclovir"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Neutropenia, anemia and thrombocytopenia have been reported",
+   "noteSha256": "14062054aa2567b9ef71a838b1afcefd031782c48fc58b59a4fed41893c1fd1e"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 8,
+   "noteId": "3898",
+   "condition": "Thrombocytopenia",
+   "causeDrugs": [
+    "Irinotecan"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Irinotecan induces myelosuppression, causing leukopenia, thrombocytopenia and anemia",
+   "noteSha256": "c681edb6faab6ebfbdd375e4baacdb40c54927f09136fff68c574eadb147918a"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 7,
+   "noteId": "326",
+   "condition": "Fibrosis",
+   "causeDrugs": [
+    "Lithium carbonate"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "glomerular and interstitial fibrosis and nephron atrophy have been reported in patients on chronic lithium therapy",
+   "noteSha256": "6189b65d793d49a91fa3cf3ba6e4fefff4b69fa1d4eb68cba72071d38155f0b1"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 7,
+   "noteId": "505",
+   "condition": "Bradycardia",
+   "causeDrugs": [
+    "Mefloquine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "including sinus bradycardia",
+   "noteSha256": "79df4ae4e84f94a1c8fbc1c7c3febfd8d3997c6edb8e2e5b989e1fec9d7299c4"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 7,
+   "noteId": "3138",
+   "condition": "Fibrosis",
+   "causeDrugs": [
+    "Cyclophosphamide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "pulmonary fibrosis",
+   "noteSha256": "456008d30d035e95bad66d35318bc93e8e194b674e459998de00193e911a9f88"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 6,
+   "noteId": "9",
+   "condition": "Diarrhea",
+   "causeDrugs": [
+    "Ixazomib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Ixazomib may cause diarrhea",
+   "noteSha256": "b603ea1c00c27efb141203df6369b4ce6e576f76eba2ee44cbab78124647e856"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 6,
+   "noteId": "112",
+   "condition": "Lung Diseases, Interstitial",
+   "causeDrugs": [
+    "Cetuximab",
+    "Erlotinib",
+    "Gefitinib",
+    "Lapatinib",
+    "Osimertinib",
+    "Panitumumab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Serious cases of interstitial lung disease (ILD), including fatal cases",
+   "noteSha256": "3e2d8bb5b942dccd58dd1d8cc45541e8b05f9efb402fb8002f7aec37e7cf4fb9"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 6,
+   "noteId": "536",
+   "condition": "Pulmonary Embolism",
+   "causeDrugs": [
+    "Ardeparin",
+    "Dalteparin",
+    "Enoxaparin",
+    "Heparin",
+    "Heparin (flush)",
+    "Tinzaparin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "may include deep vein thrombosis, pulmonary embolism",
+   "noteSha256": "cc5b9974033a7688ab30c9a6894b07667ea35a80f8b5928899cf5a34663162c6"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 6,
+   "noteId": "2206",
+   "condition": "Hepatitis",
+   "causeDrugs": [
+    "Tipranavir"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "has been associated with reports of clinical hepatitis",
+   "noteSha256": "7155757953df8e258e0ea31094b079740b83d825d224ac6638a32576c9164fbd"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 6,
+   "noteId": "3198",
+   "condition": "Hepatitis",
+   "causeDrugs": [
+    "Darunavir"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Drug-induced hepatitis has been reported with the use of darunavir/ritonavir",
+   "noteSha256": "7db9ecfd18de62c4fed2680ead5e5d0b32c544a08828ca69c388ecf3b4065074"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 4,
+   "noteId": "589",
+   "condition": "Hepatic Encephalopathy",
+   "causeDrugs": [
+    "Acetazolamide",
+    "Methazolamide",
+    "Topiramate",
+    "Zonisamide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Carbonic anhydrase inhibitors increase the risk of developing hepatic encephalopathy in these patients",
+   "noteSha256": "d72dd2d12e6f481d8442745e05eb49595a9b6b25d7ba39940e1830c43ec1c842"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 4,
+   "noteId": "760",
+   "condition": "Tachycardia, Ventricular",
+   "causeDrugs": [
+    "Amrinone",
+    "Milrinone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "including nonsustained ventricular tachycardia",
+   "noteSha256": "1e26f77fb88650c1202edd4f03af3e067961a2a14e17e7350c2ef5971b2697e4"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 4,
+   "noteId": "846",
+   "condition": "Tachycardia",
+   "causeDrugs": [
+    "Dronabinol",
+    "Nabilone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "syncope or tachycardia",
+   "noteSha256": "cddbf70d161f325564da756ed67b8da22addc0371ae2443c15630ef9b80f4444"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 4,
+   "noteId": "867",
+   "condition": "Edema",
+   "causeDrugs": [
+    "Naloxone"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "pulmonary edema",
+   "noteSha256": "61872335c5e2c62e8781567ffd866523a39624c052716dc216f06278423c5aa1"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 4,
+   "noteId": "919",
+   "condition": "Edema",
+   "causeDrugs": [
+    "Nevirapine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "may be associated with signs of hypersensitivity, which can include",
+   "noteSha256": "65efd01b7e691bc24847a256a8de67c406f2fbd00301ff705a2abfd7ad0ac82c"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 4,
+   "noteId": "1238",
+   "condition": "Hepatitis, Autoimmune",
+   "causeDrugs": [
+    "Interferon beta-1a",
+    "Peginterferon beta-1a"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "autoimmune hepatitis",
+   "noteSha256": "b8581c732a21ab05b48bafc7901d946e751417d8265a371d0cf23af0663465cc"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 4,
+   "noteId": "3844",
+   "condition": "Cholestasis",
+   "causeDrugs": [
+    "Infliximab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "hepatitis and cholestasis, have been reported with the use of infliximab",
+   "noteSha256": "5c9cc6da341a0838dc14dd5a53b47185bca93b0dd8f17e8ebd24af098df2390a"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 3,
+   "noteId": "1115",
+   "condition": "Pancytopenia",
+   "causeDrugs": [
+    "Oxcarbazepine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Rare events of pancytopenia",
+   "noteSha256": "8c66548e22882fb7c47f3f45988dd0e23a99e296ec3ce6402de63dc6c2a3a372"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 3,
+   "noteId": "1754",
+   "condition": "Leukemia, Myeloid",
+   "causeDrugs": [
+    "Rucaparib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "acute myeloid leukemia (AML) have been reported with the use of rucaparib",
+   "noteSha256": "b874d96fb4c3c13fda061d5689653399492ac6293355d42c6256455b8410d0eb"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 3,
+   "noteId": "2178",
+   "condition": "Agranulocytosis",
+   "causeDrugs": [
+    "Ticlopidine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "including neutropenia/agranulocytosis",
+   "noteSha256": "27585d146253f3e20b6209e54a71462c9d263ef68459730072651b62d7b1f44f"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "523",
+   "condition": "Pulmonary Embolism",
+   "causeDrugs": [
+    "Menotropins",
+    "Urofollitropin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "pulmonary embolism",
+   "noteSha256": "bed14386d5d8ae4c2b57ab649cd6a1858b0aafc07313599c01c26882f13503e7"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "953",
+   "condition": "Tachycardia",
+   "causeDrugs": [
+    "Nilotinib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "This can cause a ventricular tachycardia called Torsade de Pointes",
+   "noteSha256": "77216343df24a1a9caefbcc9ffaac660a6070646a49378572e2cc1a1eaef9cdc"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "1215",
+   "condition": "Anemia, Aplastic",
+   "causeDrugs": [
+    "Peginterferon alfa-2a",
+    "Peginterferon alfa-2b"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Very rarely, it may be associated with aplastic anemia",
+   "noteSha256": "66c7f39bcaced76fb2c2809e6c4bc4de594517ed8cf175d9f78653d697a0ddfc"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "1821",
+   "condition": "Tachycardia",
+   "causeDrugs": [
+    "Selegiline"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "associated with cardiovascular events such as tachycardia",
+   "noteSha256": "651366119da6d0230bc98c944995e915b274aaebb238c6247158a39ab1605d8f"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "2369",
+   "condition": "Hyponatremia",
+   "causeDrugs": [
+    "Acetylcysteine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "potentially resulting in hyponatremia",
+   "noteSha256": "0eb57892be4c904c5e85144eed0cabd74d411e42ea8019dd27f8b192774a22e7"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "2476",
+   "condition": "Ileus",
+   "causeDrugs": [
+    "Vincristine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "autonomic (constipation and adynamic ileus)",
+   "noteSha256": "5a6295a8e39bf1ed1c3e691018e4dc5ca8b1a70613b309adf90ffd4bf5472b9e"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "3294",
+   "condition": "Tachycardia, Ventricular",
+   "causeDrugs": [
+    "Digoxin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Digoxin-induced ventricular tachycardia",
+   "noteSha256": "674ab0030954216cb52870ba292de19c97f274c8eb530078156006efd887e3e0"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "3309",
+   "condition": "Ischemia",
+   "causeDrugs": [
+    "Dihydroergotamine",
+    "Ergotamine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Ergot alkaloids may cause vasospastic reactions other than coronary artery vasospasm such as peripheral vascular reactions, and colonic ischemia",
+   "noteSha256": "439c0c13fc70c41602a6f284390305c4adc90265719497a04ca4651fd8649c59"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "3644",
+   "condition": "Stomatitis",
+   "causeDrugs": [
+    "Fluorouracil"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "severe toxicity such as stomatitis",
+   "noteSha256": "a207ad48f1c3cb9e2086dc2145f254a62d3382b86b609aac126f37dddac3b755"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 2,
+   "noteId": "3856",
+   "condition": "Tachycardia",
+   "causeDrugs": [
+    "Anagrelide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "vasodilation, tachycardia",
+   "noteSha256": "32dcbf24013d4e498afb180d44928e0c3e1f84b5ff4882245cba2e6e3f30d36d"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "89",
+   "condition": "Heart Block",
+   "causeDrugs": [
+    "Lamotrigine"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "lamotrigine should not be used in patients who have cardiac conduction disorders (e.g., second- or third-degree heart block)",
+   "noteSha256": "f3eea117fc005c42c28e570237fd582a30fe3403184a9e84484d4b3d2e9d51fc"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "801",
+   "condition": "Leukemia",
+   "causeDrugs": [
+    "Mitoxantrone"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "indicated for treatment of leukemia",
+   "noteSha256": "65f10a8bd6af2d4d486dcf862c52c0a55a522a03136952383e4e39dc2c99dd91"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "1660",
+   "condition": "Hyperbilirubinemia",
+   "causeDrugs": [
+    "Rifampicin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "the accumulation of rifampin may result in hyperbilirubinemia",
+   "noteSha256": "c9d13271e49c1988a4b6cc6b16febb18948e068e92864ebc72758d4d61cd0585"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "2497",
+   "condition": "Pulmonary Embolism",
+   "causeDrugs": [
+    "Vorinostat"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "The use of vorinostat may cause pulmonary embolism",
+   "noteSha256": "7687f5c5ebd3ea15fbd373f58a6e97450948b0db23298a67c0164b8ed9b08897"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "2720",
+   "condition": "Ischemia",
+   "causeDrugs": [
+    "Thallous chloride tl-201"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "in patients suspected or known to have myocardial infarction or ischemia",
+   "noteSha256": "2dccde7a2511a8e33220d1e01de38d182bb1dcd06f950359b2b8c6a0fc826ca6"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "2805",
+   "condition": "Malnutrition",
+   "causeDrugs": [
+    "Bupropion"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "may be undesirable in patients suffering from anorexia, malnutrition, or excessive weight loss",
+   "noteSha256": "baeaa02f1e7a57dfeb469d15b68f86da795d668ac2aa416b2731ae0ddf7150db"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "3009",
+   "condition": "Endocarditis, Bacterial",
+   "causeDrugs": [
+    "Aldesleukin"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "increase the risk of disseminated infections, including bacterial endocarditis",
+   "noteSha256": "dc9df3b3c2020f9d4a1d37f672d3cbb9ddc50e69852005a33703217d90619a75"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "3139",
+   "condition": "Cystitis",
+   "causeDrugs": [
+    "Cyclophosphamide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Hemorrhagic cystitis, pyelitis, and hematuria have been reported during cyclophosphamide therapy",
+   "noteSha256": "cf442eaefca58f4af304bd83dcb4025e1ce7e5b47808d98e3e13233cf0bd71b3"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "3236",
+   "condition": "Sepsis",
+   "causeDrugs": [
+    "Abatacept"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Serious infections (including sepsis, pneumonia) have been reported in patients receiving abatacept",
+   "noteSha256": "7246b61ad4876a04fc7b71337dee3d67cd62e3531320c1646056fc09935056fb"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "3263",
+   "condition": "Lung Diseases, Interstitial",
+   "causeDrugs": [
+    "Alpelisib"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "interstitial lung disease, has been reported in patients treated with alpelisib",
+   "noteSha256": "1585c062ae058244c15eb68acef23cd5fd559f19f81fd014fcd13de2ecbea7bd"
+  },
+  {
+   "stratum": "sample",
+   "keptChains": 1,
+   "noteId": "3859",
+   "condition": "Lung Diseases, Interstitial",
+   "causeDrugs": [
+    "Anagrelide"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "The use of anagrelide may cause interstitial lung diseases",
+   "noteSha256": "e6d00b71607bf40462e99ca490978658ccfef07d31766a46fe758792e9b705f2"
+  }
+ ],
+ "controls": [
+  {
+   "noteId": "2",
+   "condition": "Acidosis, Lactic",
+   "causeDrugs": [
+    "Abacavir",
+    "Didanosine",
+    "Entecavir",
+    "Lamivudine",
+    "Stavudine",
+    "Tenofovir alafenamide",
+    "Tenofovir disoproxil",
+    "Zidovudine"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Hepatotoxicity including lactic acidosis",
+   "noteSha256": "c8a0f33c4594903bf96ef29ab0c8bd868094897cc97ab133126b201ddf48f476",
+   "expected": "CAUSES"
+  },
+  {
+   "noteId": "575",
+   "condition": "Heart Failure",
+   "causeDrugs": [
+    "Metformin"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "congestive heart failure requiring pharmacologic treatment",
+   "noteSha256": "4a5bd2767837af99866cc3cd3109602c53c5820e6186ce6383e78e89d821ead3",
+   "expected": "NOT_CAUSAL"
+  },
+  {
+   "noteId": "575",
+   "condition": "Hypotension",
+   "causeDrugs": [
+    "Metformin"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "More marked acidosis may be associated with hypothermia, hypotension",
+   "noteSha256": "4a5bd2767837af99866cc3cd3109602c53c5820e6186ce6383e78e89d821ead3",
+   "expected": "NOT_CAUSAL"
+  },
+  {
+   "noteId": "1255",
+   "condition": "Diabetes Mellitus, Type 1",
+   "causeDrugs": [
+    "Pembrolizumab"
+   ],
+   "verdict": "CAUSES",
+   "decidedBy": "agreed",
+   "quote": "Pembrolizumab can cause type 1 diabetes mellitus",
+   "noteSha256": "51a64c359b132ad8559dd91cfcbc2b8fcae4289ccbfd08d268cc00507261c4c8",
+   "expected": "CAUSES"
+  },
+  {
+   "noteId": "1713",
+   "condition": "Pulmonary Embolism",
+   "causeDrugs": [
+    "Rivaroxaban"
+   ],
+   "verdict": "NOT_CAUSAL",
+   "decidedBy": "agreed",
+   "quote": "treatment of pulmonary embolism (PE)",
+   "noteSha256": "45d6133adb99caca65ed18babd260171422ddc658603ddf8ad78b626e48a47c8",
+   "expected": "NOT_CAUSAL"
+  },
+  {
+   "noteId": "3585",
+   "condition": "Hemorrhage",
+   "causeDrugs": [
+    "Fenoldopam"
+   ],
+   "verdict": "WORSENS",
+   "decidedBy": "agreed",
+   "quote": "may exacerbate cerebral infarction or hemorrhage",
+   "noteSha256": "a790a08f22e38603e6e5e014fc8095fd2b65e6a815641c79df2e1235261044cd",
+   "expected": "WORSENS"
+  }
+ ]
+}

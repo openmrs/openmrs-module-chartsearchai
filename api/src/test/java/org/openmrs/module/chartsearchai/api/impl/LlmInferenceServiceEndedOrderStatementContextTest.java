@@ -272,9 +272,9 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		}
 	}
 
-	/** Where no drug is named before the phrase, the sentence naming it after the phrase still states it. */
+	/** Where no drug is named before the phrase, this drug named nearest after it still states it. */
 	@Test
-	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStatedByItsSentence() {
+	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStated() {
 		String stated = "The order no longer in force is her ibuprofen [2]. It interacts with her "
 				+ "Acetylsalicylic acid (aspirin) [1].";
 		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),

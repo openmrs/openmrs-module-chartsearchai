@@ -23,8 +23,8 @@
   "ratedSubstances": 17106,
   "ratedSubstancesNote": "summed per link: the distinct substanceGroupKey values among each link's rated entries",
   "rankedLinks": {
-   "sha256": "23b8c0d2601f5b0e6e559e43c0616b6e9541c64a41aff948526fb415603efc0e",
-   "line": "one per link in the census rule's order: note id, condition, kept chains, distinct rated substances, TAB-separated, each ending in LF, UTF-8; a run of DerivedTierPrecisionSampleTest that ranks the links writes the lines it hashes to api/target/derived-tier-precision-ranked-links.tsv, the lines these bytes hashed to only where it passes"
+   "sha256": "9b6adbee01847b95c6149234d9e32c327c24ed5c9bcf8588811c215613597935",
+   "line": "one per link in the census rule's order: note id, condition, kept chains, distinct rated substances, then the names of its cause drugs sorted, each its own field (issue #500), TAB-separated, each ending in LF, UTF-8; a run of DerivedTierPrecisionSampleTest that ranks the links writes the lines it hashes to api/target/derived-tier-precision-ranked-links.tsv, the lines these bytes hashed to only where it passes"
   }
  },
  "adjudication": "two fresh same-model (Claude) agents, blind to the hypothesis and to which items were controls, each judging all items plus six unmarked controls against the rubric below, verbatim as they were given it; the two disagreements went to a third blind agent. Not a clinician review. Each item's quote is the first adjudicator's where the two agreed, and the third's where it decided.",

@@ -39,7 +39,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * (issue #293), and the finding is ONE per set of orders, naming every substance that set shares
  * (ADR Decision 99's one-statement rule). It is raised on a screening question and nowhere else: the
  * rifampicin question's finding list is pinned by {@code SubstanceInSeveralActiveOrdersTest}, and
- * ADR Decision 113 carries why.
+ * ADR Decision 114 carries why.
  */
 public class OrdersSharingASubstanceTest {
 
@@ -154,7 +154,7 @@ public class OrdersSharingASubstanceTest {
 		// The ticket's two questions over its six orders and the shipped knowledge base, where both put
 		// drugs in play: the rifampicin question's finding list is SubstanceInSeveralActiveOrdersTest's,
 		// and the Metformin question names neither combination. Both stay with issue #477 (ADR
-		// Decision 113).
+		// Decision 114).
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 				DrugReferenceTestSupport.shippedEntries());
 		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,

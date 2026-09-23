@@ -1938,16 +1938,15 @@ public class DrugSafetyValidator {
 			// The nearest is another drug's; this one still owns the phrase only through a combination name.
 			DrugReference.NamedOccurrence before = latestEndingBy(others, other.getStart());
 			DrugReference.NamedOccurrence mineBefore = latestEndingBy(own, other.getStart());
-			// A tie goes to this drug here too. It is redundant with the loop condition's: walking on as
-			// the other drug's instead checks the same joiner and then leaves the loop on that tie.
-			DrugReference.NamedOccurrence joined = mineBefore != null
-					&& (before == null || mineBefore.getEnd() >= before.getEnd()) ? mineBefore : before;
-			if (joined == null || !COMBINATION_JOINER.matcher(folded.substring(joined.getEnd(),
-					other.getStart())).matches()) {
+			if (mineBefore == null) {
+				// Nothing of this drug's is named before the other's, so no walk back can reach one.
 				return false;
 			}
-			if (joined == mineBefore) {
-				return true;
+			// The joiner follows whichever name ends later. Which drug's that is, and a tie, are decided by the
+			// loop condition on the next pass, so there is one tie rule.
+			int joinedEnd = before == null ? mineBefore.getEnd() : Math.max(before.getEnd(), mineBefore.getEnd());
+			if (!COMBINATION_JOINER.matcher(folded.substring(joinedEnd, other.getStart())).matches()) {
+				return false;
 			}
 			other = before;
 			mine = mineBefore;
@@ -4321,7 +4320,7 @@ public class DrugSafetyValidator {
 	 * the question alone, so both {@code validate} passes of a request agree. Not on a question putting a
 	 * drug in play, whose finding list is its arm's, and not on the standing chart alerts. Its referent
 	 * is a current medication, and it is unrated, so the model reads it as a reason to change her
-	 * therapy. It relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decision 113
+	 * therapy. It relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decision 114
 	 * carries the scope and what it leaves open.
 	 */
 	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, List<DrugReference> orderEntries,

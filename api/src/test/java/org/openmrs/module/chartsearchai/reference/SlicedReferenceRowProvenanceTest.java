@@ -49,6 +49,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * deliberately: it is prose about the slice rather than data from it, so a note rewritten to say the
  * file is hand-authored still passes, and only its presence is checked.
  *
+ * <p><b>Derived chains, where a slice carries them.</b> Where a slice carries
+ * {@value #DERIVED}, the rows of it falling wholly inside the slice are compared too
+ * (issue #503). A slice that does not carry that table is not held to the shipped rows falling inside
+ * it, and loads with no condition-mediated chain where the shipped dataset may attach some.
+ *
  * <p>It reads the shipped file directly rather than through {@code DdiDrugReferenceSource}, because
  * the question is whether the BYTES were copied and a parse is exactly what would hide an edit the
  * parser normalises away. It is not the parsed-entry accessors' rule either: {@code getId()} and
@@ -61,11 +66,19 @@ public class SlicedReferenceRowProvenanceTest {
 	/** The shipped dataset, on the main classpath. */
 	private static final String SHIPPED = "chartsearchai/ddi-knowledge-base.json";
 
+	/** The table of pairwise interaction rows. */
+	private static final String INTERACTIONS = "interactions";
+
+	/** The table of derived (condition-mediated) chains, which the loader reads. */
+	private static final String DERIVED = "derived_interactions";
+
 	/** The slices this guard covers, which is NOT every fixture whose metadata calls itself one —
 	 *  {@code chartsearchai-test} holds dozens, several of which declare a deliberate deviation and
 	 *  would fail here correctly. The list is the coverage: a new slice is added to it rather than
 	 *  given a guard of its own, and an existing fixture is added only after someone has read its own
-	 *  note for a declared deviation. */
+	 *  note for a declared deviation. The three slices the guard was written for come first and every
+	 *  other entry follows in alphabetical order, which {@link #theListIsTheFirstThreeThenAlphabetical}
+	 *  holds it to, so a new entry goes where that order puts it. */
 	private static final List<String> SLICES = java.util.Arrays.asList(
 			"chartsearchai-test/ddi-issue338-allergy-cross-reactivity.json",
 			"chartsearchai-test/ddi-brand-name-aliases.json",
@@ -126,10 +139,24 @@ public class SlicedReferenceRowProvenanceTest {
 				assertEquals(shipped.path("mechanisms").path(group), cut.path("mechanisms").path(group),
 						slice + "'s mechanism group " + group + " must be the shipped dataset's own");
 			}
+			if (cut.has(DERIVED)) {
+				assertEquals(derivedWithin(shipped, ids), derivedWithin(cut, ids),
+						slice + " carries " + DERIVED + ", so the rows of it falling wholly inside the slice must "
+								+ "be the shipped rows falling wholly inside it and no other — the loader may attach "
+								+ "such a row to the rated drug's entry (issue #503)");
+			}
 			assertFalse(cut.path("metadata").path("note").asText("").isEmpty(),
 					slice + " must carry a metadata note — what it says is for a reader, and only that "
 							+ "it says something is checkable here");
 		}
+	}
+
+	@Test
+	public void theListIsTheFirstThreeThenAlphabetical() {
+		List<String> rest = new ArrayList<String>(SLICES.subList(3, SLICES.size()));
+		Collections.sort(rest);
+		assertEquals(rest, SLICES.subList(3, SLICES.size()),
+				"after the first three, SLICES is kept in alphabetical order, so a new entry has one place to go");
 	}
 
 	/** @return where {@code id} sits among the shipped dataset's rows, so a slice can be held to their
@@ -157,12 +184,27 @@ public class SlicedReferenceRowProvenanceTest {
 		throw new AssertionError("the shipped knowledge base carries no row with id " + id);
 	}
 
+	/** @return the {@value #DERIVED} rows of {@code dataset} whose cause drug and rated drug are BOTH in
+	 *          {@code ids}, in the dataset's own order — the two ids
+	 *          {@code DdiDrugReferenceSource.attachConditionMediatedRisks} resolves each row through, and
+	 *          drops the row where the file carries either not. */
+	private static List<JsonNode> derivedWithin(JsonNode dataset, Set<String> ids) {
+		return rowsWithin(dataset, DERIVED, 0, 4, ids);
+	}
+
 	/** @return the interaction rows of {@code dataset} whose BOTH partners are in {@code ids}, in the
 	 *          dataset's own order — which is what "falling wholly inside the slice" means. */
 	private static List<JsonNode> interactionsWithin(JsonNode dataset, Set<String> ids) {
+		return rowsWithin(dataset, INTERACTIONS, 0, 1, ids);
+	}
+
+	/** @return the rows of {@code dataset}'s {@code table} whose two id columns are BOTH in {@code ids},
+	 *          in the dataset's own order. */
+	private static List<JsonNode> rowsWithin(JsonNode dataset, String table, int first, int second,
+			Set<String> ids) {
 		List<JsonNode> out = new ArrayList<JsonNode>();
-		for (JsonNode row : dataset.path("interactions")) {
-			if (ids.contains(row.get(0).asText()) && ids.contains(row.get(1).asText())) {
+		for (JsonNode row : dataset.path(table)) {
+			if (ids.contains(row.get(first).asText()) && ids.contains(row.get(second).asText())) {
 				out.add(row);
 			}
 		}

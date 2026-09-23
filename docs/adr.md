@@ -118,7 +118,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 110: A finding about a drug the chart records only as an ended order says so, rather than reading as a proposal](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
 - [Decision 111: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)
 - [Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
-- [Decision 113: A screen of her medications states which of her orders share a substance, once per set of orders](#decision-113-a-screen-of-her-medications-states-which-of-her-orders-share-a-substance-once-per-set-of-orders)
+- [Decision 113: The sentence under a module-composed "No" is a finding that licensed it, and a contraindication about her own medication says so](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)
+- [Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders](#decision-114-a-screen-of-her-medications-states-which-of-her-orders-share-a-substance-once-per-set-of-orders)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -2375,7 +2376,7 @@ The module's load-time validity check (Decision 32, issues #150/#156/#196/#211/#
 | `derivative-merged-with-its-parent-substance` | 1 | `Fluoroestradiol f-18` keyed as `estradiol` |
 | `self-paired-interaction-rows` | 28 rows | both sides the same substance |
 
-**Since #476 a third content rule reports this dataset**, `substance-name-contradicted-by-the-bridge`: a row whose `rxnorm_name` and display name do not carry each other as a word, where the dataset's own CIEL bridge names that display name as an ingredient of concepts it files on other rows and not on it. Measured 2026-09-23 through `getLoadStatus()` over the shipped file, it names six rows, `Sulfamethoxazole` filed as `sulfamethazine` among them; two (`Omeprazole`, `Hyoscyamine`) are rows the table above already counts, and one (`Calcium saccharate` filed as `calcium glucarate`) is a synonym, so the rows the three content rules name come to 23. Its javadoc, `DrugReferenceValidity.reportSubstanceNamesContradictedByTheBridge`, carries the list. Nothing below changes: it is a data rule, softened for this dataset like the two above it.
+**Since #476 a third content rule reports this dataset**, `substance-name-contradicted-by-the-bridge`: a row whose `rxnorm_name` and display name do not carry each other as a word, where the dataset's own CIEL bridge names that display name as an ingredient of concepts it files on other rows and not on it. Measured 2026-09-23 through `getLoadStatus()` over the shipped file, it names six rows, `Sulfamethoxazole` filed as `sulfamethazine` among them; two (`Omeprazole`, `Hyoscyamine`) are rows the table above already counts, and one (`Calcium saccharate` filed as `calcium glucarate`) is a synonym, so the rows the three content rules name come to 23. Its javadoc, `DrugReferenceValidity.reportSubstanceNamesContradictedByTheBridge`, carries the list. Nothing below changes: it is a data rule, softened for this dataset like the two above it. Its follow-up compares the bridge's ingredients by display stem as well, so a trailing qualifier no longer hides a row. What that javadoc records it still misses, and the widening measured and rejected for it, stay there.
 
 That collided with two standing rules: *a rule must stay silent on an untouched default*, and `everyShippedDatasetSatisfiesEveryRule`, whose premise was that every dataset the module ships satisfies every rule. Three resolutions were considered and two rejected on evidence.
 
@@ -9513,7 +9514,8 @@ child's environment — so
 
 **Status: Accepted** (September 2026) — implemented behind `chartsearchai.drugSafety.answerFromFindings`,
 shipping OFF, issue [#469](https://github.com/openmrs/openmrs-module-chartsearchai/issues/469). The gate
-the issue names has not been run; see the last section.
+the issue names has not been run; see the last section. Its bound on the module's prose is amended by
+[Decision 113](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so).
 
 ### Context
 
@@ -9615,7 +9617,9 @@ X."* — what the finding states, and never "X should not be given", a directive
 make (see the residue on deliberate combinations); a screen gets no lead, since a lead naming which of her medications to change
 would state a choice no finding makes, which the issue measured the model adding (R2, D5, R6). Each line
 is the finding record's text between its head and its strength clause (one method, `findingBody`, for
-both), cited by its own number. The strength clause stays out: it is prompt-facing only, and the issue
+both), cited by its own number. ([Decision 113](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)
+adds the clause's referent to a contraindication about her own medication, and puts a licensing finding
+under the lead.) The strength clause stays out: it is prompt-facing only, and the issue
 counts its paste into an answer as a loss (R7, M4).
 
 **What is published beside it.** `answeredByTheModule: true`, because the keys that judge a model's
@@ -10369,7 +10373,10 @@ of its (drug, condition) keys name more than one note.
   the figure was measured, hashes the same bytes as at the commit that recorded them. A run that ranks
   the links writes them to `api/target/derived-tier-precision-ranked-links.tsv`, so a re-measurement
   after a refresh starts from the test's own ranking and weights rather than from a script that re-ranks
-  them; each adjudicated link's cause drugs are not in it. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
+  them. Since #500 each line also carries the sorted names of its link's cause drugs, and the hash was
+  re-recorded for it; with those fields cut off, the lines the class now writes hash to the value #496
+  recorded, so the appended names are the only change. Each mutation below was seen to redden the class on
+  2026-09-23, in the tests named:
   - one word of note 319: `everyAdjudicatedNoteIsTheTextItWasJudgedOn`;
   - the one Major rated side of link 1660 × Hyperbilirubinemia set to Moderate:
     `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and
@@ -10404,6 +10411,11 @@ of its (drug, condition) keys name more than one note.
   `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor` in the class, the lines above
   them before it was added. The last two were run with #496's two tests in the class, and the lines above
   them before those were added, so they do not say whether those two tests redden too.
+
+  On 2026-09-24, with #500's cause drugs in the hashed lines, the `cause_note_id` of all 128 rows of link
+  940 × Hypotension was swapped with that of the 128 rows of 262 × Hypotension, two unadjudicated links
+  with the same kept chains and rated substances: `everyLinkCarriesTheWeightsThePopulationWasMeasuredWith`
+  alone reddened. The class before #500 stayed green on it.
 
 **Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
 stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the
@@ -10527,7 +10539,80 @@ orders A and B — possible duplicate therapy"*. One order states nothing: that 
 
 → `SubstanceInSeveralActiveOrdersTest`.
 
-## Decision 113: A screen of her medications states which of her orders share a substance, once per set of orders
+## Decision 113: The sentence under a module-composed "No" is a finding that licensed it, and a contraindication about her own medication says so
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#469](https://github.com/openmrs/openmrs-module-chartsearchai/issues/469)'s item carried over from #470's
+review, which it does not close. It amends the bound of
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).
+
+### Context
+
+#470's review read two defects in `DrugReferenceInjector.composeFromFindings` from the code, and this change
+reproduced both through the real `LlmInferenceService.search` on patient 7:
+
+- **The line under the "No".** The composer sorts on the strength clause, and the sort is stable. A
+  contraindication about the proposed drug states the same withholding clause as the Major interaction
+  that licensed the lead, and the drug-in-play arm appends contraindications first. So *"Can I give her
+  ibuprofen?"* over a recorded ibuprofen allergy opened *"No — this module's drug-safety check found a
+  reason to withhold Ibuprofen."* and then *"The patient has a recorded allergy to Ibuprofen."* That is a
+  finding Decision 108 says may never decide the "No". An unrated interaction rule does the same thing,
+  because `FINDING_STRENGTH_DESCENDING` ranks it above Major.
+- **The referent.** Since #348 the strength clause carries two axes, strength and referent
+  (Decision 72). Decision 108 keeps the whole clause out of the answer. The words the order-driven
+  contraindication arm writes into its details (*"The patient has a recorded allergy to Acetylsalicylic
+  acid (aspirin)."*, a class sentence, the frame before a curated rule's note) do not say she takes the
+  drug, so on a screen the composed line lost the one fact that made it a finding about her
+  prescription.
+
+### The decision
+
+- **Within the withholding class, a finding that licensed the "No" is stated first.**
+  `DrugReferenceInjector.licensesTheModulesNo` is the one spelling of "an interaction the data rates a
+  reason to withhold". `answersFromFindings` admits a proposal by it and `composeFromFindings` orders by
+  it, so the gate and the line order cannot disagree. The key is scoped to that class, and a screen's
+  order does not move.
+- **A contraindication about a medication she already takes (`SafetyWarning.isAboutACurrentMedication`)
+  keeps its clause's referent**: *"This finding is about a medication this patient is already taking."*, after its body and
+  before its marker. The referent words are the clause's own, one constant for all three. The sentence
+  **names no drug.** The finding's drug is an entry her order resolved to, which an order's name can
+  imply without naming it. Printing that label in a claim about her record is what `findNamedSubstances`
+  guards (reference/CLAUDE.md), and the clause this sentence stands in for names no drug either. An
+  interaction line gets no referent sentence, because its detail already names the partner as her
+  active order.
+
+### What it amends in Decision 108
+
+Decision 108 bounded the module's prose to *"its records' own words behind at most one fixed lead
+sentence"*. A composed contraindication line about her own medication now also carries one fixed
+sentence, of the same kind as the lead: a fixed wording read off the arm's flag and the finding's type. That line
+therefore differs from the record it cites, which is one of the reasons Decision 108 gave for refusing
+composed-only order-record numbers. The difference this time is that the sentence claims nothing the
+record's clause does not already claim, and it carries no call.
+
+Two other routes were rejected:
+
+- **The prose in `findingBody`**, so that the record says it too. That method is also `renderFinding`'s
+  text, so the sentence would enter every current-medication finding record in the prompt with the
+  property off, beside a clause already stating the referent. That is an ungated prompt edit for every
+  install.
+- **The fact as a citation of her order record**, #469's own open item. For a contraindication the
+  module attaches the allergy or condition record (Decision 80), not the order. An order-record
+  citation needs the resolution Decision 77 ships off, and a composed-only one is the shape Decision 108
+  refused.
+
+### Residues
+
+- A class relationship folded onto a lower-rated row also withholds without licensing, and the same key
+  orders it behind a licensing row. No test builds that arrangement.
+- No model is involved, so this was not measured on one. Decision 108's gate is still not run.
+
+→ `LlmInferenceServiceAnswerFromFindingsContextTest.theLineUnderTheNoIsTheInteractionThatLicensedIt`,
+`.aMajorInteractionLeadsAnUnratedRuleUnderTheNo`,
+`.aMajorInteractionLeadsARuleRatedInAWordTheModuleDoesNotRecogniseUnderTheNo`,
+`.aScreensLinesKeepTheOrderTheArmRaisedThemIn`, `.aContraindicationAboutAMedicationSheAlreadyTakesSaysSo`.
+
+## Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close.

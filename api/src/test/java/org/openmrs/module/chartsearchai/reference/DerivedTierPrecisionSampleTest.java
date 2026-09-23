@@ -95,9 +95,10 @@ public class DerivedTierPrecisionSampleTest {
 	public static void enumerateTheLinksTheLoaderKeeps() throws Exception {
 		sample = read(SAMPLE);
 
-		// Read off the entries before the raw tree is parsed, keeping only ids, names and substance keys. An
-		// entry publishing no substance keys on ITSELF, so its id stands in for it: the ids are unique, and a
-		// String cannot equal the List a substance key is, so the distinct count is unchanged.
+		// Read off the entries before the raw tree is parsed, keeping only ids, names and substance keys.
+		// Where an entry publishes no substance, substanceGroupKey() is the entry itself, so its id stands in
+		// for it: ids are unique, and a String cannot equal the List a substance key is, so the distinct
+		// count is unchanged and no loaded entry is retained.
 		Map<String, String> entryNames = new HashMap<String, String>();
 		List<String> chainKeys = new ArrayList<String>();
 		List<Object> chainSubstances = new ArrayList<Object>();

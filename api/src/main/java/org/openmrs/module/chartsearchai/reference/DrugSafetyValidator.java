@@ -1856,6 +1856,103 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Whether an occurrence of {@code phrase} in {@code sentence} is about the drug of {@code chip}, a chip
+	 * about an order no longer in force (issue #482): the drug named NEAREST before it, by position. That is
+	 * this drug where one of its names ends at or after every other drug's name before the phrase (a tie
+	 * goes to this drug, so a name the chip's substance shares with another reads as this one), or where
+	 * the nearest name is JOINED to one of this drug's by a hyphen, a slash or a plus sign
+	 * ({@link #COMBINATION_JOINER}) — {@code "ibuprofen-metformin"} is one subject. Where no drug is named
+	 * before the phrase, the sentence rule stands: {@link #namesTheEndedOrderDrug} of the whole sentence.
+	 * {@code false} for any other chip.
+	 *
+	 * <p>Positions come from {@link DrugReference#namedOccurrences}, the accessor for WHERE a prose match
+	 * sits, over ONE {@link DrugReference#foldedLower} form of the sentence, in which the phrase is located
+	 * too, so no position from one string is compared with one from another. This drug's names are every
+	 * row of its substance ({@link SafetyWarning#endedOrderRows()}, {@link #namesTheEndedOrderDrug}'s
+	 * rows); another drug is any other entry {@link DrugReferenceService#findImpliedByQuery} reads the
+	 * sentence to put in play. With no dataset wired only this drug's names are known,
+	 * which is the sentence rule.
+	 *
+	 * <p>Its residues, in each direction, are ADR Decision 110's first residue: a pronoun reaching back past
+	 * a nearer drug to this one, and this drug listed before another in one subject ("her ibuprofen and
+	 * metformin orders"), read as the other's (the sentence appended, said twice); a pronoun reaching back
+	 * past this drug to one named before it, a nearer drug the loaded data does not carry, and a phrase
+	 * ahead of the drug it is about, read as this one (nothing appended).
+	 */
+	public boolean isAboutTheEndedOrderDrug(String sentence, String phrase, SafetyWarning chip) {
+		if (ChartSearchAiUtils.isBlank(phrase) || !namesTheEndedOrderDrug(sentence, chip)) {
+			return false;
+		}
+		String folded = DrugReference.foldedLower(sentence);
+		String foldedPhrase = DrugReference.foldedLower(phrase);
+		List<DrugReference> rows = chip.endedOrderRows();
+		List<DrugReference.NamedOccurrence> own = namedOccurrences(folded, 0, rows);
+		List<DrugReference.NamedOccurrence> others = new ArrayList<DrugReference.NamedOccurrence>();
+		if (drugReferenceService != null) {
+			for (DrugReference ref : drugReferenceService.findImpliedByQuery(sentence)) {
+				if (!rows.contains(ref)) {
+					others.addAll(ref.namedOccurrences(folded, 0));
+				}
+			}
+		}
+		for (int at = folded.indexOf(foldedPhrase); at >= 0; at = folded.indexOf(foldedPhrase, at + 1)) {
+			if (nearestBeforeIsOwn(folded, at, own, others)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * What joins two drug names into one combination name for {@link #isAboutTheEndedOrderDrug}: a hyphen
+	 * (ASCII, U+2010 or U+2011) with nothing around it, or a slash or plus sign with optional whitespace.
+	 * A spaced hyphen is left out because it is also written as a dash between clauses, and "and" and a
+	 * comma because they also join a clause about another drug; either reads as another drug's, and the
+	 * sentence is appended.
+	 */
+	private static final Pattern COMBINATION_JOINER = Pattern.compile("[-\u2010\u2011]|\\s*[/+]\\s*");
+
+	/**
+	 * Whether the drug name nearest before {@code at} of {@code folded} is one of {@code own}, or is joined
+	 * to one of them through {@link #COMBINATION_JOINER}; {@code true} where no name of either list ends by
+	 * {@code at}.
+	 */
+	private static boolean nearestBeforeIsOwn(String folded, int at, List<DrugReference.NamedOccurrence> own,
+			List<DrugReference.NamedOccurrence> others) {
+		DrugReference.NamedOccurrence mine = latestEndingBy(own, at);
+		DrugReference.NamedOccurrence other = latestEndingBy(others, at);
+		while (other != null && (mine == null || other.getEnd() > mine.getEnd())) {
+			// The nearest is another drug's; this one still owns the phrase only through a combination name.
+			DrugReference.NamedOccurrence before = latestEndingBy(others, other.getStart());
+			DrugReference.NamedOccurrence mineBefore = latestEndingBy(own, other.getStart());
+			DrugReference.NamedOccurrence joined = mineBefore != null
+					&& (before == null || mineBefore.getEnd() >= before.getEnd()) ? mineBefore : before;
+			if (joined == null || !COMBINATION_JOINER.matcher(folded.substring(joined.getEnd(),
+					other.getStart())).matches()) {
+				return false;
+			}
+			if (joined == mineBefore) {
+				return true;
+			}
+			other = before;
+			mine = mineBefore;
+		}
+		return true;
+	}
+
+	/** The occurrence of {@code occurrences} ending latest at or before {@code by}, or {@code null}. */
+	private static DrugReference.NamedOccurrence latestEndingBy(List<DrugReference.NamedOccurrence> occurrences,
+			int by) {
+		DrugReference.NamedOccurrence latest = null;
+		for (DrugReference.NamedOccurrence occurrence : occurrences) {
+			if (occurrence.getEnd() <= by && (latest == null || occurrence.getEnd() > latest.getEnd())) {
+				latest = occurrence;
+			}
+		}
+		return latest;
+	}
+
+	/**
 	 * What THIS response is about: the question, and the patient's own CHART records the answer cited.
 	 *
 	 * <p><b>Not the answer's own prose, and not a cited reference record — issue #143's second half.</b>
@@ -2378,7 +2475,8 @@ public class DrugSafetyValidator {
 	 * query-scoped slice need not retrieve it — states nothing, and the finding stays a proposal, as
 	 * before this issue. And a record naming the drug somewhere other than its drug field (an order
 	 * reason, say) is read as naming it, the echo test's own residue; an order that resolved to only
-	 * SOME of its substances passes the resolution gate, Decision 108's residue.
+	 * SOME of its substances passes the resolution gate, Decision 108's residue; why asking her
+	 * active-order NAMES as well would not close it is ADR Decision 110's measurement (issue #482).
 	 *
 	 * <p>A per-pass value and never a field, for issue #172's reason.
 	 */

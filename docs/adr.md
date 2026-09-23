@@ -9945,7 +9945,8 @@ the refusal gone, the false premise confirmed, and the referent only on a chip k
 So the chip also carries the date (`SafetyWarning.getEndedOrderStopDate()`, the latest
 `RecordMapping.getOrderStopDate()` among the ended records naming the drug, published as
 `endedOrderStopDate`), and `EndedOrderStatement.withEndedOrdersStated` appends, where no sentence of the
-MODEL's answer names the drug beside "no longer in force", *"The chart records Rifampicin (rifampin) only as
+MODEL's answer names the drug beside "no longer in force" (since issue #482, as the drug named nearest
+before that phrase — the first residue below says how), *"The chart records Rifampicin (rifampin) only as
 an order no longer in force (ended …), not as a current medication."* — the drug printed as the chip's
 label, which appends a generic name wherever it diverges from the display name — Decision 100's
 mechanism, at its three call sites, appending and never replacing. Whether a sentence names the drug is
@@ -10047,11 +10048,26 @@ rig on the machine held, and it was restored after the run.
 ### Residues
 
 - R1's MODEL prose still opens *"Yes"* and does not say the order has ended; the module's appended
-  sentence says it. Whether the answer "said it" is a sentence containing "no longer in force" that names
-  the drug by `namesTheEndedOrderDrug` — so a paraphrase of that phrase, or a name no row of the substance
-  carries, gets the sentence as well: said twice rather than not at all. The drug test's own residue runs
-  the other way: an alias the substance shares with another (#209's shape) names it too, so a sentence
-  saying that other drug's order is no longer in force reads as saying it of this one.
+  sentence says it. Whether the answer "said it" is an occurrence of "no longer in force" about the drug
+  (`DrugSafetyValidator.isAboutTheEndedOrderDrug`): the drug named nearest before it, by position
+  (`DrugReference.namedOccurrences`), where a name of any row the chip carries for its substance counts as
+  this drug and any other entry `findImpliedByQuery` reads the sentence to name counts as another; a
+  hyphen, slash or plus sign joining the nearest name to one of this drug's makes them one subject; and
+  where no drug is named before the phrase, the sentence rule. So Decision 47's recorded *"Nevirapine was
+  prescribed, but its order is no longer in force"* reads as said, and *"Rifampicin interacts with
+  nevirapine; her isoniazid order is no longer in force."* does not — nor do its variants joined by
+  "and", by a parenthesis or by a "whose" clause about the other drug (issue #482; until then any sentence naming the drug
+  and carrying the phrase was read as saying it). Said twice rather than not at all: a paraphrase of that
+  phrase, a name no row of the substance carries, a pronoun reaching back past a nearer drug
+  (*"Ibuprofen interacts with aspirin, but its order is no longer in force"*), and this drug listed
+  before another in one subject (*"Her ibuprofen and metformin orders are …"*). Toward silence: a pronoun
+  reaching back past this drug to one named before it (*"Metformin interacts with ibuprofen, but its order
+  is no longer in force"*), a nearer drug the loaded data does not carry, and a phrase ahead of the drug
+  it is about in a sentence naming this one elsewhere (*"The order no longer in force is her metformin;
+  ibuprofen …"*), which the sentence rule reads as stated. The drug test's own residue also runs that
+  way: an alias the substance shares with another (#209's shape) names it too, and a tie in position goes
+  to this drug, so a sentence saying that other drug's order is no longer in force reads as saying it of
+  this one.
 - The appended sentence is not on the early `done` of async grounding, which is emitted before the chips
   exist — Decision 100's completion shares that, and async grounding ships off.
 - A chart that did not RETRIEVE the ended record states nothing, and the finding stays a proposal as
@@ -10071,6 +10087,28 @@ rig on the machine held, and it was restored after the run.
   clause replaces one that already cleared that floor.
 - A patient with any active order the data cannot resolve gets no ended-order referent at all, even for
   a drug that order plainly is not — the price of the resolution gate.
+- An active order the data resolves to only SOME of its substances (Decision 108's residue) passes the
+  resolution gate, and where its own chart record is outside the built chart nothing reads its name.
+  Asking the context's active-order NAMES as well (issue #482 item 2) was measured and not added,
+  2026-09-23: a throwaway test drove the real `DrugReferenceService.findForActiveOrders` over the shipped
+  knowledge base, with every one of its 1629 combination-shaped aliases (containing "/", " and ", ", ",
+  "+" or " with ") used as an active order's name, and asked which entries the order's name names
+  that the resolution left out — by the order-name rule (`PatientClinicalContext.hasActiveDrug`) and by
+  the prose rule the issue proposed (`DrugReference.matchesText` over `getActiveDrugNames()`). Both
+  answered the same 4 of the 1629 names, and all 4 named a DIFFERENT substance (iodine → Iodide I-131,
+  isosorbide → Isosorbide mononitrate, a Moderna vaccine name → Tozinameran rows): no constituent the
+  resolution dropped. The reason is structural: an order's names go through `findImpliedByDrugName`,
+  whose primitive resolves each constituent a combination name names, and only #209's ranking can
+  remove one. Decision 108's own case, `Bactrim`,
+  resolves to Trimethoprim alone and its name names neither constituent, so the guard would not reach it
+  either. The population is the knowledge base's own aliases, not a dictionary's order displays.
+  Order displays written as a dictionary would were checked too, 2026-09-23, for PR #487's review: 24
+  hand-written combination displays (among them *Lamivudine and zidovudine 150mg/300mg tablet*,
+  *Sulfamethoxazole / Trimethoprim 800mg/160mg*, *Rifampicin, isoniazid, pyrazinamide and ethambutol
+  (RHZE)*, *Bactrim DS*), where a throwaway test over the shipped knowledge base asked, of each, which
+  substances `DrugReference.matchesText` finds named in the display that
+  `DrugReferenceService.findImpliedByDrugName` of it did not resolve. None of the 24 had one; one of them,
+  *Co-trimoxazole 960 mg*, named no entry by either rule.
 - The chips pass judges a substance over every row the pass resolved, and the ANSWER can add a row of a
   question's substance the pre-answer pass did not have. Where an ended record names that substance only
   by an alias the added row alone carries, the chip can state the referent while the record the model

@@ -163,6 +163,166 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		assertEquals(stated, answer.getAnswer(), "the answer already states it of both, so nothing is appended");
 	}
 
+	/**
+	 * Issue #482 item 1: the answer's "no longer in force" is about ANOTHER drug, named in the phrase's
+	 * own clause. Asked as co-occurrence in one sentence, the ended ibuprofen read as stated and nothing
+	 * was appended about it.
+	 */
+	@Test
+	public void aPhraseWhoseClauseNamesAnotherDrugDoesNotStateThisOnesEnd() {
+		String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+				+ "with Acetylsalicylic acid (aspirin) [1]; her metformin order is no longer in force.";
+		ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(completed);
+		assertEquals(answer + STATEMENT, completed.getAnswer(),
+				"the phrase is about metformin, so the answer never said ibuprofen's order ended");
+	}
+
+	/** The same, where a comma and a conjunction join the clause about the other drug. */
+	@Test
+	public void aPhraseInACommaJoinedClauseNamingAnotherDrugDoesNotStateThisOnesEnd() {
+		String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+				+ "with Acetylsalicylic acid (aspirin) [1], and her metformin order is no longer in force.";
+		ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(completed);
+		assertEquals(answer + STATEMENT, completed.getAnswer(),
+				"the phrase is about metformin, so the answer never said ibuprofen's order ended");
+	}
+
+	/** After a colon or a dash, as after a semicolon, the drug named nearest before the phrase is metformin. */
+	@Test
+	public void aPhraseAfterAColonOrADashNamingAnotherDrugDoesNotStateThisOnesEnd() {
+		for (String boundary : new String[] { ":", " —", " –", " -", " --" }) {
+			String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+					+ "with Acetylsalicylic acid (aspirin) [1]" + boundary + " her metformin order is no longer "
+					+ "in force.";
+			ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				endedIbuprofen()).search(patient, QUESTION);
+
+			assertAnEndedChip(completed);
+			assertEquals(answer + STATEMENT, completed.getAnswer(),
+					"after '" + boundary + "' the phrase is about metformin");
+		}
+	}
+
+	/**
+	 * Punctuation between the other drug's name and the phrase — an appositive, a dose range, a thousands
+	 * comma, a parenthesis — names no drug. The phrase is about the nearest drug named before it,
+	 * metformin, and not about the drug the sentence named first.
+	 */
+	@Test
+	public void aBoundaryInsideTheOtherDrugsClauseStillLeavesThePhraseAboutThatDrug() {
+		for (String tail : new String[] { "; her metformin order, started in 2024, is no longer in force.",
+				"; her metformin 500 - 1000 mg order is no longer in force.",
+				"; her metformin 1,000 mg order is no longer in force.",
+				"; her metformin order (500 mg, twice daily) is no longer in force." }) {
+			String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+					+ "with Acetylsalicylic acid (aspirin) [1]" + tail;
+			ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				endedIbuprofen()).search(patient, QUESTION);
+
+			assertAnEndedChip(completed);
+			assertEquals(answer + STATEMENT, completed.getAnswer(), "the phrase is about metformin: " + tail);
+		}
+	}
+
+	/**
+	 * PR #487 review round 1: the other drug named between this one and the phrase, joined by no comma,
+	 * semicolon, colon or dash — a plain "and", a pronoun, a parenthesis, a Unicode hyphen or minus sign
+	 * written as a dash. Read clause by clause, the phrase's clause ran back to ibuprofen and the sentence
+	 * read as stated. The phrase is about the drug named nearest before it, metformin.
+	 */
+	@Test
+	public void anotherDrugNamedNearerThePhraseWithNoClauseBoundaryDoesNotStateThisOnesEnd() {
+		for (String tail : new String[] { " and her metformin order is no longer in force.",
+				" and with metformin, whose order is no longer in force.",
+				" (her metformin order is no longer in force).",
+				" ‐ her metformin order is no longer in force.",
+				" − her metformin order is no longer in force." }) {
+			String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+					+ "with Acetylsalicylic acid (aspirin) [1]" + tail;
+			ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				endedIbuprofen()).search(patient, QUESTION);
+
+			assertAnEndedChip(completed);
+			assertEquals(answer + STATEMENT, completed.getAnswer(), "the phrase is about metformin: " + tail);
+		}
+	}
+
+	/**
+	 * Names joined into one combination name — by a hyphen, a slash or a plus sign — are one subject: the
+	 * phrase after them is about each, so the nearest being the other drug does not take it from this one.
+	 */
+	@Test
+	public void aPhraseAfterACombinationNameIncludingThisDrugStatesIt() {
+		for (String joined : new String[] { "ibuprofen-metformin", "ibuprofen‐metformin",
+				"ibuprofen/metformin", "ibuprofen / metformin", "ibuprofen + metformin" }) {
+			String stated = "Her " + joined + " order is no longer in force [2]. It interacts with her "
+					+ "Acetylsalicylic acid (aspirin) [1].";
+			ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				endedIbuprofen()).search(patient, QUESTION);
+
+			assertAnEndedChip(answer);
+			assertEquals(stated, answer.getAnswer(), "the combination names ibuprofen: " + joined);
+		}
+	}
+
+	/** Where no drug is named before the phrase, the sentence naming it after the phrase still states it. */
+	@Test
+	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStatedByItsSentence() {
+		String stated = "The order no longer in force is her ibuprofen [2]. It interacts with her "
+				+ "Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the sentence says it of ibuprofen, so nothing is appended");
+	}
+
+	/** A hyphen inside a word joins a combination name, which names ibuprofen as well as the nearer metformin. */
+	@Test
+	public void aHyphenInsideAWordDoesNotEndTheClause() {
+		String stated = "Her ibuprofen-metformin order is no longer in force [2]. It interacts with her "
+				+ "Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the clause names ibuprofen, so nothing is appended");
+	}
+
+	/** Every occurrence of the phrase is asked, not only the first one in its sentence. */
+	@Test
+	public void aLaterOccurrenceInTheSameSentenceThatIsAboutThisDrugStatesIt() {
+		String stated = "Her metformin order is no longer in force; ibuprofen's order is no longer in force "
+				+ "too [2]. It interacts with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the second clause states it, so nothing is appended");
+	}
+
+	/**
+	 * ADR Decision 47's recorded live wording, a pronoun after a clause boundary — the form the prompt
+	 * teaches ("say in the same sentence that its order is no longer in force"). The drug named nearest
+	 * before the phrase is ibuprofen, so nothing is appended.
+	 */
+	@Test
+	public void aPronounAfterAClauseBoundaryStillStatesTheDrugItsSentenceNames() {
+		String stated = "Ibuprofen was prescribed, but its order is no longer in force [2]. It interacts "
+				+ "with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the answer already states it, so nothing is appended");
+	}
+
 	@Test
 	public void aChartHoldingNoEndedOrderOfTheDrugAddsNothing() {
 		ChartAnswer answer = serviceWith(MODEL_ANSWER, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"))

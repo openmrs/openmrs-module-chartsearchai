@@ -35,15 +35,23 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * left unnamed: appended by the module, with no model asked and no prompt changed.
  *
  * <p><b>What "the answer said so" is</b>: some sentence of the answer
- * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) names the chip's drug and contains
- * {@link #NO_LONGER_IN_FORCE}, the words the prompt's ended-order branch tells the model to use. The
- * drug is asked by {@link DrugSafetyValidator#namesTheEndedOrderDrug} — the prose rule over every row of
- * its substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
+ * ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) contains {@link #NO_LONGER_IN_FORCE}, the words the
+ * prompt's ended-order branch tells the model to use, ABOUT the chip's drug — the drug named nearest
+ * before that occurrence, by position, or a combination name joining this drug to it
+ * ({@link DrugSafetyValidator#isAboutTheEndedOrderDrug}, over the loaded dataset). So <em>"Rifampicin
+ * interacts with nevirapine; her isoniazid order is no longer in force."</em> does not state rifampicin's
+ * end, and neither does the same sentence with "and" in place of the semicolon (issue #482): until then
+ * one sentence naming the drug anywhere and carrying the phrase anywhere was read as saying it. ADR
+ * Decision 47's recorded live wording, <em>"Nevirapine was prescribed, but its order is no longer in
+ * force"</em>, names no other drug before the phrase and still states it; where no drug at all is named
+ * before the phrase, the sentence rule stands. The drug is asked by
+ * {@link DrugSafetyValidator#namesTheEndedOrderDrug}'s rows — the prose rule over every row of its
+ * substance, so "rifampicin" or "rifampin" names a chip labelled {@code Rifampicin (rifampin)} — and
  * never as a substring of that label, which no answer writes (PR #478, review round 2). The phrase is
  * containment, so a paraphrase ("it was discontinued") reads as unstated and the sentence is appended
  * beside it — the residue runs toward saying it twice rather than toward silence, the direction
- * Decision 100 chose for the same reason. The drug predicate's own residue runs the other way, and that
- * method's javadoc states it.
+ * Decision 100 chose for the same reason. What this reading still gets wrong, in each direction, is ADR
+ * Decision 110's first residue.
  */
 public final class EndedOrderStatement {
 
@@ -57,7 +65,8 @@ public final class EndedOrderStatement {
 	 * The chips about an ended order whose drug {@code answer} does not state as one — one per drug, in
 	 * chip order, however many findings are about it.
 	 */
-	public static List<SafetyWarning> unstatedEndedOrders(String answer, List<SafetyWarning> warnings) {
+	public static List<SafetyWarning> unstatedEndedOrders(String answer, List<SafetyWarning> warnings,
+			DrugSafetyValidator validator) {
 		List<SafetyWarning> unstated = new ArrayList<SafetyWarning>();
 		if (warnings == null || ChartSearchAiUtils.isBlank(answer)) {
 			return unstated;
@@ -68,17 +77,23 @@ public final class EndedOrderStatement {
 			if (!warning.isAboutAnEndedOrder() || ChartSearchAiUtils.isBlank(warning.getDrug())) {
 				continue;
 			}
-			if (seen.add(warning.getDrug().toLowerCase(Locale.ROOT)) && !statesItEnded(sentences, warning)) {
+			if (seen.add(warning.getDrug().toLowerCase(Locale.ROOT))
+					&& !statesItEnded(sentences, warning, validator)) {
 				unstated.add(warning);
 			}
 		}
 		return unstated;
 	}
 
-	private static boolean statesItEnded(String[] sentences, SafetyWarning warning) {
+	private static boolean statesItEnded(String[] sentences, SafetyWarning warning,
+			DrugSafetyValidator validator) {
 		for (String sentence : sentences) {
-			if (sentence.toLowerCase(Locale.ROOT).contains(NO_LONGER_IN_FORCE)
-					&& DrugSafetyValidator.namesTheEndedOrderDrug(sentence, warning)) {
+			if (!sentence.toLowerCase(Locale.ROOT).contains(NO_LONGER_IN_FORCE)) {
+				continue;
+			}
+			// With no validator wired, nothing knows another drug's names: the sentence rule.
+			if (validator != null ? validator.isAboutTheEndedOrderDrug(sentence, NO_LONGER_IN_FORCE, warning)
+					: DrugSafetyValidator.namesTheEndedOrderDrug(sentence, warning)) {
 				return true;
 			}
 		}

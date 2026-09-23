@@ -1227,10 +1227,11 @@ public final class DrugReferenceValidity {
 	}
 
 	/**
-	 * The check for issue #476: a row whose published substance name is another substance's, where the
-	 * dataset has no row of that other substance for {@link #reportAliasesNamingAnotherSubstance} to
-	 * collide with and nothing merged for {@link #reportDerivativesMergedWithTheirParent} to find. The
-	 * shipped case: {@code Sulfamethoxazole} publishes {@code rxnorm_name: sulfamethazine} and
+	 * The check for issue #476: a row whose published substance name is another substance's. Neither
+	 * sibling sees the shipped case — the dataset has no row of that other substance for
+	 * {@link #reportAliasesNamingAnotherSubstance} to collide with, and nothing merged for
+	 * {@link #reportDerivativesMergedWithTheirParent} to find. That case: {@code Sulfamethoxazole}
+	 * publishes {@code rxnorm_name: sulfamethazine} and
 	 * sulfamethazine's CIEL concepts, and {@link DdiDrugReferenceSource} reads that field as the row's
 	 * substance name, its chip-label synonym and the token every rule about it carries — so a
 	 * cotrimoxazole order reaches a clinician as "sulfamethazine".
@@ -1261,7 +1262,7 @@ public final class DrugReferenceValidity {
 	 * row's own names to believe, and dropping the value or the row fails closed, silently, to fix a
 	 * fail-loud. The fix is upstream, and this is the check that finds the rows to hand there.
 	 *
-	 * <p>Measured over the shipped 19 MB KB 2026-09-23, by this method through
+	 * <p>Measured over the shipped KB 2026-09-23, by this method through
 	 * {@link DrugReferenceService#getLoadStatus()}: six rows — {@code Sulfamethoxazole} (filed as
 	 * {@code sulfamethazine}), {@code Chlorpheniramine} ({@code chlorine}), {@code Methionine}
 	 * ({@code n-acetylmethionine}), {@code Omeprazole} ({@code esomeprazole}), {@code Hyoscyamine}

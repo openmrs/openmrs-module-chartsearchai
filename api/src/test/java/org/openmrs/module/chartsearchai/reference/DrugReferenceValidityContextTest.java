@@ -750,7 +750,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	// ------------------------------------------------------------------
 
 	/**
-	 * Issue #476, over a verbatim slice of the shipped 19 MB knowledge base. {@code Sulfamethoxazole}
+	 * Issue #476, over a verbatim slice of the shipped knowledge base. {@code Sulfamethoxazole}
 	 * publishes {@code rxnorm_name: sulfamethazine}, and the module reads that field as the row's
 	 * substance name, its chip-label synonym and the token every rule about it carries — so a
 	 * cotrimoxazole order is named "sulfamethazine" to a clinician. Neither sibling rule can see it: no

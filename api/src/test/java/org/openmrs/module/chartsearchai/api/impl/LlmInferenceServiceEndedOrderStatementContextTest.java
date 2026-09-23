@@ -193,6 +193,33 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 				"the phrase is about metformin, so the answer never said ibuprofen's order ended");
 	}
 
+	/** A colon or a dash ends the clause as a semicolon does. */
+	@Test
+	public void aPhraseAfterAColonOrADashNamingAnotherDrugDoesNotStateThisOnesEnd() {
+		for (String boundary : new String[] { ":", " —", " –" }) {
+			String answer = "Yes, there are interactions recorded for these medications: ibuprofen interacts "
+					+ "with Acetylsalicylic acid (aspirin) [1]" + boundary + " her metformin order is no longer "
+					+ "in force.";
+			ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				endedIbuprofen()).search(patient, QUESTION);
+
+			assertEquals(answer + STATEMENT, completed.getAnswer(),
+					"after '" + boundary + "' the phrase is about metformin");
+		}
+	}
+
+	/** Every occurrence of the phrase is asked, not only the first one in its sentence. */
+	@Test
+	public void aLaterOccurrenceInTheSameSentenceThatIsAboutThisDrugStatesIt() {
+		String stated = "Her metformin order is no longer in force; ibuprofen's order is no longer in force "
+				+ "too [2]. It interacts with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the second clause states it, so nothing is appended");
+	}
+
 	/**
 	 * ADR Decision 47's recorded live wording, a pronoun after a clause boundary — the form the prompt
 	 * teaches ("say in the same sentence that its order is no longer in force"). Its clause names no

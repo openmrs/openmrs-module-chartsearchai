@@ -9904,7 +9904,8 @@ the refusal gone, the false premise confirmed, and the referent only on a chip k
 So the chip also carries the date (`SafetyWarning.getEndedOrderStopDate()`, the latest
 `RecordMapping.getOrderStopDate()` among the ended records naming the drug, published as
 `endedOrderStopDate`), and `EndedOrderStatement.withEndedOrdersStated` appends, where no sentence of the
-MODEL's answer names the drug beside "no longer in force", *"The chart records Rifampicin (rifampin) only as
+MODEL's answer names the drug beside "no longer in force" (since issue #482, beside it in that phrase's
+own clause — the first residue below says how), *"The chart records Rifampicin (rifampin) only as
 an order no longer in force (ended …), not as a current medication."* — the drug printed as the chip's
 label, which appends a generic name wherever it diverges from the display name — Decision 100's
 mechanism, at its three call sites, appending and never replacing. Whether a sentence names the drug is

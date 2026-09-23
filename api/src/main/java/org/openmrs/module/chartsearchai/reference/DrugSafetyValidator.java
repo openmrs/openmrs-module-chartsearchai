@@ -8162,7 +8162,7 @@ public class DrugSafetyValidator {
 		return everyActiveOrderResolves(context, orderEntries, BridgedOrders.of(service, context));
 	}
 
-	/** As above, for a caller holding the pass's own bridged-concept resolution (issue #472's holder),
+	/** As above, for a caller holding the pass's own bridged-concept resolution (issue #353's holder, reused by issue #472's),
 	 *  so the pass does not resolve it twice. */
 	private static boolean everyActiveOrderResolves(PatientClinicalContext context,
 			List<DrugReference> orderEntries, BridgedOrders bridged) {

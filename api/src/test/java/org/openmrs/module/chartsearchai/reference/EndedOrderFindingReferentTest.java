@@ -41,7 +41,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * stamp, which said the Rifampicin order was not in force.
  *
  * <p><b>What these cases drive.</b> The real {@code injectRecords} and the real {@code validate}, over
- * a DDInter excerpt, with the ended order's chart record carrying querystore's REAL rendered text
+ * reference datasets the module loads (DDInter excerpts, and the curated seed for the allergy case), with the ended order's chart record carrying querystore's REAL rendered text
  * ({@link DrugReferenceTestSupport#querystoreRenderedText}) — so the premise that a stopped record's
  * text names its drug to {@code DrugReference.matchesText} is exercised against what querystore
  * writes, not against a literal typed here. Context-sensitive for that reason alone.

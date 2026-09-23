@@ -248,7 +248,7 @@ public class LlmProvider {
 			+ "problems\", \"any eye issues\"), cite nothing after a no-record verdict — do not "
 			+ "list vital signs or unrelated measurements.\n"
 			// The two question shapes named here are EXAMPLES of this paragraph's scope, not its
-			// bound, and nothing else carries scope: the #348 branches at the end of the paragraph
+			// bound, and nothing else carries scope: the #348 branches near the end of the paragraph
 			// are gated on the FINDING's clause and never on the question, and the screening shape
 			// they exist for ("Does she have any drug interactions I should know about?") is not one
 			// of the shapes listed. The scope reaches it in practice — the reproduction IS this
@@ -282,7 +282,8 @@ public class LlmProvider {
 			// clause, because LlmProviderTest fails this paragraph on the substring "otherwise" in
 			// any casing (#107 arm D).
 			//
-			// Placed BEFORE the never-"Yes" token that closes the paragraph, so that token's "such an
+			// Placed BEFORE the never-"Yes" token (which closed the paragraph until #472's branch
+			// followed it), so that token's "such an
 			// answer" reaches these two branches as well. That is deliberate and it is what they ask
 			// for: neither branch wants a VERDICT at all — the lead is a statement about medications
 			// already prescribed, which is the sentence #348 says the chip carries and the answer does

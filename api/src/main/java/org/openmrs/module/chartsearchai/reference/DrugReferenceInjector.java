@@ -2531,8 +2531,8 @@ public class DrugReferenceInjector {
 		return String.join("\n", lines);
 	}
 
-	/** The prompt's ranking of the four clauses a finding can state, strongest first, or {@code -1}
-	 *  for a finding stating none. The ended-order pair (issue #472) answers {@code -1} on purpose, so
+	/** The prompt's ranking of the four clauses it ranks, strongest first, or {@code -1} for any other
+	 *  finding — one stating no clause, or the ended-order pair. That pair (issue #472) answers {@code -1} on purpose, so
 	 *  an answer carrying one keeps the model call. Neither shape {@link #answersFromFindings} admits
 	 *  should carry one: a proposal keeps its drug a proposal, and a screen names no drug to put in
 	 *  play. */

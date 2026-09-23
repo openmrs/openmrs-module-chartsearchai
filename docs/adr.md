@@ -10101,7 +10101,7 @@ orders A and B — possible duplicate therapy"*. One order states nothing: that 
   drug as much a current medication as two, so on one order the arm would go on refusing in proposal
   words. Decision 110's measurement records what the reversal can cost: its arm A re-referred a proposal
   question (R3) and lost the proposal's refusal.
-- **Its strength is the unrated default** (withhold, so the current-medication change clause). Decision
+- **Its strength is the unrated default** (withhold). Decision
   86 graded down shared classification alone on measured evidence; this is an identity claim, not that.
   A caution was proposed and refused at plan time: its prompt branch opens by stating the drug can be
   given, a permission to add a third course.

@@ -759,8 +759,8 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 *
 	 * <p>What contradicts it is the dataset's own CIEL bridge, which files the concepts naming
 	 * {@code sulfamethoxazole} as an ingredient on {@code Trimethoprim} and {@code Phenazopyridine} and
-	 * not on the row whose display name that ingredient IS. Each control removes one half of the rule and
-	 * is a correct row: see the fixture's own note for which half each one holds.
+	 * not on the row whose display name that ingredient IS. Each control is silent on one half of the
+	 * rule: see the fixture's own note for which half each one holds.
 	 *
 	 * <p>Reported and not repaired, for the reason its siblings give: the module can only choose which
 	 * of the row's names to believe, and dropping the value or the row fails closed, silently, to fix a
@@ -1356,8 +1356,9 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * — {@code Omeprazole} publishing {@code esomeprazole}, four more {@code rxnorm_name}s naming an
 	 * enantiomer or a prodrug's parent, ten stray CIEL cross-walk links, {@code Fluoroestradiol f-18}
 	 * keyed as {@code estradiol}, and four more {@code rxnorm_name}s the dataset's own bridge contradicts,
-	 * {@code Sulfamethoxazole}'s {@code sulfamethazine} among them — and issues #196 and #476 record the
-	 * remedy for these as an upstream handoff. Thirteen of them sit in {@code rxnorm_name}, which is the field
+	 * {@code Sulfamethoxazole}'s {@code sulfamethazine} among them and {@code Calcium saccharate}'s synonym
+	 * {@code calcium glucarate} too — and issues #196 and #476 record the remedy for the defects among these
+	 * as an upstream handoff. Thirteen of them sit in {@code rxnorm_name}, which is the field
 	 * {@link DrugReference#substanceKey()} is built from, so correcting them here would re-partition
 	 * substances on our own authority; that is why ADR Decision 36 ships the file byte-identical and
 	 * scopes the log level instead.

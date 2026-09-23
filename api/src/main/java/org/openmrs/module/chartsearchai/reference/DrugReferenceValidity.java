@@ -83,8 +83,8 @@ import org.slf4j.Logger;
  *
  * <p><b>What is scoped is the LEVEL, and only in the log.</b> "Every finding is loud" was true while every
  * dataset the module shipped was one it authored; since ADR Decision 36 the default is a third-party
- * knowledge base, and a data finding about THAT names something no operator can fix — 19 of its 2283 rows
- * trip two of the rules below, and reporting them at WARN on every install of every deployment is the
+ * knowledge base, and a data finding about THAT names something no operator can fix — ADR Decision 36
+ * carries the rows it trips — and reporting them at WARN on every install of every deployment is the
  * noise this class exists to avoid. So {@link #logTo(Logger, String)} reports a DATA finding about the
  * dataset the module ships at INFO and everything else at WARN, while the status channel stays identical
  * either way. The level says who can act; the status says what is true. A CONFIGURATION finding is never
@@ -150,9 +150,9 @@ public final class DrugReferenceValidity {
 	public static final String DERIVATIVE_MERGED_WITH_ITS_PARENT_SUBSTANCE =
 			"derivative-merged-with-its-parent-substance";
 
-	/** A row publishing a substance name its own display name does not carry, while the dataset's own
-	 *  bridge names that display name as an ingredient of concepts it files on other rows and not on this
-	 *  one — issue #476. */
+	/** A row whose substance name and display name do not carry each other as a word, while the dataset's
+	 *  own bridge names that display name as an ingredient of concepts it files on other rows and not on
+	 *  this one — issue #476. */
 	public static final String SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE =
 			"substance-name-contradicted-by-the-bridge";
 
@@ -363,7 +363,7 @@ public final class DrugReferenceValidity {
 	 * SHIPS — since ADR Decision 36 that is the default — and no operator can fix it: the remedy is the
 	 * upstream handoff issue #196 records, so it is INFO. Reporting it at WARN on every install of every
 	 * deployment is the "noise every install learns to ignore" this whole class is written to avoid, and
-	 * the shipped knowledge base trips two of these rules on 19 of its 2283 rows.
+	 * the shipped knowledge base trips several of these rules (ADR Decision 36 carries the measured rows).
 	 *
 	 * <p><b>A finding about the CONFIGURATION never scales.</b> It names a choice the operator made and
 	 * can unmake, so it is WARN wherever the entries came from — and keying the softening on the rule
@@ -1242,14 +1242,13 @@ public final class DrugReferenceValidity {
 	 * <ul>
 	 *   <li>its substance name and its display stem do not carry each other as a word
 	 *       ({@link DrugReference#containsWord}, the relation both siblings read a presentation, salt or
-	 *       ester by). Where one carries the other the row's identifiers agree with its name, and the
-	 *       bridge leaving it out is a gap in the bridge rather than a row keyed to another substance;</li>
+	 *       ester by). Where one carries the other the rule is silent, reading the pair as a presentation
+	 *       of one substance rather than a row keyed to another;</li>
 	 *   <li>the bridge names that display stem as an ingredient
 	 *       ({@link DrugReference#combinationConstituents}, or the whole concept name where it lists
-	 *       none) of a concept it files on other rows and NOT on this one. A synonym does not do that —
-	 *       {@code Acetylsalicylic acid} publishes {@code aspirin} and every concept the bridge files
-	 *       spells it {@code aspirin} — while a row keyed to another substance does, because the concepts
-	 *       carrying its own name went where that name's identity was.</li>
+	 *       none) of a concept it files on other rows and NOT on this one. This is the half that keeps a
+	 *       synonym such as {@code Acetylsalicylic acid} publishing {@code aspirin} silent in the shipped
+	 *       KB: no concept filed elsewhere names {@code acetylsalicylic acid}.</li>
 	 * </ul>
 	 * Both compared through {@link DrugReference#normalizeName}, the identity between two reference
 	 * strings; never through {@link DrugReference#isNamed}, which reads the row's aliases, and those
@@ -1326,9 +1325,9 @@ public final class DrugReferenceValidity {
 			report(SUBSTANCE_NAME_CONTRADICTED_BY_THE_BRIDGE, Remedy.REPORTED, contradicted,
 					contradicted + " row(s) publish a substance name their own display name does not carry, "
 							+ "while this dataset's bridge names that display name as an ingredient of "
-							+ "concepts it files on other rows and not on them — so the substance name, and "
-							+ "every label and rule token read from it, is likely another substance's. The "
-							+ "data is left as loaded — the fix is in the dataset. " + sample(details));
+							+ "concepts it files on other rows and not on them — so the substance name may be "
+							+ "another substance's. The data is left as loaded — the fix is in the dataset. "
+							+ sample(details));
 		}
 	}
 

@@ -10369,8 +10369,8 @@ of its (drug, condition) keys name more than one note.
   the links writes them to `api/target/derived-tier-precision-ranked-links.tsv`, so a re-measurement
   after a refresh starts from the test's own ranking and weights rather than from a script that re-ranks
   them. Since #500 each line also carries the sorted names of its link's cause drugs, and the hash was
-  re-recorded for it; with those fields cut off, the lines the class wrote at `bc68da1f` hash to the value
-  #496 recorded, so the appended names are the only change. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
+  re-recorded for it; with those fields cut off, the lines the class now writes hash to the value #496
+  recorded, so the appended names are the only change. Each mutation below was seen to redden it on 2026-09-23, in the tests named:
   - one word of note 319: `everyAdjudicatedNoteIsTheTextItWasJudgedOn`;
   - the one Major rated side of link 1660 × Hyperbilirubinemia set to Moderate:
     `everyAdjudicatedLinkCarriesTheWeightsItWasRecordedWith` and
@@ -10399,16 +10399,17 @@ of its (drug, condition) keys name more than one note.
   - all 128 rows of link 940 × Hypotension, which no item adjudicates, moved to note 1, #496's mutation,
     which leaves every count above unchanged: `everyLinkCarriesTheWeightsThePopulationWasMeasuredWith`
     alone;
-  - one of the sample file's recorded draw positions changed: `theSampledLinksAreTheRecordedDrawFromTheRest`;
-  - on 2026-09-24, the `cause_note_id` of all 128 rows of link 940 × Hypotension swapped with that of the
-    128 rows of 262 × Hypotension, two unadjudicated links with the same kept chains and rated substances
-    (#500): `everyLinkCarriesTheWeightsThePopulationWasMeasuredWith` alone. The class before #500 stayed
-    green on it.
+  - one of the sample file's recorded draw positions changed: `theSampledLinksAreTheRecordedDrawFromTheRest`.
 
   The Flibanserin, Acetaminophen and Didanosine lines were run with
   `everyAdjudicatedLinkIsStillReadThroughTheCauseDrugsItsNoteWasJudgedFor` in the class, the lines above
   them before it was added. The last two were run with #496's two tests in the class, and the lines above
   them before those were added, so they do not say whether those two tests redden too.
+
+  On 2026-09-24, with #500's cause drugs in the hashed lines, the `cause_note_id` of all 128 rows of link
+  940 × Hypotension was swapped with that of the 128 rows of 262 × Hypotension, two unadjudicated links
+  with the same kept chains and rated substances: `everyLinkCarriesTheWeightsThePopulationWasMeasuredWith`
+  alone reddened. The class before #500 stayed green on it.
 
 **Results.** Each figure is the share of CAUSES (strict) and of CAUSES or WORSENS (lenient). The census
 stratum is exact, the sample stratum is a ratio estimate, and the 95% interval is a bootstrap over the

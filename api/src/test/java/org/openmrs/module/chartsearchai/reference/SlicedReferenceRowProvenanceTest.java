@@ -139,8 +139,8 @@ public class SlicedReferenceRowProvenanceTest {
 			if (cut.has(DERIVED)) {
 				assertEquals(derivedWithin(shipped, ids), derivedWithin(cut, ids),
 						slice + " carries " + DERIVED + ", so the rows of it falling wholly inside the slice must "
-								+ "be the shipped rows falling wholly inside it and no other — the loader attaches "
-								+ "each such row to the rated drug's entry (issue #503)");
+								+ "be the shipped rows falling wholly inside it and no other — the loader may attach "
+								+ "such a row to the rated drug's entry (issue #503)");
 			}
 			assertFalse(cut.path("metadata").path("note").asText("").isEmpty(),
 					slice + " must carry a metadata note — what it says is for a reader, and only that "
@@ -186,21 +186,22 @@ public class SlicedReferenceRowProvenanceTest {
 	 *          {@code DdiDrugReferenceSource.attachConditionMediatedRisks} resolves each row through, and
 	 *          drops the row where the file carries either not. */
 	private static List<JsonNode> derivedWithin(JsonNode dataset, Set<String> ids) {
-		List<JsonNode> out = new ArrayList<JsonNode>();
-		for (JsonNode row : dataset.path(DERIVED)) {
-			if (ids.contains(row.path(0).asText()) && ids.contains(row.path(4).asText())) {
-				out.add(row);
-			}
-		}
-		return out;
+		return rowsWithin(dataset, DERIVED, 0, 4, ids);
 	}
 
 	/** @return the interaction rows of {@code dataset} whose BOTH partners are in {@code ids}, in the
 	 *          dataset's own order — which is what "falling wholly inside the slice" means. */
 	private static List<JsonNode> interactionsWithin(JsonNode dataset, Set<String> ids) {
+		return rowsWithin(dataset, "interactions", 0, 1, ids);
+	}
+
+	/** @return the rows of {@code dataset}'s {@code table} whose two id columns are BOTH in {@code ids},
+	 *          in the dataset's own order. */
+	private static List<JsonNode> rowsWithin(JsonNode dataset, String table, int first, int second,
+			Set<String> ids) {
 		List<JsonNode> out = new ArrayList<JsonNode>();
-		for (JsonNode row : dataset.path("interactions")) {
-			if (ids.contains(row.get(0).asText()) && ids.contains(row.get(1).asText())) {
+		for (JsonNode row : dataset.path(table)) {
+			if (ids.contains(row.get(first).asText()) && ids.contains(row.get(second).asText())) {
 				out.add(row);
 			}
 		}

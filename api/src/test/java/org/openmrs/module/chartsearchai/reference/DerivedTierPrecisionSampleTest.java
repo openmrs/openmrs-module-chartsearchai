@@ -73,7 +73,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * chains, distinct rated substances and the sorted names of its cause drugs, against the SHA-256 the sample
  * file records (issues #496, #500), so a move of chains that changes those for a link no item adjudicates
  * is reported where every count above still holds. A run that ranks the links writes the lines it hashes
- * to {@code api/}{@value #RANKED_LINKS} and hashes that file, so a refresh that reddens it leaves the ranking and weights to re-measure from;</li>
+ * to {@code api/}{@value #RANKED_LINKS} and hashes that file, so a refresh that reddens it leaves the
+ * ranking and weights to re-measure from;</li>
  * <li>the SAMPLE — its items are the links outside the census at the draw's positions the sample file
  * records.</li>
  * </ul>
@@ -359,8 +360,8 @@ public class DerivedTierPrecisionSampleTest {
 		assertTrue(unwritable.isEmpty(), "cause drug names a TAB-separated, LF-terminated line cannot carry"
 				+ " unambiguously: " + unwritable);
 		assertEquals(sample.path("population").path("rankedLinks").path("sha256").asText(),
-			ModelManifest.sha256(Files.readAllBytes(emitted)), "the ranked (link, kept chains, rated substances, cause drugs) enumeration is not"
-					+ " the one the precision figure was measured over; re-measure (ADR Decision 111) from " + emitted);
+			ModelManifest.sha256(Files.readAllBytes(emitted)), "the ranked (link, kept chains, rated substances,"
+					+ " cause drugs) enumeration is not the one the precision figure was measured over; re-measure (ADR Decision 111) from " + emitted);
 	}
 
 	@Test

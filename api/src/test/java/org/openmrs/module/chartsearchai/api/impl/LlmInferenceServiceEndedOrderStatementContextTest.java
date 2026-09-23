@@ -260,7 +260,8 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 	@Test
 	public void aPhraseAfterACombinationNameIncludingThisDrugStatesIt() {
 		for (String joined : new String[] { "ibuprofen-metformin", "ibuprofen‐metformin",
-				"ibuprofen/metformin", "ibuprofen / metformin", "ibuprofen + metformin" }) {
+				"ibuprofen/metformin", "ibuprofen / metformin", "ibuprofen + metformin",
+				"ibuprofen/warfarin/metformin", "ibuprofen / warfarin / metformin" }) {
 			String stated = "Her " + joined + " order is no longer in force [2]. It interacts with her "
 					+ "Acetylsalicylic acid (aspirin) [1].";
 			ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
@@ -271,9 +272,9 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 		}
 	}
 
-	/** Where no drug is named before the phrase, the sentence naming it after the phrase still states it. */
+	/** Where no drug is named before the phrase, this drug named nearest after it still states it. */
 	@Test
-	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStatedByItsSentence() {
+	public void aDrugNamedOnlyAfterThePhraseIsStillReadAsStated() {
 		String stated = "The order no longer in force is her ibuprofen [2]. It interacts with her "
 				+ "Acetylsalicylic acid (aspirin) [1].";
 		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
@@ -281,6 +282,40 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 
 		assertAnEndedChip(answer);
 		assertEquals(stated, answer.getAnswer(), "the sentence says it of ibuprofen, so nothing is appended");
+	}
+
+	/**
+	 * Issue #489 item 1: where no drug is named before the phrase, it is about the drug named nearest
+	 * AFTER it. Read by the sentence rule instead, the ibuprofen named later in the sentence made the
+	 * answer read as having stated ibuprofen's end, and nothing was appended about it.
+	 */
+	@Test
+	public void aPhraseAheadOfAnotherDrugDoesNotStateThisOnesEnd() {
+		String answer = "The order no longer in force is her metformin; ibuprofen interacts with her "
+				+ "Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer completed = serviceWith(answer, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			endedIbuprofen()).search(patient, QUESTION);
+
+		assertAnEndedChip(completed);
+		assertEquals(answer + STATEMENT, completed.getAnswer(),
+				"the phrase is about metformin, the drug named nearest after it");
+	}
+
+	/**
+	 * Issue #489 item 1's tie: after the phrase, a name of this drug and another drug's name START at one
+	 * position — the excerpt files the kit's name on both the Omeprazole and the Clarithromycin rows — and
+	 * the tie goes to this drug, as it does before the phrase.
+	 */
+	@Test
+	public void aNameThisDrugSharesWithAnotherAfterThePhraseStatesIt() {
+		String stated = "The order no longer in force is her Clarithromycin / Esomeprazole / Levofloxacin "
+				+ "combination kit [2]. Omeprazole interacts with her Acetylsalicylic acid (aspirin) [1].";
+		ChartAnswer answer = serviceWith(stated, DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+			DrugReferenceTestSupport.drugOrderRecord(2, "Omeprazole 20mg", Boolean.FALSE, STOPPED))
+				.search(patient, "Her current medications are aspirin and omeprazole. Any interactions?");
+
+		assertAnEndedChip(answer);
+		assertEquals(stated, answer.getAnswer(), "the kit's name is also this drug's, so nothing is appended");
 	}
 
 	/** A hyphen inside a word joins a combination name, which names ibuprofen as well as the nearer metformin. */

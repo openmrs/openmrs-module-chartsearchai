@@ -1862,7 +1862,8 @@ public class DrugSafetyValidator {
 	 * goes to this drug, so a name the chip's substance shares with another reads as this one), or where
 	 * the nearest name is JOINED to one of this drug's by a hyphen, a slash or a plus sign
 	 * ({@link #COMBINATION_JOINER}) — {@code "ibuprofen-metformin"} is one subject. Where no drug is named
-	 * before the phrase, the sentence rule stands: {@link #namesTheEndedOrderDrug} of the whole sentence.
+	 * before the phrase, the drug named nearest AFTER it (issue #489): this drug where one of its names
+	 * starts at or before every other drug's name after the phrase, a tie again going to this drug.
 	 * {@code false} for any other chip.
 	 *
 	 * <p>Positions come from {@link DrugReference#namedOccurrences}, the accessor for WHERE a prose match
@@ -1874,10 +1875,13 @@ public class DrugSafetyValidator {
 	 * which is the sentence rule.
 	 *
 	 * <p>Its residues, in each direction, are ADR Decision 110's first residue: a pronoun reaching back past
-	 * a nearer drug to this one, and this drug listed before another in one subject ("her ibuprofen and
-	 * metformin orders"), read as the other's (the sentence appended, said twice); a pronoun reaching back
-	 * past this drug to one named before it, a nearer drug the loaded data does not carry, and a phrase
-	 * ahead of the drug it is about, read as this one (nothing appended).
+	 * a nearer drug to this one; this drug listed before another in one subject ("her ibuprofen and
+	 * metformin orders"); after the phrase, this drug listed after another or joined behind it in a
+	 * combination name ("no longer in force are her metformin and ibuprofen orders"); and a phrase ahead of
+	 * this drug where another is named before the phrase, read as the other's (the sentence appended, said
+	 * twice); a pronoun reaching back past this drug to one named before it, a nearer drug the loaded data
+	 * does not carry, and a phrase ahead of another drug where this one is named before the phrase, read as
+	 * this one (nothing appended). The drug named after the phrase is asked only where none is named before.
 	 */
 	public boolean isAboutTheEndedOrderDrug(String sentence, String phrase, SafetyWarning chip) {
 		if (ChartSearchAiUtils.isBlank(phrase) || !namesTheEndedOrderDrug(sentence, chip)) {
@@ -1896,7 +1900,7 @@ public class DrugSafetyValidator {
 			}
 		}
 		for (int at = folded.indexOf(foldedPhrase); at >= 0; at = folded.indexOf(foldedPhrase, at + 1)) {
-			if (nearestBeforeIsOwn(folded, at, own, others)) {
+			if (nearestIsOwn(folded, at, at + foldedPhrase.length(), own, others)) {
 				return true;
 			}
 		}
@@ -1914,13 +1918,20 @@ public class DrugSafetyValidator {
 
 	/**
 	 * Whether the drug name nearest before {@code at} of {@code folded} is one of {@code own}, or is joined
-	 * to one of them through {@link #COMBINATION_JOINER}; {@code true} where no name of either list ends by
-	 * {@code at}.
+	 * to one of them through {@link #COMBINATION_JOINER}. Where no name of either list ends by {@code at},
+	 * whether the name starting earliest at or after {@code from} is one of {@code own}, a tie going to
+	 * {@code own}: {@code false} where only another drug's name starts there, {@code true} where neither
+	 * list's does.
 	 */
-	private static boolean nearestBeforeIsOwn(String folded, int at, List<DrugReference.NamedOccurrence> own,
+	private static boolean nearestIsOwn(String folded, int at, int from, List<DrugReference.NamedOccurrence> own,
 			List<DrugReference.NamedOccurrence> others) {
 		DrugReference.NamedOccurrence mine = latestEndingBy(own, at);
 		DrugReference.NamedOccurrence other = latestEndingBy(others, at);
+		if (mine == null && other == null) {
+			DrugReference.NamedOccurrence mineAfter = earliestStartingFrom(own, from);
+			DrugReference.NamedOccurrence otherAfter = earliestStartingFrom(others, from);
+			return otherAfter == null || mineAfter != null && mineAfter.getStart() <= otherAfter.getStart();
+		}
 		while (other != null && (mine == null || other.getEnd() > mine.getEnd())) {
 			// The nearest is another drug's; this one still owns the phrase only through a combination name.
 			DrugReference.NamedOccurrence before = latestEndingBy(others, other.getStart());
@@ -1938,6 +1949,18 @@ public class DrugSafetyValidator {
 			mine = mineBefore;
 		}
 		return true;
+	}
+
+	/** The occurrence of {@code occurrences} starting earliest at or after {@code from}, or {@code null}. */
+	private static DrugReference.NamedOccurrence earliestStartingFrom(
+			List<DrugReference.NamedOccurrence> occurrences, int from) {
+		DrugReference.NamedOccurrence earliest = null;
+		for (DrugReference.NamedOccurrence occurrence : occurrences) {
+			if (occurrence.getStart() >= from && (earliest == null || occurrence.getStart() < earliest.getStart())) {
+				earliest = occurrence;
+			}
+		}
+		return earliest;
 	}
 
 	/** The occurrence of {@code occurrences} ending latest at or before {@code by}, or {@code null}. */

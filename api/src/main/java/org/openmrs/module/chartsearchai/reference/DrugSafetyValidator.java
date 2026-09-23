@@ -1936,6 +1936,8 @@ public class DrugSafetyValidator {
 			// The nearest is another drug's; this one still owns the phrase only through a combination name.
 			DrugReference.NamedOccurrence before = latestEndingBy(others, other.getStart());
 			DrugReference.NamedOccurrence mineBefore = latestEndingBy(own, other.getStart());
+			// A tie goes to this drug here too. It is redundant with the loop condition's: walking on as
+			// the other drug's instead checks the same joiner and then leaves the loop on that tie.
 			DrugReference.NamedOccurrence joined = mineBefore != null
 					&& (before == null || mineBefore.getEnd() >= before.getEnd()) ? mineBefore : before;
 			if (joined == null || !COMBINATION_JOINER.matcher(folded.substring(joined.getEnd(),

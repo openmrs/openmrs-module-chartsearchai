@@ -424,14 +424,16 @@ public class ActiveOrderReconciliationTest {
 		// operator at a querystore index that is behind, and the uuid is the identifier a reindex
 		// takes. Nothing about the rendering said so at the call site, which is why the sweep behind
 		// #439 found this one and the scan did not.
-		// DEBUG, so the negative below covers every level and not only the one core ships: the
+		// TRACE, so the negative below covers every level and not only the one core ships: the
 		// alternative the finding itself named and #439 declined was writing these names lower down
 		// (ADR Decision 102, "the names at DEBUG, was not taken"), and a capture raised only to INFO
-		// would leave that implementable with this case green.
+		// would leave that implementable with this case green — as DEBUG left a log.trace (#443).
+		// The module ROOT, because a name leaking from any logger on this pass is the same disclosure
+		// — the argument LogCapture.MODULE_LOGGER's javadoc makes (issue #443, ADR Decision 102).
 		// Through the shared constant and never a literal of this file's own: a second spelling of a
 		// package name is how a rename leaves a capture receiving nothing, which is the vacuous-pass
-		// this negative exists to avoid (DrugReferenceTestSupport.REFERENCE_LOGGER's own javadoc).
-		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+		// this negative exists to avoid.
+		try (LogCapture capture = LogCapture.on(LogCapture.MODULE_LOGGER, Level.TRACE)) {
 			injector().injectRecords(DrugReferenceTestSupport.oneRecordChart(), oneActiveOrder(),
 					"what are her active medications?");
 
@@ -444,6 +446,11 @@ public class ActiveOrderReconciliationTest {
 					"precondition: the capture must receive this logger's DEBUG, or the negative "
 							+ "below is not a claim about what is written below WARN. Captured: "
 							+ capture.describeAll());
+			// And down to TRACE, which no production line of this logger writes, so the case writes
+			// the witness itself (LogCapture.receivesFrom, issue #443).
+			assertTrue(capture.receivesFrom(DrugReferenceInjector.class, Level.TRACE),
+					"precondition: the capture must receive this logger's TRACE, or the negative below "
+							+ "says nothing about that level. Captured: " + capture.describeAll());
 			assertTrue(capture.hasMessageAt(Level.WARN, "Active-order reconciliation",
 					SIMVASTATIN_ORDER_UUID),
 					"the divergence must still be reported, and by the identifier querystore indexes "

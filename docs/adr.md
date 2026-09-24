@@ -8010,7 +8010,7 @@ the orders of the findings it CITES, and the chips beside it carry the orders ea
 **Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
 
 **And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
-PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
+PR's review. The negative at each of the three sites then captured from DEBUG up (TRACE since #443, below) and asserted over every
 captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A
 WARN-only capture leaves the declined alternative implementable with the suite green, which the
 reviewer demonstrated: `log.info("Withheld pairs in full: {}", …)` beside the third site's cap WARN,
@@ -8051,7 +8051,7 @@ through any sibling file that captures a logger beneath that package by name, an
 module-root capture from the other direction, which is why that file named a package until round 4
 undid a narrowing this fix had made unnecessary; and each fidelity check's own logger inside
 `api.impl`, along with `LlmAnswerExtractor`'s and `QueryStoreChartBuilder`'s, is captured by name by its own test
-file. Beside that, the two reference-package negatives now assert that the capture is live BELOW warn
+file. Beside that, the two reference-package negatives (module-root since #443) now assert that the capture is live BELOW warn
 for the very logger they are about — `DrugSafetyValidator`'s end-of-pass INFO line and the injector's
 end-of-pass DEBUG line — so a filtered capture fails the case instead of satisfying it. That belt is
 independent of the helper: with `close()` reverted and no probe present at all, it is what reddens
@@ -8086,6 +8086,20 @@ negatives also now assert liveness below `WARN` for the logger they are about, a
 reference-package cases do. `FindingPartnerCoverageCheck` writes nothing below `WARN`, so there is
 no production line to name and the case writes one through that logger itself — pinning that class
 at `WARN` reddens each case of that file which asserts over the capture (measured 2026-09-16).
+
+**Since [#443](https://github.com/openmrs/openmrs-module-chartsearchai/issues/443) the negatives at all three
+sites capture the module ROOT, from TRACE up.** The two reference-package cases cited the argument above
+without having its scope: a probe writing the six screened drugs through `LlmInferenceService`'s
+logger during the screening pass, and one writing the unrepresented order through it during
+reconciliation, left both green. Under the root capture they redden
+`PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` and
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`.
+And "from DEBUG up" was not every level: a `log.trace` of the names at each of the three sites was
+green under the DEBUG captures, and under TRACE it reddens the negatives for the site it was added to
+(all measured 2026-09-24, each probe removed after the reading). Each case also asserts that the
+logger it is about is live at TRACE, through `LogCapture.receivesFrom`, because no production line
+writes at that level to serve as the witness. What a stock install discloses is unchanged by any of
+this: core ships `org.openmrs` at WARN.
 
 **Where that substitution does not hold, stated rather than pinned.** Under
 `chartsearchai.grounding.async=true` the REST layer emits `done` from the UNGROUNDED answer

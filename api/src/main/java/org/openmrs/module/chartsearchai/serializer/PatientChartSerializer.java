@@ -840,8 +840,11 @@ public class PatientChartSerializer {
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
+			// A bare null, deliberately: a (Date) cast compiles to a checkcast, which the frame analysis
+			// in ArchitectureGuardTest.theOrderStopDateReachesAMappingFromTheSerializerAlone reads as a
+			// date and reports (issue #432). There is one nine-argument rung, so nothing is ambiguous.
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
-					orderActive, (Date) null);
+					orderActive, null);
 		}
 
 		/**

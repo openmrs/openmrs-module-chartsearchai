@@ -226,7 +226,7 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The shared body of both constructor cases in this file: exactly one {@code RecordMapping} constructor matches
+	 * The shared body of the two injector-caller cases in this file: exactly one {@code RecordMapping} constructor matches
 	 * {@code tail}, and only {@code DrugReferenceInjector} invokes it.
 	 *
 	 * <p>One method rather than two copies because the two differ in a selector, the wording, and one
@@ -267,9 +267,7 @@ public class ArchitectureGuardTest {
 	private static void assertSoleCallerOfStampCarryingConstructor(String targetClassFile,
 			String typeName, String expectedCallerName, String expectedCallerClassFile, String tail,
 			String what, boolean widest, String consequence) throws IOException {
-		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
-		assertTrue(Files.isDirectory(classes),
-				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path classes = apiClassesDirectory();
 		Path mapping = classes.resolve(targetClassFile);
 		assertTrue(Files.exists(mapping),
 				"no " + typeName + " class file at " + mapping + ", so this guard would forbid nothing");
@@ -311,18 +309,8 @@ public class ArchitectureGuardTest {
 			}
 		}
 
-		List<String> callers = new ArrayList<>();
-		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
-			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
-					.filter(f -> !f.equals(mapping)).collect(java.util.stream.Collectors.toList())) {
-				if (constantPoolStrings(file).contains(carrying.get(0))) {
-					// Spelled with forward slashes whatever the platform separator is, because the
-					// expectation below is spelled that way. The copy this method replaced normalised
-					// on one of its two call paths and not the other.
-					callers.add(classes.relativize(file).toString().replace(java.io.File.separatorChar, '/'));
-				}
-			}
-		}
+		List<String> callers = classFilesHolding(classes, mapping,
+				java.util.Collections.singletonList(carrying.get(0)));
 		assertEquals(java.util.Collections.singletonList(expectedCallerClassFile), callers,
 				"the constructor that carries " + what + " may be invoked from " + expectedCallerName
 						+ " and nowhere else in the API module's classes, which is what this walk reads. "
@@ -451,22 +439,24 @@ public class ArchitectureGuardTest {
 	 * {@link #MAPPING_STOP_DATE_TAIL} names the prefix, and every constructor whose parameters start
 	 * with it carries the date at that prefix's last position. That holds while the ladder is a prefix
 	 * chain, which {@link #theOrderNamingStampIsWrittenInOnePlace} asserts. {@code RecordMapping}'s own
-	 * class file is left out of the walk, as the shared helper leaves it out of its own: its ladder
-	 * forwards the PARAMETER through {@code this(...)}, which is typed as a date and is not a write.
+	 * class file is walked too, unlike in the shared helper, and exempts only its date-carrying rungs,
+	 * which forward their own PARAMETER through {@code this(...)}. So a copy method on the mapping
+	 * that takes a date is a writer, and a rung that carries no date must default it to the null
+	 * constant — which nothing behavioural pinned: making the order-currency rung default it to a date
+	 * left the api suite green, and it is the rung the injector's two note records reach.
 	 *
 	 * <p><b>What it cannot answer.</b> It is class-grained on the allowed side: any value the
 	 * serializer passes is admitted, and what pins WHICH date that is are the behavioural cases in
 	 * {@code DrugOrderCurrencyMarkTest} — mutate the serializer's argument and read the failures. It is
 	 * conservative on the forbidden side: a null reached through a cast, a static field or a helper is
 	 * reported as a write. Its reach is the API module's classes, as every constant-pool case here
-	 * states for its own. And {@code RecordMapping} is not final, so a subclass overriding the getter
-	 * writes through no constructor at all.
+	 * states for its own. A date-carrying rung that passed a value of its own in place of the
+	 * parameter it forwards is exempt with the rest of its rung. And {@code RecordMapping} is not
+	 * final, so a subclass overriding the getter writes through no constructor at all.
 	 */
 	@Test
 	public void theOrderStopDateReachesAMappingFromTheSerializerAlone() throws Exception {
-		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
-		assertTrue(Files.isDirectory(classes),
-				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path classes = apiClassesDirectory();
 		Path mapping = classes.resolve(RECORD_MAPPING_CLASS_FILE);
 		assertTrue(Files.exists(mapping),
 				"no RecordMapping class file at " + mapping + ", so this guard would forbid nothing");
@@ -497,55 +487,49 @@ public class ArchitectureGuardTest {
 		List<String> writers = new ArrayList<>();
 		List<String> injectorSites = new ArrayList<>();
 		List<String> serializerWrites = new ArrayList<>();
-		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
-			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
-					.filter(f -> !f.equals(mapping)).collect(java.util.stream.Collectors.toList())) {
-				List<String> pooled = constantPoolStrings(file);
-				if (carrying.stream().noneMatch(pooled::contains)) {
+		for (String relative : classFilesHolding(classes, null, carrying)) {
+			boolean ownClass = classes.resolve(relative).equals(mapping);
+			javassist.CtClass type = pool.get(relative.substring(0, relative.length()
+					- ".class".length()).replace('/', '.'));
+			for (javassist.bytecode.MethodInfo method : type.getClassFile().getMethods()) {
+				javassist.bytecode.CodeAttribute code = method.getCodeAttribute();
+				if (code == null || ownClass && method.isConstructor()
+						&& carrying.contains(method.getDescriptor())) {
 					continue;
 				}
-				String relative = classes.relativize(file).toString().replace(java.io.File.separatorChar, '/');
-				javassist.CtClass type = pool.get(relative.substring(0, relative.length()
-						- ".class".length()).replace('/', '.'));
-				for (javassist.bytecode.MethodInfo method : type.getClassFile().getMethods()) {
-					javassist.bytecode.CodeAttribute code = method.getCodeAttribute();
-					if (code == null) {
+				javassist.bytecode.ConstPool constants = method.getConstPool();
+				javassist.bytecode.analysis.Frame[] frames = null;
+				javassist.bytecode.CodeIterator it = code.iterator();
+				while (it.hasNext()) {
+					int at = it.next();
+					if (it.byteAt(at) != javassist.bytecode.Opcode.INVOKESPECIAL) {
 						continue;
 					}
-					javassist.bytecode.ConstPool constants = method.getConstPool();
-					javassist.bytecode.analysis.Frame[] frames = null;
-					javassist.bytecode.CodeIterator it = code.iterator();
-					while (it.hasNext()) {
-						int at = it.next();
-						if (it.byteAt(at) != javassist.bytecode.Opcode.INVOKESPECIAL) {
-							continue;
-						}
-						int ref = it.u16bitAt(at + 1);
-						String descriptor = constants.getMethodrefType(ref);
-						if (!mappingType.equals(constants.getMethodrefClassName(ref))
-								|| !"<init>".equals(constants.getMethodrefName(ref))
-								|| !carrying.contains(descriptor)) {
-							continue;
-						}
-						if (frames == null) {
-							frames = new javassist.bytecode.analysis.Analyzer().analyze(type, method);
-						}
-						javassist.bytecode.analysis.Frame frame = frames[at];
-						int receiver = frame.getTopIndex() - javassist.bytecode.Descriptor.paramSize(descriptor);
-						javassist.bytecode.analysis.Type passed = frame.getStack(receiver + 1
-								+ javassist.bytecode.Descriptor.paramSize("(" + beforeTheDate + ")V"));
-						String site = relative + " " + method.getName() + " @" + at + " passes " + passed;
-						if (relative.equals(INJECTOR_CLASS_FILE)) {
-							injectorSites.add(site);
-						}
-						if (passed == javassist.bytecode.analysis.Type.UNINIT) {
-							continue;
-						}
-						if (relative.equals(SERIALIZER_CLASS_FILE)) {
-							serializerWrites.add(site);
-						} else {
-							writers.add(site);
-						}
+					int ref = it.u16bitAt(at + 1);
+					String descriptor = constants.getMethodrefType(ref);
+					if (!mappingType.equals(constants.getMethodrefClassName(ref))
+							|| !"<init>".equals(constants.getMethodrefName(ref))
+							|| !carrying.contains(descriptor)) {
+						continue;
+					}
+					if (frames == null) {
+						frames = new javassist.bytecode.analysis.Analyzer().analyze(type, method);
+					}
+					javassist.bytecode.analysis.Frame frame = frames[at];
+					int receiver = frame.getTopIndex() - javassist.bytecode.Descriptor.paramSize(descriptor);
+					javassist.bytecode.analysis.Type passed = frame.getStack(receiver + 1
+							+ javassist.bytecode.Descriptor.paramSize("(" + beforeTheDate + ")V"));
+					String site = relative + " " + method.getName() + " @" + at + " passes " + passed;
+					if (relative.equals(INJECTOR_CLASS_FILE)) {
+						injectorSites.add(site);
+					}
+					if (passed == javassist.bytecode.analysis.Type.UNINIT) {
+						continue;
+					}
+					if (relative.equals(SERIALIZER_CLASS_FILE)) {
+						serializerWrites.add(site);
+					} else {
+						writers.add(site);
 					}
 				}
 			}
@@ -560,6 +544,38 @@ public class ArchitectureGuardTest {
 				+ "a stop date; every other call site of a date-carrying rung passes null. A second writer's "
 				+ "date is published through orderStopDates beside a citation nothing reconciled it with — "
 				+ "see this test's javadoc. Injector sites read: " + injectorSites);
+	}
+
+	/** The API module's compiled classes, for the constructor cases that read them; failing when
+	 *  absent, because a guard that discovers nothing forbids nothing. */
+	private static Path apiClassesDirectory() {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		assertTrue(Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		return classes;
+	}
+
+	/**
+	 * Every class file under {@code classes} whose constant pool holds any of {@code descriptors},
+	 * other than {@code excluded} where that is non-null — relative to {@code classes}, spelled with
+	 * forward slashes whatever the platform separator is, because every expectation it is compared
+	 * with is spelled that way. One walk for the class-file cases that share it rather than a copy
+	 * each: the copy the shared constructor helper replaced normalised the separator on one of its two
+	 * call paths and not the other.
+	 */
+	private static List<String> classFilesHolding(Path classes, Path excluded, List<String> descriptors)
+			throws IOException {
+		List<String> holding = new ArrayList<>();
+		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
+			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
+					.filter(f -> !f.equals(excluded)).collect(java.util.stream.Collectors.toList())) {
+				List<String> pooled = constantPoolStrings(file);
+				if (descriptors.stream().anyMatch(pooled::contains)) {
+					holding.add(classes.relativize(file).toString().replace(java.io.File.separatorChar, '/'));
+				}
+			}
+		}
+		return holding;
 	}
 
 	/** The parameter section of a method descriptor — everything between the parentheses — so two

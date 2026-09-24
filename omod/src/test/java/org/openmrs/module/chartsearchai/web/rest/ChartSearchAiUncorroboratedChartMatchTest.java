@@ -219,10 +219,9 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * but chip 0 answers false, so on VALUES such a narrowing reddens here where its predicate fails on
 	 * CHIP 0, and a predicate scoped to the CONDITION sentence — the sentence chip 0 carries — leaves
 	 * this class green. (The assertions below are a separate reader and catch a narrowing that spells a
-	 * second accessor read, whatever its predicate.) <b>The narrowing axis on values is held in two
-	 * halves, one per fixture.</b> A predicate scoped to the ALLERGY sentence reddens
-	 * {@link #theChipStatesWhetherItsChartMatchIsCorroborated} on this class's chip 0, whose sentence is
-	 * the condition one. A predicate scoped to the CONDITION sentence reddens
+	 * second accessor read, whatever its predicate.) <b>So this class holds the ALLERGY-scoped half of
+	 * the narrowing axis on values</b>, in {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, and
+	 * the CONDITION-scoped half is held by
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire},
 	 * whose fixture since #412 answers true off a self-named ALLERGY RULE's sentence. <b>Not the
 	 * ALLERGEN arm</b> — {@code DrugSafetyValidator.selfNamedAllergyRule} is the population meant, and

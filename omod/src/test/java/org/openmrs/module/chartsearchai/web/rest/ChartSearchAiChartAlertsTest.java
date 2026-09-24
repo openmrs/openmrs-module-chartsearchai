@@ -32,6 +32,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.reference.SafetyWarningFixtures;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -66,15 +67,20 @@ public class ChartSearchAiChartAlertsTest {
 	 * cross-reactive partner that measurement raised beside it, so the list is a real one rather than
 	 * a single row. Contraindications carry no rating, which is what makes
 	 * {@link #everyFindingIsShapedExactlyAsASearchChipIs} able to assert that the key is present and
-	 * null rather than absent.
+	 * null rather than absent. Built by the two contraindication factories the standing pass reaches,
+	 * with the referent it hands them — every standing alert is raised from one of her active orders
+	 * (issue #527) — so {@link #everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes} reads a value
+	 * production would publish. Each sentence is one its factory's arm writes: the curated-rule arm's, for
+	 * a Lidocaine rule noted as the bundled seed notes its own self-named allergy rules, and the allergen
+	 * arm's cross-reactivity-group sentence.
 	 */
 	private static List<SafetyWarning> fixtureAlerts() {
 		return Arrays.asList(
-				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Lidocaine",
-						"Lidocaine is contraindicated by a documented lidocaine allergy."),
-				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Bupivacaine",
-						"Bupivacaine is contraindicated by a documented lidocaine allergy "
-								+ "(cross-reactivity: amide local anaesthetics)."));
+				SafetyWarningFixtures.curatedRuleContraindication("Lidocaine",
+						"Lidocaine is contraindicated by an active allergy: documented lidocaine allergy", true),
+				SafetyWarningFixtures.recordedAllergenContraindication("Bupivacaine",
+						"Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as the "
+								+ "patient's allergy to Lidocaine — possible cross-reactivity", true));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -155,11 +161,29 @@ public class ChartSearchAiChartAlertsTest {
 		Map<String, Object> first = alerts.get(0);
 		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, first.get("type"), "was: " + first);
 		assertEquals("Lidocaine", first.get("drug"), "was: " + first);
-		assertEquals("Lidocaine is contraindicated by a documented lidocaine allergy.",
+		assertEquals("Lidocaine is contraindicated by an active allergy: documented lidocaine allergy",
 				first.get("detail"), "was: " + first);
 		assertEquals(null, first.get("severity"),
 				"a contraindication carries no rating, and null is that statement rather than a "
 						+ "missing value: " + first);
+	}
+
+	/**
+	 * Every standing alert says it is about a medication she already takes (issue #527): README's
+	 * "always {@code true} here". That the standing pass raises every alert that way is
+	 * {@code StandingChartAlertsTest.everyStandingAlertIsRaisedFromOneOfHerOwnActiveOrders}, in the api
+	 * module; this is the half that pass cannot see — that the handler publishes it.
+	 */
+	@Test
+	public void everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes() {
+		List<Map<String, Object>> alerts = alertsOf(okBody(RestControllerContext.PATIENT_UUID));
+
+		assertEquals(fixtureAlerts().size(), alerts.size(), "precondition: every fixture alert, was: " + alerts);
+		for (Map<String, Object> alert : alerts) {
+			assertEquals(Boolean.TRUE, alert.get("aboutACurrentMedication"),
+					"a standing alert is one of her active orders checked against her own records, and this "
+							+ "surface must say so: " + alert);
+		}
 	}
 
 	@Test
@@ -401,11 +425,11 @@ public class ChartSearchAiChartAlertsTest {
 	 * <p>Not decoration, and the wrapper it exercises is not the outer list. {@code serializeSafetyWarnings}
 	 * copies each chip's {@code chartOrderBridges} into an {@code ArrayList} precisely because
 	 * {@code XStreamMarshaller} refuses {@code java.util.Collections}' immutable wrappers — the EMPTY
-	 * case included — and every standing alert is a contraindication, whose three-argument constructor
-	 * sets that field to {@code Collections.emptyList()}. So this surface hands the marshaller the
-	 * refused shape on its ordinary path, not an exotic one. The unscreened half is here because that
-	 * payload's {@code alerts} is empty, which is the arrangement an XML client sees on a disabled
-	 * install.
+	 * case included — and every standing alert is a contraindication, which carries no bridge, and
+	 * {@code SafetyWarning} stores an empty one as {@code Collections.emptyList()}. So this surface hands
+	 * the marshaller the refused shape on its ordinary path, not an exotic one. The unscreened half is here
+	 * because that payload's {@code alerts} is empty, which is the arrangement an XML client sees on a
+	 * disabled install.
 	 */
 	@Test
 	public void theWholePayloadMarshalsForAnXmlClient() throws Exception {

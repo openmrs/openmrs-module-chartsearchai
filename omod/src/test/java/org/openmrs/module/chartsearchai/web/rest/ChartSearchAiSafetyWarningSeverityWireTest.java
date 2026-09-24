@@ -176,6 +176,13 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       nor a value re-derived from another field agrees with every chip. Chip 10 also carries
 	 *       {@code getEndedOrderStopDate()}, so a hardcoded {@code null} for that key disagrees with
 	 *       it.</li>
+	 *   <li>12 and 13 — the same pair shape for {@code SafetyWarning.isAboutACurrentMedication()} (issue
+	 *       #527), on a curated condition rule's sentence, which that arm writes alike for one of her
+	 *       active orders and for a drug put in play. <b>Not the allergen arm's sentence</b>, which is the
+	 *       pair {@code ChartSearchAiCurrentMedicationReferentTest} carries: ADR Decision 92 records that
+	 *       two fixtures whose {@code true}-answering chips came from one population let a serializer
+	 *       narrowing the published value to that population pass the whole build (issue #412), so each
+	 *       fixture holds a population of its own.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -247,7 +254,15 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 						"Rifampicin interacts with active order Nevirapine — Major.", "Major",
 						new java.util.Date(1767225600000L)),
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Rifampicin",
-						"Rifampicin interacts with active order Nevirapine — Major.", "Major"));
+						"Rifampicin interacts with active order Nevirapine — Major.", "Major"),
+				// Chips 12 and 13: one sentence, differing only in SafetyWarning.isAboutACurrentMedication()
+				// (issue #527), both built by the curated-rule arm's own factory — the curated seed's
+				// peptic-ulcer rule as that arm words it. Mutate the put to `false` and read this class's
+				// failure.
+				SafetyWarningFixtures.curatedRuleContraindication("Ibuprofen",
+						"Ibuprofen is contraindicated by an active condition: active peptic ulcer disease", true),
+				SafetyWarningFixtures.curatedRuleContraindication("Ibuprofen",
+						"Ibuprofen is contraindicated by an active condition: active peptic ulcer disease", false));
 	}
 
 	private ChartSearchAiRestController controller;

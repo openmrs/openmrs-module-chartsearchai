@@ -1693,6 +1693,11 @@ public class ChartSearchAiRestController {
 			// And the date that order stopped, already spelled as every published date is — so the
 			// accessor's value IS the wire's, and a client can say when without the model citing it.
 			map.put("endedOrderStopDate", warning.getEndedOrderStopDate());
+			// Issue #527: whether the module raised the chip from one of this patient's own active
+			// orders. The allergen arm words that chip and its proposal twin alike, so without this a
+			// client cannot tell them apart. false is no statement that she is off the drug:
+			// SafetyWarning.isAboutACurrentMedication() says why.
+			map.put("aboutACurrentMedication", warning.isAboutACurrentMedication());
 			out.add(map);
 		}
 		return out;

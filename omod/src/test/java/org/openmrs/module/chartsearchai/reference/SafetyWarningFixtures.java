@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Builds a {@link SafetyWarning} through a factory {@code SafetyWarning} keeps package-private, for
@@ -64,7 +65,8 @@ public final class SafetyWarningFixtures {
 	 * by {@code SafetyWarning.contraindication}, the curated-rule arm's own factory (issue #527).
 	 * {@code aboutACurrentMedication} is that factory's own parameter: {@code true} as
 	 * {@code DrugSafetyValidator.addActiveOrderContraindications} passes it for one of her active orders,
-	 * {@code false} as the drug-in-play loop passes it. {@code chartRecords} is empty, being on no wire.
+	 * {@code false} as the drug-in-play loop passes it. {@code chartRecords} is empty, being on no chip
+	 * key.
 	 */
 	public static SafetyWarning curatedRuleContraindication(String drug, String detail,
 			boolean aboutACurrentMedication) {
@@ -78,7 +80,7 @@ public final class SafetyWarningFixtures {
 	 * (issue #527). {@code aboutACurrentMedication} is that factory's own parameter: {@code true} as
 	 * {@code DrugSafetyValidator.addActiveOrderContraindications} passes it for one of her active orders,
 	 * {@code false} as the drug-in-play loop passes it for a drug the question or the answer put in play.
-	 * {@code chartRecords} is empty, being on no wire.
+	 * {@code chartRecords} is empty, being on no chip key.
 	 */
 	public static SafetyWarning recordedAllergenContraindication(String drug, String detail,
 			boolean aboutACurrentMedication) {
@@ -91,13 +93,31 @@ public final class SafetyWarningFixtures {
 	 * {@code SafetyWarning.interaction}, the factory {@code DrugSafetyValidator.interactionWarning} hands
 	 * both active-order arms' rule chips to (issue #527). {@code aboutACurrentMedication} is that
 	 * factory's own parameter: {@code true} as the screening arm passes it, {@code false} as the
-	 * drug-in-play arm does. No fold, no reconciled name and no bridge, which is what an unfolded chip
-	 * whose partner nothing reconciled carries.
+	 * drug-in-play arm does. No fold, no reconciled name and no bridge.
 	 */
 	public static SafetyWarning ruleInteraction(String drug, String detail, String severity, String partner,
 			boolean aboutACurrentMedication) {
 		return SafetyWarning.interaction(drug, detail, severity, false, null, null,
 			Collections.<SafetyWarning.ChartOrderBridge> emptyList(), aboutACurrentMedication,
 			Collections.singletonList(partner));
+	}
+
+	/**
+	 * The finding that two or more of her own orders carry the same substances — built by
+	 * {@code SafetyWarning.ordersSharingASubstance}, whose referent is {@code true} (issue #477): every
+	 * order it names is hers.
+	 */
+	public static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
+		return SafetyWarning.ordersSharingASubstance(drug, detail, orders);
+	}
+
+	/**
+	 * The finding that the drug in play is already in two or more of her orders — built by
+	 * {@code SafetyWarning.substanceInSeveralActiveOrders}, the drug-in-play arm's, whose referent is
+	 * {@code false} (issue #477).
+	 */
+	public static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail,
+			List<String> orders) {
+		return SafetyWarning.substanceInSeveralActiveOrders(drug, detail, orders);
 	}
 }

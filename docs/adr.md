@@ -10968,15 +10968,18 @@ it in the injected record, which reaches a client only if the model cites it, an
 cited neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`); a
 contraindication line of an answer the module composes itself states it (Decision 113), a path that
 ships off. With `chartsearchai.drugSafety.findingsRenderedByClient` on, as it ships, the prose is asked
-to summarise the findings rather than list each one, on README's premise that every finding is published
-in `safetyWarnings`.
+to summarise the findings rather than list each one, on
+[Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)'s
+premise that every finding is published in `safetyWarnings`.
 
 ### The decision
 
 - **The chip publishes the referent verbatim, as `aboutACurrentMedication`**, written from the accessor
   in `ChartSearchAiRestController.serializeSafetyWarnings`. That is the one serializer, so
   `GET /chartsearchai/chartalerts` carries it too, and there every alert answers `true`: that pass's
-  only arm is the order-driven contraindication arm, with nothing in play. The accessor is public for
+  only arm is the order-driven contraindication arm, with nothing in play
+  ([Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)
+  is that surface). The accessor is public for
   this and the factories that set it stay package-private, as
   [Decision 92](#decision-92-the-contraindication-chip-states-whether-the-chart-match-behind-it-is-corroborated)
   settled for `restsOnAnUncorroboratedChartMatch`. The `detail` is unchanged, as

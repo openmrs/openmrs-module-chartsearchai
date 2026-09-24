@@ -43,12 +43,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code SafetyWarning.isAboutACurrentMedication()}; on the model's path it stated it in the injected
  * record, which reaches a client only if the model cites it — and there it did not.
  *
- * <p><b>Two pairs, each one sentence carried by two chips that differ only in that answer.</b> So a
- * value computed from the other published fields cannot agree with both chips of a pair. The
- * contraindication pair is the issue's own. The interaction pair is the screening arm's rule chip beside
- * the drug-in-play arm's, and is here so that a value narrowed by chip TYPE cannot agree with every chip;
- * both of its chips carry a non-empty {@code namedPartners}, as every chip
- * {@code DrugSafetyValidator.interactionWarning} builds does, so a value narrowed on it cannot either.
+ * <p><b>Pairs, each one sentence carried by two chips that differ only in that answer.</b> So a value
+ * computed from the other published fields cannot agree with both chips of a pair. The contraindication
+ * pair is the issue's own. The rule-interaction pair is the screening arm's rated chip beside the
+ * drug-in-play arm's, and is here so that a value narrowed by chip TYPE cannot agree with every chip; both
+ * of its chips carry a non-empty {@code namedPartners}, as every chip
+ * {@code DrugSafetyValidator.interactionWarning} builds does, so a value narrowed on it cannot either. The
+ * shared-substance pair is issue #477's two findings, an UNRATED interaction naming SEVERAL orders, so a
+ * value narrowed on {@code severity} or on how many orders a chip names cannot agree either. Each pair's
+ * {@code true} chip is a population a narrowing to the others would drop unseen — ADR Decision 92's lesson
+ * (issue #412) — and {@code ChartSearchAiSafetyWarningSeverityWireTest}'s reflective guard holds another,
+ * a curated rule's.
  *
  * <p>What is not asserted here, because something else holds it. That the published value is the
  * accessor's own reading, over a fixture of its own:
@@ -73,6 +78,17 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 	private static final String INTERACTION_DETAIL = "Salicylic acid interacts with active order Methotrexate "
 			+ "— Major. Salicylates may interfere with the renal elimination of methotrexate.";
 
+	/** Two of her orders carrying the same substances, as issue #477's reproduction named them. */
+	private static final List<String> TB_ORDERS = Arrays.asList("Isoniazid / pyrazinamide / rifampin",
+		"Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg");
+
+	/** The substances those two orders share. */
+	private static final String SHARED_SUBSTANCES = "Isoniazid, Pyrazinamide and Rifampicin (rifampin)";
+
+	/** A shared-substance sentence, carried by both chips of the pair. */
+	private static final String SHARED_DETAIL = SHARED_SUBSTANCES + " are in active orders " + TB_ORDERS.get(0)
+			+ " and " + TB_ORDERS.get(1) + " — possible duplicate therapy";
+
 	private ChartSearchAiRestController controller;
 
 	private ByteArrayOutputStream out;
@@ -95,8 +111,8 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 	}
 
 	/**
-	 * Chips 0 and 2 are raised from her active orders; chips 1 and 3 carry their sentences verbatim and
-	 * are about a drug put in play. Each chip is built by the factory the arm that raises it uses, with
+	 * Chips 0, 2 and 4 are raised from her active orders; chips 1, 3 and 5 carry their sentences verbatim
+	 * and are about a drug put in play. Each chip is built by the factory the arm that raises it uses, with
 	 * the answer that arm passes it — see {@link SafetyWarningFixtures}.
 	 */
 	private static List<SafetyWarning> chips() {
@@ -106,7 +122,9 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 			SafetyWarningFixtures.ruleInteraction("Salicylic acid", INTERACTION_DETAIL, "Major", "Methotrexate",
 				true),
 			SafetyWarningFixtures.ruleInteraction("Salicylic acid", INTERACTION_DETAIL, "Major", "Methotrexate",
-				false));
+				false),
+			SafetyWarningFixtures.ordersSharingASubstance(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS),
+			SafetyWarningFixtures.substanceInSeveralActiveOrders(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS));
 	}
 
 	/**
@@ -119,7 +137,7 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 			RestControllerContext.user(), false);
 		JsonNode chips = SseEvents.dataOfType(out, "done", MAPPER).get("safetyWarnings");
 		assertNotNull(chips, "the done event carried no safetyWarnings key");
-		assertEquals(4, chips.size(), "precondition: the fixture's four chips, was: " + chips);
+		assertEquals(chips().size(), chips.size(), "precondition: every fixture chip, was: " + chips);
 		return chips;
 	}
 
@@ -136,7 +154,8 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 		JsonNode chips = streamedChips();
 
 		assertReferentsDiffer(chips.get(0), chips.get(1), "the issue's contraindication pair");
-		assertReferentsDiffer(chips.get(2), chips.get(3), "the interaction pair");
+		assertReferentsDiffer(chips.get(2), chips.get(3), "the rule-interaction pair");
+		assertReferentsDiffer(chips.get(4), chips.get(5), "the shared-substance pair");
 	}
 
 	/**

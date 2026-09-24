@@ -32,6 +32,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.reference.SafetyWarningFixtures;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -66,15 +67,18 @@ public class ChartSearchAiChartAlertsTest {
 	 * cross-reactive partner that measurement raised beside it, so the list is a real one rather than
 	 * a single row. Contraindications carry no rating, which is what makes
 	 * {@link #everyFindingIsShapedExactlyAsASearchChipIs} able to assert that the key is present and
-	 * null rather than absent.
+	 * null rather than absent. Built by the two contraindication factories the standing pass reaches,
+	 * with the referent it hands them — every standing alert is raised from one of her active orders
+	 * (issue #527) — so {@link #everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes} reads a value
+	 * production would publish.
 	 */
 	private static List<SafetyWarning> fixtureAlerts() {
 		return Arrays.asList(
-				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Lidocaine",
-						"Lidocaine is contraindicated by a documented lidocaine allergy."),
-				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Bupivacaine",
+				SafetyWarningFixtures.curatedRuleContraindication("Lidocaine",
+						"Lidocaine is contraindicated by a documented lidocaine allergy.", true),
+				SafetyWarningFixtures.recordedAllergenContraindication("Bupivacaine",
 						"Bupivacaine is contraindicated by a documented lidocaine allergy "
-								+ "(cross-reactivity: amide local anaesthetics)."));
+								+ "(cross-reactivity: amide local anaesthetics).", true));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -160,6 +164,24 @@ public class ChartSearchAiChartAlertsTest {
 		assertEquals(null, first.get("severity"),
 				"a contraindication carries no rating, and null is that statement rather than a "
 						+ "missing value: " + first);
+	}
+
+	/**
+	 * Every standing alert says it is about a medication she already takes (issue #527): README's
+	 * "always {@code true} here". That the standing pass raises every alert that way is
+	 * {@code StandingChartAlertsTest.everyStandingAlertIsRaisedFromOneOfHerOwnActiveOrders}, in the api
+	 * module; this is the half that pass cannot see — that the handler publishes it.
+	 */
+	@Test
+	public void everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes() {
+		List<Map<String, Object>> alerts = alertsOf(okBody(RestControllerContext.PATIENT_UUID));
+
+		assertEquals(fixtureAlerts().size(), alerts.size(), "precondition: every fixture alert, was: " + alerts);
+		for (Map<String, Object> alert : alerts) {
+			assertEquals(Boolean.TRUE, alert.get("aboutACurrentMedication"),
+					"a standing alert is one of her active orders checked against her own records, and this "
+							+ "surface must say so: " + alert);
+		}
 	}
 
 	@Test

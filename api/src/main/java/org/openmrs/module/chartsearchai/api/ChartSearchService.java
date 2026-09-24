@@ -1162,13 +1162,8 @@ public interface ChartSearchService {
 		 * subject drug only, so several records — several indexes — share one, and the
 		 * {@code safetyWarnings} chips carrying that {@code (type, drug)} are a candidate SET rather
 		 * than a match; and a chip's {@code detail} is in any case only the mechanism half of what this
-		 * check compares against. The prefix carries no wire counterpart, and neither does the strength
-		 * call's strength; the rest reach the wire in a form that is not the counterpart it looks like —
-		 * the chart-order clause, since what the chip publishes is its ITEMS, as structured
-		 * {@code chartOrderBridges}; the provenance note, since what the chip publishes is the ANSWER it
-		 * is appended off, the chip's own {@code restsOnAnUncorroboratedChartMatch} (issue #374); and the
-		 * strength call's REFERENT, published as the chip's {@code aboutACurrentMedication} and
-		 * {@code aboutAnEndedOrder} (issues #527, #472). None is the clause TEXT compared here. A
+		 * check compares against. Which of the record's other parts reach the wire, and in what form, is
+		 * that README section's to list; none reaches it as the clause TEXT compared here. A
 		 * {@code drug_reference} record's text is published nowhere at all.
 		 *
 		 * <p><b>It is not a grounding verdict and must not be rendered as one.</b> The finding is

@@ -41,8 +41,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * was rendered from. That pass puts in play every drug the answer names that no record the answer is
  * attributable to names, and the drug-in-play arm raises such a drug's findings as a proposal's (see the
  * accessor). The issue's answer named the very drug its chip was about — <em>"Yes — an allergy is
- * recorded: Ibuprofen (drug allergen) [1]."</em> — so what the first case pins is that an answer reciting
- * the allergy record it cites leaves the published chip raised from her order.
+ * recorded: Ibuprofen (drug allergen) [1]."</em> — so what the first case pins is that an answer naming
+ * that drug leaves the published chip raised from her order. Two records the answer is attributable to
+ * name it here, the allergy record it cites and the finding's own injected record, and either alone
+ * keeps the drug out of play; take both out of the attributable corpus and the case reddens.
  *
  * <p><b>These cases are not the failing specification</b>: the flag was set this way before the issue, and
  * what the issue changed is that the wire carries it, which
@@ -123,13 +125,13 @@ public class LlmInferenceServiceCurrentMedicationReferentContextTest extends Bas
 	}
 
 	@Test
-	public void aChipRaisedFromHerOwnOrderIsPublishedAsSoWhereTheAnswerRecitesTheAllergyItCites() {
+	public void aChipRaisedFromHerOwnOrderIsPublishedAsSoWhereTheAnswerNamesItsDrug() {
 		SafetyWarning chip = identityChip(anyAllergiesOfAPatientTakingIt());
 
 		assertTrue(chip.isAboutACurrentMedication(),
 			"she takes the drug she is allergic to, and the module raised this chip from her order — an "
-					+ "answer naming the drug while reciting the allergy record it cites is no proposal of "
-					+ "it: " + chip.getDetail());
+					+ "answer naming the drug that records it is attributable to already name is no proposal "
+					+ "of it: " + chip.getDetail());
 	}
 
 	/**

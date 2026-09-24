@@ -11133,10 +11133,23 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   accused. *No* counts only before a word so the verdict lead *"No —"* stays judged. And a partner
   span naming several drugs is a list only where the last of them is followed by the span's end or by
   punctuation: *"active order Amiodarone and Digoxin is unaffected"*, and a first claim with no marker
-  whose span runs to the next claim's subject, had counted that drug a partner. `joinedAsAList` had
+  whose span runs to the next claim's subject, had counted that drug a partner. The list test had
   asked only the stretches BETWEEN names, so the tail was the one end left open. The test is
   punctuation, `clauseBound`'s reason, and #477's finding copied verbatim closes its list with a dash.
   Both refuse only.
+- **Three of those refusals had cost reach they did not need** (round 2 of the second review loop,
+  each a swapped subject left unjudged). *A list running on* first refused the whole claim, so
+  *"Clarithromycin interacts with active order Amiodarone and Digoxin which is a Major problem [6]"*,
+  [6] Simvastatin's, went silent where the one-partner form is reported; `partnerReadings` now reads
+  the claim with its last drug as a partner and without it, judged only where both reach one verdict
+  — the subject side's rule — so a citation relating none of the drugs is reported and one relating
+  only the last is not accused. *A claim after one with no run and no comma* had an empty subject
+  span, its predecessor's partner span running up to its noun; `claims` now starts it where that
+  partner began, and the drugs in between are readings that must agree. *A lead the prompt invites*
+  — it asks a withhold finding to open with *"No"* and what to avoid — put its negator or its drug in
+  the subject span: `afterItsLead` starts the span past a colon followed by a space or a spaced em or
+  en dash, locally, so `clauseBound` and the sibling's answers are unchanged. The spaces are required
+  because a dash can join a combination's names, and a colon sits inside two knowledge-base names.
 - **Silence over accusation wherever the operands cannot be read**: a subject naming no drug any
   interaction or condition-mediated finding names, nothing after the noun, a run citing a reference
   record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
@@ -11192,10 +11205,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   (*"note that X interacts …"*), and a list joined by other words (*"as well as"*), are unjudged.
 - **−** **The negators are a closed set, and punctuation ends a list.** A denial worded outside the
   set (*"is unlikely to interact"*) is judged as the pair it names and can be reported; a negator in an
-  earlier clause the subject span reaches with no comma (*"X should not be given because X interacts
-  …"*) leaves an asserting claim unjudged. A list's last partner followed by punctuation and then a
-  clause of its own (*"… and Digoxin — which is unaffected"*) is still read as a partner, and one
-  followed by a word that is not a clause (*"… and Digoxin tablets"*) is unjudged.
+  earlier clause the subject span reaches with no comma, semicolon, colon or spaced em or en dash
+  (*"X should not be given because X interacts …"*, a lead ending in a spaced hyphen) leaves an
+  asserting claim unjudged. A list's last partner followed by punctuation and then a clause of its own
+  (*"… and Digoxin — which is unaffected"*) is still read as a partner, and one followed by a word
+  that is not a clause (*"… and Digoxin tablets"*) is judged only where the claim reads alike with and
+  without it.
 - **−** **An invented partner no finding or chip names at all is not seen.** *Heparin* in *"active
   order Amiodarone and Heparin [13]"* is no name to the check, so it reads as more words of the related
   partner; and a partner list continued past a comma — *"active order Amiodarone, Heparin and

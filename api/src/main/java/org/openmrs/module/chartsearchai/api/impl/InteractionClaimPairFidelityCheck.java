@@ -45,7 +45,9 @@ import org.slf4j.LoggerFactory;
  * flagged something else.
  *
  * <p><b>The unit is {@link ActiveOrderCitationFidelityCheck#claims}'s</b>: an occurrence of
- * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, the words before it in its clause as the SUBJECT,
+ * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, the words before it in its clause as the SUBJECT — from
+ * past a lead's colon or spaced dash ({@link #afterItsLead}), and after a claim with no run from where
+ * that claim's partner began —
  * the words after it up to its marker run (or clause bound) as the PARTNER, and that run as what it
  * cites. One walk, so this check and that one cannot disagree about which claims the answer made or
  * which markers each offered. A marker past the claim's comma is not in its run — the ticket's cases
@@ -114,8 +116,9 @@ import org.slf4j.LoggerFactory;
  *   <li>the partner span names several drugs joined by words other than a list's
  *       ({@link #PARTNER_LIST_WORDS}) — <em>"active order Amiodarone but not with Digoxin"</em> ran on
  *       into a clause of its own, which may deny the second pair (round 3) — or followed by a word
- *       before any punctuation, the last of them opening a clause of its own: <em>"active order
- *       Amiodarone and Digoxin is unaffected"</em> (round 1 of the second review);</li>
+ *       before any punctuation, the last of them perhaps opening a clause of its own (<em>"active order
+ *       Amiodarone and Digoxin is unaffected"</em>, round 1 of the second review), where the claim read
+ *       with that drug as a partner and without it reaches two verdicts ({@link #partnerReadings});</li>
  *   <li>the drugs the subject span names reach different verdicts — the claim's clause names another
  *       drug before the noun with no comma or semicolon between, as a lead clause joined by
  *       <em>but</em> or a parenthesis does;</li>
@@ -148,8 +151,10 @@ import org.slf4j.LoggerFactory;
  * reported, while a clause carrying one for another reason (<em>"note that X interacts…"</em>) and a
  * list joined by other words (<em>"as well as"</em>) are left unjudged. The negators are a closed set
  * too: a denial worded outside it (<em>"is unlikely to interact"</em>) is judged as the pair it names,
- * and a negator in an earlier clause the subject span reaches leaves an asserting claim unjudged. A
- * list's last partner followed by punctuation and then a clause of its own is still read as a partner.
+ * and a negator in an earlier clause the subject span reaches — no comma, semicolon, colon or spaced
+ * em or en dash between, as in <em>"X should not be given because X interacts…"</em> or a lead ending
+ * in a spaced hyphen — leaves an asserting claim unjudged. A list's last partner followed by
+ * punctuation and then a clause of its own is still read as a partner.
  * A second partner no finding or chip names at all — <em>Heparin</em> in <em>"active order Amiodarone
  * and Heparin"</em> — is no name to this check, so it reads as more words of the related partner and
  * passes; a partner list continued past a comma is cut at it, so <em>"active order Amiodarone, Heparin
@@ -194,8 +199,8 @@ final class InteractionClaimPairFidelityCheck {
 	 * unjudged. The verdict lead's <em>"No —"</em> is followed by a dash, not a word, so it is not one. A
 	 * closed set used only to REFUSE, as {@link #SUBJECT_STAND_INS} is: a denial worded outside it
 	 * (<em>"is unlikely to interact"</em>) is judged as an assertion, and a negator in an earlier clause the
-	 * subject span reaches with no comma between (<em>"X should not be given because X interacts…"</em>)
-	 * silences a claim that asserts.
+	 * subject span reaches with no comma, semicolon or {@link #afterItsLead} separator between
+	 * (<em>"X should not be given because X interacts…"</em>) silences a claim that asserts.
 	 */
 	private static final Set<String> NEGATORS = Collections.unmodifiableSet(new HashSet<String>(
 			Arrays.asList("not", "never", "without", "cannot", "neither", "nor", "none")));
@@ -278,7 +283,7 @@ final class InteractionClaimPairFidelityCheck {
 			int misattributedClaims = 0;
 			Set<Integer> misattributed = new LinkedHashSet<Integer>();
 			for (ActiveOrderCitationFidelityCheck.Claim claim : claims) {
-				String subject = FindingPartnerCoverageCheck.comparable(claim.subject());
+				String subject = FindingPartnerCoverageCheck.comparable(afterItsLead(claim.subject()));
 				Set<String> subjectNames = namedIn(subject, vocabulary);
 				String partner = normalized(claim.partner());
 				if (subjectNames.isEmpty() || partner.isEmpty() || containsAWordOf(subject, SUBJECT_STAND_INS)
@@ -289,15 +294,18 @@ final class InteractionClaimPairFidelityCheck {
 				// "active order Amiodarone and Digoxin" states two pairs, and containment of the one related
 				// name read both as related (round 2 of #514's review). A span naming none is compared whole.
 				Set<String> partnerNames = namedIn(partner, vocabulary);
+				List<Set<String>> partnerReadings;
 				if (partnerNames.isEmpty()) {
-					partnerNames = Collections.singleton(partner);
+					partnerReadings = Collections.singletonList(Collections.singleton(partner));
 				}
-				else if (!joinedAsAList(partner, partnerNames)) {
-					// "…active order Amiodarone but not with Digoxin" — the span ran on into a clause of its
-					// own, and which of its drugs the claim offered cannot be read (round 3 of #514's review).
-					// So did "…active order Amiodarone and Digoxin is unaffected", whose Digoxin opens that
-					// clause (round 1 of #514's second review).
-					continue;
+				else {
+					partnerReadings = partnerReadings(partner, partnerNames);
+					if (partnerReadings.isEmpty()) {
+						// "…active order Amiodarone but not with Digoxin" — the span ran on into a clause of
+						// its own, and which of its drugs the claim offered cannot be read (round 3 of #514's
+						// review).
+						continue;
+					}
 				}
 				List<Finding> runFindings = new ArrayList<Finding>();
 				List<Integer> runIndexes = new ArrayList<Integer>();
@@ -343,16 +351,19 @@ final class InteractionClaimPairFidelityCheck {
 				// reading that relates passed a swap behind a lead clause with no comma ("X can be given
 				// alongside Y but X interacts with…"); taking the one nearest the noun accuses a correct
 				// citation behind a pronoun ("…alongside Y but it interacts with…"). Both shapes put the
-				// same readings in the same positions, so what cannot be read is left unjudged.
+				// same readings in the same positions, so what cannot be read is left unjudged. The partner
+				// side has readings too, where a list runs on (partnerReadings), under the same rule.
 				Verdict verdict = null;
 				boolean readingsDisagree = false;
 				for (String reading : subjectNames) {
-					Verdict read = verdict(reading, partnerNames, runFindings, population);
-					if (verdict == null) {
-						verdict = read;
-					}
-					else if (verdict != read) {
-						readingsDisagree = true;
+					for (Set<String> partners : partnerReadings) {
+						Verdict read = verdict(reading, partners, runFindings, population);
+						if (verdict == null) {
+							verdict = read;
+						}
+						else if (verdict != read) {
+							readingsDisagree = true;
+						}
 					}
 				}
 				if (readingsDisagree) {
@@ -454,46 +465,92 @@ final class InteractionClaimPairFidelityCheck {
 	}
 
 	/**
-	 * @return whether every stretch of {@code partner} between two of the {@code names} it contains is
-	 *         {@link #PARTNER_LIST_WORDS} and punctuation alone, and — where it names more than one —
-	 *         whether the list ENDS at the last of them: the span stops there, or punctuation follows it
-	 *         before any word does. A word straight after the last name of several says that name opened a
-	 *         clause of its own — <em>"Amiodarone and Digoxin is unaffected"</em>, or the next claim's
-	 *         subject where the span runs up to it (round 1 of #514's second review) — while #477's
-	 *         finding, copied verbatim, closes its list with a dash (<em>"… A and B — possible duplicate
-	 *         therapy"</em>). Punctuation and not a vocabulary, {@code clauseBound}'s reason; what that gives
-	 *         up is a last name followed by punctuation and then a clause of its own, still read as a
-	 *         partner. A name inside another occurrence ({@code lamivudine} of
-	 *         {@code lamivudine/zidovudine}) is that occurrence, so it opens no stretch; the words before
-	 *         the first name are not asked, nor, where it names one drug, the words after it.
+	 * @return the READINGS of which drugs of {@code partner} the claim names as its partners — empty where
+	 *         some stretch between two of the {@code names} it contains is more than
+	 *         {@link #PARTNER_LIST_WORDS} and punctuation, so the claim is left unjudged; otherwise
+	 *         {@code names} alone where the list ENDS at its last name — the span stops there, or
+	 *         punctuation follows it before any word does — and, where a word follows the last of
+	 *         several, {@code names} and {@code names} less the ones only that last occurrence carries.
+	 *         A word straight after the last name says that name may have opened a clause of its own —
+	 *         <em>"Amiodarone and Digoxin is unaffected"</em>, or the next claim's subject where the span
+	 *         runs up to it (round 1 of #514's second review) — or may not (<em>"Amiodarone and Digoxin
+	 *         tablets"</em>), so the claim is judged only where both readings reach one verdict: a citation
+	 *         relating the subject to none of the drugs named is misattributed under either (round 2 of
+	 *         that review), and one relating only that last drug is not accused. #477's finding, copied
+	 *         verbatim, closes its list with a dash (<em>"… A and B — possible duplicate therapy"</em>).
+	 *         Punctuation and not a vocabulary, {@code clauseBound}'s reason; what that gives up is a last
+	 *         name followed by punctuation and then a clause of its own, still read as a partner. A name
+	 *         inside another occurrence ({@code lamivudine} of {@code lamivudine/zidovudine}) is that
+	 *         occurrence, so it opens no stretch; the words before the first name are not asked, nor,
+	 *         where it names one drug, the words after it.
 	 */
-	private static boolean joinedAsAList(String partner, Set<String> names) {
-		List<int[]> occurrences = new ArrayList<int[]>();
+	private static List<Set<String>> partnerReadings(String partner, Set<String> names) {
+		List<Object[]> occurrences = new ArrayList<Object[]>();
 		for (String name : names) {
 			for (int at = partner.indexOf(name); at >= 0; at = partner.indexOf(name, at + 1)) {
-				occurrences.add(new int[] { at, at + name.length() });
+				occurrences.add(new Object[] { Integer.valueOf(at), Integer.valueOf(at + name.length()), name });
 			}
 		}
-		Collections.sort(occurrences, (one, other) -> one[0] != other[0] ? Integer.compare(one[0], other[0])
-				: Integer.compare(other[1], one[1]));
+		Collections.sort(occurrences, (one, other) -> {
+			int start = Integer.compare((Integer) one[0], (Integer) other[0]);
+			return start != 0 ? start : Integer.compare((Integer) other[1], (Integer) one[1]);
+		});
 		int coveredTo = -1;
-		boolean several = false;
-		for (int[] occurrence : occurrences) {
-			if (coveredTo >= 0 && occurrence[0] >= coveredTo) {
-				several = true;
-				for (String word : partner.substring(coveredTo, occurrence[0]).split("[^\\p{L}\\p{N}]+")) {
+		int lastFrom = -1;
+		for (Object[] occurrence : occurrences) {
+			int start = ((Integer) occurrence[0]).intValue();
+			if (coveredTo >= 0 && start >= coveredTo) {
+				for (String word : partner.substring(coveredTo, start).split("[^\\p{L}\\p{N}]+")) {
 					if (!word.isEmpty() && !PARTNER_LIST_WORDS.contains(word)) {
-						return false;
+						return Collections.emptyList();
 					}
 				}
+				lastFrom = start;
 			}
-			coveredTo = Math.max(coveredTo, occurrence[1]);
+			coveredTo = Math.max(coveredTo, ((Integer) occurrence[1]).intValue());
 		}
-		if (several) {
+		if (lastFrom >= 0) {
 			String after = partner.substring(coveredTo).trim();
-			return after.isEmpty() || !Character.isLetterOrDigit(after.codePointAt(0));
+			if (!after.isEmpty() && Character.isLetterOrDigit(after.codePointAt(0))) {
+				Set<String> beforeTheLast = new HashSet<String>();
+				for (Object[] occurrence : occurrences) {
+					if (((Integer) occurrence[0]).intValue() < lastFrom) {
+						beforeTheLast.add((String) occurrence[2]);
+					}
+				}
+				return Arrays.asList(names, beforeTheLast);
+			}
 		}
-		return true;
+		return Collections.singletonList(names);
+	}
+
+	/**
+	 * @return {@code subject} from just past its last lead separator — a colon followed by a space, or an
+	 *         em or en dash with a space on each side — or whole where it carries none. The prompt asks a
+	 *         withhold finding to open with <em>"No"</em> and what to avoid, so a lead before the claim is
+	 *         the form it invites, and a negator, a stand-in or another drug in it (<em>"Not recommended —
+	 *         X interacts…"</em>, <em>"Do not give X: X interacts…"</em>) was read as the claim's own, leaving
+	 *         a swap behind it unjudged (round 2 of #514's second review). Local to the subject span, so
+	 *         {@code ActiveOrderCitationFidelityCheck}'s clause bounds are unchanged. A colon without a
+	 *         space is not one — two knowledge-base names carry one (<em>"(2:1)"</em>) — nor is a spaced
+	 *         hyphen, which can join a combination's names; a lead ending in either is still read as the
+	 *         claim's. The spaces around a dash keep a combination joined by one (<em>"Simvastatin–X"</em>)
+	 *         a subject of two readings; no case pins the space after a colon or the one before a dash. A
+	 *         character scan, as {@link #deniesItsClause} is, for its reason.
+	 */
+	private static String afterItsLead(String subject) {
+		for (int at = subject.length() - 2; at >= 0; at--) {
+			char c = subject.charAt(at);
+			boolean spaceAfter = Character.isWhitespace(subject.charAt(at + 1));
+			if (c == ':' && spaceAfter) {
+				return subject.substring(at + 1);
+			}
+			if ((c == '\u2014' || c == '\u2013') && spaceAfter && at > 0
+					&& Character.isWhitespace(subject.charAt(at - 1))) {
+				return subject.substring(at + 1);
+			}
+		}
+		return subject;
 	}
 
 	/** @return every word of the phrase but the two its noun is ({@code lastTwoWordsOf}'s complement),

@@ -11012,7 +11012,7 @@ findings rather than list each one, on README's premise that every finding is pu
 - **`false` for a drug the question named that she takes is the proposal vocabulary open
   [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402) and
   [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513) track.** README names it as
-  current behaviour and no test pins it, so the key can move when they are fixed.
+  current behaviour.
 - A client that does not render the key still shows the same words for both referents —
   `openmrs-esm-chartsearchai`'s half.
 - The key does not say which of her orders.

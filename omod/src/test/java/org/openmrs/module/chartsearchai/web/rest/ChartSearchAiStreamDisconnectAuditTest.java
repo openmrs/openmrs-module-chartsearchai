@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.Level;
@@ -491,9 +492,9 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 	/**
 	 * Holds the request until the wall clock has moved past the millisecond it arrived in, then streams
 	 * as the base stub does — so the elapsed time the controller measures is at least a millisecond. A
-	 * spin on the clock rather than a sleep, because the wait it needs is the clock's own granularity.
-	 * It reads the wall clock production reads, so a step of that clock during the call can still
-	 * defeat it; that is the residue.
+	 * spin on the clock rather than a sleep, because the wait it needs is the clock's own granularity,
+	 * and capped by a monotonic deadline so a backward step of the wall clock cannot hold it for the
+	 * length of the step. Such a step during the call can redden the case instead; that is the residue.
 	 */
 	private static final class ClockAdvancingStub extends StreamingChartSearchStub {
 
@@ -503,7 +504,8 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 				Consumer<List<RecordReference>> citationsConsumer,
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 			long arrived = System.currentTimeMillis();
-			while (System.currentTimeMillis() <= arrived) {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+			while (System.currentTimeMillis() <= arrived && System.nanoTime() < deadline) {
 				Thread.onSpinWait();
 			}
 			return super.searchStreaming(patient, question, tokenConsumer, reasoningConsumer,

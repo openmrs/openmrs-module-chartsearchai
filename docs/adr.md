@@ -8633,16 +8633,16 @@ is this issue's own defect reappearing inside its own fix. A swallowed persisten
 normally, so the flag is still raised and no second row follows it.
 
 One row per query holds for any implementation, not only for one honouring the ungrounded consumer's
-at-most-once contract. Every implementation is bound to invoke each consumer synchronously on the
-calling thread before the call returns — `ChartSearchService`'s own javadoc states it — and that is the
-premise the controller's unsynchronized audit state rests on, a requirement of the interface rather
-than a property of the two shipped implementations (issue #459). That consumer's idempotence is keyed
-on its having FIRED rather than on the early `done` having gone out, which also makes its warning
-reachable in the classic shape; and the classic write site skips its save where a row was already attempted. Neither shipped implementation can
+at-most-once contract. That consumer's idempotence is keyed on its having FIRED rather than on the
+early `done` having gone out, which also makes its warning reachable in the classic shape; and the
+classic write site skips its save where a row was already attempted. Neither shipped implementation can
 reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
 `ChartSearchServiceRouter` never calls it, passing the caller's through — but a second call is a
 second ROW, `saveAuditLog` building a fresh one each time, and the module should not owe the table's
-shape to a collaborator's good behaviour.
+shape to a collaborator's good behaviour. What lets the controller keep its audit state in unsynchronized
+fields is a requirement of the interface rather than a property of the two shipped implementations:
+whenever an implementation invokes a consumer, it does so on the calling thread before the call
+returns, which `ChartSearchService`'s own javadoc states (issue #459).
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
 row before streaming and update it afterwards — was not taken, and what stands against it is a

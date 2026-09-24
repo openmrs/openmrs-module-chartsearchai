@@ -32,14 +32,14 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * (issue #51) and a default that has been {@code false} since before it; the correction belongs with
  * issue #178, which is what a reader trusting the old sentence would have got wrong.
  *
- * <p><b>Every consumer a {@code searchStreaming} overload is handed is invoked synchronously on the
- * calling thread, before that call returns or throws</b> (issue #459) — never from a thread of the
- * implementation's own, and never after the call has ended. It binds every overload, the ones an
- * implementation overrides and the ones it inherits, so a caller may keep what its consumers record
- * in plain fields and read them once the call has ended; the REST layer's streaming audit does, and
- * its one-row-per-query guarantee rests on this requirement rather than on how the shipped
- * implementations happen to be written. An implementation that produces on a worker thread must
- * hand each callback back to the caller's thread itself.
+ * <p><b>Whenever a {@code searchStreaming} overload invokes a consumer it was handed, it does so
+ * synchronously on the calling thread, before that call returns or throws</b> (issue #459) — never
+ * from a thread of the implementation's own, and never after the call has ended. This says WHEN and
+ * WHERE a consumer runs, not THAT it runs: which consumers fire is each overload's own contract. It
+ * binds every overload, the ones an implementation overrides and the ones it inherits, so a caller
+ * may keep what its consumers record in plain fields and read them once the call has ended — ADR
+ * Decision 105 records the caller that does. An implementation that produces on a worker thread
+ * must hand each callback back to the caller's thread itself.
  */
 public interface ChartSearchService {
 
@@ -113,8 +113,8 @@ public interface ChartSearchService {
 	 *       verdicts.</li>
 	 *   <li>It fires on the live inference path regardless of whether grounding is enabled —
 	 *       its meaning is "the answer is complete", not "grounding will follow".</li>
-	 *   <li>It is invoked on the calling thread, before this call returns or throws, as every
-	 *       consumer of every overload is — see this interface's own javadoc.</li>
+	 *   <li>When it fires, it fires on the calling thread before this call returns or throws, as
+	 *       any consumer of any overload does — see this interface's own javadoc.</li>
 	 *   <li>It does NOT fire when the implementation returns an answer that is already final —
 	 *       e.g. a cached answer, whose verdicts were attached when it was first computed. A
 	 *       caller that emitted nothing from the consumer must therefore fall back to treating

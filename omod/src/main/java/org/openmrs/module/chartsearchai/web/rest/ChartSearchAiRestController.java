@@ -648,8 +648,8 @@ public class ChartSearchAiRestController {
 	 * {@link #auditStreamedQueryIfUnrecorded} in the {@code finally} is what owes it and what states
 	 * the gate, and issue #450 is what a delivered answer with no row cost before that. One row per
 	 * query at most, for any implementation of the consumer contract — which includes the requirement
-	 * {@code ChartSearchService}'s own javadoc states, that every consumer is invoked on the calling
-	 * thread before the call returns (issue #459).</p>
+	 * {@code ChartSearchService}'s own javadoc states, that any consumer an implementation invokes runs
+	 * on the calling thread before the call returns (issue #459).</p>
 	 *
 	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
 	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
@@ -782,8 +782,7 @@ public class ChartSearchAiRestController {
 				// swallowed the early done's write failure to reach: neither shipped implementation does,
 				// and the point of the guard is that the row count is one per query for EVERY
 				// implementation rather than only for one honouring the consumer's at-most-once contract.
-				// Reading a flag a consumer set, without synchronizing, rests on the interface's threading
-				// requirement rather than on either shipped implementation (issue #459).
+				// Reading a flag a consumer set without synchronizing: see StreamAuditState (issue #459).
 				// The EVENT still goes out, because a client whose done was refused never received one, and
 				// it carries the id of the row that WAS written. No test observes that id: the only
 				// arrangement reaching this line has already had a frame write refused, so the peer it would
@@ -945,11 +944,10 @@ public class ChartSearchAiRestController {
 	 * the early event went out, and the consumer's comment says why that is not the guard.
 	 *
 	 * <p>Unsynchronized, and that is not an oversight of the kind {@code SseKeepAlive} is careful
-	 * about: {@code ChartSearchService}'s javadoc requires every consumer to be invoked synchronously on
-	 * the calling thread — here the REQUEST thread — before {@code searchStreaming} returns, and the
-	 * {@code finally} that reads this runs on that same thread (issue #459). A requirement of the
-	 * interface rather than a property of the shipped implementations, so the same holds for any
-	 * implementation. The keep-alive's own thread shares {@code out} and never this.
+	 * about: {@code ChartSearchService}'s javadoc requires any consumer an implementation invokes to
+	 * run on the calling thread — here the REQUEST thread — before {@code searchStreaming} returns, and
+	 * the {@code finally} that reads this runs on that same thread (issue #459). The keep-alive's own
+	 * thread shares {@code out} and never this.
 	 */
 	private static final class StreamAuditState {
 

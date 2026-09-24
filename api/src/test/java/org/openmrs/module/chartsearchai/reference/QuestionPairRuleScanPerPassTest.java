@@ -233,7 +233,11 @@ public class QuestionPairRuleScanPerPassTest {
 	 * would forbid something correct and pass something wrong. {@link SourceScan} blanks comments and
 	 * string literals and hard-fails on a declaration it cannot locate uniquely; the NEEDLE is pinned
 	 * separately, by requiring it inside {@code AboveFloorRules.of}, because a needle matching
-	 * nothing leaves every arm's loop empty and the case green (issue #458).
+	 * nothing leaves every arm's loop empty and the case green (issue #458). That pins the join's
+	 * SPELLING and not the set of accessors: a second accessor on {@link DrugReference} returning the
+	 * same list, walked in an arm by an indexed {@code get}, escapes this loop and the walk counts above
+	 * alike, since {@code CountingRules} counts {@code iterator()} calls — the text-needle residue the
+	 * issue #447 helper shape already has.
 	 */
 	@Test
 	public void neitherPairwiseArmReadsARuleListOfItsOwn() throws IOException {

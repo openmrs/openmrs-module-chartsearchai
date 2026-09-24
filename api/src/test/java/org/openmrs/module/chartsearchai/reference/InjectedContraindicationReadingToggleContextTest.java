@@ -9,9 +9,12 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
@@ -106,5 +109,45 @@ public class InjectedContraindicationReadingToggleContextTest extends BaseModule
 		configure(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "true");
 
 		assertReadingRendered(true);
+	}
+
+	/** Issue #310's Codeine arrangement with a chart that IS read and whose recorded allergy matches, so
+	 *  the only thing that can take the reading away is the switch under test. */
+	private String sharedNoteCodeineRecord() throws Exception {
+		return InjectedContraindicationClauseTest.sharedNoteCodeineRecord(DrugReferenceTestSupport.ctx(60,
+				null, null, null, DrugReferenceTestSupport.set("Dihydrocodeine"), null));
+	}
+
+	@Test
+	public void aSharedNoteIsListedOnceWhenAnswerValidationIsOff() throws Exception {
+		// Issue #407: the list is rendered with the reading stood down, so its #310 de-duplication has to
+		// hold here as well. A de-duplication gated on DrugSafetyValidator.reportsContraindications()
+		// rather than on the composed boolean is invisible to every contextless case, which runs with
+		// both switches absent and so true; this is the case that reddens on it.
+		configure(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS, "false");
+
+		InjectedContraindicationClauseTest.assertSharedNoteListedOnceWithNoReading(sharedNoteCodeineRecord());
+	}
+
+	@Test
+	public void aSharedNoteIsListedOnceWhenContraindicationWarningsAreOff() throws Exception {
+		configure(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
+
+		InjectedContraindicationClauseTest.assertSharedNoteListedOnceWithNoReading(sharedNoteCodeineRecord());
+	}
+
+	@Test
+	public void theSharedNoteArrangementReadsWhenBothSwitchesAreOn() throws Exception {
+		// The discriminator for the two cases above: the same record states a reading once the switches
+		// are on, so their "no reading" premise is the switch's doing and not the arrangement's.
+		configure(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS, "true");
+		configure(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "true");
+
+		String record = sharedNoteCodeineRecord();
+		assertEquals("opioid reaction",
+				DrugReferenceTestSupport.sectionAfter(record, DrugReferenceInjector.UNCORROBORATED_READING_LEAD),
+				"with the switches on, this chart's uncorroborated match must be read, was: " + record);
+		assertEquals(Arrays.asList("opioid reaction"), InjectedContraindicationClauseTest.clausesIn(record),
+				"was: " + record);
 	}
 }

@@ -55,7 +55,8 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * REAL chips the same arrangement raises: every chip, which is the population the defect read from, so
  * each case fails on the code that read it. Only the model is stubbed:
  * answer prose is not reproducible on a live engine, and the answer is the input these cases vary.
- * Every order name an answer carries is read off the chips rather than spelled here.
+ * Every order name an answer carries is read off the chips or the records, except the spacing case's,
+ * whose two displays are spelled here and asserted against the chip before the answer is built.
  */
 public class CitedFindingPartnerCompletionTest {
 

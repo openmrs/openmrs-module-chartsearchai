@@ -706,8 +706,9 @@ public interface ChartSearchService {
 	 * measured BEFORE the module names the rest itself (ADR Decision 100) — so prose naming every order
 	 * beside {@code stated < named} says the module supplied the difference. Case and the spacing
 	 * around a {@code /} are ignored (issue #516); a name the model spells differently in any other way
-	 * reads as unstated, so the residue runs toward reporting a shortfall, which is the safe direction
-	 * for a diagnostic and the opposite of {@code findingCitations}'s.
+	 * reads as unstated, so that residue runs toward reporting a shortfall, which is the safe direction
+	 * for a diagnostic and the opposite of {@code findingCitations}'s. Containment also reads an order
+	 * whose name sits inside a longer one the prose wrote as stated, the opposite direction.
 	 *
 	 * <p><b>Absence is not zero.</b> Null says the answer cited no finding, or no finding it cited named
 	 * an order, or the producer stated no measurement. {@code stated == named} is not a certificate

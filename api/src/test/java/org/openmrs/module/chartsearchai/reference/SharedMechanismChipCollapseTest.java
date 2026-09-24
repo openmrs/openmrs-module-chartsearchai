@@ -116,8 +116,9 @@ public class SharedMechanismChipCollapseTest {
 	@Test
 	public void aMergedChipCarriesTheOrdersItNamesStructurally() throws IOException {
 		// The precondition FindingPartnerCoverageCheck rests on: it asks whether the ANSWER stated every
-		// order a finding names, and it must read those names off the chip rather than recover them by
-		// parsing the detail this module composed them into (the two-resolutions-that-agree shape issue
+		// order a finding names, and it must read those names structurally — since issue #516 off the
+		// finding record's copy of this list — rather than recover them by parsing the detail this
+		// module composed them into (the two-resolutions-that-agree shape issue
 		// #151 forbids). EVERY interaction chip states them — one name for an ordinary chip, several
 		// for a merged one — so no reader has to tell "carries no list" from "covers no order".
 		List<SafetyWarning> chips = interactionsFor(new PairChipExtent.Sink());

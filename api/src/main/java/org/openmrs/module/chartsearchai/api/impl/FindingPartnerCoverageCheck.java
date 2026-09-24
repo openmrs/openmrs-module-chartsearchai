@@ -58,8 +58,9 @@ import org.slf4j.LoggerFactory;
  * {@code findingCitations}'s. Since issue #516 both operands are compared in {@code comparable} form,
  * which folds case and takes out the whitespace around a slash — the difference that issue measured
  * putting a false "not named above" into an answer — and leaves every other spelling difference
- * unstated. It says nothing about whether the answer's claim
- * ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
+ * unstated. Containment has a residue in the other direction too: an order whose name sits inside a
+ * longer one the answer wrote ({@code Lamivudine} inside {@code Lamivudine / zidovudine}) reads as
+ * stated. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
  * partner was named at all. An ordinary finding names one order and is measured like the rest, while
  * the merged finding and, since issue #477, the finding that a drug is already in several of her
  * orders and a screen's finding that several of her orders share a substance are where a list can be
@@ -83,12 +84,12 @@ public final class FindingPartnerCoverageCheck {
 	 * <p><b>It shares its population and its comparison with {@link #measure}</b> — {@code citedFindings}
 	 * and {@code comparable} — so an order is stated to both or to neither; {@code measure} counts in a
 	 * loop of its own and, since issue #439, states no list of names at all. The two do not agree in
-	 * UNIT: {@code measure} counts a partner once per cited finding that
-	 * names it while this dedups, so on two cited findings naming one order {@code named - stated}
-	 * exceeds the size of the list appended to the answer. That divergence is pre-existing and this
+	 * UNIT: {@code measure} counts a partner once per cited finding that names it while this dedups, so
+	 * on two cited findings naming one order {@code named - stated} exceeds the size of the list
+	 * appended to the answer. That divergence is pre-existing and this
 	 * sentence used to claim it away.
 	 */
-	static List<String> unstatedPartners(String answer, List<RecordReference> cited,
+	private static List<String> unstatedPartners(String answer, List<RecordReference> cited,
 			List<RecordMapping> mappings) {
 		List<String> unstated = new ArrayList<String>();
 		if (ChartSearchAiUtils.isBlank(answer)) {
@@ -129,7 +130,8 @@ public final class FindingPartnerCoverageCheck {
 	 * them: {@code findingPartners} is measured BEFORE this, on the model's own prose (ADR Decision
 	 * 100), so a response whose {@code stated} is short of {@code named} says the module named the rest.
 	 *
-	 * @param answer the model's answer, read for the markers it anchors and for the orders it names
+	 * @param answer the answer — the model's, or the one the module composed — read for the markers it
+	 *        anchors and for the orders it names
 	 * @param cited the references the answer cites, as resolved by
 	 *        {@code LlmInferenceService.extractCitedReferences}
 	 * @param mappings the chart's records, the carrier of the findings and of the orders each names

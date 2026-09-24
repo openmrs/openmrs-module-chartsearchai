@@ -2,7 +2,7 @@
     "metadata": {
         "schema_version": "1.0",
         "title": "Test fixture: the ALLERGEN row with its atc array written in DESCENDING code order",
-        "note": "The Ketoconazole and Tioconazole rows of ddi-shared-class-choice.json, field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, with ONE deliberate deviation: Ketoconazole's atc array is written in descending code order. sharedClass scans the ALLERGEN's subgroups, and all 1839 KB entries that carry codes are in ascending order, so a verbatim slice cannot observe whether the scan depends on array position. This pair shares two locally-applied subgroups and no systemic one (D01AC, G01AF), which is the only tier where the order of equals decides the answer. Interactions are empty for the same reason as the sibling fixture."
+        "note": "The Ketoconazole and Tioconazole rows of ddi-shared-class-choice.json, copied from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset with brand_names omitted, as in that file, and ONE deliberate deviation: Ketoconazole's atc array is written in descending code order. sharedClass scans the ALLERGEN's subgroups, and all 1839 KB entries that carry codes are in ascending order, so a verbatim slice cannot observe whether the scan depends on array position. This pair shares two locally-applied subgroups and no systemic one (D01AC, G01AF), which is the only tier where the order of equals decides the answer. Interactions are empty for the same reason as the sibling fixture."
     },
     "mechanisms": {},
     "drugs": [

@@ -8793,8 +8793,8 @@ public class DrugSafetyValidator {
 	 *         what came up empty. The {@code ddinter} parser writes a bridged concept's recorded name
 	 *         onto every entry it files there AS AN ALIAS, so the over-wide match is an EXACT alias
 	 *         hit and not a nested-token one — and an {@code en} session records that very concept
-	 *         name on the order. {@code ddi-bridged-concept-two-substances.json}, a verbatim shipped-KB
-	 *         slice, carries it: {@code Esomeprazole magnesium} is an alias of BOTH Omeprazole and
+	 *         name on the order. {@code ddi-bridged-concept-two-substances.json}, adapted from the
+	 *         shipped KB, carries it: {@code Esomeprazole magnesium} is an alias of BOTH Omeprazole and
 	 *         Esomeprazole (CIEL 75876, one of the 122 multi-substance bridged concepts of the shipped
 	 *         knowledge base whose recorded name does not name every substance they resolve — the
 	 *         difference of the two figures
@@ -11314,7 +11314,7 @@ public class DrugSafetyValidator {
 	 * becomes a co-medication of its own. Issue #209's case is a real unmapped order on this instance —
 	 * Sarah Taylor's {@code Hydrocortisone Injection vial 100mg} — and reaches
 	 * {@code Hydrocortisone butyrate} unranked, so one prescription would be reported as two, the second
-	 * of them an ester she is not on. Both halves are asserted over the verbatim KB slice by
+	 * of them an ester she is not on. Both halves are asserted over the KB slice by
 	 * {@code UnmappedOrderClassPartnerTest}.
 	 *
 	 * <p><b>Named and classified by the dataset, both.</b> The name is the entry's — issue #155's ladder
@@ -12013,7 +12013,7 @@ public class DrugSafetyValidator {
 	 * reorders an array from silently rewording a chip. A no-op on the shipped KB, whose arrays are all
 	 * ascending, so the case that pins it
 	 * ({@code CrossReactivityClassChoiceTest.theAnswerDoesNotDependOnTheAllergenArraysCodeOrder}) is
-	 * the one fixture here that deviates from verbatim, by writing one allergen's array descending.
+	 * the one fixture here whose codes differ from the shipped rows', by writing one allergen's array descending.
 	 *
 	 * <p><b>And the subgroups no tier may return</b> (issue #167): a shared subgroup that classifies
 	 * neither the substance nor a therapy is skipped outright rather than demoted, in both tiers, so

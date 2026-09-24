@@ -41,7 +41,7 @@ import org.junit.jupiter.api.Test;
  * cross-reactivity routes to the same symptom, and the reason issue #173 built that key.
  *
  * <p><b>Two routes in, and they need different halves of the answer.</b> Both are pinned here, over
- * verbatim rows of the shipped 19 MB KB.
+ * rows of the shipped 19 MB KB.
  * <ul>
  *   <li>The co-medication resolves to NO entry — the KB carries no row for its code — so only the
  *       ORDER'S NAME can say what it is. That is the PPI slice: the KB's {@code Omeprazole} row

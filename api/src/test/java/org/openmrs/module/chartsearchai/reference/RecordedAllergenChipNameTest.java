@@ -29,7 +29,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * — and by two substances sharing one name that is neither's display name. In the second case the
  * chip asserted an allergy the chart does not record.
  *
- * <p>Both fixtures here are VERBATIM shipped-KB slices read by the real {@code DdiDrugReferenceSource},
+ * <p>The fixtures here are shipped-KB slices read by the real {@code DdiDrugReferenceSource},
  * so the shape is the shipped data's rather than a fixture's invention, and no curated rule exists to
  * fold the identity chip away ({@code DdiDrugReferenceSource} emits no contraindications at all —
  * {@link SelfNamedAllergyRuleRankTest#aDdinterLoadCannotReachThisRankAtAll}).

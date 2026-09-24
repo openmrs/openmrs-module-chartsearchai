@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
  *       provably equivalent to the one it replaced, and the direction is under-warning.</li>
  * </ul>
  *
- * <p>Every scenario runs the REAL production path: verbatim DDInter KB slices parsed by the real
+ * <p>Every scenario runs the REAL production path: DDInter KB slices parsed by the real
  * {@link DdiDrugReferenceSource}, the real {@code validate} entry point, real question and answer
  * strings, GP reads on their no-context defaults.
  */

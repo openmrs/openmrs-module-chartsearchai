@@ -730,8 +730,9 @@ public final class DrugReferenceTestSupport {
 	 *
 	 * <p>{@code ddi-route-variants.json}: one substance filed as several rows sharing an
 	 * {@code rxnorm_name} — the shape behind issue #115's chip collapse, and (its two ATC-less
-	 * {@code Iron} rows) behind issue #135's multi-entry case. Its rows are field-for-field identical
-	 * to their KB rows but NOT in KB order: the two Iron rows are transposed, which the #135 case
+	 * {@code Iron} rows) behind issue #135's multi-entry case. Its rows are identical to their KB rows
+	 * except that brand_names is omitted, and NOT in KB order — among others, the two Iron rows are
+	 * transposed, which the #135 case
 	 * depends on — see
 	 * {@code DirectAllergyContraindicationTest.anUnclassifiedAllergenWithASiblingRouteVariantStillWarnsOnce}
 	 * before regenerating this slice.
@@ -780,8 +781,8 @@ public final class DrugReferenceTestSupport {
 	 *  shared {@code rxnorm_name}, and so the match token every rule between them and Clopidogrel
 	 *  carries — so that token is an alias of both and the display name of neither and
 	 *  {@code DrugSafetyValidator.activeOrderEntryFor}'s ranking cannot separate them (issue #353,
-	 *  review round 4). A separate file rather than a variant of that one because the change makes the
-	 *  slice no longer verbatim; the fixture's own {@code metadata.note} is the authority on which
+	 *  review round 4). A separate file rather than a variant of that one because that field is changed
+	 *  on purpose; the fixture's own {@code metadata.note} is the authority on which
 	 *  field it is, why the shape has to be authored, and what was measured over the shipped knowledge
 	 *  base before authoring it. */
 	static final String DDI_BRIDGED_CONCEPT_TIED_TOKEN =
@@ -847,7 +848,7 @@ public final class DrugReferenceTestSupport {
 	static final String DDI_ALIAS_NAMES_ANOTHER_SUBSTANCE =
 			"chartsearchai-test/ddi-alias-names-another-substance.json";
 
-	/** A verbatim shipped-KB slice: ONE subject whose partners include two the data files under the
+	/** A shipped-KB slice, brand_names omitted: ONE subject whose partners include two the data files under the
 	 *  SAME mechanism group and one it files under another — the slice ADR Decision 99's collapse and
 	 *  ADR Decision 102's log rule are both measured on; see the fixture's own note. */
 	static final String DDI_SHARED_MECHANISM_PARTNERS =

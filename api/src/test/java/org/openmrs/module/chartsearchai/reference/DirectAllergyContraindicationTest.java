@@ -44,7 +44,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * direct-allergy warning had no path to the clinician at all — no chip, and (since issue #110, which
  * turns every chip into a citable pre-answer record) nothing in the prompt either.
  *
- * <p><b>The fixture</b> is a verbatim excerpt of that dataset — {@code Ledipasvir} and {@code
+ * <p><b>The fixture</b> is an excerpt of that dataset — {@code Ledipasvir} and {@code
  * Leucovorin}, two of the 444, plus {@code Ciprofloxacin} and {@code Levofloxacin} as a real
  * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The DDInter excerpt cannot host
  * these cases: all 16 of its drugs carry ATC codes, which is why no existing test covered a direct
@@ -262,10 +262,10 @@ public class DirectAllergyContraindicationTest {
 		//
 		// The shared route-variant slice supplies the shape: its two Iron rows (DDInter975 and
 		// DDInter2187 "Iron (bisglycinate)") are the full KB's ONLY two rxnorm_name=iron entries, both
-		// field-for-field identical to their KB rows and both carrying no ATC code — so no new fixture
-		// is needed. (Field-for-field, not byte-for-byte: the slice is pretty-printed, the KB is not.)
+		// identical to their KB rows, brand_names aside, and both carrying no ATC code — so no new fixture
+		// is needed. (Field by field, not byte-for-byte: the slice is pretty-printed, the KB is not.)
 		//
-		// Verbatim in CONTENT, but the slice REORDERS them: DDInter975, whose display name IS "Iron",
+		// Copied in CONTENT, brand_names aside, but the slice REORDERS them: DDInter975, whose display name IS "Iron",
 		// is listed first, while in the full KB DDInter2187 "Iron (bisglycinate)" (index 1320) precedes
 		// it (index 2256). Under the earliest-match resolution this test was written against, that
 		// ordering was what made an allergy recorded as "Iron" resolve to DDInter975 here and to

@@ -87,7 +87,7 @@ public class ReferenceRecordRowAttributionTest {
 
 	@Test
 	public void theRecordSaysWhichRowItDescribesWhenTheChartNamesAnother() throws IOException {
-		// #237, on rows that are verbatim slices of the shipped KB — so this is the shape a ddinter
+		// #237, on rows sliced from the shipped KB — so this is the shape a ddinter
 		// deployment reaches, not a curated-only one. The chart names the ophthalmic row; the record is
 		// rendered from the unqualified one and must say so.
 		DrugReferenceService service =

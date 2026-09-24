@@ -54,7 +54,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * follows from what it asserts rather than from a list here — an earlier version of this sentence
  * enumerated them and went stale twice in eight commits. A case asserting a property of the SHIPPED
  * dataset reads the shipped knowledge base ({@code DrugReferenceTestSupport.shippedEntries}); a case
- * asserting particular chip or record TEXT reads a verbatim slice, so a refresh that leaves one family
+ * asserting particular chip or record TEXT reads a slice, so a refresh that leaves one family
  * alone cannot rewrite what it expects. Every scenario runs a real production entry point with real
  * question strings and GP reads on their no-context defaults.
  */
@@ -136,7 +136,7 @@ public class SubstanceNameRowTest {
 		            + "tracer's own prose, was: " + warnings.get(0).getDetail());
 	}
 
-	/** The verbatim slice that files a rated rule on the TRACER row — the estradiol slice above files
+	/** The slice that files a rated rule on the TRACER row — the estradiol slice above files
 	 *  none, so it cannot pose a pooled tracer rule at all. Its own concern is
 	 *  {@code DrugReferenceValidity}'s derivative-merged finding across six families
 	 *  ({@code DrugReferenceValidityContextTest}), which is why the case below reads the ratings it
@@ -530,7 +530,7 @@ public class SubstanceNameRowTest {
 		//
 		// Measured before the fix, on the shipped KB: the clause was printed with the rung disabled and
 		// absent with it enabled — a strict regression, with the whole suite green on both sides.
-		// On the verbatim slice and not the shipped KB, per shippedEntries()' own rule: this asserts record
+		// On the slice and not the shipped KB, per shippedEntries()' own rule: this asserts record
 		// TEXT, so a refresh touching that family must not be able to rewrite what it expects. The slice
 		// carries the same two rows in the same order, and Botulinum Toxin Type B is its rated partner.
 		DrugReferenceService service = DrugReferenceTestSupport
@@ -778,7 +778,7 @@ public class SubstanceNameRowTest {
 		//
 		// Reachable rather than hypothetical: rows of one substance normally SHARE their rxnorm and CIEL
 		// aliases, so a recorded order name that is no row's own display name lands on every row of the
-		// family at once. Both preconditions below are read off the real parse of a verbatim slice.
+		// family at once. Both preconditions below are read off the real parse of a slice.
 		//
 		// Asserted BOTH ways round, because one direction alone cannot see the mutation for what it is: a
 		// single false is equally satisfied by the floor, by the row == than fast path and by a genuine
@@ -841,7 +841,7 @@ public class SubstanceNameRowTest {
 		            + record);
 	}
 
-	/** The verbatim slice for issue #250's remaining family — the two influenza A/Vietnam rows and the
+	/** The slice for issue #250's remaining family — the two influenza A/Vietnam rows and the
 	 *  one partner whose RENDERED note differs between them. See the fixture's own note. */
 	private static final String TYPO_ROW_FIXTURE = "chartsearchai-test/ddi-typo-row-names-its-substance.json";
 
@@ -917,7 +917,7 @@ public class SubstanceNameRowTest {
 		// note-length step. Without the second half of the correction the chip would print the
 		// correctly-spelled name over the typo row's shorter note.
 		//
-		// On a verbatim slice and not the shipped KB, per shippedEntries()' own rule, because this asserts
+		// On a slice and not the shipped KB, per shippedEntries()' own rule, because this asserts
 		// chip TEXT.
 		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TYPO_ROW_FIXTURE);
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,

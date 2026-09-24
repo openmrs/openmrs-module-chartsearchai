@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Test;
  * clinician never asked about. Both halves are asserted here: which prose survives, and what the chip
  * calls the subject.
  *
- * <p>Slices taken verbatim from the shipped KB, driven through the real
+ * <p>Slices taken from the shipped KB, driven through the real
  * {@link DdiDrugReferenceSource} parser and the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}.
  */

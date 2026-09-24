@@ -184,7 +184,7 @@ public class SafetyFindingSeverityFidelityTest {
 		// fails if it accuses a faithful answer. Neither alone discriminates.
 		StringBuilder prose = new StringBuilder();
 		for (Map.Entry<Integer, String> finding : ratedFindings.entrySet()) {
-			prose.append("Clarithromycin interacts with active order X — ")
+			prose.append("Clarithromycin interacts with her ").append(ordersOf(finding.getKey())).append(" — ")
 					.append(finding.getValue()).append(" [").append(finding.getKey()).append("]. ");
 		}
 		service.setLlmProvider(answering(prose.toString().trim()));
@@ -593,15 +593,27 @@ public class SafetyFindingSeverityFidelityTest {
 	/** An answer that names each cited record in one flat clause with no rating anywhere — the
 	 *  ticket's own shape, and the one the round-two check cannot see because it reproduces nothing
 	 *  of the records it cites. */
-	private static String enumerationCiting(Iterable<Integer> indexes) {
+	private String enumerationCiting(Iterable<Integer> indexes) {
 		StringBuilder prose = new StringBuilder("No — Clarithromycin should not be started");
 		String separator = ": ";
 		for (Integer index : indexes) {
-			prose.append(separator).append("Clarithromycin interacts with an active order [")
-					.append(index).append("]");
+			prose.append(separator).append("Clarithromycin interacts with her ").append(ordersOf(index))
+					.append(" [").append(index).append("]");
 			separator = ", ";
 		}
 		return prose.append(".").toString();
+	}
+
+	/** The orders the injected finding at {@code index} names, read off its own record — so an answer
+	 *  built here names what that finding covers and ADR Decision 100's completion has nothing to add
+	 *  (issue #516: it covers the findings an answer CITES, and every answer here cites some). */
+	private String ordersOf(Integer index) {
+		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindings(chart)) {
+			if (mapping.getIndex() == index.intValue()) {
+				return String.join(" and ", mapping.getFindingPartners());
+			}
+		}
+		throw new IllegalStateException("no injected finding at [" + index + "]: " + chart.getText());
 	}
 
 	private List<Integer> indexesRated(String rating) {

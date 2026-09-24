@@ -54,9 +54,12 @@ import org.slf4j.LoggerFactory;
  * default server log and any log shipping a deployment configures — a wider audience than the
  * clinicians holding <i>AI Query Patient Data</i>.
  *
- * <p><b>Nothing is lost by taking the names out.</b> ADR Decision 100 has the module APPEND them to
- * the answer, so the reader who holds the privilege already receives every name; the counts the log
- * keeps are the two {@code findingPartners} publishes. {@link #theOrdersReachTheAnswerAClinicianIsHanded}
+ * <p><b>Nothing is lost by taking the names out.</b> ADR Decision 100 has the module APPEND to the
+ * answer the orders of every finding it cited, and every chip carries its own orders as
+ * {@code namedPartners}, so the reader who holds the privilege already receives every name; the
+ * counts the log keeps are the two {@code findingPartners} publishes. Since issue #516 the answers
+ * here cite every injected finding, because the append and the count cover only cited findings.
+ * {@link #theOrdersReachTheAnswerAClinicianIsHanded}
  * and {@link #searchStreaming_theOrdersReachTheAnswerItReturns} are what make that a move rather than
  * a deletion — remove the append and they redden, so a fix that simply stopped naming the orders
  * anywhere cannot pass this file. They assert it of the answer each method RETURNS; the one surface
@@ -66,7 +69,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Everything here runs the real {@link LlmInferenceService#search}/{@code searchStreaming}
  * orchestration over real merged chips the real {@code DrugSafetyValidator} raised from the shared
- * fixture ({@code DrugReferenceTestSupport.sharedMechanismInteractionChips}). Only the model is
+ * fixture ({@code DrugReferenceTestSupport.sharedMechanismInteractionChips}), and over the
+ * {@code safety_finding} records the real injector writes for the same arrangement
+ * ({@code DrugReferenceTestSupport.sharedMechanismFindingsOver}). Only the model is
  * stubbed: answer prose is not reproducible on a live engine, and the answer is the one input this
  * check reads.
  */
@@ -79,8 +84,9 @@ public class FindingPartnerLogDisclosureTest {
 	 *  captured on 2026-09-16 came from three loggers, all inside {@code ...api.impl}:
 	 *  {@code LlmInferenceService}, {@code ReferenceProseFidelityCheck} and the check itself. The
 	 *  answer path's other half — the validator and the injector, which log from
-	 *  {@code ...chartsearchai.reference} — is stubbed out below, so naming the root reaches nothing
-	 *  there, and those two sites are pinned where they are written:
+	 *  {@code ...chartsearchai.reference} — is stubbed out below (the injected chart is built in
+	 *  {@link #setUp}, before any capture opens), so naming the root reaches nothing there, and those
+	 *  two sites are pinned where they are written:
 	 *  {@code ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName}
 	 *  and {@code PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug}.
 	 *  The root is named anyway because the alternative scopes the negative to the package this
@@ -110,6 +116,11 @@ public class FindingPartnerLogDisclosureTest {
 	/** Every order those chips name, as they name it. */
 	private List<String> partners;
 
+	/** The chart production is handed: the patient's own drug orders with the safety findings the REAL
+	 *  injector writes for the same arrangement appended — built once, so the markers an answer cites
+	 *  were numbered against the very chart the service reads. */
+	private PatientChart injected;
+
 	private TestableService service;
 
 	@BeforeEach
@@ -125,12 +136,24 @@ public class FindingPartnerLogDisclosureTest {
 					"and the arranged answer names none of them, so the shortfall the WARN reports is "
 							+ "the whole list: " + partner);
 		}
+		injected = DrugReferenceTestSupport.sharedMechanismFindingsOver(chart());
 		service = newService();
+	}
+
+	/** {@code prose} citing every finding the chart carries — ADR Decision 100's completion and
+	 *  {@code findingPartners} cover the findings an answer CITES (issue #516), and every case here is
+	 *  about the orders of all of them. */
+	private String citingEveryFinding(String prose) {
+		StringBuilder sb = new StringBuilder(prose.substring(0, prose.length() - 1));
+		for (PatientChartSerializer.RecordMapping finding : DrugReferenceTestSupport.injectedFindings(injected)) {
+			sb.append(" [").append(finding.getIndex()).append("]");
+		}
+		return sb.append(".").toString();
 	}
 
 	@Test
 	public void noLogLineNamesAnOrderTheFindingsCover() {
-		service.setLlmProvider(answering(NAMES_NO_ORDER));
+		service.setLlmProvider(answering(citingEveryFinding(NAMES_NO_ORDER)));
 		// DEBUG, so the claim covers every level and not only the one core ships: the finding's own
 		// criterion is "nothing at INFO or above", and below it the module has no reason to write
 		// these names at all — the clinician's answer carries them.
@@ -162,7 +185,7 @@ public class FindingPartnerLogDisclosureTest {
 		// The other half: taking the names out may not take the diagnostic out. The maintainer's
 		// channel still says a shortfall happened, for which patient, and how big — and says it with
 		// the numbers findingPartners publishes, so the log and the wire cannot come to disagree.
-		service.setLlmProvider(answering(NAMES_NO_ORDER));
+		service.setLlmProvider(answering(citingEveryFinding(NAMES_NO_ORDER)));
 		try (LogCapture capture = LogCapture.on(PACKAGE)) {
 			ChartAnswer answer = service.search(patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
@@ -189,7 +212,8 @@ public class FindingPartnerLogDisclosureTest {
 		for (String partner : partners) {
 			namesThemAll.append(' ').append(partner).append(',');
 		}
-		String answerNamingAll = namesThemAll.append(" so it should not be started.").toString();
+		String answerNamingAll = citingEveryFinding(
+				namesThemAll.append(" so it should not be started.").toString());
 		service.setLlmProvider(answering(answerNamingAll));
 		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
 			assertLiveBelowWarnForTheCheck(capture);
@@ -220,7 +244,7 @@ public class FindingPartnerLogDisclosureTest {
 		// What makes the case above a MOVE and not a deletion: the names the log gives up are the ones
 		// ADR Decision 100 appends to the answer, which reaches a reader holding the privilege. Delete
 		// the append and this reddens; delete the names from the log and it does not.
-		service.setLlmProvider(answering(NAMES_NO_ORDER));
+		service.setLlmProvider(answering(citingEveryFinding(NAMES_NO_ORDER)));
 		ChartAnswer answer = service.search(patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
 		String completed = answer.getAnswer().toLowerCase(Locale.ROOT);
@@ -239,7 +263,7 @@ public class FindingPartnerLogDisclosureTest {
 		// UNGROUNDED answer handed to its consumer mid-pass, which is response.getAnswer() — the
 		// pre-append text — and the trailing `grounded` event carries no `answer` key. There the names
 		// reach a client on that event's safetyWarnings[].namedPartners and not in the prose.
-		service.setLlmProvider(answering(NAMES_NO_ORDER));
+		service.setLlmProvider(answering(citingEveryFinding(NAMES_NO_ORDER)));
 		ChartAnswer answer = service.searchStreaming(patient(),
 				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION, token -> { });
 
@@ -256,7 +280,7 @@ public class FindingPartnerLogDisclosureTest {
 		// /search/stream is the path users hit, and it is the second call site the finding names. A
 		// fix applied to one of the two would leave the disclosure in production traffic while every
 		// case above stayed green.
-		service.setLlmProvider(answering(NAMES_NO_ORDER));
+		service.setLlmProvider(answering(citingEveryFinding(NAMES_NO_ORDER)));
 		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
 			assertLiveBelowWarnForTheCheck(capture);
 			ChartAnswer answer = service.searchStreaming(patient(),
@@ -340,7 +364,7 @@ public class FindingPartnerLogDisclosureTest {
 			@Override
 			public PatientChart inject(PatientChart chart, Patient patient, String question,
 					ChartReadStatus readStatus) {
-				return chart;
+				return injected;
 			}
 		});
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {

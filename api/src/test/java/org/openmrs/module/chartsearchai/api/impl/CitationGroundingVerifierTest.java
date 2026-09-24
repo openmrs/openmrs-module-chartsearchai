@@ -2431,7 +2431,7 @@ public class CitationGroundingVerifierTest {
 				ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER, "order-uuid-simvastatin", null,
 				org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
 						.injectedActiveOrderText("order-uuid-simvastatin", "Simvastatin 20mg"),
-				null, 0, null, null, null, null, null, Boolean.TRUE);
+				null, 0, null, null, null, null, null, null, Boolean.TRUE);
 	}
 
 	/**

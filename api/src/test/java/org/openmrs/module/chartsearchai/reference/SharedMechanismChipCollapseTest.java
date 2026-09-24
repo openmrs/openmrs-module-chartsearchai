@@ -17,7 +17,8 @@ import java.io.IOException;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.api.impl.FindingPartnerCoverageCheck;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * One mechanism, several partners: the finding is stated ONCE and names every active order it covers.
@@ -146,54 +147,36 @@ public class SharedMechanismChipCollapseTest {
 	}
 
 	@Test
-	public void theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself() throws IOException {
-		// ADR Decision 100. Measured live on the 3.7.1 standalone (2026-09-15, reproduced on consecutive
-		// runs): the chip named five corticosteroid orders and the prose named four, dropping
-		// Dexamethasone, while every published key read clean. The module composed that chip, so it
-		// knows the names deterministically and can finish the sentence without asking the model again
-		// — which is what keeps this off the PROMPT path ADR Decision 84 measured regressions in.
-		//
-		// The chips here are the REAL ones the validator raised above; only the answer stands in for
-		// the model, which is the one input a test has to supply.
+	public void eachFindingsRecordCarriesTheOrdersItsChipNames() throws IOException {
+		// Issue #516: ADR Decision 100 names the orders of the findings an answer CITES, and a marker
+		// reaches a record, never a chip — so each injected finding's record carries its own chip's
+		// orders, written where the record is, and every other record carries none.
 		List<SafetyWarning> chips = interactionsFor(new PairChipExtent.Sink());
-		String modelAnswer = "No \u2014 aspirin should not be given: it interacts with her prednisone.";
+		PatientChart chart = DrugReferenceTestSupport.sharedMechanismFindingsOver(
+				DrugReferenceTestSupport.oneRecordChart());
 
-		List<String> unstated = FindingPartnerCoverageCheck.unstatedPartners(modelAnswer, chips);
-		String completed = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(modelAnswer, unstated);
-
-		assertTrue(unstated.size() >= 2,
-				"the premise: this answer names one order and the chips name more, was: " + unstated);
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		assertEquals(chips.size(), findings.size(),
+				"the premise: one record per chip, was: " + chart.getText());
 		for (SafetyWarning chip : chips) {
-			for (String order : chip.namedPartners()) {
-				assertTrue(completed.toLowerCase(java.util.Locale.ROOT)
-						.contains(order.toLowerCase(java.util.Locale.ROOT)),
-						"every order the findings name must reach the answer a client is handed, whether "
-								+ "the model named it or the module did. Missing " + order + " from: "
-								+ completed);
+			boolean merged = chip.getDetail().contains(CORTICOSTEROID_MECHANISM);
+			RecordMapping record = null;
+			for (RecordMapping finding : findings) {
+				if (finding.getText().contains(CORTICOSTEROID_MECHANISM) == merged) {
+					record = finding;
+				}
+			}
+			assertNotNull(record, "was: " + chart.getText());
+			assertEquals(chip.namedPartners(), record.getFindingPartners(),
+					"the record carries its OWN finding's orders, every one of them, was: " + record.getText());
+		}
+		for (RecordMapping mapping : chart.getMappings()) {
+			if (!findings.contains(mapping)) {
+				assertTrue(mapping.getFindingPartners().isEmpty(),
+						"a record that is not a finding names no order this way, was: "
+								+ mapping.getResourceType() + " " + mapping.getFindingPartners());
 			}
 		}
-		assertTrue(completed.startsWith(modelAnswer),
-				"and it APPENDS, so the verdict lead the model wrote is never re-decided, was: "
-						+ completed);
-	}
-
-	@Test
-	public void anAnswerNamingEveryOrderIsReturnedByteForByte() throws IOException {
-		// The control that makes the case above about the shortfall and not about the append.
-		List<SafetyWarning> chips = interactionsFor(new PairChipExtent.Sink());
-		StringBuilder sb = new StringBuilder("No \u2014 aspirin should not be given: it interacts with");
-		for (SafetyWarning chip : chips) {
-			for (String order : chip.namedPartners()) {
-				sb.append(" ").append(order).append(",");
-			}
-		}
-		String modelAnswer = sb.append(" all of them.").toString();
-
-		String completed = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(modelAnswer,
-				FindingPartnerCoverageCheck.unstatedPartners(modelAnswer, chips));
-
-		assertEquals(modelAnswer, completed,
-				"an answer that named every order is returned unchanged, not merely equivalent");
 	}
 
 	@Test

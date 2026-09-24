@@ -98,7 +98,7 @@ These methods are the ONLY correct entry points for their respective operations.
   - **`describesEndedOrder` is now AND-ed with this, never ranked against it**, and each can only exclude more. Do not "simplify" it into a precedence rule. Scoped to `drug_order` deliberately. Mutate the guards and read the failures. → ADR Decisions 46, 47.
 
 - **One mechanism, one chip, and the orders it names**: `DrugSafetyValidator.collapseSharedMechanisms` states a mechanism ONCE, naming every active order it covers, each chip carrying them as `SafetyWarning.namedPartners()`. **It may not drop a partner or move a rating, and returns the PAIR count, not the chip count.** → ADR Decision 99; `SharedMechanismChipCollapseTest`.
-  - **An order the prose leaves unnamed is named by the MODULE, not a second inference**: `FindingPartnerCoverageCheck.withUnstatedPartnersNamed` APPENDS, and runs after `measure`, so `findingPartners.stated` is the MODEL's. → ADR Decision 100.
+  - **An order the prose leaves unnamed is named by the MODULE, not a second inference**: `FindingPartnerCoverageCheck.withUnstatedPartnersNamed` APPENDS, after `measure`, only the CITED findings' orders (`citedFindingIndexes`; #516). → ADR Decision 100.
 
 ## Model files
 

@@ -661,7 +661,7 @@ public class DrugReferenceInjector {
 			// citation's own, and the verdict published was #201's defect one group over. Stamped
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
-					order.getUuid(), null, rendered, null, 0, null, null, null, null, null,
+					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null,
 					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -691,7 +691,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -736,10 +736,13 @@ public class DrugReferenceInjector {
 			// it, so "which rating did this finding state" has one answer rather than one per parse.
 			// resourceKey is NOT a substitute for it: one screening question raises several findings
 			// of one type about one drug, so five records of this loop can share a single key.
+			// The orders the finding names travel the same way and for the same reason (issue #516):
+			// ADR Decision 100's completion names the orders of the findings an answer CITES, and a
+			// marker reaches this record, never the chip.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
-					chartRecordNumbers(finding, findingRecords)));
+					finding.namedPartners(), chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}

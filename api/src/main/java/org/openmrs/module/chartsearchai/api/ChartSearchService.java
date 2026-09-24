@@ -686,18 +686,21 @@ public interface ChartSearchService {
 	}
 
 	/**
-	 * How many active orders a response's safety findings name, and how many of those the answer's own
-	 * prose stated. This type is CANONICAL for what its two numbers do and do not assert.
+	 * How many active orders the safety findings an answer CITED name, and how many of those the
+	 * answer's own prose stated. This type is CANONICAL for what its two numbers do and do not assert.
 	 *
 	 * <p><b>Why {@code findingCitations} could not answer it.</b> That counts FINDINGS, and ADR Decision
 	 * 99 made one finding cover several orders — so a cited finding whose prose drops one of five names
 	 * reads {@code carried:4, cited:4}, which is true and is not the question. Measured live on the
 	 * 3.7.1 standalone (2026-09-15, two consecutive runs) with every other published key clean.
 	 *
-	 * <p><b>What {@code named} counts</b> is {@code SafetyWarning.namedPartners()} summed over the
-	 * response's chips. Empty for the chip types naming no active order, so this is not a partner total
-	 * and must not be read against {@code interactionPairs}, which counts PAIRS over a different
-	 * population.
+	 * <p><b>What {@code named} counts</b> is the orders each finding the answer cited names — its
+	 * {@code safety_finding} record's copy of {@code SafetyWarning.namedPartners()} — summed over those
+	 * findings, one count per finding naming an order (issue #516). Not the response's chips: a finding
+	 * the answer did not cite is {@code findingCitations}' to count, and ADR Decision 100 appends the
+	 * orders of the cited findings only, so {@code named} covers what that sentence can name. Empty for
+	 * the finding types naming no active order, so this is not a partner total and must not be read
+	 * against {@code interactionPairs}, which counts PAIRS over a different population.
 	 *
 	 * <p><b>What {@code stated} counts</b> is those the MODEL's prose names, by containment, and it is
 	 * measured BEFORE the module names the rest itself (ADR Decision 100) — so prose naming every order
@@ -705,8 +708,8 @@ public interface ChartSearchService {
 	 * differently reads as unstated, so the residue runs toward reporting a shortfall, which is the safe
 	 * direction for a diagnostic and the opposite of {@code findingCitations}'s.
 	 *
-	 * <p><b>Absence is not zero.</b> Null says no finding named an order, or the producer stated no
-	 * measurement. {@code stated == named} is not a certificate that the prose is complete, only that
+	 * <p><b>Absence is not zero.</b> Null says the answer cited no finding, or no finding it cited named
+	 * an order, or the producer stated no measurement. {@code stated == named} is not a certificate that the prose is complete, only that
 	 * every name the check could look for appeared.
 	 */
 	final class FindingPartnerCoverage {
@@ -1290,14 +1293,15 @@ public interface ChartSearchService {
 		 * @return the statement, or null where the producer made no measurement
 		 */
 		/**
-		 * How many active orders this response's safety findings name, and how many of those the MODEL's
-		 * prose stated — the shortfall ADR Decision 99 moved out of {@link #getFindingCitationExtent()}'s
+		 * How many active orders the safety findings this answer cited name, and how many of those the
+		 * MODEL's prose stated — the shortfall ADR Decision 99 moved out of {@link #getFindingCitationExtent()}'s
 		 * reach by putting several orders under one finding.
 		 *
 		 * <p>{@link FindingPartnerCoverage} is canonical for what each number asserts, for why a null is
 		 * not a zero, and for why {@code stated == named} certifies nothing.
 		 *
-		 * @return the statement, or null where no finding named an order or no measurement was made
+		 * @return the statement, or null where the answer cited no finding naming an order or no
+		 *         measurement was made
 		 */
 		public FindingPartnerCoverage getFindingPartnerCoverage() {
 			return findingPartnerCoverage;

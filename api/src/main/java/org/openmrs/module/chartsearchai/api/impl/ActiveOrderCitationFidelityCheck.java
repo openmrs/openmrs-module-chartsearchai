@@ -317,7 +317,10 @@ final class ActiveOrderCitationFidelityCheck {
 	 * <p>A claim is one occurrence of {@link DrugSafetyValidator#ACTIVE_ORDER_NOUN} inside one
 	 * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} unit, and its markers are {@link #firstMarkerRun}
 	 * between the noun and the next occurrence. The SUBJECT and PARTNER spans each claim carries are
-	 * read by the pair check only; this class never reads them.
+	 * read by the pair check only; this class never reads them. Nor does it read the TRAILING run a
+	 * claim with no run of its own carries — the first run past its clause, before the next claim —
+	 * which is not the claim's run and is never counted as one here: the pair check alone reads it,
+	 * and only under the two gates {@code InteractionClaimPairFidelityCheck}'s class javadoc states.
 	 *
 	 * @param answer the answer prose; null answers no claims
 	 */
@@ -348,10 +351,16 @@ final class ActiveOrderCitationFidelityCheck {
 				// bound is what keeps the second claim's citation out of the first claim's run.
 				int limit = next < 0 ? sentence.length() : next;
 				int from = at + phrase.length();
-				int[] run = firstMarkerRun(sentence, from, limit);
-				int partnerTo = run == null ? clauseBound(sentence, from, limit) : run[0];
+				int clauseEnd = clauseBound(sentence, from, limit);
+				int[] run = firstMarkerRun(sentence, from, clauseEnd, limit);
+				int partnerTo = run == null ? clauseEnd : run[0];
+				// Only a claim with no run of its own carries a TRAILING run, which may begin anywhere before the
+				// next claim — which is why it is a separate span and never this class's run.
+				int[] trailing = run == null ? firstMarkerRun(sentence, partnerTo, limit, limit) : null;
 				claims.add(new Claim(sentence, clauseStart(sentence, previousEnd, at), at, from, partnerTo,
-						run == null ? "" : sentence.substring(run[0], run[1])));
+						run == null ? "" : sentence.substring(run[0], run[1]),
+						trailing == null ? partnerTo : trailing[0],
+						trailing == null ? "" : sentence.substring(trailing[0], trailing[1])));
 				previousEnd = run == null ? partnerTo : run[1];
 				at = next;
 			}
@@ -416,7 +425,7 @@ final class ActiveOrderCitationFidelityCheck {
 	/**
 	 * @return the {@code {start, end}} offsets of the first run of citation markers in
 	 *         {@code sentence} between {@code from} and {@code limit} — markers separated by nothing
-	 *         but {@link #RUN_SEPARATORS} — or null when none begins there.
+	 *         but {@link #RUN_SEPARATORS} — or null when none begins before {@code startBound}.
 	 *
 	 *         <p>Returns OFFSETS rather than the indexes the run contains so that decoding stays
 	 *         {@link ChartSearchAiUtils#citedIndexes}' job (CLAUDE.md's inline-citation rule), applied
@@ -425,15 +434,16 @@ final class ActiveOrderCitationFidelityCheck {
 	 *         run can be told from the next claim's — and, since issue #514, where the claim's partner
 	 *         ends.
 	 */
-	private static int[] firstMarkerRun(String sentence, int from, int limit) {
-		// Where the claim's own clause ends. The run may only BEGIN before it — a claim whose clause
+	private static int[] firstMarkerRun(String sentence, int from, int startBound, int limit) {
+		// startBound is, for a claim's own run, where the claim's own clause ends (claims() passes
+		// clauseBound). The run may only BEGIN before it — a claim whose clause
 		// carries no markers takes none, rather than annexing the next clause's. Round 1 of this PR's
 		// review found the unbounded form crying wolf on
 		// "…active order Prednisone, which she has been taking since 2024 for her benign thyroid
 		// neoplasm [177]", where [177] is a correct citation for the clause it sits in and this key
 		// is published to a client. It bounds the START only: a comma is a legitimate separator
-		// BETWEEN two markers of one run ("[1], [2]"), which is why RUN_SEPARATORS carries one.
-		int startBound = clauseBound(sentence, from, limit);
+		// BETWEEN two markers of one run ("[1], [2]"), which is why RUN_SEPARATORS carries one. A
+		// TRAILING run (issue #514) passes limit, and is not the claim's run for that reason.
 		// The region is what keeps this linear. Matcher.find scans to the end of the INPUT, not to a
 		// bound the caller applies afterwards, so a phrase occurrence with no marker after it used to
 		// pay for a scan of the whole remaining sentence — once per occurrence, which is quadratic in
@@ -599,7 +609,9 @@ final class ActiveOrderCitationFidelityCheck {
 	/**
 	 * One active-order claim — see {@link #claims}. Its three spans are substrings of one sentence: the
 	 * SUBJECT from the start of the claim's clause to the noun, the PARTNER from after the noun to its
-	 * marker run or, where it has none, to its clause bound, and the RUN itself.
+	 * marker run or, where it has none, to its clause bound, and the RUN itself. A claim with no run
+	 * also carries the first run past its clause and the GAP before it (issue #514, round 1 of its
+	 * review) — read by the pair check alone, never by {@link ActiveOrderCitationFidelityCheck}.
 	 */
 	static final class Claim {
 
@@ -615,14 +627,21 @@ final class ActiveOrderCitationFidelityCheck {
 
 		private final String run;
 
+		/** Where the trailing run begins — {@code partnerTo} where there is none, so the gap is empty. */
+		private final int trailingFrom;
+
+		private final String trailingRun;
+
 		private Claim(String sentence, int subjectFrom, int nounAt, int partnerFrom, int partnerTo,
-				String run) {
+				String run, int trailingFrom, String trailingRun) {
 			this.sentence = sentence;
 			this.subjectFrom = subjectFrom;
 			this.nounAt = nounAt;
 			this.partnerFrom = partnerFrom;
 			this.partnerTo = partnerTo;
 			this.run = run;
+			this.trailingFrom = trailingFrom;
+			this.trailingRun = trailingRun;
 		}
 
 		/** @return the words before the noun in the claim's own clause — "Metformin interacts with" */
@@ -642,8 +661,27 @@ final class ActiveOrderCitationFidelityCheck {
 		 *         (CLAUDE.md's inline-citation rule) in either of them alike
 		 */
 		List<Integer> admittedRunIndexes(Set<Integer> admitted) {
+			return admittedIn(run, admitted);
+		}
+
+		/**
+		 * @return the indexes the TRAILING run cites that {@code admitted} admits — empty for a claim
+		 *         with a run of its own, or with no run before the next claim. Not the claim's run: the
+		 *         pair check alone reads it, under its two gates.
+		 */
+		List<Integer> admittedTrailingRunIndexes(Set<Integer> admitted) {
+			return admittedIn(trailingRun, admitted);
+		}
+
+		/** @return the words between the claim's clause bound and its trailing run — empty where it has
+		 *          no trailing run */
+		String trailingGap() {
+			return sentence.substring(partnerTo, trailingFrom);
+		}
+
+		private static List<Integer> admittedIn(String markers, Set<Integer> admitted) {
 			List<Integer> indexes = new ArrayList<Integer>();
-			for (Integer index : ChartSearchAiUtils.citedIndexes(run)) {
+			for (Integer index : ChartSearchAiUtils.citedIndexes(markers)) {
 				if (admitted.contains(index)) {
 					indexes.add(index);
 				}

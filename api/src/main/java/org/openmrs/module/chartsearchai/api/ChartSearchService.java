@@ -756,8 +756,9 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>What a claim is</b> is {@code ActiveOrderCitationFidelityCheck}'s: an occurrence of
 	 * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, and the markers it cites are its own marker RUN.
-	 * A marker past the claim's clause break is not in that run, so the claim is judged as citing
-	 * nothing.
+	 * A marker past the claim's clause break is not in that run. A claim with no run of its own also
+	 * cites the findings of the first run past its clause that name its PARTNER, where nothing between
+	 * the break and that run names a drug any finding names; otherwise it is judged as citing nothing.
 	 *
 	 * <p><b>What {@code judged} counts.</b> The claims the check could reach a verdict on: the
 	 * words before the noun name a drug some interaction or condition-mediated finding or chip
@@ -767,7 +768,7 @@ public interface ChartSearchService {
 	 * none, every finding and chip — is about a drug it names.
 	 * Every other claim is outside all three numbers.
 	 *
-	 * <p><b>What {@code misattributedCitations} holds.</b> The findings a judged claim's run cites where
+	 * <p><b>What {@code misattributedCitations} holds.</b> The findings a judged claim cites where
 	 * NONE of them relates the two drugs the claim names: each drug must be one the finding names — its
 	 * subject, an order it names, or a prescription its chart-order clause resolved a drug from — read
 	 * structurally, never from its text. Two orders one finding names therefore read as related, which

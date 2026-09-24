@@ -46,9 +46,13 @@ import org.slf4j.LoggerFactory;
  * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, the words before it in its clause as the SUBJECT,
  * the words after it up to its marker run (or clause bound) as the PARTNER, and that run as what it
  * cites. One walk, so this check and that one cannot disagree about which claims the answer made or
- * which markers each offered. A marker past the claim's comma is therefore not the claim's — the
- * ticket's cases 2 and 4 put it there — and such a claim is judged as citing nothing, which still
- * reports it where no finding relates its pair.
+ * which markers each offered. A marker past the claim's comma is not in its run — the ticket's cases
+ * 2 and 4 put it there — and a claim with no run of its own takes the findings of the first run past
+ * its clause on two gates only: the words between the comma and that run name no drug any finding
+ * names, and the finding names the claim's PARTNER. Each gate is against the report ADR Decision 76
+ * calls crying wolf, a later clause's own correct citation: the first where that clause names another
+ * drug a finding carries, the second where it names one no finding carries. A claim neither gate lets
+ * through is judged as citing nothing, and is still reported where no finding relates its pair.
  *
  * <p><b>What a finding relates is read structurally, never from its text.</b> Every name a finding
  * goes by: its subject ({@link ChartSearchAiUtils#findingSubject} on a record,
@@ -65,8 +69,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Two answers.</b>
  * <ul>
- *   <li>A claim whose run cites findings, none of which relates its pair: every one of them is
- *       MISATTRIBUTED. A run citing one that relates and one that does not is silent.</li>
+ *   <li>A claim whose run — or the trailing run it takes — cites findings, none of which relates its
+ *       pair: every one of them is MISATTRIBUTED. A run citing one that relates and one that does not
+ *       is silent.</li>
  *   <li>A claim whose run cites no finding, and whose pair no finding in the prompt and no chip beside
  *       the answer relates: UNFOUNDED. The chips count because a drug only the answer names is put in
  *       play after the answer, and a pair the module did raise is not one "no finding raised".</li>
@@ -101,6 +106,8 @@ import org.slf4j.LoggerFactory;
  * prints reads as unrelated and can be REPORTED — the bridge names are what keep a brand-named
  * prescription's own display out of that case. A claim pairing two orders one finding names reads as
  * related, so an order put in for a merged finding's subject passes — {@link #anyRelates} says why.
+ * The trailing-run gates read names the findings carry, so a later clause naming another drug only by
+ * a name no finding prints, citing a finding that names the claim's partner, is taken for the claim.
  * And a claim not written in the
  * active-order form — the ticket's first case, <em>"a caution to note regarding interactions with
  * Lopinavir / ritonavir, Didanosine, and Nevirapine [288], [290]"</em> — is not a claim to this check
@@ -202,6 +209,21 @@ final class InteractionClaimPairFidelityCheck {
 						// no drug to an order is reference material too — so what the claim offered
 						// cannot be judged from here.
 						unreadable = true;
+					}
+				}
+				// A claim with no run of its own takes a finding marker past its clause only on two gates,
+				// each against a false report Decision 76 names: nothing between the clause break and the
+				// marker names a drug any finding names — a later clause about another drug carries its own
+				// citation — and the finding names the claim's PARTNER, the evidence the marker is about this
+				// claim. Round 1 of #514's review: without it the ticket's own cases 2 and 4, whose markers
+				// sit after a comma, named no citation.
+				if (namedIn(FindingPartnerCoverageCheck.comparable(claim.trailingGap()), vocabulary).isEmpty()) {
+					for (Integer index : claim.admittedTrailingRunIndexes(admitted)) {
+						Finding finding = citedFindings.contains(index) ? citableFindings.get(index) : null;
+						if (finding != null && finding.relatesDrugs && matchesAny(partner, finding.names)) {
+							runFindings.add(finding);
+							runIndexes.add(index);
+						}
 					}
 				}
 				List<Finding> candidates = runFindings.isEmpty() ? population : runFindings;

@@ -10911,8 +10911,16 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   run or the clause bound). A first plan let a claim with no run take finding markers up to the next
   claim, to reach the ticket's cases 2 and 4, whose markers sit after a comma; it was refuted before
   any code on the ground [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)
-  gives for the run unit, and it was not needed — such a claim is judged as citing nothing, and a pair
-  no finding relates is then UNFOUNDED, so both cases still report.
+  gives for the run unit — a later clause's own correct citation, *"Metformin interacts with active
+  order Rifampin, and its interaction with Trimethoprim is also a caution [349]"*, [349] being
+  Metformin × Trimethoprim. The first version therefore read such a claim as citing nothing, and
+  round 1 of the PR's review showed the cost: cases 2 and 4 could then only be UNFOUNDED, and the
+  finding they misattribute was never named. **So a claim with no run of its own takes the findings of
+  the first run past its clause on two gates**, each against that false report: nothing between the
+  clause break and the run names a drug any finding or chip names, and the finding names the claim's
+  PARTNER — the evidence the marker is about this claim. The refutation's example fails both; case 2's
+  [353] names Lamivudine / zidovudine and its gap names no drug. The trailing run is a separate span of
+  `claims`, so `ActiveOrderCitationFidelityCheck`'s run and both its answers are unchanged.
 - **What a finding relates is read structurally.** A finding goes by its subject
   (`ChartSearchAiUtils.findingSubject`, the half of `resourceKey` that `findingSubjects` already
   split), the orders it names (`getFindingPartners()`), and the prescriptions and substances its
@@ -10943,8 +10951,9 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 
 ### Alternatives considered
 
-- **Sentence scoping, or letting a run-less claim reach past its clause.** Refuted at plan time; see
-  above.
+- **Sentence scoping, or letting a run-less claim reach past its clause ungated.** Refuted at plan
+  time; see above. Reading every such claim as citing nothing shipped first and was reverted by
+  round 1 of the review, for the cost stated there.
 - **A vocabulary of her active orders on the partner side.** No structural source reaches the answer
   path, and parsing the rendered `drug_order` text for one is the re-derivation `getOrderActive`'s
   rule (#317) refuses.
@@ -10966,6 +10975,9 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   ticket's invented-partner shape, and the bridge names are what keep a brand-named prescription's
   own display from being that case. No case pins the naming direction (a span names a drug only by
   containing it); the check's javadoc says what it decides.
+- **−** **The trailing-run gates read names the findings carry.** A later clause naming another drug
+  only by a name no finding prints, and citing a finding that names the claim's partner, is taken for
+  the claim and can be reported.
 - **−** **Two orders one finding names read as related**, so a claim pairing two orders of a merged
   (Decision 99) finding is not reported — the price of not falsely reporting #477's findings; the
   relation bullet above says why.

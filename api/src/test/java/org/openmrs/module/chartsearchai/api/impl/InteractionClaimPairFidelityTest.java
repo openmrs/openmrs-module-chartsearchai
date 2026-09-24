@@ -168,11 +168,10 @@ public class InteractionClaimPairFidelityTest {
 
 	@Test
 	public void aFindingMarkerPastTheClaimsClauseLeavesTheClaimUncitedAndItIsStillJudged() {
-		// The ticket's cases 2 and 4 put the marker after a comma — "…active order Lamivudine /
-		// zidovudine, and this is a caution to note […] [353]". The claim's marker run is the one
-		// ActiveOrderCitationFidelityCheck reads, and a marker past the clause break is not in it, so
-		// the claim is judged as citing nothing: a pair no finding relates is unfounded, whichever
-		// finding the sentence cites later.
+		// The claim's marker run is the one ActiveOrderCitationFidelityCheck reads, and a marker past
+		// the clause break is not in it. The finding past it is taken for the claim only where it names
+		// the claim's PARTNER (the next case); the Simvastatin finding names no Heparin, so this claim is
+		// judged as citing nothing, and a pair no finding relates is unfounded.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 		String unfounded = "Clarithromycin interacts with active order Heparin, which is a caution to "
 				+ "note [" + arrangement.finding("Simvastatin", "Amiodarone") + "].";
@@ -189,6 +188,100 @@ public class InteractionClaimPairFidelityTest {
 				"the marker is past the claim's run, so it is not accused, was: " + reported);
 		assertEquals(0, clean.getUnfounded(), "a pair a finding relates is not unfounded, was: " + clean);
 		assertEquals(1, clean.getJudged(), "was: " + clean);
+	}
+
+	@Test
+	public void aFindingMarkerPastTheClaimsClauseIsTheClaimsWhereTheFindingNamesItsPartner() {
+		// The ticket's cases 2 and 4 put the marker after a comma — "…active order Lamivudine /
+		// zidovudine, and this is a caution to note, not a reason to withhold it [353]", [353] being
+		// Stavudine's finding against that order. Nothing between the clause break and the marker names
+		// a drug, and the finding cited names the claim's partner: that is the evidence the marker is
+		// the claim's, so the finding about another drug is reported rather than read as no citation.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		for (String tail : Arrays.asList(", and this is a caution to note, not a reason to withhold it [",
+				", which is a reason to withhold it [")) {
+			String answer = "Clarithromycin interacts with active order Amiodarone" + tail
+					+ simvastatinsFinding + "].";
+
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+					.getInteractionClaimPairs();
+
+			assertEquals(Collections.singletonList(Integer.valueOf(simvastatinsFinding)),
+					pairs.getMisattributedCitations(), "was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getUnfounded(), "it cited a finding, was: " + pairs + " for: " + answer);
+			assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+		}
+	}
+
+	@Test
+	public void aFindingMarkerPastTheClaimsClauseIsNotTheClaimsWhereTheWordsBeforeItNameAnotherDrug() {
+		// A later clause about another drug, carrying its own correct citation, is not the claim's —
+		// Decision 76's cry-wolf shape. The Simvastatin finding names the claim's partner Amiodarone, so
+		// the partner gate alone would take it; the words before it name Simvastatin, so it is not taken.
+		// The second answer is the plan's refutation example, a finding about the claim's own drug and a
+		// different order. Both claims are then uncited, and a finding relates Clarithromycin × Amiodarone.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		for (String answer : Arrays.asList(
+				"Clarithromycin interacts with active order Amiodarone, and Simvastatin's interaction with it "
+						+ "is a caution [" + arrangement.finding("Simvastatin", "Amiodarone") + "].",
+				"Clarithromycin interacts with active order Amiodarone, and its interaction with Digoxin is "
+						+ "also a caution [" + arrangement.finding("Clarithromycin", "Digoxin") + "].")) {
+
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+					.getInteractionClaimPairs();
+
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+		}
+	}
+
+	@Test
+	public void aFindingMarkerPastTheClaimsClauseIsNotTheClaimsWhereTheFindingRelatesNoDrugToAnOrder() {
+		// Only a finding relating a drug to an order is taken past the clause. A contraindication about
+		// Clarithromycin names the claim's partner, but it is not about which of her orders Amiodarone
+		// interacts with, so the claim stays uncited and is judged — Clarithromycin × Amiodarone being a
+		// pair a finding relates — rather than silenced by what it cannot compare.
+		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOverWithRecordedAllergies(baseChart(),
+				LISTING_QUESTION, ORDERS, ORDER_ATC, setOf("Clarithromycin"));
+		RecordMapping contraindication = null;
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(ChartSearchAiUtils.findingType(finding))) {
+				contraindication = finding;
+			}
+		}
+		assertNotNull(contraindication, "the premise: a contraindication finding, chart was: " + chart.getText());
+		String answer = "Amiodarone interacts with active order Clarithromycin, which is a caution ["
+				+ contraindication.getIndex() + "].";
+
+		InteractionClaimPairs pairs = service(chart, unused -> Collections.<SafetyWarning> emptyList(), answer)
+				.search(patient(), LISTING_QUESTION).getInteractionClaimPairs();
+
+		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
+		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
+	}
+
+	@Test
+	public void anUncitedClaimAboutADrugAClassOnlyFindingIsAboutIsNotJudged() {
+		// A class-only finding about ciprofloxacin names a class and not an order, so whether it meant
+		// the claim's partner cannot be read — and an uncited claim about ciprofloxacin is judged against
+		// every finding, that one included. It is left unjudged rather than called unfounded.
+		String question = "is it safe to give ciprofloxacin?";
+		Arrangement arrangement = new Arrangement(question, setOf("levofloxacin"), setOf("J01MA12"), null);
+		assertTrue(DrugReferenceTestSupport.injectedFindings(arrangement.chart).stream()
+				.anyMatch(finding -> finding.getFindingPartners().isEmpty()
+						&& ChartSearchAiUtils.findingSubject(finding).equalsIgnoreCase("ciprofloxacin")),
+				"the premise: a class-only finding about ciprofloxacin, chart was: " + arrangement.chart.getText());
+		String answer = "Ciprofloxacin interacts with active order Heparin.";
+
+		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), question)
+				.getInteractionClaimPairs();
+
+		assertEquals(0, pairs.getJudged(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
 	}
 
 	@Test

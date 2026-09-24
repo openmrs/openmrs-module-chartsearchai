@@ -250,7 +250,7 @@ public class ChartSearchAiUtils {
 	 * injected record are added — several exist already, and they do not all fall on the same side
 	 * (see below).
 	 *
-	 * <p>Four behaviours now hang off this one classification, not just the display grouping. The
+	 * <p>Several behaviours now hang off this one classification, not just the display grouping. The
 	 * demote-only grounding carve-out in {@code CitationGroundingVerifier} is derived from it via
 	 * {@link #isGroundingDemoteOnly}. That gate used to test the {@code drug_reference} type directly,
 	 * so when {@code safety_finding} arrived (#110) it was classified here and NOT registered there,
@@ -270,6 +270,10 @@ public class ChartSearchAiUtils {
 	 * further injected kind is measured automatically instead of being silently omitted — and the
 	 * fail-safe below means it UNDER-reports an unrecognised type rather than over-reporting it,
 	 * which is the safe direction for a number an operator reads as a floor on prompt spend.
+	 *
+	 * <p>A fifth reads that slice: whether the local engine sends its DRY sampler, which a chart
+	 * carrying a reference-group record is decoded without (issue #512, ADR Decision 117). An
+	 * unrecognised type falls to chart evidence here, and so keeps the sampler it had before.
 	 *
 	 * <p>The two groups are exhaustive because exactly two code paths mint a
 	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever

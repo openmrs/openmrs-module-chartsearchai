@@ -703,7 +703,7 @@ public class FindingEnumerationClauseContextTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			lastFlag = Boolean.valueOf(enumerateFindings);
 			return new LlmResponse("No.", Collections.<Integer> emptyList());
 		}
@@ -711,7 +711,7 @@ public class FindingEnumerationClauseContextTest {
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			lastFlag = Boolean.valueOf(enumerateFindings);
 			streamingFlags.add(Boolean.valueOf(enumerateFindings));
 			streamingScopes.add(cacheScope);

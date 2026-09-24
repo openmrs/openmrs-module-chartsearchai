@@ -438,17 +438,24 @@ public class LlmProvider {
 	 *        outside what {@code ProjectInstructionsGuardTest} can police. Issue
 	 *        <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>
 	 *        shipped that mistake first and eleven test classes errored on it
+	 * @param referenceRecords whether {@code numberedRecords} carries the module's reference records,
+	 *        which decides the local engine's repetition penalty and nothing in the prompt (issue #512). A
+	 *        parameter of this one arity for the reason {@code enumerateFindings} is; the caller
+	 *        holding the chart reads it through {@link LlmEngine.ReferenceRecords#in}. Every test
+	 *        double of this method drops it, which is the cost {@link #findingProse} names and
+	 *        here costs nothing: a double returns its own answer and reaches no engine, and
+	 *        {@code ReferenceRecordsReachTheEngineTest} drives this real method instead
 	 * @return the LLM's response with answer text and structured citation indices
 	 */
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-			boolean enumerateFindings) {
+			boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
 				findingProse(enumerateFindings));
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
-				systemPrompt, userMessage, timeoutSeconds);
+				systemPrompt, userMessage, timeoutSeconds, referenceRecords);
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());
@@ -486,10 +493,11 @@ public class LlmProvider {
 	 *        reaches the user message and never the KV seed above, which is what keeps that seed a
 	 *        byte-prefix of this query; why it is a parameter of the one arity is the paragraph
 	 *        above and {@code search}'s own @param
+	 * @param referenceRecords see {@code search}'s own @param
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-			String cacheScope, boolean enumerateFindings) {
+			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
@@ -508,7 +516,7 @@ public class LlmProvider {
 		};
 
 		LlmEngine.InferenceResult result = getActiveEngine().inferStreaming(
-				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed);
+				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed, referenceRecords);
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());

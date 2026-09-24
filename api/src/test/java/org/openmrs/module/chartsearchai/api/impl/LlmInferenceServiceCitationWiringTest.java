@@ -309,6 +309,20 @@ public class LlmInferenceServiceCitationWiringTest {
 				}
 
 				@Override
+				public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+						ReferenceRecords referenceRecords) {
+					return infer(systemPrompt, userMessage, timeoutSeconds);
+				}
+
+				@Override
+				public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+						int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+						ReferenceRecords referenceRecords) {
+					return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, cacheScope,
+							cacheSeed);
+				}
+
+				@Override
 				public void warmup(String systemPrompt, String userMessage, int timeoutSeconds) {
 				}
 
@@ -344,14 +358,14 @@ public class LlmInferenceServiceCitationWiringTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return canned();
 		}
 	}
@@ -365,7 +379,7 @@ public class LlmInferenceServiceCitationWiringTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return canned();
 		}
 
@@ -373,7 +387,7 @@ public class LlmInferenceServiceCitationWiringTest {
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return canned();
 		}
 	}

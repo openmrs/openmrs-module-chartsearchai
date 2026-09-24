@@ -492,16 +492,16 @@ public class LlmInferenceServiceEndedOrderStatementContextTest extends BaseModul
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings) {
+				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return new LlmResponse(answer, Collections.singletonList(Integer.valueOf(1)));
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			tokenConsumer.accept(answer);
-			return search(numberedRecords, focusIndices, question, enumerateFindings);
+			return search(numberedRecords, focusIndices, question, enumerateFindings, referenceRecords);
 		}
 	}
 

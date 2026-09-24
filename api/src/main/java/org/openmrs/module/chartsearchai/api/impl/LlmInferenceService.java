@@ -156,6 +156,10 @@ public class LlmInferenceService implements ChartSearchService {
 			// with the build green. A local for the same reason they are, and so that this comment
 			// has somewhere to live.
 			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
+			// And whether the prompt carries the module's reference records, which decides the local
+			// engine's repetition penalty (issue #512, ADR Decision 117). Off the slice above, and so
+			// off the post-inject chart for the reason it is.
+			LlmEngine.ReferenceRecords referenceRecords = LlmEngine.ReferenceRecords.in(referenceSlice);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Issue #469: a question the module resolved itself is answered from its own findings, and
@@ -170,7 +174,7 @@ public class LlmInferenceService implements ChartSearchService {
 
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
-					chart.getFocusIndices(), question, enumerateFindings);
+					chart.getFocusIndices(), question, enumerateFindings, referenceRecords);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -189,7 +193,7 @@ public class LlmInferenceService implements ChartSearchService {
 				long repairStart = System.currentTimeMillis();
 				response = withRepairedFindingEnumeration(response,
 						llmProvider.search(chartTextOrPlaceholder(chart), chart.getFocusIndices(),
-								findingEnumerationRepairQuestion(owedRepair), false),
+								findingEnumerationRepairQuestion(owedRepair), false, referenceRecords),
 						owedRepair, chart.getMappings());
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
@@ -508,8 +512,12 @@ public class LlmInferenceService implements ChartSearchService {
 				// reddens on either edit — this literal flipped, or that flag threaded in — because
 				// there the two passes' flags differ. Passed at the call site because the flag-less
 				// arity was removed — the @param on `search` is canonical for why.
+				// The reference-records value, by contrast, is READ off the focused chart rather than
+				// written as a literal (issue #512): it states what the prompt carries, which for this
+				// chart is none, and a read cannot go stale if that ever changes.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
-						DISCARD_TOKENS, previewReasoningConsumer, null, false);
+						DISCARD_TOKENS, previewReasoningConsumer, null, false,
+						LlmEngine.ReferenceRecords.in(ChartSearchAiUtils.referenceSlice(focused.getMappings())));
 			}
 		}
 		catch (RuntimeException e) {
@@ -606,6 +614,10 @@ public class LlmInferenceService implements ChartSearchService {
 			// is unconditionally false and this issue's whole payload is reverted with the build
 			// green.
 			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
+			// And whether the prompt carries the module's reference records, which decides the local
+			// engine's repetition penalty (issue #512, ADR Decision 117). Off the slice above, and so
+			// off the post-inject chart for the reason it is.
+			LlmEngine.ReferenceRecords referenceRecords = LlmEngine.ReferenceRecords.in(referenceSlice);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Issue #469, the same branch as search()'s and through the same method. Ahead of the
@@ -635,7 +647,7 @@ public class LlmInferenceService implements ChartSearchService {
 			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer, kvCacheScope, enumerateFindings);
+					reasoningConsumer, kvCacheScope, enumerateFindings, referenceRecords);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -660,7 +672,7 @@ public class LlmInferenceService implements ChartSearchService {
 						llmProvider.searchStreaming(chartTextOrPlaceholder(chart),
 								chart.getFocusIndices(),
 								findingEnumerationRepairQuestion(owedRepair), tokenConsumer,
-								reasoningConsumer, kvCacheScope, false),
+								reasoningConsumer, kvCacheScope, false, referenceRecords),
 						owedRepair, chart.getMappings());
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),

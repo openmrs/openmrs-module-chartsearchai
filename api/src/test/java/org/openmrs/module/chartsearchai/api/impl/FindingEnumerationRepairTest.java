@@ -587,14 +587,14 @@ public class FindingEnumerationRepairTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return canned(question);
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			LlmResponse response = canned(question);
 			if (tokenConsumer != null) {
 				tokenConsumer.accept(response.getAnswer());

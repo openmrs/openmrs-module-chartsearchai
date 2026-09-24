@@ -539,6 +539,64 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Issue #512: the local engine's two {@code ReferenceRecords} arities must hand that value to
+	 * the body builder, which is the only place the DRY sampler is decided. Nothing behavioural can
+	 * see this link: {@code ReferenceRecordsReachTheEngineTest} records the value at a stub engine and
+	 * {@code LocalLlmEngineTest} builds a body directly, and a real call needs the spawned server
+	 * this module cannot start in a test. So an override calling the builder's narrower overload,
+	 * which pins {@code ABSENT}, would keep the penalty on every request with both green.
+	 *
+	 * <p>Read as {@link #theLaunchPathStillCallsEachProtection} is, through
+	 * {@link #methodBodyWithoutLiterals}. What each part does:
+	 * <ul>
+	 * <li>Each call's argument list is read up to its first closing parenthesis, and the value must
+	 * be the LAST argument there, the bare parameter name straight after a comma. So the narrower
+	 * overload fails, and so does a conditional rewrite ending {@code : referenceRecords)}, a cast,
+	 * or any argument that itself contains a call.</li>
+	 * <li>The parameter is {@code final} in both overrides and the slice is taken on that spelling,
+	 * so a reassignment such as {@code referenceRecords = ReferenceRecords.ABSENT;} does not compile,
+	 * and deleting the {@code final} to allow it leaves nothing to slice, which fails here. A local
+	 * or lambda parameter of the same name in the method's own body does not compile either.</li>
+	 * </ul>
+	 *
+	 * <p><b>The residue.</b> Text cannot see reachability, so a call in a branch that never runs
+	 * satisfies this, as does a forwarding call whose result is discarded while a second body,
+	 * built without the builder, is what gets posted. Read this as "each builder call in the two
+	 * overrides is handed the parameter unchanged", and no more.
+	 */
+	@Test
+	public void theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder() throws IOException {
+		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
+		Pattern forwarded = Pattern.compile("buildRequestBody\\([^;)]*,\\s*referenceRecords\\s*\\)");
+
+		List<String> violations = new ArrayList<>();
+		for (String signature : java.util.Arrays.asList(
+				"public synchronized InferenceResult infer(String systemPrompt, String userMessage,\n"
+						+ "\t\t\tint timeoutSeconds, final ReferenceRecords referenceRecords)",
+				"public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,\n"
+						+ "\t\t\tint timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, "
+						+ "String cacheSeed,\n\t\t\tfinal ReferenceRecords referenceRecords)")) {
+			String body = methodBodyWithoutLiterals(source, signature);
+			assertTrue(body != null && !body.isEmpty(),
+					"could not slice the body of " + signature + " out of LocalLlmEngine.java — if its"
+							+ " referenceRecords is no longer final, restore that: it is what makes a"
+							+ " reassignment fail to compile. A guard that reads nothing reports no"
+							+ " violations, so this is a failure and not a pass");
+			int calls = body.split("buildRequestBody\\(", -1).length - 1;
+			int forwarding = 0;
+			for (Matcher m = forwarded.matcher(body); m.find();) {
+				forwarding++;
+			}
+			if (calls == 0 || forwarding != calls) {
+				violations.add(signature.replaceAll("\\s+", " ") + " builds its request without"
+						+ " handing the body builder its referenceRecords (" + forwarding + " of " + calls
+						+ " calls) — the DRY sampler is then sent whatever the prompt carries");
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
 	 * The body of the method whose declaration is {@code signature}, with comments and string and
 	 * character literals blanked. Literals go because a class-wide version of
 	 * {@link #theLaunchPathStillCallsEachProtection} was satisfied by a log line that merely

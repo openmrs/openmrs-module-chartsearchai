@@ -262,7 +262,7 @@ public class LlmInferenceServiceProgressiveReasoningTest {
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			texts.add(numberedRecords);
 			scopes.add(cacheScope);
 			// The preview pass is the one with a null KV scope; it emits an answer that MUST be

@@ -60,8 +60,8 @@ public final class SafetyWarningFixtures {
 	}
 
 	/**
-	 * A curated-rule contraindication chip whose chart match the chart corroborates, built by
-	 * {@code SafetyWarning.contraindication}, the curated-rule arm's own factory (issue #527).
+	 * A curated-rule contraindication chip not flagged as resting on an uncorroborated chart match, built
+	 * by {@code SafetyWarning.contraindication}, the curated-rule arm's own factory (issue #527).
 	 * {@code aboutACurrentMedication} is that factory's own parameter: {@code true} as
 	 * {@code DrugSafetyValidator.addActiveOrderContraindications} passes it for one of her active orders,
 	 * {@code false} as the drug-in-play loop passes it. {@code chartRecords} is empty, being on no wire.

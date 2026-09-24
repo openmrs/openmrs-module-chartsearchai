@@ -227,7 +227,7 @@ public class LocalLlmEngine implements LlmEngine {
 
 	@Override
 	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
-			int timeoutSeconds, ReferenceRecords referenceRecords) {
+			int timeoutSeconds, final ReferenceRecords referenceRecords) {
 		ensureServerRunning();
 		return postForResult(buildRequestBody(systemPrompt, userMessage, false, referenceRecords),
 				timeoutSeconds);
@@ -298,7 +298,7 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
-			ReferenceRecords referenceRecords) {
+			final ReferenceRecords referenceRecords) {
 		ensureServerRunning();
 
 		// Disk-persisted KV cache on the QUERY path (mirrors what warmup already does, see

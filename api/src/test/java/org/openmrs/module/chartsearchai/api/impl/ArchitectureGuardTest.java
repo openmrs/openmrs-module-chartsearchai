@@ -547,28 +547,41 @@ public class ArchitectureGuardTest {
 	 * which pins {@code ABSENT}, would keep the penalty on every request with both green.
 	 *
 	 * <p>Read as {@link #theLaunchPathStillCallsEachProtection} is, through
-	 * {@link #methodBodyWithoutLiterals}, and with that method's residue: text cannot see
-	 * reachability, so a call in a branch that never runs satisfies it. The argument list is read up
-	 * to its first closing parenthesis, so the value must be passed as a bare argument there; an
-	 * argument that itself contains a call fails the guard rather than passing it.
+	 * {@link #methodBodyWithoutLiterals}. What each part does:
+	 * <ul>
+	 * <li>Each call's argument list is read up to its first closing parenthesis, and the value must
+	 * be the LAST argument there, the bare parameter name straight after a comma. So the narrower
+	 * overload fails, and so does a conditional rewrite ending {@code : referenceRecords)}, a cast,
+	 * or any argument that itself contains a call.</li>
+	 * <li>The parameter is {@code final} in both overrides and the slice is taken on that spelling,
+	 * so a reassignment such as {@code referenceRecords = ReferenceRecords.ABSENT;} does not compile,
+	 * and deleting the {@code final} to allow it leaves nothing to slice, which fails here. A local
+	 * or lambda parameter of the same name in the method's own body does not compile either.</li>
+	 * </ul>
+	 *
+	 * <p><b>The residue.</b> Text cannot see reachability, so a call in a branch that never runs
+	 * satisfies this, as does a forwarding call whose result is discarded while a second body,
+	 * built without the builder, is what gets posted. Read this as "each builder call in the two
+	 * overrides is handed the parameter unchanged", and no more.
 	 */
 	@Test
 	public void theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder() throws IOException {
 		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
-		Pattern forwarded = Pattern.compile("buildRequestBody\\([^;)]*\\breferenceRecords\\s*\\)");
+		Pattern forwarded = Pattern.compile("buildRequestBody\\([^;)]*,\\s*referenceRecords\\s*\\)");
 
 		List<String> violations = new ArrayList<>();
 		for (String signature : java.util.Arrays.asList(
 				"public synchronized InferenceResult infer(String systemPrompt, String userMessage,\n"
-						+ "\t\t\tint timeoutSeconds, ReferenceRecords referenceRecords)",
+						+ "\t\t\tint timeoutSeconds, final ReferenceRecords referenceRecords)",
 				"public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,\n"
 						+ "\t\t\tint timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, "
-						+ "String cacheSeed,\n\t\t\tReferenceRecords referenceRecords)")) {
+						+ "String cacheSeed,\n\t\t\tfinal ReferenceRecords referenceRecords)")) {
 			String body = methodBodyWithoutLiterals(source, signature);
 			assertTrue(body != null && !body.isEmpty(),
-					"could not slice the body of " + signature + " out of LocalLlmEngine.java — a guard"
-							+ " that reads nothing reports no violations, so this is a failure and not a"
-							+ " pass");
+					"could not slice the body of " + signature + " out of LocalLlmEngine.java — if its"
+							+ " referenceRecords is no longer final, restore that: it is what makes a"
+							+ " reassignment fail to compile. A guard that reads nothing reports no"
+							+ " violations, so this is a failure and not a pass");
 			int calls = body.split("buildRequestBody\\(", -1).length - 1;
 			int forwarding = 0;
 			for (Matcher m = forwarded.matcher(body); m.find();) {

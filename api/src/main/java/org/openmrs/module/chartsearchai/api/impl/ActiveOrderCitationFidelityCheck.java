@@ -320,7 +320,7 @@ final class ActiveOrderCitationFidelityCheck {
 	 * read by the pair check only; this class never reads them. Nor does it read the TRAILING run a
 	 * claim with no run of its own carries — the first run past its clause, before the next claim —
 	 * which is not the claim's run and is never counted as one here: the pair check alone reads it,
-	 * and only under the two gates {@code InteractionClaimPairFidelityCheck}'s class javadoc states.
+	 * and only under the gates {@code InteractionClaimPairFidelityCheck}'s class javadoc states.
 	 *
 	 * @param answer the answer prose; null answers no claims
 	 */
@@ -667,7 +667,7 @@ final class ActiveOrderCitationFidelityCheck {
 		/**
 		 * @return the indexes the TRAILING run cites that {@code admitted} admits — empty for a claim
 		 *         with a run of its own, or with no run before the next claim. Not the claim's run: the
-		 *         pair check alone reads it, under its two gates.
+		 *         pair check alone reads it, under its gates.
 		 */
 		List<Integer> admittedTrailingRunIndexes(Set<Integer> admitted) {
 			return admittedIn(trailingRun, admitted);

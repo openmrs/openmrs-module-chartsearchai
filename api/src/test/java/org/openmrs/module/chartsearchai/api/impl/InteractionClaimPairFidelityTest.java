@@ -706,6 +706,84 @@ public class InteractionClaimPairFidelityTest {
 	}
 
 	@Test
+	public void aSubjectAPronounStandsForIsNotReadAsTheOtherDrugItsClauseNames() {
+		// Round 3 of #514's review. "it" is Clarithromycin, named before the comma or in the sentence
+		// before, so the claim's clause names Simvastatin alone and Simvastatin was the only reading:
+		// [13] — Clarithromycin's own Amiodarone finding — was accused, and a Digoxin pair a finding does
+		// relate to Clarithromycin was called unfounded. A pronoun in the subject clause says the subject
+		// is not what the clause names, so the claim is left unjudged.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int clarithromycinsFinding = arrangement.finding("Clarithromycin", "Amiodarone");
+		assertTrue(arrangement.hasFinding("Clarithromycin", "Digoxin"), "the premise: Clarithromycin's "
+				+ "Digoxin pair is a finding, chart was: " + arrangement.chart.getText());
+		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+				"Simvastatin"), "and Simvastatin's is not, chart was: " + arrangement.chart.getText());
+		for (String answer : Arrays.asList(
+				"Clarithromycin can be given, but together with Simvastatin it interacts with active order "
+						+ "Amiodarone [" + clarithromycinsFinding + "].",
+				"Clarithromycin needs care. Like Simvastatin it interacts with active order Amiodarone ["
+						+ clarithromycinsFinding + "].",
+				"Clarithromycin needs care. Unlike Simvastatin it interacts with active order Digoxin.")) {
+
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+					.getInteractionClaimPairs();
+
+			assertEquals(0, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+		}
+	}
+
+	@Test
+	public void aDrugTheWordsAfterThePartnerJoinToItOtherwiseThanAsAListIsNotReadAsAPartner() {
+		// Round 3 of #514's review. The partner span runs to the marker run, so a following clause with no
+		// comma before it — one denying the pair, or saying the drug can be given — is in it, and its
+		// Digoxin was counted an invented partner. Only a list joins a second partner to the first; where
+		// other words join them, which drugs the claim offered cannot be read, and it is left unjudged.
+		// The list itself, "active order Amiodarone and Digoxin [6]", stays reported — the case above.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		for (String answer : Arrays.asList(
+				"Simvastatin interacts with active order Amiodarone but not with Digoxin [" + simvastatinsFinding
+						+ "].",
+				"Simvastatin interacts with active order Amiodarone and can be given alongside Digoxin ["
+						+ simvastatinsFinding + "].",
+				"Simvastatin interacts with active order Amiodarone and can be given alongside Digoxin.")) {
+			assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+					"Simvastatin"), "the premise: no finding relates Simvastatin to Digoxin, chart was: "
+							+ arrangement.chart.getText());
+
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+					.getInteractionClaimPairs();
+
+			assertEquals(0, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"was: " + pairs + " for: " + answer);
+		}
+	}
+
+	@Test
+	public void aFindingMarkerPastAClauseStatingAnotherInteractionIsNotTheClaims() {
+		// Round 3 of #514's review. The later clause names the other drug by its class, which no finding
+		// prints, so the gap gate saw no drug and [6] — Simvastatin's Amiodarone finding, right for that
+		// clause — was taken for the claim and accused. A gap stating the relationship again is another
+		// claim's, so the marker is not this one's; the claim is judged as citing nothing, and a finding
+		// relates its pair.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		String answer = "Clarithromycin interacts with active order Amiodarone, which also interacts with a "
+				+ "statin [" + arrangement.finding("Simvastatin", "Amiodarone") + "].";
+
+		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+				.getInteractionClaimPairs();
+
+		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
+		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+	}
+
+	@Test
 	public void anAnswerStatingNoClaimIsAMeasurementOfNone() {
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 

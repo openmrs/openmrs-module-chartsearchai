@@ -758,11 +758,15 @@ public interface ChartSearchService {
 	 * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, and the markers it cites are its own marker RUN.
 	 * A marker past the claim's clause break is not in that run. A claim with no run of its own also
 	 * cites the findings of the first run past its clause that name its PARTNER, where nothing between
-	 * the break and that run names a drug any finding names; otherwise it is judged as citing nothing.
+	 * the break and that run names a drug any finding names or states the relationship again in the
+	 * phrase's own verb; otherwise it is judged as citing nothing.
 	 *
 	 * <p><b>What {@code judged} counts.</b> The claims the check could reach a verdict on: the
 	 * words before the noun name a drug some interaction or condition-mediated finding or chip
-	 * names, the words after it are not blank, the run cites no reference record other than an
+	 * names and carry no word standing for a drug without naming it (<em>it</em>, <em>this</em>,
+	 * <em>which</em>, <em>the</em> …), the words after it are not blank, and where they name several
+	 * drugs they join them as a list (<em>and</em>, <em>or</em>), the run cites no reference record
+	 * other than an
 	 * interaction or condition-mediated finding, no finding naming no order (a class-only
 	 * relationship) among those the claim is judged against — the ones it cites, or where it cites
 	 * none, every finding and chip — is about a drug it names, and every drug the words before the noun
@@ -794,7 +798,10 @@ public interface ChartSearchService {
 	 * unrelated and can be reported. A short name inside a longer one reads as the same drug, toward
 	 * silence. A second partner no finding or chip names at all reads as more words of the first, and
 	 * a partner list continued past a comma is cut at it, so neither invented partner is counted; and a
-	 * swapped subject in a clause naming several drugs is unjudged, not reported.
+	 * swapped subject in a clause naming several drugs is unjudged, not reported. The stand-in words
+	 * are a closed list, so a clause naming another drug and then its own subject by a word the list
+	 * lacks — a brand no finding prints, a bare class noun — is read as that other drug and can be
+	 * reported.
 	 */
 	final class InteractionClaimPairs {
 

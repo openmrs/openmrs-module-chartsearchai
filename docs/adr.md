@@ -10916,11 +10916,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   Metformin × Trimethoprim. The first version therefore read such a claim as citing nothing, and
   round 1 of the PR's review showed the cost: cases 2 and 4 could then only be UNFOUNDED, and the
   finding they misattribute was never named. **So a claim with no run of its own takes the findings of
-  the first run past its clause on two gates**, each against that false report: nothing between the
-  clause break and the run names a drug any finding or chip names, and the finding names the claim's
-  PARTNER — the evidence the marker is about this claim. The refutation's example fails both; case 2's
-  [353] names Lamivudine / zidovudine and its gap names no drug. The trailing run is a separate span of
-  `claims`, so `ActiveOrderCitationFidelityCheck`'s run and both its answers are unchanged.
+  the first run past its clause on two gates**, each against that false report — a third joined in
+  round 3, below: nothing between the clause break and the run names a drug any finding or chip
+  names, and the finding names the claim's PARTNER — the evidence the marker is about this claim.
+  The refutation's example fails both; case 2's [353] names Lamivudine / zidovudine and its gap
+  names no drug. The trailing run is a separate span of `claims`, so
+  `ActiveOrderCitationFidelityCheck`'s run and both its answers are unchanged.
 - **What a finding relates is read structurally.** A finding goes by its subject
   (`ChartSearchAiUtils.findingSubject`, the half of `resourceKey` that `findingSubjects` already
   split), the orders it names (`getFindingPartners()`), and the prescriptions and substances its
@@ -10945,6 +10946,21 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   partner is not accused. Every such drug the subject span names is a reading, and the claim is judged
   only where every reading reaches one verdict: a clause naming another drug before the noun with no
   comma between had passed a swap wherever any reading related.
+- **Where the clause may not name what the claim is about, the claim is unjudged** (round 3 of the
+  PR's review, three false reports the round-2 widening had opened). A subject clause carrying a word
+  that stands for a drug without naming it — `SUBJECT_STAND_INS`: *it*, *this*, *which*, the *the* of
+  *"the drug"* — may have its subject before its comma or in the sentence before, and the one drug it
+  does name was then the only reading: *"Clarithromycin can be given, but together with Simvastatin it
+  interacts with active order Amiodarone [13]"*, [13] Clarithromycin's own, was accused. A partner
+  span naming several drugs is a list only where `PARTNER_LIST_WORDS` (*and*, *or*) join them;
+  *"active order Amiodarone but not with Digoxin [6]"* ran on into a clause denying the second pair and
+  called it unfounded. And a trailing gap stating the phrase's own verb again, `RELATIONSHIP_VERB`
+  derived from `ACTIVE_ORDER_INTERACTION_PHRASE`, is another claim's clause — *", which also interacts
+  with a statin [6]"* names its drug by a class no finding prints, so the name gate let its correct
+  citation be accused. Both word sets are closed and used only to REFUSE, never to decide what a claim
+  offered, which is what `ActiveOrderCitationFidelityCheck.clauseBound` declines a vocabulary for: a
+  word taken out of the stand-ins or put into the list words judges a claim as round 2 did, and the
+  opposite edit can only silence.
 - **Silence over accusation wherever the operands cannot be read**: a subject naming no drug any
   interaction or condition-mediated finding names, nothing after the noun, a run citing a reference
   record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
@@ -10989,9 +11005,15 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   ticket's invented-partner shape, and the bridge names are what keep a brand-named prescription's
   own display from being that case. No case pins the naming direction (a span names a drug only by
   containing it); the check's javadoc says what it decides.
-- **−** **The trailing-run gates read names the findings carry.** A later clause naming another drug
-  only by a name no finding prints, and citing a finding that names the claim's partner, is taken for
-  the claim and can be reported.
+- **−** **The trailing-run gates read names the findings carry and the phrase's own verb.** A later
+  clause naming another drug only by a name no finding prints, citing a finding that names the claim's
+  partner and stating its interaction in other words than *interacts with*, is taken for the claim and
+  can be reported.
+- **−** **The stand-in words are a closed list, and the refusals cost claims.** A subject clause naming
+  another drug and then its own subject by a word the list lacks — a brand no finding prints, a bare
+  class noun (*"Unlike Simvastatin Biaxin interacts with …"*) — is read as that other drug and can be
+  reported. The other direction is silence: a clause carrying a stand-in for another reason
+  (*"note that X interacts …"*), and a list joined by other words (*"as well as"*), are unjudged.
 - **−** **An invented partner no finding or chip names at all is not seen.** *Heparin* in *"active
   order Amiodarone and Heparin [13]"* is no name to the check, so it reads as more words of the related
   partner; and a partner list continued past a comma — *"active order Amiodarone, Heparin and

@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,6 +24,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.InteractionClaimPairs;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -48,11 +50,14 @@ import org.slf4j.LoggerFactory;
  * cites. One walk, so this check and that one cannot disagree about which claims the answer made or
  * which markers each offered. A marker past the claim's comma is not in its run — the ticket's cases
  * 2 and 4 put it there — and a claim with no run of its own takes the findings of the first run past
- * its clause on two gates only: the words between the comma and that run name no drug any finding
- * names, and the finding names the claim's PARTNER. Each gate is against the report ADR Decision 76
- * calls crying wolf, a later clause's own correct citation: the first where that clause names another
- * drug a finding carries, the second where it names one no finding carries. A claim neither gate lets
- * through is judged as citing nothing, and is still reported where no finding relates its pair.
+ * its clause on three gates only: the words between the comma and that run name no drug any finding
+ * names and do not state the relationship again in the phrase's own verb ({@link #RELATIONSHIP_VERB}),
+ * and the finding names the claim's PARTNER. Each gate is against the report ADR Decision 76 calls
+ * crying wolf, a later clause's own correct citation: the first where that clause names another drug a
+ * finding carries, the second where it states another interaction naming its drug by a class or a word
+ * no finding prints (round 3 of #514's review), the third where it names one no finding carries. A
+ * claim the gates do not let through is judged as citing nothing, and is still reported where no
+ * finding relates its pair.
  *
  * <p><b>What a finding relates is read structurally, never from its text.</b> Every name a finding
  * goes by: its subject ({@link ChartSearchAiUtils#findingSubject} on a record,
@@ -97,6 +102,15 @@ import org.slf4j.LoggerFactory;
  *       {@link FindingPartnerCoverageCheck#comparable} form, the form that class asks "did the answer
  *       name this order" in, so one question has one comparison;</li>
  *   <li>the partner side is blank;</li>
+ *   <li>the subject clause carries a word standing for a drug without naming it —
+ *       {@link #SUBJECT_STAND_INS}, <em>it</em>, <em>this</em>, <em>which</em>, the <em>the</em> of
+ *       <em>"the drug"</em> — since its subject may then be a drug named before its comma or in the
+ *       sentence before, and the drug the clause does name is the wrong reading: <em>"Clarithromycin can
+ *       be given, but together with Simvastatin it interacts with active order Amiodarone"</em> (round 3
+ *       of #514's review);</li>
+ *   <li>the partner span names several drugs joined by words other than a list's
+ *       ({@link #PARTNER_LIST_WORDS}) — <em>"active order Amiodarone but not with Digoxin"</em> ran on
+ *       into a clause of its own, which may deny the second pair (round 3);</li>
  *   <li>the drugs the subject span names reach different verdicts — the claim's clause names another
  *       drug before the noun with no comma or semicolon between, as a lead clause joined by
  *       <em>but</em> or a parenthesis does;</li>
@@ -120,8 +134,14 @@ import org.slf4j.LoggerFactory;
  * prints reads as unrelated and can be REPORTED — the bridge names are what keep a brand-named
  * prescription's own display out of that case. A claim pairing two orders one finding names reads as
  * related, so an order put in for a merged finding's subject passes — {@link #anyRelates} says why.
- * The trailing-run gates read names the findings carry, so a later clause naming another drug only by
- * a name no finding prints, citing a finding that names the claim's partner, is taken for the claim.
+ * The trailing-run gates read names the findings carry and the phrase's own verb, so a later clause
+ * naming another drug only by a name no finding prints, citing a finding that names the claim's
+ * partner, is taken for the claim unless it says <em>interacts with</em> — one restating the
+ * relationship in other words is still taken. The stand-in words and the list words are closed sets
+ * used only to refuse: a subject clause naming another drug and then its own by a word the stand-ins
+ * lack — a brand no finding prints, a bare class noun — is still read as that other drug and can be
+ * reported, while a clause carrying one for another reason (<em>"note that X interacts…"</em>) and a
+ * list joined by other words (<em>"as well as"</em>) are left unjudged.
  * A second partner no finding or chip names at all — <em>Heparin</em> in <em>"active order Amiodarone
  * and Heparin"</em> — is no name to this check, so it reads as more words of the related partner and
  * passes; a partner list continued past a comma is cut at it, so <em>"active order Amiodarone, Heparin
@@ -144,6 +164,33 @@ import org.slf4j.LoggerFactory;
 final class InteractionClaimPairFidelityCheck {
 
 	private static final Logger log = LoggerFactory.getLogger(InteractionClaimPairFidelityCheck.class);
+
+	/**
+	 * Words that stand for a drug without naming it — a pronoun, a demonstrative, a relative, the
+	 * definite article of <em>"the drug"</em>. One in a claim's SUBJECT clause says its subject may be a
+	 * drug the clause does not name, named before its comma or in the sentence before (round 3 of #514's
+	 * review), so the claim is left unjudged. A closed set used only to REFUSE: it never decides what a
+	 * claim offered, which {@code ActiveOrderCitationFidelityCheck.clauseBound} declines a vocabulary
+	 * for, so a word missing from it leaves a claim judged as before and a word added can only silence.
+	 */
+	private static final Set<String> SUBJECT_STAND_INS = Collections.unmodifiableSet(new HashSet<String>(
+			Arrays.asList("it", "its", "they", "their", "this", "that", "these", "those", "which", "who",
+					"the")));
+
+	/**
+	 * The words that may join one partner to the next — a list. Anything else between two drugs of the
+	 * partner span is another clause the span ran on into, so the claim is left unjudged (round 3 of
+	 * #514's review). Used only to refuse, as {@link #SUBJECT_STAND_INS} is: outside it, silence.
+	 */
+	private static final Set<String> PARTNER_LIST_WORDS = Collections.unmodifiableSet(new HashSet<String>(
+			Arrays.asList("and", "or")));
+
+	/**
+	 * The verb of {@link DrugSafetyValidator#ACTIVE_ORDER_INTERACTION_PHRASE} — the phrase less its
+	 * {@link DrugSafetyValidator#ACTIVE_ORDER_NOUN}, derived and never spelled again. A trailing gap
+	 * stating it states another relationship, whose marker is that clause's own.
+	 */
+	private static final String RELATIONSHIP_VERB = relationshipVerb();
 
 	private InteractionClaimPairFidelityCheck() {
 	}
@@ -211,7 +258,9 @@ final class InteractionClaimPairFidelityCheck {
 				Set<String> subjectNames = namedIn(FindingPartnerCoverageCheck.comparable(claim.subject()),
 						vocabulary);
 				String partner = normalized(claim.partner());
-				if (subjectNames.isEmpty() || partner.isEmpty()) {
+				if (subjectNames.isEmpty() || partner.isEmpty()
+						|| containsAWordOf(FindingPartnerCoverageCheck.comparable(claim.subject()),
+								SUBJECT_STAND_INS)) {
 					continue;
 				}
 				// Every drug the partner span names that a finding or chip names is a partner of the claim —
@@ -220,6 +269,11 @@ final class InteractionClaimPairFidelityCheck {
 				Set<String> partnerNames = namedIn(partner, vocabulary);
 				if (partnerNames.isEmpty()) {
 					partnerNames = Collections.singleton(partner);
+				}
+				else if (!joinedAsAList(partner, partnerNames)) {
+					// "…active order Amiodarone but not with Digoxin" — the span ran on into a clause of its
+					// own, and which of its drugs the claim offered cannot be read (round 3 of #514's review).
+					continue;
 				}
 				List<Finding> runFindings = new ArrayList<Finding>();
 				List<Integer> runIndexes = new ArrayList<Integer>();
@@ -237,13 +291,17 @@ final class InteractionClaimPairFidelityCheck {
 						unreadable = true;
 					}
 				}
-				// A claim with no run of its own takes a finding marker past its clause only on two gates,
+				// A claim with no run of its own takes a finding marker past its clause only on three gates,
 				// each against a false report Decision 76 names: nothing between the clause break and the
 				// marker names a drug any finding names — a later clause about another drug carries its own
 				// citation — and the finding names the claim's PARTNER, the evidence the marker is about this
 				// claim. Round 1 of #514's review: without it the ticket's own cases 2 and 4, whose markers
-				// sit after a comma, named no citation.
-				if (namedIn(FindingPartnerCoverageCheck.comparable(claim.trailingGap()), vocabulary).isEmpty()) {
+				// sit after a comma, named no citation. Round 3: a gap stating the relationship again
+				// ("…, which also interacts with a statin [6]") is another claim naming its drug by a word no
+				// finding prints, so its marker is not taken either.
+				String trailingGap = FindingPartnerCoverageCheck.comparable(claim.trailingGap());
+				if (namedIn(trailingGap, vocabulary).isEmpty() && (RELATIONSHIP_VERB.isEmpty()
+						|| !trailingGap.contains(RELATIONSHIP_VERB))) {
 					for (Integer index : claim.admittedTrailingRunIndexes(admitted)) {
 						Finding finding = citedFindings.contains(index) ? citableFindings.get(index) : null;
 						if (finding != null && finding.relatesDrugs && matchesAny(partner, finding.names)) {
@@ -320,6 +378,57 @@ final class InteractionClaimPairFidelityCheck {
 			}
 		}
 		return named;
+	}
+
+	/** @return whether {@code text} has, as a whole word, one of {@code words} */
+	private static boolean containsAWordOf(String text, Set<String> words) {
+		for (String word : text.split("[^\\p{L}\\p{N}]+")) {
+			if (words.contains(word)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return whether every stretch of {@code partner} between two of the {@code names} it contains is
+	 *         {@link #PARTNER_LIST_WORDS} and punctuation alone — a list of partners. A name inside
+	 *         another occurrence ({@code lamivudine} of {@code lamivudine/zidovudine}) is that occurrence,
+	 *         so it opens no stretch; the words before the first name and after the last are not asked.
+	 */
+	private static boolean joinedAsAList(String partner, Set<String> names) {
+		List<int[]> occurrences = new ArrayList<int[]>();
+		for (String name : names) {
+			for (int at = partner.indexOf(name); at >= 0; at = partner.indexOf(name, at + 1)) {
+				occurrences.add(new int[] { at, at + name.length() });
+			}
+		}
+		Collections.sort(occurrences, (one, other) -> one[0] != other[0] ? Integer.compare(one[0], other[0])
+				: Integer.compare(other[1], one[1]));
+		int coveredTo = -1;
+		for (int[] occurrence : occurrences) {
+			if (coveredTo >= 0 && occurrence[0] >= coveredTo) {
+				for (String word : partner.substring(coveredTo, occurrence[0]).split("[^\\p{L}\\p{N}]+")) {
+					if (!word.isEmpty() && !PARTNER_LIST_WORDS.contains(word)) {
+						return false;
+					}
+				}
+			}
+			coveredTo = Math.max(coveredTo, occurrence[1]);
+		}
+		return true;
+	}
+
+	/** @return every word of the phrase but the two its noun is ({@code lastTwoWordsOf}'s complement),
+	 *          in comparable form — never throwing, since a class that cannot initialise would break the
+	 *          answer this check promises never to */
+	private static String relationshipVerb() {
+		String[] words = DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE.trim().split("\\s+");
+		StringBuilder verb = new StringBuilder();
+		for (int at = 0; at < words.length - 2; at++) {
+			verb.append(at == 0 ? "" : " ").append(words[at]);
+		}
+		return FindingPartnerCoverageCheck.comparable(verb.toString());
 	}
 
 	/** What a judged claim is, under one reading of its subject. */

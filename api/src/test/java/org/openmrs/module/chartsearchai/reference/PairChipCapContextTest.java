@@ -197,9 +197,10 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void theQuestionPairWarnRatesTheWithheldPairsAndStatesTheConfiguredCap() {
-		// HOW MANY pairs went, and at what ratings, exists only in this log line: since issue #336 the
-		// response states the two COUNTS (PairChipExtentContextTest) and never the ratings, so this is
-		// still the only place an operator can see how severe what was dropped was. It must report the
+		// The RATINGS of what went exist only in this log line: since issue #336 the response states the
+		// two COUNTS (PairChipExtentContextTest), so how many went is on the served response too, and
+		// never the ratings — this is still the only place an operator can see how severe what was
+		// dropped was. It must report the
 		// CAP THAT ACTUALLY CUT, not the compiled-in default.
 		//
 		// It never named the pairs, in this arm: the list it builds is each withheld candidate's
@@ -207,12 +208,10 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		// WARN in addActiveOrderPairInteractions, and ADR Decision 102. The old method name and the old
 		// first line of this comment both said "names", against a loop that adds `finding.severity`.
 		configureCap("3");
-		// The whole package and not just DrugSafetyValidator's own logger, because a drug name leaking
-		// from a neighbour on this pass is the same disclosure — the argument
-		// FindingPartnerLogDisclosureTest makes for the other half of the answer path. Through the
-		// shared constant, since a second literal of a package name is how a rename leaves a capture
-		// receiving nothing (DrugReferenceTestSupport.REFERENCE_LOGGER's own javadoc).
-		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+		// The module root, the screening case's scope below. This case asserts what the WARN carries and
+		// no absence — its drugs come from the QUESTION, not the patient's list (ADR Decision 102) — so
+		// the scope decides nothing here beyond receiving that WARN.
+		try (LogCapture capture = LogCapture.on(LogCapture.MODULE_LOGGER, Level.DEBUG)) {
 			questionPairChips();
 
 			String line = firstContaining(capture.messagesAt(Level.WARN), "question-named drug pairs shown");
@@ -233,7 +232,11 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		// sibling question-pair arm's cap WARN above has always logged; an operator who needs the pairs
 		// themselves raises the cap and re-asks, which puts them on the wire as chips.
 		configureCap("3");
-		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+		// The module root and not just the reference package, because a drug name leaking from any
+		// logger on this pass is the same disclosure — the argument FindingPartnerLogDisclosureTest's
+		// PACKAGE makes. A reference-package capture left the six screened names, written from
+		// api.impl.LlmInferenceService's logger during this pass, green here (issue #443).
+		try (LogCapture capture = LogCapture.on(LogCapture.MODULE_LOGGER, Level.TRACE)) {
 			screeningChips();
 
 			// The precondition the negative below cannot supply for itself: this capture must be live
@@ -249,6 +252,11 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 					"precondition: the capture must receive this logger's INFO, or a negative over "
 							+ "every captured line says nothing about what is written below WARN. "
 							+ "Captured: " + capture.describeAll());
+			// And down to TRACE, which no production line of this logger writes, so the case writes
+			// the witness itself (LogCapture.receivesFrom, issue #443).
+			assertTrue(capture.receivesFrom(DrugSafetyValidator.class, Level.TRACE),
+					"precondition: the capture must receive this logger's TRACE, or the negative below "
+							+ "says nothing about that level. Captured: " + capture.describeAll());
 
 			String line = firstContaining(capture.messagesAt(Level.WARN), "Interaction screening across");
 			assertTrue(line.contains("found 15 pair(s)") && line.contains("reporting the 3 most severe"),
@@ -273,7 +281,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 			// patient is prescribed. Read from the chart's own list, so it cannot drift from what was
 			// screened.
 			//
-			// describeAll() and not messagesAt(WARN), and the capture is opened at DEBUG, because the
+			// describeAll() and not messagesAt(WARN), and the capture is opened at TRACE, because the
 			// alternative #439 explicitly declined was these names at a lower level — ADR Decision 102,
 			// "the names at DEBUG, was not taken". A WARN-only capture leaves that alternative
 			// implementable with this case green: the reviewer's probe for round 2 of this PR's review

@@ -8087,6 +8087,20 @@ reference-package cases do. `FindingPartnerCoverageCheck` writes nothing below `
 no production line to name and the case writes one through that logger itself — pinning that class
 at `WARN` reddens each case of that file which asserts over the capture (measured 2026-09-16).
 
+**Since [#443](https://github.com/openmrs/openmrs-module-chartsearchai/issues/443) all three negatives
+capture the module ROOT, from TRACE up.** The two reference-package cases cited the argument above
+without having its scope: a probe writing the six screened drugs through `LlmInferenceService`'s
+logger during the screening pass, and one writing the unrepresented order through it during
+reconciliation, left both green. Under the root capture they redden
+`PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` and
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`.
+And "from DEBUG up" was not every level: a `log.trace` of the names at each of the three sites was
+green under the DEBUG captures, and under TRACE it reddens the negatives for the site it was added to
+(all measured 2026-09-24, each probe removed after the reading). Each case also asserts that the
+logger it is about is live at TRACE, through `LogCapture.receivesFrom`, because no production line
+writes at that level to serve as the witness. What a stock install discloses is unchanged by any of
+this: core ships `org.openmrs` at WARN.
+
 **Where that substitution does not hold, stated rather than pinned.** Under
 `chartsearchai.grounding.async=true` the REST layer emits `done` from the UNGROUNDED answer
 `searchStreaming` hands its consumer mid-pass, which is the model's own text — the append happens

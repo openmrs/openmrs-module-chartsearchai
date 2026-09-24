@@ -39,7 +39,6 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
-import org.slf4j.LoggerFactory;
 
 /**
  * What {@link FindingPartnerCoverageCheck} may write to the server log about a patient
@@ -71,9 +70,12 @@ import org.slf4j.LoggerFactory;
  * orchestration over real merged chips the real {@code DrugSafetyValidator} raised from the shared
  * fixture ({@code DrugReferenceTestSupport.sharedMechanismInteractionChips}), and over the
  * {@code safety_finding} records the real injector writes for the same arrangement
- * ({@code DrugReferenceTestSupport.sharedMechanismFindingsOver}). Only the model is
- * stubbed: answer prose is not reproducible on a live engine, and the answer is the one input this
- * check reads.
+ * ({@code DrugReferenceTestSupport.sharedMechanismFindingsOver}). Four collaborators are stubbed,
+ * in {@link #newService}: the model, because answer prose is not reproducible on a live engine and the
+ * answer is the one input this check reads; and the chart-building strategy, the injector and the
+ * validator, each returning what {@link #setUp} had the real ones produce for this arrangement before
+ * any capture opens — so the injector's and the validator's own log lines are not written during
+ * these cases, which is what {@link #PACKAGE}'s javadoc means by that half being pinned elsewhere.
  */
 public class FindingPartnerLogDisclosureTest {
 
@@ -99,7 +101,7 @@ public class FindingPartnerLogDisclosureTest {
 	 *  {@code LoggerConfig} a sibling file's class-named capture left installed, which
 	 *  {@link LogCapture#close()} now removes ({@code LogCaptureRestorationTest}) — so that
 	 *  measurement went with the fix, and the paragraph recording it goes here. */
-	private static final String PACKAGE = "org.openmrs.module.chartsearchai";
+	private static final String PACKAGE = LogCapture.MODULE_LOGGER;
 
 	/** The check's own WARN, by a phrase no neighbour writes — for the cases whose negative needs
 	 *  this check to have RUN. */
@@ -154,10 +156,11 @@ public class FindingPartnerLogDisclosureTest {
 	@Test
 	public void noLogLineNamesAnOrderTheFindingsCover() {
 		service.setLlmProvider(answering(citingEveryFinding(NAMES_NO_ORDER)));
-		// DEBUG, so the claim covers every level and not only the one core ships: the finding's own
+		// TRACE, so the claim covers every level and not only the one core ships: the finding's own
 		// criterion is "nothing at INFO or above", and below it the module has no reason to write
-		// these names at all — the clinician's answer carries them.
-		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
+		// these names at all — the clinician's answer carries them. DEBUG left a log.trace of them
+		// invisible here (issue #443).
+		try (LogCapture capture = LogCapture.on(PACKAGE, Level.TRACE)) {
 			assertLiveBelowWarnForTheCheck(capture);
 			ChartAnswer answer = service.search(patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
@@ -215,7 +218,7 @@ public class FindingPartnerLogDisclosureTest {
 		String answerNamingAll = citingEveryFinding(
 				namesThemAll.append(" so it should not be started.").toString());
 		service.setLlmProvider(answering(answerNamingAll));
-		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
+		try (LogCapture capture = LogCapture.on(PACKAGE, Level.TRACE)) {
 			assertLiveBelowWarnForTheCheck(capture);
 			ChartAnswer answer = service.search(patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
@@ -227,7 +230,7 @@ public class FindingPartnerLogDisclosureTest {
 			assertEquals(coverage.getNamed(), coverage.getStated(),
 					"the premise this case exists for: the arranged answer states every name the "
 							+ "findings carry, so there is no shortfall to report");
-			// At any level, which is what the capture was opened at DEBUG for: hasMessageAt(WARN, …)
+			// At any level, which is what the capture was opened at TRACE for: hasMessageAt(WARN, …)
 			// would leave the same report implementable one level down, and this sentence used to
 			// claim a reach the call it was written over did not have (issue #439, review round 4).
 			for (String logged : capture.describeAll()) {
@@ -281,7 +284,7 @@ public class FindingPartnerLogDisclosureTest {
 		// fix applied to one of the two would leave the disclosure in production traffic while every
 		// case above stayed green.
 		service.setLlmProvider(answering(citingEveryFinding(NAMES_NO_ORDER)));
-		try (LogCapture capture = LogCapture.on(PACKAGE, Level.DEBUG)) {
+		try (LogCapture capture = LogCapture.on(PACKAGE, Level.TRACE)) {
 			assertLiveBelowWarnForTheCheck(capture);
 			ChartAnswer answer = service.searchStreaming(patient(),
 					DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION, token -> { });
@@ -305,27 +308,21 @@ public class FindingPartnerLogDisclosureTest {
 	}
 
 	/**
-	 * Liveness for the LOGGER these negatives are about, BELOW warn — {@link LogCapture}'s own rule
+	 * Liveness for the LOGGER these negatives are about, down to TRACE — {@link LogCapture}'s own rule
 	 * for a negative asserted over a package capture, which nothing in this file met until issue
 	 * #439's fourth review round. The neighbouring assertions establish that the capture received
 	 * SOMETHING and that this check wrote its WARN; neither says a sub-WARN event from this check's
 	 * logger would have arrived, and a {@code LoggerConfig} pinning that one class at WARN leaves
 	 * every "no line at any level names an order" assertion true of nothing below it.
 	 *
-	 * <p>The check writes nothing below WARN, so unlike the two reference-package cases there is no
-	 * production line to name. The case writes one through the check's own logger instead, which
-	 * asks the same question of the same logger: filtered, and this fails rather than the negative
-	 * passing. Its text names no drug, so it cannot redden the negatives it precedes.
+	 * <p>The check writes nothing below WARN, so there is no production line to name. The case writes
+	 * one through the check's own logger instead, at the level the capture was opened at
+	 * ({@link LogCapture#receivesFrom}, issue #443): filtered, and this fails rather than the negative
+	 * passing.
 	 */
 	private static void assertLiveBelowWarnForTheCheck(LogCapture capture) {
-		String witness = "liveness witness, no patient data";
-		LoggerFactory.getLogger(FindingPartnerCoverageCheck.class).debug(witness);
-		boolean arrived = false;
-		for (String logged : capture.describeAll()) {
-			arrived = arrived || logged.contains(witness);
-		}
-		assertTrue(arrived,
-				"precondition: this capture must be live below WARN for "
+		assertTrue(capture.receivesFrom(FindingPartnerCoverageCheck.class, Level.TRACE),
+				"precondition: this capture must be live down to TRACE for "
 						+ FindingPartnerCoverageCheck.class.getName()
 						+ ", or a negative over every captured line says nothing about what is "
 						+ "written below WARN. Captured: " + capture.describeAll());

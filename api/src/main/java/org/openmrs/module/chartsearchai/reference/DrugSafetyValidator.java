@@ -1465,9 +1465,10 @@ public class DrugSafetyValidator {
 	 * conclusion wrong. The CHIP array has no such container — chips are per-drug findings — but the
 	 * RESPONSE is itself the per-question container, and a key beside {@code safetyWarnings} is a
 	 * module change. Rendering "10 of 18 shown" is still the frontend's, in
-	 * {@code openmrs-esm-chartsearchai}; having something to render is not. What the WARN still holds
-	 * alone is HOW MANY pairs went and at what ratings — the statement is a count, deliberately, because
-	 * a list of withheld pairs on the wire is the uncapped prompt expansion this cap exists to prevent.
+	 * {@code openmrs-esm-chartsearchai}; having something to render is not. HOW MANY pairs went follows
+	 * from those two counts on the served response, so what the WARN holds alone is the withheld pairs'
+	 * RATINGS (issue #443) — ratings and not a list, deliberately, because a list of withheld pairs on
+	 * the wire is the uncapped prompt expansion this cap exists to prevent.
 	 * WHICH pairs went is nowhere at all since issue #439: in the screening arm both sides of a pair are
 	 * the patient's own prescriptions, so that list was her medication list on a server-log line. An
 	 * operator who needs the pairs raises this property and re-asks, which reproduces the screen and
@@ -4863,8 +4864,8 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>The partner is carried rather than re-resolved by each consumer, because
 	 * {@link #activeOrderEntryFor} is a scan whose answer two arms and one ledger all have to agree on —
-	 * {@link #bestRulePerPartner} groups on it, {@link #addActiveOrderPairInteractions} names and logs a
-	 * pair by it, and {@link InteractionPairs} keys the cross-arm suppression on it. Three copies of the
+	 * {@link #bestRulePerPartner} groups on it, {@link #addActiveOrderPairInteractions} keys a pair by
+	 * it, and {@link InteractionPairs} keys the cross-arm suppression on it. Three copies of the
 	 * same scan is three chances to answer that question differently, which is the shape of every
 	 * duplicate chip this class has had to fix.
 	 */
@@ -6350,10 +6351,11 @@ public class DrugSafetyValidator {
 		int cap = maxPairChips();
 		int shown = Math.min(found.size(), cap);
 		if (shown < found.size()) {
-			// WARN, not INFO: how many pairs went, and at what ratings, is an operator's diagnostic and
-			// it lives only here — the response states the two COUNTS (see the extent returned below)
-			// and never the ratings, and a list of withheld pairs on the wire is the unbounded expansion
-			// this cap exists to prevent. Silent truncation in a safety net reads as "nothing else was
+			// WARN, not INFO: how many pairs went, and at what ratings, is an operator's diagnostic, and
+			// the RATINGS live only here (issue #443) — the served response states the two COUNTS (see
+			// the extent returned below), from which how many went follows, and never the ratings, and
+			// a list of withheld pairs on the wire is the unbounded expansion this cap exists to
+			// prevent. Silent truncation in a safety net reads as "nothing else was
 			// found", which since issue #336 the response itself no longer says.
 			//
 			// WHICH pairs went is nowhere, here or on the wire. That is what the list below is: each
@@ -8295,8 +8297,9 @@ public class DrugSafetyValidator {
 		if (pairs.size() > reported) {
 			// Counted here, counted on the response. A clinician reading the reported chips could not
 			// tell a capped screen from a complete one, which is issue #336 — and the count that closes
-			// it is the extent this method returns, not this line. What the log still holds alone is how
-			// many pairs went and at what RATINGS, so a withheld Major is recoverable: an operator who
+			// it is the extent this method returns, not this line — which also states how many went, so
+			// what the log still holds alone is their RATINGS (issue #443), and a withheld Major is
+			// recoverable from them: an operator who
 			// needs the pairs themselves raises the cap and re-asks, which puts them on the wire as
 			// chips rather than in the log as PHI — reproducing the screen, not recovering the served
 			// request's own withheld list, which is a loss ADR Decision 102 states rather than remedies.
@@ -8912,8 +8915,9 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>ONE call site inside this class, {@link #bestRulePerPartner}, which stores the answer on
 	 *         the {@link SubjectRule} it builds. Three things need it and must not disagree — that
-	 *         grouping, the name and log label {@link #addActiveOrderPairInteractions} gives a screened
-	 *         pair, and the cross-arm key in {@link InteractionPairs} — so it is resolved once and carried
+	 *         grouping, the name {@link #addActiveOrderPairInteractions} keys a screened pair by (#440
+	 *         deleted the log label it also gave one), and the cross-arm key in
+	 *         {@link InteractionPairs} — so it is resolved once and carried
 	 *         rather than asked again by each of them. Issue #136 made it two consumers; keeping them in
 	 *         step by re-running the same scan was the arrangement, and carrying the result removes the
 	 *         chance of a pair being named after one entry and grouped under another.

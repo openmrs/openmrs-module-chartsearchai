@@ -120,6 +120,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
 - [Decision 113: The sentence under a module-composed "No" is a finding that licensed it, and a contraindication about her own medication says so](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)
 - [Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders](#decision-114-a-screen-of-her-medications-states-which-of-her-orders-share-a-substance-once-per-set-of-orders)
+- [Decision 115: Several rows of one substance are not a pair, so the question-pair arm leaves the field to the arm that screened](#decision-115-several-rows-of-one-substance-are-not-a-pair-so-the-question-pair-arm-leaves-the-field-to-the-arm-that-screened)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -4578,6 +4579,7 @@ Decision 60 gave the two PAIRWISE interaction arms a `PairChipExtent` and put it
 - **−** **`reported` is further from the interaction chip count than it was.** Decision 60 already recorded that the drug-in-play arm raises chips this does not count; now that arm also states the extent, and still does not count its class chips or its chips for answer-named drugs. Named in the type's javadoc, in `README` and in the wire helper's, and enforced by nothing.
 - **−** **The gate reads the chart, and a population the reference data cannot resolve is not a population it screened.** `hasActiveMedicationRecords` asks whether the chart records an active drug, not whether any of those drugs is one the knowledge base knows. A patient whose only order is a name the dataset carries no entry for now gets `{"found": 0, "reported": 0}` on a prescribing question, which `README` tells a client to read as a complete screen. That is pre-existing rather than introduced — the screening arm returns `of(0, 0)` on the same chart, measured — but this decision multiplies its reach from screening questions to every question naming a reference drug, so it is recorded here rather than left to be rediscovered. The same shape covers a PARTIAL order read: `PatientClinicalContextBuilder` wraps the whole order loop in one `try`, so a throw leaves the orders collected so far in place and the rest unread. [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer) added the `PatientClinicalContext.activeDrugOrdersRead()` analogue of `contraindicationRecordsRead()` that this bullet said did not exist, and [Decision 91](#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer) made the answer read it too, through `chartReadForSafety()` — so the clause here that said only the standing surface asks it is no longer true. What is unchanged is the defect this bullet records: `interactionPairs` itself still cannot tell "no orders" from "the orders could not be read", and a client has to read `chartReadForSafety` beside it to do so.
 - **−** **A prescribing question is not always this arm's to speak for, and the reader cannot tell from the wire.** The gate is "no pairwise arm stated", and a name the clinician reads as ONE drug can resolve to several reference entries — the shipped KB files `Botulinum toxin type A` beside `Daxibotulinumtoxina`, and every route variant of a substance alike. That opens the question-pair arm, which then owns the field and reports ITS pairs, while the drug-in-play arm goes on raising chips that are in neither number. So a response can carry an above-floor interaction chip beside `found: 0`. It is honest — the zero describes the check that stated it — and it predates this decision, which only makes it reachable on a question shape where the field used to be `null`. Named in `README`, in the type's javadoc and in `docs/ddi-interaction-question-examples.md`, and enforced by nothing.
+  **CLOSED for rows of ONE substance by [Decision 115](#decision-115-several-rows-of-one-substance-are-not-a-pair-so-the-question-pair-arm-leaves-the-field-to-the-arm-that-screened)** (issue #433); entries of several substances still open the arm. This bullet is left as the dated record.
 - **−** **The arm is not gated on the question's SHAPE, so the statement reaches more than prescribing questions.** It runs for any question that mentions a drug, so *"What is clarithromycin used for?"* on a medicated chart now publishes an extent too — measured `{"found": 1, "reported": 1}` where that chart's order relates. Honest under the contract and deliberate (a shape gate would be the topic-intent gate CLAUDE.md's contraindication bullet records as measured-and-declined), but a client that renders a badge whenever the key is non-null will show one on a large class of ordinary questions. Rendering `0 / 0` at all is the frontend's decision, in `openmrs-esm-chartsearchai`, and neither `README` nor the type's javadoc tells it which way to go.
 - **−** **A third assigner of one local.** Decision 60 records that "published once, from a local both arms assign" is not test-observable, because no reachable path throws between an arm and the return. That is now a local three arms assign. The behavioural guard that does exist — `PairChipExtentContextTest.aPassThatThrewStatesNothingRatherThanACompleteScreen`, whose javadoc records that writing `(0, 0)` inside the fail-safe left api and omod green before it existed — reddens a per-arm sink write. A structural guard over the single `recordPairExtent` call site was considered and declined as redundant with it.
 
@@ -5308,7 +5310,7 @@ Reproduced at the api level over the DDInter excerpt through the real `validate`
 - **+** The response describes the findings it carries on the commonest two-drug prescribing question about a medicated patient, instead of asserting a screen of none above them.
 - **+** It makes true a sentence `README` and `PairChipExtent` already published. The zero contract had a counter-example in shipped code.
 - **−** **A PARTIAL cede still states only the list the arm kept, and the reader cannot tell from the wire.** Three question drugs where the chart owns one pair and the arm keeps another report `{found: 1, reported: 1}` beside FOUR interaction chips — the chart arm's three and this arm's one — measured at the api level over the excerpt through the real `validate`, which is the arrangement its pinning test asserts. The statement is true of the list it describes — and note what it is NOT: a partial cede does not exempt the survivors from `maxPairChips`, so that list can be truncated like any other and the two numbers then differ. What a client must not read `found == reported` as is complete about the *response*, which this field has never been — the same residue Decision 65 records for the multi-row cause, one arm nearer. Pinned as deliberate by `PairChipExtentContextTest.aQuestionPairListThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList`, which reddens if the scope is widened to any cede.
-- **−** **The multi-row cause of the same rendering is untouched.** A name resolving to several reference rows opens the question-pair arm, whose entry pairs are then all one drug, so it enumerates no pair and states a true `of(0, 0)` while the drug-in-play chips go uncounted. Decision 65 records it; it is not a cede and this decision does not reach it.
+- **−** **The multi-row cause of the same rendering is untouched.** A name resolving to several reference rows opens the question-pair arm, whose entry pairs are then all one drug, so it enumerates no pair and states a true `of(0, 0)` while the drug-in-play chips go uncounted. Decision 65 records it; it is not a cede and this decision does not reach it. **CLOSED for rows of one substance by Decision 115** (issue #433).
 - **−** **One more branch on a return value three arms feed one local.** The arm's `@return` now carries three outcomes rather than two.
 - **− THE SCREENING ARM HAS THE SAME DEFECT, MEASURED, AND THIS DECISION DOES NOT FIX IT.** Not every candidate that arm skips is a cede: `seenPairs` collapses one clinical pair reached from two rows, and `StatedInteractionChips` drops a candidate whose every published field repeats a chip already stated — #339's review round 12 decided the latter, and `PairChipExtent`'s javadoc carries its reason (a restatement is a pair *already shown*, byte-identically, so what `found` counts there is what a reader could have been told apart). But one of them IS a cede to the drug-in-play arm, by a predicate this decision's first draft did not reach: `reportedPairs.alreadyReported(ref, matched.partnerKey())`. Measured through the real `validate` over the excerpt — answer `"Ibuprofen is on the list."`, a screening question, the same two-order chart — it publishes `of(0, 0)` beside one Major interaction chip, and neutering `alreadyReported` gives `1/1` with two chips, so the drop is that cede and not the collapse. That is this decision's own defect on the sibling arm.
 
@@ -5444,7 +5446,7 @@ The second row is the control that makes the first a cede rather than a chart th
 
   The verifier's argument for why, recorded as an argument rather than as established: the cede fires only through `reportedPairs.alreadyReported`, so only if the drug-in-play arm chipped the pair first — and that arm reasons over `inPlay`, to which a screening question contributes nothing, its own gate being `questionDrugs.isEmpty()`. So the pair can only cede if the ANSWER names one of its drugs and survives `isEchoOfAttributableRecord`. But `DrugReferenceInjector.preAnswerFindings` has by then injected a `safety_finding` naming both substances, reference-group material that reaches the attributable corpus with no citation needed, so any answer mention of either drug is an echo and neither drug enters `inPlay`. On that reading the arrangement is unreachable through `/search` under this configuration, and the api-level reproduction above reaches it because it passes no mappings and so has no attributable corpus. **What follows is a claim about the DEFECT's reach and not about the fix**: the false zero is correspondingly rarer in production than the ticket's own reproduction suggests, and this branch's `null` rests on the unit suite rather than on anything anyone has watched run. Whoever next touches this arm should either close that gap or record that it is still open.
 
-- **— Decision 65's multi-row cause of the same rendering is untouched.** A name resolving to several reference rows opens the question-pair arm, which then states a true `of(0, 0)` while the drug-in-play chips go uncounted. That is not a cede and no decision has closed it.
+- **— Decision 65's multi-row cause of the same rendering is untouched.** A name resolving to several reference rows opens the question-pair arm, which then states a true `of(0, 0)` while the drug-in-play chips go uncounted. That is not a cede and no decision had closed it when this was written. **CLOSED for rows of one substance by Decision 115** (issue #433); left as the dated record.
 
 ## Decision 72: A finding about a medication the patient is already taking states a call about that medication
 
@@ -10692,3 +10694,55 @@ Rifampicin (rifampin) are in active orders A and B — possible duplicate therap
   severity this finding does not state (Decision 112's finding has that shape too).
 
 → `OrdersSharingASubstanceTest`, `OrdersSharingASubstanceModuleAnswerContextTest`.
+
+## Decision 115: Several rows of one substance are not a pair, so the question-pair arm leaves the field to the arm that screened
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#433](https://github.com/openmrs/openmrs-module-chartsearchai/issues/433). Closes the multi-row
+residue [Decision 65](#decision-65-the-interaction-check-that-runs-on-the-prescribing-question-states-its-extent-too)
+recorded as a trade-off and Decisions 69 and 71 recorded as untouched, for rows of ONE substance.
+
+### Context
+
+`addQuestionPairInteractions` gated on `questionDrugs.size() < 2`, a count of ENTRIES. DDInter files
+one substance under a row per route or formulation, so one question word can resolve several. The
+issue measured it by driving the real `DrugReferenceService.findImpliedByQuery` over the shipped
+knowledge base: `Is dexamethasone safe for her?` resolves four rows, all one
+`DrugReference.substanceGroupKey()`. No rule can join two of them — `DdiDrugReferenceSource.isSelfPair`
+drops every such row at load, over the same `substanceKey` — so the arm enumerated a population that
+could not hold a pair and stated `of(0, 0)`. Being non-null, that displaced Decision 65's fallback.
+The issue's live measurement (3.7.1 standalone, patient `10000TA`) is the response publishing
+`{found: 0, reported: 0}` beside a Moderate rule chip the same answer stated and cited.
+
+### The decision
+
+**The arm's entry gate refuses a question whose entries all answer one `substanceGroupKey()`, and
+returns `null` exactly as for one entry** (`DrugSafetyValidator.oneSubstance`). The arm did not run;
+Decision 65's fallback then hands the field to the drug-in-play arm, which screened her medications.
+
+- **At the entry gate, as the issue proposed, rather than inside the empty-list branch.** Placed at the
+  gate the rule is the arm's own premise — several rows of one substance are not a pair — whatever
+  the source; placed in the branch it would hold only where the source had already removed every rule
+  between them. For DDInter the two behave alike, since `isSelfPair` leaves no such rule, and no test
+  tells them apart: they differ only on the curated-source case below.
+- **"Enumerated pairs and related none" is still a measurement and still states its zero.** The
+  narrowing requires ALL entries to share one key, so a question resolving two substances keeps the
+  field — `PairChipExtentContextTest.aPairwiseArmsStatementIsNotDisplacedByTheDrugInPlayScreen` — and
+  states its zero where it relates none of their pairs —
+  `PairChipExtentContextTest.aQuestionPairListThatRelatesNoPairStatesZeroRatherThanNothing`.
+
+### Consequences
+
+- **+** Pinned by `PairChipExtentContextTest.severalRowsOfOneSubstanceAreNotAPairAndLeaveTheFieldToTheArmThatScreened`,
+  over `DrugReferenceTestSupport.DDI_ROUTE_VARIANTS`'s four dexamethasone rows and one voxelotor order.
+- **−** **A curated JSON source loses a chip it could author.** `isSelfPair` guards only
+  `DdiDrugReferenceSource`, and `JsonDrugReferenceSource` binds `substanceName`, so a hand-authored file
+  can give two entries one substance and a rule between them. A question resolving only those two no
+  longer reaches the arm. Accepted on the ground the loader states for DDInter's own such rows
+  (`DrugReferenceValidity.SELF_PAIRED_INTERACTION_ROWS`): a drug cannot interact with itself.
+- **−** **What this does not close.** A question whose entries are more than one substance still opens
+  the arm, and where the data relates none of their pairs — or `pairKeyNames` names two of them alike —
+  it states `of(0, 0)` beside the drug-in-play arm's chips. That is Decision 65's trade-off in its
+  remaining form, and `PairChipExtent`'s class javadoc still warns a client of it.
+
+→ `PairChipExtentContextTest`.

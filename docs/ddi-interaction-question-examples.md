@@ -160,11 +160,13 @@ unrated class-only sentences are out because neither pairwise arm has a class le
 must not mean two things by question shape. Chips it raised for a drug only the *answer* named are
 out because the statement is the **question's**: counted over the answer as well, the same question
 and chart would report differently according to what the model happened to write. And it states
-nothing at all where the chart records no active medication — there was no population to screen. One consequence worth knowing before you read a `{"found": 0}` as odd: a question
-naming what looks like *one* drug can still resolve to several reference entries (route variants
-such as `Dexamethasone` / `Dexamethasone (ophthalmic)`), which opens the question-pair arm, and
-it then honestly reports `found: 0` because route variants of one substance are not a clinical
-pair.
+nothing at all where the chart records no active medication — there was no population to screen.
+A question naming what looks like *one* drug can still resolve to several reference entries (route
+variants such as `Dexamethasone` / `Dexamethasone (ophthalmic)`). Where those are all rows of one
+substance the question-pair arm does not run — no two of them are a clinical pair — and this arm
+states the field
+([#433](https://github.com/openmrs/openmrs-module-chartsearchai/issues/433)); only entries of more
+than one substance open the question-pair arm.
 
 ---
 

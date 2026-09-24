@@ -376,14 +376,15 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// neither pairwise arm runs — the question-pair arm needs two and the screen needs none — and
 		// until issue #356 the arm that DID screen X against her medications said so nowhere, so a
 		// complete negative screen and a question nobody screened at all were one value on the wire.
-		// "Here" is load-bearing: a name resolving to several entries opens the question-pair arm
-		// instead, which is why the metformin and clarithromycin of these cases were each checked
-		// against findImpliedByQuery over the excerpt rather than assumed to be one drug apiece.
+		// "Here" is load-bearing: a name resolving to entries of several substances opens the
+		// question-pair arm instead, which is why the metformin and clarithromycin of these cases were
+		// each checked against findImpliedByQuery over the excerpt rather than assumed to be one drug
+		// apiece.
 		Pass none = pass("Can I give this patient metformin?", oneSimvastatinOrder());
 
-		// Asserted, not assumed: on TWO entries the question-pair arm runs instead and returns
-		// of(0, 0) for a pair it does not relate, so every assertion below would go on holding while
-		// the arm this case exists for never ran. Its sibling below is immune because it asserts a
+		// Asserted, not assumed: on entries of TWO substances the question-pair arm runs instead and
+		// returns of(0, 0) for a pair it does not relate, so every assertion below would go on holding
+		// while the arm this case exists for never ran. Its sibling below is immune because it asserts a
 		// found of 1, which that arm could not produce there.
 		assertEquals(1, entriesResolvedBy("Can I give this patient metformin?"),
 				"precondition: one entry, so neither pairwise arm is even reachable");
@@ -744,5 +745,47 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 						+ "an empty candidate map rather than on an empty surviving list; was: "
 						+ ceded.extent.getFound() + " with chips "
 						+ DrugReferenceTestSupport.details(ceded.chips));
+	}
+
+	@Test
+	public void severalRowsOfOneSubstanceAreNotAPairAndLeaveTheFieldToTheArmThatScreened()
+			throws IOException {
+		// Issue #433. One word, one substance, FOUR reference entries: the fixture files dexamethasone
+		// under a systemic, a nasal, an ophthalmic and a topical row, and the question word puts every
+		// one of them in play. Counted as entries that is "two or more drugs", so the question-pair arm
+		// ran over a population that cannot hold a pair — the DDInter loader drops every rule joining
+		// two rows of one substance (DdiDrugReferenceSource.isSelfPair) — found none, and stated
+		// of(0, 0). Having stated one it displaced validate's issue #356 fallback, so the pass stated a
+		// complete screen of none beside the drug-in-play arm's own chip about her voxelotor. Several
+		// rows of one substance are not a pair any more than one row is: the arm has no list to
+		// describe, states nothing, and the arm that DID screen her medications speaks.
+		String oneSubstance = "Is dexamethasone safe for her?";
+		Pass screened = passOverRouteVariants(oneSubstance,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Voxelotor 1500mg"),
+						null, null, null));
+
+		List<DrugReference> resolved = service.findImpliedByQuery(oneSubstance);
+		assertEquals(4, resolved.size(),
+				"precondition: the four dexamethasone rows, or the question-pair arm's two-entry gate is "
+						+ "not reached and this case measures the ordinary one-entry path: " + resolved);
+		for (DrugReference row : resolved) {
+			assertEquals(resolved.get(0).substanceGroupKey(), row.substanceGroupKey(),
+					"precondition: every resolved row is ONE substance, which is the shape under test: "
+							+ resolved);
+		}
+		for (SafetyWarning chip : screened.chips) {
+			assertFalse(chip.getDetail().contains("named in the question"),
+					"precondition: the question-pair arm chips nothing here, so any statement it made "
+							+ "would be about a list that held no pair: " + chip);
+		}
+		// Precondition: the drug-in-play arm relates dexamethasone to her voxelotor, one chip for the
+		// one substance.
+		DrugReferenceTestSupport.onlyOfType(screened.chips, SafetyWarning.TYPE_INTERACTION);
+		assertNotNull(screened.extent, "a response carrying an interaction chip must not state nothing");
+		assertEquals(1, screened.extent.getFound(),
+				"the drug-in-play arm's own count of the pair it related — a 0 here is the question-pair "
+						+ "arm's statement about four rows of one substance, which is issue #433");
+		assertEquals(1, screened.extent.getReported(),
+				"reported by the arm that applies no cap, so it equals what it found");
 	}
 }

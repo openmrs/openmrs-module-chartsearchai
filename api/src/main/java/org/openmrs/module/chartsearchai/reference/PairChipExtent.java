@@ -45,13 +45,15 @@ package org.openmrs.module.chartsearchai.reference;
  * question, "can I give this patient X?". Until #356 that shape published no statement at all, so a
  * completed negative screen and a question nobody screened were one value on the wire.
  *
- * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED —
- * and, since issues #336 and #370, by whether a cede left that arm with no pair of its own — not by
- * how many drugs a clinician would say it named</b>, and the resolved
+ * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED, and
+ * of how many substances — and, since issues #336 and #370, by whether a cede left that arm with no
+ * pair of its own — not by how many drugs a clinician would say it named</b>, and the resolved
  * count and the clinician's reading come apart on the shipped knowledge base. A name that resolves
- * to SEVERAL reference entries — a substance filed under more than one row, {@code Dexamethasone}
- * beside {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} —
- * opens the question-pair arm, which then owns this field and states its own pair count. The
+ * to entries of SEVERAL substances — an alias family sharing an {@code rxnorm_name} whose rows the
+ * dataset identifies as different substances — opens the question-pair arm, which then owns this
+ * field and states its own pair count. Several rows of ONE substance do not ({@code Dexamethasone}
+ * beside {@code Dexamethasone (ophthalmic)}, issue #433): no two of them can be a pair, so that arm
+ * does not run and the drug-in-play arm states the field. The
  * drug-in-play arm still raises its chips, and they are not in that number. So a response CAN carry
  * an above-floor interaction chip beside {@code found: 0}: the zero is honest about the check that
  * stated it, and a client must not read it as a count of the chips beside it — which is the same
@@ -147,8 +149,9 @@ package org.openmrs.module.chartsearchai.reference;
  *
  * <ol>
  *   <li>no arm enumerated anything — the question resolved no reference drug AND did not ask to be
- *       screened, which is the ordinary case for most questions, or it resolved one and the chart
- *       records no medication to screen it against, or a global property gating those arms is off
+ *       screened, which is the ordinary case for most questions, or it resolved one substance
+ *       (however many rows) and the chart records no medication to screen it against, or a global
+ *       property gating those arms is off
  *       (the drug-reference feature, the answer validator, {@code warnOnInteractions}). Both halves
  *       of the first are needed: a question resolving no drug that DOES ask to be screened runs
  *       {@link DrugSafetyValidator#addActiveOrderPairInteractions}, which states {@code of(0, 0)}

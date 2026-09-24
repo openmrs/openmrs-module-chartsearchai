@@ -49,9 +49,9 @@ import org.slf4j.LoggerFactory;
  * Before that issue it was every chip the response raised, which the appended sentence then credited
  * to "those findings": measured on the demo seed (issue #516), an abstention citing no finding was
  * handed five orders, and an answer citing one finding eight orders from the 23 chips it did not
- * cite. A finding the answer did not cite is {@code findingCitations}' to count, and its orders reach
- * a client on its chip's {@code namedPartners}; an answer citing no finding gets nothing appended and
- * no measurement.
+ * cite. A finding the answer did not cite is {@code findingCitations}' to count, and none of its
+ * orders is appended — the chips beside the answer carry the orders each names as
+ * {@code namedPartners}; an answer citing no finding gets nothing appended and no measurement.
  *
  * <p><b>What it does NOT establish.</b> Containment over the answer's prose is the test, so a name the
  * model spelled differently reads as unstated; the residue therefore runs toward REPORTING a shortfall

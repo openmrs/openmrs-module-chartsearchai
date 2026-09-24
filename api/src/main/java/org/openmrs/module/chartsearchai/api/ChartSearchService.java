@@ -723,7 +723,7 @@ public interface ChartSearchService {
 			this.stated = stated;
 		}
 
-		/** @return how many active orders the response's findings name */
+		/** @return how many active orders the findings the answer cited name */
 		public int getNamed() {
 			return named;
 		}

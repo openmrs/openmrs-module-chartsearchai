@@ -7764,7 +7764,8 @@ data leak. So:
   record is, in `DrugReferenceInjector`'s findings loop — a `resourceKey` is not unique, so the chips
   cannot be joined back to a cited record.
 - An answer citing no finding gets nothing appended and publishes `findingPartners: null`. An uncited
-  finding is `findingCitations`' to count, and its orders reach a client on its chip's `namedPartners`.
+  finding is `findingCitations`' to count; the chips beside the answer carry the orders each names as
+  `namedPartners`.
 - `findingPartners` moved with the sentence, because README tells a client to read `named − stated` as
   the orders the module appended; a count over every chip beside a sentence over the cited findings
   would falsify that. What this decision fixes is unchanged: WHEN the count is taken, on the model's
@@ -7994,8 +7995,8 @@ RETURNS, so the reader who holds the privilege receives the names there, and `fi
 publishes the same two numbers the log now carries — so a maintainer triaging a shortfall reads the
 same `stated`/`named` in both places. The finding's own alternative, the names at DEBUG, was not
 taken: a channel nobody needs is not worth the bytes of PHI it writes. (Since #516 the answer names
-the orders of the findings it CITES, and an uncited finding's orders reach the same reader on its
-chip's `namedPartners` — Decision 100's amendment. The count the log carries moved with it.)
+the orders of the findings it CITES, and the chips beside it carry the orders each names as
+`namedPartners` — Decision 100's amendment. The count the log carries moved with it.)
 
 **Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
 

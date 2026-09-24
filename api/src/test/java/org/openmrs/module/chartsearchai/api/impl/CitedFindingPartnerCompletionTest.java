@@ -227,6 +227,47 @@ public class CitedFindingPartnerCompletionTest {
 		assertEquals(2, coverage.getStated(), "and both orders count as stated, was: " + coverage);
 	}
 
+	@Test
+	public void anOrderSeveralCitedFindingsNameIsListedOnce() throws IOException {
+		// The sentence lists an order once however many of the cited findings name it: two drugs the
+		// question proposes, each related to her one simvastatin order, raise two findings naming it.
+		// The answer cites both and names no order.
+		String question = "Is it safe to give clarithromycin or fluconazole?";
+		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), question,
+				new java.util.LinkedHashSet<String>(Collections.singletonList("Simvastatin")),
+				new java.util.LinkedHashSet<String>(Collections.singletonList("C10AA01")));
+		List<SafetyWarning> chips = Collections.<SafetyWarning> emptyList();
+		StringBuilder sb = new StringBuilder("Neither should be started here");
+		List<String> distinct = new ArrayList<String>();
+		int named = 0;
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+			sb.append(" [").append(finding.getIndex()).append("]");
+			for (String order : finding.getFindingPartners()) {
+				named++;
+				if (!distinct.contains(order)) {
+					distinct.add(order);
+				}
+			}
+		}
+		String modelAnswer = sb.append(".").toString();
+		assertTrue(named > distinct.size(),
+				"the premise: the cited findings name some order more than once, was: " + chart.getText());
+
+		ChartAnswer answer = service(chart, chips, modelAnswer).search(patient(), question);
+
+		String appended = answer.getAnswer().substring(modelAnswer.length());
+		for (String order : distinct) {
+			int from = appended.indexOf(order);
+			assertTrue(from >= 0, "every order of a cited finding is named, missing " + order + " from: "
+					+ answer.getAnswer());
+			assertEquals(-1, appended.indexOf(order, from + 1),
+					"and named once, however many cited findings name it: " + answer.getAnswer());
+		}
+		assertEquals(named, answer.getFindingPartnerCoverage().getNamed(),
+				"while named counts one per cited finding naming the order — the residue ADR Decision "
+						+ "100's amendment records, was: " + answer.getFindingPartnerCoverage());
+	}
+
 	/**
 	 * The shared-mechanism arrangement: the chart with the findings the real injector wrote, the chips
 	 * the real validator raised over the same patient and question, and which of each is the merged

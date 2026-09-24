@@ -335,6 +335,13 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/**
 	 * The boundary the ceiling is written on: a body of EXACTLY the ceiling is a body that fits, so
 	 * it must arrive whole. Off by one here and the largest legitimate answer is the one that fails.
+	 *
+	 * <p>While the ceiling equals {@link #STATED_RESPONSE_BUDGET} this sends the same body as
+	 * {@link #aCompletionOfExactlyTheStatedBudgetArrivesWhole}, and a stream-side off-by-one alone
+	 * (the throw in {@code BoundedResponseStream.count} written as {@code >=}) reddens both. What
+	 * this case adds is that its body moves with the constant: that same {@code >=} with the ceiling
+	 * raised by one byte to compensate reddened this case and neither budget case in this class
+	 * (measured 2026-09-24).</p>
 	 */
 	@Test
 	public void aBodyOfExactlyTheCeilingArrivesWholeRatherThanCutOff() {

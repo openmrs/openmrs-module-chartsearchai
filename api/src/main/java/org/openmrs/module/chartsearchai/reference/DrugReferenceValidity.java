@@ -795,25 +795,23 @@ public final class DrugReferenceValidity {
 	 * same string, which is the asymmetry issue #150 reports: #147 gave allergen resolution the
 	 * recorded-name rule, and the tail allowance is what opened this.
 	 *
-	 * <p><b>The same alias also failed CLOSED, through the dose arm, until issue #271.</b>
-	 * {@code DrugSafetyValidator.substanceOwnsDose} vetoes a dose that another substance's name sits
-	 * nearer to, and it located names with a raw {@code String.indexOf} over each alias, so a blank
-	 * alias on an entry of another substance was found at every space in the clause, and a space
-	 * nearer the stated dose than the drug's own name dropped the dose warning. Measured 2026-09-24
-	 * through {@code DrugSafetyValidator.validate} over the {@code setEntries} seam, which skips this
-	 * drop: with one unrelated entry carrying {@code " "} beside
-	 * {@code drug-reference-substance-dosing-rows.json}, {@code Give cefalexin 400 mg three times
-	 * daily.} for a six-year-old raised the Cefalexin dose warning without that entry and none with it
-	 * on the commit before #271 merged ({@code c39cc524^}), and raised it either way on #271's own
-	 * ({@code c39cc524}), which locates a name by the rule that decides the clause names it.
-	 * Recorded so this entry states both things that data defect did.
-	 *
 	 * <p>The offending token and not the entry, deliberately. The entry's other aliases, its ATC codes and
 	 * its rules are all valid and may be its only coverage — the ATC codes especially, since
 	 * {@link DrugReferenceService#findByActiveOrders} matches on those and not on aliases at all — so
 	 * refusing the entry would convert a fail-open into a silent fail-closed. Dropping the token removes
 	 * exactly the thing that fails open and nothing else, which is why it is preferred over refusing the
 	 * entry rather than merely gentler than it.
+	 *
+	 * <p>Before issue #260's fix (PR #271) the same alias also failed CLOSED, through the dose arm:
+	 * {@code DrugSafetyValidator.substanceOwnsDose} vetoes a dose that another substance's name sits
+	 * strictly nearer to, and it then located names with a raw {@code String.indexOf} over each alias,
+	 * so a blank alias on an entry of another substance was found at every space in the clause.
+	 * Measured 2026-09-24 through {@code DrugSafetyValidator.validate} over the {@code setEntries} seam,
+	 * which skips this drop, with one unrelated entry carrying {@code " "} added to
+	 * {@code drug-reference-substance-dosing-rows.json}: the Cefalexin dose warning that
+	 * {@code Give cefalexin 400 mg three times daily.} raised for a six-year-old without that entry was
+	 * not raised with it on the commit before the fix ({@code c39cc524^}), and was raised either way on
+	 * the fix's own ({@code c39cc524}). What that fix leaves of it was not measured.
 	 *
 	 * <p><b>An entry no alias of its own names is REPAIRED</b> (#210, #211) — <b>except where its display
 	 * NAME is itself a string that names nothing, which is REPORTED instead</b> (#296). Repairing that

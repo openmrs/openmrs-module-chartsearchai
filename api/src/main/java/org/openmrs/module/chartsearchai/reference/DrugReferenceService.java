@@ -433,7 +433,8 @@ public class DrugReferenceService {
 	 *         PARSERS, not of this filter: {@link DdiDrugReferenceSource} makes an entry's display name
 	 *         its first alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of
 	 *         those every entry names itself. A hand-authored {@code json} dataset need not — the shape
-	 *         {@link DrugReference#nameMatchStrength}'s javadoc already records its gate as excluding —
+	 *         {@link DrugReference#nameMatchStrength}'s javadoc records its gate as excluding, and which
+	 *         a load repairs except for the entries that javadoc names —
 	 *         and a {@code json} dataset is what {@code sourceFormat=json} loads — the default until ADR
 	 *         Decision 36, and still what a deployment needing dosing selects. There the rank-2 claimant can be an
 	 *         entry the prose matcher never reached, and then no matched row's alias denotes its own

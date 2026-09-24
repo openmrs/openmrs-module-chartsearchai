@@ -81,7 +81,8 @@ public class ArchitectureGuardTest {
 	private static final String RECORD_MAPPING_CLASS_FILE =
 			"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer$RecordMapping.class";
 
-	/** The one class that may write the two {@code RecordMapping} stamps this file guards. */
+	/** The one class that may write the two {@code RecordMapping} stamps the injector cases guard, and
+	 *  a class the issue #432 case requires to pass a {@code null} stop date. */
 	private static final String INJECTOR_CLASS_FILE =
 			"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class";
 
@@ -92,12 +93,27 @@ public class ArchitectureGuardTest {
 	private static final String CHART_BUILDER_CLASS_FILE =
 			"org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.class";
 
+	/** The one class that may pass a {@code RecordMapping} a stop date (issue #432), outside the
+	 *  mapping's own date-carrying rungs, which pass their parameter on. */
+	private static final String SERIALIZER_CLASS_FILE =
+			"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer.class";
+
 	/** The descriptor tail that tells {@code SerializedRecord}'s widest constructor — the only one
 	 *  taking the order stop date of issue #315 — from every other one. TWO types, not one: the
 	 *  four-argument rung {@code (String,String,String,Date)} ends in the same {@code Date}, so a
 	 *  single-type tail cannot tell them apart, and the {@code Boolean} immediately in front of it is
 	 *  what makes this pair unique. Verified against {@code javap -s}. */
 	private static final String STOP_DATE_TAIL = "Ljava/lang/Boolean;Ljava/util/Date;)V";
+
+	/** The descriptor tail of the NARROWEST {@code RecordMapping} rung taking the order stop date of
+	 *  issue #315 — the order-currency-and-date rung, whose last two parameters are {@code orderActive}
+	 *  and {@code orderStopDate}. The same string as {@link #STOP_DATE_TAIL} and a different claim: on
+	 *  {@code SerializedRecord} it picks the widest constructor and the only one taking the date, while
+	 *  on {@code RecordMapping} every WIDER rung takes the date too, at the same position, because the
+	 *  ladder is a prefix chain of the widest. So it selects the prefix every date-carrying rung
+	 *  starts with rather than one constructor. Verified against {@code javap -s}: exactly one
+	 *  {@code RecordMapping} descriptor ends in it. */
+	private static final String MAPPING_STOP_DATE_TAIL = "Ljava/lang/Boolean;Ljava/util/Date;)V";
 
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
 	private static final String COVERAGE_TYPE =
@@ -211,7 +227,8 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The shared body of both constructor cases in this file: exactly one {@code RecordMapping} constructor matches
+	 * The shared body of the two injector-caller cases in this file: exactly one {@code RecordMapping}
+	 * constructor matches
 	 * {@code tail}, and only {@code DrugReferenceInjector} invokes it.
 	 *
 	 * <p>One method rather than two copies because the two differ in a selector, the wording, and one
@@ -237,7 +254,7 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The shared body of all three constructor cases in this file: exactly one constructor of
+	 * The shared body of the three constant-pool constructor cases in this file: exactly one constructor of
 	 * {@code targetClassFile} matches {@code tail}, and only {@code expectedCallerClassFile} invokes
 	 * it.
 	 *
@@ -252,27 +269,11 @@ public class ArchitectureGuardTest {
 	private static void assertSoleCallerOfStampCarryingConstructor(String targetClassFile,
 			String typeName, String expectedCallerName, String expectedCallerClassFile, String tail,
 			String what, boolean widest, String consequence) throws IOException {
-		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
-		assertTrue(Files.isDirectory(classes),
-				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path classes = apiClassesDirectory();
 		Path mapping = classes.resolve(targetClassFile);
-		assertTrue(Files.exists(mapping),
-				"no " + typeName + " class file at " + mapping + ", so this guard would forbid nothing");
-
+		List<String> carrying = java.util.Collections.singletonList(
+				soleConstructorEndingIn(mapping, typeName, tail, what));
 		List<String> constructors = constructorDescriptors(mapping);
-		assertTrue(constructors.size() > 1,
-				"expected " + typeName + " to publish several constructor arities and found "
-						+ constructors.size() + "; with one there is no narrower one for a caller that "
-						+ "carries none of this to use, and this guard is vacuous");
-		List<String> carrying = new ArrayList<>();
-		for (String descriptor : constructors) {
-			if (descriptor.endsWith(tail)) {
-				carrying.add(descriptor);
-			}
-		}
-		assertEquals(1, carrying.size(),
-				"exactly one " + typeName + " constructor may END in " + what + ", which is how this "
-						+ "case tells it from the others. Found " + carrying.size() + ": " + carrying);
 		// A tail selects by the LAST parameter, so a rung added BELOW the widest keeps its own tail,
 		// matches NEITHER selector, and is guarded by nothing — both cases stay green while a second
 		// class writes through the new widest. Measured, on a mutation adding a 12th parameter plus a
@@ -296,18 +297,8 @@ public class ArchitectureGuardTest {
 			}
 		}
 
-		List<String> callers = new ArrayList<>();
-		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
-			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
-					.filter(f -> !f.equals(mapping)).collect(java.util.stream.Collectors.toList())) {
-				if (constantPoolStrings(file).contains(carrying.get(0))) {
-					// Spelled with forward slashes whatever the platform separator is, because the
-					// expectation below is spelled that way. The copy this method replaced normalised
-					// on one of its two call paths and not the other.
-					callers.add(classes.relativize(file).toString().replace(java.io.File.separatorChar, '/'));
-				}
-			}
-		}
+		List<String> callers = classFilesHolding(classes, mapping,
+				java.util.Collections.singletonList(carrying.get(0)));
 		assertEquals(java.util.Collections.singletonList(expectedCallerClassFile), callers,
 				"the constructor that carries " + what + " may be invoked from " + expectedCallerName
 						+ " and nowhere else in the API module's classes, which is what this walk reads. "
@@ -387,6 +378,13 @@ public class ArchitectureGuardTest {
 	 * descriptor and stays green here. That rung is invoked by no production class today and by test
 	 * helpers only, and nothing pins that; the sibling stamp has no single-writer guard of its own,
 	 * which is why this sentence names the hole rather than claiming the pair is covered.
+	 *
+	 * <p><b>It guards the date's FIRST carrier, and the published value is read off the second.</b>
+	 * {@code orderStopDates} and {@code endedOrderStopDate} read {@code RecordMapping.getOrderStopDate()},
+	 * and the class this case admits is not the one that builds mappings. That carrier is held by
+	 * {@link #theOrderStopDateReachesAMappingFromTheSerializerAlone} (issue #432), whose javadoc says
+	 * what it cannot answer; until it existed the injector could write a date there with this case
+	 * green.
 	 */
 	@Test
 	public void theOrderStopDateStampIsWrittenInOnePlace() throws IOException {
@@ -395,6 +393,288 @@ public class ArchitectureGuardTest {
 				"the order stop date of issue #315", true,
 				"A second writer would be a second answer to when a prescription ended, published to a "
 						+ "clinician with nothing reconciling them — see this test's javadoc.");
+	}
+
+	/**
+	 * The stop date reaches a {@code RecordMapping} from ONE class (issue #432): of every call site in
+	 * the API module's classes that invokes a {@code RecordMapping} constructor carrying
+	 * {@code orderStopDate}, only {@code PatientChartSerializer}'s may pass anything but the null
+	 * constant — other than {@code RecordMapping}'s own date-carrying rungs, which forward their
+	 * parameter — and the field is {@code final}, so no method but a constructor can write it, and
+	 * assigned in the widest constructor alone, so every other rung reaches it through
+	 * {@code this(...)}.
+	 * {@code DrugReferenceInjector} builds its order, reference and finding records through
+	 * rungs that carry the date, and must pass {@code null} at each of them.
+	 *
+	 * <p><b>Why a second case beside {@link #theOrderStopDateStampIsWrittenInOnePlace}.</b> That case
+	 * guards the date's FIRST carrier, {@code SerializedRecord}. What is published is read off the
+	 * SECOND, {@code RecordMapping.getOrderStopDate()}: {@code ChartSearchAiUtils.orderStopDates}
+	 * publishes it for any cited record carrying one, gated on the stamp and never on a resource type,
+	 * and {@code DrugSafetyValidator} reads it for a chip's {@code endedOrderStopDate} (issue #472).
+	 * Before this case the injector could fill that slot on the {@code active_drug_order} record it
+	 * appends for an order still in force, with every guard and the whole suite green, as the issue
+	 * measured — and the response would then publish a stop date beside a citation of that order. The
+	 * sibling constructor cases cannot see it: they confine the order-naming and provenance rungs to
+	 * the injector, which is exactly the class this case constrains.
+	 *
+	 * <p><b>It asks what is PASSED, which the constant-pool cases cannot.</b> Those say which class
+	 * invokes a constructor; this one runs javassist's {@code Analyzer} over each invoking method and
+	 * reads the type of the stop-date argument on the operand stack at the call. javassist types
+	 * {@code aconst_null} as {@link javassist.bytecode.analysis.Type#UNINIT}, and a value that is null
+	 * on one path and a date on another merges to the date, so anything but {@code UNINIT} is a value
+	 * that can be non-null. javassist is not declared by this module: it reaches the test classpath
+	 * through {@code openmrs-api}, in provided scope, and its absence fails compilation rather than
+	 * passing. The pool resolves against the test classpath plus {@code target/classes}, so a type it
+	 * cannot resolve fails the analysis loudly rather than reading as a violation or a pass.
+	 *
+	 * <p>Which rungs carry the date is derived rather than listed: the one whose descriptor ends in
+	 * {@link #MAPPING_STOP_DATE_TAIL} names the prefix, and every constructor whose parameters start
+	 * with it carries the date at that prefix's last position. That holds while the ladder is a prefix
+	 * chain, which {@link #theOrderNamingStampIsWrittenInOnePlace} asserts. {@code RecordMapping}'s own
+	 * class file is walked too, unlike in the shared helper, and exempts only its date-carrying rungs,
+	 * which forward their own PARAMETER through {@code this(...)}. So a copy method on the mapping
+	 * that takes a date is a writer, and a rung that carries no date must default it to the null
+	 * constant through {@code this(...)} — which nothing behavioural pinned: making the
+	 * order-currency rung pass a date in place of that null left the api suite green, and it is the
+	 * rung the injector's two note records reach through the {@code this(...)} chain from the
+	 * five-argument one they call.
+	 *
+	 * <p><b>The field's assignments are read as well as the calls.</b> A rung that assigns the fields
+	 * itself instead of delegating makes no call this walk reads, so review measured one — the
+	 * five-argument rung assigning all of them, the stop date a live one — with this case and the api
+	 * suite green. So the mapping's own class file is also walked for every {@code putfield} of
+	 * {@code orderStopDate}, and there must be exactly one, in the widest constructor, which is the one
+	 * every other constructor's parameters are a prefix of. That rules out a second assignment in any
+	 * other constructor whatever value it stores, a null included, so a rung that carries no date
+	 * reaches the field only through the chain the call reading covers.
+	 *
+	 * <p><b>Why the field's {@code final} is asserted, and asserted positively.</b> Successive
+	 * reviews each wrote the date past the call-site reading one more way — a constructor reference,
+	 * then a setter on a field made non-final — and a list of routes is never closed. A {@code final}
+	 * field can be assigned only in its own class's constructors, and this case reads every
+	 * assignment of it there, so the property is stated of the field rather than of each route.
+	 *
+	 * <p><b>What it cannot answer.</b> It is class-grained on the allowed side: any value the
+	 * serializer passes is admitted, and what pins WHICH date that is are the behavioural cases in
+	 * {@code DrugOrderCurrencyMarkTest} — mutate the serializer's argument and read the failures. It is
+	 * conservative on the forbidden side: a null reached through a cast, a static field or a helper is
+	 * reported as a write. Its reach is the API module's classes, as every constant-pool case here
+	 * states for its own, and a REFLECTIVE construction or field write names no descriptor this reads,
+	 * so no case here can see it. A date-carrying rung that passed, or the widest that assigned, a
+	 * value of its own in place of the parameter it takes is exempt with the rest of its rung. And
+	 * the case reads the field, not the getter: a {@code getOrderStopDate()} that derived a value
+	 * instead of returning the field, or a subclass overriding it — {@code RecordMapping} is not final — publishes a date no constructor
+	 * wrote.
+	 */
+	@Test
+	public void theOrderStopDateReachesAMappingFromTheSerializerAlone() throws Exception {
+		Path classes = apiClassesDirectory();
+		Path mapping = classes.resolve(RECORD_MAPPING_CLASS_FILE);
+		String prefix = parameters(soleConstructorEndingIn(mapping, "RecordMapping", MAPPING_STOP_DATE_TAIL,
+				"the order-currency mark and the stop date"));
+		List<String> constructors = constructorDescriptors(mapping);
+		String beforeTheDate = prefix.substring(0, prefix.length() - "Ljava/util/Date;".length());
+		List<String> carrying = new ArrayList<>();
+		for (String descriptor : constructors) {
+			if (parameters(descriptor).startsWith(prefix)) {
+				carrying.add(descriptor);
+			}
+		}
+
+		javassist.ClassPool pool = new javassist.ClassPool(true);
+		pool.appendClassPath(classes.toString());
+		String mappingType = binaryName(RECORD_MAPPING_CLASS_FILE);
+		assertTrue(javassist.Modifier.isFinal(pool.get(mappingType).getDeclaredField("orderStopDate")
+				.getModifiers()), "RecordMapping.orderStopDate must stay final: a non-final field can be "
+						+ "written by a setter or any method of the mapping, which no constructor reading "
+						+ "sees — see this test's javadoc.");
+		String widest = null;
+		for (String candidate : constructors) {
+			boolean prefixOfAll = true;
+			for (String other : constructors) {
+				prefixOfAll &= parameters(candidate).startsWith(parameters(other));
+			}
+			if (prefixOfAll) {
+				widest = candidate;
+			}
+		}
+		assertTrue(widest != null, "no RecordMapping constructor has every other one's parameters as its "
+				+ "prefix, so there is no widest rung to hold the stop date's one assignment. Constructors: "
+				+ constructors);
+		List<String> assignments = new ArrayList<>();
+		for (javassist.bytecode.MethodInfo method : pool.get(mappingType).getClassFile().getMethods()) {
+			javassist.bytecode.CodeAttribute code = method.getCodeAttribute();
+			if (code == null) {
+				continue;
+			}
+			javassist.bytecode.ConstPool constants = method.getConstPool();
+			javassist.bytecode.CodeIterator it = code.iterator();
+			while (it.hasNext()) {
+				int at = it.next();
+				if (it.byteAt(at) != javassist.bytecode.Opcode.PUTFIELD) {
+					continue;
+				}
+				int ref = it.u16bitAt(at + 1);
+				if (mappingType.equals(constants.getFieldrefClassName(ref))
+						&& "orderStopDate".equals(constants.getFieldrefName(ref))) {
+					assignments.add(method.getName() + method.getDescriptor());
+				}
+			}
+		}
+		assertEquals(java.util.Collections.singletonList("<init>" + widest), assignments,
+				"RecordMapping.orderStopDate must be assigned once, in the widest constructor: a rung that "
+						+ "assigns it itself makes no this(...) call the call-site reading below sees, so "
+						+ "it could store a date with this case green — see this test's javadoc.");
+		List<String> writers = new ArrayList<>();
+		List<String> injectorSites = new ArrayList<>();
+		List<String> serializerWrites = new ArrayList<>();
+		for (String relative : classFilesHolding(classes, null, carrying)) {
+			boolean ownClass = classes.resolve(relative).equals(mapping);
+			javassist.CtClass type = pool.get(binaryName(relative));
+			// A constructor REFERENCE — RecordMapping::new — compiles to an invokedynamic over a method
+			// handle and to no invokespecial at all, so the frame reading below never meets it, and its
+			// arguments have no static type to read. Measured: the injector wrote a live date through
+			// one with this case green. So a handle on a date-carrying rung is a writer wherever the
+			// serializer does not hold it.
+			javassist.bytecode.ConstPool pooled = type.getClassFile().getConstPool();
+			for (int entry = 1; entry < pooled.getSize(); entry++) {
+				if (pooled.getTag(entry) != javassist.bytecode.ConstPool.CONST_MethodHandle) {
+					continue;
+				}
+				int ref = pooled.getMethodHandleIndex(entry);
+				if (isDateCarryingRung(pooled, ref, mappingType, carrying)
+						&& !relative.equals(SERIALIZER_CLASS_FILE)) {
+					writers.add(relative + " holds a method handle on " + pooled.getMethodrefType(ref));
+				}
+			}
+			for (javassist.bytecode.MethodInfo method : type.getClassFile().getMethods()) {
+				javassist.bytecode.CodeAttribute code = method.getCodeAttribute();
+				if (code == null || ownClass && method.isConstructor()
+						&& carrying.contains(method.getDescriptor())) {
+					continue;
+				}
+				javassist.bytecode.ConstPool constants = method.getConstPool();
+				javassist.bytecode.analysis.Frame[] frames = null;
+				javassist.bytecode.CodeIterator it = code.iterator();
+				while (it.hasNext()) {
+					int at = it.next();
+					if (it.byteAt(at) != javassist.bytecode.Opcode.INVOKESPECIAL) {
+						continue;
+					}
+					int ref = it.u16bitAt(at + 1);
+					String descriptor = constants.getMethodrefType(ref);
+					if (!isDateCarryingRung(constants, ref, mappingType, carrying)) {
+						continue;
+					}
+					if (frames == null) {
+						frames = new javassist.bytecode.analysis.Analyzer().analyze(type, method);
+					}
+					javassist.bytecode.analysis.Frame frame = frames[at];
+					int receiver = frame.getTopIndex() - javassist.bytecode.Descriptor.paramSize(descriptor);
+					javassist.bytecode.analysis.Type passed = frame.getStack(receiver + 1
+							+ javassist.bytecode.Descriptor.paramSize("(" + beforeTheDate + ")V"));
+					String site = relative + " " + method.getName() + " @" + at + " passes " + passed;
+					if (relative.equals(INJECTOR_CLASS_FILE)) {
+						injectorSites.add(site);
+					}
+					if (passed == javassist.bytecode.analysis.Type.UNINIT) {
+						continue;
+					}
+					if (relative.equals(SERIALIZER_CLASS_FILE)) {
+						serializerWrites.add(site);
+					} else {
+						writers.add(site);
+					}
+				}
+			}
+		}
+		assertTrue(!serializerWrites.isEmpty(), "found no PatientChartSerializer call site passing a stop "
+				+ "date into a RecordMapping, so the one legitimate writer is invisible to this walk and it "
+				+ "would forbid nothing. Date-carrying rungs looked for: " + carrying);
+		assertTrue(!injectorSites.isEmpty(), "found no DrugReferenceInjector call site of a date-carrying "
+				+ "RecordMapping rung, so the class this case exists to constrain is not being read. "
+				+ "Date-carrying rungs looked for: " + carrying);
+		assertEquals(new ArrayList<String>(), writers, "only PatientChartSerializer may pass a RecordMapping "
+				+ "a stop date; every other call site of a date-carrying rung, but the mapping's own "
+				+ "forwarding rungs, passes null. A second writer's "
+				+ "date is published through orderStopDates beside a citation nothing reconciled it with — "
+				+ "see this test's javadoc. Injector sites read: " + injectorSites);
+	}
+
+	/** Whether method ref {@code ref} of {@code pool} names one of {@code mappingType}'s
+	 *  date-carrying constructors — asked the same way of a call site and of a method handle, so the
+	 *  two readings cannot come to disagree about which rungs they are looking for. */
+	private static boolean isDateCarryingRung(javassist.bytecode.ConstPool pool, int ref, String mappingType,
+			List<String> carrying) {
+		return mappingType.equals(pool.getMethodrefClassName(ref))
+				&& "<init>".equals(pool.getMethodrefName(ref))
+				&& carrying.contains(pool.getMethodrefType(ref));
+	}
+
+	/** The binary name of the type a class file relative to {@code target/classes} holds. */
+	private static String binaryName(String classFile) {
+		return classFile.substring(0, classFile.length() - ".class".length()).replace('/', '.');
+	}
+
+	/**
+	 * The one constructor of {@code classFile} whose descriptor ends in {@code tail}, which is how the
+	 * constructor cases that call this select their subject, so a canary added here reaches each of
+	 * them. Fails, rather than
+	 * selecting nothing, when the class file is absent, when the type publishes a single arity (with
+	 * one there is no narrower rung for a caller that carries none of the guarded field to use, and
+	 * the guard is vacuous), and when anything but exactly one constructor matches.
+	 */
+	private static String soleConstructorEndingIn(Path classFile, String typeName, String tail, String what)
+			throws IOException {
+		assertTrue(Files.exists(classFile),
+				"no " + typeName + " class file at " + classFile + ", so this guard would forbid nothing");
+		List<String> constructors = constructorDescriptors(classFile);
+		assertTrue(constructors.size() > 1,
+				"expected " + typeName + " to publish several constructor arities and found "
+						+ constructors.size() + "; with one there is no narrower one for a caller that "
+						+ "carries none of this to use, and this guard is vacuous");
+		List<String> matching = new ArrayList<>();
+		for (String descriptor : constructors) {
+			if (descriptor.endsWith(tail)) {
+				matching.add(descriptor);
+			}
+		}
+		assertEquals(1, matching.size(),
+				"exactly one " + typeName + " constructor may END in " + what + ", which is how this "
+						+ "case tells it from the others. Found " + matching.size() + ": " + matching);
+		return matching.get(0);
+	}
+
+	/** The API module's compiled classes, for the constructor cases that read them; failing when
+	 *  absent, because a guard that discovers nothing forbids nothing. */
+	private static Path apiClassesDirectory() {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		assertTrue(Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		return classes;
+	}
+
+	/**
+	 * Every class file under {@code classes} whose constant pool holds any of {@code descriptors},
+	 * other than {@code excluded} where that is non-null — relative to {@code classes}, spelled with
+	 * forward slashes whatever the platform separator is, because every expectation it is compared
+	 * with is spelled that way. One walk for the class-file cases that share it rather than a copy
+	 * each: the copy the shared constructor helper replaced normalised the separator on one of its two
+	 * call paths and not the other.
+	 */
+	private static List<String> classFilesHolding(Path classes, Path excluded, List<String> descriptors)
+			throws IOException {
+		List<String> holding = new ArrayList<>();
+		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
+			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
+					.filter(f -> !f.equals(excluded)).collect(java.util.stream.Collectors.toList())) {
+				List<String> pooled = constantPoolStrings(file);
+				if (descriptors.stream().anyMatch(pooled::contains)) {
+					holding.add(classes.relativize(file).toString().replace(java.io.File.separatorChar, '/'));
+				}
+			}
+		}
+		return holding;
 	}
 
 	/** The parameter section of a method descriptor — everything between the parentheses — so two

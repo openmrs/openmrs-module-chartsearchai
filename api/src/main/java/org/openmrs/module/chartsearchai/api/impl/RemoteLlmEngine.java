@@ -350,23 +350,11 @@ public class RemoteLlmEngine implements LlmEngine {
 	/**
 	 * What an operator is told when the peer sent more than one answer can be.
 	 *
-	 * <p><b>The cause is logged here and deliberately NOT attached.</b>
-	 * {@link BoundedResponseStream.ResponseTooLargeException} is an {@link IOException}, and the
-	 * streaming route's terminal handler reads {@code getCause() instanceof IOException} as "the
-	 * client hung up" — it then logs at DEBUG and sends no {@code error} event, so an
-	 * {@code APIException} carrying this cause would reach a clinician as a stream that simply
-	 * stopped. The ERROR line below reaches the operator either way; what detaching the cause
-	 * buys is the {@code error} event AND the controller's own ERROR line naming the patient,
-	 * both of which the DEBUG branch replaces with one line saying the client hung up — which is
-	 * not what happened. Attaching it was measured doing exactly that.
+	 * <p>The cause is attached like every other transport failure's. It is an {@link IOException},
+	 * and until issue #451 the streaming route read any {@code IOException} cause as "the client hung
+	 * up" — so #446 detached it here to keep this failure reportable. That route now asks whether its
+	 * OWN write to the client was refused, which no engine exception can answer yes to.
 	 * → {@code ChartSearchAiRestController.streamAnswer}.</p>
-	 *
-	 * <p><b>That heuristic is itself wrong, and this only steps around it.</b> Every other
-	 * {@code IOException} the engines wrap is misread the same way — a peer that hangs up
-	 * mid-answer is reported as the CLIENT disconnecting — which is older than this ceiling and
-	 * wider than it. Fixing it means giving the controller's own disconnect throw a type to test
-	 * for, rather than testing for a cause any transport failure can carry; that is a change to
-	 * the streaming route and is issue #451, where it is measured.</p>
 	 */
 	private static APIException oversized(BoundedResponseStream.ResponseTooLargeException e) {
 		log.error("Remote LLM API exceeded the {}-byte response ceiling", e.getLimit(), e);
@@ -377,7 +365,7 @@ public class RemoteLlmEngine implements LlmEngine {
 				+ ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
 				+ " output tokens is expected to need. Check that it is the endpoint intended and "
 				+ "that it speaks the OpenAI chat-completions format; the ceiling itself is fixed "
-				+ "and not configurable.");
+				+ "and not configurable.", e);
 	}
 
 	private String getRequiredGlobalProperty(String propertyName) {

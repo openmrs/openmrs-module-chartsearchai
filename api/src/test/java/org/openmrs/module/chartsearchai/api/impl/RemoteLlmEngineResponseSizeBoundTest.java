@@ -412,18 +412,18 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/**
 	 * The failure has to be one the module can REPORT, and neither half of that is implied by an
 	 * exception merely being raised. The message has to name the ceiling, or it is any other
-	 * transport failure. And the cause must not be an {@link IOException}, for the reason
-	 * {@code RemoteLlmEngine.oversized}'s javadoc gives and measured.
+	 * transport failure. And the cause has to be the ceiling's own exception, so the stack an
+	 * operator reads names where the read was cut off — {@code RemoteLlmEngine.oversized}'s javadoc
+	 * says why that is safe to attach now (issue #451).
 	 */
 	private static void assertCeilingFailureIsReportable(APIException raised) {
 		assertNotNull(raised.getMessage(), "the failure must say something an operator can act on");
 		assertTrue(raised.getMessage().contains(String.valueOf(RemoteLlmEngine.MAX_RESPONSE_BYTES)),
 				"the message must name the ceiling that was exceeded. Got: "
 						+ raised.getMessage());
-		assertFalse(raised.getCause() instanceof IOException,
-				"an IOException cause makes ChartSearchAiRestController.streamAnswer classify this "
-						+ "as a client disconnect: no error event reaches the client and nothing "
-						+ "is logged. Got cause: " + raised.getCause());
+		assertTrue(raised.getCause() instanceof BoundedResponseStream.ResponseTooLargeException,
+				"the failure must carry the ceiling's own exception as its cause. Got cause: "
+						+ raised.getCause());
 	}
 
 	private void pointEngineAt(String path) {

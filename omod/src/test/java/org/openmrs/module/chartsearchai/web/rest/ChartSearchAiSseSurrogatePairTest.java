@@ -27,7 +27,7 @@ import org.openmrs.Patient;
  * A code point the model streams across two chunks reaches the client as that code point, on every
  * channel that carries model text raw (issue #438).
  *
- * <p>Each chunk becomes one frame, and each frame is encoded on its own — so a chunk ending in the
+ * <p>Each chunk became one frame, and each frame is encoded on its own — so a chunk ending in the
  * high half of a surrogate pair and a chunk opening with the low half used to be two separate
  * encodes of two unpaired surrogates, each replaced by {@code ?}. The clinician saw {@code ??} where
  * the model wrote a non-BMP character, until {@code done} replaced the text. The chunkings below are

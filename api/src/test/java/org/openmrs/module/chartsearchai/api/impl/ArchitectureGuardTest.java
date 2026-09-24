@@ -397,7 +397,9 @@ public class ArchitectureGuardTest {
 	 * The stop date reaches a {@code RecordMapping} from ONE class (issue #432): of every call site in
 	 * the API module's classes that invokes a {@code RecordMapping} constructor carrying
 	 * {@code orderStopDate}, only {@code PatientChartSerializer}'s may pass anything but the null
-	 * constant. {@code DrugReferenceInjector} builds its order, reference and finding records through
+	 * constant — other than {@code RecordMapping}'s own date-carrying rungs, which forward their
+	 * parameter — and the field is {@code final}, so no method but a constructor can write it.
+	 * {@code DrugReferenceInjector} builds its order, reference and finding records through
 	 * rungs that carry the date, and must pass {@code null} at each of them.
 	 *
 	 * <p><b>Why a second case beside {@link #theOrderStopDateStampIsWrittenInOnePlace}.</b> That case
@@ -431,6 +433,12 @@ public class ArchitectureGuardTest {
 	 * constant — which nothing behavioural pinned: making the order-currency rung default it to a date
 	 * left the api suite green, and it is the rung the injector's two note records reach.
 	 *
+	 * <p><b>Why the field's {@code final} is asserted, and asserted positively.</b> Successive
+	 * reviews each wrote the date past the call-site reading one more way — a constructor reference,
+	 * then a setter on a field made non-final — and a list of routes is never closed. A {@code final}
+	 * field can be assigned only in a constructor, and the constructors are the part this case
+	 * reads, so the property is stated of the field rather than of each route.
+	 *
 	 * <p><b>What it cannot answer.</b> It is class-grained on the allowed side: any value the
 	 * serializer passes is admitted, and what pins WHICH date that is are the behavioural cases in
 	 * {@code DrugOrderCurrencyMarkTest} — mutate the serializer's argument and read the failures. It is
@@ -438,8 +446,10 @@ public class ArchitectureGuardTest {
 	 * reported as a write. Its reach is the API module's classes, as every constant-pool case here
 	 * states for its own, and a REFLECTIVE construction names no descriptor in any pool, so no case
 	 * here can see it. A date-carrying rung that passed a value of its own in place of the
-	 * parameter it forwards is exempt with the rest of its rung. And {@code RecordMapping} is not
-	 * final, so a subclass overriding the getter writes through no constructor at all.
+	 * parameter it forwards is exempt with the rest of its rung. And the case reads the field, not the
+	 * getter: a {@code getOrderStopDate()} that derived a value instead of returning the field, or a
+	 * subclass overriding it — {@code RecordMapping} is not final — publishes a date no constructor
+	 * wrote.
 	 */
 	@Test
 	public void theOrderStopDateReachesAMappingFromTheSerializerAlone() throws Exception {
@@ -458,15 +468,17 @@ public class ArchitectureGuardTest {
 
 		javassist.ClassPool pool = new javassist.ClassPool(true);
 		pool.appendClassPath(classes.toString());
-		String mappingType = RECORD_MAPPING_CLASS_FILE.substring(0,
-				RECORD_MAPPING_CLASS_FILE.length() - ".class".length()).replace('/', '.');
+		String mappingType = binaryName(RECORD_MAPPING_CLASS_FILE);
+		assertTrue(javassist.Modifier.isFinal(pool.get(mappingType).getDeclaredField("orderStopDate")
+				.getModifiers()), "RecordMapping.orderStopDate must stay final: a non-final field can be "
+						+ "written by a setter or any method of the mapping, which no constructor reading "
+						+ "sees — see this test's javadoc.");
 		List<String> writers = new ArrayList<>();
 		List<String> injectorSites = new ArrayList<>();
 		List<String> serializerWrites = new ArrayList<>();
 		for (String relative : classFilesHolding(classes, null, carrying)) {
 			boolean ownClass = classes.resolve(relative).equals(mapping);
-			javassist.CtClass type = pool.get(relative.substring(0, relative.length()
-					- ".class".length()).replace('/', '.'));
+			javassist.CtClass type = pool.get(binaryName(relative));
 			// A constructor REFERENCE — RecordMapping::new — compiles to an invokedynamic over a method
 			// handle and to no invokespecial at all, so the frame reading below never meets it, and its
 			// arguments have no static type to read. Measured: the injector wrote a live date through
@@ -478,9 +490,7 @@ public class ArchitectureGuardTest {
 					continue;
 				}
 				int ref = pooled.getMethodHandleIndex(entry);
-				if (mappingType.equals(pooled.getMethodrefClassName(ref))
-						&& "<init>".equals(pooled.getMethodrefName(ref))
-						&& carrying.contains(pooled.getMethodrefType(ref))
+				if (isDateCarryingRung(pooled, ref, mappingType, carrying)
 						&& !relative.equals(SERIALIZER_CLASS_FILE)) {
 					writers.add(relative + " holds a method handle on " + pooled.getMethodrefType(ref));
 				}
@@ -501,9 +511,7 @@ public class ArchitectureGuardTest {
 					}
 					int ref = it.u16bitAt(at + 1);
 					String descriptor = constants.getMethodrefType(ref);
-					if (!mappingType.equals(constants.getMethodrefClassName(ref))
-							|| !"<init>".equals(constants.getMethodrefName(ref))
-							|| !carrying.contains(descriptor)) {
+					if (!isDateCarryingRung(constants, ref, mappingType, carrying)) {
 						continue;
 					}
 					if (frames == null) {
@@ -535,9 +543,25 @@ public class ArchitectureGuardTest {
 				+ "RecordMapping rung, so the class this case exists to constrain is not being read. "
 				+ "Date-carrying rungs looked for: " + carrying);
 		assertEquals(new ArrayList<String>(), writers, "only PatientChartSerializer may pass a RecordMapping "
-				+ "a stop date; every other call site of a date-carrying rung passes null. A second writer's "
+				+ "a stop date; every other call site of a date-carrying rung, but the mapping's own "
+				+ "forwarding rungs, passes null. A second writer's "
 				+ "date is published through orderStopDates beside a citation nothing reconciled it with — "
 				+ "see this test's javadoc. Injector sites read: " + injectorSites);
+	}
+
+	/** Whether method ref {@code ref} of {@code pool} names one of {@code mappingType}'s
+	 *  date-carrying constructors — asked the same way of a call site and of a method handle, so the
+	 *  two readings cannot come to disagree about which rungs they are looking for. */
+	private static boolean isDateCarryingRung(javassist.bytecode.ConstPool pool, int ref, String mappingType,
+			List<String> carrying) {
+		return mappingType.equals(pool.getMethodrefClassName(ref))
+				&& "<init>".equals(pool.getMethodrefName(ref))
+				&& carrying.contains(pool.getMethodrefType(ref));
+	}
+
+	/** The binary name of the type a class file relative to {@code target/classes} holds. */
+	private static String binaryName(String classFile) {
+		return classFile.substring(0, classFile.length() - ".class".length()).replace('/', '.');
 	}
 
 	/**

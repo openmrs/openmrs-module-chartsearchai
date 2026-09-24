@@ -195,14 +195,17 @@ public class SlicedReferenceRowProvenanceTest {
 	 *
 	 * <p>Structural, because what it pins is a pairing of two things a test does — sets a global
 	 * property and loads a fixture. A test source "turns the tier on" when it names the property's
-	 * constant or its value, a mention in a comment included, so this fails closed. The fixtures it
+	 * constant or its value, a mention in a comment included, so this fails closed — or when a test class
+	 * its {@code extends} or {@code implements} clause names does, transitively, since a subclass runs the
+	 * {@code @BeforeEach} it inherits. The fixtures it
 	 * counts as loaded are those {@code FixtureReach} finds its text naming: a string literal, a test
 	 * class's compile-time {@code String} constant, or a test class's method whose body reaches one,
 	 * transitively — and those of any test class its {@code extends} or {@code implements} clause names.
 	 * Among what it cannot see: a constant of a type other than {@code String}, a fixture
 	 * name assembled at runtime, a member inherited from a class the file never names, a method called
 	 * on an object whose class the file never names, a walk over the fixture directory, the property set
-	 * by an XML dataset, an omod test class's constants beyond what omod's last build compiled, and
+	 * by an XML dataset, the property set by a supertype outside these test sources, an omod test class's
+	 * constants beyond what omod's last build compiled, and
 	 * the callers of a helper that sets the property on their behalf — it is the helper's own class that
 	 * is flagged, with the fixtures that class names.
 	 */
@@ -255,15 +258,17 @@ public class SlicedReferenceRowProvenanceTest {
 		assertFalse(reach.named("class Probe { java.util.List<? extends Object> x = DrugReferenceTestSupport.set(); }")
 				.contains("ddi-knowledge-base-sample.json"),
 				"a wildcard bound is not a supertype, so it must not pull in the whole file of a class named after it");
+		assertTrue(turnsTheDerivedTierOn("class Probe extends ConditionMediatedFindingTest {}", reach, byClass),
+				"a class must count as turning the tier on where a test class it extends does, whose @BeforeEach it inherits");
+		assertFalse(turnsTheDerivedTierOn("class Probe extends ReferenceRecordRowAttributionTest {}", reach, byClass),
+				"a class must not count as turning the tier on merely by extending a test class that does not");
 
 		Set<String> derivedOn = new TreeSet<String>();
 		Map<String, Set<String>> refused = new TreeMap<String, Set<String>>();
 		for (Map.Entry<Path, String> source : sources.entrySet()) {
 			String text = source.getValue();
 			String name = simpleName(source.getKey());
-			if (name.equals(getClass().getSimpleName())
-					|| !(text.contains("GP_DRUG_SAFETY_DERIVED_FINDINGS")
-							|| text.contains(ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS))) {
+			if (name.equals(getClass().getSimpleName()) || !turnsTheDerivedTierOn(text, reach, byClass)) {
 				continue;
 			}
 			derivedOn.add(name);
@@ -348,6 +353,25 @@ public class SlicedReferenceRowProvenanceTest {
 	}
 
 	/**
+	 * @return whether {@code source}, or the file of one of its {@link FixtureReach#supertypes}, names
+	 *         the derived-findings property's constant or its value, a comment included — a subclass
+	 *         inherits the {@code @BeforeEach} that sets it without ever naming it
+	 */
+	private static boolean turnsTheDerivedTierOn(String source, FixtureReach reach, Map<String, String> byClass) {
+		List<String> texts = new ArrayList<String>(Collections.singletonList(source));
+		for (String type : reach.supertypes(source)) {
+			texts.add(byClass.get(type));
+		}
+		for (String text : texts) {
+			if (text.contains("GP_DRUG_SAFETY_DERIVED_FINDINGS")
+					|| text.contains(ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Which fixtures a test source names. A member is a test class's compile-time {@code String} constant
 	 * whose value names a fixture — read from the compiled class's {@code ConstantValue} attributes, so
 	 * the declaration's spelling does not matter — or a test class's method, whose fixtures are those its
@@ -424,27 +448,44 @@ public class SlicedReferenceRowProvenanceTest {
 		}
 
 		/**
-		 * @return the fixtures a whole test source names, and those named by every test class its
-		 *         {@code extends} and {@code implements} clauses name, a nested type's outer class
-		 *         included — a lifecycle method it inherits runs without the source ever naming it
+		 * @return the fixtures a whole test source names, and those named by each of its
+		 *         {@link #supertypes} — a lifecycle method it inherits runs without the source ever naming it
 		 */
 		Set<String> named(String source) {
-			return named(source, new HashSet<String>());
+			Set<String> out = namedByItself(source);
+			for (String type : supertypes(source)) {
+				out.addAll(namedByItself(code.get(type)));
+			}
+			return out;
 		}
 
-		private Set<String> named(String source, Set<String> extended) {
-			String text = withoutComments(source);
+		/**
+		 * @return the top-level test classes {@code source}'s {@code extends} and {@code implements}
+		 *         clauses name, a nested type's outer class included, and theirs, transitively — each once.
+		 *         A clause of any type declaration in the file counts, a nested one's included; a
+		 *         supertype outside these test sources is not walked.
+		 */
+		Set<String> supertypes(String source) {
 			Set<String> out = new TreeSet<String>();
-			closure(references(text, classesNamedIn(text, null), out), out);
-			Matcher clause = SUPERTYPES.matcher(withoutLiterals(text));
-			while (clause.find()) {
-				for (String type : words(clause.group(1))) {
-					if (code.containsKey(type) && extended.add(type)) {
-						out.addAll(named(code.get(type), extended));
+			java.util.Deque<String> pending = new java.util.ArrayDeque<String>(Collections.singleton(source));
+			while (!pending.isEmpty()) {
+				Matcher clause = SUPERTYPES.matcher(withoutLiterals(withoutComments(pending.pop())));
+				while (clause.find()) {
+					for (String type : words(clause.group(1))) {
+						if (code.containsKey(type) && out.add(type)) {
+							pending.push(code.get(type));
+						}
 					}
 				}
 			}
 			return out;
+		}
+
+		/** @return the fixtures {@code source}'s own text names, directly or through the members it names. */
+		private Set<String> namedByItself(String source) {
+			String text = withoutComments(source);
+			Set<String> out = new TreeSet<String>();
+			return closure(references(text, classesNamedIn(text, null), out), out);
 		}
 
 		/** @return the fixtures {@code owner.member} reaches; empty for a member that names none. */

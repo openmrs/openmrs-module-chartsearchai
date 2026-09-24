@@ -174,6 +174,9 @@ public class LocalLlmEngineTest {
 				engine.buildRequestBody("sys", "usr", stream, LlmEngine.ReferenceRecords.ABSENT),
 				"a prompt without reference records sends today's body byte for byte, which is what "
 						+ "keeps the #15 and d2d7d361 measurements covering it");
+			assertEquals(engine.buildRequestBody("sys", "usr", stream),
+				engine.buildRequestBody("sys", "usr", stream, (LlmEngine.ReferenceRecords) null),
+				"and a null value is read as absent, which is that same request");
 			absent.remove(java.util.Arrays.asList("samplers", "dry_multiplier", "dry_base",
 				"dry_allowed_length", "dry_penalty_last_n"));
 			present.remove("samplers");

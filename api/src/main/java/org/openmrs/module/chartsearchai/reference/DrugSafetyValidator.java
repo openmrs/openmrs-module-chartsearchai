@@ -6353,9 +6353,10 @@ public class DrugSafetyValidator {
 		if (shown < found.size()) {
 			// WARN, not INFO: how many pairs went, and at what ratings, is an operator's diagnostic, and
 			// the RATINGS live only here (issue #443) — the response states the two COUNTS (see the
-			// extent returned below) and never the ratings, and a list of withheld pairs on the wire is the unbounded expansion this cap exists to
-			// prevent. Silent truncation in a safety net reads as "nothing else was
-			// found", which since issue #336 the response itself no longer says.
+			// extent returned below) and never the ratings, and a list of withheld pairs on the wire is
+			// the unbounded expansion this cap exists to prevent. Silent truncation in a safety net
+			// reads as "nothing else was found", which since issue #336 the response itself no longer
+			// says.
 			//
 			// WHICH pairs went is nowhere, here or on the wire. That is what the list below is: each
 			// withheld candidate's RATING and no name — which is why issue #439 could make the sibling

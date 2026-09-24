@@ -40,16 +40,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * patient on no ibuprofen, the same allergen arm raises a chip about a drug being proposed. Both carry
  * one sentence, "The patient has a recorded allergy to Ibuprofen.", and on the issue's reproduction both
  * reached the client as one byte-identical object. The module held the difference on
- * {@code SafetyWarning.isAboutACurrentMedication()} and stated it only in the injected record, which
- * reaches a client only if the model cites it — and there it did not.
+ * {@code SafetyWarning.isAboutACurrentMedication()}; on the model's path it stated it in the injected
+ * record, which reaches a client only if the model cites it — and there it did not.
  *
  * <p><b>Two pairs, each one sentence carried by two chips that differ only in that answer.</b> So a
  * value computed from the other published fields cannot agree with both chips of a pair. The
  * contraindication pair is the issue's own. The interaction pair is the screening arm's rule chip beside
  * the drug-in-play arm's, and is here so that a value narrowed by chip TYPE cannot agree with every chip;
- * both of its chips name one active order, as a rule chip of either arm does
- * ({@code DrugSafetyValidator.interactionWarning}), so a value narrowed on {@code namedPartners} cannot
- * either.
+ * both of its chips carry a non-empty {@code namedPartners}, as every chip
+ * {@code DrugSafetyValidator.interactionWarning} builds does, so a value narrowed on it cannot either.
  *
  * <p>What is not asserted here, because something else holds it. That the published value is the
  * accessor's own reading, over a fixture of its own:

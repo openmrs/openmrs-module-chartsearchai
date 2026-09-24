@@ -123,6 +123,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 115: Several rows of one substance are not a pair, so the question-pair arm leaves the field to the arm that screened](#decision-115-several-rows-of-one-substance-are-not-a-pair-so-the-question-pair-arm-leaves-the-field-to-the-arm-that-screened)
 - [Decision 116: A question about a drug states which of her orders share a substance too](#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)
 - [Decision 117: A prompt carrying the module's reference records is decoded without the DRY sampler](#decision-117-a-prompt-carrying-the-modules-reference-records-is-decoded-without-the-dry-sampler)
+- [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10962,9 +10963,10 @@ same object byte for byte. The first is about a drug she already takes —
 `DrugSafetyValidator.addActiveOrderContraindications` raised it — and the second is about a proposal,
 raised by the drug-in-play loop. The allergen arm builds both through one factory,
 `SafetyWarning.recordedAllergenContraindication`, and no arm's sentence varies with the referent. The
-module held the difference on `SafetyWarning.isAboutACurrentMedication()` and stated it only in the
-injected record, which reaches a client only if the model cites it; the issue's first answer cited
-neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`). With
+module held the difference on `SafetyWarning.isAboutACurrentMedication()`. On the model's path it stated
+it in the injected record, which reaches a client only if the model cites it, and the issue's first answer
+cited neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`); an answer
+the module composes itself states it in its own text (Decision 113), a path that ships off. With
 `chartsearchai.drugSafety.findingsRenderedByClient` on, as it ships, the prose is asked to summarise the
 findings rather than list each one, on README's premise that every finding is published in
 `safetyWarnings`.
@@ -10981,9 +10983,8 @@ findings rather than list each one, on README's premise that every finding is pu
   [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
   left it for `aboutAnEndedOrder`.
 - **The contract says what the flag is.** `true` is a chip the module raised from one of her active
-  orders. `false` is not a statement that she is off the drug: it is also the answer for a drug the
-  question (or the answer) named that she takes, and for the chip saying that drug is already in several
-  of her orders. The accessor's javadoc is the one home of that list, and README carries it for a client.
+  orders, and `false` is not a statement that she is off the drug. What `false` covers has one home, the
+  accessor's javadoc, and README carries it for a client.
 - **README also says how to render `true`**: as a finding about a medication she already takes, with no
   drug named in that claim.
   [Decision 113](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)'s
@@ -11005,10 +11006,9 @@ findings rather than list each one, on README's premise that every finding is pu
 
 ### Residues
 
-- **The published chips are the chips pass's.** On the model's path that pass reads the model's answer,
-  so a drug the answer names that no record the answer is attributable to names is in play there, and the
-  drug-in-play arm raises its findings, answering `false`. `answerFromTheModule`'s chips pass reads the
-  empty answer. Decision 110's last residue records the same shape for `aboutAnEndedOrder`.
+- **The published chips are the chips pass's, not the prompt pass's**, and the two can state different
+  referents for one drug; the accessor's javadoc says how. Decision 110's last residue records the same
+  shape for `aboutAnEndedOrder`.
 - **`false` for a drug the question named that she takes is the proposal vocabulary open
   [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402) and
   [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513) track.** README names it as

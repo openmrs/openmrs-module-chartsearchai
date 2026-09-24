@@ -60,6 +60,19 @@ public final class SafetyWarningFixtures {
 	}
 
 	/**
+	 * A curated-rule contraindication chip whose chart match the chart corroborates, built by
+	 * {@code SafetyWarning.contraindication}, the curated-rule arm's own factory (issue #527).
+	 * {@code aboutACurrentMedication} is that factory's own parameter: {@code true} as
+	 * {@code DrugSafetyValidator.addActiveOrderContraindications} passes it for one of her active orders,
+	 * {@code false} as the drug-in-play loop passes it. {@code chartRecords} is empty, being on no wire.
+	 */
+	public static SafetyWarning curatedRuleContraindication(String drug, String detail,
+			boolean aboutACurrentMedication) {
+		return SafetyWarning.contraindication(drug, detail, false, aboutACurrentMedication,
+			Collections.<String> emptySet());
+	}
+
+	/**
 	 * A recorded-allergen contraindication chip — the allergen arm's own sentence, built by
 	 * {@code SafetyWarning.recordedAllergenContraindication}, the factory that arm's two callers share
 	 * (issue #527). {@code aboutACurrentMedication} is that factory's own parameter: {@code true} as

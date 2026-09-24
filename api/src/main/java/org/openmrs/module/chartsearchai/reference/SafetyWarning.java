@@ -1014,8 +1014,8 @@ public class SafetyWarning {
 	 *
 	 * <p><b>Published VERBATIM since issue #527, as each chip's {@code aboutACurrentMedication} wire key
 	 * — so this accessor's name IS the key</b>, the rule {@link #restsOnAnUncorroboratedChartMatch()}
-	 * states for its own. Until then this paragraph read "prompt-facing only", and the referent reached a
-	 * client only inside a record the model cites. Public for that reason and no other: the factories
+	 * states for its own. Until then this paragraph read "prompt-facing only". Public for that reason and
+	 * no other: the factories
 	 * that SET it stay package-private, for the one-directional reason that accessor gives. The chip's
 	 * own detail is untouched, so {@code DrugSafetyValidator.StatedInteractionChips} still does NOT key
 	 * on it — for the reason stated at {@link #chartOrderBridges()}, which is NOT that this is

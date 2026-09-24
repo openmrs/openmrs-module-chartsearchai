@@ -441,7 +441,10 @@ public class LlmProvider {
 	 * @param referenceRecords whether {@code numberedRecords} carries the module's reference records,
 	 *        which decides the engine's repetition penalty and nothing in the prompt (issue #512). A
 	 *        parameter of this one arity for the reason {@code enumerateFindings} is; the caller
-	 *        holding the chart reads it through {@link LlmEngine.ReferenceRecords#in}
+	 *        holding the chart reads it through {@link LlmEngine.ReferenceRecords#in}. Every test
+	 *        double of this method drops it, which is the cost {@link #findingProse} names and
+	 *        here costs nothing: a double returns its own answer and reaches no engine, and
+	 *        {@code ReferenceRecordsReachTheEngineTest} drives this real method instead
 	 * @return the LLM's response with answer text and structured citation indices
 	 */
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,

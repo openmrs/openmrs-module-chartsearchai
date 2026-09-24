@@ -246,8 +246,8 @@ public class LocalLlmEngine implements LlmEngine {
 
 	/**
 	 * Sends a pre-built request body to the local llama-server and parses the (non-streaming)
-	 * result. Shared by the default-schema and custom-{@code response_format} {@link #infer}
-	 * overloads. Called only from {@code synchronized} methods, so it runs under the engine lock.
+	 * result. Shared by every {@link #infer} overload. Called only from {@code synchronized}
+	 * methods, so it runs under the engine lock.
 	 */
 	private InferenceResult postForResult(String requestBody, int timeoutSeconds) {
 		HttpRequest request = completionsRequest(requestBody, timeoutSeconds);
@@ -1478,8 +1478,9 @@ public class LocalLlmEngine implements LlmEngine {
 	}
 
 	/**
-	 * The one body every request to the spawned server is built from. {@code referenceRecords}
-	 * decides the sampler chain and nothing else.
+	 * The one body every chat-completions request to the spawned server is built from — warmup
+	 * included, the slot save and restore calls not. {@code referenceRecords} decides the sampler
+	 * chain and nothing else.
 	 */
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			int maxTokens, ObjectNode responseFormat, ReferenceRecords referenceRecords) {

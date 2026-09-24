@@ -7747,8 +7747,52 @@ the checks that judge the model's prose all run before it for the same reason.
 and not named above: active order Dexamethasone."*, no order the findings name is missing from it,
 and `findingPartners` still reports `{named:9, stated:8}`.
 
-→ `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` and
-`.anAnswerNamingEveryOrderIsReturnedByteForByte`.
+**Amended by [#516](https://github.com/openmrs/openmrs-module-chartsearchai/issues/516): the
+completion and `findingPartners` cover the findings the answer CITED.** Both read every chip the
+response raised, and the append's own justification — *"the finding is already cited in the sentence
+the model wrote"* — holds only when every chip's finding is cited, which the single merged chip above
+was and the issue's measured cells were not. Measured on the demo seed (issue #516, byte-identical across two
+runs): an abstention citing no finding was handed five orders "covered by those findings", an answer
+citing one of two Amlodipine findings was handed the other's order, and an answer citing one finding
+was handed eight orders from the 23 chips it did not cite — orders an external reviewer then graded a
+data leak. So:
+
+- The population is the `safety_finding` records the answer's markers resolve to, read through
+  `SafetyFindingCitationExtentCheck.citedFindingIndexes` and nothing else
+  (`ArchitectureGuardTest.theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck`, which
+  checks the call is made and not what it is handed; handing it a blank answer reads the #409 union,
+  and `CitedFindingPartnerCompletionTest.aFindingOnlyTheStructuredCitationsArrayListsHasNoOrderAppended`
+  reddens on that). A
+  record carries its finding's orders as `RecordMapping.getFindingPartners()`, written where the
+  record is, in `DrugReferenceInjector`'s findings loop — a `resourceKey` is not unique, so the chips
+  cannot be joined back to a cited record.
+- An answer citing no finding gets nothing appended and publishes `findingPartners: null`. An uncited
+  finding is `findingCitations`' to count; the chips beside the answer carry the orders each names as
+  `namedPartners`.
+- `findingPartners` moved with the sentence, because README tells a client to read `named − stated` as
+  the orders the module appended; a count over every chip beside a sentence over the cited findings
+  would falsify that. What this decision fixes is unchanged: WHEN the count is taken, on the model's
+  prose before the append. One residue of that reading predates #516: the count is one per cited
+  finding naming an order while the sentence names each order once, so two cited findings naming one
+  order make `named − stated` exceed the appended list.
+- The containment test compares case-folded forms with the whitespace around `/` taken out, in one
+  helper both methods and the sentence's dedup share: an answer writing *Isoniazid /
+  pyrazinamide/rifampin* was told that order was "not named above".
+
+**Spec changed deliberately, by the product owner (issue #516, decision 4).**
+`SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` required
+every chip's orders in an answer carrying no citation marker — the case this amendment decides gets
+nothing. It and its byte-for-byte control moved to `CitedFindingPartnerCompletionTest`, which drives
+the real `LlmInferenceService` over records the real injector wrote (a reference-package test cannot
+resolve an answer's citations), and cites the merged finding; it keeps its strictness — every order of
+the cited finding must reach the answer. `FindingPartnerLogDisclosureTest`'s answers cite every
+injected finding for the same reason, its assertions unchanged; and the answers
+`FindingEnumerationRepairTest` and `SafetyFindingSeverityFidelityTest` build now name each cited
+finding's orders, read off its record, because those harnesses stubbed the post-answer chips empty —
+which is what kept the completion out of their byte-for-byte and no-WARN assertions until the
+completion read the records instead.
+
+→ `CitedFindingPartnerCompletionTest`, `SharedMechanismChipCollapseTest.eachFindingsRecordCarriesTheOrdersItsChipNames`.
 
 ## Decision 101: The SSE framing ends a payload line wherever a CLIENT would, not only at LF
 
@@ -7957,7 +8001,9 @@ channel, because Decision 100 has the module APPEND every unstated order to the 
 RETURNS, so the reader who holds the privilege receives the names there, and `findingPartners`
 publishes the same two numbers the log now carries — so a maintainer triaging a shortfall reads the
 same `stated`/`named` in both places. The finding's own alternative, the names at DEBUG, was not
-taken: a channel nobody needs is not worth the bytes of PHI it writes.
+taken: a channel nobody needs is not worth the bytes of PHI it writes. (Since #516 the answer names
+the orders of the findings it CITES, and the chips beside it carry the orders each names as
+`namedPartners` — Decision 100's amendment. The count the log carries moved with it.)
 
 **Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
 

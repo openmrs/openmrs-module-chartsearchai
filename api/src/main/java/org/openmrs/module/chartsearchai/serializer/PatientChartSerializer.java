@@ -664,6 +664,10 @@ public class PatientChartSerializer {
 	 * standing beside it: whether that text names the drug of the order it is about. It is never
 	 * rendered, and a reader must not look for it in the prose — deciding it from the text is exactly
 	 * what {@link #getOrderActive()}'s rule forbids, for the same reason.
+	 *
+	 * <p>{@link #getFindingPartners()} (issue #516) is carried beside the record for
+	 * {@link #getFindingSeverity()}'s reason: the finding's text names those orders, and a consumer
+	 * reads them here rather than parsing for them.
 	 */
 	public static class RecordMapping {
 
@@ -712,6 +716,20 @@ public class PatientChartSerializer {
 		 * can itself contain a rating word.
 		 */
 		private final String findingSeverity;
+
+		/**
+		 * The active orders an injected {@code safety_finding} names, as its chip names them — empty on
+		 * every other record, and on a finding that names no order (issue #516). Written in exactly ONE
+		 * place, {@code DrugReferenceInjector}'s finding mapping, off {@code SafetyWarning.namedPartners()}
+		 * of the very finding the record renders. Never re-derived from {@link #getText()}, which is the
+		 * two-resolutions-that-agree shape issue #151 forbids.
+		 *
+		 * <p>Beside the record because a {@code resourceKey} is not unique — one question raises several
+		 * findings of one type about one drug — so the chips cannot be joined back to the record a
+		 * marker cites. {@code FindingPartnerCoverageCheck} reads it to scope ADR Decision 100's
+		 * completion, and {@code findingPartners}, to the findings the answer cited.
+		 */
+		private final List<String> findingPartners;
 
 		/**
 		 * The numbers of the chart records this record was DERIVED from, empty where it was not
@@ -853,13 +871,14 @@ public class PatientChartSerializer {
 		 * since issue #294 {@link #orderDrugNamed} to {@code null} with it. The rungs above this one
 		 * each said "the full one is below" and were each overtaken by the next issue, this one
 		 * included, which is why every rung names the widest by the parameter only it takes rather than
-		 * by a count that the next insertion falsifies.
+		 * by a count that the next insertion falsifies. Since issue #516 it defaults
+		 * {@link #findingPartners} to empty as well.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, null);
+					orderStopDate, findingSeverity, null, null);
 		}
 
 		/**
@@ -873,12 +892,17 @@ public class PatientChartSerializer {
 		 * for an active order. The widest is the rung that takes {@link #orderDrugNamed} — named and
 		 * not located, because the ladder has repeatedly grown under a "the one below is the full one"
 		 * sentence, which is what this javadoc used to say.
+		 *
+		 * <p>Since issue #516 it also takes {@link #findingPartners}, immediately after
+		 * {@link #findingSeverity}, and so does the widest rung — for the tail constraint the widest
+		 * constructor's javadoc states: this rung keeps its list tail and the widest its list-then-Boolean
+		 * one. The finding-rating rung above defaults it to empty.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, List<Integer> derivedFrom) {
+				String findingSeverity, List<String> findingPartners, List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, derivedFrom, null, null);
+					orderStopDate, findingSeverity, findingPartners, derivedFrom, null, null);
 		}
 
 		/**
@@ -903,11 +927,15 @@ public class PatientChartSerializer {
 		 * order-currency one. Appending it here, or giving it a rung beneath this one, breaks a tail
 		 * and reddens that guard — so read the constraint as binding any future parameter, not as
 		 * #276's own.
+		 *
+		 * <p><b>Issue #516 answered it the same way again</b>, inserting {@link #findingPartners} after
+		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
+		 * was.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, List<Integer> derivedFrom, List<String> dosingCeilings,
-				Boolean orderDrugNamed) {
+				String findingSeverity, List<String> findingPartners, List<Integer> derivedFrom,
+				List<String> dosingCeilings, Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -918,6 +946,10 @@ public class PatientChartSerializer {
 			this.orderActive = orderActive;
 			this.orderStopDate = orderStopDate;
 			this.findingSeverity = findingSeverity;
+			// Copied and wrapped, and never null, for the reason derivedFrom below is.
+			this.findingPartners = findingPartners == null || findingPartners.isEmpty()
+					? Collections.<String> emptyList()
+					: Collections.unmodifiableList(new ArrayList<String>(findingPartners));
 			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
 			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
 			// reader branches on absence — empty is the honest answer wherever nothing was resolved.
@@ -1106,6 +1138,14 @@ public class PatientChartSerializer {
 		 */
 		public String getFindingSeverity() {
 			return findingSeverity;
+		}
+
+		/**
+		 * @return the active orders this injected finding names — see {@link #findingPartners} — never
+		 *         null, and empty on every record that is not an injected {@code safety_finding}
+		 */
+		public List<String> getFindingPartners() {
+			return findingPartners;
 		}
 	}
 }

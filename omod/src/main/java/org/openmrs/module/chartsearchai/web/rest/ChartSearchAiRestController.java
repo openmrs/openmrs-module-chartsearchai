@@ -2022,13 +2022,14 @@ public class ChartSearchAiRestController {
 	 * carried and an answer cited. A shared serializer would make one rename move three keys.
 	 */
 	/**
-	 * The wire shape of {@code findingPartners}: {@code named} active orders this response's safety
-	 * findings name, {@code stated} of them the MODEL's prose stated — the shortfall ADR Decision 99
+	 * The wire shape of {@code findingPartners}: {@code named} active orders the safety findings this
+	 * answer cited name, {@code stated} of them the MODEL's prose stated — the shortfall ADR Decision 99
 	 * moved out of {@code findingCitations}'s reach, which counts FINDINGS and so reads clean when one
 	 * finding covering five orders is cited and its prose names four.
 	 *
-	 * <p>{@code null} where no finding named an order or the check made no measurement; never a zeroed
-	 * object, because absence of the population is not a measurement of none. Read it BESIDE the answer
+	 * <p>{@code null} where the answer cited no finding naming an order or the check made no
+	 * measurement; never a zeroed object, because absence of the population is not a measurement of
+	 * none. Read it BESIDE the answer
 	 * rather than as a description of it: since ADR Decision 100 the module names the orders the prose
 	 * left out, so {@code stated < named} beside prose naming them all says the module supplied the
 	 * difference. See {@code ChartSearchService.FindingPartnerCoverage}, canonical for both.

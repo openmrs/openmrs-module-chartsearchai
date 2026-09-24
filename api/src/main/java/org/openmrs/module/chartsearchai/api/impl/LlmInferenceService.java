@@ -268,13 +268,15 @@ public class LlmInferenceService implements ChartSearchService {
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
 					patient, chart.getMappings(), pairExtent);
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
-			// COMPLETED below, so what a client is handed names every order its findings cover. Two
-			// different answers to two different questions — see FindingPartnerCoverage.
+			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
+			// (issue #516) — `cited`, off the injected records, and never the chips above, which include
+			// findings the answer never mentioned. Two different answers to two different questions —
+			// see FindingPartnerCoverage.
 			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
-					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), safetyWarnings);
+					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), cited,
+							chart.getMappings());
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
-					response.getAnswer(),
-					FindingPartnerCoverageCheck.unstatedPartners(response.getAnswer(), safetyWarnings));
+					response.getAnswer(), cited, chart.getMappings());
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
 			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
@@ -768,13 +770,15 @@ public class LlmInferenceService implements ChartSearchService {
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
 					patient, chart.getMappings(), pairExtent);
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
-			// COMPLETED below, so what a client is handed names every order its findings cover. Two
-			// different answers to two different questions — see FindingPartnerCoverage.
+			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
+			// (issue #516) — `cited`, off the injected records, and never the chips above, which include
+			// findings the answer never mentioned. Two different answers to two different questions —
+			// see FindingPartnerCoverage.
 			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
-					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), safetyWarnings);
+					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), cited,
+							chart.getMappings());
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
-					response.getAnswer(),
-					FindingPartnerCoverageCheck.unstatedPartners(response.getAnswer(), safetyWarnings));
+					response.getAnswer(), cited, chart.getMappings());
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
 			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
@@ -831,7 +835,8 @@ public class LlmInferenceService implements ChartSearchService {
 	 * the order-driven contraindication arm by text the module itself just wrote would be circular:
 	 * the ticket's M8 and N5 cells are a model's answer raising a chip the question alone does not.
 	 * So the chips beside this answer are the findings it states. The partner completion (ADR Decision
-	 * 100) still runs over it and finds nothing to add where the findings name every order.
+	 * 100) still runs over it, over the findings it cites — every one, by construction — and finds
+	 * nothing to add where the composed text names every order they cover.
 	 *
 	 * <p>The streaming consumers are handed the same things in the same order as on the model's path —
 	 * the text once, then the citations, then the early answer — so a streaming client sees an answer
@@ -849,7 +854,7 @@ public class LlmInferenceService implements ChartSearchService {
 		List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate("", question, patient,
 				mappings, pairExtent);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
-				FindingPartnerCoverageCheck.unstatedPartners(composed, safetyWarnings));
+				extractCitedReferences(composed, null, mappings), mappings);
 		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is
 		// about an ended order today: strengthRank refuses the ended-order clauses, so a question whose
 		// findings carry one keeps the model call.

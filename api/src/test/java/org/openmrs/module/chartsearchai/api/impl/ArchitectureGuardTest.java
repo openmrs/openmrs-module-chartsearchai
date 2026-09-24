@@ -194,6 +194,12 @@ public class ArchitectureGuardTest {
 	 * over a real arrangement that injects such a record. The two halves are different kinds of
 	 * question on purpose; neither alone is the property those three judgements need.
 	 *
+	 * <p><b>Since issue #516 this rung also carries {@code RecordMapping.getFindingPartners()}</b>, as
+	 * does the widest, so this case and {@link #theOrderNamingStampIsWrittenInOnePlace} confine that
+	 * stamp's writer to the injector CLASS as well. To the class and not to its findings loop, for the
+	 * reason the paragraph above gives of the provenance list: the pool cannot say which of the
+	 * class's constructions passes it.
+	 *
 	 * <p>The canaries that stop this forbidding nothing are enumerated once, on
 	 * {@link #assertSoleInjectorCallerOfMappingConstructor}, which holds them. A copy of that list
 	 * stood here until the two cases were unified.
@@ -1294,14 +1300,15 @@ public class ArchitectureGuardTest {
 	 * forms it strips and which residues survive.
 	 *
 	 * <p><b>The NEEDLES are shared; the polarity is not.</b> Both marker rules and
-	 * {@link #theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck} forbid these spellings,
+	 * {@link #assertTakesItsCitedReadingFromTheExtentCheck} — the finding-severity and the
+	 * finding-partner rules — forbid these spellings,
 	 * so a third dialect added to one copy and not the other would leave the other blind while both
 	 * reported success by finding nothing — the drift
 	 * {@link #assertMarkersReachedOnlyThroughTheSharedDecodeStep}'s own javadoc exists to prevent,
 	 * arriving through the duplicate rather than through a parameter. What is deliberately NOT hoisted
 	 * is each rule's required call: the marker rules REQUIRE {@code ChartSearchAiUtils.citedIndexes(}
-	 * and the finding-severity rule FORBIDS it, so one signature over both polarities is what that
-	 * javadoc rightly refuses.
+	 * and the finding-severity and finding-partner rules FORBID it, so one signature over both
+	 * polarities is what that javadoc rightly refuses.
 	 */
 	private static boolean namesAMarkerDialect(String code) {
 		return code.contains("\\[") || code.contains("INLINE_CITATION");
@@ -1441,7 +1448,9 @@ public class ArchitectureGuardTest {
 	 * the point. What the two rules do share is the comment strip, and that one IS hoisted —
 	 * {@link #codeLines}, so a comment form closed in one copy cannot be left open in the other. What
 	 * stays duplicated is each rule's own loop and needles, because one signature over both
-	 * polarities is what would put two needle sets behind it.
+	 * polarities is what would put two needle sets behind it. This rule's loop is shared, since issue
+	 * #516, with {@link #theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck}, whose
+	 * polarity is this one's — {@link #assertTakesItsCitedReadingFromTheExtentCheck}.
 	 *
 	 * <p><b>Stated POSITIVELY, for the reason its neighbours record:</b> forbidding spellings alone
 	 * let three of four ordinary relocations through with the build green, and what closes them is
@@ -1472,7 +1481,51 @@ public class ArchitectureGuardTest {
 	 */
 	@Test
 	public void theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck() throws IOException {
-		String fileName = "SafetyFindingSeverityFidelityCheck.java";
+		assertTakesItsCitedReadingFromTheExtentCheck("SafetyFindingSeverityFidelityCheck.java", true,
+				"this key has its own reading again and can accuse a finding the answer never cited — "
+						+ "the issue #409 defect, which no behavioural case in this package can see.");
+	}
+
+	/**
+	 * {@code FindingPartnerCoverageCheck} decides which findings' orders ADR Decision 100 appends, and
+	 * which findings {@code findingPartners} counts, by asking
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/516">#516</a>, whose
+	 * owner named that method as the only reading of the question.
+	 *
+	 * <p>The sibling case above, over the same body, for the same reason: for a non-blank answer a
+	 * marker scan spelled here answers identically on every case in
+	 * {@code CitedFindingPartnerCompletionTest}, so no behavioural case can see the relocation. It
+	 * does NOT forbid a {@code Pattern.compile}: this class needs one to compare order names, and that
+	 * pattern recognises no citation shape. The marker-dialect negatives are what stand in for that
+	 * clause here, and the residues the sibling's javadoc names are this case's too.
+	 *
+	 * <p>It does not read the call's ARGUMENTS. A call handed {@code null} for the answer satisfies it
+	 * and takes the blank-answer branch, which returns the whole resolution — the issue #409 union of
+	 * the structured {@code citations} array and the prose markers. That reading IS behaviourally
+	 * visible: {@code CitedFindingPartnerCompletionTest.aFindingOnlyTheStructuredCitationsArrayListsHasNoOrderAppended}
+	 * and its {@code searchStreaming_} twin redden on it.
+	 */
+	@Test
+	public void theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck() throws IOException {
+		assertTakesItsCitedReadingFromTheExtentCheck("FindingPartnerCoverageCheck.java", false,
+				"the appended sentence and findingPartners have a reading of their own again, and can "
+						+ "come to cover a finding the published findingCitations count says the answer "
+						+ "never cited — the issue #516 defect's population, one reading over.");
+	}
+
+	/**
+	 * The shared body of the two cases above: {@code fileName} CALLS the one reading of which findings
+	 * the answer cited and reads no citation marker itself. Hoisted rather than copied — this file's
+	 * own javadoc records a copied guard body losing a canary within one commit
+	 * ({@link #assertSoleCallerOfStampCarryingConstructor}).
+	 *
+	 * @param forbidPatterns whether a first {@code Pattern.compile} in the file is itself a dialect,
+	 *        which is true of a class that recognises no shape at all
+	 * @param consequence what the missing call costs, stated in the failure
+	 */
+	private static void assertTakesItsCitedReadingFromTheExtentCheck(String fileName,
+			boolean forbidPatterns, String consequence) throws IOException {
 		List<String> lines = getSourceCache().get(fileName);
 		org.junit.jupiter.api.Assertions.assertNotNull(lines, "precondition: " + fileName
 				+ " was not found by the source scan, so this rule would pass vacuously");
@@ -1497,12 +1550,13 @@ public class ArchitectureGuardTest {
 		}
 		org.junit.jupiter.api.Assertions.assertTrue(callsTheReading, fileName
 				+ " must take \"which findings did the answer cite\" from "
-				+ "SafetyFindingCitationExtentCheck.citedFindingIndexes. If that call is gone, this "
-				+ "key has its own reading again and can accuse a finding the answer never cited — "
-				+ "the issue #409 defect, which no behavioural case in this package can see.");
-		org.junit.jupiter.api.Assertions.assertEquals(0, compiles, fileName
-				+ " must compile no pattern of its own: it recognises no shape, and a first "
-				+ "Pattern.compile here is a citation-marker dialect.");
+				+ "SafetyFindingCitationExtentCheck.citedFindingIndexes. If that call is gone, "
+				+ consequence);
+		if (forbidPatterns) {
+			org.junit.jupiter.api.Assertions.assertEquals(0, compiles, fileName
+					+ " must compile no pattern of its own: it recognises no shape, and a first "
+					+ "Pattern.compile here is a citation-marker dialect.");
+		}
 		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(), fileName
 				+ " must not read the answer's markers itself — not a bracketed regex, not "
 				+ "INLINE_CITATION, and not the shared decode step directly. The reading it needs "

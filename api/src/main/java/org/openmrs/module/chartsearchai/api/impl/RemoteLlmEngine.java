@@ -333,7 +333,8 @@ public class RemoteLlmEngine implements LlmEngine {
 	 *
 	 * <p><b>ADR Decision 102 declined DEBUG for the safety-finding shortfall (#439), and this is
 	 * the distinction rather than a departure.</b> It declined a SECOND channel — Decision 100
-	 * already appends every unstated order to the answer, so "a channel nobody needs is not worth
+	 * already appends to the answer the unstated orders of the findings it cites, and the chips
+	 * carry the orders each finding names, so "a channel nobody needs is not worth
 	 * the bytes of PHI it writes". Here the BODY has no first channel. The status code reaches
 	 * the operator twice over — the ERROR line below, and the controller logging the
 	 * {@code APIException} — but what the endpoint actually SAID reaches nothing else: both

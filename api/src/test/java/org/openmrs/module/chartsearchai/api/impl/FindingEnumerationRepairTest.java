@@ -392,21 +392,30 @@ public class FindingEnumerationRepairTest {
 						+ "short while the returned one is whole. Streamed: " + streamed);
 	}
 
-	/** An answer that names each cited record in one flat clause — the ticket's own shape. */
-	private static String enumerationCiting(Iterable<Integer> indexes) {
+	/** An answer that names each cited record in one flat clause — the ticket's own shape, naming the
+	 *  order each finding is about. */
+	private String enumerationCiting(Iterable<Integer> indexes) {
 		StringBuilder prose = new StringBuilder("No — Clarithromycin should not be started");
 		String separator = ": ";
 		for (Integer index : indexes) {
-			prose.append(separator).append("Clarithromycin interacts with an active order [")
-					.append(index).append("]");
+			prose.append(separator).append("Clarithromycin interacts with her ").append(ordersOf(index))
+					.append(" [").append(index).append("]");
 			separator = ", ";
 		}
 		return prose.append(".").toString();
 	}
 
 	/** The shape a repair answer takes: the omitted finding alone, in the same clause form. */
-	private static String continuationCiting(Integer index) {
-		return "Clarithromycin interacts with an active order [" + index + "], Moderate.";
+	private String continuationCiting(Integer index) {
+		return "Clarithromycin interacts with her " + ordersOf(index) + " [" + index + "], Moderate.";
+	}
+
+	/** The orders the injected finding at {@code index} names, read off its own record — so an answer
+	 *  built here names what that finding covers and ADR Decision 100's completion has nothing to add
+	 *  (issue #516: it covers the findings an answer CITES, and every answer here cites some). */
+	private String ordersOf(Integer index) {
+		return String.join(" and ",
+				DrugReferenceTestSupport.findingAt(chart, index.intValue()).getFindingPartners());
 	}
 
 	private static Set<String> setOf(String... values) {

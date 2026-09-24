@@ -526,15 +526,37 @@ public final class DrugReferenceTestSupport {
 	private static PatientChart injectedFindingsOver(PatientChart base, String question,
 			Set<String> activeDrugs, Set<String> activeAtcCodes, Set<String> allergies,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
-		PatientChart chart = injectorWithSafety(ddinterServiceWithGroups())
-				.injectRecords(base,
-						ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, orders), question);
+		return injectedOrThrow(ddinterServiceWithGroups(), base,
+				ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, orders), question,
+				"drugs " + activeDrugs + (allergies == null ? "" : " and allergies " + allergies));
+	}
+
+	/** The real injector with the real validator behind it over {@code service}, putting {@code base}
+	 *  through {@code injectRecords} — and the throw-on-empty contract the public forms built on it
+	 *  document, kept here so a caller cannot silently assert nothing. */
+	private static PatientChart injectedOrThrow(DrugReferenceService service, PatientChart base,
+			PatientClinicalContext context, String question, String arrangement) {
+		PatientChart chart = injectorWithSafety(service).injectRecords(base, context, question);
 		if (injectedFindings(chart).isEmpty()) {
-			throw new IllegalStateException("no safety finding was injected for drugs " + activeDrugs
-					+ (allergies == null ? "" : " and allergies " + allergies)
+			throw new IllegalStateException("no safety finding was injected for " + arrangement
 					+ " and question: " + question);
 		}
 		return chart;
+	}
+
+	/**
+	 * The injected {@code safety_finding} record at citation {@code index} in {@code chart} — for a
+	 * case composing an answer that cites it and must name what it covers (issue #516).
+	 *
+	 * @throws IllegalStateException when no injected finding carries that index
+	 */
+	public static RecordMapping findingAt(PatientChart chart, int index) {
+		for (RecordMapping mapping : injectedFindings(chart)) {
+			if (mapping.getIndex() == index) {
+				return mapping;
+			}
+		}
+		throw new IllegalStateException("no injected finding at [" + index + "]: " + chart.getText());
 	}
 
 	/**
@@ -892,6 +914,12 @@ public final class DrugReferenceTestSupport {
 	 *  question they were raised for, or the answer it arranges is about something else. */
 	public static final String SHARED_MECHANISM_QUESTION = "Is aspirin safe for her?";
 
+	/** The sentence the shared-mechanism fixture files under mechanism group 2346, which both
+	 *  corticosteroid rows carry — what tells the MERGED chip, and its finding's record, from the other
+	 *  one. One copy, read by every case that has to tell them apart. */
+	public static final String SHARED_MECHANISM_TEXT =
+			"Coadministration with corticosteroids may decrease the serum concentrations";
+
 	/**
 	 * The six-order chart the SCREENING arm is measured on: six real excerpt drugs the data relates
 	 * <b>15</b> ways, exactly 10 of them Major, so a cap and the severity ordering are both
@@ -928,10 +956,8 @@ public final class DrugReferenceTestSupport {
 	 */
 	public static List<SafetyWarning> sharedMechanismInteractionChips(PairChipExtent.Sink sink)
 			throws IOException {
-		PatientClinicalContext context = ctx(60, null,
-				set("Prednisone 5mg", "Methylprednisolone 4mg", "Heparin 5000 units"), null, null, null);
 		List<SafetyWarning> warnings = validator(serviceWith(ddiFixtureEntries(DDI_SHARED_MECHANISM_PARTNERS)))
-				.validate("", SHARED_MECHANISM_QUESTION, context, null, null, sink);
+				.validate("", SHARED_MECHANISM_QUESTION, sharedMechanismContext(), null, null, sink);
 		List<SafetyWarning> interactions = new ArrayList<SafetyWarning>();
 		for (SafetyWarning warning : warnings) {
 			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
@@ -939,6 +965,28 @@ public final class DrugReferenceTestSupport {
 			}
 		}
 		return interactions;
+	}
+
+	/**
+	 * {@code base} with the safety findings the REAL injector writes for the arrangement
+	 * {@link #sharedMechanismInteractionChips} raises its chips over — the same fixture, the same
+	 * patient and the same question, so the records a case cites and the chips it is handed are one
+	 * arrangement rather than two that happen to agree (issue #516).
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding, so a caller cannot
+	 *         silently assert nothing
+	 */
+	public static PatientChart sharedMechanismFindingsOver(PatientChart base) throws IOException {
+		return injectedOrThrow(serviceWith(ddiFixtureEntries(DDI_SHARED_MECHANISM_PARTNERS)), base,
+				sharedMechanismContext(), SHARED_MECHANISM_QUESTION, "the shared-mechanism arrangement");
+	}
+
+	/** The patient both shared-mechanism accessors are about: three active orders, two of which the
+	 *  fixture files under one mechanism. One construction, so the two cannot describe different
+	 *  patients. */
+	private static PatientClinicalContext sharedMechanismContext() {
+		return ctx(60, null,
+				set("Prednisone 5mg", "Methylprednisolone 4mg", "Heparin 5000 units"), null, null, null);
 	}
 
 	/** The chips of {@code warnings} whose {@link SafetyWarning#getType()} is {@code type}, in order. */
@@ -953,8 +1001,9 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/** Every active order {@code warnings} name, each once — {@link SafetyWarning#namedPartners()} over
-	 *  a whole response, which is the population {@code FindingPartnerCoverageCheck} measures the
-	 *  answer against. */
+	 *  a whole response. Since issue #516 {@code FindingPartnerCoverageCheck} measures an answer against
+	 *  the findings it CITED, each record carrying its chip's list, so this is that population only for
+	 *  an answer citing every finding. */
 	public static List<String> namedPartners(List<SafetyWarning> warnings) {
 		List<String> partners = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {
@@ -1151,6 +1200,26 @@ public final class DrugReferenceTestSupport {
 	 */
 	public static List<SafetyWarning> chipsOverOrders(String fixture, String question, String... displays)
 			throws IOException {
+		return validator(ddiFixtureService(fixture)).validate("", question, contextOverOrders(displays));
+	}
+
+	/**
+	 * {@code base} with the safety findings the REAL injector writes over the arrangement
+	 * {@link #chipsOverOrders} raises its chips over — the same fixture, question and orders — for a
+	 * case outside this package whose answer must CITE one of those findings (issue #516).
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding
+	 */
+	public static PatientChart findingsOverOrders(PatientChart base, String fixture, String question,
+			String... displays) throws IOException {
+		return injectedOrThrow(ddiFixtureService(fixture), base, contextOverOrders(displays), question,
+				"orders " + Arrays.asList(displays));
+	}
+
+	/** The patient {@link #chipsOverOrders} and {@link #findingsOverOrders} share: one order per
+	 *  display, each with its own uuid. One construction, so the chips and the records cannot describe
+	 *  different patients. */
+	private static PatientClinicalContext contextOverOrders(String... displays) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		Set<String> names = new LinkedHashSet<String>();
@@ -1158,8 +1227,7 @@ public final class DrugReferenceTestSupport {
 			orders.add(activeOrder("order-" + i, displays[i]));
 			names.add(displays[i]);
 		}
-		return validator(ddiFixtureService(fixture)).validate("", question,
-			ctx(40, null, names, null, null, null, orders));
+		return ctx(40, null, names, null, null, null, orders);
 	}
 
 	/**
@@ -1667,7 +1735,7 @@ public final class DrugReferenceTestSupport {
 						+ "using this record is about a record that names it: " + text);
 		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
 				order.getUuid() + "-" + index, null, text, null, 0, orderActive, stopDate, null, null, null,
-				null);
+				null, null);
 	}
 
 	/**

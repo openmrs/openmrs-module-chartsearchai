@@ -10967,10 +10967,9 @@ module held the difference on `SafetyWarning.isAboutACurrentMedication()`. On th
 it in the injected record, which reaches a client only if the model cites it, and the issue's first answer
 cited neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`); a
 contraindication line of an answer the module composes itself states it (Decision 113), a path that
-ships off. With
-`chartsearchai.drugSafety.findingsRenderedByClient` on, as it ships, the prose is asked to summarise the
-findings rather than list each one, on README's premise that every finding is published in
-`safetyWarnings`.
+ships off. With `chartsearchai.drugSafety.findingsRenderedByClient` on, as it ships, the prose is asked
+to summarise the findings rather than list each one, on README's premise that every finding is published
+in `safetyWarnings`.
 
 ### The decision
 

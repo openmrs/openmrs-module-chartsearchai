@@ -1015,12 +1015,11 @@ public class SafetyWarning {
 	 * <p><b>Published VERBATIM since issue #527, as each chip's {@code aboutACurrentMedication} wire key
 	 * — so this accessor's name IS the key</b>, the rule {@link #restsOnAnUncorroboratedChartMatch()}
 	 * states for its own. Until then this paragraph read "prompt-facing only". Public for that reason and
-	 * no other: the factories
-	 * that SET it stay package-private, for the one-directional reason that accessor gives. The chip's
-	 * own detail is untouched, so {@code DrugSafetyValidator.StatedInteractionChips} still does NOT key
-	 * on it — for the reason stated at {@link #chartOrderBridges()}, which is NOT that this is
-	 * unpublished: that key
-	 * decides which chips are EMITTED and, through {@code ChartSearchAiUtils.resourceKey}, whether two
+	 * no other: the factories that SET it stay package-private, for the one-directional reason that
+	 * accessor gives. The chip's own detail is untouched, so
+	 * {@code DrugSafetyValidator.StatedInteractionChips} still does NOT key on it — for the reason stated
+	 * at {@link #chartOrderBridges()}, which is NOT that this is unpublished: that key decides which
+	 * chips are EMITTED and, through {@code ChartSearchAiUtils.resourceKey}, whether two
 	 * injected findings share one resource uuid, so a fact like this must not be able to change which
 	 * chips exist, whether or not a client can read it. The published-versus-prompt-facing reading of
 	 * it was falsified by issue #347 and again by #374, and the key's own membership contradicts it in

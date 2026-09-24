@@ -195,14 +195,17 @@ public class SlicedReferenceRowProvenanceTest {
 	 *
 	 * <p>Structural, because what it pins is a pairing of two things a test does — sets a global
 	 * property and loads a fixture. A test source "turns the tier on" when it names the property's
-	 * constant or its value, a mention in a comment included, so this fails closed — or when a test class
-	 * its {@code extends} or {@code implements} clause names does, transitively, since a subclass runs the
-	 * {@code @BeforeEach} it inherits. The fixtures it
+	 * constant or its value, a mention in a comment included, so this fails closed, or a test class's
+	 * compile-time {@code String} constant holding that value — or when a test class its {@code extends}
+	 * or {@code implements} clause names does, transitively, since a subclass runs the
+	 * {@code @BeforeEach} it inherits; a nested supertype counts as its outer class, qualified or imported
+	 * by a single-type import. The fixtures it
 	 * counts as loaded are those {@code FixtureReach} finds its text naming: a string literal, a test
 	 * class's compile-time {@code String} constant, or a test class's method whose body reaches one,
 	 * transitively — and those of any test class its {@code extends} or {@code implements} clause names.
 	 * Among what it cannot see: a constant of a type other than {@code String}, a fixture
-	 * name assembled at runtime, a member inherited from a class the file never names, a method called
+	 * name assembled at runtime, the property's key returned by a method, a nested supertype imported
+	 * on demand, a member inherited from a class the file never names, a method called
 	 * on an object whose class the file never names, a walk over the fixture directory, the property set
 	 * by an XML dataset, the property set by a supertype outside these test sources, an omod test class's
 	 * constants beyond what omod's last build compiled, and
@@ -262,6 +265,15 @@ public class SlicedReferenceRowProvenanceTest {
 				"a class must count as turning the tier on where a test class it extends does, whose @BeforeEach it inherits");
 		assertFalse(turnsTheDerivedTierOn("class Probe extends ReferenceRecordRowAttributionTest {}", reach, byClass),
 				"a class must not count as turning the tier on merely by extending a test class that does not");
+		assertTrue(reach.named("import org.openmrs.module.chartsearchai.reference.ReferenceRecordRowAttributionTest.Nested;\n"
+				+ "class Probe implements Nested {}").contains("ddi-route-variants.json"),
+				"a class must inherit what a nested supertype's outer class loads where an import lets the clause name it bare");
+		assertTrue(turnsTheDerivedTierOn("import org.openmrs.module.chartsearchai.reference.ConditionMediatedFindingTest.Base;\n"
+				+ "class Probe extends Base {}", reach, byClass),
+				"a class must count as turning the tier on where it extends, through an import, a type nested in a class that does");
+		assertTrue(turnsTheDerivedTierOn("class Probe { String key = SlicedReferenceRowProvenanceTest.DerivedKeyAlias.KEY; }",
+				reach, byClass),
+				"a class must count as turning the tier on where it names a test class's constant holding the property's key");
 
 		Set<String> derivedOn = new TreeSet<String>();
 		Map<String, Set<String>> refused = new TreeMap<String, Set<String>>();
@@ -354,8 +366,9 @@ public class SlicedReferenceRowProvenanceTest {
 
 	/**
 	 * @return whether {@code source}, or the file of one of its {@link FixtureReach#supertypes}, names
-	 *         the derived-findings property's constant or its value, a comment included — a subclass
-	 *         inherits the {@code @BeforeEach} that sets it without ever naming it
+	 *         the derived-findings property's constant or its value, a comment included, or names a test
+	 *         class's constant holding that value — a subclass inherits the {@code @BeforeEach} that sets
+	 *         it without ever naming it
 	 */
 	private static boolean turnsTheDerivedTierOn(String source, FixtureReach reach, Map<String, String> byClass) {
 		List<String> texts = new ArrayList<String>(Collections.singletonList(source));
@@ -364,7 +377,8 @@ public class SlicedReferenceRowProvenanceTest {
 		}
 		for (String text : texts) {
 			if (text.contains("GP_DRUG_SAFETY_DERIVED_FINDINGS")
-					|| text.contains(ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS)) {
+					|| text.contains(ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS)
+					|| reach.namesAConstantValued(text, ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS)) {
 				return true;
 			}
 		}
@@ -394,6 +408,9 @@ public class SlicedReferenceRowProvenanceTest {
 
 		private static final Pattern WORD = Pattern.compile("[A-Za-z_$][\\w$]*");
 
+		/** A single-type import's last two names — an outer class and the type nested in it, where the first is a test class. */
+		private static final Pattern NESTED_IMPORT = Pattern.compile("\\bimport\\s+[\\w.\\s]*?(\\w+)\\s*\\.\\s*(\\w+)\\s*;");
+
 		private static final Set<String> NOT_A_METHOD = new HashSet<String>(Arrays.asList("if", "for", "while",
 				"switch", "catch", "synchronized", "try", "return"));
 
@@ -404,6 +421,9 @@ public class SlicedReferenceRowProvenanceTest {
 
 		/** top-level class, its nested classes' included → constant name → the fixtures values under it name. */
 		private final Map<String, Map<String, Set<String>>> constants = new HashMap<String, Map<String, Set<String>>>();
+
+		/** top-level class, its nested classes' included → constant name → every {@code String} value under it. */
+		private final Map<String, Map<String, Set<String>>> strings = new HashMap<String, Map<String, Set<String>>>();
 
 		/** top-level class → method name → every body declared under that name. */
 		private final Map<String, Map<String, List<String>>> methods = new HashMap<String, Map<String, List<String>>>();
@@ -436,6 +456,8 @@ public class SlicedReferenceRowProvenanceTest {
 						String binary = file.getFileName().toString();
 						String top = binary.substring(0, binary.length() - ".class".length()).split("\\$")[0];
 						for (Map.Entry<String, String> constant : constantStrings(file).entrySet()) {
+							strings.computeIfAbsent(top, k -> new HashMap<String, Set<String>>())
+									.computeIfAbsent(constant.getKey(), k -> new TreeSet<String>()).add(constant.getValue());
 							String fixture = fixtureIn(constant.getValue());
 							if (fixture != null) {
 								constants.computeIfAbsent(top, k -> new HashMap<String, Set<String>>())
@@ -461,18 +483,28 @@ public class SlicedReferenceRowProvenanceTest {
 
 		/**
 		 * @return the top-level test classes {@code source}'s {@code extends} and {@code implements}
-		 *         clauses name, a nested type's outer class included, and theirs, transitively — each once.
-		 *         A clause of any type declaration in the file counts, a nested one's included; a
-		 *         supertype outside these test sources is not walked.
+		 *         clauses name, and theirs, transitively — each once. A nested type counts as its outer
+		 *         class, whether the clause qualifies it or names it bare under a single-type import of it;
+		 *         a type-import-on-demand is not read. A clause of any type declaration in the file counts,
+		 *         a nested one's included; a supertype outside these test sources is not walked.
 		 */
 		Set<String> supertypes(String source) {
 			Set<String> out = new TreeSet<String>();
 			java.util.Deque<String> pending = new java.util.ArrayDeque<String>(Collections.singleton(source));
 			while (!pending.isEmpty()) {
-				Matcher clause = SUPERTYPES.matcher(withoutLiterals(withoutComments(pending.pop())));
+				String text = withoutLiterals(withoutComments(pending.pop()));
+				Map<String, String> outerOf = new HashMap<String, String>();
+				Matcher imported = NESTED_IMPORT.matcher(text);
+				while (imported.find()) {
+					if (code.containsKey(imported.group(1))) {
+						outerOf.put(imported.group(2), imported.group(1));
+					}
+				}
+				Matcher clause = SUPERTYPES.matcher(text);
 				while (clause.find()) {
-					for (String type : words(clause.group(1))) {
-						if (code.containsKey(type) && out.add(type)) {
+					for (String word : words(clause.group(1))) {
+						String type = code.containsKey(word) ? word : outerOf.get(word);
+						if (type != null && out.add(type)) {
 							pending.push(code.get(type));
 						}
 					}
@@ -491,6 +523,25 @@ public class SlicedReferenceRowProvenanceTest {
 		/** @return the fixtures {@code owner.member} reaches; empty for a member that names none. */
 		Set<String> of(String owner, String member) {
 			return closure(Collections.singletonList(new String[] { owner, member }), new TreeSet<String>());
+		}
+
+		/**
+		 * @return whether {@code source}'s own text names a test class's compile-time {@code String}
+		 *         constant whose value is {@code value}, under the rule a fixture constant is named by; a
+		 *         method returning such a value is not followed
+		 */
+		boolean namesAConstantValued(String source, String value) {
+			String text = withoutComments(source);
+			Set<String> words = words(text);
+			for (String owner : classesNamedIn(text, null)) {
+				for (Map.Entry<String, Set<String>> constant : strings.getOrDefault(owner,
+						Collections.<String, Set<String>> emptyMap()).entrySet()) {
+					if (constant.getValue().contains(value) && words.contains(constant.getKey())) {
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 
 		/**
@@ -719,5 +770,14 @@ public class SlicedReferenceRowProvenanceTest {
 			}
 			throw new AssertionError("unbalanced braces after offset " + open);
 		}
+	}
+
+	/**
+	 * A test class's constant holding the derived-findings property's key under a name of its own, compiled
+	 * so the scan's anchor has one to resolve a probe naming it through.
+	 */
+	private static final class DerivedKeyAlias {
+
+		static final String KEY = ChartSearchAiConstants.GP_DRUG_SAFETY_DERIVED_FINDINGS;
 	}
 }

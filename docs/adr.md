@@ -8554,7 +8554,9 @@ and on the streaming endpoint it was a statement on the success path: at the tai
 one. The four streamed channels — `token`, `thinking`, `preliminary`, `references` — write through
 `writeSseEventOrThrow`, which turns an `IOException` into a `RuntimeException`; that unwinds out of
 `searchStreaming` past both of those sites into the catch-all, whose `e.getCause() instanceof
-IOException` test reads it as a benign client hang-up and returns at DEBUG. So a user holding *AI
+IOException` test reads it as a benign client hang-up and returns at DEBUG. (Since
+[#451](https://github.com/openmrs/openmrs-module-chartsearchai/issues/451) that test is
+`instanceof ClientDisconnectedException`, the type `writeSseEventOrThrow` throws.) So a user holding *AI
 Query Patient Data* could read a streamed answer about any patient and then reset the socket, and
 nothing recorded the query. Because `checkRateLimit` counts persisted rows, it was also uncounted;
 the ticket calls that a secondary effect and so does this.

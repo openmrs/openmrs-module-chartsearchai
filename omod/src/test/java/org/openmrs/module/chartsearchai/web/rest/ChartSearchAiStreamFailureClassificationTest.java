@@ -75,13 +75,12 @@ public class ChartSearchAiStreamFailureClassificationTest {
 				assertEquals(Arrays.asList("token", "error"), SseEvents.types(out),
 						"a failed inference must end the stream with an error event, not in silence;"
 								+ " asyncGrounding=" + asyncGrounding);
-				assertTrue(capture.hasThrowableAt(Level.ERROR),
-						"the operator must get an ERROR carrying the failure. Captured: "
-								+ capture.describeAll());
-				assertTrue(capture.hasMessageAt(Level.ERROR, "Chart search streaming failed",
-						"[id=" + StreamingChartSearchStub.PATIENT.getPatientId() + "]"),
-						"naming the patient the failed answer was about. Captured: "
-								+ capture.describeAll());
+				Throwable logged = capture.thrownWith(Level.ERROR, "Chart search streaming failed",
+						"[id=" + StreamingChartSearchStub.PATIENT.getPatientId() + "]");
+				assertTrue(logged instanceof APIException
+						&& logged.getCause() == EndpointHangsUpAfterATokenStub.RESET,
+						"the operator must get an ERROR naming the patient and carrying the engine's "
+								+ "failure with its transport cause. Captured: " + capture.describeAll());
 				assertFalse(capture.hasMessageAt(Level.DEBUG, DISCONNECT_LINE),
 						"the client did not disconnect, and no line may say it did. Captured: "
 								+ capture.describeAll());
@@ -94,6 +93,15 @@ public class ChartSearchAiStreamFailureClassificationTest {
 	public void aClientGoneOnATokenFrameIsADisconnect() {
 		for (boolean asyncGrounding : new boolean[] { false, true }) {
 			assertQuietDisconnect(0, asyncGrounding, "token");
+		}
+	}
+
+	/** A client gone on the {@code references} frame, which {@code sendReferencesEvent} composes. */
+	@Test
+	public void aClientGoneOnTheReferencesFrameIsADisconnect() {
+		for (boolean asyncGrounding : new boolean[] { false, true }) {
+			assertQuietDisconnect(StreamingChartSearchStub.FRAGMENTS.length, asyncGrounding,
+					"references");
 		}
 	}
 
@@ -154,14 +162,15 @@ public class ChartSearchAiStreamFailureClassificationTest {
 	 */
 	private static final class EndpointHangsUpAfterATokenStub extends StreamingChartSearchStub {
 
+		static final IOException RESET = new IOException("Connection reset");
+
 		@Override
 		public ChartAnswer searchStreaming(Patient patient, String question,
 				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 				Consumer<List<RecordReference>> citationsConsumer,
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 			tokenConsumer.accept(FRAGMENTS[0]);
-			IOException reset = new IOException("Connection reset");
-			throw new APIException("Failed to call remote LLM API: " + reset.getMessage(), reset);
+			throw new APIException("Failed to call remote LLM API: " + RESET.getMessage(), RESET);
 		}
 	}
 }

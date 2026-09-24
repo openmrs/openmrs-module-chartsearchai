@@ -423,9 +423,10 @@ public class ChartSearchAiChartAlertsTest {
 	 * <p>Not decoration, and the wrapper it exercises is not the outer list. {@code serializeSafetyWarnings}
 	 * copies each chip's {@code chartOrderBridges} into an {@code ArrayList} precisely because
 	 * {@code XStreamMarshaller} refuses {@code java.util.Collections}' immutable wrappers — the EMPTY
-	 * case included — and every standing alert is a contraindication, whose three-argument constructor
-	 * sets that field to {@code Collections.emptyList()}. So this surface hands the marshaller the
-	 * refused shape on its ordinary path, not an exotic one. The unscreened half is here because that
+	 * case included — and every standing alert is a contraindication, which carries no bridge, and
+	 * {@code SafetyWarning} stores an empty one as {@code Collections.emptyList()}. So this surface hands
+	 * the marshaller the refused shape on its ordinary path, not an exotic one. The unscreened half is here
+	 * because that
 	 * payload's {@code alerts} is empty, which is the arrangement an XML client sees on a disabled
 	 * install.
 	 */

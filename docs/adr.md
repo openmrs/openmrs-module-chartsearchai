@@ -10967,10 +10967,10 @@ module held the difference on `SafetyWarning.isAboutACurrentMedication()`. On th
 it in the injected record, which reaches a client only if the model cites it, and the issue's first answer
 cited neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`); a
 contraindication line of an answer the module composes itself states it (Decision 113), a path that
-ships off. With `chartsearchai.drugSafety.findingsRenderedByClient` on, as it ships, the prose is asked
-to summarise the findings rather than list each one, on
-[Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)'s
-premise that every finding is published in `safetyWarnings`.
+ships off.
+[Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)
+rests on the premise that every finding is published in `safetyWarnings`; the referent was the part of a
+finding the chip did not carry.
 
 ### The decision
 
@@ -11010,8 +11010,8 @@ premise that every finding is published in `safetyWarnings`.
 ### Residues
 
 - **The published chips are the chips pass's, not the prompt pass's**, and the two can state different
-  referents for one drug; the accessor's javadoc says how. Decision 110's last residue records the same
-  shape for `aboutAnEndedOrder`.
+  referents for one drug; the accessor's javadoc says what the chips pass has in play. Decision 110's
+  residue on a row the answer adds records the same shape for `aboutAnEndedOrder`.
 - **`false` for a drug the question named that she takes is the proposal vocabulary open
   [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402) and
   [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513) track.** README names it as

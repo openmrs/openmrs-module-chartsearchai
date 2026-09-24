@@ -996,15 +996,12 @@ public class SafetyWarning {
 	 * the second pass, which is not the same on every path. {@code LlmInferenceService.search} and
 	 * {@code searchStreaming} hand it the MODEL's answer, and a drug the answer names is in play there
 	 * beside the question's unless a record the answer is attributable to already names it
-	 * ({@code DrugSafetyValidator.isEchoOfAttributableRecord}). The injected record of every finding the
+	 * ({@code DrugSafetyValidator.isEchoOfAttributableRecord}); the injected record of every finding the
 	 * first pass raised names that finding's drug, and the attributable records include the module's own
-	 * uncited, so a drug the answer names that a finding's record already names leaves the referent
-	 * alone. What can move it: a sibling ROW of the substance that no such record names puts the whole
-	 * substance in play, and the order-driven arm then answers false for every row of it — ADR Decision
-	 * 110's last residue is that shape; and a chip only the second pass raises has no first-pass
-	 * referent to agree with.
-	 * {@code answerFromTheModule} hands it the EMPTY answer, as the pass that raised the findings had.
-	 * Nothing compares the two passes' warnings; ADR Decision 118 records the divergence as a residue.
+	 * uncited. {@code answerFromTheModule} hands it the EMPTY answer, as the pass that raised the findings
+	 * had. The ways the two passes' answers can still differ are not listed here: two lists written here
+	 * were each found incomplete. Nothing compares the two passes' warnings; ADR Decision 118 records the
+	 * divergence as a residue.
 	 * Said here because a reader checking for pass-stability will look for it.
 	 *
 	 * <p>It is not derivable from anything else the warning carries, which is why it travels. In

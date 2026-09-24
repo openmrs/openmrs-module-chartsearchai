@@ -200,7 +200,8 @@ public class SlicedReferenceRowProvenanceTest {
 	 * or {@code implements} clause names does, transitively, since a subclass runs the
 	 * {@code @BeforeEach} it inherits; a nested supertype counts as its outer class, qualified or imported
 	 * by a single-type import. The fixtures it
-	 * counts as loaded are those {@code FixtureReach} finds its text naming: a string literal, a test
+	 * counts as loaded are those {@code FixtureReach} finds its text naming: a string literal a fixture file
+	 * name occurs in on a name boundary, beside other text or not ({@code FixtureReach.fixturesIn}), a test
 	 * class's compile-time {@code String} constant, or a test class's method whose body reaches one,
 	 * transitively — and those of any test class its {@code extends} or {@code implements} clause names.
 	 * Among what it cannot see: a constant of a type other than {@code String}, a fixture
@@ -258,6 +259,11 @@ public class SlicedReferenceRowProvenanceTest {
 		assertTrue(reach.named("class Probe implements ReferenceRecordRowAttributionTest.Nested {}")
 				.contains("ddi-route-variants.json"),
 				"a class must inherit what a nested supertype's outer class loads, through implements as well as extends");
+		assertEquals(Collections.singleton("ddi-self-interaction.json"),
+				reach.named("class Probe { @CsvSource({ \"ddi-self-interaction.json, Can I give metformin?\" }) void t() {} }"),
+				"a literal naming a fixture beside other text, as a @CsvSource row does, must resolve to that fixture");
+		assertEquals(Collections.<String> emptySet(), reach.named("class Probe { String s = \"xddi-self-interaction.json\"; }"),
+				"a longer file name ending in a fixture's name must not resolve to that fixture");
 		assertFalse(reach.named("class Probe { java.util.List<? extends Object> x = DrugReferenceTestSupport.set(); }")
 				.contains("ddi-knowledge-base-sample.json"),
 				"a wildcard bound is not a supertype, so it must not pull in the whole file of a class named after it");
@@ -386,9 +392,10 @@ public class SlicedReferenceRowProvenanceTest {
 	}
 
 	/**
-	 * Which fixtures a test source names. A member is a test class's compile-time {@code String} constant
-	 * whose value names a fixture — read from the compiled class's {@code ConstantValue} attributes, so
-	 * the declaration's spelling does not matter — or a test class's method, whose fixtures are those its
+	 * Which fixtures a test source names. A string literal names every fixture {@link #fixturesIn} finds
+	 * in it. A member is a test class's compile-time {@code String} constant whose value names a fixture,
+	 * by the same rule — read from the compiled class's {@code ConstantValue} attributes, so the
+	 * declaration's spelling does not matter — or a test class's method, whose fixtures are those its
 	 * body names, closed transitively. A text names a member when the member's name occurs in it as a
 	 * word and the member's top-level class is the text's own or is named anywhere in the file the text
 	 * belongs to — every way of qualifying, importing or extending a class, a nested one's included,
@@ -458,10 +465,10 @@ public class SlicedReferenceRowProvenanceTest {
 						for (Map.Entry<String, String> constant : constantStrings(file).entrySet()) {
 							strings.computeIfAbsent(top, k -> new HashMap<String, Set<String>>())
 									.computeIfAbsent(constant.getKey(), k -> new TreeSet<String>()).add(constant.getValue());
-							String fixture = fixtureIn(constant.getValue());
-							if (fixture != null) {
+							Set<String> named = fixturesIn(constant.getValue());
+							if (!named.isEmpty()) {
 								constants.computeIfAbsent(top, k -> new HashMap<String, Set<String>>())
-										.computeIfAbsent(constant.getKey(), k -> new TreeSet<String>()).add(fixture);
+										.computeIfAbsent(constant.getKey(), k -> new TreeSet<String>()).addAll(named);
 							}
 						}
 					}
@@ -587,10 +594,7 @@ public class SlicedReferenceRowProvenanceTest {
 		private List<String[]> references(String text, Set<String> classes, Set<String> out) {
 			Matcher literal = LITERAL.matcher(text);
 			while (literal.find()) {
-				String fixture = fixtureIn(literal.group(1));
-				if (fixture != null) {
-					out.add(fixture);
-				}
+				out.addAll(fixturesIn(literal.group(1)));
 			}
 			Set<String> words = words(text);
 			List<String[]> members = new ArrayList<String[]>();
@@ -621,10 +625,32 @@ public class SlicedReferenceRowProvenanceTest {
 			return out;
 		}
 
-		/** @return the fixture file {@code literal} names, by its last path segment, or null. */
-		private String fixtureIn(String literal) {
-			String name = literal.substring(literal.lastIndexOf('/') + 1);
-			return fixtures.contains(name) ? name : null;
+		/**
+		 * @return every fixture file name occurring in {@code literal} on a name boundary — the character
+		 *         before it, if any, is not a letter, digit, {@code _}, {@code -} or {@code .}, and the one
+		 *         after it, if any, is not a letter, digit, {@code _} or {@code -} — so a path, a
+		 *         {@code @CsvSource} row or a list naming a fixture beside other text all count, while
+		 *         {@code xddi-self-interaction.json} does not name {@code ddi-self-interaction.json}. A
+		 *         following {@code .} is a boundary, so {@code ddi-self-interaction.json.bak} counts as
+		 *         naming that fixture: an over-match, which can only over-report.
+		 */
+		private Set<String> fixturesIn(String literal) {
+			Set<String> out = new TreeSet<String>();
+			for (String fixture : fixtures) {
+				for (int at = literal.indexOf(fixture); at >= 0; at = literal.indexOf(fixture, at + 1)) {
+					int end = at + fixture.length();
+					if ((at == 0 || !isNameChar(literal.charAt(at - 1)) && literal.charAt(at - 1) != '.')
+							&& (end == literal.length() || !isNameChar(literal.charAt(end)))) {
+						out.add(fixture);
+						break;
+					}
+				}
+			}
+			return out;
+		}
+
+		private static boolean isNameChar(char c) {
+			return Character.isLetterOrDigit(c) || c == '_' || c == '-';
 		}
 
 		/**

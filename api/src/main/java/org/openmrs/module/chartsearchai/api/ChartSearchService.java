@@ -696,7 +696,7 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>What {@code named} counts</b> is the orders each finding the answer cited names — its
 	 * {@code safety_finding} record's copy of {@code SafetyWarning.namedPartners()} — summed over those
-	 * findings, one count per finding naming an order (issue #516). Not the response's chips: a finding
+	 * findings, one count per order each of them names (issue #516). Not the response's chips: a finding
 	 * the answer did not cite is {@code findingCitations}' to count, and ADR Decision 100 appends the
 	 * orders of the cited findings only, so {@code named} covers what that sentence can name. Empty for
 	 * the finding types naming no active order, so this is not a partner total and must not be read
@@ -704,13 +704,14 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>What {@code stated} counts</b> is those the MODEL's prose names, by containment, and it is
 	 * measured BEFORE the module names the rest itself (ADR Decision 100) — so prose naming every order
-	 * beside {@code stated < named} says the module supplied the difference. A name the model spells
-	 * differently reads as unstated, so the residue runs toward reporting a shortfall, which is the safe
-	 * direction for a diagnostic and the opposite of {@code findingCitations}'s.
+	 * beside {@code stated < named} says the module supplied the difference. Case and the spacing
+	 * around a {@code /} are ignored (issue #516); a name the model spells differently in any other way
+	 * reads as unstated, so the residue runs toward reporting a shortfall, which is the safe direction
+	 * for a diagnostic and the opposite of {@code findingCitations}'s.
 	 *
 	 * <p><b>Absence is not zero.</b> Null says the answer cited no finding, or no finding it cited named
-	 * an order, or the producer stated no measurement. {@code stated == named} is not a certificate that the prose is complete, only that
-	 * every name the check could look for appeared.
+	 * an order, or the producer stated no measurement. {@code stated == named} is not a certificate
+	 * that the prose is complete, only that every name the check could look for appeared.
 	 */
 	final class FindingPartnerCoverage {
 

@@ -608,12 +608,8 @@ public class SafetyFindingSeverityFidelityTest {
 	 *  built here names what that finding covers and ADR Decision 100's completion has nothing to add
 	 *  (issue #516: it covers the findings an answer CITES, and every answer here cites some). */
 	private String ordersOf(Integer index) {
-		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindings(chart)) {
-			if (mapping.getIndex() == index.intValue()) {
-				return String.join(" and ", mapping.getFindingPartners());
-			}
-		}
-		throw new IllegalStateException("no injected finding at [" + index + "]: " + chart.getText());
+		return String.join(" and ",
+				DrugReferenceTestSupport.findingAt(chart, index.intValue()).getFindingPartners());
 	}
 
 	private List<Integer> indexesRated(String rating) {

@@ -47,9 +47,8 @@ import org.slf4j.LoggerFactory;
  * answer cited, and pinned to it by
  * {@code ArchitectureGuardTest.theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck}.
  * Before that issue it was every chip the response raised, which the appended sentence then credited
- * to "those findings": measured on the demo seed (issue #516), an abstention citing no finding was
- * handed five orders, and an answer citing one finding eight orders from the 23 chips it did not
- * cite. A finding the answer did not cite is {@code findingCitations}' to count, and none of its
+ * to "those findings" — ADR Decision 100's amendment records what that put in front of a clinician.
+ * A finding the answer did not cite is {@code findingCitations}' to count, and none of its
  * orders is appended — the chips beside the answer carry the orders each names as
  * {@code namedPartners}; an answer citing no finding gets nothing appended and no measurement.
  *
@@ -81,9 +80,10 @@ public final class FindingPartnerCoverageCheck {
 	 * injector wrote those findings and each names its orders, each once however many cited findings
 	 * cover it; empty where the answer cited no finding.
 	 *
-	 * <p><b>Not shared with {@link #measure}</b>, which counts in a loop of its own and, since issue
-	 * #439, states no list of names at all — so there is no agreement between them left to keep. The
-	 * two never did agree in UNIT either: {@code measure} counts a partner once per cited finding that
+	 * <p><b>It shares its population and its comparison with {@link #measure}</b> — {@code citedFindings}
+	 * and {@code comparable} — so an order is stated to both or to neither; {@code measure} counts in a
+	 * loop of its own and, since issue #439, states no list of names at all. The two do not agree in
+	 * UNIT: {@code measure} counts a partner once per cited finding that
 	 * names it while this dedups, so on two cited findings naming one order {@code named - stated}
 	 * exceeds the size of the list appended to the answer. That divergence is pre-existing and this
 	 * sentence used to claim it away.

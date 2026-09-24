@@ -7751,7 +7751,7 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 completion and `findingPartners` cover the findings the answer CITED.** Both read every chip the
 response raised, and the append's own justification — *"the finding is already cited in the sentence
 the model wrote"* — holds only when every chip's finding is cited, which the single merged chip above
-was and most responses are not. Measured on the demo seed (issue #516, byte-identical across two
+was and the issue's three cells were not. Measured on the demo seed (issue #516, byte-identical across two
 runs): an abstention citing no finding was handed five orders "covered by those findings", an answer
 citing one of two Amlodipine findings was handed the other's order, and an answer citing one finding
 was handed eight orders from the 23 chips it did not cite — orders an external reviewer then graded a
@@ -7783,7 +7783,11 @@ nothing. It and its byte-for-byte control moved to `CitedFindingPartnerCompletio
 the real `LlmInferenceService` over records the real injector wrote (a reference-package test cannot
 resolve an answer's citations), and cites the merged finding; it keeps its strictness — every order of
 the cited finding must reach the answer. `FindingPartnerLogDisclosureTest`'s answers cite every
-injected finding for the same reason, its assertions unchanged.
+injected finding for the same reason, its assertions unchanged; and the answers
+`FindingEnumerationRepairTest` and `SafetyFindingSeverityFidelityTest` build now name each cited
+finding's orders, read off its record, because those harnesses stubbed the post-answer chips empty —
+which is what kept the completion out of their byte-for-byte and no-WARN assertions until the
+completion read the records instead.
 
 → `CitedFindingPartnerCompletionTest`, `SharedMechanismChipCollapseTest.eachFindingsRecordCarriesTheOrdersItsChipNames`.
 

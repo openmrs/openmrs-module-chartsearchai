@@ -46,24 +46,21 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * 100.
  *
  * <p><b>The defect.</b> The appended sentence reads <em>"Also covered by those findings and not named
- * above: …"</em>, and it named the orders of every chip the response raised. Measured on the demo seed:
- * an abstention citing no finding was handed five orders, and an answer citing one Amlodipine finding
- * was handed eight orders from the 23 chips it did not cite — orders a reviewer then read as drugs
- * the patient is not on.
+ * above: …"</em>, and it named the orders of every chip the response raised — ADR Decision 100's
+ * amendment records what that measured on the demo seed.
  *
  * <p>Everything here runs the real {@link LlmInferenceService#search}/{@code searchStreaming} over a
- * chart whose {@code safety_finding} records the REAL injector wrote, and the post-answer validator
- * hands back the REAL chips the same arrangement raises — every chip, which is the population the
- * defect read from, so each case below fails on the code that read it. Only the model is stubbed:
+ * chart whose {@code safety_finding} records the REAL injector wrote, and — in every case but the dedup
+ * one, whose failure on that code is that it appended nothing — the post-answer validator hands back the
+ * REAL chips the same arrangement raises: every chip, which is the population the defect read from, so
+ * each case fails on the code that read it. Only the model is stubbed:
  * answer prose is not reproducible on a live engine, and the answer is the input these cases vary.
  * Every order name an answer carries is read off the chips rather than spelled here.
  */
 public class CitedFindingPartnerCompletionTest {
 
-	/** The sentence the fixture files under one mechanism for two of her orders — what tells the merged
-	 *  finding's record and chip from the other one. */
-	private static final String CORTICOSTEROID_MECHANISM =
-			"Coadministration with corticosteroids may decrease the serum concentrations";
+	/** What tells the merged finding's record and chip from the other one. */
+	private static final String CORTICOSTEROID_MECHANISM = DrugReferenceTestSupport.SHARED_MECHANISM_TEXT;
 
 	/** What tells issue #477's finding — a drug already carried by several of her orders — from the
 	 *  interaction findings beside it. */
@@ -263,6 +260,7 @@ public class CitedFindingPartnerCompletionTest {
 			assertEquals(-1, appended.indexOf(order, from + 1),
 					"and named once, however many cited findings name it: " + answer.getAnswer());
 		}
+		assertNotNull(answer.getFindingPartnerCoverage(), "the answer cited findings, so it is measured");
 		assertEquals(named, answer.getFindingPartnerCoverage().getNamed(),
 				"while named counts one per cited finding naming the order — the residue ADR Decision "
 						+ "100's amendment records, was: " + answer.getFindingPartnerCoverage());

@@ -526,15 +526,37 @@ public final class DrugReferenceTestSupport {
 	private static PatientChart injectedFindingsOver(PatientChart base, String question,
 			Set<String> activeDrugs, Set<String> activeAtcCodes, Set<String> allergies,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
-		PatientChart chart = injectorWithSafety(ddinterServiceWithGroups())
-				.injectRecords(base,
-						ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, orders), question);
+		return injectedOrThrow(ddinterServiceWithGroups(), base,
+				ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, orders), question,
+				"drugs " + activeDrugs + (allergies == null ? "" : " and allergies " + allergies));
+	}
+
+	/** The real injector with the real validator behind it over {@code service}, putting {@code base}
+	 *  through {@code injectRecords} — and the throw-on-empty contract every public form that injects
+	 *  findings documents, in the one place it is kept, so a caller cannot silently assert nothing. */
+	private static PatientChart injectedOrThrow(DrugReferenceService service, PatientChart base,
+			PatientClinicalContext context, String question, String arrangement) {
+		PatientChart chart = injectorWithSafety(service).injectRecords(base, context, question);
 		if (injectedFindings(chart).isEmpty()) {
-			throw new IllegalStateException("no safety finding was injected for drugs " + activeDrugs
-					+ (allergies == null ? "" : " and allergies " + allergies)
+			throw new IllegalStateException("no safety finding was injected for " + arrangement
 					+ " and question: " + question);
 		}
 		return chart;
+	}
+
+	/**
+	 * The injected {@code safety_finding} record at citation {@code index} in {@code chart} — for a
+	 * case composing an answer that cites it and must name what it covers (issue #516).
+	 *
+	 * @throws IllegalStateException when no injected finding carries that index
+	 */
+	public static RecordMapping findingAt(PatientChart chart, int index) {
+		for (RecordMapping mapping : injectedFindings(chart)) {
+			if (mapping.getIndex() == index) {
+				return mapping;
+			}
+		}
+		throw new IllegalStateException("no injected finding at [" + index + "]: " + chart.getText());
 	}
 
 	/**
@@ -892,6 +914,12 @@ public final class DrugReferenceTestSupport {
 	 *  question they were raised for, or the answer it arranges is about something else. */
 	public static final String SHARED_MECHANISM_QUESTION = "Is aspirin safe for her?";
 
+	/** The sentence the shared-mechanism fixture files under mechanism group 2346, which both
+	 *  corticosteroid rows carry — what tells the MERGED chip, and its finding's record, from the other
+	 *  one. One copy, read by every case that has to tell them apart. */
+	public static final String SHARED_MECHANISM_TEXT =
+			"Coadministration with corticosteroids may decrease the serum concentrations";
+
 	/**
 	 * The six-order chart the SCREENING arm is measured on: six real excerpt drugs the data relates
 	 * <b>15</b> ways, exactly 10 of them Major, so a cap and the severity ordering are both
@@ -949,13 +977,8 @@ public final class DrugReferenceTestSupport {
 	 *         silently assert nothing
 	 */
 	public static PatientChart sharedMechanismFindingsOver(PatientChart base) throws IOException {
-		PatientChart chart = injectorWithSafety(serviceWith(ddiFixtureEntries(DDI_SHARED_MECHANISM_PARTNERS)))
-				.injectRecords(base, sharedMechanismContext(), SHARED_MECHANISM_QUESTION);
-		if (injectedFindings(chart).isEmpty()) {
-			throw new IllegalStateException("no safety finding was injected for the shared-mechanism "
-					+ "arrangement: " + chart.getText());
-		}
-		return chart;
+		return injectedOrThrow(serviceWith(ddiFixtureEntries(DDI_SHARED_MECHANISM_PARTNERS)), base,
+				sharedMechanismContext(), SHARED_MECHANISM_QUESTION, "the shared-mechanism arrangement");
 	}
 
 	/** The patient both shared-mechanism accessors are about: three active orders, two of which the
@@ -1189,13 +1212,8 @@ public final class DrugReferenceTestSupport {
 	 */
 	public static PatientChart findingsOverOrders(PatientChart base, String fixture, String question,
 			String... displays) throws IOException {
-		PatientChart chart = injectorWithSafety(ddiFixtureService(fixture)).injectRecords(base,
-				contextOverOrders(displays), question);
-		if (injectedFindings(chart).isEmpty()) {
-			throw new IllegalStateException("no safety finding was injected for orders "
-					+ Arrays.asList(displays) + " and question: " + question);
-		}
-		return chart;
+		return injectedOrThrow(ddiFixtureService(fixture), base, contextOverOrders(displays), question,
+				"orders " + Arrays.asList(displays));
 	}
 
 	/** The patient {@link #chipsOverOrders} and {@link #findingsOverOrders} share: one order per

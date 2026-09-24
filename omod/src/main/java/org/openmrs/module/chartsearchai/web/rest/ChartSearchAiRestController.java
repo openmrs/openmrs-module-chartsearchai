@@ -2028,8 +2028,8 @@ public class ChartSearchAiRestController {
 	 * finding covering five orders is cited and its prose names four.
 	 *
 	 * <p>{@code null} where the answer cited no finding naming an order or the check made no
-	 * measurement; never a zeroed
-	 * object, because absence of the population is not a measurement of none. Read it BESIDE the answer
+	 * measurement; never a zeroed object, because absence of the population is not a measurement of
+	 * none. Read it BESIDE the answer
 	 * rather than as a description of it: since ADR Decision 100 the module names the orders the prose
 	 * left out, so {@code stated < named} beside prose naming them all says the module supplied the
 	 * difference. See {@code ChartSearchService.FindingPartnerCoverage}, canonical for both.

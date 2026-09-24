@@ -43,8 +43,7 @@ public class SharedMechanismChipCollapseTest {
 	private static final String ASPIRIN = "Acetylsalicylic acid (aspirin)";
 
 	/** The sentence DDInter files under mechanism group 2346, which both corticosteroid rows carry. */
-	private static final String CORTICOSTEROID_MECHANISM =
-			"Coadministration with corticosteroids may decrease the serum concentrations";
+	private static final String CORTICOSTEROID_MECHANISM = DrugReferenceTestSupport.SHARED_MECHANISM_TEXT;
 
 	/** Through the shared arrangement, which is where it lives since issue #439 gave it a second
 	 *  reader — {@code FindingPartnerLogDisclosureTest} drives these same chips through the real

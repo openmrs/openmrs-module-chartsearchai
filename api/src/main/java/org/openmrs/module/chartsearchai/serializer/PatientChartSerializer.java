@@ -871,7 +871,8 @@ public class PatientChartSerializer {
 		 * since issue #294 {@link #orderDrugNamed} to {@code null} with it. The rungs above this one
 		 * each said "the full one is below" and were each overtaken by the next issue, this one
 		 * included, which is why every rung names the widest by the parameter only it takes rather than
-		 * by a count that the next insertion falsifies.
+		 * by a count that the next insertion falsifies. Since issue #516 it defaults
+		 * {@link #findingPartners} to empty as well.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,

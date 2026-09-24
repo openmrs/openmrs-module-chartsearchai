@@ -425,6 +425,40 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 		}
 	}
 
+	/**
+	 * The row the {@code finally} writes states how long the stream ran, and not the clock it was
+	 * timed against — issue #459. That argument is an expression rather than a value the pipeline
+	 * hands over, so no other case here reads it, and two slips of it leave every one of them green:
+	 * passing the {@code startTime} the delta is taken from, which files epoch milliseconds on every
+	 * such row, and passing {@code 0}.
+	 *
+	 * <p>Bounded from both sides for that reason. The upper bound is the test's own bracketing clock,
+	 * which the {@code startTime} slip exceeds by decades. The lower bound is what the fixture buys:
+	 * {@link ClockAdvancingStub} holds the request until the clock has moved, so the real delta is at
+	 * least one millisecond and a {@code 0} cannot pass for it — without that, a request finishing
+	 * inside a millisecond makes {@code 0} a value the real clock also produces.
+	 */
+	@Test
+	public void anEndedStreamsRowStatesHowLongItRanNotTheClock() {
+		for (boolean asyncGrounding : new boolean[] { false, true }) {
+			long before = System.currentTimeMillis();
+			DisconnectingSink gone = streamWith(new ClockAdvancingStub(), 1, asyncGrounding);
+			long after = System.currentTimeMillis();
+
+			assertTrue(gone.refused >= 1, canary(asyncGrounding));
+			assertEquals(1, audit.saved.size(),
+					"precondition: the finally must be the site that wrote this row;"
+							+ " asyncGrounding=" + asyncGrounding);
+			Long elapsed = audit.saved.get(0).getResponseTimeMs();
+			assertTrue(elapsed != null && elapsed >= 1 && elapsed <= after - before,
+					"responseTimeMs must be the stream's elapsed time — at least the millisecond the "
+							+ "fixture held the request and at most the " + (after - before)
+							+ " ms the call took — not the start of the clock and not 0; was " + elapsed
+							+ ", asyncGrounding=" + asyncGrounding);
+			audit.saved.clear();
+		}
+	}
+
 	private DisconnectingSink streamWith(ChartSearchService service, int acceptEventFrames,
 			boolean asyncGrounding) {
 		DisconnectingSink gone = new DisconnectingSink(acceptEventFrames);
@@ -451,6 +485,29 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 			super.searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
 					citationsConsumer, ungroundedAnswerConsumer);
 			throw new RuntimeException("the grounding pass failed");
+		}
+	}
+
+	/**
+	 * Holds the request until the wall clock has moved past the millisecond it arrived in, then streams
+	 * as the base stub does — so the elapsed time the controller measures is at least a millisecond. A
+	 * spin on the clock rather than a sleep, because the wait it needs is the clock's own granularity.
+	 * It reads the wall clock production reads, so a step of that clock during the call can still
+	 * defeat it; that is the residue.
+	 */
+	private static final class ClockAdvancingStub extends StreamingChartSearchStub {
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			long arrived = System.currentTimeMillis();
+			while (System.currentTimeMillis() <= arrived) {
+				Thread.onSpinWait();
+			}
+			return super.searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
+					citationsConsumer, ungroundedAnswerConsumer);
 		}
 	}
 

@@ -8633,9 +8633,12 @@ is this issue's own defect reappearing inside its own fix. A swallowed persisten
 normally, so the flag is still raised and no second row follows it.
 
 One row per query holds for any implementation, not only for one honouring the ungrounded consumer's
-at-most-once contract. That consumer's idempotence is keyed on its having FIRED rather than on the
-early `done` having gone out, which also makes its warning reachable in the classic shape; and the
-classic write site skips its save where a row was already attempted. Neither shipped implementation can
+at-most-once contract. Every implementation is bound to invoke each consumer synchronously on the
+calling thread before the call returns — `ChartSearchService`'s own javadoc states it — and that is the
+premise the controller's unsynchronized audit state rests on, a requirement of the interface rather
+than a property of the two shipped implementations (issue #459). That consumer's idempotence is keyed
+on its having FIRED rather than on the early `done` having gone out, which also makes its warning
+reachable in the classic shape; and the classic write site skips its save where a row was already attempted. Neither shipped implementation can
 reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
 `ChartSearchServiceRouter` never calls it, passing the caller's through — but a second call is a
 second ROW, `saveAuditLog` building a fresh one each time, and the module should not owe the table's
@@ -8671,8 +8674,11 @@ the answer in FULL under `unknown`, so the length of the answer does not say whi
 filed. **Nor does anything on a row filed the FIRST way say that its stream came apart**: it carries
 the pipeline's own mode and reference count, which is what
 `ChartSearchAiStreamDisconnectAuditTest.aFailureAfterTheAnswerIsCompleteAuditsThePipelinesOwnAnswer`
-asserts, and is the same row a completed query leaves. `unknown` is therefore a subset of "this query
-did not finish" and not a test for it; the README's audit-log section says that to a client.
+asserts, and is the same row a completed query leaves. On an install whose `ChartSearchService` is this
+module's own, `unknown` is therefore a subset of "this query did not finish" and not a test for it; on
+one running an alternative service it is also what a completed answer stating no mode files, which
+`ChartSearchAiConstants.SEARCH_MODE_UNKNOWN`'s javadoc records, so there it is not even that subset. The
+README's audit-log section says both to a client (issue #459).
 Closing the residue would need a new signal on the `searchStreaming` interface carrying the mode
 ahead of the answer, and the mode is a property of the chart that was assembled, which is the
 producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.

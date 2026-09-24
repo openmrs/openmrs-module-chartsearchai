@@ -1421,9 +1421,11 @@ public class ChartSearchAiUtils {
 	 *         read out of it. The exception ADMITS two things that are no elided-unit list: a comma
 	 *         decimal whose fraction is three digits long behind four or more
 	 *         ({@code "1000,300 mg/day"}), and a PARTIALLY grouped number, one whose last group
-	 *         alone is marked ({@code "20000,500 mg/day"} for 20,000,500). And it does NOT REACH a
-	 *         list written any other way, so #425's own false report still stands for those — each
-	 *         half leaving its own shapes behind. The run-length half leaves a first number of three
+	 *         alone is marked ({@code "20000,500 mg/day"} for 20,000,500). Which way either of
+	 *         those two errs follows from {@code DosingCeilingFidelityCheck}'s strictest-first
+	 *         paragraph, and is not restated here. And the exception does NOT REACH a list written
+	 *         any other way, so #425's own false report still stands for those — each half leaving
+	 *         its own shapes behind. The run-length half leaves a first number of three
 	 *         digits or fewer ({@code "600,500 mg/day"}). The tail test is an EQUALITY and not an
 	 *         upper bound, so it leaves every ceiling whose number is not exactly three digits long,
 	 *         in both directions: {@code "4000,2000 mg/day"} and {@code "2000,60 mg/day"}, both

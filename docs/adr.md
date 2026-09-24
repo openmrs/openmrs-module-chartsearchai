@@ -8087,8 +8087,8 @@ reference-package cases do. `FindingPartnerCoverageCheck` writes nothing below `
 no production line to name and the case writes one through that logger itself — pinning that class
 at `WARN` reddens each case of that file which asserts over the capture (measured 2026-09-16).
 
-**Since [#443](https://github.com/openmrs/openmrs-module-chartsearchai/issues/443) all three negatives
-capture the module ROOT, from TRACE up.** The two reference-package cases cited the argument above
+**Since [#443](https://github.com/openmrs/openmrs-module-chartsearchai/issues/443) the negatives at all three
+sites capture the module ROOT, from TRACE up.** The two reference-package cases cited the argument above
 without having its scope: a probe writing the six screened drugs through `LlmInferenceService`'s
 logger during the screening pass, and one writing the unrepresented order through it during
 reconciliation, left both green. Under the root capture they redden

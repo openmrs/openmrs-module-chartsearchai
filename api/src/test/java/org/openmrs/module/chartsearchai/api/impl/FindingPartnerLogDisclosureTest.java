@@ -70,12 +70,13 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * orchestration over real merged chips the real {@code DrugSafetyValidator} raised from the shared
  * fixture ({@code DrugReferenceTestSupport.sharedMechanismInteractionChips}), and over the
  * {@code safety_finding} records the real injector writes for the same arrangement
- * ({@code DrugReferenceTestSupport.sharedMechanismFindingsOver}). Four collaborators are stubbed,
- * in {@link #newService}: the model, because answer prose is not reproducible on a live engine and the
- * answer is the one input this check reads; and the chart-building strategy, the injector and the
- * validator, each returning what {@link #setUp} had the real ones produce for this arrangement before
- * any capture opens — so the injector's and the validator's own log lines are not written during
- * these cases, which is what {@link #PACKAGE}'s javadoc means by that half being pinned elsewhere.
+ * ({@code DrugReferenceTestSupport.sharedMechanismFindingsOver}). Four collaborators are stubbed.
+ * The model, set per case, because answer prose is not reproducible on a live engine and the answer is
+ * the one input this check reads. And, in {@link #newService}, the chart-building strategy, which
+ * returns the hand-built {@link #chart()}, and the injector and the validator, which return what
+ * {@link #setUp} had the real ones produce for this arrangement before any capture opens — so the
+ * injector's and the validator's own log lines are not written during these cases, which is what
+ * {@link #PACKAGE}'s javadoc means by that half being pinned elsewhere.
  */
 public class FindingPartnerLogDisclosureTest {
 

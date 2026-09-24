@@ -55,8 +55,9 @@ import org.apache.logging.log4j.core.config.Property;
  * logger writes nothing at the captured level — a check that only WARNs, or any logger at TRACE,
  * which no production line in this module writes — there is no line to name, and the case writes
  * one through that logger itself and asserts it arrived, which asks the same question of the same
- * logger: {@link #receivesFrom}. The three disclosure negatives of ADR Decision 102 capture at TRACE
- * and each asks it (issue #443).
+ * logger: {@link #receivesFrom}. The disclosure negatives at ADR Decision 102's three sites capture
+ * at TRACE and each asks it (issue #443); the two cases named above keep their production-line
+ * witness beside it, which shows the pass itself logged.
  *
  * <p>Use with try-with-resources; it is not thread-safe against a concurrent
  * {@link #close()} but the collected event list is.
@@ -147,14 +148,7 @@ public final class LogCapture implements AutoCloseable {
 	public boolean receivesFrom(Class<?> source, Level level) {
 		String witness = "liveness witness from " + source.getName() + " at " + level + ", no patient data";
 		LogManager.getLogger(source).log(level, witness);
-		synchronized (events) {
-			for (LogEvent event : events) {
-				if (witness.equals(event.getMessage().getFormattedMessage())) {
-					return true;
-				}
-			}
-		}
-		return false;
+		return hasMessageAt(level, witness);
 	}
 
 	/** @return true when at least one captured event was logged at {@code level} or more severe. */

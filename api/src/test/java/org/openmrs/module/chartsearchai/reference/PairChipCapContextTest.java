@@ -198,9 +198,8 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void theQuestionPairWarnRatesTheWithheldPairsAndStatesTheConfiguredCap() {
 		// The RATINGS of what went exist only in this log line: since issue #336 the response states the
-		// two COUNTS (PairChipExtentContextTest), so how many went is on the served response too, and
-		// never the ratings — this is still the only place an operator can see how severe what was
-		// dropped was. It must report the
+		// two COUNTS (PairChipExtentContextTest) and never the ratings, so this is still the only place
+		// an operator can see how severe what was dropped was (issue #443). It must report the
 		// CAP THAT ACTUALLY CUT, not the compiled-in default.
 		//
 		// It never named the pairs, in this arm: the list it builds is each withheld candidate's
@@ -234,8 +233,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		configureCap("3");
 		// The module root and not just the reference package, because a drug name leaking from any
 		// logger on this pass is the same disclosure — the argument FindingPartnerLogDisclosureTest's
-		// PACKAGE makes. A reference-package capture left the six screened names, written from
-		// api.impl.LlmInferenceService's logger during this pass, green here (issue #443).
+		// PACKAGE makes (issue #443, ADR Decision 102).
 		try (LogCapture capture = LogCapture.on(LogCapture.MODULE_LOGGER, Level.TRACE)) {
 			screeningChips();
 

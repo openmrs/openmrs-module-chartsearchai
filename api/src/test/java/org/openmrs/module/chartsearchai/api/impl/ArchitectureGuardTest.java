@@ -1515,7 +1515,26 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The shared body of the two cases above: {@code fileName} CALLS the one reading of which findings
+	 * {@code InteractionClaimPairFidelityCheck} decides which findings a claim CITES by asking
+	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/514">#514</a> — so it
+	 * cannot accuse a finding the published {@code findingCitations} says the answer never cited, the
+	 * issue #409 defect one key over.
+	 *
+	 * <p>The two cases above over the same body and the same rule: the check reads a claim's markers
+	 * only through {@code ActiveOrderCitationFidelityCheck.Claim.admittedRunIndexes}, never the decode
+	 * step or a marker dialect of its own.
+	 */
+	@Test
+	public void theInteractionClaimPairCheckTakesItsCitedReadingFromTheExtentCheck() throws IOException {
+		assertTakesItsCitedReadingFromTheExtentCheck("InteractionClaimPairFidelityCheck.java", true,
+				"interactionClaimPairs has a reading of its own again and can accuse a finding the "
+						+ "published findingCitations count says the answer never cited — the issue #409 "
+						+ "defect, one key over.");
+	}
+
+	/**
+	 * The shared body of the three cases above: {@code fileName} CALLS the one reading of which findings
 	 * the answer cited and reads no citation marker itself. Hoisted rather than copied — this file's
 	 * own javadoc records a copied guard body losing a canary within one commit
 	 * ({@link #assertSoleCallerOfStampCarryingConstructor}).

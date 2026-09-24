@@ -122,6 +122,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders](#decision-114-a-screen-of-her-medications-states-which-of-her-orders-share-a-substance-once-per-set-of-orders)
 - [Decision 115: Several rows of one substance are not a pair, so the question-pair arm leaves the field to the arm that screened](#decision-115-several-rows-of-one-substance-are-not-a-pair-so-the-question-pair-arm-leaves-the-field-to-the-arm-that-screened)
 - [Decision 116: A question about a drug states which of her orders share a substance too](#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)
+- [Decision 117: An active-order claim is held to the findings that relate its pair](#decision-117-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -9680,7 +9681,8 @@ counts its paste into an answer as a loss (R7, M4).
 
 **What is published beside it.** `answeredByTheModule: true`, because the keys that judge a model's
 prose — `unfaithfullyRenderedCitations`, `misattributedOrderCitations`, `activeOrderClaims`,
-`unstatedFindingSeverities`, `unstatedDosingCeilings`, `findingCitations`, `findingPartners` — state
+`unstatedFindingSeverities`, `unstatedDosingCeilings`, `findingCitations`, `findingPartners`,
+`interactionClaimPairs` — state
 `null` and a null alone could mean a check that failed. The chips pass is handed the empty answer, as
 the pass that raised the findings was, so the chips beside the answer are the findings it states; scoping
 the order-driven arm by text the module itself just wrote would be circular (the issue's M8 and N5 are a
@@ -10880,3 +10882,98 @@ of orders, and over #483's order predicate.
   local-and-systemic residue reaches these questions too (hydrocortisone cream beside a tablet).
 
 → `OrdersSharingASubstanceTest`, `OrdersSharingASubstanceModuleAnswerContextTest.onAProposalTheFindingFollowsTheProposedDrugsCautionsInTheModulesAnswer`.
+
+## Decision 117: An active-order claim is held to the findings that relate its pair
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#514](https://github.com/openmrs/openmrs-module-chartsearchai/issues/514).
+
+### Context
+
+The external DDI evaluation's questions list the patient's medications before asking about a new
+drug, which puts findings about several SUBJECTS in the prompt (#513). On its demo patients
+(chartsearchai `main` @ `627449a7`, Gemma 4 E2B, each cell byte-identical across two runs, per the
+issue) the answer gave one drug's finding to another — *"Metformin interacts with active order
+Lamivudine / zidovudine … [353]"*, where [353] is Stavudine's — or stated a Metformin pair no
+finding raised, citing nothing. `misattributedOrderCitations`, `unfaithfullyRenderedCitations` and
+`unstatedFindingSeverities` read `[]` or flagged something else: the first judges CHART citations,
+the second needs `MIN_REPRODUCED_WORDS` copied words, the third judges ratings. Nothing compared the
+pair a claim states with the finding it cites.
+
+### The decision
+
+**`InteractionClaimPairFidelityCheck` judges every claim `ActiveOrderCitationFidelityCheck.claims`
+yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations`, `unfounded`.**
+
+- **The unit is the sibling's, extracted rather than respelled.** `claims(answer)` is now the one
+  walk: a claim is an occurrence of `ACTIVE_ORDER_NOUN`, its markers are its marker RUN, and it
+  carries the SUBJECT span (its clause, up to the noun) and the PARTNER span (after the noun, to the
+  run or the clause bound). A first plan let a claim with no run take finding markers up to the next
+  claim, to reach the ticket's cases 2 and 4, whose markers sit after a comma; it was refuted before
+  any code on the ground [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)
+  gives for the run unit, and it was not needed — such a claim is judged as citing nothing, and a pair
+  no finding relates is then UNFOUNDED, so both cases still report.
+- **What a finding relates is read structurally.** A finding goes by its subject
+  (`ChartSearchAiUtils.findingSubject`, the half of `resourceKey` that `findingSubjects` already
+  split), the orders it names (`getFindingPartners()`), and the prescriptions and substances its
+  chart-order clause resolved them from — the new `RecordMapping.getFindingBridgeNames()`, written
+  beside `findingPartners` by the injector off `SafetyWarning.ChartOrderBridge.namesOf`. The bridges
+  are there because the plan's first version omitted them and the refutation showed the false alarm:
+  a brand-named order's finding tells the model *"Warfarin from Coumadin 5mg"*, so a claim naming
+  `Coumadin 5mg` is about the pair the finding relates. A finding relates a claim when each side
+  names one of those names, either way round — so two orders one finding names read as related.
+  Requiring one side to be the SUBJECT was tried after a review pass found a merged shared-mechanism
+  finding hiding an order-for-drug swap that way, and reverted in the next pass: issue #477's
+  findings relate two of her orders to each other, nothing on the record tells them apart, and the
+  split called a verbatim copy of one misattributed — a false report, where the flat set costs a miss.
+- **The chips are part of the population for an uncited claim.** A drug only the answer names is put
+  in play after the answer, so its pair can be a chip no carried finding is; that is not a pair "no
+  finding raised".
+- **Silence over accusation wherever the operands cannot be read**: a subject naming no drug any
+  interaction or condition-mediated finding names, nothing after the noun, a run citing a reference
+  record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
+  — #357), and a finding naming no order (class-only) about a drug the claim names, among those it
+  cites or, citing none, among all of them. Contraindication and overdose findings relate no drug to
+  an order: an uncited claim is not judged against them, and a run citing one is unjudged. The partner side is deliberately NOT gated on a vocabulary: the chart
+  carries no structural list of her active orders, and an invented partner no finding names is the
+  ticket's own second shape.
+- **Which findings a claim cites is `SafetyFindingCitationExtentCheck.citedFindingIndexes`**, the one
+  reading `findingCitations` publishes, intersected with the run — so this key cannot accuse a finding
+  that key says the answer never cited (#409's shape).
+
+### Alternatives considered
+
+- **Sentence scoping, or letting a run-less claim reach past its clause.** Refuted at plan time; see
+  above.
+- **A vocabulary of her active orders on the partner side.** No structural source reaches the answer
+  path, and parsing the rendered `drug_order` text for one is the re-derivation `getOrderActive`'s
+  rule (#317) refuses.
+- **Comparing the partner name against a chart record's text** — Decision 76's recorded alternative
+  — is a different question: that one compares a CHART citation, this one the module's own finding's
+  structure, which is what the ticket's direction names.
+
+### Consequences
+
+- **+** Pinned by `InteractionClaimPairFidelityTest` over the real `search`/`searchStreaming`, the real
+  injector's findings and the real validator's chips over the answer. Not every leg has a case of its
+  own, and successive review passes kept finding one more: mutate a leg and read the failures rather
+  than trusting a list. `ArchitectureGuardTest.theInteractionClaimPairCheckTakesItsCitedReadingFromTheExtentCheck`
+  pins the shared reading; `ChartSearchAiInteractionClaimPairsTest` the wire.
+- **−** **Containment is the comparison**, `FindingPartnerCoverageCheck.comparable`'s form, so a swap
+  between a short name and a longer one containing it (*Lamivudine*, *Lamivudine / zidovudine*) passes,
+  and a subject spelled as no finding spells it leaves the claim unjudged. A PARTNER spelled so fails
+  the other way: it reads as unrelated and can be reported. The partner side is ungated for the
+  ticket's invented-partner shape, and the bridge names are what keep a brand-named prescription's
+  own display from being that case. No case pins the naming direction (a span names a drug only by
+  containing it); the check's javadoc says what it decides.
+- **−** **Two orders one finding names read as related**, so a claim pairing two orders of a merged
+  (Decision 99) finding is not reported — the price of not falsely reporting #477's findings; the
+  relation bullet above says why.
+- **−** **The ticket's first case is not covered.** *"… a caution to note regarding interactions with
+  Lopinavir / ritonavir, Didanosine, and Nevirapine [288], [290]"* carries no `active order` claim,
+  and nothing here recognises an interaction stated in other words.
+- **−** **Unmeasured on the evaluation's own cells.** Whether cases 3 and 4 are judged depends on
+  whether any finding or chip on those cells names the subject; the issue's captured prompts would
+  measure it and were not available here.
+
+→ `InteractionClaimPairFidelityTest`, `ChartSearchAiInteractionClaimPairsTest`.

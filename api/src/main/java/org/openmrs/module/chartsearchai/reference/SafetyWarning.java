@@ -1208,6 +1208,24 @@ public class SafetyWarning {
 			this.orderDisplay = orderDisplay;
 		}
 
+		/**
+		 * Every substance and order display {@code bridges} state, each once, in the order they state
+		 * them — the names a finding's chart-order clause gives its drugs besides
+		 * {@link SafetyWarning#getDrug()} and {@link SafetyWarning#namedPartners()} (issue #514). One
+		 * projection for both readers: {@code DrugReferenceInjector} carries it onto the finding's
+		 * record, and {@code InteractionClaimPairFidelityCheck} reads it off a chip, so a record and its
+		 * chip cannot go by different names. Static and taking the list, not an accessor of the warning:
+		 * it states nothing the chip's own {@code chartOrderBridges} key does not already carry.
+		 */
+		public static List<String> namesOf(List<ChartOrderBridge> bridges) {
+			Set<String> names = new LinkedHashSet<String>();
+			for (ChartOrderBridge bridge : bridges) {
+				names.add(bridge.getSubstance());
+				names.add(bridge.getOrderDisplay());
+			}
+			return new ArrayList<String>(names);
+		}
+
 		/** @return the substance name the chip prints — the {@code substance} half of the wire pair. */
 		public String getSubstance() {
 			return substance;

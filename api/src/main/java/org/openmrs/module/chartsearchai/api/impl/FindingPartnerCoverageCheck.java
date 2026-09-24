@@ -232,8 +232,12 @@ public final class FindingPartnerCoverageCheck {
 	 * finding names {@code Isoniazid / pyrazinamide / rifampin}. One helper for both methods and for
 	 * {@link #unstatedPartners}' dedup, so a name cannot be stated to one and unstated to the other.
 	 * Only that whitespace: {@code DrugReference.collapseWhitespace} is not widened for it.
+	 *
+	 * <p>Package-private since issue #514: {@code InteractionClaimPairFidelityCheck} asks whether a
+	 * claim names a finding's drug, and takes this form rather than one of its own so the two checks
+	 * cannot read one name as stated to one and not to the other.
 	 */
-	private static String comparable(String text) {
+	static String comparable(String text) {
 		return SPACING_AROUND_A_SLASH.matcher(text.toLowerCase(Locale.ROOT)).replaceAll("/");
 	}
 

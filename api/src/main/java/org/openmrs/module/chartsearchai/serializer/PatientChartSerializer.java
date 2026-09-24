@@ -667,7 +667,8 @@ public class PatientChartSerializer {
 	 *
 	 * <p>{@link #getFindingPartners()} (issue #516) is carried beside the record for
 	 * {@link #getFindingSeverity()}'s reason: the finding's text names those orders, and a consumer
-	 * reads them here rather than parsing for them.
+	 * reads them here rather than parsing for them. {@link #getFindingBridgeNames()} (issue #514) is
+	 * carried for the same reason.
 	 */
 	public static class RecordMapping {
 
@@ -730,6 +731,21 @@ public class PatientChartSerializer {
 		 * completion, and {@code findingPartners}, to the findings the answer cited.
 		 */
 		private final List<String> findingPartners;
+
+		/**
+		 * The names of this patient's own prescriptions, and of the substances resolved from them, that
+		 * an injected {@code safety_finding}'s chart-order clause states — every substance and order
+		 * display of {@code SafetyWarning.chartOrderBridges()} of the finding the record renders, empty
+		 * on every other record and on a finding stating no such clause (issue #514). Written in
+		 * exactly ONE place, {@code DrugReferenceInjector}'s finding mapping, beside
+		 * {@link #findingPartners} and for its reason: a marker reaches this record, never the chip, and
+		 * the record's text is never parsed for it.
+		 *
+		 * <p>Read by {@code InteractionClaimPairFidelityCheck}: the clause gives the finding's subject
+		 * or partner a second name — the prescription a brand-named order is (#349) — and a sentence
+		 * naming the drug by that name is still about the pair the finding relates.
+		 */
+		private final List<String> findingBridgeNames;
 
 		/**
 		 * The numbers of the chart records this record was DERIVED from, empty where it was not
@@ -872,13 +888,13 @@ public class PatientChartSerializer {
 		 * each said "the full one is below" and were each overtaken by the next issue, this one
 		 * included, which is why every rung names the widest by the parameter only it takes rather than
 		 * by a count that the next insertion falsifies. Since issue #516 it defaults
-		 * {@link #findingPartners} to empty as well.
+		 * {@link #findingPartners} to empty as well, and since issue #514 {@link #findingBridgeNames}.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, null, null);
+					orderStopDate, findingSeverity, null, null, null);
 		}
 
 		/**
@@ -896,13 +912,16 @@ public class PatientChartSerializer {
 		 * <p>Since issue #516 it also takes {@link #findingPartners}, immediately after
 		 * {@link #findingSeverity}, and so does the widest rung — for the tail constraint the widest
 		 * constructor's javadoc states: this rung keeps its list tail and the widest its list-then-Boolean
-		 * one. The finding-rating rung above defaults it to empty.
+		 * one. The finding-rating rung above defaults it to empty. Since issue #514
+		 * {@link #findingBridgeNames} follows it in both rungs, for the same constraint.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, List<String> findingPartners, List<Integer> derivedFrom) {
+				String findingSeverity, List<String> findingPartners, List<String> findingBridgeNames,
+				List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, findingPartners, derivedFrom, null, null);
+					orderStopDate, findingSeverity, findingPartners, findingBridgeNames, derivedFrom, null,
+					null);
 		}
 
 		/**
@@ -930,12 +949,12 @@ public class PatientChartSerializer {
 		 *
 		 * <p><b>Issue #516 answered it the same way again</b>, inserting {@link #findingPartners} after
 		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
-		 * was.
+		 * was — and issue #514 once more, inserting {@link #findingBridgeNames} after it in both.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, List<String> findingPartners, List<Integer> derivedFrom,
-				List<String> dosingCeilings, Boolean orderDrugNamed) {
+				String findingSeverity, List<String> findingPartners, List<String> findingBridgeNames,
+				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -950,6 +969,10 @@ public class PatientChartSerializer {
 			this.findingPartners = findingPartners == null || findingPartners.isEmpty()
 					? Collections.<String> emptyList()
 					: Collections.unmodifiableList(new ArrayList<String>(findingPartners));
+			// Copied and wrapped, and never null, for the same reason.
+			this.findingBridgeNames = findingBridgeNames == null || findingBridgeNames.isEmpty()
+					? Collections.<String> emptyList()
+					: Collections.unmodifiableList(new ArrayList<String>(findingBridgeNames));
 			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
 			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
 			// reader branches on absence — empty is the honest answer wherever nothing was resolved.
@@ -1146,6 +1169,15 @@ public class PatientChartSerializer {
 		 */
 		public List<String> getFindingPartners() {
 			return findingPartners;
+		}
+
+		/**
+		 * @return the prescription and substance names this injected finding's chart-order clause
+		 *         states — see {@link #findingBridgeNames} — never null, and empty on every record that
+		 *         is not an injected {@code safety_finding} stating that clause
+		 */
+		public List<String> getFindingBridgeNames() {
+			return findingBridgeNames;
 		}
 	}
 }

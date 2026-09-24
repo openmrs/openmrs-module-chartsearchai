@@ -1845,6 +1845,12 @@ public class ChartSearchAiRestController {
 	 * state — the two are one check's two answers off one report (issue #379), so a failed check
 	 * states null on both or on neither. {@code ChartSearchService.ActiveOrderClaims} is canonical
 	 * for what a zero and a null each assert, and for why the other key could not be read alone.
+	 *
+	 * <p>{@code interactionClaimPairs} is the same remedy for the PAIR such a claim states (issue
+	 * #514): whether the findings it cites, or where it cites none any finding or chip, relate the two
+	 * drugs it names. Its list is never null, so {@link #serializeInteractionClaimPairs}' own null test
+	 * is the no-measurement case and nothing else; {@code ChartSearchService.InteractionClaimPairs} is
+	 * canonical for it.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);
@@ -1865,6 +1871,8 @@ public class ChartSearchAiRestController {
 				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
 		target.put("findingPartners",
 				serializeFindingPartnerCoverage(answer.getFindingPartnerCoverage()));
+		target.put("interactionClaimPairs",
+				serializeInteractionClaimPairs(answer.getInteractionClaimPairs()));
 		target.put("chartReadForSafety", answer.getChartReadForSafety());
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
 		// Issue #469: whether any model wrote this answer. Beside the keys it explains — where it is
@@ -2075,6 +2083,26 @@ public class ChartSearchAiRestController {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
 		map.put("stated", claims.getStated());
 		map.put("uncited", claims.getUncited());
+		return map;
+	}
+
+	/**
+	 * The wire shape of {@code interactionClaimPairs} — issue #514: {@code judged} active-order claims
+	 * the check reached a verdict on, {@code misattributedCitations} the findings cited for a judged
+	 * claim none of them relates, and {@code unfounded} judged claims citing no finding whose pair no
+	 * finding relates. {@code null} where the check stated no measurement, never a zeroed object, since
+	 * zero is itself a measurement. {@code ChartSearchService.InteractionClaimPairs} is canonical for
+	 * what each value does and does not assert. The list is copied, for the reason
+	 * {@link #putModuleStatements} gives for its neighbours.
+	 */
+	private Map<String, Object> serializeInteractionClaimPairs(ChartSearchService.InteractionClaimPairs pairs) {
+		if (pairs == null) {
+			return null;
+		}
+		Map<String, Object> map = new LinkedHashMap<String, Object>();
+		map.put("judged", pairs.getJudged());
+		map.put("misattributedCitations", new ArrayList<Integer>(pairs.getMisattributedCitations()));
+		map.put("unfounded", pairs.getUnfounded());
 		return map;
 	}
 

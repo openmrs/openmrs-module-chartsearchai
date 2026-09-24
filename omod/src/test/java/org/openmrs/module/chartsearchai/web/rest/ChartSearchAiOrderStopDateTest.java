@@ -116,7 +116,7 @@ public class ChartSearchAiOrderStopDateTest {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
-				null, null, null, null, null, stated, null, false);
+				null, null, null, null, null, stated, null, false, null);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -307,7 +307,7 @@ public class ChartSearchAiOrderStopDateTest {
 			ungroundedAnswerConsumer.accept(new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
-					null, null, null, null, null, stated, null, false));
+					null, null, null, null, null, stated, null, false, null));
 			return answer();
 		}
 

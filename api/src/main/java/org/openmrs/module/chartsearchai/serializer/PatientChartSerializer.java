@@ -664,6 +664,10 @@ public class PatientChartSerializer {
 	 * standing beside it: whether that text names the drug of the order it is about. It is never
 	 * rendered, and a reader must not look for it in the prose — deciding it from the text is exactly
 	 * what {@link #getOrderActive()}'s rule forbids, for the same reason.
+	 *
+	 * <p>{@link #getFindingPartners()} (issue #516) is carried beside the record for
+	 * {@link #getFindingSeverity()}'s reason: the finding's text names those orders, and a consumer
+	 * reads them here rather than parsing for them.
 	 */
 	public static class RecordMapping {
 

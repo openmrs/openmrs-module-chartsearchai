@@ -8639,7 +8639,10 @@ classic write site skips its save where a row was already attempted. Neither shi
 reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
 `ChartSearchServiceRouter` never calls it, passing the caller's through — but a second call is a
 second ROW, `saveAuditLog` building a fresh one each time, and the module should not owe the table's
-shape to a collaborator's good behaviour.
+shape to a collaborator's good behaviour. What lets the controller keep its audit state in unsynchronized
+fields is a requirement of the interface rather than a property of the two shipped implementations:
+whenever an implementation invokes a consumer, it does so on the calling thread before the call
+returns or throws, which `ChartSearchService`'s own javadoc states (issue #459).
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
 row before streaming and update it afterwards — was not taken, and what stands against it is a
@@ -8671,8 +8674,11 @@ the answer in FULL under `unknown`, so the length of the answer does not say whi
 filed. **Nor does anything on a row filed the FIRST way say that its stream came apart**: it carries
 the pipeline's own mode and reference count, which is what
 `ChartSearchAiStreamDisconnectAuditTest.aFailureAfterTheAnswerIsCompleteAuditsThePipelinesOwnAnswer`
-asserts, and is the same row a completed query leaves. `unknown` is therefore a subset of "this query
-did not finish" and not a test for it; the README's audit-log section says that to a client.
+asserts, and is the same row a completed query leaves. On an install whose `ChartSearchService` is this
+module's own, `unknown` is therefore a subset of "this query did not finish" and not a test for it; on
+one running an alternative service it is also what a completed answer stating no mode files, which
+`ChartSearchAiConstants.SEARCH_MODE_UNKNOWN`'s javadoc records, so there it is not even that subset. The
+README's audit-log section says both to a client (issue #459).
 Closing the residue would need a new signal on the `searchStreaming` interface carrying the mode
 ahead of the answer, and the mode is a property of the chart that was assembled, which is the
 producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.

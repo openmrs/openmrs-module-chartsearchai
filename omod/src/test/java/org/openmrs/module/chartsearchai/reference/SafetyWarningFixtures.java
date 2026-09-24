@@ -17,9 +17,9 @@ import java.util.Date;
  * an omod test that cannot reach one from {@code org.openmrs.module.chartsearchai.web.rest}.
  *
  * <p><b>Why it exists, and why it is not a widening of production API.</b> The chip-serialization
- * guards live in {@code web.rest}, and the flag this shape carries is set only by
- * {@code SafetyWarning}'s package-private {@code contraindication} factory. This class is declared in
- * {@code SafetyWarning}'s OWN package under {@code omod/src/test}, so it reaches that factory with no
+ * guards live in {@code web.rest}, and the facts these shapes carry are set only by
+ * {@code SafetyWarning}'s package-private factories. This class is declared in
+ * {@code SafetyWarning}'s OWN package under {@code omod/src/test}, so it reaches them with no
  * production change at all — a split package across two artifacts being legal on a plain classpath,
  * which is what surefire gives these tests.
  *
@@ -27,8 +27,8 @@ import java.util.Date;
  * new public factory taking the flag, and an anonymous subclass overriding the accessor — and both are
  * weaker. ADR Decision 92 records the comparison and is canonical for it.
  *
- * <p>Deliberately NOT a general-purpose chip builder: it exposes the one shape a wire guard needs, so
- * it cannot become a second way to assemble the chips {@code DrugSafetyValidator} assembles.
+ * <p>Deliberately NOT a general-purpose chip builder: it exposes only the shapes the wire guards need,
+ * so it cannot become a second way to assemble the chips {@code DrugSafetyValidator} assembles.
  */
 public final class SafetyWarningFixtures {
 
@@ -57,5 +57,34 @@ public final class SafetyWarningFixtures {
 			Date stopDate) {
 		return new SafetyWarning(SafetyWarning.TYPE_INTERACTION, drug, detail, severity)
 				.asAboutAnEndedOrder(stopDate, Collections.<DrugReference> emptyList());
+	}
+
+	/**
+	 * A recorded-allergen contraindication chip — the allergen arm's own sentence, built by
+	 * {@code SafetyWarning.recordedAllergenContraindication}, the factory that arm's two callers share
+	 * (issue #527). {@code aboutACurrentMedication} is that factory's own parameter: {@code true} as
+	 * {@code DrugSafetyValidator.addActiveOrderContraindications} passes it for one of her active orders,
+	 * {@code false} as the drug-in-play loop passes it for a drug the question or the answer put in play.
+	 * {@code chartRecords} is empty, being on no wire.
+	 */
+	public static SafetyWarning recordedAllergenContraindication(String drug, String detail,
+			boolean aboutACurrentMedication) {
+		return SafetyWarning.recordedAllergenContraindication(drug, detail, aboutACurrentMedication,
+			Collections.<String> emptySet());
+	}
+
+	/**
+	 * An interaction RULE chip naming one active order, {@code partner} — built by
+	 * {@code SafetyWarning.interaction}, the factory {@code DrugSafetyValidator.interactionWarning} hands
+	 * both active-order arms' rule chips to (issue #527). {@code aboutACurrentMedication} is that
+	 * factory's own parameter: {@code true} as the screening arm passes it, {@code false} as the
+	 * drug-in-play arm does. No fold, no reconciled name and no bridge, which is what an unfolded chip
+	 * whose partner nothing reconciled carries.
+	 */
+	public static SafetyWarning ruleInteraction(String drug, String detail, String severity, String partner,
+			boolean aboutACurrentMedication) {
+		return SafetyWarning.interaction(drug, detail, severity, false, null, null,
+			Collections.<SafetyWarning.ChartOrderBridge> emptyList(), aboutACurrentMedication,
+			Collections.singletonList(partner));
 	}
 }

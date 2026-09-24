@@ -5452,7 +5452,7 @@ The second row is the control that makes the first a cede rather than a chart th
 
 ## Decision 72: A finding about a medication the patient is already taking states a call about that medication
 
-**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal).
+**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
 
 ### Context — the defect
 
@@ -7299,7 +7299,7 @@ So the two surfaces disagreed about one chart, in the direction #309 was filed a
   **No claim is made here about whether a demotion would be observable, and that is deliberate rather than an omission.** Three claims once written here were each refuted in review: that a condition rule has no co-keyed rival (unmeasured); that the two rank constants share a key space (`CURATED_RULE`'s own javadoc says the opposite); and that `ContraindicationRouteVariantTest.oneCuratedRuleAuthoredTwiceRaisesOneChip` exhibits a co-keyed `CURATED_RULE` rival (it does not — both its rules answer `selfNamedAllergyRule`, so they collapse on the SUBSTANCE key, as that test's own comment says). The premise reason above needs no such claim, so none is made; whoever revisits the demotion should measure the key space rather than cite this bullet.
 - **Qualify the chip's `detail`.** The sentence is measured prose that `DrugSafetyChipLabelTest` and [#108](https://github.com/openmrs/openmrs-module-chartsearchai/issues/108) constrain, and `DrugReferenceInjector.renderFinding` copies it VERBATIM into the citable `safety_finding` and then appends `FINDING_UNCORROBORATED_MATCH` off this same flag — so hedging the sentence would state the hedge twice, the second time in wording nobody has measured, inside citable evidence. Decision 73 records the same risk of the section leads it reuses.
 - **Tighten `hasConditionToken`.** Fail-open and refused twice already; Decision 73's **The MATCH is untouched** paragraph is canonical, and `containsWord("GI bleeding", "gi bleed")` is `false`, so the shipped seed's own gastrointestinal-bleeding chip would stop firing for a condition a clinician typed.
-- **A new PUBLIC construction path for the flag**, which is what [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347) did when it needed a `web.rest` fixture to carry a newly published fact, recording the necessity in its own constructor javadoc. Declined: it would add production API with no production caller, and making `contraindication(..)` public is separately unavailable, since it also sets `aboutACurrentMedication` and `chartRecords`, whose accessors stay package-private — which WOULD breach the symmetry rule. The fixture instead reaches the real factory from `SafetyWarning`'s own package, through an omod test-only builder, so the chip a wire guard reads is one production built.
+- **A new PUBLIC construction path for the flag**, which is what [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347) did when it needed a `web.rest` fixture to carry a newly published fact, recording the necessity in its own constructor javadoc. Declined: it would add production API with no production caller, and making `contraindication(..)` public is separately unavailable, since it also sets `aboutACurrentMedication` and `chartRecords`, whose accessors stay package-private — which WOULD breach the symmetry rule. *(Since [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) the `aboutACurrentMedication` accessor is public; `chartRecords`, still package-private, carries that argument alone.)* The fixture instead reaches the real factory from `SafetyWarning`'s own package, through an omod test-only builder, so the chip a wire guard reads is one production built.
 - **An anonymous subclass overriding the accessor in the fixture.** Legal — the class and the method are not final, and the reflective guard invokes virtually — and it needs no new API either. Declined because it exercises neither the field nor any constructor, so a later change to the private constructor that dropped the flag would leave that guard green, which is the class of defect #340 exists to catch.
 
 ### Trade-offs
@@ -10945,3 +10945,79 @@ above those parameters already recorded the same dodge at `allowed_length=4` ("S
   keeps DRY, so a misspelling copied from the patient's own records is not addressed by this decision.
 
 → `ReferenceRecordsReachTheEngineTest`.
+
+## Decision 118: A chip says whether the module raised it from one of the patient's own active orders
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#527](https://github.com/openmrs/openmrs-module-chartsearchai/issues/527). The referent it publishes is
+[Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)'s.
+
+### Context
+
+The issue's reproduction, on a RefApp standalone with the bundled DDInter knowledge base: asked *"any
+allergies?"*, a patient with an active *Advil 400mg* order and a recorded ibuprofen allergy received the
+chip `{"type":"contraindication","drug":"Ibuprofen","detail":"The patient has a recorded allergy to
+Ibuprofen.", …}`, and asked *"can I give her ibuprofen?"*, a patient with no ibuprofen order received the
+same object byte for byte. The first is about a drug she already takes —
+`DrugSafetyValidator.addActiveOrderContraindications` raised it — and the second is about a proposal,
+raised by the drug-in-play loop. The allergen arm builds both through one factory,
+`SafetyWarning.recordedAllergenContraindication`, and no arm's sentence varies with the referent. The
+module held the difference on `SafetyWarning.isAboutACurrentMedication()` and stated it only in the
+injected record, which reaches a client only if the model cites it; the issue's first answer cited
+neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`). With
+`chartsearchai.drugSafety.findingsRenderedByClient` on, as it ships, the prose is asked to summarise the
+findings rather than list each one, on README's premise that every finding is published in
+`safetyWarnings`.
+
+### The decision
+
+- **The chip publishes the referent verbatim, as `aboutACurrentMedication`**, written from the accessor
+  in `ChartSearchAiRestController.serializeSafetyWarnings`. That is the one serializer, so
+  `GET /chartsearchai/chartalerts` carries it too, and there every alert answers `true`: that pass's
+  only arm is the order-driven contraindication arm, with nothing in play. The accessor is public for
+  this and the factories that set it stay package-private, as
+  [Decision 92](#decision-92-the-contraindication-chip-states-whether-the-chart-match-behind-it-is-corroborated)
+  settled for `restsOnAnUncorroboratedChartMatch`. The `detail` is unchanged, as
+  [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
+  left it for `aboutAnEndedOrder`.
+- **The contract says what the flag is.** `true` is a chip the module raised from one of her active
+  orders. `false` is not a statement that she is off the drug: it is also the answer for a drug the
+  question (or the answer) named that she takes, and for the chip saying that drug is already in several
+  of her orders. The accessor's javadoc is the one home of that list, and README carries it for a client.
+- **README also says how to render `true`**: as a finding about a medication she already takes, with no
+  drug named in that claim.
+  [Decision 113](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)'s
+  reason for its composed sentence transfers to a client: the chip's `drug` is the entry her order
+  resolved to, which the order's own name can imply without naming.
+- **Only the referent is published.** How strongly a finding counts stays prompt-facing
+  ([#283](https://github.com/openmrs/openmrs-module-chartsearchai/issues/283)), and reference/CLAUDE.md
+  keeps STRENGTH and REFERENT as two axes.
+
+### Alternatives
+
+- **The order named on the chip**, the issue's second option. Not taken: the order-driven
+  contraindication arm walks the entries her orders resolved to, not the orders, so naming one needs the
+  entry-to-order resolution `DrugSafetyValidator.chartOrderBridges` makes for interaction chips, with its
+  own silences; and `namedPartners` is empty for a contraindication by contract. The flag is what the arm
+  holds.
+- **The prompt pass's referent on the published chip.** Not taken: every other key of a chip is the value
+  of the pass that raised it, as Decision 110 left `aboutAnEndedOrder`.
+
+### Residues
+
+- **The published chips are the chips pass's.** On the model's path that pass reads the model's answer,
+  so a drug the answer names that no record the answer is attributable to names is in play there, and the
+  drug-in-play arm raises its findings, answering `false`. `answerFromTheModule`'s chips pass reads the
+  empty answer. Decision 110's last residue records the same shape for `aboutAnEndedOrder`.
+- **`false` for a drug the question named that she takes is the proposal vocabulary open
+  [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402) and
+  [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513) track.** README names it as
+  current behaviour and no test pins it, so the key can move when they are fixed.
+- A client that does not render the key still shows the same words for both referents —
+  `openmrs-esm-chartsearchai`'s half.
+- The key does not say which of her orders.
+
+→ `ChartSearchAiCurrentMedicationReferentTest`,
+`ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`,
+`LlmInferenceServiceCurrentMedicationReferentContextTest`,
+`StandingChartAlertsTest.everyStandingAlertIsRaisedFromOneOfHerOwnActiveOrders`.

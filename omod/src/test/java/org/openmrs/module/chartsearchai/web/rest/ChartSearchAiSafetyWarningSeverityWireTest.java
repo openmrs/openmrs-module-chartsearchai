@@ -176,6 +176,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       nor a value re-derived from another field agrees with every chip. Chip 10 also carries
 	 *       {@code getEndedOrderStopDate()}, so a hardcoded {@code null} for that key disagrees with
 	 *       it.</li>
+	 *   <li>12 and 13 — the same pair shape for {@code SafetyWarning.isAboutACurrentMedication()} (issue
+	 *       #527), on the allergen arm's identity sentence, which that arm writes alike for one of her
+	 *       active orders and for a drug put in play: the issue's own byte-identical pair.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -247,7 +250,14 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 						"Rifampicin interacts with active order Nevirapine — Major.", "Major",
 						new java.util.Date(1767225600000L)),
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Rifampicin",
-						"Rifampicin interacts with active order Nevirapine — Major.", "Major"));
+						"Rifampicin interacts with active order Nevirapine — Major.", "Major"),
+				// Chips 12 and 13: one sentence, differing only in SafetyWarning.isAboutACurrentMedication()
+				// (issue #527), both built by the allergen arm's own factory. Mutate the put to `false`
+				// and read this class's failure.
+				SafetyWarningFixtures.recordedAllergenContraindication("Ibuprofen",
+						"The patient has a recorded allergy to Ibuprofen.", true),
+				SafetyWarningFixtures.recordedAllergenContraindication("Ibuprofen",
+						"The patient has a recorded allergy to Ibuprofen.", false));
 	}
 
 	private ChartSearchAiRestController controller;

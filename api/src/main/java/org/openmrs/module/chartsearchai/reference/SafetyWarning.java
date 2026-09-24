@@ -179,11 +179,11 @@ public class SafetyWarning {
 	 * one, since a chip of any type may in principle have been resolved from an order.
 	 *
 	 * <p>{@link #isAboutACurrentMedication()} is false here, as it is for the two shorter
-	 * constructors, and for the same reason rather than as a default: the two arms that answer true
-	 * to it reach {@link #interaction} or {@link #contraindication} instead (see that accessor for
-	 * which they are), so no caller of this constructor is one of them. A caller here is stating a
-	 * chip's wire-facing shape, and issue #348's clause is decided by the arm that raised the
-	 * finding, never by whoever assembles one.
+	 * constructors, and for the same reason rather than as a default: the arms that answer true to it
+	 * build their chips through this class's package-private factories instead (see that accessor for
+	 * which arms they are), so no caller of this constructor is one of them — and since issue #527 that
+	 * false is a published value. A caller here is stating a chip's wire-facing shape, and issue #348's
+	 * clause is decided by the arm that raised the finding, never by whoever assembles one.
 	 */
 	public SafetyWarning(String type, String drug, String detail, String severity,
 			List<ChartOrderBridge> chartOrderBridges) {
@@ -988,14 +988,17 @@ public class SafetyWarning {
 	 * call, and one finding stating the other column beside them is the one-site shape issue #402
 	 * recorded and reverted (ADR Decision 112).
 	 *
-	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and nothing
-	 * reads the second answer.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in
-	 * play there are the QUESTION's — which is the right base for a record the model reads before it
-	 * answers. The post-answer pass also has the drugs the ANSWER named in play, so a substance the
-	 * answer proposed can flip this to false there. That pass renders no clause
-	 * ({@code DrugReferenceInjector.renderFinding} has one caller, {@code injectRecords}, and it uses
-	 * the pre-answer findings), this flag is on neither the wire nor either collapse key, and nothing
-	 * compares the two passes' warnings — so the divergence is unobservable rather than tolerated.
+	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and the wire
+	 * publishes the second.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in play
+	 * there are the QUESTION's — the base for the record the model reads before it answers, and the only
+	 * pass a clause is rendered from ({@code DrugReferenceInjector.renderFinding} has one caller,
+	 * {@code injectRecords}, and it uses the pre-answer findings). The chips an answer carries come from
+	 * the second pass, which is not the same on every path. {@code LlmInferenceService.search} and
+	 * {@code searchStreaming} hand it the MODEL's answer, so a drug the answer names that no record the
+	 * answer is attributable to names ({@code DrugSafetyValidator.isEchoOfAttributableRecord}) is in play
+	 * there beside the question's, and the drug-in-play arm raises its findings, answering false.
+	 * {@code answerFromTheModule} hands it the EMPTY answer, as the pass that raised the findings had.
+	 * Nothing compares the two passes' warnings; ADR Decision 118 records the divergence as a residue.
 	 * Said here because a reader checking for pass-stability will look for it.
 	 *
 	 * <p>It is not derivable from anything else the warning carries, which is why it travels. In
@@ -1009,9 +1012,14 @@ public class SafetyWarning {
 	 * withholds and why — it has more than one silence, and since issue #353 more than it had when
 	 * this paragraph was written — rather than any summary of it here.
 	 *
-	 * <p><b>Prompt-facing only.</b> Nothing on the wire moves and the chip's own detail is untouched,
-	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it — for the
-	 * reason stated at {@link #chartOrderBridges()}, which is NOT that this is unpublished: that key
+	 * <p><b>Published VERBATIM since issue #527, as each chip's {@code aboutACurrentMedication} wire key
+	 * — so this accessor's name IS the key</b>, the rule {@link #restsOnAnUncorroboratedChartMatch()}
+	 * states for its own. Until then this paragraph read "prompt-facing only", and the referent reached a
+	 * client only inside a record the model cites. Public for that reason and no other: the factories
+	 * that SET it stay package-private, for the one-directional reason that accessor gives. The chip's
+	 * own detail is untouched, so {@code DrugSafetyValidator.StatedInteractionChips} still does NOT key
+	 * on it — for the reason stated at {@link #chartOrderBridges()}, which is NOT that this is
+	 * unpublished: that key
 	 * decides which chips are EMITTED and, through {@code ChartSearchAiUtils.resourceKey}, whether two
 	 * injected findings share one resource uuid, so a fact like this must not be able to change which
 	 * chips exist, whether or not a client can read it. The published-versus-prompt-facing reading of
@@ -1026,8 +1034,15 @@ public class SafetyWarning {
 	 * {@code InteractionPairs.alreadyReported} already stops the screening arm restating a pair the
 	 * drug-in-play arm reported, before this ledger sees it. So no two chips of one pass can differ by
 	 * this flag alone.
+	 *
+	 * <p><b>What the published {@code false} does NOT say is that she is off the drug.</b> It is the
+	 * answer of every arm named above as answering false, whatever her chart holds — for
+	 * a drug the question named that she already takes (issues #402 and #513 track that vocabulary), and
+	 * for {@link #substanceInSeveralActiveOrders}' finding, which says two of her orders carry the drug —
+	 * and of every chip built through a public constructor. This is the one home of that list;
+	 * {@code README.md} carries it for a client, with how to render {@code true}.
 	 */
-	boolean isAboutACurrentMedication() {
+	public boolean isAboutACurrentMedication() {
 		return aboutACurrentMedication;
 	}
 

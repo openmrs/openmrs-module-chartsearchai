@@ -136,7 +136,8 @@ public class LlmInferenceServiceCurrentMedicationReferentContextTest extends Bas
 
 	/**
 	 * The issue's second row: the same allergy on a patient with no order of the drug, asked whether to
-	 * give it. The chip's sentence is the first case's, byte for byte, and only the referent differs.
+	 * give it. The chip's sentence is the first case's, byte for byte, and of what the wire carries only
+	 * the referent differs.
 	 */
 	@Test
 	public void theSameSentenceAboutADrugProposedToAPatientOnNoOrderOfItIsPublishedAsAProposal() {

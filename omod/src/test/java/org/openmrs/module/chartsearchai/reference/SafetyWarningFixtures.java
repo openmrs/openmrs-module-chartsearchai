@@ -18,8 +18,8 @@ import java.util.List;
  * an omod test that cannot reach one from {@code org.openmrs.module.chartsearchai.web.rest}.
  *
  * <p><b>Why it exists, and why it is not a widening of production API.</b> The chip-serialization
- * guards live in {@code web.rest}, and the facts these shapes carry are set only by
- * {@code SafetyWarning}'s package-private factories. This class is declared in
+ * guards live in {@code web.rest}, and the facts these shapes carry are set only through
+ * {@code SafetyWarning}'s package-private factories and methods. This class is declared in
  * {@code SafetyWarning}'s OWN package under {@code omod/src/test}, so it reaches them with no
  * production change at all — a split package across two artifacts being legal on a plain classpath,
  * which is what surefire gives these tests.

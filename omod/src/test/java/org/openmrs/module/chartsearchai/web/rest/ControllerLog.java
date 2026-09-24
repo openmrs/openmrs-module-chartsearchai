@@ -147,6 +147,20 @@ final class ControllerLog implements AutoCloseable {
 	 * what a rule about loudness uses — see {@link #hasEventAtOrAbove}.
 	 */
 	boolean hasMessageAt(Level level, String... needles) {
+		return firstMessageAt(level, needles) != null;
+	}
+
+	/**
+	 * The throwable of the first message at exactly {@code level} carrying every one of
+	 * {@code needles}, or {@code null} — so a case can ask what THAT line was logged with, rather
+	 * than whether some other line at the same level carried something.
+	 */
+	Throwable thrownWith(Level level, String... needles) {
+		LogEvent event = firstMessageAt(level, needles);
+		return event == null ? null : event.getThrown();
+	}
+
+	private LogEvent firstMessageAt(Level level, String... needles) {
 		synchronized (events) {
 			for (LogEvent event : events) {
 				if (!level.equals(event.getLevel())) {
@@ -158,11 +172,11 @@ final class ControllerLog implements AutoCloseable {
 					all = all && message.contains(needle);
 				}
 				if (all) {
-					return true;
+					return event;
 				}
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/** Every captured event as {@code LEVEL message [thrown TYPE: message]}, for failure text. */

@@ -692,8 +692,8 @@ public class ChartSearchAiRestController {
 			// grounding-verified) answer exists, persist the audit row and emit "done" — the user's
 			// perceived completion no longer waits out the grounding tail. The audit's responseTimeMs
 			// deliberately measures to THIS point (what the user experienced); the [timing] service log
-			// still carries groundMs. Serialization + write failures unwind like any mid-stream
-			// disconnect, via the same RuntimeException(IOException) shape writeSseEventOrThrow uses.
+			// still carries groundMs. A refused write unwinds like any mid-stream disconnect, through
+			// writeSseEventOrThrow; a serialization failure is not a disconnect and is thrown as a failure.
 			Consumer<ChartAnswer> ungroundedConsumer = ungrounded -> {
 				if (!auditState.recordAnswerOnce(ungrounded)) {
 					// Interface contract is at-most-once; stay idempotent anyway. Keyed on this consumer
@@ -717,14 +717,14 @@ public class ChartSearchAiRestController {
 				auditState.earlyQuestionId = saveAuditLog(user, patient, sanitizedQuestion,
 						ungrounded, System.currentTimeMillis() - startTime);
 				auditState.auditAttempted = true;
+				String doneJson;
 				try {
-					writeSseEvent(out, "done",
-							doneEventJson(ungrounded, auditState.earlyQuestionId));
+					doneJson = doneEventJson(ungrounded, auditState.earlyQuestionId);
 				}
 				catch (IOException e) {
-					log.debug("Client disconnected during streaming (done)");
-					throw new RuntimeException("Client disconnected", e);
+					throw new APIException("Could not serialize the done event", e);
 				}
+				writeSseEventOrThrow(out, "done", doneJson);
 				auditState.earlyDoneSent = true;
 			};
 
@@ -741,8 +741,8 @@ public class ChartSearchAiRestController {
 			// async grounding is active — on a trailing "grounded" event after an early "done". The
 			// frontend must render "thinking" distinctly (e.g. a collapsible panel), never as the
 			// answer; citations must show as unverified until verdicts arrive. All unwind on client
-			// disconnect via writeSseEventOrThrow — those four do; the early done above is written with
-			// writeSseEvent inside its own try, which is the distinction that method's javadoc draws.
+			// disconnect via writeSseEventOrThrow, as do the early done above and the terminal events
+			// below.
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 					patient, sanitizedQuestion,
 					token -> {
@@ -782,7 +782,7 @@ public class ChartSearchAiRestController {
 					// After the save, for the reason the async site above states.
 					auditState.auditAttempted = true;
 				}
-				writeSseEvent(out, "done", doneEventJson(chartAnswer, questionId));
+				writeSseEventOrThrow(out, "done", doneEventJson(chartAnswer, questionId));
 			} else {
 				// done already went out before grounding; deliver the verdicts in the trailing
 				// "grounded" event. Same reference serialization as done, so the client can
@@ -793,7 +793,7 @@ public class ChartSearchAiRestController {
 				if (auditState.earlyQuestionId != null) {
 					groundedData.put("questionId", auditState.earlyQuestionId);
 				}
-				writeSseEvent(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
+				writeSseEventOrThrow(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
 			}
 		}
 		catch (ChartTooLargeException e) {
@@ -819,7 +819,10 @@ public class ChartSearchAiRestController {
 			}
 		}
 		catch (Exception e) {
-			if (e.getCause() instanceof IOException) {
+			// The controller's own refused write, and nothing else: an engine wraps its transport
+			// failures with an IOException cause too, and an inference endpoint that hangs up is a
+			// failure the client and the operator are both owed (issue #451).
+			if (e instanceof ClientDisconnectedException) {
 				log.debug("Streaming ended due to client disconnect");
 			} else {
 				log.error("Chart search streaming failed for patient [id={}]",
@@ -873,7 +876,7 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>Called from {@link #streamAnswer}'s {@code finally}, so it covers every exit of that try
 	 * block rather than one of them: the mid-stream disconnect, where a refused frame becomes the
-	 * {@code RuntimeException(IOException)} the catch-all reads as a benign client hang-up, and the
+	 * {@link ClientDisconnectedException} the catch-all reads as a benign client hang-up, and the
 	 * tail after the ungrounded handoff, which {@code LlmInferenceService} runs with no catch of its
 	 * own.
 	 *
@@ -2248,12 +2251,15 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * Writes an SSE event, converting a client-disconnect {@link IOException} into the
-	 * {@link RuntimeException} the streaming loop unwinds on. Shared by the incremental events — the
-	 * three raw-text channels ({@code token}, {@code thinking}, {@code preliminary}) and the early
-	 * {@code references} — so all of them handle a mid-stream disconnect identically. Every other
-	 * event ({@code done}, whether early or classic, {@code grounded} and {@code error}) calls
-	 * {@link #writeSseEvent} directly, each inside the handler that decides what a failure there
-	 * means.
+	 * {@link ClientDisconnectedException} the streaming loop unwinds on. Every event
+	 * {@code streamAnswer} writes inside its try goes through here — the three raw-text channels
+	 * ({@code token}, {@code thinking}, {@code preliminary}), {@code references}, {@code done} in
+	 * either shape and {@code grounded} — so a refused write means the same thing on every frame.
+	 * The {@code error} events are written from the catches with {@link #writeSseEvent}, each
+	 * handling its own refusal.
+	 *
+	 * <p>Callers serialize before they call, so a serialization failure never reaches the catch
+	 * below and is never mistaken for the client going away.</p>
 	 */
 	private void writeSseEventOrThrow(OutputStream out, String event, String data) {
 		try {
@@ -2261,7 +2267,22 @@ public class ChartSearchAiRestController {
 		}
 		catch (IOException e) {
 			log.debug("Client disconnected during streaming ({})", event);
-			throw new RuntimeException("Client disconnected", e);
+			throw new ClientDisconnectedException(e);
+		}
+	}
+
+	/**
+	 * The client refused a frame of the stream — thrown by {@link #writeSseEventOrThrow} and by
+	 * nothing else, so it is the one failure {@code streamAnswer} reports as a disconnect. A type
+	 * rather than a cause test, because an engine's transport failure carries an
+	 * {@link IOException} cause as well (issue #451).
+	 */
+	private static final class ClientDisconnectedException extends RuntimeException {
+
+		private static final long serialVersionUID = 1L;
+
+		ClientDisconnectedException(IOException cause) {
+			super("Client disconnected", cause);
 		}
 	}
 

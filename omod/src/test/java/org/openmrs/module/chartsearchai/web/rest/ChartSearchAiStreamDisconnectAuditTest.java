@@ -135,8 +135,8 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 	 * catch of its own, so it unwinds into the controller with the answer already on the wire.
 	 *
 	 * <p>Two things at once. It is the case that tells a {@code finally} from a statement at the tail
-	 * of the catch-all's disconnect branch — this exception's cause is not an {@code IOException}, so
-	 * it takes the other branch. And it is the case where the controller is HOLDING the pipeline's own
+	 * of the catch-all's disconnect branch — this exception is not a client disconnect, so it takes
+	 * the other branch. And it is the case where the controller is HOLDING the pipeline's own
 	 * answer: the ungrounded consumer fires in both shapes, by that interface's contract, so the row
 	 * here states the mode and the reference count the pipeline resolved rather than the blanks a
 	 * hand-built answer would file.

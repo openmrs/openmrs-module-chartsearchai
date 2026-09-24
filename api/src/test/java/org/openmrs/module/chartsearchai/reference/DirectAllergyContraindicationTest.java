@@ -161,19 +161,17 @@ public class DirectAllergyContraindicationTest {
 		// exactly the patients most likely to hit it — the ones with more than one recorded drug
 		// allergy.
 		//
-		// The token order guards a re-merge, and not the hoist: re-merging the two passes into one loop
-		// whose precondition exits the METHOD at the first allergen with no identity match.
-		// (The keyword mutation WHAT MOVED below records moves nothing on today's code; re-merging is
-		// what puts the exit back in front of a later comparison.) With the unrelated allergen first, that exit comes
-		// before Ledipasvir is compared and this case reddens; with the tokens flipped, Ledipasvir's chip
-		// is raised first and it stays green — both measured with the exit added to pass one's no-match
-		// branch, which is that loop's behaviour for a drug with no class data. So do not "tidy" the
-		// order. Moving the precondition above the identity pass instead — the hoist
-		// aClassifiedAllergenRaisesNothingForAnUnclassifiedDrug's comment names — reddens this case in
-		// either order, so the order plays no part in guarding it.
-		// Nor can the two single-allergen absence cases either side of this one catch either mutation:
-		// each passes one allergen with no identity match, so there is no later comparison for an early
-		// exit to skip, and each expects no chip.
+		// The token order guards re-merging the two passes into one loop whose precondition exits the
+		// METHOD at the first allergen with no identity match. With the unrelated allergen first, that
+		// exit comes before Ledipasvir is compared and this case reddens; with the tokens flipped,
+		// Ledipasvir's chip is raised first and the case stays green — both measured with the exit added
+		// to pass one's no-match branch, which is that loop's behaviour for a drug with no class data.
+		// So do not "tidy" the order. Moving the precondition above the identity pass instead — the
+		// hoist aClassifiedAllergenRaisesNothingForAnUnclassifiedDrug's comment names — reddens this
+		// case in either order, so the order plays no part in guarding it. Nor can the two
+		// single-allergen absence cases either side of this one catch either mutation: each passes one
+		// allergen with no identity match, so there is no later comparison for an early exit to skip,
+		// and each expects no chip.
 		//
 		// WHAT MOVED (issue #388): this used to record "1 on this build, 0 with the guard's
 		// `continue` changed to `return`". That mutation no longer moves anything — ADR Decision 82
@@ -204,9 +202,8 @@ public class DirectAllergyContraindicationTest {
 		// cases here and in the neighbouring allergen classes (measured the same way). Each of those
 		// turns on an identity chip for a drug carrying neither an ATC subgroup nor a cross-reactivity
 		// group, which is the only state in which this guard fires at all. This case and the other
-		// single-allergen absence case are not among them: both stay green under the hoist, which is
-		// what the case above's comment means when it says neither can catch it. What the case above
-		// can no longer catch is the `continue`-vs-`return` keyword, and its own comment says so.
+		// single-allergen absence case are not among them; the case above's comment says why. What the
+		// case above can no longer catch is the `continue`-vs-`return` keyword, and its own comment says so.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

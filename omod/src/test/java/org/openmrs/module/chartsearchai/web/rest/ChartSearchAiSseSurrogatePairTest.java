@@ -116,6 +116,20 @@ public class ChartSearchAiSseSurrogatePairTest {
 		assertChannelCarries("token", "dose " + SYRINGE + " given");
 	}
 
+	/**
+	 * A {@code null} chunk behind a held half fails the stream the way a {@code null} chunk always
+	 * has — an {@code error} event — rather than completing the half into the text {@code "?null"}.
+	 */
+	@Test
+	public void aNullChunkBehindAHeldHalfIsStillAnError() throws Exception {
+		stream(Channel.TOKEN, "dose \uD83D", null);
+
+		assertEquals(Arrays.asList("dose "), dataOf("token"),
+				"nothing after the held half may be written as answer text");
+		assertTrue(SseEvents.types(out).contains("error"),
+				"a null chunk must end the stream in an error event; got " + SseEvents.types(out));
+	}
+
 	private void stream(Channel channel, String... chunks) {
 		List<Chunk> script = new ArrayList<Chunk>();
 		for (String chunk : chunks) {

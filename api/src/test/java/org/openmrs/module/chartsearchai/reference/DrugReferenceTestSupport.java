@@ -532,8 +532,8 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/** The real injector with the real validator behind it over {@code service}, putting {@code base}
-	 *  through {@code injectRecords} — and the throw-on-empty contract every public form that injects
-	 *  findings documents, in the one place it is kept, so a caller cannot silently assert nothing. */
+	 *  through {@code injectRecords} — and the throw-on-empty contract the public forms built on it
+	 *  document, kept here so a caller cannot silently assert nothing. */
 	private static PatientChart injectedOrThrow(DrugReferenceService service, PatientChart base,
 			PatientClinicalContext context, String question, String arrangement) {
 		PatientChart chart = injectorWithSafety(service).injectRecords(base, context, question);

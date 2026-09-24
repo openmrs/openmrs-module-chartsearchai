@@ -548,13 +548,14 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>Read as {@link #theLaunchPathStillCallsEachProtection} is, through
 	 * {@link #methodBodyWithoutLiterals}, and with that method's residue: text cannot see
-	 * reachability, so a call in a branch that never runs satisfies it.
+	 * reachability, so a call in a branch that never runs satisfies it. The argument list is read up
+	 * to its first closing parenthesis, so the value must be passed as a bare argument there; an
+	 * argument that itself contains a call fails the guard rather than passing it.
 	 */
 	@Test
 	public void theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder() throws IOException {
 		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
-		java.util.regex.Pattern forwarded = java.util.regex.Pattern.compile(
-				"buildRequestBody\\([^;]*\\breferenceRecords\\s*\\)");
+		Pattern forwarded = Pattern.compile("buildRequestBody\\([^;)]*\\breferenceRecords\\s*\\)");
 
 		List<String> violations = new ArrayList<>();
 		for (String signature : java.util.Arrays.asList(
@@ -570,7 +571,7 @@ public class ArchitectureGuardTest {
 							+ " pass");
 			int calls = body.split("buildRequestBody\\(", -1).length - 1;
 			int forwarding = 0;
-			for (java.util.regex.Matcher m = forwarded.matcher(body); m.find();) {
+			for (Matcher m = forwarded.matcher(body); m.find();) {
 				forwarding++;
 			}
 			if (calls == 0 || forwarding != calls) {

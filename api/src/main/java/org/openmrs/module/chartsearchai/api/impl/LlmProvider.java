@@ -439,7 +439,7 @@ public class LlmProvider {
 	 *        <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>
 	 *        shipped that mistake first and eleven test classes errored on it
 	 * @param referenceRecords whether {@code numberedRecords} carries the module's reference records,
-	 *        which decides the engine's repetition penalty and nothing in the prompt (issue #512). A
+	 *        which decides the local engine's repetition penalty and nothing in the prompt (issue #512). A
 	 *        parameter of this one arity for the reason {@code enumerateFindings} is; the caller
 	 *        holding the chart reads it through {@link LlmEngine.ReferenceRecords#in}. Every test
 	 *        double of this method drops it, which is the cost {@link #findingProse} names and

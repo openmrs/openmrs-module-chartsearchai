@@ -122,8 +122,8 @@ public interface LlmEngine {
 	 * does, and ADR Decision 117 is canonical for why and for what the other requests keep.
 	 *
 	 * <p>Abstract rather than a default that falls back to the 3-arg form, deliberately: such a
-	 * default is how an engine silently drops the argument and keeps the penalty, with every test
-	 * double recording the value it was handed and never seeing what the engine did with it.
+	 * default is how an engine silently drops the argument and keeps the penalty, and a test double
+	 * that records the value it was handed never sees what the engine did with it.
 	 *
 	 * @param referenceRecords whether the prompt carries reference-group records, from
 	 *        {@link ReferenceRecords#in}

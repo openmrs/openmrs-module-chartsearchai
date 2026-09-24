@@ -1449,14 +1449,18 @@ public class LocalLlmEngine implements LlmEngine {
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			ReferenceRecords referenceRecords) {
 		return buildRequestBody(systemPrompt, userMessage, stream,
-				ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS,
-				ChartAnswerResponseFormat.build(MAPPER, resolveReasoningMaxChars()), referenceRecords);
+				ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS, defaultResponseFormat(),
+				referenceRecords);
 	}
 
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			int maxTokens) {
-		return buildRequestBody(systemPrompt, userMessage, stream, maxTokens,
-				ChartAnswerResponseFormat.build(MAPPER, resolveReasoningMaxChars()));
+		return buildRequestBody(systemPrompt, userMessage, stream, maxTokens, defaultResponseFormat());
+	}
+
+	/** The chart-answer schema, built in this one place for the answer and the warmup alike. */
+	private ObjectNode defaultResponseFormat() {
+		return ChartAnswerResponseFormat.build(MAPPER, resolveReasoningMaxChars());
 	}
 
 	/** Test seam wrapping {@link ChartSearchAiUtils#getReasoningMaxChars()} (fail-safe 0). */

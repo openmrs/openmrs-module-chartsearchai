@@ -106,25 +106,39 @@ public class ReferenceRecordsReachTheEngineTest {
 
 	@Test
 	public void theProgressiveReasoningPreviewIsReadOffItsOwnChart() {
-		RecordingEngine engine = new RecordingEngine();
 		Patient patient = new Patient();
 		patient.setUuid("uuid-1");
 
-		newService(chartWithReferenceRecords(), engine, true).searchStreaming(patient, QUESTION,
-			token -> { });
-
+		RecordingEngine engine = new RecordingEngine();
+		newService(chartWithReferenceRecords(), chartWithoutReferenceRecords(), engine, true)
+				.searchStreaming(patient, QUESTION, token -> { });
 		assertEquals(Arrays.asList(null, "uuid-1", "uuid-1"), engine.scopes,
 				"the premise: the null-scoped preview, then the committed answer and its repair");
 		assertEquals(Arrays.asList(ReferenceRecords.ABSENT, ReferenceRecords.PRESENT,
 			ReferenceRecords.PRESENT), engine.handed,
 				"the preview's focused chart never passes the injector, so it carries no reference "
-						+ "record and keeps the penalty; the committed answer's chart does");
+						+ "record and keeps the penalty, whatever the committed answer's chart carries");
+
+		RecordingEngine reversed = new RecordingEngine();
+		newService(chartWithoutReferenceRecords(), chartWithReferenceRecords(), reversed, true)
+				.searchStreaming(patient, QUESTION, token -> { });
+		assertEquals(Arrays.asList(null, "uuid-1"), reversed.scopes,
+				"the premise: the preview, then the committed answer, which owes no repair");
+		assertEquals(Arrays.asList(ReferenceRecords.PRESENT, ReferenceRecords.ABSENT),
+			reversed.handed,
+				"and the preview's value is READ off its chart rather than written as a literal: a "
+						+ "focused chart carrying a reference record is handed PRESENT");
 	}
 
 	private static TestableService newService(PatientChart injected, RecordingEngine engine,
 			boolean progressive) {
+		return newService(injected, chartWithoutReferenceRecords(), engine, progressive);
+	}
+
+	private static TestableService newService(PatientChart injected, PatientChart focused,
+			RecordingEngine engine, boolean progressive) {
 		TestableService created = new TestableService(progressive);
-		created.setChartBuildingStrategy(new StubStrategy());
+		created.setChartBuildingStrategy(new StubStrategy(focused));
 		created.setLlmProvider(new EngineBackedProvider(engine));
 		created.setDrugReferenceInjector(new DrugReferenceInjector() {
 
@@ -181,6 +195,12 @@ public class ReferenceRecordsReachTheEngineTest {
 
 	private static final class StubStrategy extends ChartBuildingStrategy {
 
+		private final PatientChart focused;
+
+		private StubStrategy(PatientChart focused) {
+			this.focused = focused;
+		}
+
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
 			return chartWithoutReferenceRecords();
@@ -188,7 +208,7 @@ public class ReferenceRecordsReachTheEngineTest {
 
 		@Override
 		PatientChart buildFocusedChart(Patient patient, String question) {
-			return chartWithoutReferenceRecords();
+			return focused;
 		}
 
 		@Override

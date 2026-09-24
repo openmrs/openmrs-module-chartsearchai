@@ -736,17 +736,19 @@ public class PatientChartSerializer {
 		private final List<String> findingPartners;
 
 		/**
-		 * The names of this patient's own prescriptions, and of the substances resolved from them, that
-		 * an injected {@code safety_finding}'s chart-order clause states — every substance and order
-		 * display of {@code SafetyWarning.chartOrderBridges()} of the finding the record renders, empty
-		 * on every other record and on a finding stating no such clause (issue #514). Written in
-		 * exactly ONE place, {@code DrugReferenceInjector}'s finding mapping, beside
-		 * {@link #findingPartners} and for its reason: a marker reaches this record, never the chip, and
-		 * the record's text is never parsed for it.
+		 * The names an injected {@code safety_finding}'s drugs go by through this patient's own
+		 * prescriptions — {@code SafetyWarning.orderNamesOf} of the finding the record renders: every
+		 * substance and order display of its {@code chartOrderBridges()}, then the display of every
+		 * active order its arm matched a drug against, bridged or not. Empty on every other record and
+		 * on a finding matched against no order (issue #514). Written in exactly ONE place,
+		 * {@code DrugReferenceInjector}'s finding mapping, beside {@link #findingPartners} and for its
+		 * reason: a marker reaches this record, never the chip, and the record's text is never parsed
+		 * for it. Not rendered: a display here that the chart-order clause does not state is in no text.
 		 *
-		 * <p>Read by {@code InteractionClaimPairFidelityCheck}: the clause gives the finding's subject
-		 * or partner a second name — the prescription a brand-named order is (#349) — and a sentence
-		 * naming the drug by that name is still about the pair the finding relates.
+		 * <p>Read by {@code InteractionClaimPairFidelityCheck}: a sentence naming the drug by the
+		 * prescription a brand-named order is (#349), or by her order's display where the finding prints
+		 * the knowledge base's label (round 4 of #514's review), is still about the pair the finding
+		 * relates.
 		 */
 		private final List<String> findingBridgeNames;
 
@@ -1178,9 +1180,9 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * @return the prescription and substance names this injected finding's chart-order clause
-		 *         states — see {@link #findingBridgeNames} — never null, and empty on every record that
-		 *         is not an injected {@code safety_finding} stating that clause
+		 * @return the names this injected finding's drugs go by through her prescriptions — see
+		 *         {@link #findingBridgeNames} — never null, and empty on every record that is not an
+		 *         injected {@code safety_finding} matched against one of her orders
 		 */
 		public List<String> getFindingBridgeNames() {
 			return findingBridgeNames;

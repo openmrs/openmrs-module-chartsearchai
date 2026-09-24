@@ -11090,10 +11090,21 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   (`ChartSearchAiUtils.findingSubject`, the half of `resourceKey` that `findingSubjects` already
   split), the orders it names (`getFindingPartners()`), and the prescriptions and substances its
   chart-order clause resolved them from — the new `RecordMapping.getFindingBridgeNames()`, written
-  beside `findingPartners` by the injector off `SafetyWarning.ChartOrderBridge.namesOf`. The bridges
+  beside `findingPartners` by the injector off `SafetyWarning.orderNamesOf`. The bridges
   are there because the plan's first version omitted them and the refutation showed the false alarm:
   a brand-named order's finding tells the model *"Warfarin from Coumadin 5mg"*, so a claim naming
-  `Coumadin 5mg` is about the pair the finding relates. A finding relates a claim when each side
+  `Coumadin 5mg` is about the pair the finding relates. **Round 4 of the PR's review added the
+  displays of the orders a finding's arm matched**, bridged or not, written off the same walk
+  `DrugSafetyValidator.chartOrderBridges` makes (its `matchedDisplays`, filled before the display
+  silence test is asked, so no bridge moves) and carried as `SafetyWarning.orderNamesOf`, which
+  prints and publishes nothing. A bridge is stated only where the display does NOT name the
+  substance, so a finding naming its partner by the knowledge base's label — *Rifampicin
+  (rifampin)*, *Salbutamol (albuterol)* — against her order *Rifampicin 300mg capsule* carried no
+  name that display contains: a claim naming the order as its record prints it was reported
+  misattributed where it cited the finding, and unfounded in the prompt's own few-shot shape, where
+  its run is the order record. Only the orders a side of THAT finding resolves from are named —
+  another order's display is no name of it — so a claim naming her other order and citing it is
+  still reported. A finding relates a claim when each side
   names one of those names, either way round — so two orders one finding names read as related.
   Requiring one side to be the SUBJECT was tried after a review pass found a merged shared-mechanism
   finding hiding an order-for-drug swap that way, and reverted in the next pass: issue #477's
@@ -11197,8 +11208,9 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   between a short name and a longer one containing it (*Lamivudine*, *Lamivudine / zidovudine*) passes,
   and a subject spelled as no finding spells it leaves the claim unjudged. A PARTNER spelled so fails
   the other way: it reads as unrelated and can be reported. The partner side is ungated for the
-  ticket's invented-partner shape, and the bridge names are what keep a brand-named prescription's
-  own display from being that case. No case pins the naming direction (a span names a drug only by
+  ticket's invented-partner shape, and the displays of the orders the finding's arm matched are what
+  keep her prescription's own display, as its record prints it, from being that case; a paraphrase of
+  that display still is. No case pins the naming direction (a span names a drug only by
   containing it); the check's javadoc says what it decides.
 - **−** **The trailing-run gates read names the findings carry and the phrase's own verb.** A later
   clause naming another drug only by a name no finding prints, citing a finding that names the claim's

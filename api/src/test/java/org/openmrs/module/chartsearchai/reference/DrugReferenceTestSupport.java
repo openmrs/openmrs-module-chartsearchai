@@ -533,7 +533,44 @@ public final class DrugReferenceTestSupport {
 	public static List<SafetyWarning> chipsOverAnswer(String answer, String question,
 			Set<String> activeDrugs, Set<String> activeAtcCodes,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
-		return validator(ddinterServiceWithGroups()).validate(answer, question,
+		return chipsOverAnswer(ddinterServiceWithGroups(), answer, question, activeDrugs, activeAtcCodes,
+				orders);
+	}
+
+	/**
+	 * The service over the knowledge base the module SHIPS ({@link #shippedEntries()}) with the shipped
+	 * cross-reactivity groups — for a case outside this package whose premise is a substance the pinned
+	 * excerpt does not carry (issue #514: Rifampicin, whose label the shipped data spells
+	 * {@code Rifampicin (rifampin)}). Built once per case and handed to both overloads below, so the
+	 * chart and the chips are one arrangement over one dataset.
+	 */
+	public static DrugReferenceService shippedServiceWithGroups() {
+		return serviceWithGroups(shippedEntries());
+	}
+
+	/**
+	 * {@link #injectedFindingsOver(PatientChart, String, Set, Set, List)} over {@code service} rather
+	 * than the excerpt.
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding
+	 */
+	public static PatientChart injectedFindingsOver(DrugReferenceService service, PatientChart base,
+			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return injectedOrThrow(service, base, ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders),
+				question, "drugs " + activeDrugs);
+	}
+
+	/**
+	 * {@link #chipsOverAnswer(String, String, Set, Set, List)} over {@code service} rather than the
+	 * excerpt — the chips for the patient
+	 * {@link #injectedFindingsOver(DrugReferenceService, PatientChart, String, Set, Set, List)} injects
+	 * findings for.
+	 */
+	public static List<SafetyWarning> chipsOverAnswer(DrugReferenceService service, String answer,
+			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return validator(service).validate(answer, question,
 				ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders));
 	}
 

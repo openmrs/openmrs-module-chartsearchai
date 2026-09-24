@@ -34,6 +34,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.InteractionClaimP
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
@@ -1091,6 +1092,147 @@ public class InteractionClaimPairFidelityTest {
 		}
 	}
 
+	/**
+	 * A claim naming her order the way the chart's own record of it prints it — with its dose and form —
+	 * is about the pair the finding relates, even where the finding names the partner under a
+	 * knowledge-base label that display does not contain (round 4 of #514's review). The shipped data
+	 * labels rifampicin {@code Rifampicin (rifampin)}; her order displays {@code Rifampicin 300mg
+	 * capsule}, which names the substance, so the finding states no chart-order clause and no bridge
+	 * name carries the display. The review's probe had sentences stating exactly that pair reported as
+	 * misattributed where the finding's marker was taken for the claim and as unfounded where it was
+	 * not, while the three controls naming the partner by the label or one of its words were not
+	 * reported.
+	 */
+	@Test
+	public void aClaimNamingHerOrderAsItsOwnRecordPrintsItIsAboutThePairTheFindingRelates() {
+		String question = "Is it safe to give clarithromycin?";
+		DrugReferenceService shipped = DrugReferenceTestSupport.shippedServiceWithGroups();
+		for (String display : Arrays.asList("Rifampicin 300mg capsule", "Rifampin 300mg capsule")) {
+			Arrangement arrangement = new Arrangement(shipped, question, setOf(display), setOf("J04AB02"),
+					Collections.singletonList(new PatientClinicalContext.ActiveDrugOrder("order-rifampicin",
+							display, setOf(display), setOf("J04AB02"))));
+			int finding = arrangement.finding("Clarithromycin", "Rifampicin (rifampin)");
+			RecordMapping record = DrugReferenceTestSupport.findingAt(arrangement.chart, finding);
+			assertEquals(Collections.<String> emptyList(), record.getFindingBridgeNames().stream()
+					.filter(name -> !name.equals(display)).collect(java.util.stream.Collectors.toList()),
+					"the premise: no bridge name but the display itself — the display names the substance, "
+							+ "so the finding states no chart-order clause, was: " + record.getText());
+			assertFalse(record.getText().contains(display),
+					"the premise: the finding does not print her order's display, was: " + record.getText());
+			int order = arrangement.orderRecord(display);
+			List<String> answers = new ArrayList<String>(Arrays.asList(
+					"Clarithromycin interacts with active order " + display + " [" + order + "][" + finding + "].",
+					"Clarithromycin interacts with active order " + display + " [" + order + "], a Moderate "
+							+ "problem [" + finding + "].",
+					"Clarithromycin interacts with active order " + display + " [" + finding + "].",
+					"Clarithromycin interacts with active order " + display + "."));
+			if (display.startsWith("Rifampicin")) {
+				// The controls: the label, and each of its words, cited to the finding.
+				for (String partner : Arrays.asList("Rifampicin (rifampin)", "Rifampin", "Rifampicin")) {
+					answers.add("Clarithromycin interacts with active order " + partner + " [" + finding + "].");
+				}
+			}
+			for (String answer : answers) {
+				InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), question)
+						.getInteractionClaimPairs();
+
+				assertNotNull(pairs, "the check ran, for: " + answer);
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"the finding cited relates exactly this pair, was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(),
+						"a finding in the prompt relates this pair, was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getJudged(), "the claim was judged, was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * The other value of the case above: the display of one of her orders is a name only of the findings
+	 * matched against THAT order, never of every finding. A claim naming her other order by its record's
+	 * display and citing the rifampicin finding is still misattributed.
+	 */
+	@Test
+	public void anotherOrdersDisplayIsNoNameOfAFindingNotMatchedAgainstIt() {
+		String question = "Is it safe to give clarithromycin?";
+		String rifampicin = "Rifampicin 300mg capsule";
+		String simvastatin = "Simvastatin 20mg tablet";
+		Arrangement arrangement = new Arrangement(DrugReferenceTestSupport.shippedServiceWithGroups(), question,
+				setOf(rifampicin, simvastatin), setOf("J04AB02", "C10AA01"), Arrays.asList(
+						new PatientClinicalContext.ActiveDrugOrder("order-rifampicin", rifampicin,
+								setOf(rifampicin), setOf("J04AB02")),
+						new PatientClinicalContext.ActiveDrugOrder("order-simvastatin", simvastatin,
+								setOf(simvastatin), setOf("C10AA01"))));
+		int rifampicinsFinding = arrangement.finding("Clarithromycin", "Rifampicin (rifampin)");
+		String answer = "Clarithromycin interacts with active order " + simvastatin + " [" + rifampicinsFinding
+				+ "].";
+
+		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), question)
+				.getInteractionClaimPairs();
+
+		assertEquals(Collections.singletonList(Integer.valueOf(rifampicinsFinding)),
+				pairs.getMisattributedCitations(),
+				"the finding cited relates Clarithromycin to another order, was: " + pairs);
+		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
+	}
+
+	/**
+	 * The chip half of the case above: a drug only the ANSWER names raises its finding post-answer, as a
+	 * chip no carried record has, and an uncited claim pairing it with her order as the record prints it
+	 * is founded on that chip. The chip goes by the same names its record would.
+	 */
+	@Test
+	public void aClaimAboutADrugOnlyTheAnswerNamesIsFoundedOnItsChipUnderHerOrdersDisplay() {
+		String question = "Is it safe to give clarithromycin?";
+		String display = "Rifampicin 300mg capsule";
+		Arrangement arrangement = new Arrangement(DrugReferenceTestSupport.shippedServiceWithGroups(), question,
+				setOf(display), setOf("J04AB02"), Collections.singletonList(new PatientClinicalContext.ActiveDrugOrder(
+						"order-rifampicin", display, setOf(display), setOf("J04AB02"))));
+		String answer = "Warfarin interacts with active order " + display + ".";
+		assertFalse(arrangement.hasFinding("Warfarin", "Rifampicin (rifampin)"),
+				"the premise: no carried finding is about Warfarin, was: " + arrangement.chart.getText());
+		boolean chipRelates = false;
+		for (SafetyWarning chip : arrangement.chipsOver(answer)) {
+			chipRelates |= relates(chip, "Warfarin", "Rifampicin (rifampin)");
+		}
+		assertTrue(chipRelates, "the premise: the post-answer chips relate Warfarin to her rifampicin order, was: "
+				+ arrangement.chipsOver(answer));
+
+		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), question)
+				.getInteractionClaimPairs();
+
+		assertEquals(0, pairs.getUnfounded(), "a chip relates this pair, was: " + pairs);
+		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+	}
+
+	/**
+	 * The screening arm's half: both drugs are her orders, and the finding names rifampicin, its
+	 * subject, under its knowledge-base label. A claim naming that order as its record prints it, citing
+	 * the finding, is about the pair it relates, whichever drug the sentence leads with.
+	 */
+	@Test
+	public void aScreeningFindingIsCitedForTheClaimNamingHerOrderAsItsRecordPrintsIt() {
+		String question = "Are there any drug interactions with her current medications?";
+		String rifampicin = "Rifampicin 300mg capsule";
+		String simvastatin = "Simvastatin 20mg tablet";
+		Arrangement arrangement = new Arrangement(DrugReferenceTestSupport.shippedServiceWithGroups(), question,
+				setOf(rifampicin, simvastatin), setOf("J04AB02", "C10AA01"), Arrays.asList(
+						new PatientClinicalContext.ActiveDrugOrder("order-rifampicin", rifampicin,
+								setOf(rifampicin), setOf("J04AB02")),
+						new PatientClinicalContext.ActiveDrugOrder("order-simvastatin", simvastatin,
+								setOf(simvastatin), setOf("C10AA01"))));
+		// The finding's SUBJECT is rifampicin, so its order's display comes through the subject's walk.
+		int finding = arrangement.finding("Rifampicin (rifampin)", "Simvastatin");
+		String answer = "Simvastatin interacts with active order " + rifampicin + " [" + finding + "].";
+
+		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), question)
+				.getInteractionClaimPairs();
+
+		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
+		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+	}
+
 	/** Issue #477's arrangement: two of her orders carrying rifampicin, the finding that the drug is
 	 *  already in both, and the chips the real validator raises over them. */
 	private static final class SeveralOrders {
@@ -1144,18 +1286,46 @@ public class InteractionClaimPairFidelityTest {
 
 		private final PatientChart chart;
 
+		/** The dataset both halves are built over; null for the pinned excerpt. */
+		private final DrugReferenceService dataset;
+
 		private Arrangement(String question, Set<String> drugs, Set<String> atc,
 				List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			this(null, question, drugs, atc, orders);
+		}
+
+		/** Over {@code dataset} rather than the excerpt — the chart AND the chips, so they are one
+		 *  arrangement. */
+		private Arrangement(DrugReferenceService dataset, String question, Set<String> drugs, Set<String> atc,
+				List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			this.dataset = dataset;
 			this.question = question;
 			this.drugs = drugs;
 			this.atc = atc;
 			this.orders = orders;
-			this.chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), question, drugs, atc,
-					orders);
+			this.chart = dataset == null
+					? DrugReferenceTestSupport.injectedFindingsOver(baseChart(), question, drugs, atc, orders)
+					: DrugReferenceTestSupport.injectedFindingsOver(dataset, baseChart(), question, drugs, atc,
+							orders);
 		}
 
 		private List<SafetyWarning> chipsOver(String answer) {
-			return DrugReferenceTestSupport.chipsOverAnswer(answer, question, drugs, atc, orders);
+			return dataset == null
+					? DrugReferenceTestSupport.chipsOverAnswer(answer, question, drugs, atc, orders)
+					: DrugReferenceTestSupport.chipsOverAnswer(dataset, answer, question, drugs, atc, orders);
+		}
+
+		/** The citation number of the {@code active_drug_order} record the injector wrote for the order
+		 *  displayed {@code display}. */
+		private int orderRecord(String display) {
+			for (RecordMapping mapping : chart.getMappings()) {
+				if (ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(mapping.getResourceType())
+						&& mapping.getText() != null && mapping.getText().contains(display)) {
+					return mapping.getIndex();
+				}
+			}
+			throw new IllegalStateException("no active_drug_order record of " + display + " in: "
+					+ chart.getText());
 		}
 
 		private boolean hasFinding(String subject, String partner) {

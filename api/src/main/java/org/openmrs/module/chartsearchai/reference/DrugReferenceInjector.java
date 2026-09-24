@@ -742,7 +742,7 @@ public class DrugReferenceInjector {
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
-					finding.namedPartners(), SafetyWarning.ChartOrderBridge.namesOf(finding.chartOrderBridges()),
+					finding.namedPartners(), SafetyWarning.orderNamesOf(finding),
 					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;

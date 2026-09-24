@@ -64,10 +64,14 @@ import org.slf4j.LoggerFactory;
  * <p><b>What a finding relates is read structurally, never from its text.</b> Every name a finding
  * goes by: its subject ({@link ChartSearchAiUtils#findingSubject} on a record,
  * {@link SafetyWarning#getDrug()} on a chip), the orders it names
- * ({@link RecordMapping#getFindingPartners()}, {@link SafetyWarning#namedPartners()}), and the
- * prescriptions and substances its chart-order clause resolved them from
- * ({@link RecordMapping#getFindingBridgeNames()}, {@link SafetyWarning#chartOrderBridges()}) — the
- * last because a brand-named order's finding gives the drug a second name the model may use (#349).
+ * ({@link RecordMapping#getFindingPartners()}, {@link SafetyWarning#namedPartners()}), and the names
+ * its drugs go by through her orders ({@link RecordMapping#getFindingBridgeNames()},
+ * {@link SafetyWarning#orderNamesOf}) — the prescriptions and substances its chart-order clause
+ * resolved them from, because a brand-named order's finding gives the drug a second name the model may
+ * use (#349), and the display of every order its arm matched a drug against, because a finding names
+ * its partner by the knowledge base's label (<em>Rifampicin (rifampin)</em>) while the chart's record of
+ * the order prints its display (<em>Rifampicin 300mg capsule</em>), and the finding states no
+ * chart-order clause where that display names the substance (round 4 of #514's review).
  * A finding relates a subject to a partner when each names one of those names, whichever way round: an
  * interaction relates two drugs whichever the sentence leads with, the screening arm's two drugs are
  * both her orders, and issue #477's findings relate two of her orders to each other. So two orders one
@@ -139,8 +143,9 @@ import org.slf4j.LoggerFactory;
  * <em>Lamivudine</em> inside <em>Lamivudine / zidovudine</em> — so a swap between those two passes.
  * An invented pair whose subject is a drug no finding names is unjudged. The partner side runs the
  * other way, because it is ungated: a partner the answer names by a brand or a paraphrase no finding
- * prints reads as unrelated and can be REPORTED — the bridge names are what keep a brand-named
- * prescription's own display out of that case. A claim pairing two orders one finding names reads as
+ * prints reads as unrelated and can be REPORTED — the displays of the orders the finding's arm matched
+ * are what keep her prescription's own display, as its record prints it, out of that case, and a
+ * paraphrase of that display is still in it. A claim pairing two orders one finding names reads as
  * related, so an order put in for a merged finding's subject passes — {@link #anyRelates} says why.
  * The trailing-run gates read names the findings carry and the phrase's own verb, so a later clause
  * naming another drug only by a name no finding prints, citing a finding that names the claim's
@@ -626,7 +631,7 @@ final class InteractionClaimPairFidelityCheck {
 	/**
 	 * @return whether one of {@code findings} relates one reading of the claim's subject to one of its
 	 *         partners: each names one of the finding's names — its subject, an order it names, or a
-	 *         bridge name — whichever way round.
+	 *         name through her orders — whichever way round.
 	 *         Two of its ORDERS count as a pair it relates, deliberately: issue #477's findings (a drug
 	 *         already in several of her orders, orders sharing a substance) state exactly that relation,
 	 *         and nothing on the record tells them from a merged finding stating each order against its
@@ -688,7 +693,7 @@ final class InteractionClaimPairFidelityCheck {
 
 		private final String subject;
 
-		/** Every name it goes by — its subject, the orders it names, its bridge names. */
+		/** Every name it goes by — its subject, the orders it names, its names through her orders. */
 		private final Set<String> names;
 
 		private Finding(String type, String subject, List<String> partners, List<String> bridgeNames) {
@@ -721,7 +726,7 @@ final class InteractionClaimPairFidelityCheck {
 
 		static Finding of(SafetyWarning chip) {
 			return new Finding(chip.getType(), chip.getDrug(), chip.namedPartners(),
-					SafetyWarning.ChartOrderBridge.namesOf(chip.chartOrderBridges()));
+					SafetyWarning.orderNamesOf(chip));
 		}
 	}
 }

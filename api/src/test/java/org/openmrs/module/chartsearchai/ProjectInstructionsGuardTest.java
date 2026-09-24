@@ -165,6 +165,11 @@ public class ProjectInstructionsGuardTest {
 	 * package's worth of their own — {@code serializer/} is where both order stamps and the mapping
 	 * ladder live — before trimming a fifth time, because a split is the move that made the
 	 * drug-safety budget tractable and no amount of trimming has made this one so.
+	 * <b>That split was considered on 2026-09-24 and rejected (issue #432), so do not re-propose it on
+	 * the same grounds:</b> the chart-assembly rules bind {@code api/impl} — their writer
+	 * {@code QueryStoreChartBuilder}, and {@code ChartBuildingStrategy} — as well as the carriers in
+	 * {@code serializer/}, and a rule binding two packages belongs in the root file by that file's own
+	 * placement criterion.
 	 *
 	 * <p><b>The reference budget was raised from 76,000 to 76,500 on 2026-09-23</b> (issues #391 Part B
 	 * and #473), in the state the 2026-09-07 paragraph above describes: the file sat 2 bytes under the

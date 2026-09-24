@@ -522,10 +522,11 @@ public class DrugReference {
 	 *         predicate on all 2283 rows and elects the same row for all 129 multi-row families. It is
 	 *         still not reused, and the second reason is the one that would bite: that method is for a
 	 *         CLINICIAN-ENTERED name, and CLAUDE.md keeps identity, ranking and widening apart; and it is
-	 *         gated on {@link #matchesDrugName}, which its own javadoc says excludes "a hand-authored
-	 *         {@code json} entry whose {@code aliases} omit its own {@code name}" — so on such a dataset
-	 *         it answers false where this answers true, i.e. fails CLOSED. Recorded because the
-	 *         measurement is what makes the two look interchangeable to whoever reads them next.
+	 *         gated on {@link #matchesDrugName}, which can exclude an entry whose {@code aliases} omit
+	 *         its own {@code name} — a shape a load repairs, except for the entries
+	 *         {@link #nameMatchStrength}'s javadoc names — so for such an entry it can answer false
+	 *         where this answers true, i.e. fail CLOSED. Recorded because the measurement is what makes
+	 *         the two look interchangeable to whoever reads them next.
 	 *
 	 *         <p>Read by {@link #canonicalRow} and, since issue #250, by {@link #namesNoRoute()} — a row
 	 *         whose trailing parenthetical is the name the data files its family under carries no
@@ -2419,9 +2420,13 @@ public class DrugReference {
 	 * <p><b>Gated on {@link #matchesDrugName} first</b>, so the entries a name can resolve to are
 	 * exactly the ones it resolved to before and only the CHOICE among them changes: this can never
 	 * resolve a name that resolved to nothing, and never fail to resolve one that resolved to
-	 * something. The one shape that gate excludes is a hand-authored {@code json} entry whose
-	 * {@code aliases} omit its own {@code name} — for it the display name is not a match at all, which
-	 * is the pre-existing answer and not this method's to widen.
+	 * something. The shape that gate can exclude is an entry whose {@code aliases} omit its own
+	 * {@code name}: where the gate finds none of them in that name either, the display name is not a
+	 * match at all, which is the pre-existing answer and not this method's to widen. A load repairs that
+	 * shape except where {@code DrugReferenceValidity}'s {@code sanitizeAliases} reports it instead
+	 * (issue #296), and an entry pushed through the {@code setEntries} seam is never loaded — see
+	 * {@link #setAliases}. {@link DrugReferenceService#findImpliedByDrugName} records how often the
+	 * shipped data poses it.
 	 *
 	 * @return one of {@link #NAME_NO_MATCH}, {@link #NAME_TOKEN_INSIDE_A_NAME},
 	 *         {@link #NAME_IS_ANOTHER_NAME}, {@link #NAME_IS_THE_DISPLAY_NAME} — higher is a stronger

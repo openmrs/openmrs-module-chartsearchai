@@ -792,7 +792,7 @@ public final class DrugReferenceValidity {
 	 * {@code Sodium chloride} and {@code Amphotericin B, liposomal} do not — a single-word allergen has no
 	 * space at all, and a space preceded by a letter fails the left boundary. It takes a recorded name
 	 * with a non-alphanumeric before a space and a short word after it. The prose matcher is false on the
-	 * same string, which is the asymmetry issue #150 reports: #148 gave allergen resolution the
+	 * same string, which is the asymmetry issue #150 reports: #147 gave allergen resolution the
 	 * recorded-name rule, and the tail allowance is what opened this.
 	 *
 	 * <p>The offending token and not the entry, deliberately. The entry's other aliases, its ATC codes and
@@ -801,6 +801,18 @@ public final class DrugReferenceValidity {
 	 * refusing the entry would convert a fail-open into a silent fail-closed. Dropping the token removes
 	 * exactly the thing that fails open and nothing else, which is why it is preferred over refusing the
 	 * entry rather than merely gentler than it.
+	 *
+	 * <p>Before issue #260's fix (PR #271) the same alias also failed CLOSED, through the dose arm:
+	 * {@code DrugSafetyValidator.substanceOwnsDose} vetoes a dose that another substance's name sits
+	 * strictly nearer to, and it then located names with a raw {@code String.indexOf} over each alias,
+	 * so a blank alias on an entry of another substance was found at every space in the clause.
+	 * Measured 2026-09-24 through {@code DrugSafetyValidator.validate} over the {@code setEntries} seam,
+	 * which skips this drop, with one unrelated entry carrying {@code " "} added to
+	 * {@code drug-reference-substance-dosing-rows.json}: the Cefalexin dose warning that
+	 * {@code Give cefalexin 400 mg three times daily.} raised for a six-year-old without that entry was
+	 * not raised with it on the commit before the fix ({@code c39cc524^}), and was raised either way on
+	 * the fix's own ({@code c39cc524}). Whether any other shape of it survives that fix was not
+	 * measured.
 	 *
 	 * <p><b>An entry no alias of its own names is REPAIRED</b> (#210, #211) — <b>except where its display
 	 * NAME is itself a string that names nothing, which is REPORTED instead</b> (#296). Repairing that
@@ -811,7 +823,8 @@ public final class DrugReferenceValidity {
 	 * a property of the PARSERS: {@link DdiDrugReferenceSource} makes an entry's display name its first
 	 * alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of those the strongest
 	 * claimant on any alias an entry carries is itself in the matched set. A hand-authored {@code json}
-	 * file need not do that, and {@code json} is the DEFAULT format — there the rank-2 claimant can be an
+	 * file need not do that, and {@code json} was the DEFAULT format until ADR Decision 36 and is still what a
+	 * deployment needing dosing selects — there the rank-2 claimant can be an
 	 * entry the matcher never reached, and then no matched row's alias denotes its own substance and every
 	 * one is dropped ({@code DrugReferenceService.rowsOf} bounds that to "never emptied", which is a floor
 	 * rather than a fix). Giving the entry its own display name asserts nothing the file does not already

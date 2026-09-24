@@ -269,6 +269,25 @@ public class OrdersSharingASubstanceTest {
 	}
 
 	@Test
+	public void aQuestionNamingNoDrugThatIsNotAScreenStatesNothingWhereTheAnswerNamesOne() {
+		// The gate reads the QUESTION's drugs and never inPlay, which also holds the drugs the ANSWER
+		// names: the pre-answer pass validates an empty answer, so a gate on inPlay would raise the
+		// finding on the post-answer chips alone and the prose would never have been handed it.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
+				"Lamivudine / zidovudine", "Efavirenz", "Cotrimoxazole 960mg", RHZ, RHZE, "Stavudine");
+		String question = "What was her last blood pressure?";
+		String answer = "She takes metformin.";
+		assertTrue(service.findImpliedByQuery(question).isEmpty(), "precondition: the question names no drug");
+		assertFalse(QueryScopeRouter.isInteractionScreening(question), "precondition: not a screen");
+		assertFalse(service.findImpliedByQuery(answer).isEmpty(), "precondition: the answer puts a drug in play");
+
+		assertEquals(0, shared(DrugReferenceTestSupport.validator(service).validate(answer, question, context))
+				.size());
+	}
+
+	@Test
 	public void theChipListRanksTheFindingByStrengthAsTheModuleAnswerDoes() throws IOException {
 		// A reason to change her therapy, so beside a Major and ahead of a caution, on the chips and the
 		// prompt's record order as in the module's answer (OrdersSharingASubstanceModuleAnswerContextTest):

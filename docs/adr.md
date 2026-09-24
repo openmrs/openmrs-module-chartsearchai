@@ -10831,7 +10831,9 @@ of orders, and over #483's order predicate.
   question alone, like the screening gate, so both `validate` passes of a request agree. `inPlay` is not
   used because the answer widens it, which was Decision 114's reason for refusing the earlier anchor.
   The screening gate needs `questionDrugs` empty, so a pass raises the finding at most once. A question
-  that names no drug and is not a screen, and the standing chart alerts, raise nothing, as before.
+  that names no drug and is not a screen, and the standing chart alerts, raise nothing, as before;
+  the first raises nothing whatever drug its answer names →
+  `OrdersSharingASubstanceTest.aQuestionNamingNoDrugThatIsNotAScreenStatesNothingWhereTheAnswerNamesOne`.
 - **A set of orders whose every shared substance the question named is left out.** For such a
   substance Decision 112's `alreadyInSeveralOrders` has already said it is in those orders, off the
   same `ordersWhoseDisplayNames`, so this finding would restate it in the other referent (found in this

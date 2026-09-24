@@ -541,9 +541,9 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The one constructor of {@code classFile} whose descriptor ends in {@code tail}, which is how a
-	 * constructor case here selects its subject — shared by every case that selects one, because the
-	 * copy of this selection that preceded it lost a canary within a single commit. Fails, rather than
+	 * The one constructor of {@code classFile} whose descriptor ends in {@code tail}, which is how the
+	 * constructor cases that call this select their subject, so a canary added here reaches each of
+	 * them. Fails, rather than
 	 * selecting nothing, when the class file is absent, when the type publishes a single arity (with
 	 * one there is no narrower rung for a caller that carries none of the guarded field to use, and
 	 * the guard is vacuous), and when anything but exactly one constructor matches.

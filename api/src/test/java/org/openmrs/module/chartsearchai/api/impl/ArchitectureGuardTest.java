@@ -93,7 +93,8 @@ public class ArchitectureGuardTest {
 	private static final String CHART_BUILDER_CLASS_FILE =
 			"org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.class";
 
-	/** The one class that may pass a {@code RecordMapping} a stop date (issue #432). */
+	/** The one class that may pass a {@code RecordMapping} a stop date (issue #432), outside the
+	 *  mapping's own date-carrying rungs, which pass their parameter on. */
 	private static final String SERIALIZER_CLASS_FILE =
 			"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer.class";
 
@@ -226,7 +227,8 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * The shared body of the two injector-caller cases in this file: exactly one {@code RecordMapping} constructor matches
+	 * The shared body of the two injector-caller cases in this file: exactly one {@code RecordMapping}
+	 * constructor matches
 	 * {@code tail}, and only {@code DrugReferenceInjector} invokes it.
 	 *
 	 * <p>One method rather than two copies because the two differ in a selector, the wording, and one
@@ -431,7 +433,8 @@ public class ArchitectureGuardTest {
 	 * which forward their own PARAMETER through {@code this(...)}. So a copy method on the mapping
 	 * that takes a date is a writer, and a rung that carries no date must default it to the null
 	 * constant — which nothing behavioural pinned: making the order-currency rung default it to a date
-	 * left the api suite green, and it is the rung the injector's two note records reach.
+	 * left the api suite green, and it is the rung the injector's two note records reach through the
+	 * {@code this(...)} chain from the five-argument one they call.
 	 *
 	 * <p><b>Why the field's {@code final} is asserted, and asserted positively.</b> Successive
 	 * reviews each wrote the date past the call-site reading one more way — a constructor reference,
@@ -447,8 +450,8 @@ public class ArchitectureGuardTest {
 	 * states for its own, and a REFLECTIVE construction or field write names no descriptor this reads,
 	 * so no case here can see it. A date-carrying rung that passed, or the widest that assigned, a
 	 * value of its own in place of the parameter it takes is exempt with the rest of its rung. And
-	 * the case reads the field, not the getter: a {@code getOrderStopDate()} that derived a value instead of returning the field, or a
-	 * subclass overriding it — {@code RecordMapping} is not final — publishes a date no constructor
+	 * the case reads the field, not the getter: a {@code getOrderStopDate()} that derived a value
+	 * instead of returning the field, or a subclass overriding it — {@code RecordMapping} is not final — publishes a date no constructor
 	 * wrote.
 	 */
 	@Test

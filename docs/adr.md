@@ -10915,7 +10915,7 @@ above those parameters already recorded the same dodge at `allowed_length=4` ("S
 - **Only the answer arities carry it.** `entails`, `entailsBatch` and `warmup` send what they sent: a
   verdict is YES or NO rather than a copy, and a warmup generates one token.
 - **The two engine methods are abstract, not defaults that drop the value.** An engine that does not
-  handle it fails to compile rather than keeping the penalty. `RemoteLlmEngine` sends no repetition
+  implement them does not compile. `RemoteLlmEngine` sends no repetition
   penalty at all and ignores it.
 
 **Rejected:**
@@ -10930,7 +10930,8 @@ above those parameters already recorded the same dodge at `allowed_length=4` ("S
 ### Consequences
 
 - **+** Pinned by `LocalLlmEngineTest.buildRequestBody_sendsNoDrySamplerForAPromptCarryingReferenceRecords`
-  (the body, and that `ABSENT` is today's body byte for byte), `ReferenceRecordsReachTheEngineTest` (the
+  (the body each value produces), `RemoteLlmEngineReferenceRecordsTest` (the remote engine's request, off
+  the wire, whatever the value), `ReferenceRecordsReachTheEngineTest` (the
   value each answer call hands the engine, through a real `LlmProvider` over a chart the real injector
   built) and `ArchitectureGuardTest.theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder`
   (the one link a test cannot run: that guard reads source, with its residue named in its javadoc).

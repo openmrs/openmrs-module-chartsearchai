@@ -2265,9 +2265,8 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>Each frame is encoded on its own, and an encoder handed an unpaired surrogate substitutes
 	 * {@code ?} for it — so a code point the model streamed across two chunks reached the client as
-	 * {@code ??}. One encoder held for the whole response cannot fix that: the frame syntax between the
-	 * two halves is encoded between them too. The half has to be withheld, and per CHANNEL, because the
-	 * next frame written may belong to another channel whose text it is not part of.</p>
+	 * {@code ??}. Why the half is withheld per CHANNEL, rather than encoded through one encoder for the
+	 * whole response, is ADR Decision 101.</p>
 	 *
 	 * <p>What it does with malformed text: a held half followed by anything but a low half is prepended
 	 * all the same and encoded as {@code ?}, as before; a held half still pending when the channel ends
@@ -2283,7 +2282,8 @@ public class ChartSearchAiRestController {
 		 * was held back and no frame should be written.
 		 *
 		 * @throws NullPointerException on a {@code null} chunk, which the writer's split refused before
-		 *         this existed and which must not now read as "held back"
+		 *         this existed and which must not now be prepended to a held half as the text
+		 *         {@code "?null"}
 		 */
 		String take(String chunk) {
 			Objects.requireNonNull(chunk, "a streamed chunk");

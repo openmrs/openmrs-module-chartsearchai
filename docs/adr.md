@@ -7783,8 +7783,9 @@ one, references stamped `grounded: true` — a verdict the server publishes only
 verification — forged `safetyWarnings`/`interactionPairs`, a `questionId` that would misattribute the
 clinician's later `/feedback`, or an `error` in place of the answer. Every server-side integrity
 control this module publishes is rendered from those events, so the forgery pre-empts all of them at
-once. Bounded, and stated as such: one upstream delta chunk becomes one frame, so the sequence must
-arrive inside a single chunk — routine for a hostile or token-batching remote endpoint, impractical
+once. Bounded, and stated as such: one upstream delta chunk becomes at most one frame, and what is
+held across chunks is at most a high surrogate (#438, below), never a terminator — so the sequence
+must arrive inside a single chunk — routine for a hostile or token-batching remote endpoint, impractical
 against the local llama-server, which streams a token at a time. **What a single CR buys depends on where it
 falls, and a RUN of them removes even that**: a client joins a frame's `data:` lines with LF, so text
 ahead of a lone CR lands in the same buffer as the forged JSON. Driven through this package's own
@@ -7803,9 +7804,9 @@ client this project ships — the pre-fix writer passed a CR through, so the str
 `done.answer` byte for byte and now does not. Driven through `streamAnswer`, a CRLF inside ONE chunk
 arrives as a single LF; a CRLF STRADDLING two chunks arrives as two, a blank line the model never
 wrote, because each chunk is framed on its own and nothing carries the pending CR across. Reachable:
-each upstream delta becomes one frame, and char-by-char chunking is a mode `LlmProviderTest` pins. The
-writer is not changed for it — spanning a terminator across frames needs state in a per-event writer,
-for a cosmetic difference on a channel whose fidelity contract is `done.answer`. Both shapes are why
+each upstream delta is framed on its own, and char-by-char chunking is a mode `LlmProviderTest` pins. The
+writer is not changed for it: it is a cosmetic difference on a channel whose fidelity contract is
+`done.answer`. Both shapes are why
 README states the rule rather than the property — do not RELY on the streamed text being
 byte-identical, and use `done`'s `answer` where fidelity matters — because the property is not general:
 an answer whose breaks are LF streams back byte-identical, which is the ordinary case and is measured.

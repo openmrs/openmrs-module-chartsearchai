@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -23,7 +22,6 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.api.ChartSearchService;
 
 /**
  * A code point the model streams across two chunks reaches the client as that code point, on every
@@ -42,10 +40,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 public class ChartSearchAiSseSurrogatePairTest {
 
 	/** U+1F489, SYRINGE: one code point, two UTF-16 chars. */
-	private static final String SYRINGE = "💉";
-
-	/** The same code point as the four bytes UTF-8 encodes it to. */
-	private static final byte[] SYRINGE_UTF8 = { (byte) 0xF0, (byte) 0x9F, (byte) 0x92, (byte) 0x89 };
+	private static final String SYRINGE = "\uD83D\uDC89";
 
 	private ChartSearchAiRestController controller;
 
@@ -116,6 +111,15 @@ public class ChartSearchAiSseSurrogatePairTest {
 		assertChannelCarries("token", "dose " + SYRINGE + " given");
 	}
 
+	/** A half still held when the channel ends is not a character, and is never written. */
+	@Test
+	public void aHalfStillHeldWhenTheChannelEndsIsNeverWritten() throws Exception {
+		stream(Channel.TOKEN, "dose ", "\uD83D");
+
+		assertEquals(Arrays.asList("dose "), dataOf("token"),
+				"a high half no low half followed must not reach the client, as '?' or otherwise");
+	}
+
 	/**
 	 * A {@code null} chunk behind a held half fails the stream the way a {@code null} chunk always
 	 * has — an {@code error} event — rather than completing the half into the text {@code "?null"}.
@@ -149,10 +153,6 @@ public class ChartSearchAiSseSurrogatePairTest {
 		assertEquals(expected, streamed.toString(),
 				"the '" + type + "' events must carry every code point the model streamed; got "
 						+ SseEvents.quoted(streamed.toString()));
-		assertFalse(streamed.toString().contains("?"),
-				"no half of a surrogate pair may reach the client as the encoder's '?'");
-		assertTrue(indexOf(out.toByteArray(), SYRINGE_UTF8) >= 0,
-				"the wire must carry U+1F489 as its four UTF-8 bytes");
 	}
 
 	private List<String> dataOf(String type) {
@@ -163,18 +163,6 @@ public class ChartSearchAiSseSurrogatePairTest {
 			}
 		}
 		return data;
-	}
-
-	private static int indexOf(byte[] haystack, byte[] needle) {
-		outer: for (int i = 0; i + needle.length <= haystack.length; i++) {
-			for (int j = 0; j < needle.length; j++) {
-				if (haystack[i + j] != needle[j]) {
-					continue outer;
-				}
-			}
-			return i;
-		}
-		return -1;
 	}
 
 	private enum Channel { TOKEN, THINKING, PRELIMINARY }
@@ -192,32 +180,12 @@ public class ChartSearchAiSseSurrogatePairTest {
 	}
 
 	/** Streams a script of chunks, each on its channel and in order, then answers normally. */
-	private static final class ChunkingStubService implements ChartSearchService {
+	private static final class ChunkingStubService extends StreamingChartSearchStub {
 
 		private final List<Chunk> script;
 
 		ChunkingStubService(List<Chunk> script) {
 			this.script = script;
-		}
-
-		@Override
-		public ChartAnswer search(Patient patient, String question) {
-			return StreamingChartSearchStub.answer();
-		}
-
-		@Override
-		public ChartAnswer searchStreaming(Patient patient, String question,
-				Consumer<String> tokenConsumer) {
-			return searchStreaming(patient, question, tokenConsumer, r -> { }, c -> { }, a -> { });
-		}
-
-		@Override
-		public ChartAnswer searchStreaming(Patient patient, String question,
-				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				Consumer<List<RecordReference>> citationsConsumer,
-				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
-			return searchStreaming(patient, question, tokenConsumer, reasoningConsumer,
-					citationsConsumer, ungroundedAnswerConsumer, p -> { });
 		}
 
 		@Override
@@ -240,11 +208,7 @@ public class ChartSearchAiSseSurrogatePairTest {
 				}
 			}
 			citationsConsumer.accept(Collections.<RecordReference> emptyList());
-			return StreamingChartSearchStub.answer();
-		}
-
-		@Override
-		public void warmup(Patient patient) {
+			return answer();
 		}
 	}
 }

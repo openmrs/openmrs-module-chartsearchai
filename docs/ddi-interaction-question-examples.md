@@ -138,7 +138,7 @@ These fields of the response matter for these tests:
 | Arm | Fires when | What it checks | States `interactionPairs`? |
 |---|---|---|---|
 | **Drug-in-play** | the question names a drug | that drug × every active order | yes, since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), where neither pairwise arm stated one *and* the question resolved a drug it could screen |
-| **Question-pair** | the question resolves **≥2** reference entries | those drugs against each other | yes — unless it ceded every pair to the drug-in-play arm, where it states nothing ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)) |
+| **Question-pair** | the question resolves reference entries of **≥2** substances ([#433](https://github.com/openmrs/openmrs-module-chartsearchai/issues/433)) | those drugs against each other | yes — unless it ceded every pair to the drug-in-play arm, where it states nothing ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)) |
 | **Screening** | the question names **no** drug *and* reads as a screening request | every active order × every other | yes — unless a cede left it with no pair of its own, where it states nothing and, no fallback standing behind it, nothing else does either ([#370](https://github.com/openmrs/openmrs-module-chartsearchai/issues/370)) |
 | **Class / allergy** | always, scoped to what the response is about | ATC class and cross-reactivity-group joins against allergies, conditions and other orders | no |
 
@@ -146,7 +146,7 @@ They are **not** equivalent and they do not cover for each other, which is why t
 below are separate.
 
 **Where `interactionPairs` comes from.** Three arms state it. The two *pairwise* ones have
-mutually exclusive gates — the question-pair arm needs two or more resolved drugs, the screening
+mutually exclusive gates — the question-pair arm needs entries of two or more substances, the screening
 arm needs none — so at most one of those runs per question and neither can be suppressed by the
 other's cap. Where neither of them stated one, the **drug-in-play** arm states it instead
 ([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)), which is what a

@@ -1070,7 +1070,7 @@ public class DrugSafetyValidator {
 		//
 		// Composition with the question-pair arm of issue #114, now that both arms are live, both group
 		// chips and both cap: the two gates are mutually EXCLUSIVE, so on any one question at most one
-		// of them runs at all. That arm needs questionDrugs.size() >= 2; this one needs it empty. No
+		// of them runs at all. That arm needs entries of two or more substances; this one, none. No
 		// pair can therefore be reported by one and suppressed by the other, the cap never applies to
 		// overlapping sets (only one arm is ever reachable per question — which is also why the two
 		// share ONE configured limit, #131), and no shared "who owns this pair" decision is needed
@@ -1433,7 +1433,7 @@ public class DrugSafetyValidator {
 	 * wants 5, and that belongs in a deployment's hands.
 	 *
 	 * <p><b>One property for both arms</b>, deliberately: their gates are mutually exclusive — the pair
-	 * arm needs the question to resolve two or more reference drugs, the screen needs it to resolve none
+	 * arm needs the question to resolve entries of two or more substances, the screen to resolve none
 	 * — so at most one of them runs per question and no question can be subject to both. Two separately
 	 * tunable limits for one concept would be arbitrary. It bounds those two and nothing else: the
 	 * drug-in-play arm raises one chip per partner it relates and has never been capped, which is why

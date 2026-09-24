@@ -10969,8 +10969,8 @@ cited neither of the two findings it carried (`findingCitations` `{"carried":2,"
 contraindication line of an answer the module composes itself states it (Decision 113), a path that
 ships off.
 [Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)
-rests on the premise that every finding is published in `safetyWarnings`; the referent was the part of a
-finding the chip did not carry.
+rests on the premise that every finding is published in `safetyWarnings`, and the chip did not carry
+the referent.
 
 ### The decision
 

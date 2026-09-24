@@ -310,13 +310,14 @@ public class InjectedContraindicationClauseTest {
 	@Test
 	public void aRecordStatingNoReadingStillRendersASharedNoteOnce() throws Exception {
 		// Issue #407: the case above renders WITH a reading, and nothing else in this class renders
-		// without one, so a de-duplication moved inside `if (reading.states())` — where every other line
-		// about the sections lives — left the whole suite green while this record read "opioid reaction;
-		// opioid reaction" again. The list is rendered either way, so its de-duplication has to hold either
-		// way. A null context is one of the three ways statesTheChartsContraindicationReading answers
-		// false, and all three reach the list through that one boolean.
+		// without one, so a de-duplication moved inside `if (reading.states())` left the whole suite green
+		// while this record read "opioid reaction; opioid reaction" again. The list is rendered either
+		// way, so its de-duplication has to hold either way. A chart whose allergy and condition reads
+		// failed is one of the three ways statesTheChartsContraindicationReading answers false, and all
+		// three reach the list through that one boolean.
 		String record = recordFor(fixtureService(InjectedContraindicationCorroborationTest.BORROWED_ALIAS),
-				"Is it safe to give her codeine?", null, "Codeine");
+				"Is it safe to give her codeine?", DrugReferenceTestSupport.unreadableRecordsCtx(60, null),
+				"Codeine");
 
 		// The premise: no reading section at all, so this is the no-reading path and not the case above
 		// again. All three leads, because this fixture is built to raise the third.
@@ -324,7 +325,7 @@ public class InjectedContraindicationClauseTest {
 				DrugReferenceInjector.NOT_RECORDED_READING_LEAD,
 				DrugReferenceInjector.UNCORROBORATED_READING_LEAD)) {
 			assertFalse(record.contains(lead),
-					"precondition: a record with no context states no reading, was: " + record);
+					"precondition: a chart the module could not read states no reading, was: " + record);
 		}
 		assertEquals(Arrays.asList("opioid reaction"), clausesIn(record),
 				"two rules carrying one note are ONE clause with no reading beside it too, was: " + record);

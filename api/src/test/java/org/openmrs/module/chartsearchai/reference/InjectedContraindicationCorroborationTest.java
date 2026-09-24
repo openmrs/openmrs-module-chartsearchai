@@ -92,7 +92,8 @@ public class InjectedContraindicationCorroborationTest {
 	 *  <p>Package-visible because its Codeine entry is also issue #310's own shape — two rules of one
 	 *  entry on two collapsed keys carrying ONE note — which
 	 *  {@code InjectedContraindicationClauseTest.twoRulesOfOneEntrySharingANoteRenderThatClauseOnce}
-	 *  asserts about the rendered clause LIST while the cases here assert about the reading SECTIONS.
+	 *  and, where no reading is stated, {@code .aRecordStatingNoReadingStillRendersASharedNoteOnce}
+	 *  assert about the rendered clause LIST while the cases here assert about the reading SECTIONS.
 	 *  Shared rather than re-authored, so the two questions are asked of one arrangement. */
 	static final String BORROWED_ALIAS =
 			"chartsearchai-test/drug-reference-borrowed-alias-corroboration.json";
@@ -403,8 +404,8 @@ public class InjectedContraindicationCorroborationTest {
 		// em-dash join and its contains() check are both WITHIN a key). It is now de-duplicated over
 		// clause TEXT, the identity these sections already resolved over; the sections are what this
 		// case is about, and the list is
-		// InjectedContraindicationClauseTest.twoRulesOfOneEntrySharingANoteRenderThatClauseOnce's, over
-		// this very fixture.
+		// InjectedContraindicationClauseTest.twoRulesOfOneEntrySharingANoteRenderThatClauseOnce's (and,
+		// with no reading, .aRecordStatingNoReadingStillRendersASharedNoteOnce's), over this very fixture.
 		String record = record(fixtureService(BORROWED_ALIAS), "Codeine",
 				"Is it safe to give her codeine?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dihydrocodeine"), null));

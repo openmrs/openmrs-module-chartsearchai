@@ -94,13 +94,14 @@ public final class SafetyWarningFixtures {
 	 * {@code SafetyWarning.interaction}, the factory {@code DrugSafetyValidator.interactionWarning} hands
 	 * both active-order arms' rule chips to (issue #527). {@code aboutACurrentMedication} is that
 	 * factory's own parameter: {@code true} as the screening arm passes it, {@code false} as the
-	 * drug-in-play arm does. No fold, no reconciled name and no bridge.
+	 * drug-in-play arm does. So is {@code bridges}, the chip's {@code chartOrderBridges}, which each of
+	 * those arms resolves through {@code DrugSafetyValidator.chartOrderBridges} before it builds the chip.
+	 * No fold and no reconciled name.
 	 */
 	public static SafetyWarning ruleInteraction(String drug, String detail, String severity, String partner,
-			boolean aboutACurrentMedication) {
-		return SafetyWarning.interaction(drug, detail, severity, false, null, null,
-			Collections.<SafetyWarning.ChartOrderBridge> emptyList(), aboutACurrentMedication,
-			Collections.singletonList(partner));
+			List<SafetyWarning.ChartOrderBridge> bridges, boolean aboutACurrentMedication) {
+		return SafetyWarning.interaction(drug, detail, severity, false, null, null, bridges,
+			aboutACurrentMedication, Collections.singletonList(partner));
 	}
 
 	/**

@@ -70,15 +70,17 @@ public class ChartSearchAiChartAlertsTest {
 	 * null rather than absent. Built by the two contraindication factories the standing pass reaches,
 	 * with the referent it hands them — every standing alert is raised from one of her active orders
 	 * (issue #527) — so {@link #everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes} reads a value
-	 * production would publish.
+	 * production would publish. Each sentence is one its factory's arm writes: the curated-rule arm's, for
+	 * a Lidocaine rule noted as the bundled seed notes its own self-named allergy rules, and the allergen
+	 * arm's cross-reactivity-group sentence.
 	 */
 	private static List<SafetyWarning> fixtureAlerts() {
 		return Arrays.asList(
 				SafetyWarningFixtures.curatedRuleContraindication("Lidocaine",
-						"Lidocaine is contraindicated by a documented lidocaine allergy.", true),
+						"Lidocaine is contraindicated by an active allergy: documented lidocaine allergy", true),
 				SafetyWarningFixtures.recordedAllergenContraindication("Bupivacaine",
-						"Bupivacaine is contraindicated by a documented lidocaine allergy "
-								+ "(cross-reactivity: amide local anaesthetics).", true));
+						"Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as the "
+								+ "patient's allergy to Lidocaine — possible cross-reactivity", true));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -159,7 +161,7 @@ public class ChartSearchAiChartAlertsTest {
 		Map<String, Object> first = alerts.get(0);
 		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, first.get("type"), "was: " + first);
 		assertEquals("Lidocaine", first.get("drug"), "was: " + first);
-		assertEquals("Lidocaine is contraindicated by a documented lidocaine allergy.",
+		assertEquals("Lidocaine is contraindicated by an active allergy: documented lidocaine allergy",
 				first.get("detail"), "was: " + first);
 		assertEquals(null, first.get("severity"),
 				"a contraindication carries no rating, and null is that statement rather than a "

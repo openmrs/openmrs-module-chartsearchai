@@ -50,10 +50,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * of its chips carry a non-empty {@code namedPartners}, as every chip
  * {@code DrugSafetyValidator.interactionWarning} builds does, so a value narrowed on it cannot either. The
  * shared-substance pair is issue #477's two findings, an UNRATED interaction naming SEVERAL orders, so a
- * value narrowed on {@code severity} or on how many orders a chip names cannot agree either. Each pair's
- * {@code true} chip is a population a narrowing to the others would drop unseen — ADR Decision 92's lesson
- * (issue #412) — and {@code ChartSearchAiSafetyWarningSeverityWireTest}'s reflective guard holds another,
- * a curated rule's.
+ * value narrowed to rated chips, or to chips naming at most one order, cannot agree either. The caution
+ * pair is a second rule-interaction pair, rated Moderate where the first is rated Major — a caution beside
+ * a finding that withholds, as {@code DrugSafetyValidator.licensesWithholding} answers, which is the
+ * STRENGTH axis ADR Decision 118 keeps apart from the referent. So a value narrowed to leave out the
+ * unrated chips, the Major one or the Moderate one cannot agree with every chip, and publishing the
+ * referent only where the finding withholds is such a value; one leaving out only a rating no chip here
+ * carries, Minor among them, is not ruled out. The caution pair's chips also carry a chart-order bridge,
+ * so a value narrowed on whether a chip carries one cannot agree either. Each pair's {@code true} chip is
+ * a population a narrowing to the others would drop unseen — ADR Decision 92's lesson (issue #412) — and
+ * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s reflective guard holds another, a curated rule's.
  *
  * <p>What is not asserted here, because something else holds it. That the published value is the
  * accessor's own reading, over a fixture of its own:
@@ -77,6 +83,20 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 	/** A rule chip's sentence as either active-order arm words it for this pair. */
 	private static final String INTERACTION_DETAIL = "Salicylic acid interacts with active order Methotrexate "
 			+ "— Major. Salicylates may interfere with the renal elimination of methotrexate.";
+
+	/**
+	 * The caution pair's sentence: the shipped knowledge base's Moderate rule for Carbamazepine with
+	 * Fluoxetine, in the shape {@code DrugSafetyValidator.interactionWarning} writes a rule chip.
+	 */
+	private static final String CAUTION_DETAIL = "Carbamazepine interacts with active order Fluoxetine — Moderate. "
+			+ "Fluoxetine may inhibit the hepatic metabolism of carbamazepine. Carbamazepine toxicity is possible.";
+
+	/**
+	 * Where the caution pair's partner came from: her own prescription, whose display does not name the
+	 * substance — the correspondence issue #347 publishes.
+	 */
+	private static final List<SafetyWarning.ChartOrderBridge> FLUOXETINE_FROM_PROZAC = Collections
+			.singletonList(new SafetyWarning.ChartOrderBridge("Fluoxetine", "Prozac 20mg"));
 
 	/** Two of her orders carrying the same substances, as issue #477's reproduction named them. */
 	private static final List<String> TB_ORDERS = Arrays.asList("Isoniazid / pyrazinamide / rifampin",
@@ -111,20 +131,24 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 	}
 
 	/**
-	 * Chips 0, 2 and 4 are raised from her active orders; chips 1, 3 and 5 carry their sentences verbatim
-	 * and are about a drug put in play. Each chip is built by the factory the arm that raises it uses, with
-	 * the answer that arm passes it — see {@link SafetyWarningFixtures}.
+	 * Chips 0, 2, 4 and 6 are raised from her active orders; chips 1, 3, 5 and 7 carry their sentences
+	 * verbatim and are about a drug put in play. Each chip is built by the factory the arm that raises it
+	 * uses, with the answer that arm passes it — see {@link SafetyWarningFixtures}.
 	 */
 	private static List<SafetyWarning> chips() {
 		return Arrays.asList(
 			SafetyWarningFixtures.recordedAllergenContraindication("Ibuprofen", ALLERGY_DETAIL, true),
 			SafetyWarningFixtures.recordedAllergenContraindication("Ibuprofen", ALLERGY_DETAIL, false),
 			SafetyWarningFixtures.ruleInteraction("Salicylic acid", INTERACTION_DETAIL, "Major", "Methotrexate",
-				true),
+				Collections.<SafetyWarning.ChartOrderBridge> emptyList(), true),
 			SafetyWarningFixtures.ruleInteraction("Salicylic acid", INTERACTION_DETAIL, "Major", "Methotrexate",
-				false),
+				Collections.<SafetyWarning.ChartOrderBridge> emptyList(), false),
 			SafetyWarningFixtures.ordersSharingASubstance(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS),
-			SafetyWarningFixtures.substanceInSeveralActiveOrders(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS));
+			SafetyWarningFixtures.substanceInSeveralActiveOrders(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS),
+			SafetyWarningFixtures.ruleInteraction("Carbamazepine", CAUTION_DETAIL, "Moderate", "Fluoxetine",
+				FLUOXETINE_FROM_PROZAC, true),
+			SafetyWarningFixtures.ruleInteraction("Carbamazepine", CAUTION_DETAIL, "Moderate", "Fluoxetine",
+				FLUOXETINE_FROM_PROZAC, false));
 	}
 
 	/**
@@ -156,6 +180,7 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 		assertReferentsDiffer(chips.get(0), chips.get(1), "the issue's contraindication pair");
 		assertReferentsDiffer(chips.get(2), chips.get(3), "the rule-interaction pair");
 		assertReferentsDiffer(chips.get(4), chips.get(5), "the shared-substance pair");
+		assertReferentsDiffer(chips.get(6), chips.get(7), "the caution pair");
 	}
 
 	/**

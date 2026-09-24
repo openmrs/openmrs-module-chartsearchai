@@ -110,7 +110,36 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		assertNull(chart.getModuleAnswer(), "no pair was related: " + chart.getModuleAnswer());
 	}
 
+	@Test
+	public void onAProposalTheFindingFollowsTheProposedDrugsCautionsInTheModulesAnswer() throws IOException {
+		// Rifampicin proposed to a patient on two isoniazid orders and pyrazinamide: the Major against
+		// pyrazinamide licenses the "No", the Minor against isoniazid is a caution about the drug asked
+		// about, and her two isoniazid orders are a finding about her own therapy the question did not
+		// ask about. That finding comes after what was asked about, as the chips put it
+		// (OrdersSharingASubstanceTest.onAProposalTheFindingFollowsTheProposedDrugsCautions).
+		PatientChart chart = ask("Can I give her rifampicin?",
+			DrugReferenceTestSupport.activeOrder("order-inh-1", "Isoniazid 300mg"),
+			DrugReferenceTestSupport.activeOrder("order-inh-2", "Isoniazid 100mg"),
+			DrugReferenceTestSupport.activeOrder("order-pza", "Pyrazinamide 500mg"));
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "a Major licenses the module's No: " + chart.getText());
+		List<String> lines = Arrays.asList(answer.split("\n"));
+		assertEquals(4, lines.size(), "was: " + answer);
+		assertTrue(lines.get(1).startsWith("Rifampicin (rifampin) interacts with active order Pyrazinamide — Major."),
+			"the Major under the No: " + answer);
+		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) interacts with active order Isoniazid")
+				&& lines.get(2).contains(" — Minor."), "then the proposed drug's caution: " + answer);
+		assertTrue(lines.get(3).startsWith("Isoniazid is in active orders Isoniazid 300mg and Isoniazid 100mg"
+				+ " — possible duplicate therapy."), "then her own orders: " + answer);
+	}
+
 	private static PatientChart screen(PatientClinicalContext.ActiveDrugOrder... orders) throws IOException {
+		return ask(DrugReferenceTestSupport.SCREENING_QUESTION, orders);
+	}
+
+	private static PatientChart ask(String question, PatientClinicalContext.ActiveDrugOrder... orders)
+			throws IOException {
 		List<String> names = new ArrayList<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			names.addAll(order.getNames());
@@ -118,7 +147,6 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		PatientClinicalContext context = DrugReferenceTestSupport.ctx(40, null,
 				new LinkedHashSet<String>(names), null, null, null, Arrays.asList(orders));
 		return DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
-				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context,
-					DrugReferenceTestSupport.SCREENING_QUESTION);
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
 	}
 }

@@ -235,9 +235,15 @@ public class DuplicateTherapySelfChipTest {
 		assertEquals(DrugReferenceTestSupport.details(coveredFirst),
 				DrugReferenceTestSupport.details(unnameableFirst),
 				"the same two codes, listed the other way round");
-		assertEquals(1, unnameableFirst.size(), "was: " + unnameableFirst);
+		// Beside it, the finding that her two orders share rifapentine (ADR Decision 116), which is not
+		// this skip's and is asserted on its own.
+		assertEquals(Arrays.asList("Rifapentine is in active orders Isoniazid / Rifapentine and Rifapentine 150mg"
+				+ " — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(unnameableFirst)));
+		List<SafetyWarning> classChips = DrugReferenceTestSupport.besideOrdersSharingASubstance(unnameableFirst);
+		assertEquals(1, classChips.size(), "was: " + unnameableFirst);
 		assertEquals("Isoniazid is in the same ATC class (J04AC) as active order Rifapentine 150mg"
-				+ " — possible duplicate therapy", unnameableFirst.get(0).getDetail(),
+				+ " — possible duplicate therapy", classChips.get(0).getDetail(),
 				"the co-medication that does NOT contain isoniazid still reports it");
 	}
 
@@ -264,10 +270,20 @@ public class DuplicateTherapySelfChipTest {
 				DrugReferenceTestSupport.ctx(60, null, names, both, null, null,
 						Arrays.asList(plain, combination)));
 
-		assertEquals(DrugReferenceTestSupport.details(combinationFirst),
-				DrugReferenceTestSupport.details(plainFirst),
+		// The finding that her two orders share rifapentine (ADR Decision 116) is not this skip's, and
+		// names the orders in chart order, so it is asserted per arrangement and kept out of the equality.
+		assertEquals(Arrays.asList("Rifapentine is in active orders Isoniazid / Rifapentine and Rifapentine 150mg"
+				+ " — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(combinationFirst)));
+		assertEquals(Arrays.asList("Rifapentine is in active orders Rifapentine 150mg and Isoniazid / Rifapentine"
+				+ " — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(plainFirst)));
+		assertEquals(
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.besideOrdersSharingASubstance(combinationFirst)),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.besideOrdersSharingASubstance(plainFirst)),
 				"the same two orders, listed the other way round");
-		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport.details(plainFirst),
+		assertEquals(Collections.<String> emptyList(),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.besideOrdersSharingASubstance(plainFirst)),
 				"and isoniazid is inside one of them either way, so neither raises the chip");
 	}
 

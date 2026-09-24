@@ -311,7 +311,7 @@ public class SafetyWarning {
 
 	/**
 	 * The warning that two or more of the patient's own active orders carry the same substances, raised
-	 * on a screen of her medications (issue #477). The one construction site is
+	 * on a screen of her medications and on a question that resolves a drug (issue #477). The one construction site is
 	 * {@code DrugSafetyValidator.addOrdersSharingASubstance}, canonical for why it exists and when.
 	 *
 	 * <p>{@link #substanceInSeveralActiveOrders}' shape, with two differences: both sides are her own
@@ -973,9 +973,11 @@ public class SafetyWarning {
 	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
 	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries — and that
 	 * second arm answers true only where no SIBLING ROW put the substance in play, because its chips
-	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction. Beside
-	 * the first of them, inside its gate, {@link #ordersSharingASubstance(String, String, List)} (issue
-	 * #477) answers true too: every order it names is hers, and a screen proposes nothing. The
+	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction.
+	 * {@link #ordersSharingASubstance(String, String, List)} (issue #477) answers true too: every order
+	 * it names is hers. That holds on a question that resolves a drug as well as on a screen, so there it
+	 * is a current-medication finding beside the drug-in-play arm's proposal findings, which the issue's
+	 * decision accepted (ADR Decision 116). The
 	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
 	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because
@@ -1071,7 +1073,9 @@ public class SafetyWarning {
 	 * Whether this is {@link #ordersSharingASubstance(String, String, List)}' finding — that two or
 	 * more of her own orders carry the same substances — rather than a relationship between two. An INTERACTION finding that
 	 * relates no PAIR, so {@code DrugReferenceInjector.answersFromFindings} asks this to keep a screen
-	 * the module answers itself one that related at least one pair (ADR Decision 108). Package-private,
+	 * the module answers itself one that related at least one pair (ADR Decision 108), and
+	 * {@code composeFromFindings} asks it to put the finding after the drug proposed's own findings
+	 * (ADR Decision 116). Package-private,
 	 * matching the factory: it is on neither the wire nor either collapse key.
 	 */
 	boolean statesOrdersSharingASubstance() {

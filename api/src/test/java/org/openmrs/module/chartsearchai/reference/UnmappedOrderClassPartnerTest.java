@@ -138,10 +138,16 @@ public class UnmappedOrderClassPartnerTest {
 								"Dexamethasone injection 4mg/ml", mappedNames,
 								DrugReferenceTestSupport.set(DEXAMETHASONE_CODE))));
 
-		List<SafetyWarning> warnings = chips(HYDROCORTISONE_QUESTION, context);
+		List<SafetyWarning> all = chips(HYDROCORTISONE_QUESTION, context);
+		// Beside it, the finding that her two orders share dexamethasone (ADR Decision 116), which decides
+		// nothing about a co-medication and is asserted on its own.
+		assertEquals(Arrays.asList("Dexamethasone is in active orders Dexamethasone 4mg tablet and Dexamethasone"
+				+ " injection 4mg/ml — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(all)));
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.besideOrdersSharingASubstance(all);
 
 		assertEquals(1, warnings.size(),
-				"two orders of one substance are one co-medication, was: " + warnings);
+				"two orders of one substance are one co-medication, was: " + all);
 		assertEquals(EXPECTED_CHIP, warnings.get(0).getDetail());
 	}
 
@@ -264,11 +270,16 @@ public class UnmappedOrderClassPartnerTest {
 						DrugReferenceTestSupport.activeOrder("order-228-l", "Omeprazole capsule",
 								unmappedNames, null)));
 
-		List<SafetyWarning> warnings = chips("Is it safe to give pantoprazole?", context);
+		List<SafetyWarning> all = chips("Is it safe to give pantoprazole?", context);
+		// Beside it, the finding that her two orders share omeprazole (ADR Decision 116), asserted on its own.
+		assertEquals(Arrays.asList("Omeprazole is in active orders Omeprazole 20mg and Omeprazole capsule"
+				+ " — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(all)));
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.besideOrdersSharingASubstance(all);
 
 		assertEquals(1, warnings.size(),
 				"two orders of one substance are one co-medication however each resolved, was: "
-						+ warnings);
+						+ all);
 		assertEquals("Pantoprazole is in the same ATC class (A02BC) as active order Omeprazole 20mg"
 				+ " — possible duplicate therapy", warnings.get(0).getDetail(),
 				"and it keeps the name the code walk gave it");
@@ -300,8 +311,12 @@ public class UnmappedOrderClassPartnerTest {
 						DrugReferenceTestSupport.activeOrder("order-228-h", "Metronidazole gel",
 								unmappedNames, null)));
 
-		List<String> chips = DrugReferenceTestSupport.classChipDetails(
-				nitroimidazoleChips("Is it safe to give tinidazole?", context));
+		List<SafetyWarning> all = nitroimidazoleChips("Is it safe to give tinidazole?", context);
+		// Beside it, the finding that her two orders share metronidazole (ADR Decision 116), which
+		// classChipDetails leaves out and which is asserted on its own.
+		assertEquals(Arrays.asList(METRONIDAZOLE_IN_BOTH),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(all)));
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(all);
 
 		assertEquals(1, chips.size(), "two orders of one substance are one co-medication, was: " + chips);
 		assertEquals("Tinidazole is in the same ATC class (J01XD) as active order Metronidazole 500mg"
@@ -372,6 +387,10 @@ public class UnmappedOrderClassPartnerTest {
 				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-228-d",
 						"Metronidazole and secnidazole", names, null)));
 	}
+
+	/** The finding that her two metronidazole orders share it (ADR Decision 116). */
+	private static final String METRONIDAZOLE_IN_BOTH = "Metronidazole is in active orders Metronidazole 500mg and"
+			+ " Metronidazole gel — possible duplicate therapy";
 
 	private static List<SafetyWarning> chips(String question, PatientClinicalContext context)
 			throws IOException {

@@ -10,24 +10,29 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
- * Whether two of the patient's OWN active orders carrying one substance are said to on a screen of
- * her medications — issue #477's remaining shape after #483, which states it only for a drug the
- * question puts in play.
+ * Whether two of the patient's OWN active orders carrying one substance are said to, on a screen of
+ * her medications and on a question about another drug — issue #477's remaining shape after #483,
+ * which states it only for the drug the question puts in play.
  *
  * <p><b>The defect.</b> A screening question puts no drug in play, so neither the class arm nor
  * {@code alreadyInSeveralOrders} runs, and the screening arm relates constituents pairwise and has no
@@ -37,9 +42,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>What decides that an order carries a substance</b> is #483's predicate, the order's DISPLAY
  * (issue #293), and the finding is ONE per set of orders, naming every substance that set shares
- * (ADR Decision 99's one-statement rule). It is raised on a screening question and nowhere else: the
- * rifampicin question's finding list is pinned by {@code SubstanceInSeveralActiveOrdersTest}, and
- * ADR Decision 114 carries why.
+ * (ADR Decision 99's one-statement rule). It is raised on a screening question and on a question that
+ * resolves a drug, and on no other question; ADR Decisions 114 and 116 carry why.
  */
 public class OrdersSharingASubstanceTest {
 
@@ -150,36 +154,102 @@ public class OrdersSharingASubstanceTest {
 	}
 
 	@Test
-	public void aQuestionPuttingADrugInPlayStatesNoCurrentMedicationFindingBesideItsProposalFindings() {
-		// The ticket's two questions over its six orders and the shipped knowledge base, both putting
-		// drugs in play. What they state about her orders sharing a substance is still open on issue
-		// #477, so this pins not that silence but the constraint any statement there must keep: this
-		// finding's current-medication referent never sits beside the proposal findings of a drug in
-		// play, the mixed-referent response ADR Decision 112 recorded on a model (Decision 114).
+	public void bothOfTheTicketsDrugQuestionsStateTheTwoCombinationsOnceAfterEveryOtherFinding() {
+		// The ticket's two questions over its six orders and the shipped knowledge base, each putting a
+		// drug in play that is not the one the two combinations share: the same finding a screen states,
+		// in the same words and referent, once for the one set of orders (the issue's decision comment).
+		// Last, after every arm the question raised; the drug-in-play arm's own findings stay proposals.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 				DrugReferenceTestSupport.shippedEntries());
 		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
 				"Lamivudine / zidovudine", "Efavirenz", "Cotrimoxazole 960mg", RHZ, RHZE, "Stavudine");
-		int proposals = 0;
 		for (String drug : Arrays.asList("Rifampicin", "Metformin")) {
 			String question = "The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and"
 					+ " sulfamethoxazole is it safe to give " + drug + "?";
-			assertTrue(service.findImpliedByQuery(question).size() > 0, "precondition: drugs in play: " + question);
+			Set<Object> asked = new HashSet<Object>();
+			for (DrugReference entry : service.findImpliedByQuery(question)) {
+				asked.add(entry.substanceGroupKey());
+			}
+			List<DrugReference> named = service.findImpliedByQuery(drug);
+			assertTrue(!named.isEmpty() && asked.contains(named.get(0).substanceGroupKey()),
+					"precondition: the question puts " + drug + " itself in play, not only the drugs it lists: "
+							+ named);
 			List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("", question, context);
-			boolean proposal = false;
-			for (SafetyWarning warning : warnings) {
-				proposal |= !warning.isAboutACurrentMedication();
-			}
-			if (!proposal) {
-				continue;
-			}
-			proposals++;
-			for (SafetyWarning finding : shared(warnings)) {
-				assertTrue(!finding.isAboutACurrentMedication(), "a current-medication finding beside proposal"
-						+ " findings on " + question + ": " + DrugReferenceTestSupport.details(warnings));
+
+			List<SafetyWarning> found = shared(warnings);
+			assertEquals(Arrays.asList(SHARED_BY_BOTH), DrugReferenceTestSupport.details(found), question);
+			SafetyWarning finding = found.get(0);
+			assertEquals(Arrays.asList(RHZ, RHZE), finding.namedPartners());
+			assertEquals(SafetyWarning.TYPE_INTERACTION, finding.getType());
+			assertNull(finding.getSeverity(), "nothing rates this relationship");
+			assertTrue(finding.isAboutACurrentMedication(), "both orders are her own prescriptions");
+			assertSame(finding, warnings.get(warnings.size() - 1),
+					"after every other finding: " + DrugReferenceTestSupport.details(warnings));
+			for (SafetyWarning warning : warnings.subList(0, warnings.size() - 1)) {
+				assertFalse(warning.isAboutACurrentMedication(), "the drug-in-play arm states the proposal on "
+						+ question + ": " + warning.getDetail());
 			}
 		}
-		assertTrue(proposals > 0, "precondition: a question raised proposal findings");
+	}
+
+	@Test
+	public void theModelReadsItAsAReasonToChangeHerTherapyOnADrugQuestionToo() {
+		// Through the real injector on the ticket's chart: the prompt carries the finding once, with the
+		// current-medication clause, for both of its questions.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
+				"Lamivudine / zidovudine", "Efavirenz", "Cotrimoxazole 960mg", RHZ, RHZE, "Stavudine");
+		for (String drug : Arrays.asList("Rifampicin", "Metformin")) {
+			String question = "The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and"
+					+ " sulfamethoxazole is it safe to give " + drug + "?";
+			PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+					DrugReferenceTestSupport.oneRecordChart(), context, question);
+
+			List<String> texts = new ArrayList<String>();
+			for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+				if (finding.getText().contains(SHARED_BY_BOTH)) {
+					texts.add(finding.getText().trim());
+				}
+			}
+			assertEquals(1, texts.size(), question + ": " + chart.getText());
+			assertTrue(texts.get(0).endsWith(CHANGE_CURRENT), "was: " + texts.get(0));
+		}
+	}
+
+	@Test
+	public void onAProposalTheFindingFollowsTheProposedDrugsCautions() throws IOException {
+		// Rifampicin proposed to a patient on two isoniazid orders and pyrazinamide: a Major against
+		// pyrazinamide, a Minor against isoniazid, and her two isoniazid orders. The finding is about
+		// her own orders and not about the drug asked about, so it trails that drug's findings, as the
+		// module's composed answer puts it (OrdersSharingASubstanceModuleAnswerContextTest).
+		List<String> details = DrugReferenceTestSupport.details(DrugReferenceTestSupport.validator(
+				DrugReferenceTestSupport.ddiFixtureService(FIXTURE)).validate("", "Can I give her rifampicin?",
+					contextOf(DrugReferenceTestSupport.activeOrder("order-inh-1", "Isoniazid 300mg"),
+						DrugReferenceTestSupport.activeOrder("order-inh-2", "Isoniazid 100mg"),
+						DrugReferenceTestSupport.activeOrder("order-pza", "Pyrazinamide 500mg"))));
+
+		assertEquals(3, details.size(), "was: " + details);
+		assertTrue(details.get(0).startsWith("Rifampicin (rifampin) interacts with active order Pyrazinamide — Major."),
+			"the Major leads: " + details);
+		assertTrue(details.get(1).startsWith("Rifampicin (rifampin) interacts with active order Isoniazid"),
+			"then the caution: " + details);
+		assertTrue(details.get(1).contains(" — Minor."), "was: " + details);
+		assertEquals("Isoniazid is in active orders Isoniazid 300mg and Isoniazid 100mg — possible duplicate therapy",
+			details.get(2), "then this finding: " + details);
+	}
+
+	@Test
+	public void aQuestionNamingNoDrugThatIsNotAScreenStatesNothing() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
+				"Lamivudine / zidovudine", "Efavirenz", "Cotrimoxazole 960mg", RHZ, RHZE, "Stavudine");
+		String question = "What was her last blood pressure?";
+		assertTrue(service.findImpliedByQuery(question).isEmpty(), "precondition: no drug in play");
+		assertFalse(QueryScopeRouter.isInteractionScreening(question), "precondition: not a screen");
+
+		assertEquals(0, shared(DrugReferenceTestSupport.validator(service).validate("", question, context)).size());
 	}
 
 	@Test
@@ -287,16 +357,8 @@ public class OrdersSharingASubstanceTest {
 				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION, context);
 	}
 
-	/** This finding among {@code warnings}, recognised by the flag its factory sets, so a reword of
-	 *  the sentence cannot leave a negative case asserting the absence of a string nobody emits. */
 	private static List<SafetyWarning> shared(List<SafetyWarning> warnings) {
-		List<SafetyWarning> found = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (warning.statesOrdersSharingASubstance()) {
-				found.add(warning);
-			}
-		}
-		return found;
+		return DrugReferenceTestSupport.ordersSharingASubstance(warnings);
 	}
 
 	private static PatientClinicalContext twoTuberculosisCombinations() {

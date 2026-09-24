@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -479,6 +480,27 @@ public class FindingEnumerationClauseContextTest {
 			SCREENING_QUESTION, LlmInferenceService.severalFindingsAboutOneDrug(chart))
 				.contains("put every one of them"),
 				"and its prompt must carry no clause");
+	}
+
+	/**
+	 * A DRUG QUESTION BESIDE TWO OF HER ORDERS SHARING A SUBSTANCE ASKS FOR NOTHING — issue #477. The
+	 * finding that her orders share a substance is raised on a question putting a drug in play too, and
+	 * it names the substances the orders share rather than the drug asked about, so the chart's findings
+	 * name two subjects and the clause, which is about ONE drug, is withheld. Without that finding every
+	 * finding here names rifampicin and the clause is sent; this pins the change as the gate's own
+	 * direction (ADR Decision 116). Over the verbatim TB fixture rather than the bundled knowledge base the
+	 * other cases read, because that fixture is the one issue #477's own cases are written over.
+	 */
+	@Test
+	public void aDrugQuestionBesideTwoOrdersSharingASubstanceAsksForNothing() throws IOException {
+		String question = "Is it safe to give rifampicin?";
+		PatientChart chart = DrugReferenceTestSupport.findingsOverOrders(DrugReferenceTestSupport.oneRecordChart(),
+			"chartsearchai-test/ddi-substance-in-several-orders.json", question,
+			"Isoniazid / pyrazinamide / rifampin", "Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg");
+		Set<String> subjects = ChartSearchAiUtils.findingSubjects(chart.getMappings());
+		assertEquals(setOf("Rifampicin (rifampin)", "Isoniazid, Pyrazinamide and Rifampicin (rifampin)"), subjects,
+				"the premise: the drug asked about, and the substances her two orders share");
+		assertFalse(LlmInferenceService.severalFindingsAboutOneDrug(chart), "two subjects, so no clause");
 	}
 
 	/**

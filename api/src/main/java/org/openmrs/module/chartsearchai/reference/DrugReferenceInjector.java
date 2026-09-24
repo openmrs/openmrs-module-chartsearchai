@@ -833,7 +833,7 @@ public class DrugReferenceInjector {
 						context.chartReadForSafety()
 								&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
 										orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries))) {
-			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers);
+			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers, !questionDrugs.isEmpty());
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -2546,9 +2546,12 @@ public class DrugReferenceInjector {
 	 * or on a screen her interactions, ahead of any other finding about her own medications a widened
 	 * question also raised — her allergy to a drug she is prescribed, say — so that such a finding
 	 * cannot take the answer's first sentence and leave the question unanswered. One key does both,
-	 * because the two never meet: the screening arm stands down for a question that resolved a drug,
-	 * and the drug-in-play arm's finding about two of her own orders (issue #477) arises only for a
-	 * drug she already takes, which {@link #answersFromFindings} refuses to answer for. Within each
+	 * because the screening arm stands down for a question that resolved a drug. On a PROPOSAL the
+	 * finding that two of her orders share a substance (issue #477) is such a finding, about her own
+	 * orders rather than the drug proposed, so it joins that second group; on a screen it is what was
+	 * asked about and stays in the first. The validator appends it after every other finding on a
+	 * proposal, so in neither the chips nor this answer does it come ahead of a finding about the drug
+	 * proposed (ADR Decision 116). Within each
 	 * group, strongest first — withhold, change a current medication, then the two cautions, the order
 	 * the prompt gives the model for the first three and this module's own choice between the last two
 	 * — read off {@link #strengthClause} and never off the severity word; stable, so the injection order
@@ -2589,7 +2592,7 @@ public class DrugReferenceInjector {
 	 *         keeps the model call
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers) {
+			Map<String, Integer> orderRecordNumbers, boolean proposal) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -2600,7 +2603,8 @@ public class DrugReferenceInjector {
 			order.add(Integer.valueOf(i));
 		}
 		Collections.sort(order, Comparator.<Integer> comparingInt(i -> findings.get(i).isAboutACurrentMedication()
-				&& !SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType()) ? 1 : 0)
+				&& (!SafetyWarning.TYPE_INTERACTION.equals(findings.get(i).getType())
+						|| proposal && findings.get(i).statesOrdersSharingASubstance()) ? 1 : 0)
 				.thenComparingInt(i -> strengthRank(clauses[i]))
 				.thenComparingInt(i -> STRENGTH_WITHHOLD.equals(clauses[i]) && licensesTheModulesNo(findings.get(i))
 						? 0 : 1));

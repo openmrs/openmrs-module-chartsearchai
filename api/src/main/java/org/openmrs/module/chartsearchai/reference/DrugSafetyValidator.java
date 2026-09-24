@@ -1095,6 +1095,14 @@ public class DrugSafetyValidator {
 			// Among the pairs by strength and outside their extent: it relates no pair (issue #477).
 			addOrdersSharingASubstance(warnings, screenedFrom, orderEntries, subjects, coMedications);
 		}
+		// The same finding on a question that puts a drug in play (issue #477), which the gate above can
+		// never reach — the two are mutually exclusive on questionDrugs, so a pass raises it at most once.
+		// questionDrugs and never inPlay, so both validate passes of one request agree. After every other
+		// finding: it is about her own orders and not the drug asked about, and the module's composed
+		// answer puts it after that drug's findings too. ADR Decision 116.
+		if (warnInteractions && !questionDrugs.isEmpty()) {
+			addOrdersSharingASubstance(warnings, warnings.size(), orderEntries, subjects, coMedications);
+		}
 		// And where neither of them STATED one, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
 		// screen, so the drug-in-play arm above is the whole of the interaction check on the canonical
@@ -4305,12 +4313,12 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * On a screen of her medications, one finding per set of two or more of the patient's own active
-	 * orders that carry the same substances, naming every substance the set shares — issue #477's
-	 * remaining shape after {@link #alreadyInSeveralOrders}, which states it only for a drug in play.
-	 * A screening question puts none in play, and the screening arm relates substances PAIRWISE and has
-	 * no identity leg, so two tuberculosis combinations sharing three substances raised nothing saying
-	 * they duplicate each other.
+	 * One finding per set of two or more of the patient's own active orders that carry the same
+	 * substances, naming every substance the set shares — issue #477's remaining shape after
+	 * {@link #alreadyInSeveralOrders}, which states it only for the drug in play. A screening question
+	 * puts none in play, and the screening arm relates substances PAIRWISE and has no identity leg, so
+	 * two tuberculosis combinations sharing three substances raised nothing saying they duplicate each
+	 * other; a question about another drug raised nothing either.
 	 *
 	 * <p><b>Which orders carry a substance is #483's predicate</b>,
 	 * {@link CoMedications#ordersWhoseDisplayNames}, and the substances asked about are the ones this
@@ -4319,21 +4327,25 @@ public class DrugSafetyValidator {
 	 * named by the row this response names them by ({@link SubstanceSubjects#subjectOf}) and listed in
 	 * label order; sets in the order {@code orderEntries} first reaches one of their substances.
 	 *
-	 * <p><b>Raised on a screening question and nowhere else</b> — the screening arm's own gate, read off
-	 * the question alone, so both {@code validate} passes of a request agree. Not on a question putting a
-	 * drug in play, whose finding list is its arm's, and not on the standing chart alerts. Its referent
-	 * is a current medication, and it is unrated, so the model reads it as a reason to change her
-	 * therapy. It relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decision 114
-	 * carries the scope and what it leaves open.
+	 * <p><b>Raised on a screening question and on a question that resolves a drug</b> — two gates in
+	 * {@code validate}, each read off the question alone, so both {@code validate} passes of a request
+	 * agree, and mutually exclusive on {@code questionDrugs}, so a pass raises it once. Not on a question
+	 * that names no drug and is not a screen, and not on the standing chart alerts. Its referent is a
+	 * current medication, and it is unrated, so the model reads it as a reason to change her therapy. It
+	 * relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decisions 114 and 116 carry
+	 * the scope.
 	 *
-	 * <p><b>Inserted among the screen's pairs by strength</b>, before the first of them from
+	 * <p><b>On a screen, inserted among the screen's pairs by strength</b>, before the first of them from
 	 * {@code screenedFrom} on that {@link #licensesWithholding} refuses: as a reason to change her
 	 * therapy it ranks beside a Major and ahead of a caution, which is where
 	 * {@code DrugReferenceInjector.composeFromFindings} and the prompt's ranking sentence put it, so the
 	 * chips, the prompt's record order and the module's answer order it alike, and a truncated answer
 	 * keeps it as the module's answer would (issue #346). The pairs arrive withholding first, since
 	 * {@link #severityPriority} ranks an unrated rule above a Major and every caution below both, so
-	 * this is the boundary between the two, and the pairs' own order is untouched.
+	 * this is the boundary between the two, and the pairs' own order is untouched. On a question that
+	 * resolves a drug, {@code screenedFrom} is the end of the list, so it is appended after every other
+	 * finding: it is about her own orders rather than the drug asked about, which is where the module's
+	 * composed answer puts it too ({@code DrugReferenceInjector.composeFromFindings}).
 	 */
 	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, int screenedFrom,
 			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications) {

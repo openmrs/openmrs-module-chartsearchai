@@ -231,10 +231,16 @@ public class PartialOrderCoveragePartnerTest {
 								DrugReferenceTestSupport.set("Metronidazole gel"),
 								DrugReferenceTestSupport.set("P01AB09"))));
 
-		List<String> chips = DrugReferenceTestSupport.classChipDetails(validator().validate("", QUESTION, context));
+		List<SafetyWarning> all = validator().validate("", QUESTION, context);
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(all);
 
 		assertEquals(1, chips.size(),
 				"two orders of one substance are one co-medication, was: " + chips);
+		// Beside it, the finding that her two orders share metronidazole (ADR Decision 116), which
+		// classChipDetails leaves out and which is asserted on its own.
+		assertEquals(Arrays.asList("Metronidazole is in active orders Metronidazole 500mg and Metronidazole gel"
+				+ " — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(all)));
 	}
 
 	/** ONE order whose concept maps to the codes of TWO substances the dataset carries — the shape the

@@ -784,6 +784,96 @@ public class InteractionClaimPairFidelityTest {
 	}
 
 	@Test
+	public void aClaimItsOwnClauseDeniesIsNotJudgedAsAssertingThePair() {
+		// Round 1 of #514's second review. A question asking whether a drug is safe invites an answer
+		// denying a pair, and a denial is not the pair it names: "Simvastatin does not interact with
+		// active order Digoxin" was published unfounded, and with a marker beside it the finding it cited
+		// was accused. A negator in the subject clause leaves the claim unjudged. The verdict lead "No —"
+		// is no negator — aFindingAboutAnotherDrugCitedForTheClaimIsReportedAsMisattributed is still judged.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+				"Simvastatin"), "the premise: no finding relates Simvastatin to Digoxin, chart was: "
+						+ arrangement.chart.getText());
+		for (String answer : Arrays.asList(
+				"Simvastatin does not interact with active order Digoxin.",
+				"Simvastatin doesn't interact with active order Digoxin.",
+				"Simvastatin doesn’t interact with active order Digoxin.",
+				"Simvastatin has no interaction with active order Digoxin.",
+				"Simvastatin never interacts with active order Digoxin.",
+				"No finding relates Simvastatin to active order Digoxin.",
+				"Simvastatin is not reported to interact with active order Digoxin [" + simvastatinsFinding + "].")) {
+			assertFalse(arrangement.chipsOver(answer).stream().anyMatch(chip -> relates(chip, "Simvastatin",
+					"Digoxin")), "nor does a chip, were: " + arrangement.chipsOver(answer));
+
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+					.getInteractionClaimPairs();
+
+			assertEquals(0, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"was: " + pairs + " for: " + answer);
+		}
+
+		// The denial beside an assertion: the assertion is still judged, and the denial counted nowhere.
+		String both = "Simvastatin interacts with active order Amiodarone [" + simvastatinsFinding
+				+ "]; Simvastatin does not interact with active order Digoxin.";
+		InteractionClaimPairs pairs = arrangement.service(both).search(patient(), LISTING_QUESTION)
+				.getInteractionClaimPairs();
+
+		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
+		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
+	}
+
+	@Test
+	public void aDrugOpeningTheClauseAfterAPartnerListIsNotReadAsAPartner() {
+		// Round 1 of #514's second review. A second drug joined by "and" is a partner only where the list
+		// runs to the end of the partner span; words after it say it opened a clause of its own — "…and
+		// Digoxin is unaffected", or the next claim's subject, the span running to the next claim where
+		// the first carries no marker. Its Digoxin was published unfounded. The list itself stays judged
+		// (aSecondPartnerNoFindingRelatesToTheSubjectIsUnfoundedBesideTheOneItsCitationRelates).
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+				"Simvastatin"), "the premise: no finding relates Simvastatin to Digoxin, chart was: "
+						+ arrangement.chart.getText());
+		for (String answer : Arrays.asList(
+				"Simvastatin interacts with active order Amiodarone and Digoxin is unaffected.",
+				"Simvastatin interacts with active order Amiodarone and Digoxin is unaffected [" + simvastatinsFinding
+						+ "].",
+				"Simvastatin interacts with active order Amiodarone and Digoxin interacts with active order "
+						+ "Clarithromycin [" + arrangement.finding("Clarithromycin", "Digoxin") + "].")) {
+			assertFalse(arrangement.chipsOver(answer).stream().anyMatch(chip -> relates(chip, "Simvastatin",
+					"Digoxin")), "nor does a chip, were: " + arrangement.chipsOver(answer));
+
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+					.getInteractionClaimPairs();
+
+			assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+		}
+	}
+
+	@Test
+	public void aSinglePartnerFollowedByWordsOfItsOwnClauseIsStillJudged() {
+		// The list-end test above asks only a span naming SEVERAL drugs: words after a lone partner are
+		// its own clause's, and the claim still names one pair — here the finding it cites.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		String answer = "Clarithromycin interacts with active order Amiodarone which is a reason to withhold it ["
+				+ arrangement.finding("Clarithromycin", "Amiodarone") + "].";
+
+		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+				.getInteractionClaimPairs();
+
+		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
+		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
+	}
+
+	@Test
 	public void anAnswerStatingNoClaimIsAMeasurementOfNone() {
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 

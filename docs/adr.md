@@ -11125,6 +11125,18 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   offered, which is what `ActiveOrderCitationFidelityCheck.clauseBound` declines a vocabulary for: a
   word taken out of the stand-ins or put into the list words judges a claim as round 2 did, and the
   opposite edit can only silence.
+- **A denial is not the pair it names, and a list ends at its last partner** (round 1 of the PR's
+  second review loop, two false reports on the answer shape a *"is it safe to give X?"* question
+  invites). A subject clause `deniesItsClause` — a word of `NEGATORS` (*not*, *never*, *without*, *cannot*,
+  *neither*, *nor*, *none*), a contracted *n't*, or *no* where a word follows it — is unjudged: *"Simvastatin does not
+  interact with active order Digoxin"* had been published `unfounded`, and with a marker its citation
+  accused. *No* counts only before a word so the verdict lead *"No —"* stays judged. And a partner
+  span naming several drugs is a list only where the last of them is followed by the span's end or by
+  punctuation: *"active order Amiodarone and Digoxin is unaffected"*, and a first claim with no marker
+  whose span runs to the next claim's subject, had counted that drug a partner. `joinedAsAList` had
+  asked only the stretches BETWEEN names, so the tail was the one end left open. The test is
+  punctuation, `clauseBound`'s reason, and #477's finding copied verbatim closes its list with a dash.
+  Both refuse only.
 - **Silence over accusation wherever the operands cannot be read**: a subject naming no drug any
   interaction or condition-mediated finding names, nothing after the noun, a run citing a reference
   record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
@@ -11178,6 +11190,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   class noun (*"Unlike Simvastatin Biaxin interacts with …"*) — is read as that other drug and can be
   reported. The other direction is silence: a clause carrying a stand-in for another reason
   (*"note that X interacts …"*), and a list joined by other words (*"as well as"*), are unjudged.
+- **−** **The negators are a closed set, and punctuation ends a list.** A denial worded outside the
+  set (*"is unlikely to interact"*) is judged as the pair it names and can be reported; a negator in an
+  earlier clause the subject span reaches with no comma (*"X should not be given because X interacts
+  …"*) leaves an asserting claim unjudged. A list's last partner followed by punctuation and then a
+  clause of its own (*"… and Digoxin — which is unaffected"*) is still read as a partner, and one
+  followed by a word that is not a clause (*"… and Digoxin tablets"*) is unjudged.
 - **−** **An invented partner no finding or chip names at all is not seen.** *Heparin* in *"active
   order Amiodarone and Heparin [13]"* is no name to the check, so it reads as more words of the related
   partner; and a partner list continued past a comma — *"active order Amiodarone, Heparin and

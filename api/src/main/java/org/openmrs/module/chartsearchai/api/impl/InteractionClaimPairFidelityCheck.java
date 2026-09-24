@@ -108,9 +108,14 @@ import org.slf4j.LoggerFactory;
  *       sentence before, and the drug the clause does name is the wrong reading: <em>"Clarithromycin can
  *       be given, but together with Simvastatin it interacts with active order Amiodarone"</em> (round 3
  *       of #514's review);</li>
+ *   <li>the subject clause carries a word denying what it states — {@link #NEGATORS}: <em>"Simvastatin
+ *       does not interact with active order Digoxin"</em> names a pair it denies (round 1 of #514's
+ *       second review);</li>
  *   <li>the partner span names several drugs joined by words other than a list's
  *       ({@link #PARTNER_LIST_WORDS}) — <em>"active order Amiodarone but not with Digoxin"</em> ran on
- *       into a clause of its own, which may deny the second pair (round 3);</li>
+ *       into a clause of its own, which may deny the second pair (round 3) — or followed by a word
+ *       before any punctuation, the last of them opening a clause of its own: <em>"active order
+ *       Amiodarone and Digoxin is unaffected"</em> (round 1 of the second review);</li>
  *   <li>the drugs the subject span names reach different verdicts — the claim's clause names another
  *       drug before the noun with no comma or semicolon between, as a lead clause joined by
  *       <em>but</em> or a parenthesis does;</li>
@@ -141,7 +146,10 @@ import org.slf4j.LoggerFactory;
  * used only to refuse: a subject clause naming another drug and then its own by a word the stand-ins
  * lack — a brand no finding prints, a bare class noun — is still read as that other drug and can be
  * reported, while a clause carrying one for another reason (<em>"note that X interacts…"</em>) and a
- * list joined by other words (<em>"as well as"</em>) are left unjudged.
+ * list joined by other words (<em>"as well as"</em>) are left unjudged. The negators are a closed set
+ * too: a denial worded outside it (<em>"is unlikely to interact"</em>) is judged as the pair it names,
+ * and a negator in an earlier clause the subject span reaches leaves an asserting claim unjudged. A
+ * list's last partner followed by punctuation and then a clause of its own is still read as a partner.
  * A second partner no finding or chip names at all — <em>Heparin</em> in <em>"active order Amiodarone
  * and Heparin"</em> — is no name to this check, so it reads as more words of the related partner and
  * passes; a partner list continued past a comma is cut at it, so <em>"active order Amiodarone, Heparin
@@ -176,6 +184,21 @@ final class InteractionClaimPairFidelityCheck {
 	private static final Set<String> SUBJECT_STAND_INS = Collections.unmodifiableSet(new HashSet<String>(
 			Arrays.asList("it", "its", "they", "their", "this", "that", "these", "those", "which", "who",
 					"the")));
+
+	/**
+	 * Words denying what their clause states — <em>not</em>, <em>never</em>, <em>without</em>,
+	 * <em>cannot</em>, <em>neither</em>, <em>nor</em>, <em>none</em> — read by {@link #deniesItsClause}
+	 * with a contracted <em>n't</em>, and <em>no</em> where a word follows it (<em>"no interaction"</em>, <em>"no finding"</em>). One in a claim's SUBJECT
+	 * clause says the clause may deny the pair it names — <em>"Simvastatin does not interact with active
+	 * order Digoxin"</em> was published unfounded (round 1 of #514's second review) — so the claim is left
+	 * unjudged. The verdict lead's <em>"No —"</em> is followed by a dash, not a word, so it is not one. A
+	 * closed set used only to REFUSE, as {@link #SUBJECT_STAND_INS} is: a denial worded outside it
+	 * (<em>"is unlikely to interact"</em>) is judged as an assertion, and a negator in an earlier clause the
+	 * subject span reaches with no comma between (<em>"X should not be given because X interacts…"</em>)
+	 * silences a claim that asserts.
+	 */
+	private static final Set<String> NEGATORS = Collections.unmodifiableSet(new HashSet<String>(
+			Arrays.asList("not", "never", "without", "cannot", "neither", "nor", "none")));
 
 	/**
 	 * The words that may join one partner to the next — a list. Anything else between two drugs of the
@@ -255,12 +278,11 @@ final class InteractionClaimPairFidelityCheck {
 			int misattributedClaims = 0;
 			Set<Integer> misattributed = new LinkedHashSet<Integer>();
 			for (ActiveOrderCitationFidelityCheck.Claim claim : claims) {
-				Set<String> subjectNames = namedIn(FindingPartnerCoverageCheck.comparable(claim.subject()),
-						vocabulary);
+				String subject = FindingPartnerCoverageCheck.comparable(claim.subject());
+				Set<String> subjectNames = namedIn(subject, vocabulary);
 				String partner = normalized(claim.partner());
-				if (subjectNames.isEmpty() || partner.isEmpty()
-						|| containsAWordOf(FindingPartnerCoverageCheck.comparable(claim.subject()),
-								SUBJECT_STAND_INS)) {
+				if (subjectNames.isEmpty() || partner.isEmpty() || containsAWordOf(subject, SUBJECT_STAND_INS)
+						|| deniesItsClause(subject)) {
 					continue;
 				}
 				// Every drug the partner span names that a finding or chip names is a partner of the claim —
@@ -273,6 +295,8 @@ final class InteractionClaimPairFidelityCheck {
 				else if (!joinedAsAList(partner, partnerNames)) {
 					// "…active order Amiodarone but not with Digoxin" — the span ran on into a clause of its
 					// own, and which of its drugs the claim offered cannot be read (round 3 of #514's review).
+					// So did "…active order Amiodarone and Digoxin is unaffected", whose Digoxin opens that
+					// clause (round 1 of #514's second review).
 					continue;
 				}
 				List<Finding> runFindings = new ArrayList<Finding>();
@@ -391,10 +415,57 @@ final class InteractionClaimPairFidelityCheck {
 	}
 
 	/**
+	 * @return whether {@code text} carries a word of {@link #NEGATORS}, a contracted <em>n't</em>, or a
+	 *         <em>no</em> a word follows — the determiner of <em>"no interaction"</em>, never the verdict
+	 *         lead's <em>"No —"</em>. A character scan and not a pattern: this class compiles none, so it
+	 *         cannot grow a citation-marker dialect ({@code ArchitectureGuardTest}).
+	 */
+	private static boolean deniesItsClause(String text) {
+		int at = 0;
+		while (at < text.length()) {
+			if (!Character.isLetterOrDigit(text.charAt(at))) {
+				at++;
+				continue;
+			}
+			int end = at;
+			while (end < text.length() && Character.isLetterOrDigit(text.charAt(end))) {
+				end++;
+			}
+			String word = text.substring(at, end);
+			if (NEGATORS.contains(word)) {
+				return true;
+			}
+			if ("t".equals(word) && at >= 2 && "'\u2019".indexOf(text.charAt(at - 1)) >= 0
+					&& text.charAt(at - 2) == 'n') {
+				return true;
+			}
+			if ("no".equals(word)) {
+				int next = end;
+				while (next < text.length() && Character.isWhitespace(text.charAt(next))) {
+					next++;
+				}
+				if (next > end && next < text.length() && Character.isLetter(text.charAt(next))) {
+					return true;
+				}
+			}
+			at = end;
+		}
+		return false;
+	}
+
+	/**
 	 * @return whether every stretch of {@code partner} between two of the {@code names} it contains is
-	 *         {@link #PARTNER_LIST_WORDS} and punctuation alone — a list of partners. A name inside
-	 *         another occurrence ({@code lamivudine} of {@code lamivudine/zidovudine}) is that occurrence,
-	 *         so it opens no stretch; the words before the first name and after the last are not asked.
+	 *         {@link #PARTNER_LIST_WORDS} and punctuation alone, and — where it names more than one —
+	 *         whether the list ENDS at the last of them: the span stops there, or punctuation follows it
+	 *         before any word does. A word straight after the last name of several says that name opened a
+	 *         clause of its own — <em>"Amiodarone and Digoxin is unaffected"</em>, or the next claim's
+	 *         subject where the span runs up to it (round 1 of #514's second review) — while #477's
+	 *         finding, copied verbatim, closes its list with a dash (<em>"… A and B — possible duplicate
+	 *         therapy"</em>). Punctuation and not a vocabulary, {@code clauseBound}'s reason; what that gives
+	 *         up is a last name followed by punctuation and then a clause of its own, still read as a
+	 *         partner. A name inside another occurrence ({@code lamivudine} of
+	 *         {@code lamivudine/zidovudine}) is that occurrence, so it opens no stretch; the words before
+	 *         the first name are not asked, nor, where it names one drug, the words after it.
 	 */
 	private static boolean joinedAsAList(String partner, Set<String> names) {
 		List<int[]> occurrences = new ArrayList<int[]>();
@@ -406,8 +477,10 @@ final class InteractionClaimPairFidelityCheck {
 		Collections.sort(occurrences, (one, other) -> one[0] != other[0] ? Integer.compare(one[0], other[0])
 				: Integer.compare(other[1], one[1]));
 		int coveredTo = -1;
+		boolean several = false;
 		for (int[] occurrence : occurrences) {
 			if (coveredTo >= 0 && occurrence[0] >= coveredTo) {
+				several = true;
 				for (String word : partner.substring(coveredTo, occurrence[0]).split("[^\\p{L}\\p{N}]+")) {
 					if (!word.isEmpty() && !PARTNER_LIST_WORDS.contains(word)) {
 						return false;
@@ -415,6 +488,10 @@ final class InteractionClaimPairFidelityCheck {
 				}
 			}
 			coveredTo = Math.max(coveredTo, occurrence[1]);
+		}
+		if (several) {
+			String after = partner.substring(coveredTo).trim();
+			return after.isEmpty() || !Character.isLetterOrDigit(after.codePointAt(0));
 		}
 		return true;
 	}

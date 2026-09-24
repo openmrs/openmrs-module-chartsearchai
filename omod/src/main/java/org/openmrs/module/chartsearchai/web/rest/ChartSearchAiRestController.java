@@ -2089,8 +2089,8 @@ public class ChartSearchAiRestController {
 	/**
 	 * The wire shape of {@code interactionClaimPairs} — issue #514: {@code judged} active-order claims
 	 * the check reached a verdict on, {@code misattributedCitations} the findings cited for a judged
-	 * claim none of them relates, and {@code unfounded} judged claims citing no finding whose pair no
-	 * finding relates. {@code null} where the check stated no measurement, never a zeroed object, since
+	 * claim none of them relates, and {@code unfounded} judged claims naming a partner no finding
+	 * relates, citing no finding for it. {@code null} where the check stated no measurement, never a zeroed object, since
 	 * zero is itself a measurement. {@code ChartSearchService.InteractionClaimPairs} is canonical for
 	 * what each value does and does not assert. The list is copied, for the reason
 	 * {@link #putModuleStatements} gives for its neighbours.

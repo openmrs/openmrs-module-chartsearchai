@@ -763,21 +763,26 @@ public interface ChartSearchService {
 	 * <p><b>What {@code judged} counts.</b> The claims the check could reach a verdict on: the
 	 * words before the noun name a drug some interaction or condition-mediated finding or chip
 	 * names, the words after it are not blank, the run cites no reference record other than an
-	 * interaction or condition-mediated finding, and no finding naming no order (a class-only
+	 * interaction or condition-mediated finding, no finding naming no order (a class-only
 	 * relationship) among those the claim is judged against — the ones it cites, or where it cites
-	 * none, every finding and chip — is about a drug it names.
+	 * none, every finding and chip — is about a drug it names, and every drug the words before the noun
+	 * name reaches the same verdict as the claim's subject — so a clause naming another drug before the
+	 * noun with no comma or semicolon between is judged only where both readings agree.
 	 * Every other claim is outside all three numbers.
 	 *
 	 * <p><b>What {@code misattributedCitations} holds.</b> The findings a judged claim cites where
-	 * NONE of them relates the two drugs the claim names: each drug must be one the finding names — its
+	 * NONE of them relates its subject to any drug the words after the noun name: each drug must be one
+	 * the finding names — its
 	 * subject, an order it names, or a prescription its chart-order clause resolved a drug from — read
 	 * structurally, never from its text. Two orders one finding names therefore read as related, which
 	 * is what issue #477's findings state and is a miss on a merged finding. Distinct, in the order the
 	 * answer states them.
 	 *
-	 * <p><b>What {@code unfounded} counts.</b> The judged claims whose run cites no finding and whose
-	 * pair no finding in the prompt and no chip beside the answer relates. It is a count of CLAIMS, and
-	 * the list is of CITATIONS, so a client must not add them.
+	 * <p><b>What {@code unfounded} counts.</b> The judged claims naming, after the noun, a drug no
+	 * finding in the prompt and no chip beside the answer relates to the subject, where the claim cites
+	 * no finding or cites one relating another drug it names there — the invented partner, alone or
+	 * beside a real one. It is a count of CLAIMS, and the list is of CITATIONS, so a client must not add
+	 * them.
 	 *
 	 * <p><b>Zero is a measurement and absence is not; neither empty list nor zero is a
 	 * certificate.</b> A null {@code InteractionClaimPairs} says the producer stated no measurement —
@@ -787,7 +792,9 @@ public interface ChartSearchService {
 	 * directions: a SUBJECT spelled differently from every name the findings carry leaves its claim
 	 * unjudged, while a PARTNER spelled so — a brand or paraphrase no finding prints — reads as
 	 * unrelated and can be reported. A short name inside a longer one reads as the same drug, toward
-	 * silence.
+	 * silence. A second partner no finding or chip names at all reads as more words of the first, and
+	 * a partner list continued past a comma is cut at it, so neither invented partner is counted; and a
+	 * swapped subject in a clause naming several drugs is unjudged, not reported.
 	 */
 	final class InteractionClaimPairs {
 
@@ -814,7 +821,7 @@ public interface ChartSearchService {
 			return misattributedCitations;
 		}
 
-		/** @return how many judged claims cited no finding and state a pair no finding relates */
+		/** @return how many judged claims name a partner no finding relates, citing no finding for it */
 		public int getUnfounded() {
 			return unfounded;
 		}

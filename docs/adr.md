@@ -10937,6 +10937,14 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 - **The chips are part of the population for an uncited claim.** A drug only the answer names is put
   in play after the answer, so its pair can be a chip no carried finding is; that is not a pair "no
   finding raised".
+- **A claim can state several pairs, and its subject can be read several ways** (round 2 of the PR's
+  review). Every drug the partner span names that a finding or chip names is a partner: containment of
+  one related name had read *"active order Amiodarone and Digoxin [6]"*, [6] about Amiodarone alone,
+  as related — the ticket's invented-partner shape in this form. A partner the run leaves unrelated
+  that no finding or chip relates makes the claim UNFOUNDED, and the citation that relates its other
+  partner is not accused. Every such drug the subject span names is a reading, and the claim is judged
+  only where every reading reaches one verdict: a clause naming another drug before the noun with no
+  comma between had passed a swap wherever any reading related.
 - **Silence over accusation wherever the operands cannot be read**: a subject naming no drug any
   interaction or condition-mediated finding names, nothing after the noun, a run citing a reference
   record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
@@ -10957,6 +10965,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 - **A vocabulary of her active orders on the partner side.** No structural source reaches the answer
   path, and parsing the rendered `drug_order` text for one is the re-derivation `getOrderActive`'s
   rule (#317) refuses.
+- **The subject as the drug nearest the noun**, the review's suggestion. *"X can be given alongside
+  Y but X interacts with …"* and *"… alongside Y but it interacts with …"* put the same readings in
+  the same positions, and the nearest is the subject in the first and not in the second, so it
+  accuses a correct citation there — `InteractionClaimPairFidelityTest.aCorrectCitationBehindAPronounIsNotAccusedOnTheDrugNearestTheNoun`
+  reddens on it. Splitting the clause at *but*/*and* is the conjunction vocabulary
+  `ActiveOrderCitationFidelityCheck.clauseBound` refuses.
 - **Comparing the partner name against a chart record's text** — Decision 76's recorded alternative
   — is a different question: that one compares a CHART citation, this one the module's own finding's
   structure, which is what the ticket's direction names.
@@ -10978,6 +10992,13 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 - **−** **The trailing-run gates read names the findings carry.** A later clause naming another drug
   only by a name no finding prints, and citing a finding that names the claim's partner, is taken for
   the claim and can be reported.
+- **−** **An invented partner no finding or chip names at all is not seen.** *Heparin* in *"active
+  order Amiodarone and Heparin [13]"* is no name to the check, so it reads as more words of the related
+  partner; and a partner list continued past a comma — *"active order Amiodarone, Heparin and
+  Digoxin"* — is cut at it. Catching either needs a drug vocabulary on the answer path, which this
+  check does not have.
+- **−** **A swapped subject in a clause naming several drugs is unjudged, not reported** — behind a
+  lead clause, a pronoun or a parenthesis — since its readings disagree.
 - **−** **Two orders one finding names read as related**, so a claim pairing two orders of a merged
   (Decision 99) finding is not reported — the price of not falsely reporting #477's findings; the
   relation bullet above says why.

@@ -61,20 +61,31 @@ import org.slf4j.LoggerFactory;
  * prescriptions and substances its chart-order clause resolved them from
  * ({@link RecordMapping#getFindingBridgeNames()}, {@link SafetyWarning#chartOrderBridges()}) — the
  * last because a brand-named order's finding gives the drug a second name the model may use (#349).
- * A finding relates a claim when each side of it names one of those names, whichever way round: an
+ * A finding relates a subject to a partner when each names one of those names, whichever way round: an
  * interaction relates two drugs whichever the sentence leads with, the screening arm's two drugs are
  * both her orders, and issue #477's findings relate two of her orders to each other. So two orders one
  * finding names read as related, and a claim pairing two orders of a merged finding is not reported —
  * {@link #anyRelates} says why that is the direction chosen.
  *
+ * <p><b>A claim can state several pairs</b> (round 2 of #514's review). Every drug the partner span
+ * names that a finding or chip names is a PARTNER of it — <em>"active order Amiodarone and
+ * Digoxin"</em> states two — and a span naming none is compared whole. Every such drug the SUBJECT span
+ * names is a READING of its subject, and the claim is judged only where every reading reaches one
+ * verdict: which drug of <em>"X can be given alongside Y but X interacts with…"</em> is the subject is
+ * the one nearest the noun, and of <em>"…alongside Y but it interacts with…"</em> is not, the same
+ * readings in the same positions — so taking any reading that relates passes a swap, and taking the
+ * nearest accuses a correct citation.
+ *
  * <p><b>Two answers.</b>
  * <ul>
  *   <li>A claim whose run — or the trailing run it takes — cites findings, none of which relates its
- *       pair: every one of them is MISATTRIBUTED. A run citing one that relates and one that does not
- *       is silent.</li>
- *   <li>A claim whose run cites no finding, and whose pair no finding in the prompt and no chip beside
- *       the answer relates: UNFOUNDED. The chips count because a drug only the answer names is put in
- *       play after the answer, and a pair the module did raise is not one "no finding raised".</li>
+ *       subject to any of its partners: every one of them is MISATTRIBUTED. A run citing one that
+ *       relates and one that does not is silent.</li>
+ *   <li>A claim citing no finding, or citing one that relates another of its partners, where a partner
+ *       is related to its subject by no finding in the prompt and no chip beside the answer: UNFOUNDED —
+ *       the invented partner, alone or beside a real one. The chips count because a drug only the answer
+ *       names is put in play after the answer, and a pair the module did raise is not one "no finding
+ *       raised".</li>
  * </ul>
  *
  * <p><b>Conservative by construction</b>, since a check that cries wolf is worse than none — each of
@@ -86,6 +97,9 @@ import org.slf4j.LoggerFactory;
  *       {@link FindingPartnerCoverageCheck#comparable} form, the form that class asks "did the answer
  *       name this order" in, so one question has one comparison;</li>
  *   <li>the partner side is blank;</li>
+ *   <li>the drugs the subject span names reach different verdicts — the claim's clause names another
+ *       drug before the noun with no comma or semicolon between, as a lead clause joined by
+ *       <em>but</em> or a parenthesis does;</li>
  *   <li>the run cites a reference record that is not a relating finding — a {@code drug_reference}
  *       monograph states interactions no finding raises (#357 renders a sub-floor rule naming her
  *       order in its tail), and this check reads no reference text;</li>
@@ -108,6 +122,11 @@ import org.slf4j.LoggerFactory;
  * related, so an order put in for a merged finding's subject passes — {@link #anyRelates} says why.
  * The trailing-run gates read names the findings carry, so a later clause naming another drug only by
  * a name no finding prints, citing a finding that names the claim's partner, is taken for the claim.
+ * A second partner no finding or chip names at all — <em>Heparin</em> in <em>"active order Amiodarone
+ * and Heparin"</em> — is no name to this check, so it reads as more words of the related partner and
+ * passes; a partner list continued past a comma is cut at it, so <em>"active order Amiodarone, Heparin
+ * and Digoxin"</em> is judged on Amiodarone alone. A swapped subject in a clause naming several drugs is
+ * left unjudged, not reported — a pronoun or a parenthesis included.
  * And a claim not written in the
  * active-order form — the ticket's first case, <em>"a caution to note regarding interactions with
  * Lopinavir / ritonavir, Didanosine, and Nevirapine [288], [290]"</em> — is not a claim to this check
@@ -195,6 +214,13 @@ final class InteractionClaimPairFidelityCheck {
 				if (subjectNames.isEmpty() || partner.isEmpty()) {
 					continue;
 				}
+				// Every drug the partner span names that a finding or chip names is a partner of the claim —
+				// "active order Amiodarone and Digoxin" states two pairs, and containment of the one related
+				// name read both as related (round 2 of #514's review). A span naming none is compared whole.
+				Set<String> partnerNames = namedIn(partner, vocabulary);
+				if (partnerNames.isEmpty()) {
+					partnerNames = Collections.singleton(partner);
+				}
 				List<Finding> runFindings = new ArrayList<Finding>();
 				List<Integer> runIndexes = new ArrayList<Integer>();
 				boolean unreadable = false;
@@ -230,14 +256,31 @@ final class InteractionClaimPairFidelityCheck {
 				if (unreadable || anyUndecidable(candidates, subjectNames, partner)) {
 					continue;
 				}
-				judged++;
-				if (anyRelates(candidates, subjectNames, partner)) {
+				// Each drug the subject span names is a READING of the claim's subject, and the claim is
+				// judged only where every reading reaches one verdict. Round 2 of #514's review: taking any
+				// reading that relates passed a swap behind a lead clause with no comma ("X can be given
+				// alongside Y but X interacts with…"); taking the one nearest the noun accuses a correct
+				// citation behind a pronoun ("…alongside Y but it interacts with…"). Both shapes put the
+				// same readings in the same positions, so what cannot be read is left unjudged.
+				Verdict verdict = null;
+				boolean readingsDisagree = false;
+				for (String reading : subjectNames) {
+					Verdict read = verdict(reading, partnerNames, runFindings, population);
+					if (verdict == null) {
+						verdict = read;
+					}
+					else if (verdict != read) {
+						readingsDisagree = true;
+					}
+				}
+				if (readingsDisagree) {
 					continue;
 				}
-				if (runFindings.isEmpty()) {
+				judged++;
+				if (verdict == Verdict.UNFOUNDED) {
 					unfounded++;
 				}
-				else {
+				else if (verdict == Verdict.MISATTRIBUTED) {
 					misattributedClaims++;
 					misattributed.addAll(runIndexes);
 				}
@@ -246,8 +289,8 @@ final class InteractionClaimPairFidelityCheck {
 				// The citations and the counts, never a name: a claim's names are this patient's
 				// medications, and core ships org.openmrs at WARN (ADR Decision 102, issue #439).
 				log.warn("Answer for patient={} states {} active-order claim(s) no cited finding relates "
-						+ "the pair of — cited {} — and {} whose pair no finding relates at all. The answer "
-						+ "prose is left unchanged (issue #514).", patientId,
+						+ "the pair of — cited {} — and {} naming a pair no finding relates at all. The "
+						+ "answer prose is left unchanged (issue #514).", patientId,
 						Integer.valueOf(misattributedClaims), misattributed,
 						Integer.valueOf(unfounded));
 			}
@@ -279,6 +322,36 @@ final class InteractionClaimPairFidelityCheck {
 		return named;
 	}
 
+	/** What a judged claim is, under one reading of its subject. */
+	private enum Verdict {
+		RELATED, MISATTRIBUTED, UNFOUNDED
+	}
+
+	/**
+	 * @return the claim's verdict with {@code reading} as its subject: MISATTRIBUTED where it cites
+	 *         findings none of which relates the reading to any of its partners; otherwise UNFOUNDED where
+	 *         a partner is related by no finding in the prompt and no chip, cited or not — the invented
+	 *         partner beside a cited one that relates; otherwise RELATED. A partner the run leaves
+	 *         unrelated that an uncited finding relates is not a pair "no finding raised".
+	 */
+	private static Verdict verdict(String reading, Set<String> partners, List<Finding> runFindings,
+			List<Finding> population) {
+		boolean citationRelates = false;
+		boolean everyPartnerFounded = true;
+		for (String partner : partners) {
+			if (!runFindings.isEmpty() && anyRelates(runFindings, reading, partner)) {
+				citationRelates = true;
+			}
+			else if (!anyRelates(population, reading, partner)) {
+				everyPartnerFounded = false;
+			}
+		}
+		if (!runFindings.isEmpty() && !citationRelates) {
+			return Verdict.MISATTRIBUTED;
+		}
+		return everyPartnerFounded ? Verdict.RELATED : Verdict.UNFOUNDED;
+	}
+
 	/** @return {@code text} in the one form every name and span here is compared in —
 	 *          {@link FindingPartnerCoverageCheck#comparable}, trimmed — and empty for null. The SUBJECT
 	 *          span is compared untrimmed, only ever searched by containment. */
@@ -305,18 +378,19 @@ final class InteractionClaimPairFidelityCheck {
 	}
 
 	/**
-	 * @return whether one of {@code findings} relates the claim's two sides: each side names one of the
-	 *         finding's names — its subject, an order it names, or a bridge name — whichever way round.
+	 * @return whether one of {@code findings} relates one reading of the claim's subject to one of its
+	 *         partners: each names one of the finding's names — its subject, an order it names, or a
+	 *         bridge name — whichever way round.
 	 *         Two of its ORDERS count as a pair it relates, deliberately: issue #477's findings (a drug
 	 *         already in several of her orders, orders sharing a substance) state exactly that relation,
 	 *         and nothing on the record tells them from a merged finding stating each order against its
 	 *         subject, so refusing the pair would call a verbatim copy of them misattributed. The cost is
 	 *         the other direction: a claim pairing two orders of a merged finding is not reported.
 	 */
-	private static boolean anyRelates(List<Finding> findings, Set<String> subjectNames, String partner) {
+	private static boolean anyRelates(List<Finding> findings, String subject, String partner) {
 		for (Finding finding : findings) {
 			if (finding.namesAnOrder && matchesAny(partner, finding.names)
-					&& namesAny(subjectNames, finding.names)) {
+					&& matchesAny(subject, finding.names)) {
 				return true;
 			}
 		}

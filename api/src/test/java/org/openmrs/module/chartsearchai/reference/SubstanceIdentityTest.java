@@ -55,13 +55,13 @@ import org.junit.jupiter.api.Test;
  * and has nothing for the stem to veto. See {@link DrugReference#substanceKey()} for the
  * measurements.
  *
- * <p>Both directions are asserted here, against slices taken verbatim from the shipped KB, through
+ * <p>Both directions are asserted here, against slices taken from the shipped KB, through
  * the real {@link DdiDrugReferenceSource} parser and the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}.
  */
 public class SubstanceIdentityTest {
 
-	/** Verbatim KB rows and interaction rows — see the fixture's own {@code metadata.note}. */
+	/** KB rows and interaction rows — see the fixture's own {@code metadata.note}. */
 	private static final String FIXTURE = DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY;
 
 	/** The must-NOT-collapse pair, in the slice that already carries it: {@code Omeprazole} and

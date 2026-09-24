@@ -40,7 +40,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * only visible in what gets injected — which is why these cases measure the injected slice itself
  * ({@code DrugReferenceTestSupport.injectedReferences}) rather than inferring it from chip counts.
  *
- * <p>Driven through the real {@link DrugReferenceInjector#injectRecords} over verbatim KB slices.
+ * <p>Driven through the real {@link DrugReferenceInjector#injectRecords} over KB slices.
  */
 public class ReferenceRecordSubstanceCollapseTest {
 

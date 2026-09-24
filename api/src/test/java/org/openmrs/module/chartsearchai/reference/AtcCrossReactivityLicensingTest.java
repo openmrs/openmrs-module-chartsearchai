@@ -55,7 +55,7 @@ import org.junit.jupiter.api.Test;
  * and keeps the 3701. Re-measure before relying on a figure.
  *
  * <p>Asserted through the real {@code validate} entry point on both arms, over rows copied
- * field-for-field from the shipped KB. Every case here pins a LIMB OF THE CRITERION rather than a
+ * from the shipped KB with brand_names omitted. Every case here pins a LIMB OF THE CRITERION rather than a
  * list entry: each has a partner case whose only difference is what ATC's name says.
  */
 public class AtcCrossReactivityLicensingTest {

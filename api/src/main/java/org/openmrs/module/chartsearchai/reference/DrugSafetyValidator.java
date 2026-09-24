@@ -1465,9 +1465,10 @@ public class DrugSafetyValidator {
 	 * conclusion wrong. The CHIP array has no such container — chips are per-drug findings — but the
 	 * RESPONSE is itself the per-question container, and a key beside {@code safetyWarnings} is a
 	 * module change. Rendering "10 of 18 shown" is still the frontend's, in
-	 * {@code openmrs-esm-chartsearchai}; having something to render is not. What the WARN still holds
-	 * alone is HOW MANY pairs went and at what ratings — the statement is a count, deliberately, because
-	 * a list of withheld pairs on the wire is the uncapped prompt expansion this cap exists to prevent.
+	 * {@code openmrs-esm-chartsearchai}; having something to render is not. What only the WARN
+	 * carries is the withheld pairs' RATINGS (issue #443) — the response states counts and never
+	 * ratings — and ratings rather than a list, deliberately, because a list of withheld pairs on the
+	 * wire is the uncapped prompt expansion this cap exists to prevent.
 	 * WHICH pairs went is nowhere at all since issue #439: in the screening arm both sides of a pair are
 	 * the patient's own prescriptions, so that list was her medication list on a server-log line. An
 	 * operator who needs the pairs raises this property and re-asks, which reproduces the screen and
@@ -4863,8 +4864,8 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>The partner is carried rather than re-resolved by each consumer, because
 	 * {@link #activeOrderEntryFor} is a scan whose answer two arms and one ledger all have to agree on —
-	 * {@link #bestRulePerPartner} groups on it, {@link #addActiveOrderPairInteractions} names and logs a
-	 * pair by it, and {@link InteractionPairs} keys the cross-arm suppression on it. Three copies of the
+	 * {@link #bestRulePerPartner} groups on it, {@link #addActiveOrderPairInteractions} keys a pair by
+	 * it, and {@link InteractionPairs} keys the cross-arm suppression on it. Three copies of the
 	 * same scan is three chances to answer that question differently, which is the shape of every
 	 * duplicate chip this class has had to fix.
 	 */
@@ -6350,11 +6351,12 @@ public class DrugSafetyValidator {
 		int cap = maxPairChips();
 		int shown = Math.min(found.size(), cap);
 		if (shown < found.size()) {
-			// WARN, not INFO: how many pairs went, and at what ratings, is an operator's diagnostic and
-			// it lives only here — the response states the two COUNTS (see the extent returned below)
-			// and never the ratings, and a list of withheld pairs on the wire is the unbounded expansion
-			// this cap exists to prevent. Silent truncation in a safety net reads as "nothing else was
-			// found", which since issue #336 the response itself no longer says.
+			// WARN, not INFO: how many pairs went, and at what ratings, is an operator's diagnostic, and
+			// the RATINGS live only here (issue #443) — the response states the two COUNTS (see the
+			// extent returned below) and never the ratings, and a list of withheld pairs on the wire is
+			// the unbounded expansion this cap exists to prevent. Silent truncation in a safety net
+			// reads as "nothing else was found", which since issue #336 the response itself no longer
+			// says.
 			//
 			// WHICH pairs went is nowhere, here or on the wire. That is what the list below is: each
 			// withheld candidate's RATING and no name — which is why issue #439 could make the sibling
@@ -8295,8 +8297,8 @@ public class DrugSafetyValidator {
 		if (pairs.size() > reported) {
 			// Counted here, counted on the response. A clinician reading the reported chips could not
 			// tell a capped screen from a complete one, which is issue #336 — and the count that closes
-			// it is the extent this method returns, not this line. What the log still holds alone is how
-			// many pairs went and at what RATINGS, so a withheld Major is recoverable: an operator who
+			// it is the extent this method returns, not this line. What only the log carries is the
+			// withheld pairs' RATINGS (issue #443), so a withheld Major is recoverable: an operator who
 			// needs the pairs themselves raises the cap and re-asks, which puts them on the wire as
 			// chips rather than in the log as PHI — reproducing the screen, not recovering the served
 			// request's own withheld list, which is a loss ADR Decision 102 states rather than remedies.
@@ -8793,8 +8795,8 @@ public class DrugSafetyValidator {
 	 *         what came up empty. The {@code ddinter} parser writes a bridged concept's recorded name
 	 *         onto every entry it files there AS AN ALIAS, so the over-wide match is an EXACT alias
 	 *         hit and not a nested-token one — and an {@code en} session records that very concept
-	 *         name on the order. {@code ddi-bridged-concept-two-substances.json}, a verbatim shipped-KB
-	 *         slice, carries it: {@code Esomeprazole magnesium} is an alias of BOTH Omeprazole and
+	 *         name on the order. {@code ddi-bridged-concept-two-substances.json}, adapted from the
+	 *         shipped KB, carries it: {@code Esomeprazole magnesium} is an alias of BOTH Omeprazole and
 	 *         Esomeprazole (CIEL 75876, one of the 122 multi-substance bridged concepts of the shipped
 	 *         knowledge base whose recorded name does not name every substance they resolve — the
 	 *         difference of the two figures
@@ -8912,8 +8914,9 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>ONE call site inside this class, {@link #bestRulePerPartner}, which stores the answer on
 	 *         the {@link SubjectRule} it builds. Three things need it and must not disagree — that
-	 *         grouping, the name and log label {@link #addActiveOrderPairInteractions} gives a screened
-	 *         pair, and the cross-arm key in {@link InteractionPairs} — so it is resolved once and carried
+	 *         grouping, the name {@link #addActiveOrderPairInteractions} keys a screened pair by (#440
+	 *         deleted the log label it also gave one), and the cross-arm key in
+	 *         {@link InteractionPairs} — so it is resolved once and carried
 	 *         rather than asked again by each of them. Issue #136 made it two consumers; keeping them in
 	 *         step by re-running the same scan was the arrangement, and carrying the result removes the
 	 *         chance of a pair being named after one entry and grouped under another.
@@ -11314,7 +11317,7 @@ public class DrugSafetyValidator {
 	 * becomes a co-medication of its own. Issue #209's case is a real unmapped order on this instance —
 	 * Sarah Taylor's {@code Hydrocortisone Injection vial 100mg} — and reaches
 	 * {@code Hydrocortisone butyrate} unranked, so one prescription would be reported as two, the second
-	 * of them an ester she is not on. Both halves are asserted over the verbatim KB slice by
+	 * of them an ester she is not on. Both halves are asserted over the KB slice by
 	 * {@code UnmappedOrderClassPartnerTest}.
 	 *
 	 * <p><b>Named and classified by the dataset, both.</b> The name is the entry's — issue #155's ladder
@@ -12013,7 +12016,7 @@ public class DrugSafetyValidator {
 	 * reorders an array from silently rewording a chip. A no-op on the shipped KB, whose arrays are all
 	 * ascending, so the case that pins it
 	 * ({@code CrossReactivityClassChoiceTest.theAnswerDoesNotDependOnTheAllergenArraysCodeOrder}) is
-	 * the one fixture here that deviates from verbatim, by writing one allergen's array descending.
+	 * the one fixture here whose codes differ from the shipped rows', by writing one allergen's array descending.
 	 *
 	 * <p><b>And the subgroups no tier may return</b> (issue #167): a shared subgroup that classifies
 	 * neither the substance nor a therapy is skipped outright rather than demoted, in both tiers, so
@@ -12866,7 +12869,7 @@ public class DrugSafetyValidator {
 	/** @return doses-per-day implied by a frequency phrase in {@code window}, or 0 when none found.
 	 *          Word-forms are word-boundary anchored, so "bd"/"od" do not match inside larger words
 	 *          such as "abdominal" or "blood". */
-	static int frequencyPerDay(String window) {
+	private static int frequencyPerDay(String window) {
 		Matcher hours = EVERY_N_HOURS.matcher(window);
 		if (hours.find()) {
 			String n = hours.group(1) != null ? hours.group(1)

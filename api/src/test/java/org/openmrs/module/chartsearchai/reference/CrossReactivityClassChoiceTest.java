@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
  * <p>Asserted here on chip TEXT — the naming is the whole defect, the finding was already right —
  * through the real {@link DrugSafetyValidator#validate} entry point, on both call sites that reach
  * the arm (a drug the question names, and a drug the patient is already on), over rows copied
- * field-for-field from the shipped KB.
+ * from the shipped KB with brand_names omitted.
  *
  * <p><b>And the two limits, pinned so the preference cannot be read as "always say systemic".</b> A
  * pair that shares only a locally-applied subgroup keeps it (budesonide/dexamethasone share
@@ -58,13 +58,13 @@ import org.junit.jupiter.api.Test;
  */
 public class CrossReactivityClassChoiceTest {
 
-	/** Rows copied field-for-field from the shipped 19 MB KB, in KB order — the corticosteroid family
+	/** Rows copied from the shipped 19 MB KB with brand_names omitted, in KB order — the corticosteroid family
 	 *  whose route codes outnumber its systemic one, a topical-only azole pair, the psoralens, and the
 	 *  three pairs whose locally-applied class is not one of the anatomical main groups. */
 	private static final String FIXTURE = "chartsearchai-test/ddi-shared-class-choice.json";
 
 	/** The same azole pair, with the ALLERGEN's {@code atc} array written descending — the one
-	 *  deviation from verbatim, because every KB array is ascending and the scan order is otherwise
+	 *  deviation from that file, because every KB array is ascending and the scan order is otherwise
 	 *  unobservable. */
 	private static final String DESCENDING_FIXTURE =
 			"chartsearchai-test/ddi-shared-class-descending-atc.json";

@@ -53,7 +53,7 @@ import org.junit.jupiter.api.Test;
  * those two cases turn on have none reachable — the oxymetazoline rows are all route-qualified, and the
  * chloroprocaine pair is decided by the FIRST rung before the second is consulted.
  *
- * <p>Every scenario runs the REAL production path: a verbatim DDInter KB slice parsed by the real
+ * <p>Every scenario runs the REAL production path: a DDInter KB slice parsed by the real
  * {@link DdiDrugReferenceSource}, the real {@code validate} entry point, real question strings, GP
  * reads on their no-context defaults.
  */

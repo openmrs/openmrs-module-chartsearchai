@@ -701,7 +701,10 @@ public class PatientChartSerializer {
 		 *
 		 * <p>Written in exactly ONE place, {@code QueryStoreChartBuilder.toSerializedRecords}, beside
 		 * {@link #orderActive} and off the same one authoritative order read, and pinned there by
-		 * {@code ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace}.
+		 * {@code ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace}. That guard is over
+		 * {@code SerializedRecord}; what holds every other API-module class to a null here is
+		 * {@code ArchitectureGuardTest.theOrderStopDateReachesAMappingFromTheSerializerAlone} (issue #432),
+		 * within the limits its javadoc states.
 		 * {@code SerializedRecord.orderStopDate} is canonical for what it is and for the asymmetry that
 		 * is its contract; pointed at rather than restated, so this javadoc cannot go stale against it.
 		 */
@@ -854,8 +857,11 @@ public class PatientChartSerializer {
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
+			// A bare null, deliberately: a (Date) cast compiles to a checkcast, which the frame analysis
+			// in ArchitectureGuardTest.theOrderStopDateReachesAMappingFromTheSerializerAlone reads as a
+			// date and reports (issue #432). There is one nine-argument rung, so nothing is ambiguous.
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
-					orderActive, (Date) null);
+					orderActive, null);
 		}
 
 		/**

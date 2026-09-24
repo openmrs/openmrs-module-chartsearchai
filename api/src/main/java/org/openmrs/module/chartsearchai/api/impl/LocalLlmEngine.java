@@ -222,8 +222,15 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
 			int timeoutSeconds) {
+		return infer(systemPrompt, userMessage, timeoutSeconds, ReferenceRecords.ABSENT);
+	}
+
+	@Override
+	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
+			int timeoutSeconds, final ReferenceRecords referenceRecords) {
 		ensureServerRunning();
-		return postForResult(buildRequestBody(systemPrompt, userMessage, false), timeoutSeconds);
+		return postForResult(buildRequestBody(systemPrompt, userMessage, false, referenceRecords),
+				timeoutSeconds);
 	}
 
 	@Override
@@ -239,8 +246,8 @@ public class LocalLlmEngine implements LlmEngine {
 
 	/**
 	 * Sends a pre-built request body to the local llama-server and parses the (non-streaming)
-	 * result. Shared by the default-schema and custom-{@code response_format} {@link #infer}
-	 * overloads. Called only from {@code synchronized} methods, so it runs under the engine lock.
+	 * result. Shared by every {@link #infer} overload. Called only from {@code synchronized}
+	 * methods, so it runs under the engine lock.
 	 */
 	private InferenceResult postForResult(String requestBody, int timeoutSeconds) {
 		HttpRequest request = completionsRequest(requestBody, timeoutSeconds);
@@ -284,6 +291,14 @@ public class LocalLlmEngine implements LlmEngine {
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, cacheScope,
+				cacheSeed, ReferenceRecords.ABSENT);
+	}
+
+	@Override
+	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			final ReferenceRecords referenceRecords) {
 		ensureServerRunning();
 
 		// Disk-persisted KV cache on the QUERY path (mirrors what warmup already does, see
@@ -308,7 +323,7 @@ public class LocalLlmEngine implements LlmEngine {
 			log.warn("Query restored KV cache from disk: {}", cacheKey);
 		}
 
-		String requestBody = buildRequestBody(systemPrompt, userMessage, true);
+		String requestBody = buildRequestBody(systemPrompt, userMessage, true, referenceRecords);
 
 		HttpRequest request = completionsRequest(requestBody, timeoutSeconds);
 
@@ -1423,14 +1438,29 @@ public class LocalLlmEngine implements LlmEngine {
 	}
 
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream) {
+		return buildRequestBody(systemPrompt, userMessage, stream, ReferenceRecords.ABSENT);
+	}
+
+	/**
+	 * The chart-answer request, for a prompt whose chart does or does not carry the module's
+	 * reference records — the one input that decides whether the DRY sampler is sent (issue #512,
+	 * ADR Decision 117).
+	 */
+	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
+			ReferenceRecords referenceRecords) {
 		return buildRequestBody(systemPrompt, userMessage, stream,
-				ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS);
+				ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS, defaultResponseFormat(),
+				referenceRecords);
 	}
 
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			int maxTokens) {
-		return buildRequestBody(systemPrompt, userMessage, stream, maxTokens,
-				ChartAnswerResponseFormat.build(MAPPER, resolveReasoningMaxChars()));
+		return buildRequestBody(systemPrompt, userMessage, stream, maxTokens, defaultResponseFormat());
+	}
+
+	/** The chart-answer schema, built in this one place for the answer and the warmup alike. */
+	private ObjectNode defaultResponseFormat() {
+		return ChartAnswerResponseFormat.build(MAPPER, resolveReasoningMaxChars());
 	}
 
 	/** Test seam wrapping {@link ChartSearchAiUtils#getReasoningMaxChars()} (fail-safe 0). */
@@ -1447,6 +1477,17 @@ public class LocalLlmEngine implements LlmEngine {
 	 */
 	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
 			int maxTokens, ObjectNode responseFormat) {
+		return buildRequestBody(systemPrompt, userMessage, stream, maxTokens, responseFormat,
+				ReferenceRecords.ABSENT);
+	}
+
+	/**
+	 * The one body every chat-completions request to the spawned server is built from — warmup
+	 * included, the slot save and restore calls not. {@code referenceRecords} decides the sampler
+	 * chain and nothing else.
+	 */
+	String buildRequestBody(String systemPrompt, String userMessage, boolean stream,
+			int maxTokens, ObjectNode responseFormat, ReferenceRecords referenceRecords) {
 		ObjectNode root = MAPPER.createObjectNode();
 		root.put("temperature", 0.0);
 		root.put("max_tokens", maxTokens);
@@ -1460,8 +1501,20 @@ public class LocalLlmEngine implements LlmEngine {
 		// of date+finding blocks — without penalizing single-token repetition,
 		// which is required for legitimate extraction of dates and identifiers
 		// from the chart) and temperature.
+		//
+		// Except for a prompt carrying the module's reference records (issue #512,
+		// ADR Decision 117), which gets temperature alone and no dry_* field. An
+		// answer over those records is expected to restate them — an order name
+		// like "Isoniazid / pyrazinamide / rifampin", a mechanism sentence — and
+		// with the whole context in DRY's window every such copy past eight
+		// tokens is penalised mid-word: "riframpin", "zidovudeine", and a script
+		// switch ("Efavirenز", ending in an Arabic letter) of the kind recorded
+		// below. Null is read as absent, which is the request as it was before.
+		boolean dry = referenceRecords != ReferenceRecords.PRESENT;
 		ArrayNode samplers = MAPPER.createArrayNode();
-		samplers.add("dry");
+		if (dry) {
+			samplers.add("dry");
+		}
 		samplers.add("temperature");
 		root.set("samplers", samplers);
 		// DRY parameters tuned for extractive QA over patient charts: penalize
@@ -1474,11 +1527,16 @@ public class LocalLlmEngine implements LlmEngine {
 		// to neighboring digits (2023-05-04 -> 2023-05-03, 2026-02-28 ->
 		// 2026-02-18) or switch scripts to dodge ("Serum potassium" -> "Serum
 		// पोटेशियम"). allowed_length=8 keeps the loop-catching margin while
-		// letting date and identifier n-grams pass through unchanged.
-		root.put("dry_multiplier", 0.8);
-		root.put("dry_base", 1.75);
-		root.put("dry_allowed_length", 8);
-		root.put("dry_penalty_last_n", -1);
+		// letting date and identifier n-grams pass through unchanged. Raising it
+		// moved where the penalty starts and left copying from the prompt
+		// penalised, which is what the reference-records carve-out above is for;
+		// every other request still sends exactly these values.
+		if (dry) {
+			root.put("dry_multiplier", 0.8);
+			root.put("dry_base", 1.75);
+			root.put("dry_allowed_length", 8);
+			root.put("dry_penalty_last_n", -1);
+		}
 		// llama.cpp-specific extension. Without it, each request reprocesses the
 		// whole prompt from scratch, so successive queries on the same patient
 		// pay full prefill cost every time. With it set, llama-server reuses

@@ -150,7 +150,7 @@ import org.slf4j.LoggerFactory;
  * And a claim not written in the
  * active-order form — the ticket's first case, <em>"a caution to note regarding interactions with
  * Lopinavir / ritonavir, Didanosine, and Nevirapine [288], [290]"</em> — is not a claim to this check
- * at all. ADR Decision 117 records them.
+ * at all. ADR Decision 119 records them.
  *
  * <p><b>It reports and it publishes</b> — the WARN for a maintainer, carrying the citations and the
  * counts and never a drug name (the names are this patient's medications, and core ships

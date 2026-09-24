@@ -13,6 +13,8 @@ import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+
 /**
  * Abstraction for LLM inference engines. Implementations handle the actual
  * model invocation (local or remote) while prompt construction and response
@@ -71,7 +73,7 @@ public interface LlmEngine {
 	 * behaviour reproduces with no inference server at all, against a socket that sends headers and
 	 * then stalls, on Java 11, 17 and 21 alike and with {@code ofString()} as well. It is also a
 	 * PER-CALL budget rather than a per-invocation one: {@link LocalLlmEngine} spends it again on
-	 * each KV-cache slot call the six-argument form below can make around the completion.</p>
+	 * each KV-cache slot call the KV-scoped forms below can make around the completion.</p>
 	 *
 	 * <p>The non-streaming forms, {@link #infer(String, String, int)} and
 	 * {@link #warmup(String, String, int)}, keep the "maximum wall-clock seconds" wording
@@ -109,6 +111,62 @@ public interface LlmEngine {
 	default InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
 			Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
 		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer);
+	}
+
+	/**
+	 * As {@link #infer(String, String, int)}, for a chart-answer prompt whose chart may carry the
+	 * module's own reference records — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/512">#512</a>. An
+	 * answer over such a prompt is expected to restate those records, and an engine that penalises
+	 * repeating the prompt has to stop doing so for it; {@link LocalLlmEngine} is the engine that
+	 * does, and ADR Decision 117 is canonical for why and for what the other requests keep.
+	 *
+	 * <p>Abstract rather than a default that falls back to the 3-arg form, deliberately: such a
+	 * default is how an engine silently drops the argument and keeps the penalty, and a test double
+	 * that records the value it was handed never sees what the engine did with it.
+	 *
+	 * @param referenceRecords whether the prompt carries reference-group records, from
+	 *        {@link ReferenceRecords#in}
+	 */
+	InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+			ReferenceRecords referenceRecords);
+
+	/**
+	 * As {@link #inferStreaming(String, String, int, Consumer, String, String)}, for a chart-answer
+	 * prompt whose chart may carry the module's own reference records. Abstract for the reason
+	 * {@link #infer(String, String, int, ReferenceRecords)} gives.
+	 *
+	 * @param referenceRecords whether the prompt carries reference-group records, from
+	 *        {@link ReferenceRecords#in}
+	 */
+	InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
+			Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			ReferenceRecords referenceRecords);
+
+	/**
+	 * Whether a prompt's chart carries reference-group records (issue #512). Read off the chart the
+	 * model is handed, through {@link #in}, and never off a resource-type name or the rendered text.
+	 */
+	enum ReferenceRecords {
+
+		/** The chart carries no reference-group record. */
+		ABSENT,
+
+		/** The chart carries at least one reference-group record. */
+		PRESENT;
+
+		/**
+		 * The one reading of a chart's {@link ChartSearchAiUtils#referenceSlice}: present when it
+		 * counts a record. The slice is what already decides "reference material" for the audit row,
+		 * through {@link ChartSearchAiUtils#referenceGroup}, so this question has no type list of its
+		 * own.
+		 *
+		 * @param slice the slice of the chart the prompt is built from, may be null
+		 * @return {@link #PRESENT} when the slice counts at least one record, else {@link #ABSENT}
+		 */
+		public static ReferenceRecords in(ChartSearchAiUtils.ReferenceSlice slice) {
+			return slice != null && slice.getRecords() > 0 ? PRESENT : ABSENT;
+		}
 	}
 
 	/**

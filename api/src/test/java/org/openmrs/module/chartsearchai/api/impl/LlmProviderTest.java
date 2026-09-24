@@ -956,6 +956,20 @@ public class LlmProviderTest {
 		}
 
 		@Override
+		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+				ReferenceRecords referenceRecords) {
+			return infer(systemPrompt, userMessage, timeoutSeconds);
+		}
+
+		@Override
+		public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+				int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+				ReferenceRecords referenceRecords) {
+			return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, cacheScope,
+					cacheSeed);
+		}
+
+		@Override
 		public void warmup(String systemPrompt, String userMessage, int timeoutSeconds) {
 		}
 
@@ -1056,6 +1070,20 @@ public class LlmProviderTest {
 		}
 
 		@Override
+		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+				ReferenceRecords referenceRecords) {
+			return infer(systemPrompt, userMessage, timeoutSeconds);
+		}
+
+		@Override
+		public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+				int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+				ReferenceRecords referenceRecords) {
+			return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, cacheScope,
+					cacheSeed);
+		}
+
+		@Override
 		public void warmup(String s, String u, int t) {
 		}
 
@@ -1091,6 +1119,20 @@ public class LlmProviderTest {
 		@Override
 		public InferenceResult inferStreaming(String s, String u, int t, Consumer<String> c) {
 			throw new AssertionError("the blocking search path must not stream");
+		}
+
+		@Override
+		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+				ReferenceRecords referenceRecords) {
+			return infer(systemPrompt, userMessage, timeoutSeconds);
+		}
+
+		@Override
+		public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+				int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+				ReferenceRecords referenceRecords) {
+			return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, cacheScope,
+					cacheSeed);
 		}
 
 		@Override
@@ -1134,7 +1176,7 @@ public class LlmProviderTest {
 		List<Integer> focus = Arrays.asList(1, 2);
 
 		provider.searchStreaming(records, focus, "Is the patient diabetic?",
-				tok -> { }, reason -> { }, "patient-uuid-42", false);
+				tok -> { }, reason -> { }, "patient-uuid-42", false, LlmEngine.ReferenceRecords.ABSENT);
 
 		assertEquals("patient-uuid-42", engine.capturedScope,
 				"the patient UUID must reach the engine as the KV cache scope so the query path can "
@@ -1158,7 +1200,7 @@ public class LlmProviderTest {
 		LlmProvider provider = providerWith(engine);
 
 		provider.searchStreaming("1. x", Arrays.<Integer>asList(), "q",
-				tok -> { }, reason -> { }, null, false);
+				tok -> { }, reason -> { }, null, false, LlmEngine.ReferenceRecords.ABSENT);
 
 		assertNull(engine.capturedScope, "a null scope must pass through unchanged");
 		assertNull(engine.capturedSeed,
@@ -1212,7 +1254,7 @@ public class LlmProviderTest {
 		List<Integer> focus = Arrays.asList(1);
 		String question = "should i give Warfarin?";
 
-		provider.search(records, focus, question, true);
+		provider.search(records, focus, question, true, LlmEngine.ReferenceRecords.ABSENT);
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,
@@ -1238,7 +1280,7 @@ public class LlmProviderTest {
 		String records = "1. [2024-01-01] BP 120/80";
 		List<Integer> focus = Arrays.<Integer>asList();
 
-		provider.search(records, focus, "Is she hypertensive?", false);
+		provider.search(records, focus, "Is she hypertensive?", false, LlmEngine.ReferenceRecords.ABSENT);
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is she hypertensive?", false),
 				engine.capturedUserMessage,
@@ -1267,7 +1309,7 @@ public class LlmProviderTest {
 		String question = "should i give Warfarin?";
 
 		provider.searchStreaming(records, focus, question, tok -> { }, reason -> { },
-				"patient-uuid-42", true);
+				"patient-uuid-42", true, LlmEngine.ReferenceRecords.ABSENT);
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,

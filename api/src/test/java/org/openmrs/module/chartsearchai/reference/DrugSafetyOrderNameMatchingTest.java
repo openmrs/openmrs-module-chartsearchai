@@ -59,7 +59,7 @@ import org.junit.jupiter.api.Test;
 public class DrugSafetyOrderNameMatchingTest {
 
 	/**
-	 * A verbatim slice of the full DDInter KB (2283 drugs / 295,184 rows) carrying the rows behind
+	 * A slice of the full DDInter KB (2283 drugs / 295,184 rows) carrying the rows behind
 	 * the live-reproduced collisions — linezolid x opium, dolutegravir x iron — the
 	 * multivitamin x warfarin row the localized plural must still match, and the warfarin x heparin
 	 * row the far-edge case needs. The 16-drug DDInter excerpt contains none of those drugs, so it

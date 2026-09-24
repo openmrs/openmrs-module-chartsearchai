@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Real slice: Lidocaine route variants sharing RxCUI 6387 — id-uniqueness fixture."
+  "note": "Real slice, with brand_names omitted from every row: Lidocaine route variants sharing RxCUI 6387 — id-uniqueness fixture."
  },
  "mechanisms": {
   "6466": {

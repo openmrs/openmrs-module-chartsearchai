@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
  * {@code CLAUDE.md} bullet states it as one rule. They need different data, so there are two
  * fixtures.
  *
- * <p><b>The class arm's fixture</b> is the verbatim DDInter excerpt
+ * <p><b>The class arm's fixture</b> is the DDInter excerpt
  * {@code ddi-unclassified-allergen.json}, whose {@code Ciprofloxacin} and {@code Levofloxacin} rows
  * are the real dataset's — so the class comparison here is the one the shipped knowledge base makes,
  * and {@code DirectAllergyContraindicationTest}'s javadoc is where that pair's subgroups and the

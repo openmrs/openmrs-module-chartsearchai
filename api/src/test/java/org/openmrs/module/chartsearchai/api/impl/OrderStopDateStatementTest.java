@@ -426,14 +426,14 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings) {
+				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return new LlmResponse(answer, Collections.<Integer> emptyList());
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return new LlmResponse(answer, Collections.<Integer> emptyList());
 		}
 	}

@@ -865,8 +865,8 @@ public class PatientClinicalContext {
 	 * <p><b>Diacritics are folded on both sides (issue #141)</b>, through the one shared
 	 * {@link DrugReference#foldDiacritics}. This was the matcher #129/#138 did not reach: that work
 	 * folded {@link DrugReference#containsBoundedToken}, the order-name scan, and scoped itself there,
-	 * leaving this one comparing raw code points. On the SHIPPED DEFAULT source format
-	 * ({@code sourceFormat=json}) the curated Amoxicillin entry's {@code penicillin} allergy token
+	 * leaving this one comparing raw code points. On what was the SHIPPED DEFAULT source format
+	 * until ADR Decision 36 ({@code sourceFormat=json}) the curated Amoxicillin entry's {@code penicillin} allergy token
 	 * therefore missed an allergen recorded as {@code Pénicilline G} — a real fr locale-preferred name
 	 * in the 3.7.1 dictionary, and {@link PatientClinicalContextBuilder} reads the concept name in the
 	 * CURRENT locale, so a francophone deployment reaches it by default. Measured 2026-08-05 over that

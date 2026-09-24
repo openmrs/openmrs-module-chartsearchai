@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "Verbatim DDInter 2.0 slice: ONE subject (Acetylsalicylic acid) whose partners include TWO the data gives the SAME mechanism group (2346, Prednisone and Methylprednisolone) and one it gives a different group (5408, Heparin). Rows are field-for-field their shipped-KB rows. The point of the fixture is that 2346's sentence does not vary between its members, so rendering it once per partner re-sends it; measured on the shipped KB that paragraph reached one clinician-facing response five times. The Unknown/-1 rows among the PARTNERS are carried verbatim and are below the shipped severity floor, so they raise nothing."
+  "note": "DDInter 2.0 slice: ONE subject (Acetylsalicylic acid) whose partners include TWO the data gives the SAME mechanism group (2346, Prednisone and Methylprednisolone) and one it gives a different group (5408, Heparin). Rows are their shipped-KB rows with brand_names omitted, not in KB order; the interaction rows are the shipped ones among them. The point of the fixture is that 2346's sentence does not vary between its members, so rendering it once per partner re-sends it; measured on the shipped KB that paragraph reached one clinician-facing response five times. The Unknown/-1 rows among the PARTNERS are carried verbatim and are below the shipped severity floor, so they raise nothing."
  },
  "mechanisms": {
   "-1": {

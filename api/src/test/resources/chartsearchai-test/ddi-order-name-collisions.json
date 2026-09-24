@@ -2,7 +2,7 @@
  "metadata": {
   "schema_version": "1.0",
   "title": "Test fixture: real KB slice for order-name matching (issue #86)",
-  "note": "Verbatim slice of the full DDInter knowledge base (2283 drugs / 295,184 rows): the drug rows and interaction rows behind the live-verified order-name collisions — opium inside \"Tiotropium\", iron inside \"Spironolactone\" — plus the multivitamin x warfarin row a localized plural order name (\"Multivitamines et fer\") must still match, and the heparin x warfarin row that pins the far edge of the tail allowance (\"Heparinoids / salicylic acid\" is a different substance and must NOT be read as heparin). The bundled 16-drug sample contains none of these drugs. Rows and mechanism texts are unmodified; only unrelated drugs and rows were dropped.",
+  "note": "Slice of the full DDInter knowledge base (2283 drugs / 295,184 rows): the drug rows and interaction rows behind the live-verified order-name collisions — opium inside \"Tiotropium\", iron inside \"Spironolactone\" — plus the multivitamin x warfarin row a localized plural order name (\"Multivitamines et fer\") must still match, and the heparin x warfarin row that pins the far edge of the tail allowance (\"Heparinoids / salicylic acid\" is a different substance and must NOT be read as heparin). The bundled 16-drug sample contains none of these drugs. Mechanism texts are unmodified and each drug row is its shipped row with brand_names omitted; the rows are not in KB order, and besides unrelated drugs, Linezolid's shipped rows against Warfarin and Heparin were dropped.",
   "source": {
    "name": "DDInter 2.0",
    "url": "https://ddinter2.scbdd.com/",

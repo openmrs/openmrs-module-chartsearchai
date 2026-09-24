@@ -168,13 +168,21 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       package-private factory through {@code SafetyWarningFixtures}, and by the public
 	 *       constructor, respectively. <b>Their sentence is a self-named ALLERGY RULE's since issue
 	 *       #412</b> —
-	 *       {@link #UNCORROBORATED_CONTRAINDICATION} carries why, and what it buys is the one axis the
-	 *       chip 8/9 pair cannot reach by itself.</li>
+	 *       {@link #UNCORROBORATED_CONTRAINDICATION} carries why, and what it buys is the
+	 *       CONDITION-scoped half of the one axis the chip 8/9 pair cannot reach by itself; the
+	 *       ALLERGY-scoped half is {@code ChartSearchAiUncorroboratedChartMatchTest}'s chip 0.</li>
 	 *   <li>10 and 11 — the same pair shape for {@code SafetyWarning.isAboutAnEndedOrder()} (issue
 	 *       #472): one sentence, differing only in that answer, so neither a hardcoded {@code false}
 	 *       nor a value re-derived from another field agrees with every chip. Chip 10 also carries
 	 *       {@code getEndedOrderStopDate()}, so a hardcoded {@code null} for that key disagrees with
 	 *       it.</li>
+	 *   <li>12 and 13 — the same pair shape for {@code SafetyWarning.isAboutACurrentMedication()} (issue
+	 *       #527), on a curated condition rule's sentence, which that arm writes alike for one of her
+	 *       active orders and for a drug put in play. <b>Not the allergen arm's sentence</b>, which is the
+	 *       pair {@code ChartSearchAiCurrentMedicationReferentTest} carries: ADR Decision 92 records that
+	 *       two fixtures whose {@code true}-answering chips came from one population let a serializer
+	 *       narrowing the published value to that population pass the whole build (issue #412), so each
+	 *       fixture holds a population of its own.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -246,7 +254,15 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 						"Rifampicin interacts with active order Nevirapine — Major.", "Major",
 						new java.util.Date(1767225600000L)),
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Rifampicin",
-						"Rifampicin interacts with active order Nevirapine — Major.", "Major"));
+						"Rifampicin interacts with active order Nevirapine — Major.", "Major"),
+				// Chips 12 and 13: one sentence, differing only in SafetyWarning.isAboutACurrentMedication()
+				// (issue #527), both built by the curated-rule arm's own factory — the curated seed's
+				// peptic-ulcer rule as that arm words it. Mutate the put to `false` and read this class's
+				// failure.
+				SafetyWarningFixtures.curatedRuleContraindication("Ibuprofen",
+						"Ibuprofen is contraindicated by an active condition: active peptic ulcer disease", true),
+				SafetyWarningFixtures.curatedRuleContraindication("Ibuprofen",
+						"Ibuprofen is contraindicated by an active condition: active peptic ulcer disease", false));
 	}
 
 	private ChartSearchAiRestController controller;

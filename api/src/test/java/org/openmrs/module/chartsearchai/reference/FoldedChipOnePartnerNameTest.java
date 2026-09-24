@@ -94,7 +94,7 @@ public class FoldedChipOnePartnerNameTest {
 	private static final String AMBIGUOUS_TOKEN_FIXTURE =
 			"chartsearchai-test/ddi-fold-ambiguous-token.json";
 
-	/** The ticket's own arrangement (issue #296), verbatim from the shipped KB: two substances the data
+	/** The ticket's own arrangement (issue #296), taken from the shipped KB: two substances the data
 	 *  files under ONE {@code rxnorm_name} and one {@code rxcui}, publishing the same four ATC codes, so
 	 *  the token names both — but it is one of them's own display NAME and only the other's alias. */
 	private static final String OUTRANKED_TOKEN_FIXTURE =
@@ -341,7 +341,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * Issue #296: a rule whose token names two substances IS reconciled where the token names the
 	 * ladder's substance more strongly than it names the other one.
 	 *
-	 * <p>The ticket's own arrangement, verbatim from the shipped knowledge base:
+	 * <p>The ticket's own arrangement, from the shipped knowledge base:
 	 * {@code Ketoconazole} and {@code Levoketoconazole} are two substances the data files under one
 	 * {@code rxnorm_name} ({@code ketoconazole}) and one {@code rxcui}, publishing the same four ATC
 	 * codes. Neither an identity test nor a code-scoped one separates them — the ticket rules both out
@@ -381,7 +381,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * The boundary of issue #296's ranking, and the only arrangement that separates its two choices from
 	 * the ones next to them.
 	 *
-	 * <p>Verbatim from the shipped knowledge base: {@code atropine} is {@code Atropine}'s own display
+	 * <p>From the shipped knowledge base: {@code atropine} is {@code Atropine}'s own display
 	 * name, and only an alias of BOTH its {@code Atropine (ophthalmic)} presentation and the separate
 	 * {@code Hyoscyamine} substance. The order here is one the dictionary did not map, recorded as
 	 * {@code Atropine (ophthalmic)}, so it reaches the ladder through

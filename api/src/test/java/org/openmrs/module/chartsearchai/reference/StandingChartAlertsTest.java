@@ -142,6 +142,32 @@ public class StandingChartAlertsTest {
 	}
 
 	/**
+	 * Every standing alert says it was raised from one of her own active orders — README's "always
+	 * {@code true} here" for {@code aboutACurrentMedication} (issue #527). The pass has no question and
+	 * no answer, so nothing is in play and the order-driven contraindication arm is the only one that
+	 * speaks (see {@code DrugSafetyValidator.standingChartAlerts}); this chart reaches both of the chip
+	 * factories that arm hands the answer to — a curated rule's, and the allergen arm's identity sentence
+	 * for an allergy recorded under a brand name no curated token contains.
+	 */
+	@Test
+	public void everyStandingAlertIsRaisedFromOneOfHerOwnActiveOrders() {
+		List<SafetyWarning> alerts = alertsOf(curatedValidator(),
+				DrugReferenceTestSupport.prescribedIbuprofenChart(
+						DrugReferenceTestSupport.set("brufen"), DrugReferenceTestSupport.set("peptic ulcer")));
+
+		assertTrue(DrugReferenceTestSupport.detailContains(alerts, SafetyWarning.TYPE_CONTRAINDICATION,
+				"Ibuprofen", "The patient has a recorded allergy to Ibuprofen."),
+				"precondition: the allergen arm's identity sentence, was: " + alerts);
+		assertTrue(DrugReferenceTestSupport.detailContains(alerts, SafetyWarning.TYPE_CONTRAINDICATION,
+				"Ibuprofen", "active peptic ulcer disease"), "precondition: and a curated rule's, was: " + alerts);
+		for (SafetyWarning alert : alerts) {
+			assertTrue(alert.isAboutACurrentMedication(),
+					"every standing alert is one of her active orders checked against her own records: "
+							+ alert.getDetail());
+		}
+	}
+
+	/**
 	 * The same chart and the same dataset, on the ANSWER surface, still answer nothing — so this class
 	 * cannot pass by having re-widened what issue #280 exists to keep narrow.
 	 *

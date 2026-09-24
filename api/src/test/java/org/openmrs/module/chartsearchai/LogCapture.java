@@ -49,17 +49,30 @@ import org.apache.logging.log4j.core.config.Property;
  * <p><b>A negative asserted over a PACKAGE capture has to assert liveness for the LOGGER it is
  * about, not just for the package</b>, and below WARN where that is what it claims: one logger's
  * events can be filtered while the package's neighbours arrive, so "nothing was logged from there"
- * and "nothing is reaching us from there" look identical. Name a line that logger writes at the
- * captured level and assert it first — {@code PairChipCapContextTest}'s screening case and
+ * and "nothing is reaching us from there" look identical. Name a line that logger writes below
+ * WARN and assert it first — {@code PairChipCapContextTest}'s screening case and
  * {@code ActiveOrderReconciliationTest}'s reconciliation case each do (issue #439). Where that
- * logger writes nothing at the captured level — a check that only WARNs — there is no line to name,
- * and the case writes one through that logger itself and asserts it arrived, which asks the same
- * question of the same logger: {@code FindingPartnerLogDisclosureTest}, whose check is one.
+ * logger writes nothing at the captured level — a check that only WARNs, or any logger at TRACE,
+ * which no production line in this module writes — there is no line to name, and the case writes
+ * one through that logger itself and asserts it arrived, which asks the same question of the same
+ * logger: {@link #receivesFrom}. The disclosure negatives at ADR Decision 102's three sites capture
+ * at TRACE and each asks it (issue #443); the two cases named above keep their production-line
+ * witness beside it, which shows the pass itself logged.
  *
  * <p>Use with try-with-resources; it is not thread-safe against a concurrent
  * {@link #close()} but the collected event list is.
  */
 public final class LogCapture implements AutoCloseable {
+
+	/**
+	 * The module's ROOT logger name, for a disclosure negative whose claim is about every logger a pass
+	 * writes from: a patient's medication name leaking from a neighbour's logger is the same
+	 * disclosure as one leaking from the logger under test (ADR Decision 102). Derived from a class in
+	 * that package rather than spelled, for the reason
+	 * {@code DrugReferenceTestSupport.REFERENCE_LOGGER} gives: a stale literal leaves a capture
+	 * receiving nothing, and every negative over it passes vacuously (issue #443).
+	 */
+	public static final String MODULE_LOGGER = ChartSearchAiConstants.class.getPackage().getName();
 
 	private final List<LogEvent> events = Collections.synchronizedList(new ArrayList<LogEvent>());
 
@@ -116,6 +129,26 @@ public final class LogCapture implements AutoCloseable {
 	 */
 	public static LogCapture on(String loggerName, Level level) {
 		return new LogCapture(loggerName, level);
+	}
+
+	/**
+	 * Whether an event {@code source}'s own logger writes at {@code level} reaches this capture, asked by
+	 * writing one through that logger and looking for it. For the liveness a negative over a package
+	 * capture needs (see the class javadoc) at a level the logger's production lines do not reach: a
+	 * production line at DEBUG proves nothing about TRACE, and a {@link LoggerConfig} pinning that one
+	 * class at DEBUG would leave a negative "at every level" true of nothing below it.
+	 *
+	 * <p>The witness names the class and the level and carries no patient data, so it cannot redden a
+	 * negative asserted over {@link #describeAll()} after it. It stays in the captured events.
+	 *
+	 * @param source the class whose logger the negative is about
+	 * @param level the level to ask about — the level the capture was opened at, for a claim about every
+	 *            level it receives
+	 */
+	public boolean receivesFrom(Class<?> source, Level level) {
+		String witness = "liveness witness from " + source.getName() + " at " + level + ", no patient data";
+		LogManager.getLogger(source).log(level, witness);
+		return hasMessageAt(level, witness);
 	}
 
 	/** @return true when at least one captured event was logged at {@code level} or more severe. */

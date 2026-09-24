@@ -184,7 +184,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 						+ "recorded allergy is to a multivitamin");
 		assertFalse(warfarin.matchesText("vitamin a, b"),
 				"and the prose matcher is false on the same string with or without the blank alias, which "
-						+ "is the asymmetry issue #150 reports: #148 gave allergen resolution the "
+						+ "is the asymmetry issue #150 reports: #147 gave allergen resolution the "
 						+ "recorded-name rule, whose inflection tail is what opened this");
 		assertTrue(warfarin.matchesDrugName("Warfarine Co 5mg"),
 				"and the entry must still resolve the drug it is about");
@@ -593,7 +593,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	/**
-	 * Issue #196 item 4, over a verbatim slice of the shipped 19 MB knowledge base. The rule above
+	 * Issue #196 item 4, over a slice of the shipped 19 MB knowledge base. The rule above
 	 * cannot see this one and never could: it reports a published name denoting a DIFFERENT substance,
 	 * and here the two rows are the SAME substance to {@link DrugReference#substanceGroupKey()}, so its
 	 * first exclusion removes the case by construction. Measured on the shipped file 2026-08-13 by
@@ -1229,8 +1229,8 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 			assertTrue(
 					capture.messagesAt(Level.WARN).toString()
 							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
-					"same log leg, and it matters more here: this is the default format, so an operator "
-							+ "hitting it has changed nothing but the path. Captured: "
+					"same log leg, and it matters more here: this was the default format until ADR Decision 36, "
+							+ "so an operator hitting it then had changed nothing but the path. Captured: "
 							+ capture.describeAll());
 		}
 

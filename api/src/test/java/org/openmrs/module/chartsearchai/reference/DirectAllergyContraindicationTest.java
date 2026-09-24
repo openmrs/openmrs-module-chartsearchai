@@ -44,7 +44,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * direct-allergy warning had no path to the clinician at all — no chip, and (since issue #110, which
  * turns every chip into a citable pre-answer record) nothing in the prompt either.
  *
- * <p><b>The fixture</b> is a verbatim excerpt of that dataset — {@code Ledipasvir} and {@code
+ * <p><b>The fixture</b> is an excerpt of that dataset — {@code Ledipasvir} and {@code
  * Leucovorin}, two of the 444, plus {@code Ciprofloxacin} and {@code Levofloxacin} as a real
  * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The DDInter excerpt cannot host
  * these cases: all 16 of its drugs carry ATC codes, which is why no existing test covered a direct
@@ -159,10 +159,19 @@ public class DirectAllergyContraindicationTest {
 		// listed FIRST, so pre-fix it was reached before the identity match behind it. If reaching it
 		// left the METHOD, that match would never be looked at and issue #135 would be reinstated for
 		// exactly the patients most likely to hit it — the ones with more than one recorded drug
-		// allergy. The token order is therefore load-bearing and must not be "tidied": with the identity
-		// allergen first its chip is added before the precondition is ever reached. Nor can the two
-		// single-allergen absence cases either side of this one catch it: they pass one allergen, so
-		// nothing is ever queued.
+		// allergy.
+		//
+		// The token order guards re-merging the two passes into one loop whose precondition exits the
+		// METHOD at the first allergen with no identity match. With the unrelated allergen first, that
+		// exit comes before Ledipasvir is compared and this case reddens; with the tokens flipped,
+		// Ledipasvir's chip is raised first and the case stays green — both measured with the exit added
+		// to pass one's no-match branch, which is that loop's behaviour for a drug with no class data.
+		// So do not "tidy" the order. Moving the precondition above the identity pass instead — the
+		// hoist aClassifiedAllergenRaisesNothingForAnUnclassifiedDrug's comment names — reddens this
+		// case in either order, so the order plays no part in guarding it. Nor can the two
+		// single-allergen absence cases either side of this one catch either mutation: each passes one
+		// allergen with no identity match, so there is no later comparison for an early exit to skip,
+		// and each expects no chip.
 		//
 		// WHAT MOVED (issue #388): this used to record "1 on this build, 0 with the guard's
 		// `continue` changed to `return`". That mutation no longer moves anything — ADR Decision 82
@@ -192,8 +201,9 @@ public class DirectAllergyContraindicationTest {
 		// precondition to the top of the method" edit — and the case above reddens, along with other
 		// cases here and in the neighbouring allergen classes (measured the same way). Each of those
 		// turns on an identity chip for a drug carrying neither an ATC subgroup nor a cross-reactivity
-		// group, which is the only state in which this guard fires at all. What the case above can no
-		// longer catch is the `continue`-vs-`return` keyword, and its own comment says so.
+		// group, which is the only state in which this guard fires at all. This case and the other
+		// single-allergen absence case are not among them; the case above's comment says why. What the
+		// case above can no longer catch is the `continue`-vs-`return` keyword, and its own comment says so.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -262,10 +272,10 @@ public class DirectAllergyContraindicationTest {
 		//
 		// The shared route-variant slice supplies the shape: its two Iron rows (DDInter975 and
 		// DDInter2187 "Iron (bisglycinate)") are the full KB's ONLY two rxnorm_name=iron entries, both
-		// field-for-field identical to their KB rows and both carrying no ATC code — so no new fixture
-		// is needed. (Field-for-field, not byte-for-byte: the slice is pretty-printed, the KB is not.)
+		// identical to their KB rows, brand_names aside, and both carrying no ATC code — so no new fixture
+		// is needed. (Field by field, not byte-for-byte: the slice is pretty-printed, the KB is not.)
 		//
-		// Verbatim in CONTENT, but the slice REORDERS them: DDInter975, whose display name IS "Iron",
+		// Copied in CONTENT, brand_names aside, but the slice REORDERS them: DDInter975, whose display name IS "Iron",
 		// is listed first, while in the full KB DDInter2187 "Iron (bisglycinate)" (index 1320) precedes
 		// it (index 2256). Under the earliest-match resolution this test was written against, that
 		// ordering was what made an allergy recorded as "Iron" resolve to DDInter975 here and to

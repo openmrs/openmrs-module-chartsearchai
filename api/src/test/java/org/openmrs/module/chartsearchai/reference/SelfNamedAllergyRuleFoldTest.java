@@ -116,7 +116,7 @@ public class SelfNamedAllergyRuleFoldTest {
 
 	@Test
 	public void anAllergyToTheDrugItselfIsOneChipAndKeepsTheCuratedNote() {
-		// THE case, on the shipped default sourceFormat=json. Pre-fix: 2 chips, one per arm.
+		// THE case, on sourceFormat=json, the shipped default until ADR Decision 36. Pre-fix: 2 chips, one per arm.
 		List<SafetyWarning> warnings = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.curatedService())
 				.validate("", "Is it safe to give her ibuprofen?",

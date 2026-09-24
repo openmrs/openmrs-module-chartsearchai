@@ -122,7 +122,9 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders](#decision-114-a-screen-of-her-medications-states-which-of-her-orders-share-a-substance-once-per-set-of-orders)
 - [Decision 115: Several rows of one substance are not a pair, so the question-pair arm leaves the field to the arm that screened](#decision-115-several-rows-of-one-substance-are-not-a-pair-so-the-question-pair-arm-leaves-the-field-to-the-arm-that-screened)
 - [Decision 116: A question about a drug states which of her orders share a substance too](#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)
-- [Decision 117: An active-order claim is held to the findings that relate its pair](#decision-117-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
+- [Decision 117: A prompt carrying the module's reference records is decoded without the DRY sampler](#decision-117-a-prompt-carrying-the-modules-reference-records-is-decoded-without-the-dry-sampler)
+- [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
+- [Decision 119: An active-order claim is held to the findings that relate its pair](#decision-119-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -2949,7 +2951,7 @@ Rendered-record partners move with the row — counts of the elected ROW's rated
 - **+** A question naming a substance is answered about that substance. The estradiol case is the sharpest available: a real, clinically important oestrogen/anticoagulant interaction was attached to a PET tracer nobody is giving, so both failure directions were bad — act on a warning about a drug not in play, or dismiss it and miss the interaction.
 - **+** One decision, one place. The chip subject, the injected record's title and the class arm's partner label all read this fold, so none of them can disagree about what a substance is called.
 - **−** **On the ticket's own reproduction shape the chip's partner left the injected record entirely, and issue [#364](https://github.com/openmrs/openmrs-module-chartsearchai/pull/364) (issue [#357](https://github.com/openmrs/openmrs-module-chartsearchai/issues/357), Decision 66) has since closed it.** Re-measured 2026-09-02 by driving the real `DdiDrugReferenceSource.parse` of the shipped 19 MB knowledge base, the real `injectRecords` and the real `validate`, for a patient on `Tamoxifen 20mg` asked *"Is it safe to give her estradiol?"*: the chip reads `Estradiol interacts with active order tamoxifen — Major` and the record now reads `Drug reference — Estradiol (ATC G03CA03). Interactions: tamoxifen (Unknown severity interaction (DDInter 2.0; no mechanism description on file).); ivosidenib (Moderate).` — 169 characters, `withheldInteractions` 576, tamoxifen NAMED. **Byte-identical on `origin/main` at `85da86fb` and on issue #355's merged head**, so the fix is #357's and neither #355 nor this decision moved it. The mechanism: the `Estradiol` row rates tamoxifen `Unknown`, which is below the floor, so `DrugReferenceInjector.renderTier` does not place it in the promoted segment — but the chart names it, so since #357 it leads the CHART-NAMED segment, which renders every member. **On the tree immediately before #357 the record named no tamoxifen either.** Re-measured 2026-09-02 from a detached worktree at `a243a303`, the commit `main` sat on immediately before #364 landed, through the same real `DdiDrugReferenceSource.parse`, `injectRecords` and `validate`, for that same patient and question: 1536 characters, `withheldInteractions` 575, reading `Interactions: ivosidenib (Moderate. Coadministration with inducers of CYP450 3A4 …); kanamycin (Moderate. …); ketoconazole (Moderate. …)` — three partners in dataset order, each with its full mechanism paragraph, the first of them rated Moderate. `main`'s own wording of this bullet quoted those same three partners, so it was describing `a243a303` rather than the tree it shipped on — which is what the rewrite above corrects. Tamoxifen's absence is the shape CLAUDE.md records as #151's symptom — "a Major chip whose supporting reference record was simply not in the prompt" — and an earlier wording of this bullet, taken on that tree, read that absence as evidence for electing the big substance row. **That inference no longer holds and the underlying election is unchanged**: this bullet's own subject — `onePerPartner` rendering one ROW's rules rather than the substance's pooled ones — is still open, and it needs a reproduction that survives #357 rather than this one. A five-Major, 167-character record with `withheldInteractions` 573 was quoted here for a while and belongs to neither tree above: it was measured on issue #355's branch BEFORE this merge — #355 without #357 — where the capped severity-ordered tail rendered `lenalidomide (Major); paritaprevir (Major); pomalidomide (Major); thalidomide (Major); tranexamic acid (Major)`. Since #357 the chart names tamoxifen, so `tailStart` is not 0 and that capped branch is not the one this record takes; the figure is recorded here as what it measured rather than restated as a property of either tree. The elected `G03CA03` row's own rule and partner totals, which the sentence quoting it did arithmetic over, are dropped with it rather than carried across.
-- **−** **A chip about `Estradiol` can carry the tracer's own mechanism prose.** Measured verbatim on that same run: `Estradiol interacts with active order tamoxifen — Major. Coadministration of the radioactive diagnostic agent fluoroestradiol F 18 with drugs that block the estrogen receptor (ER), such as tamoxifen and fulvestrant, may reduce the uptake of fluoroestradiol F 18 into ER-positive tumors.` — carried into the prompt as a `safety_finding` with `STRENGTH_WITHHOLD`. This is `bestRulePerPartner`'s pre-existing pooling over every row of a substance, which `main` has too (with the wrong label as well); what makes it clinically loud here is the unrepaired #196 merge, which files a diagnostic tracer and a therapeutic substance as one. **Pinned rather than only described**, and the first version of this bullet mis-attributed that: it credited the stem guard in `SubstanceNameRowTest.theChipNamesTheRowTheDataNamesTheSubstanceAfter`, whose slice rates no rule on the tracer row at all, so that assertion has no pooled tracer prose to see and cannot observe this. What observes it is `theChipNamesTheElectedRowWhereThePooledWinningRuleIsTheTracers`, over `ddi-derivative-merged-into-one-substance.json` — the one verbatim slice that files a rated rule on the tracer (Major against `ospemifene`, against the substance row's Moderate) — which asserts both halves: the chip names `Estradiol`, and the prose under that name is the tracer's. Matching the STEM case-insensitively is still what the assertion needs, since the KB spells the tracer three ways and `contains("Fluoroestradiol f-18")` does not see `fluoroestradiol F 18`.
+- **−** **A chip about `Estradiol` can carry the tracer's own mechanism prose.** Measured verbatim on that same run: `Estradiol interacts with active order tamoxifen — Major. Coadministration of the radioactive diagnostic agent fluoroestradiol F 18 with drugs that block the estrogen receptor (ER), such as tamoxifen and fulvestrant, may reduce the uptake of fluoroestradiol F 18 into ER-positive tumors.` — carried into the prompt as a `safety_finding` with `STRENGTH_WITHHOLD`. This is `bestRulePerPartner`'s pre-existing pooling over every row of a substance, which `main` has too (with the wrong label as well); what makes it clinically loud here is the unrepaired #196 merge, which files a diagnostic tracer and a therapeutic substance as one. **Pinned rather than only described**, and the first version of this bullet mis-attributed that: it credited the stem guard in `SubstanceNameRowTest.theChipNamesTheRowTheDataNamesTheSubstanceAfter`, whose slice rates no rule on the tracer row at all, so that assertion has no pooled tracer prose to see and cannot observe this. What observes it is `theChipNamesTheElectedRowWhereThePooledWinningRuleIsTheTracers`, over `ddi-derivative-merged-into-one-substance.json` — the one slice that files a rated rule on the tracer (Major against `ospemifene`, against the substance row's Moderate) — which asserts both halves: the chip names `Estradiol`, and the prose under that name is the tracer's. Matching the STEM case-insensitively is still what the assertion needs, since the KB spells the tracer three ways and `contains("Fluoroestradiol f-18")` does not see `fluoroestradiol F 18`.
 - **−** **The influenza A/Vietnam antigen family keeps its typo name**, for the reasons above. #250 asked for four renames and this delivers three; the fourth is a data fix.
 - **−** **The gate leaves the mixed-substance fold order-sensitive**, because the second rung is skipped per pair: a row of one substance interposed between two rows of another is compared against neither on that rung. It was already order-sensitive there and this does not make it more so — re-folding each of the 2148 codes' rows reversed, and under 40 random permutations each, changes the elected row for 49 codes with the rung and 50 without it, the one removed being `G03CA03`. What would make it sound is grouping by substance before folding, in `entryForAtcCode` rather than in the fold.
 - **+** The `#237` attribution clause now rests on the chart rather than on an inference about the fold. That is strictly better independently of this rung, and it is the second time a proxy at this site has had to be replaced by the question it stood in for.
@@ -3579,7 +3581,7 @@ Re-derive rather than trusting the figures; they are a property of the dataset a
 
 ### Trade-offs
 
-- **− The ranking decides which substance a token NAMES, not which row a rule was AUTHORED on.** `ddinter` derives a rule's token from the partner row's `rxnorm_name`, so a rule authored on `Levoketoconazole` carries the token `ketoconazole` too, and the reconciled chip prints its prose under `Ketoconazole`. A subject can carry two above-floor rules under that one token: `Osilodrostat` carries a `Major` rule against each of `Ketoconazole` and `Levoketoconazole`, and both rows publish `rxnorm_name: ketoconazole` (the two rows, their four shared ATC codes and both mechanism texts are in `ddi-fold-outranked-token.json`, copied field-for-field from the shipped file). Nothing NEW is asserted — the unfolded chip already printed that same token — but the prose can name the other row. Closing it means choosing between two rules, which is `bestRulePerPartner`'s question rather than this one.
+- **− The ranking decides which substance a token NAMES, not which row a rule was AUTHORED on.** `ddinter` derives a rule's token from the partner row's `rxnorm_name`, so a rule authored on `Levoketoconazole` carries the token `ketoconazole` too, and the reconciled chip prints its prose under `Ketoconazole`. A subject can carry two above-floor rules under that one token: `Osilodrostat` carries a `Major` rule against each of `Ketoconazole` and `Levoketoconazole`, and both rows publish `rxnorm_name: ketoconazole` (the two rows, their four shared ATC codes and both mechanism texts are in `ddi-fold-outranked-token.json`, copied from the shipped file). Nothing NEW is asserted — the unfolded chip already printed that same token — but the prose can name the other row. Closing it means choosing between two rules, which is `bestRulePerPartner`'s question rather than this one.
 - **− The ranking needs the alias list stored TRIMMED, which is a change outside the fold.** `nameMatchStrength` gates on `matchesDrugName`, which trims neither operand, while `isNamed` trims both — so an alias carrying padding IS one of the entry's names by the gate and matches nothing by the rank, and both directions of that are wrong here. Measured through the real `JsonDrugReferenceSource` and the real `validate`: a curated entry named only by `" warfarin"` lost a reconciliation the existence form had made (`Acenocoumarol interacts with active order Warfarin … as active order Warfarin` before, `… active order warfarin … as active order Warfarin` after), and the same padding on a RIVAL row dropped that row out of the contest and licensed the displacement — one substance's rated mechanism under another's name, which is the failure the ranking exists to prevent. Closed at `DrugReference.setAliases`, the one place every source writes the list, rather than in either predicate: the disagreement is a property of the stored string. Exhaustive for it rather than a patch on one shape — searched over both operands across space, tab, NBSP, NUL, precomposed and decomposed accents, dotted capital I, hyphen, period and digits, every pair where `isNamed` holds and the rank falls below `NAME_IS_ANOTHER_NAME` has an alias differing from its own `trim()`, the other being an alias folding to empty, which the loader already drops. No bundled dataset changes: 0 padded aliases over the shipped KB, the curated seed and the DDInter excerpt. Pinned by `aPaddedAliasNamesTheOneOrderOnce`, which reddens if the trim is removed.
 - **+ A CONTESTED token is admissible only at `NAME_IS_THE_DISPLAY_NAME`, which is what bounds this change downstream.** Every rival reaching the comparison passed `isNamed`, so the token IS one of that rival's stored aliases — and on a loaded dataset identity then implies containment (those aliases are stored trimmed, below, and the loader leaves none that names nothing), so the rival ranks at least `NAME_IS_ANOTHER_NAME`. Only the top rank strictly outranks that. Measured over the shipped KB: of the 18 contested pairs the predicate admits, 18 are at the top rank and none has a `displayLabel` differing from the token by anything but case — so all 28 reconciliations above are case-only (`ketoconazole`→`Ketoconazole`, `atropine`→`Atropine`, and so on). The prompt's name union for that partner therefore cannot move, and `SubjectRule.partnerKey` case-folds to the label the chip now renders, so #121's key-versus-name gap is not widened by any case this decision adds. The UNCONTESTED path is untouched and still admits at either rank. **Two surfaces, not one, since [Decision 51](#decision-51-the-injected-record-names-a-folded-chips-partner-in-its-own-vocabulary) landed first**: the ENTRY rung of `reconciledPartnerName` also hands the injected `drug_reference` note `labelEntry.getName()` under this same gate, so this widening moves that prompt text too. There the bound is a derivation rather than the measurement above — the top rank IS `normalizeName(token).equals(normalizeName(name))`, and both that name and `partnerLabel`'s token reach the note trimmed, so a contested token's note name is that token re-cased. The measurement is needed only for the chip, whose `displayLabel()` can append a generic the rank says nothing about.
 - **− 34 of the 62 folded chips still show Decision 39's symptom**, and they are not all ties. 20 (`penicillin g`) and 12 (`antithrombin iii`) are: no substance claims those tokens as its own display name, so nothing says which of them a rule is about, and admitting on a tie would be the `Omeprazole`/`Esomeprazole` displacement in a different spelling. The other 2 are `gabapentin`, where the ranking is decisive and the ladder still loses because `canonicalRow` hands it the weaker claimant — recorded here rather than left to read as a tie, because closing it is a question about `entryForAtcCode`'s pick and not about this predicate. That shape is not gabapentin's alone: `A02BC05` resolves to `Omeprazole` against the token `esomeprazole` the same way, and there refusing is exactly what the guard is for. What is named here is the instance among these 62 chips, not the extent of the shape.
@@ -3705,7 +3707,7 @@ Decision 43 delivered three of #250's four families and deferred the fourth — 
 | `Yersinia pestis 195/p antigen (formaldehyde inactivated)` | 227 |
 | `Tick-borne encephalitis vaccine (whole virus, inactivated)` | 252 |
 
-The A/Vietnam typo row's own `(h5n1)` sits MID-name and `TRAILING_QUALIFIER` is end-anchored, so the proxy calls the typo row unqualified and the correctly-spelled row qualified, and rung one hands the family to the typo. Driven through the real `validate` over a verbatim slice of the two rows and their `ozanimod` rules, that is what a clinician reads:
+The A/Vietnam typo row's own `(h5n1)` sits MID-name and `TRAILING_QUALIFIER` is end-anchored, so the proxy calls the typo row unqualified and the correctly-spelled row qualified, and rung one hands the family to the typo. Driven through the real `validate` over a slice of the two rows and their `ozanimod` rules, that is what a clinician reads:
 
 > `Nfluenza a virus a/vietnam/1194/2004 (h5n1) antigen interacts with active order ozanimod — Moderate. The administration of inactivated, killed, or otherwise noninfectious vaccines during ozanimod therapy is generally safe but may be associated with a diminished or suboptimal immunologic response.`
 
@@ -4308,7 +4310,7 @@ The injected `drug_reference` note moves with the chip, through the mechanism De
 
 Asking one gate at many more call sites did not leave the gate alone, and each round of review found one more way it did not. Both corrections NARROW what the widened sites would otherwise print, which is why the "no new mis-attribution class" claim survives while "the gate is untouched" does not.
 
-**The ENTRY rung asks the gate of the row the RESPONSE elects, and falls back to the ladder's own** (review rounds 1 and 3). Round 1 moved the operand from `OrderPartner.labelEntry` to `SubstanceSubjects.subjectOf(labelEntry)`, because printing `canonicalRow`'s pick at a chip-naming site is #187 and the class arm elects with `interactionSubject` everywhere else. That moved WHICH ROW `unambiguouslyNames` is asked about, and the two rows of one substance can answer differently — CLAUDE.md's rule is that the gate is asked of the row about to be PRINTED, and a row's own claim is not its substance's. Measured through the real `validate` over `ddi-fold-tied-token.json`, itself a verbatim shipped-KB slice: a charted `Atropine (ophthalmic)` order mapped to `S01FA01` elects that presentation, whose claim on the token `atropine` merely ties `Hyoscyamine`'s, while `canonicalRow`'s `Atropine` claims it outright. Round 1 therefore turned a permit into a refusal, the rule sentence fell back to `partnerLabel` while `classPartnerName` kept the elected row, and ONE folded detail read `active order atropine` beside `active order Atropine (ophthalmic)` — one prescription, two names, where `09717dc7` printed `Atropine` in both. Strictly worse than the base on that arrangement, and measured by mutating the operand back.
+**The ENTRY rung asks the gate of the row the RESPONSE elects, and falls back to the ladder's own** (review rounds 1 and 3). Round 1 moved the operand from `OrderPartner.labelEntry` to `SubstanceSubjects.subjectOf(labelEntry)`, because printing `canonicalRow`'s pick at a chip-naming site is #187 and the class arm elects with `interactionSubject` everywhere else. That moved WHICH ROW `unambiguouslyNames` is asked about, and the two rows of one substance can answer differently — CLAUDE.md's rule is that the gate is asked of the row about to be PRINTED, and a row's own claim is not its substance's. Measured through the real `validate` over `ddi-fold-tied-token.json`, itself a shipped-KB slice: a charted `Atropine (ophthalmic)` order mapped to `S01FA01` elects that presentation, whose claim on the token `atropine` merely ties `Hyoscyamine`'s, while `canonicalRow`'s `Atropine` claims it outright. Round 1 therefore turned a permit into a refusal, the rule sentence fell back to `partnerLabel` while `classPartnerName` kept the elected row, and ONE folded detail read `active order atropine` beside `active order Atropine (ophthalmic)` — one prescription, two names, where `09717dc7` printed `Atropine` in both. Strictly worse than the base on that arrangement, and measured by mutating the operand back.
 
 Round 3's answer is that the printed row is the FIRST of (the response's elected row, the ladder's own row) that the gate admits. Both are rows of one substance, the gate is still asked of the row that is then printed, and nothing is printed on a sibling's claim — so `aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken` stands: on the unmapped-order rung the two rows COINCIDE and there is no second ask to make. The order is a preference between two rows the gate may each admit, never a widening of it, and it is monotone over the base: where the election is refused it restores exactly what `09717dc7` printed. `FoldedChipOnePartnerNameTest.aRowTheResponseElectsButTheTokenDoesNotClaimFallsBackToTheLaddersOwn` is the pin; dropping the fallback reddens it and `noFoldedChipNamesOneActiveOrderTwoWays` in that same class — `Tests run: 1683, Failures: 2`, re-measured at review round 10's head — and nothing else in the api suite. The second is not a second pin of the fallback: that sweep took this arrangement as its TENTH run, and without the fallback the chip still folds but names the one order `atropine` AND `Atropine (ophthalmic)`, so what fails there is its one-name assertion and not its count.
 
@@ -5359,7 +5361,7 @@ Two halves, for the two readers, and the same settlement Decision 67 (#354) reac
 
 **A second residue, and it is the seam between the two halves rather than either one.** `resolvesFrom`'s name leg is deliberately over-wide — it asks the unranked `matchesDrugName` over every name the order records, so an order named `Hydrocortisone Injection vial 100mg` still reads as `Hydrocortisone butyrate`'s own order (#209's residue, kept because its only prior effect was to WITHHOLD a partner, which misses a pair and can never invent one). That predicate's javadoc said the bridge could not print an over-wide NAME match, "because `recordsANameOf` is that leg, so wherever it is over-wide the bridge's own silence test fires on the same evidence" — true only while the silence test was that same fold. It is now the display, so an over-wide match reached through some OTHER recorded name no longer silences itself, and the attribution is printed and published.
 
-**One shape of that residue is constructed on shipped data, it was shipped here as unconstructible, and it is a REGRESSION against Decision 68** — found in review round 2 and closed below. This paragraph read: "What the clause claims stays true of the module — it states a RESOLUTION this pass performed, not a fact about the drug, and that same resolution already decides the pair suppression — so this makes an over-wide resolution VISIBLE rather than creating one, which is the direction a clinician can act on. No shipped-KB instance is constructed: it needs an entry whose alias is a bounded token inside another substance's recorded name, the `insulin`/`insulin glargine` shape, which this repo's fixtures do not carry." Both halves are wrong. The characterisation is too narrow, which is why the search for an instance came up empty: the `ddinter` parser writes a bridged concept's recorded name onto every entry it files there AS AN ALIAS, so the over-wide match is an EXACT alias hit and not a nested-token one, and this repo's `ddi-bridged-concept-two-substances.json` — a verbatim shipped-KB slice — carries it (`Esomeprazole magnesium` is an alias of BOTH Omeprazole and Esomeprazole, CIEL 75876). And the "stays true of the module" defence is the very reading Decision 68 refuses: a clause printed into a citable `safety_finding` carrying `STRENGTH_WITHHOLD` is read as a fact about the patient, which is that decision's own finding.
+**One shape of that residue is constructed on shipped data, it was shipped here as unconstructible, and it is a REGRESSION against Decision 68** — found in review round 2 and closed below. This paragraph read: "What the clause claims stays true of the module — it states a RESOLUTION this pass performed, not a fact about the drug, and that same resolution already decides the pair suppression — so this makes an over-wide resolution VISIBLE rather than creating one, which is the direction a clinician can act on. No shipped-KB instance is constructed: it needs an entry whose alias is a bounded token inside another substance's recorded name, the `insulin`/`insulin glargine` shape, which this repo's fixtures do not carry." Both halves are wrong. The characterisation is too narrow, which is why the search for an instance came up empty: the `ddinter` parser writes a bridged concept's recorded name onto every entry it files there AS AN ALIAS, so the over-wide match is an EXACT alias hit and not a nested-token one, and this repo's `ddi-bridged-concept-two-substances.json` — adapted from the shipped KB — carries it (`Esomeprazole magnesium` is an alias of BOTH Omeprazole and Esomeprazole, CIEL 75876). And the "stays true of the module" defence is the very reading Decision 68 refuses: a clause printed into a citable `safety_finding` carrying `STRENGTH_WITHHOLD` is read as a fact about the patient, which is that decision's own finding.
 
 **How it reopened Decision 68's refusal, which is the part that makes it a regression rather than a widening.** `restsOnAnAmbiguousBridge` withholds the clause for a substance the bridge's own recorded name does not NAME, and its first conjunct was `!resolvesFromAny(rows, order, BridgedOrders.NONE)` — "nothing but the bridge made this true". On an `en` deployment the concept's locale-preferred name IS the string the bridge records for it (Decision 68's own context says so of CIEL 105281), and `PatientClinicalContextBuilder.addConceptName` records that string on the order. So one string was read by two rules that answer oppositely: the unranked `matchesDrugName` said it reaches Omeprazole while the ranked `substancesNamedByBridge` said it does not NAME it — and the unranked reading, standing in for independent evidence, cancelled the refusal the ranked one had earned. Before half 1 of this decision the shape never got that far: `recordsANameOfAny` short-circuited it into silence one step earlier. Measured on head `d3bc3fd9` through the real `validate` and `injectRecords` over that fixture: a `Nexium 40mg` order on CIEL 75876 beside `Clopidogrel 75mg`, asked *"Can I give this patient omeprazole?"*, published `Omeprazole from Nexium 40mg` on the chip and in the record. Decision 68's own case stayed green because its fixture order is the FRANCOPHONE shape, recording no name the bridge carries.
 
@@ -5452,7 +5454,7 @@ The second row is the control that makes the first a cede rather than a chart th
 
 ## Decision 72: A finding about a medication the patient is already taking states a call about that medication
 
-**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal).
+**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
 
 ### Context — the defect
 
@@ -6304,7 +6306,7 @@ The two runs disagree with each other about the answer, and this decision does n
 
 **Ordering is [Decision 37](#decision-37-a-safety-answers-call-is-as-strong-as-the-findings-rating)'s and [#346](https://github.com/openmrs/openmrs-module-chartsearchai/issues/346)'s answer to the same shape, not a new one.** Faced with several findings about one subject, `FINDING_STRENGTH_DESCENDING` orders them rather than dropping the weaker one. What that ordering is claimed to buy is stated there and is not borrowed here. This is the contraindication arm's version of the same CHOICE, expressed as the order the arm appends in rather than as a comparator, because the ledger's ranks cannot serve as one: two pairs of them share a value, for opposite reasons that their own field javadoc gives, and neither sharing was chosen to mean anything ACROSS key spaces — so sorting on them would give it a meaning nothing measured.
 
-**What was wrong before is worth naming, because it is not what the issue reported.** The single loop raised whichever relationship each allergen produced as it reached it, and `recordedAllergens` preserves `PatientClinicalContext.getAllergyTokens()`, so which finding LED was decided by the order `PatientService.getAllergies` returned the records. That is the order-dependence [#268](https://github.com/openmrs/openmrs-module-chartsearchai/issues/268) removed from the fold's CONTENT — `ContraindicationChips.add`'s equal-rank tiebreak, added because *"the surviving sentence depends on the order PatientService.getAllergies returned the records"* — left standing in its ORDER. Measured through the real validator over the verbatim DDInter fixture `ddi-unclassified-allergen.json`: with allergies recorded `[Levofloxacin, Ciprofloxacin]` and the question *"Is it safe to give her ciprofloxacin?"*, the `J01MA` cross-reactivity chip was index 0 and the direct allergy index 1; with the two records in the other order, the direct allergy led. `DirectAllergyFindingLeadsTest` pins both arrangements, and the second one is what says the rule is *identity leads* rather than *the record order is reversed*.
+**What was wrong before is worth naming, because it is not what the issue reported.** The single loop raised whichever relationship each allergen produced as it reached it, and `recordedAllergens` preserves `PatientClinicalContext.getAllergyTokens()`, so which finding LED was decided by the order `PatientService.getAllergies` returned the records. That is the order-dependence [#268](https://github.com/openmrs/openmrs-module-chartsearchai/issues/268) removed from the fold's CONTENT — `ContraindicationChips.add`'s equal-rank tiebreak, added because *"the surviving sentence depends on the order PatientService.getAllergies returned the records"* — left standing in its ORDER. Measured through the real validator over the DDInter fixture `ddi-unclassified-allergen.json`: with allergies recorded `[Levofloxacin, Ciprofloxacin]` and the question *"Is it safe to give her ciprofloxacin?"*, the `J01MA` cross-reactivity chip was index 0 and the direct allergy index 1; with the two records in the other order, the direct allergy led. `DirectAllergyFindingLeadsTest` pins both arrangements, and the second one is what says the rule is *identity leads* rather than *the record order is reversed*.
 
 **Both cross-reactivity arms are pinned, and the curated one needed a case of its own.** The measurement above is the ATC-class arm's. The curated arm — `CrossReactivityGroup.sharedGroup`, the second comparison of the second pass — is driven by the same file over the pinned DDInter excerpt carrying the bundled groups, whose `Ibuprofen` and `Acetylsalicylic acid` rows share the `NSAID` group while sharing no ATC subgroup, so the class comparison declines and the group one answers; both record orders again, since the client contract in `README.md` states the lead over each arm alike. It is not redundant with the class cases, and the mutation that shows it is not the one above: hoisting ONLY the group comparison into the identity pass, guarded so each allergen's own class-over-group precedence is unchanged, moves emission order without changing a chip or a word of its text — under it the class cases stay green and `theDirectAllergyLeadsOverACuratedGroupWhereTheChartRecordedTheGroupAllergenFirst` reddens with the group chip at index 0 (measured 2026-09-08 on `1049b165` with that case added, through `mvn -o clean install` from the repository root).
 
@@ -7299,7 +7301,7 @@ So the two surfaces disagreed about one chart, in the direction #309 was filed a
   **No claim is made here about whether a demotion would be observable, and that is deliberate rather than an omission.** Three claims once written here were each refuted in review: that a condition rule has no co-keyed rival (unmeasured); that the two rank constants share a key space (`CURATED_RULE`'s own javadoc says the opposite); and that `ContraindicationRouteVariantTest.oneCuratedRuleAuthoredTwiceRaisesOneChip` exhibits a co-keyed `CURATED_RULE` rival (it does not — both its rules answer `selfNamedAllergyRule`, so they collapse on the SUBSTANCE key, as that test's own comment says). The premise reason above needs no such claim, so none is made; whoever revisits the demotion should measure the key space rather than cite this bullet.
 - **Qualify the chip's `detail`.** The sentence is measured prose that `DrugSafetyChipLabelTest` and [#108](https://github.com/openmrs/openmrs-module-chartsearchai/issues/108) constrain, and `DrugReferenceInjector.renderFinding` copies it VERBATIM into the citable `safety_finding` and then appends `FINDING_UNCORROBORATED_MATCH` off this same flag — so hedging the sentence would state the hedge twice, the second time in wording nobody has measured, inside citable evidence. Decision 73 records the same risk of the section leads it reuses.
 - **Tighten `hasConditionToken`.** Fail-open and refused twice already; Decision 73's **The MATCH is untouched** paragraph is canonical, and `containsWord("GI bleeding", "gi bleed")` is `false`, so the shipped seed's own gastrointestinal-bleeding chip would stop firing for a condition a clinician typed.
-- **A new PUBLIC construction path for the flag**, which is what [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347) did when it needed a `web.rest` fixture to carry a newly published fact, recording the necessity in its own constructor javadoc. Declined: it would add production API with no production caller, and making `contraindication(..)` public is separately unavailable, since it also sets `aboutACurrentMedication` and `chartRecords`, whose accessors stay package-private — which WOULD breach the symmetry rule. The fixture instead reaches the real factory from `SafetyWarning`'s own package, through an omod test-only builder, so the chip a wire guard reads is one production built.
+- **A new PUBLIC construction path for the flag**, which is what [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347) did when it needed a `web.rest` fixture to carry a newly published fact, recording the necessity in its own constructor javadoc. Declined: it would add production API with no production caller, and making `contraindication(..)` public is separately unavailable, since it also sets `aboutACurrentMedication` and `chartRecords`, whose accessors stay package-private — which WOULD breach the symmetry rule. *(Since [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) the `aboutACurrentMedication` accessor is public; `chartRecords`, still package-private, carries that argument alone.)* The fixture instead reaches the real factory from `SafetyWarning`'s own package, through an omod test-only builder, so the chip a wire guard reads is one production built.
 - **An anonymous subclass overriding the accessor in the fixture.** Legal — the class and the method are not final, and the reflective guard invokes virtually — and it needs no new API either. Declined because it exercises neither the field nor any constructor, so a later change to the private constructor that dropped the flag would leave that guard green, which is the class of defect #340 exists to catch.
 
 ### Trade-offs
@@ -7654,11 +7656,11 @@ Read these rather than trusting a list; each was run against `OrderStopDateState
 
 - **+** For a prescription that lapsed by its duration, the end instant reaches a client for the first time; it exists in no rendered text anywhere in the system.
 - **+** No prompt bytes change, so none of the regressions Decisions 45 and 47 measured can recur, and no KV cache entry is invalidated.
-- **+** The question is asked once, of `OrderService`, against the same read that decides whether the order is in force — so the two answers about one order cannot disagree. `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace` holds it there.
-- **−** **The prose is unchanged, and the ticket's title is a statement about prose.** An answer still reports an ended prescription without dating it; what changes is that the response now carries the date beside the citation. Rendering it is a change in `openmrs-esm-chartsearchai`, so on a client that ignores the key nothing a clinician sees moves at all.
+- **+** The question is asked once, of `OrderService`, against the same read that decides whether the order is in force — so the two answers about one order cannot disagree. Two cases hold it there, one per carrier of the date: `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace` confines `SerializedRecord`'s date-carrying constructor to `QueryStoreChartBuilder`, and `ArchitectureGuardTest.theOrderStopDateReachesAMappingFromTheSerializerAlone` (#432) lets no class but `PatientChartSerializer` pass `RecordMapping` anything but a null stop date — the carrier `orderStopDates` is read off — exempting only the mapping's own date-carrying rungs, which forward it, and holding the field's one assignment to the widest constructor. Each admits its writer as a whole class and reads the API module's classes only; what each cannot answer is in its own javadoc.
+- **−** **The prose is unchanged, and the ticket's title is a statement about prose.** An answer still reports an ended prescription without dating it; what changes is that the response now carries the date beside the citation. Rendering it is a change in `openmrs-esm-chartsearchai`, where it is [openmrs/openmrs-esm-chartsearchai#31](https://github.com/openmrs/openmrs-esm-chartsearchai/issues/31), so on a client that ignores the key nothing a clinician sees moves at all.
 - **−** **`[]` is not a certificate, and it is the only "nothing" a client will see.** The projection has no failure mode, so every answer this module builds states a measurement and the key is never `null` on one — which makes the null-versus-empty distinction every sibling key turns on a serializer contract here rather than a live signal. `[]` says this answer cited no chart record whose order both is out of force and publishes a stop date. It does not say the patient has no ended prescription. **How rare that is has needed correcting twice, so it is measured in exactly one place and pointed at from here**: `SerializedRecord.orderStopDate`'s javadoc, with `DrugOrderCurrencyMarkTest.aRealDiscontinuationLeavesThePrescriptionCarryingItsStopDate` asserting it. The short version a reader of this bullet needs is that an ordinary discontinuation is SERVED rather than skipped; two earlier drafts of this entry said otherwise in two different ways, which is the reason the detail is not restated here.
 - **−** **`RecordMapping` gains a thirteenth constructor parameter, inserted rather than appended.** `ArchitectureGuardTest` selects two constructors by their descriptor TAILS and requires the guarded one to be the widest, so the parameter had to go beside `orderActive` in every rung from the order-currency one down; appending it to the widest, or giving it a rung below, reddens that guard. Same constraint #276 met and answered the same way.
-- **−** **The published date is a UTC calendar date, and on a server east of UTC that can be a day before the local one.** `ChartSearchAiRestController.formatDate` converts through `ZoneId.of("UTC")` before taking the calendar day, so an order stopped at 01:00 local on a UTC+3 host publishes the previous date. Measured by running that conversion: `2026-08-25T01:00` local in `Africa/Nairobi` renders `2026-08-24`, while `12:00` the same day renders `2026-08-25`. It is not new — every date on the response goes through that one method, and #315's own second comment recorded the same shift in querystore's serializer as something found in passing — but it is newly consequential, because this is the first time an order's END is published rather than inferred, and a stop date read a day early is a clinical fact misreported. Deliberately not fixed here: changing the conversion would move every date this module publishes, which is its own decision with its own compatibility question. What this change owes is that the key is spelled like its neighbours, and it is.
+- **−** **The published date is a UTC calendar date, so on a server whose UTC offset is not zero it can be a day off the local one, in a direction set by the offset — and at ordinary hours.** `ChartSearchAiRestController.formatDate` converts through `ZoneId.of("UTC")` before taking the calendar day. Measured on 2026-09-24 by calling production `DateFormatUtil.formatDate`, which that method delegates to (#432): WEST of UTC the published date is the day AFTER — `2026-08-24T20:00` local in `America/New_York` renders `2026-08-25` (`19:59` renders `2026-08-24`), and `17:00` in `America/Los_Angeles` renders `2026-08-25` (`16:59` renders `2026-08-24`); EAST of UTC it is the day BEFORE — `2026-08-25T01:00` and `02:59` local in `Africa/Nairobi` render `2026-08-24`, while `03:00` renders `2026-08-25`. Core makes both common rather than exotic, and each drives a different direction. `OrderServiceImpl.saveOrderInternal` rewrites an `autoExpireDate` saved at midnight to 23:59:59 local, which is always the next UTC day west of UTC (`23:59:59` in New York renders the next date) and never shifts east of it (`23:59:59` in Nairobi renders the same date). `discontinueOrder`, given no stop date, stops the order at `aMomentBefore(new Date())` — the moment of the click — so such a discontinuation shifts wherever that moment falls in the window — evenings in the west, just after midnight in the east. Both read with `javap -c` against `openmrs-api-2.9.0-SNAPSHOT`. It is not new — every date on the response goes through that one method, and #315's own second comment recorded the same shift in querystore's serializer as something found in passing — but it is newly consequential, because this is the first time an order's END is published rather than inferred, and a stop date read a day off is a clinical fact misreported. Deliberately not fixed here: changing the conversion would move every date this module publishes, which is its own decision with its own compatibility question. What this change owes is that the key is spelled like its neighbours, and it is.
 - **−** **One more date on the wire, and it is about the patient.** Unlike a dosing ceiling it is not reference material: it says when this patient's prescription stopped. It is published only for a record the answer itself cited, and it is the same fact the cited record's own text already states wherever querystore renders one.
 - **−** **The order read is unchanged in cost but now carries more.** It was already made once per chart assembly for Decision 46's mark; this adds a map entry per ended order and no new service call. Decision 46's own accounting of how often "once per chart assembly" is stands unchanged.
 
@@ -8010,7 +8012,7 @@ the orders of the findings it CITES, and the chips beside it carry the orders ea
 **Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
 
 **And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
-PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
+PR's review. The negative at each of the three sites then captured from DEBUG up (TRACE since #443, below) and asserted over every
 captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A
 WARN-only capture leaves the declined alternative implementable with the suite green, which the
 reviewer demonstrated: `log.info("Withheld pairs in full: {}", …)` beside the third site's cap WARN,
@@ -8051,7 +8053,7 @@ through any sibling file that captures a logger beneath that package by name, an
 module-root capture from the other direction, which is why that file named a package until round 4
 undid a narrowing this fix had made unnecessary; and each fidelity check's own logger inside
 `api.impl`, along with `LlmAnswerExtractor`'s and `QueryStoreChartBuilder`'s, is captured by name by its own test
-file. Beside that, the two reference-package negatives now assert that the capture is live BELOW warn
+file. Beside that, the two reference-package negatives (module-root since #443) now assert that the capture is live BELOW warn
 for the very logger they are about — `DrugSafetyValidator`'s end-of-pass INFO line and the injector's
 end-of-pass DEBUG line — so a filtered capture fails the case instead of satisfying it. That belt is
 independent of the helper: with `close()` reverted and no probe present at all, it is what reddens
@@ -8086,6 +8088,20 @@ negatives also now assert liveness below `WARN` for the logger they are about, a
 reference-package cases do. `FindingPartnerCoverageCheck` writes nothing below `WARN`, so there is
 no production line to name and the case writes one through that logger itself — pinning that class
 at `WARN` reddens each case of that file which asserts over the capture (measured 2026-09-16).
+
+**Since [#443](https://github.com/openmrs/openmrs-module-chartsearchai/issues/443) the negatives at all three
+sites capture the module ROOT, from TRACE up.** The two reference-package cases cited the argument above
+without having its scope: a probe writing the six screened drugs through `LlmInferenceService`'s
+logger during the screening pass, and one writing the unrepresented order through it during
+reconciliation, left both green. Under the root capture they redden
+`PairChipCapContextTest.theScreeningWarnRatesTheWithheldPairsAtTheConfiguredCapAndNamesNoDrug` and
+`ActiveOrderReconciliationTest.theReconciliationWarnIdentifiesTheOrderByUuidAndNeverByItsDrugName`.
+And "from DEBUG up" was not every level: a `log.trace` of the names at each of the three sites was
+green under the DEBUG captures, and under TRACE it reddens the negatives for the site it was added to
+(all measured 2026-09-24, each probe removed after the reading). Each case also asserts that the
+logger it is about is live at TRACE, through `LogCapture.receivesFrom`, because no production line
+writes at that level to serve as the witness. What a stock install discloses is unchanged by any of
+this: core ships `org.openmrs` at WARN.
 
 **Where that substitution does not hold, stated rather than pinned.** Under
 `chartsearchai.grounding.async=true` the REST layer emits `done` from the UNGROUNDED answer
@@ -8639,7 +8655,10 @@ classic write site skips its save where a row was already attempted. Neither shi
 reach the shape that needs either guard — `LlmInferenceService` calls the consumer once, and
 `ChartSearchServiceRouter` never calls it, passing the caller's through — but a second call is a
 second ROW, `saveAuditLog` building a fresh one each time, and the module should not owe the table's
-shape to a collaborator's good behaviour.
+shape to a collaborator's good behaviour. What lets the controller keep its audit state in unsynchronized
+fields is a requirement of the interface rather than a property of the two shipped implementations:
+whenever an implementation invokes a consumer, it does so on the calling thread before the call
+returns or throws, which `ChartSearchService`'s own javadoc states (issue #459).
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
 row before streaming and update it afterwards — was not taken, and what stands against it is a
@@ -8671,8 +8690,11 @@ the answer in FULL under `unknown`, so the length of the answer does not say whi
 filed. **Nor does anything on a row filed the FIRST way say that its stream came apart**: it carries
 the pipeline's own mode and reference count, which is what
 `ChartSearchAiStreamDisconnectAuditTest.aFailureAfterTheAnswerIsCompleteAuditsThePipelinesOwnAnswer`
-asserts, and is the same row a completed query leaves. `unknown` is therefore a subset of "this query
-did not finish" and not a test for it; the README's audit-log section says that to a client.
+asserts, and is the same row a completed query leaves. On an install whose `ChartSearchService` is this
+module's own, `unknown` is therefore a subset of "this query did not finish" and not a test for it; on
+one running an alternative service it is also what a completed answer stating no mode files, which
+`ChartSearchAiConstants.SEARCH_MODE_UNKNOWN`'s javadoc records, so there it is not even that subset. The
+README's audit-log section says both to a client (issue #459).
 Closing the residue would need a new signal on the `searchStreaming` interface carrying the mode
 ahead of the answer, and the mode is a property of the chart that was assembled, which is the
 producer-states-it discipline `ChartAnswer.getSearchMode()` exists for.
@@ -10883,7 +10905,149 @@ of orders, and over #483's order predicate.
 
 → `OrdersSharingASubstanceTest`, `OrdersSharingASubstanceModuleAnswerContextTest.onAProposalTheFindingFollowsTheProposedDrugsCautionsInTheModulesAnswer`.
 
-## Decision 117: An active-order claim is held to the findings that relate its pair
+## Decision 117: A prompt carrying the module's reference records is decoded without the DRY sampler
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#512](https://github.com/openmrs/openmrs-module-chartsearchai/issues/512), which it closes. The scope
+is the issue owner's decision, recorded in the issue's first comment.
+
+### Context
+
+`LocalLlmEngine.buildRequestBody` pinned every request to `samplers: [dry, temperature]` with
+`dry_allowed_length=8` and `dry_penalty_last_n=-1`, so the whole context — prompt included — is in
+DRY's window. A safety answer restates the findings the module injected, so every copy of one longer
+than eight tokens was penalised and the model was pushed off it mid-word. The issue measured it
+through the real module on the external DDI evaluation's twelve questions for its three demo
+patients, changing only `dry_multiplier` 0.8 → 0.0: E2B's answers carried nine misspelled forms with
+DRY on ("riframpin", "zidovudeine") and none with it off, and the published
+`unfaithfullyRenderedCitations` summed over the twelve went from 7 to 1; on E4B, one form to none and
+3 to 1. The forms were found by comparing each answer's words with the chip text and confirmed by
+reading; the second figure is `ReferenceProseFidelityCheck` as published on the wire. The comment
+above those parameters already recorded the same dodge at `allowed_length=4` ("Serum potassium" →
+"Serum पोटेशियम").
+
+### The decision
+
+**A chart-answer request whose chart carries a reference-group record sends `samplers:
+["temperature"]` and no `dry_*` field. Every other request is byte-identical to before.**
+
+- **Decided off the chart, never off the prompt text or a type name.** `LlmEngine.ReferenceRecords.in`
+  reads `ChartSearchAiUtils.referenceSlice`, the slice the audit row already carries, which asks
+  `referenceGroup`. `LlmInferenceService` reads it off the post-inject chart once per request and hands
+  it to the answer, the #398 repair and — off its own chart — the progressive-reasoning preview.
+- **Only the answer arities carry it.** `entails`, `entailsBatch` and `warmup` send what they sent: a
+  verdict is YES or NO rather than a copy, and a warmup generates one token.
+- **The two engine methods are abstract, not defaults that drop the value.** An engine that does not
+  implement them does not compile. `RemoteLlmEngine` sends no repetition
+  penalty at all and ignores it.
+
+**Rejected:**
+
+- **Re-running #15's 14-model loop benchmark and re-tuning DRY for every request.** Its harness and
+  question set are not in the repository, and its MedGemma Q6 variants are not on disk.
+- **A positive `dry_penalty_last_n`.** In the pinned llama.cpp, prompt tokens enter DRY's history (the
+  issue owner's reading of `server-context.cpp`, recorded in the issue), and
+  the answer is written after the `reasoning` field, so a window over generated text still penalises
+  the answer for restating what the reasoning restated. That would need its own A/B.
+
+### Consequences
+
+- **+** Pinned by `LocalLlmEngineTest.buildRequestBody_sendsNoDrySamplerForAPromptCarryingReferenceRecords`
+  (the body each value produces), `RemoteLlmEngineReferenceRecordsTest` (the remote engine's request, off
+  the wire, whatever the value), `ReferenceRecordsReachTheEngineTest` (the
+  value each answer call hands the engine, through a real `LlmProvider` over a chart the real injector
+  built) and `ArchitectureGuardTest.theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder`
+  (the one link a test cannot run: that guard reads source, with its residue named in its javadoc).
+- **−** **The changed path has no loop guard.** No loop was observed in the issue's 24 DRY-off answers,
+  the longest 2,265 characters; `max_tokens` bounds the worst case; and the remote engine has never
+  sent DRY. That is not #15's benchmark.
+- **−** **How many requests take the changed path was not measured.** It depends on
+  `chartsearchai.drugReference.enabled`, on the question and on the patient's medications, which
+  together decide whether the injector appends any record.
+- **−** **Copying a CHART record is still penalised.** A request whose chart carries no reference record
+  keeps DRY, so a misspelling copied from the patient's own records is not addressed by this decision.
+
+→ `ReferenceRecordsReachTheEngineTest`.
+
+## Decision 118: A chip says whether the module raised it from one of the patient's own active orders
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#527](https://github.com/openmrs/openmrs-module-chartsearchai/issues/527). The referent it publishes is
+[Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)'s.
+
+### Context
+
+The issue's reproduction, on a RefApp standalone with the bundled DDInter knowledge base: asked *"any
+allergies?"*, a patient with an active *Advil 400mg* order and a recorded ibuprofen allergy received the
+chip `{"type":"contraindication","drug":"Ibuprofen","detail":"The patient has a recorded allergy to
+Ibuprofen.", …}`, and asked *"can I give her ibuprofen?"*, a patient with no ibuprofen order received the
+same object byte for byte. The first is about a drug she already takes —
+`DrugSafetyValidator.addActiveOrderContraindications` raised it — and the second is about a proposal,
+raised by the drug-in-play loop. The allergen arm builds both through one factory,
+`SafetyWarning.recordedAllergenContraindication`, and no arm's sentence varies with the referent. The
+module held the difference on `SafetyWarning.isAboutACurrentMedication()`. On the model's path it stated
+it in the injected record, which reaches a client only if the model cites it, and the issue's first answer
+cited neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`); a
+contraindication line of an answer the module composes itself states it (Decision 113), a path that
+ships off.
+[Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)
+rests on the premise that every finding is published in `safetyWarnings`, and the chip did not carry
+the referent.
+
+### The decision
+
+- **The chip publishes the referent verbatim, as `aboutACurrentMedication`**, written from the accessor
+  in `ChartSearchAiRestController.serializeSafetyWarnings`. That is the one serializer, so
+  `GET /chartsearchai/chartalerts` carries it too, and there every alert answers `true`: that pass's
+  only arm is the order-driven contraindication arm, with nothing in play
+  ([Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)
+  is that surface). The accessor is public for
+  this and the factories that set it stay package-private, as
+  [Decision 92](#decision-92-the-contraindication-chip-states-whether-the-chart-match-behind-it-is-corroborated)
+  settled for `restsOnAnUncorroboratedChartMatch`. The `detail` is unchanged, as
+  [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)
+  left it for `aboutAnEndedOrder`.
+- **The contract says what the flag is.** `true` is a chip the module raised from one of her active
+  orders, and `false` is not a statement that she is off the drug. What `false` covers has one home, the
+  accessor's javadoc, and README carries it for a client.
+- **README also says how to render `true`**: as a finding about a medication she already takes, with no
+  drug named in that claim.
+  [Decision 113](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)'s
+  reason for its composed sentence transfers to a client: the chip's `drug` is the entry her order
+  resolved to, which the order's own name can imply without naming.
+- **Only the referent is published.** How strongly a finding counts stays prompt-facing
+  ([#283](https://github.com/openmrs/openmrs-module-chartsearchai/issues/283)), and reference/CLAUDE.md
+  keeps STRENGTH and REFERENT as two axes.
+
+### Alternatives
+
+- **The order named on the chip**, the issue's second option. Not taken: the order-driven
+  contraindication arm walks the entries her orders resolved to, not the orders, so naming one needs the
+  entry-to-order resolution `DrugSafetyValidator.chartOrderBridges` makes for interaction chips, with its
+  own silences; and `namedPartners` is empty for a contraindication by contract. The flag is what the arm
+  holds.
+- **The prompt pass's referent on the published chip.** Not taken: every other key of a chip is the value
+  of the pass that raised it, as Decision 110 left `aboutAnEndedOrder`.
+
+### Residues
+
+- **The published chips are the chips pass's, not the prompt pass's**, and the two can state different
+  referents for one drug; the accessor's javadoc says what the chips pass has in play. Decision 110's
+  residue on a row the answer adds records the same shape for `aboutAnEndedOrder`.
+- **`false` for a drug the question named that she takes is the proposal vocabulary open
+  [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402) and
+  [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513) track.** README names it as
+  current behaviour.
+- A client that does not render the key still shows the same words for both referents —
+  `openmrs-esm-chartsearchai`'s half.
+- The key does not say which of her orders.
+
+→ `ChartSearchAiCurrentMedicationReferentTest`,
+`ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`,
+`LlmInferenceServiceCurrentMedicationReferentContextTest`,
+`StandingChartAlertsTest.everyStandingAlertIsRaisedFromOneOfHerOwnActiveOrders`.
+
+## Decision 119: An active-order claim is held to the findings that relate its pair
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#514](https://github.com/openmrs/openmrs-module-chartsearchai/issues/514).

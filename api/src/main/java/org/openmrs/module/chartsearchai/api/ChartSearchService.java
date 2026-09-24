@@ -31,6 +31,15 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
  * default-on pre-filter narrowing the chart — machinery removed with the querystore migration
  * (issue #51) and a default that has been {@code false} since before it; the correction belongs with
  * issue #178, which is what a reader trusting the old sentence would have got wrong.
+ *
+ * <p><b>Whenever a {@code searchStreaming} overload invokes a consumer it was handed, it does so
+ * synchronously on the calling thread, before that call returns or throws</b> (issue #459) — never
+ * from a thread of the implementation's own, and never after the call has ended. This says WHEN and
+ * WHERE a consumer runs, not THAT it runs: which consumers fire is each overload's own contract. It
+ * binds every overload, the ones an implementation overrides and the ones it inherits, so a caller
+ * may keep what its consumers record in plain fields and read them once the call has ended — ADR
+ * Decision 105 records the caller that does. An implementation that produces on a worker thread
+ * must hand each callback back to the caller's thread itself.
  */
 public interface ChartSearchService {
 
@@ -104,6 +113,8 @@ public interface ChartSearchService {
 	 *       verdicts.</li>
 	 *   <li>It fires on the live inference path regardless of whether grounding is enabled —
 	 *       its meaning is "the answer is complete", not "grounding will follow".</li>
+	 *   <li>When it fires, it fires on the calling thread before this call returns or throws, as
+	 *       any consumer of any overload does — see this interface's own javadoc.</li>
 	 *   <li>It does NOT fire when the implementation returns an answer that is already final —
 	 *       e.g. a cached answer, whose verdicts were attached when it was first computed. A
 	 *       caller that emitted nothing from the consumer must therefore fall back to treating
@@ -745,7 +756,7 @@ public interface ChartSearchService {
 	 * Whether the pair each <em>"X interacts with active order Y"</em> claim in the answer states is a
 	 * pair the module's own findings relate — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/514">#514</a>, ADR
-	 * Decision 117. {@code InteractionClaimPairFidelityCheck} states it. This type is CANONICAL for what
+	 * Decision 119. {@code InteractionClaimPairFidelityCheck} states it. This type is CANONICAL for what
 	 * its three parts do and do not assert; README states the same contract for a client author.
 	 *
 	 * <p><b>Why a client could not read it off anything already published.</b> On the ticket's cells
@@ -1267,12 +1278,9 @@ public interface ChartSearchService {
 		 * subject drug only, so several records — several indexes — share one, and the
 		 * {@code safetyWarnings} chips carrying that {@code (type, drug)} are a candidate SET rather
 		 * than a match; and a chip's {@code detail} is in any case only the mechanism half of what this
-		 * check compares against. The prefix and the strength call carry no wire counterpart; TWO clauses
-		 * are exceptions and neither is the counterpart it looks like — the chart-order clause, since
-		 * what the chip publishes is its ITEMS, as structured {@code chartOrderBridges}, and the
-		 * provenance note, since what the chip publishes is the ANSWER it is appended off, the chip's own
-		 * {@code restsOnAnUncorroboratedChartMatch} (issue #374). Neither is the clause TEXT compared
-		 * here. A {@code drug_reference} record's text is published nowhere at all.
+		 * check compares against. Which of the record's other parts reach the wire, and in what form, is
+		 * that README section's to list; none reaches it as the clause TEXT compared here. A
+		 * {@code drug_reference} record's text is published nowhere at all.
 		 *
 		 * <p><b>It is not a grounding verdict and must not be rendered as one.</b> The finding is
 		 * deterministic and correct; what diverged is the ANSWER's rendering of it. Reading it as
@@ -1445,7 +1453,7 @@ public interface ChartSearchService {
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/514">#514</a>. Judged on
 		 * the model's own prose, before the module appends anything to it.
 		 * {@link InteractionClaimPairs} is canonical for what each part and a null assert; ADR Decision
-		 * 117 carries the decision.
+		 * 119 carries the decision.
 		 *
 		 * @return the statement, or null where the producer made no measurement
 		 */

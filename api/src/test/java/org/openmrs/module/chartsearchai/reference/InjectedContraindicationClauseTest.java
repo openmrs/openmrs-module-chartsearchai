@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -106,8 +107,10 @@ public class InjectedContraindicationClauseTest {
 
 	/** As {@link #contraindicationClauses}, over a record located by the drug it names rather than by
 	 *  position — {@code DrugReferenceTestSupport.referenceTextNaming}, which is what a case over a
-	 *  fixture carrying several entries has to use. */
-	private static List<String> clausesIn(String text) {
+	 *  fixture carrying several entries has to use. Package-visible for
+	 *  {@code InjectedContraindicationReadingToggleContextTest}, which reads the same list under a real
+	 *  global property. */
+	static List<String> clausesIn(String text) {
 		int start = text.indexOf(" Contraindicated with: ");
 		assertTrue(start >= 0,
 				"precondition: the record must render a contraindication clause: " + text);
@@ -253,7 +256,7 @@ public class InjectedContraindicationClauseTest {
 	}
 
 	/** A service over {@code fixture}, parsed by the real production parser. */
-	private static DrugReferenceService fixtureService(String fixture) throws Exception {
+	static DrugReferenceService fixtureService(String fixture) throws Exception {
 		return DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(fixture));
 	}
@@ -263,7 +266,7 @@ public class InjectedContraindicationClauseTest {
 	 *  asserting a precondition through it asserts that of the very instance the record is rendered
 	 *  from. The issue #310 cases render through this; the cases above it predate it and reach the
 	 *  injector directly. */
-	private static String recordFor(DrugReferenceService service, String question,
+	static String recordFor(DrugReferenceService service, String question,
 			PatientClinicalContext context, String drug) {
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
@@ -304,6 +307,49 @@ public class InjectedContraindicationClauseTest {
 
 		assertEquals(Arrays.asList("opioid reaction"), clausesIn(record),
 				"two rules carrying one note are ONE clause in the rendered list, was: " + record);
+	}
+
+	/** Issue #310's Codeine record over {@code InjectedContraindicationCorroborationTest.BORROWED_ALIAS},
+	 *  for {@code context} — the arrangement {@link #twoRulesOfOneEntrySharingANoteRenderThatClauseOnce}
+	 *  renders WITH a reading, handed to each case asking it of a record stating none. */
+	static String sharedNoteCodeineRecord(PatientClinicalContext context) throws Exception {
+		return recordFor(fixtureService(InjectedContraindicationCorroborationTest.BORROWED_ALIAS),
+				"Is it safe to give her codeine?", context, "Codeine");
+	}
+
+	/** What a record stating NO reading must read over {@link #sharedNoteCodeineRecord}: no reading
+	 *  section at all — all three leads, because this fixture is built to raise the third — so the case is
+	 *  the no-reading path and not the with-reading case again, and the shared note listed ONCE. */
+	static void assertSharedNoteListedOnceWithNoReading(String record) {
+		for (String lead : Arrays.asList(DrugReferenceInjector.RECORDED_READING_LEAD,
+				DrugReferenceInjector.NOT_RECORDED_READING_LEAD,
+				DrugReferenceInjector.UNCORROBORATED_READING_LEAD)) {
+			assertFalse(record.contains(lead),
+					"precondition: this record may state no reading, was: " + record);
+		}
+		assertEquals(Arrays.asList("opioid reaction"), clausesIn(record),
+				"two rules carrying one note are ONE clause with no reading beside it too, was: " + record);
+	}
+
+	@Test
+	public void aRecordStatingNoReadingStillRendersASharedNoteOnce() throws Exception {
+		// Issue #407: a de-duplication moved inside `if (reading.states())` left the whole suite green
+		// while this record read "opioid reaction; opioid reaction" again. The list is rendered either
+		// way, so its de-duplication has to hold either way. statesTheChartsContraindicationReading answers
+		// false three ways, and a regression can be keyed on any one of them rather than on the boolean,
+		// so each has its own case: a chart whose allergy and condition reads failed here, no context at
+		// all in the next, and the two drugSafety switches in
+		// InjectedContraindicationReadingToggleContextTest, which needs a real global property.
+		assertSharedNoteListedOnceWithNoReading(
+				sharedNoteCodeineRecord(DrugReferenceTestSupport.unreadableRecordsCtx(60, null)));
+	}
+
+	@Test
+	public void aRecordWithNoPatientContextStillRendersASharedNoteOnce() throws Exception {
+		// Issue #407, the null-context cause: a de-duplication gated on `reading.context() != null` is
+		// the same regression keyed on one input of the boolean, and the unread-chart case above cannot
+		// see it because that chart IS a context.
+		assertSharedNoteListedOnceWithNoReading(sharedNoteCodeineRecord(null));
 	}
 
 	@Test

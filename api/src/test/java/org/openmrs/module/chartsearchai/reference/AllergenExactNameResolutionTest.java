@@ -48,7 +48,7 @@ import org.junit.jupiter.api.Test;
  * written to pin. The case whose premise #250 genuinely removed is on the ORDER side —
  * {@code OrderedSubjectRowTest}, where the trap moved to the COVID pair in this same fixture.
  *
- * <p>Every case runs over verbatim shipped-KB slices through the real {@link DdiDrugReferenceSource}
+ * <p>Every case runs over shipped-KB slices through the real {@link DdiDrugReferenceSource}
  * parser, and the cases that assert an OUTCOME go through the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)} and assert the chip text,
  * so none can pass by raising some other chip about the right substance. The
@@ -58,11 +58,11 @@ import org.junit.jupiter.api.Test;
  */
 public class AllergenExactNameResolutionTest {
 
-	/** Verbatim KB rows carrying the botulinum pair and the enalapril/enalaprilat pair — see the
+	/** KB rows carrying the botulinum pair and the enalapril/enalaprilat pair — see the
 	 *  fixture's own {@code metadata.note}. Shared, so a rename breaks in one place. */
 	private static final String IDENTITY_FIXTURE = DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY;
 
-	/** Verbatim KB rows carrying the two PPIs filed under one substance name, and the four
+	/** KB rows carrying the two PPIs filed under one substance name, and the four
 	 *  hydrocortisone rows. */
 	private static final String PPI_FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;
 
@@ -153,7 +153,7 @@ public class AllergenExactNameResolutionTest {
 		// row is a DIFFERENT substance, and it does not claim the recorded name at all — it matches only
 		// through the inflectional tail #128 measured and allowed.
 		//
-		// Verbatim in CONTENT, but this slice REORDERS the pair relative to the KB, which is what makes
+		// Copied in CONTENT, brand_names aside, but this slice REORDERS the pair relative to the KB, which is what makes
 		// the case reachable: in the shipped 19 MB KB Enalaprilat (index 1142) precedes Enalapril (1882),
 		// so an allergy recorded there resolves to itself even under earliest-match, and it was measured
 		// doing so live. The shape is not hypothetical — Mecasermin rinfabate, Melphalan flufenamide,

@@ -647,7 +647,8 @@ public class ChartSearchAiRestController {
 	 * pipeline producing something, not only on the one that reaches its own write site</b> —
 	 * {@link #auditStreamedQueryIfUnrecorded} in the {@code finally} is what owes it and what states
 	 * the gate, and issue #450 is what a delivered answer with no row cost before that. One row per
-	 * query at most, for any implementation of the consumer contract.</p>
+	 * query at most, for any implementation of the consumer contract — which includes the threading
+	 * requirement {@code ChartSearchService}'s own javadoc states (issue #459).</p>
 	 *
 	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
 	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
@@ -780,6 +781,7 @@ public class ChartSearchAiRestController {
 				// swallowed the early done's write failure to reach: neither shipped implementation does,
 				// and the point of the guard is that the row count is one per query for EVERY
 				// implementation rather than only for one honouring the consumer's at-most-once contract.
+				// Reading a flag a consumer set without synchronizing: see StreamAuditState (issue #459).
 				// The EVENT still goes out, because a client whose done was refused never received one, and
 				// it carries the id of the row that WAS written. No test observes that id: the only
 				// arrangement reaching this line has already had a frame write refused, so the peer it would
@@ -865,8 +867,8 @@ public class ChartSearchAiRestController {
 			// here rather than left to be rediscovered.
 			//
 			// The elapsed time is measured to HERE, which is what the user experienced of a stream that
-			// did not finish. No test discriminates it: a unit-test request finishes inside a millisecond,
-			// so a substituted 0 is a value the real clock also produces.
+			// did not finish. ChartSearchAiStreamDisconnectAuditTest's
+			// anEndedStreamsRowStatesHowLongItRanNotTheClock bounds it from both sides (issue #459).
 			auditStreamedQueryIfUnrecorded(user, patient, sanitizedQuestion, auditState,
 					System.currentTimeMillis() - startTime);
 		}
@@ -941,9 +943,10 @@ public class ChartSearchAiRestController {
 	 * the early event went out, and the consumer's comment says why that is not the guard.
 	 *
 	 * <p>Unsynchronized, and that is not an oversight of the kind {@code SseKeepAlive} is careful
-	 * about: every consumer is called synchronously by the service on the REQUEST thread, and the
-	 * {@code finally} that reads this runs on that same thread. The keep-alive's own thread shares
-	 * {@code out} and never this.
+	 * about: {@code ChartSearchService}'s javadoc requires any consumer an implementation invokes to
+	 * run on the calling thread — here the REQUEST thread — before {@code searchStreaming} returns or
+	 * throws, and the {@code finally} that reads this runs on that same thread (issue #459). The keep-alive's own
+	 * thread shares {@code out} and never this.
 	 */
 	private static final class StreamAuditState {
 
@@ -1690,6 +1693,11 @@ public class ChartSearchAiRestController {
 			// And the date that order stopped, already spelled as every published date is — so the
 			// accessor's value IS the wire's, and a client can say when without the model citing it.
 			map.put("endedOrderStopDate", warning.getEndedOrderStopDate());
+			// Issue #527: whether the module raised the chip from one of this patient's own active
+			// orders. The allergen arm words that chip and its proposal twin alike, so without this a
+			// client cannot tell them apart. false is no statement that she is off the drug:
+			// SafetyWarning.isAboutACurrentMedication() says why.
+			map.put("aboutACurrentMedication", warning.isAboutACurrentMedication());
 			out.add(map);
 		}
 		return out;

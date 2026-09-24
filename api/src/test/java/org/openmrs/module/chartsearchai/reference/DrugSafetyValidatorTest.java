@@ -64,6 +64,12 @@ public class DrugSafetyValidatorTest {
 		return DrugReferenceTestSupport.set(values);
 	}
 
+	private void assertStatedDailyDose(String answer, String statedDaily) {
+		List<SafetyWarning> warnings = validator().validate(answer, ctx(5, null, null, null));
+		assertTrue(detailContains(warnings, SafetyWarning.TYPE_OVERDOSE, "ibuprofen", statedDaily),
+				"\"" + answer + "\" should state " + statedDaily + ", got " + warnings);
+	}
+
 	@Test
 	public void overdoseIsFlaggedWhenDailyTotalExceedsMax() {
 		// 600 mg x4/day = 2400 mg/day, over the 1200 mg/day pediatric (2-11) maximum.
@@ -127,11 +133,16 @@ public class DrugSafetyValidatorTest {
 
 	@Test
 	public void frequencyParsingMapsEveryNHoursToDosesPerDay() {
-		assertEquals(4, DrugSafetyValidator.frequencyPerDay("one tablet every 6 hours"));
-		assertEquals(3, DrugSafetyValidator.frequencyPerDay("every 8 hours"));
-		assertEquals(2, DrugSafetyValidator.frequencyPerDay("twice daily"));
-		assertEquals(3, DrugSafetyValidator.frequencyPerDay("three times a day"));
-		assertEquals(0, DrugSafetyValidator.frequencyPerDay("as needed for pain"));
+		// Read through validate, so the frequency is parsed from the folded clause production builds
+		// (issue #272). 1300 mg is over the 1200 mg/day age 2-11 ceiling at any frequency, so the chip
+		// always fires and the daily total it states moves with the doses-per-day parsed.
+		assertStatedDailyDose("Ibuprofen 1300 mg one tablet every 6 hours.", "~5200 mg/day");
+		assertStatedDailyDose("Ibuprofen 1300 mg every 8 hours.", "~3900 mg/day");
+		assertStatedDailyDose("Ibuprofen 1300 mg twice daily.", "~2600 mg/day");
+		assertStatedDailyDose("Ibuprofen 1300 mg three times a day.", "~3900 mg/day");
+		// No frequency and once daily both count as one dose a day, so this pins that "as needed" is
+		// not read as a multiple — the 0-versus-1 difference itself reaches no output and is not pinned.
+		assertStatedDailyDose("Ibuprofen 1300 mg as needed for pain.", "~1300 mg/day");
 	}
 
 	@Test
@@ -170,8 +181,8 @@ public class DrugSafetyValidatorTest {
 	@Test
 	public void frequencyWordFormsRequireWordBoundaries() {
 		// "bd" inside "abdominal" must not be read as twice-daily; a real "bd" still parses.
-		assertEquals(0, DrugSafetyValidator.frequencyPerDay("for abdominal discomfort"));
-		assertEquals(2, DrugSafetyValidator.frequencyPerDay("ibuprofen 200 mg bd"));
+		assertStatedDailyDose("Ibuprofen 1300 mg for abdominal discomfort.", "~1300 mg/day");
+		assertStatedDailyDose("Ibuprofen 1300 mg bd.", "~2600 mg/day");
 	}
 
 	@Test

@@ -219,12 +219,15 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * but chip 0 answers false, so on VALUES such a narrowing reddens here where its predicate fails on
 	 * CHIP 0, and a predicate scoped to the CONDITION sentence — the sentence chip 0 carries — leaves
 	 * this class green. (The assertions below are a separate reader and catch a narrowing that spells a
-	 * second accessor read, whatever its predicate.) What holds the narrowing axis on values is
+	 * second accessor read, whatever its predicate.) <b>So this class holds the ALLERGY-scoped half of
+	 * the narrowing axis on values</b>, in {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, and
+	 * the CONDITION-scoped half is held by
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire},
 	 * whose fixture since #412 answers true off a self-named ALLERGY RULE's sentence. <b>Not the
 	 * ALLERGEN arm</b> — {@code DrugSafetyValidator.selfNamedAllergyRule} is the population meant, and
 	 * {@code SafetyWarning.contraindication}'s own javadoc carries why that arm answers false by
-	 * construction rather than by remembering to.
+	 * construction rather than by remembering to. ADR Decision 92 carries why the two sentences must not
+	 * be tidied back into line.
 	 *
 	 * <p>This case adds the thing no value comparison can see: that the published value came from the
 	 * accessor rather than from something that happens to agree with it on this fixture — the

@@ -97,9 +97,9 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 	 * {@code null} drug into the safety warnings, and an id-less one has no stable citation
 	 * {@code resourceUuid}.
 	 *
-	 * <p>The curated schema is the DEFAULT format, so the document this parser is likeliest to be handed
-	 * by mistake is one of another format — a DDInter export named by {@code dataFilePath} while
-	 * {@code sourceFormat} was left alone. That declares no {@code entries}, and used to load as zero in
+	 * <p>The curated schema was the DEFAULT format until ADR Decision 36, and while it was, the document
+	 * this parser was likeliest to be handed by mistake was one of another format — a DDInter export named
+	 * by {@code dataFilePath} while {@code sourceFormat} was left alone. That declares no {@code entries}, and used to load as zero in
 	 * the same silence issue #242 records on the DDInter side. Nothing is counted as discarded: a
 	 * document with no {@code entries} carries nothing this parser can read, which is what tells an
 	 * operator it is a file of another format rather than a mis-shaped one of this.

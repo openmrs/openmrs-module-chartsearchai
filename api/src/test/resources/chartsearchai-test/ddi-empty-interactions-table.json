@@ -1,6 +1,6 @@
 {
  "metadata": {
-  "note": "The well-shaped twin of `ddi-no-interactions-table.json`: the same three drug rows, plus the `interactions` key below - which is EMPTY on purpose, so the pair isolates the presence of the key rather than confusing it with the table having rows. A drug catalogue declaring no interactions is a coherent document and loads all three rows here, which is why issue #242's remedy is REPORTED rather than a refusal. Verbatim DDInter 2.0 rows, unedited."
+  "note": "The well-shaped twin of `ddi-no-interactions-table.json`: the same three drug rows, plus the `interactions` key below - which is EMPTY on purpose, so the pair isolates the presence of the key rather than confusing it with the table having rows. A drug catalogue declaring no interactions is a coherent document and loads all three rows here, which is why issue #242's remedy is REPORTED rather than a refusal. The rows are DDInter-shaped and not the shipped ones: their ids name other drugs in the shipped KB (DDInter1926 is Venetoclax there, DDInter150 Azathioprine, DDInter962 Iopanoic acid), so do not read a row off this file as DDInter's."
  },
  "mechanisms": {
   "1105": {

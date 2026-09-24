@@ -4812,6 +4812,11 @@ public class DrugReferenceInjector {
 	 *         <p>Both halves of issue #310 are pinned in that class —
 	 *         {@code twoRulesOfOneEntrySharingANoteRenderThatClauseOnce} and
 	 *         {@code aClauseTwoKeysRenderIsListedOnceWithAnotherClauseBetweenThem} for the list,
+	 *         {@code aRecordStatingNoReadingStillRendersASharedNoteOnce} and {@code
+	 *         aRecordWithNoPatientContextStillRendersASharedNoteOnce} for the list where no reading is
+	 *         stated because the chart was not read or there is no context (issue #407) — the two
+	 *         {@code drugSafety} switches are pinned in {@code
+	 *         InjectedContraindicationReadingToggleContextTest} because they are global properties —
 	 *         {@code aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder} for the RECORDED section's
 	 *         order and {@code theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo} for the other two.
 	 *         {@code clausesDifferingOnlyInCaseOrSpacingAreEachTheirOwnClause} and {@code
@@ -4897,7 +4902,12 @@ public class DrugReferenceInjector {
 		// is per KEY, and two keys of one entry may render one string, so "; ".join(byRule.values()) read
 		// "opioid reaction; opioid reaction" for the "recorded either way" shape the walk below names. A
 		// LinkedHashMap into a LinkedHashSet, so the survivor keeps the earlier key's slot and the list
-		// stays in clause order.
+		// stays in clause order. Outside `if (reading.states())` below deliberately, and gated on none of
+		// that boolean's inputs either — issue #407, pinned per input by
+		// InjectedContraindicationClauseTest.aRecordStatingNoReadingStillRendersASharedNoteOnce and
+		// .aRecordWithNoPatientContextStillRendersASharedNoteOnce, and by
+		// InjectedContraindicationReadingToggleContextTest.aSharedNoteIsListedOnceWhenAnswerValidationIsOff
+		// and .aSharedNoteIsListedOnceWhenContraindicationWarningsAreOff.
 		Set<String> clauses = new LinkedHashSet<String>(byRule.values());
 		Set<Object> recordedRules = new HashSet<Object>();
 		Set<Object> uncorroboratedRules = new HashSet<Object>();

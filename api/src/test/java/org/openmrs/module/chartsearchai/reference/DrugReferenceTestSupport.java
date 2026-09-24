@@ -1607,7 +1607,10 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * @return the {@code detail} sentences of the INTERACTION chips alone — which over a rule-less
 	 *         dataset is the class arm's output, so a count of them is a count of co-medications that
-	 *         arm decided about.
+	 *         arm decided about. The finding that two of her orders share a substance
+	 *         ({@link #ordersSharingASubstance}, issue #477) is left out: it is raised beside the class arm
+	 *         on a question that resolves a drug (ADR Decision 116) and decides nothing about a
+	 *         co-medication.
 	 *
 	 *         <p>Here rather than in each file for the reason {@link #row} records: it was copied
 	 *         verbatim between two of them, javadoc included, and a shared filter cannot drift into two
@@ -1616,10 +1619,38 @@ public final class DrugReferenceTestSupport {
 	static List<String> classChipDetails(List<SafetyWarning> warnings) {
 		List<String> out = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
+			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())
+					&& !warning.statesOrdersSharingASubstance()) {
 				out.add(warning.getDetail());
 			}
 		}
+		return out;
+	}
+
+	/**
+	 * The findings among {@code warnings} that two or more of her orders share a substance (issue #477),
+	 * recognised by the flag their factory sets, so a reword of the sentence cannot leave a case asserting
+	 * the absence of a string nobody emits.
+	 */
+	static List<SafetyWarning> ordersSharingASubstance(List<SafetyWarning> warnings) {
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (warning.statesOrdersSharingASubstance()) {
+				out.add(warning);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * {@code warnings} without {@link #ordersSharingASubstance}'s findings — for a case about another arm
+	 * whose arrangement also has two orders of one substance. Such a case asserts that finding on its own
+	 * rather than dropping it, because its detail lists the orders in chart order, which a case comparing
+	 * two chart orders must not compare.
+	 */
+	static List<SafetyWarning> besideOrdersSharingASubstance(List<SafetyWarning> warnings) {
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>(warnings);
+		out.removeAll(ordersSharingASubstance(warnings));
 		return out;
 	}
 

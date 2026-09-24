@@ -60,6 +60,11 @@ public class SubstanceInSeveralActiveOrdersTest {
 	private static final String RIFAMPICIN_IN_BOTH = "Rifampicin (rifampin) is already in active orders "
 			+ RHZ + " and " + RHZE + " — possible duplicate therapy";
 
+	/** The finding that her two orders share a substance, which a question putting a drug in play states
+	 *  too, after every other finding (issue #477's decision comment; {@code OrdersSharingASubstanceTest}). */
+	private static final String SHARED_BY_BOTH = "Isoniazid, Pyrazinamide and Rifampicin (rifampin) are in"
+			+ " active orders " + RHZ + " and " + RHZE + " — possible duplicate therapy";
+
 	/** The phrase the finding is recognised by in the cases asserting its ABSENCE. Taken from the full
 	 *  sentence above rather than spelled again, so a reword of the one cannot leave the other asserting
 	 *  the absence of a string production no longer emits. */
@@ -85,7 +90,8 @@ public class SubstanceInSeveralActiveOrdersTest {
 		// The whole response, so the finding's POSITION is decided rather than incidental, and so the
 		// chips this issue must not move are held too: the Major against pyrazinamide and the Minor
 		// against isoniazid are the reference data's relationships with her regimen's OTHER
-		// constituents, which the issue leaves standing.
+		// constituents, which the issue leaves standing. Last, the finding that her two orders share
+		// those substances, which a question putting a drug in play states too (ADR Decision 116).
 		assertEquals(Arrays.asList(
 				"Rifampicin (rifampin) interacts with active order Pyrazinamide — Major. A two-month regimen"
 						+ " consisting of rifampin (RIF) and pyrazinamide (PZA) for the treatment of latent"
@@ -100,7 +106,7 @@ public class SubstanceInSeveralActiveOrdersTest {
 						+ " occur with rifabutin and isoniazid. Patients who are elderly, have hepatic impairment,"
 						+ " are slow acetylators of isoniazid, drink alcohol daily, are female, or are taking"
 						+ " other strong CYP450-inducing agents may be at greater risk of hepatotoxicity.",
-				RIFAMPICIN_IN_BOTH),
+				RIFAMPICIN_IN_BOTH, SHARED_BY_BOTH),
 				DrugReferenceTestSupport.details(warnings));
 		SafetyWarning finding = warnings.get(2);
 		assertEquals(Arrays.asList(RHZ, RHZE), finding.namedPartners(),
@@ -282,8 +288,10 @@ public class SubstanceInSeveralActiveOrdersTest {
 		// clause, so one response refused rifampicin as a proposal and, two findings later, called it a
 		// medication to change; the lead the prompt ranks first was the refusal (ADR Decision 112).
 		// Unrated, the new finding keeps the default an unrated relationship has (Decision 86 graded down
-		// only shared classification), so it withholds and is never the caution.
-		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD), clauses(QUESTION));
+		// only shared classification), so it withholds and is never the caution. The fourth is not this
+		// arm's: it is the finding that her two orders share a substance, about her own therapy and so a
+		// reason to change it (ADR Decision 116).
+		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD, CHANGE_CURRENT), clauses(QUESTION));
 	}
 
 	@Test
@@ -292,8 +300,9 @@ public class SubstanceInSeveralActiveOrdersTest {
 		// The ticket's question names four drugs before rifampicin, and QueryScopeRouter's closed
 		// proposal grammar does not admit it — so issue #472's gate would treat it as proposing nothing.
 		// The referent here is not that gate's: the arm's findings state the proposal column on any
-		// question, and this finding states what its siblings state.
-		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD), clauses(
+		// question, and this finding states what its siblings state. The fourth is her two orders sharing a
+		// substance, as on the question above.
+		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD, CHANGE_CURRENT), clauses(
 				"The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and"
 						+ " sulfamethoxazole is it safe to give Rifampicin?"));
 	}

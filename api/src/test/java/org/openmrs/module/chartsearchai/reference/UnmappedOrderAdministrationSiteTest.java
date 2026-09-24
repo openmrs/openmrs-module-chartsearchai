@@ -390,10 +390,10 @@ public class UnmappedOrderAdministrationSiteTest {
 		// tablet. Note what this case does NOT pin: its tablet records "Oral administration", which
 		// ROUTES_OF_ENTRY refuses before the whole-substance decline is reached, so the decline itself
 		// is pinned by aPresentationTheModuleCannotPlaceDeclinesForTheWholeSubstance instead.
-		List<String> creamFirst = DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
-				twoPresentations(true)));
-		List<String> tabletFirst = DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
-				twoPresentations(false)));
+		List<String> creamFirst = besideHydrocortisoneInBoth(chips(DEXAMETHASONE_QUESTION,
+				twoPresentations(true)), CREAM, "Hydrocortisone 20mg tablet");
+		List<String> tabletFirst = besideHydrocortisoneInBoth(chips(DEXAMETHASONE_QUESTION,
+				twoPresentations(false)), "Hydrocortisone 20mg tablet", CREAM);
 
 		assertEquals(Collections.singletonList(SYSTEMIC_CHIP), tabletFirst,
 				"a systemic presentation the chart records must still be named");
@@ -425,7 +425,7 @@ public class UnmappedOrderAdministrationSiteTest {
 									"Hydrocortisone 20mg tablet", tabletNames, null, tabletTerms)));
 
 			assertEquals(Collections.singletonList(SYSTEMIC_CHIP),
-					DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, context)),
+					besideHydrocortisoneInBoth(chips(DEXAMETHASONE_QUESTION, context), CREAM, "Hydrocortisone 20mg tablet"),
 					"a presentation the module cannot place must not be narrowed away by one it can,"
 							+ " recorded as: " + tabletTerms);
 		}
@@ -469,10 +469,11 @@ public class UnmappedOrderAdministrationSiteTest {
 				"the nasal order alone: the dataset files no R01 code, so nothing is narrowed");
 
 		assertEquals(Collections.singletonList(SYSTEMIC_CHIP),
-				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
+				besideHydrocortisoneInBoth(chips(DEXAMETHASONE_QUESTION,
 						DrugReferenceTestSupport.ctx(60, null,
 								DrugReferenceTestSupport.set("Hydrocortisone nasal preparation", CREAM),
-								null, null, null, Arrays.asList(nasal, cream)))),
+								null, null, null, Arrays.asList(nasal, cream))),
+						"Hydrocortisone nasal preparation", CREAM),
 				"and a cream beside it must not carry it into the skin");
 	}
 
@@ -495,10 +496,10 @@ public class UnmappedOrderAdministrationSiteTest {
 		assertTrue(union.contains("D07AA02") && union.contains("S01BA02"),
 				"the union keeps a code from each site, was: " + union);
 
-		List<String> creamFirst = DrugReferenceTestSupport
-				.details(chips(DEXAMETHASONE_QUESTION, creamAndEyePreparation(true)));
-		List<String> dropFirst = DrugReferenceTestSupport
-				.details(chips(DEXAMETHASONE_QUESTION, creamAndEyePreparation(false)));
+		List<String> creamFirst = besideHydrocortisoneInBoth(
+				chips(DEXAMETHASONE_QUESTION, creamAndEyePreparation(true)), CREAM, "Hydrocortisone eye preparation");
+		List<String> dropFirst = besideHydrocortisoneInBoth(
+				chips(DEXAMETHASONE_QUESTION, creamAndEyePreparation(false)), "Hydrocortisone eye preparation", CREAM);
 
 		assertEquals(
 				Collections.singletonList("Dexamethasone is in the same ATC class (S01BA) as active"
@@ -716,6 +717,21 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	private static PatientClinicalContext terbinafine(String... administration) {
 		return order("Terbinafine 1% preparation", administration);
+	}
+
+	/**
+	 * The chips of {@code warnings} other than the finding that her two hydrocortisone orders share it
+	 * (ADR Decision 116), having asserted that finding names {@code first} and {@code second}, in chart
+	 * order. It decides nothing this file is about, and it names the orders in chart order, so a case
+	 * comparing two chart orders compares what is left. ADR Decision 114 records that a local and a
+	 * systemic presentation of one substance raise it.
+	 */
+	private static List<String> besideHydrocortisoneInBoth(List<SafetyWarning> warnings, String first,
+			String second) {
+		assertEquals(Collections.singletonList("Hydrocortisone is in active orders " + first + " and " + second
+				+ " — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.ordersSharingASubstance(warnings)));
+		return DrugReferenceTestSupport.details(DrugReferenceTestSupport.besideOrdersSharingASubstance(warnings));
 	}
 
 	/** One patient, two unmapped hydrocortisone orders — a cutaneous cream and an eye preparation — in

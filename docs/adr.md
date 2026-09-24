@@ -7751,7 +7751,7 @@ and `findingPartners` still reports `{named:9, stated:8}`.
 completion and `findingPartners` cover the findings the answer CITED.** Both read every chip the
 response raised, and the append's own justification — *"the finding is already cited in the sentence
 the model wrote"* — holds only when every chip's finding is cited, which the single merged chip above
-was and the issue's three cells were not. Measured on the demo seed (issue #516, byte-identical across two
+was and the issue's measured cells were not. Measured on the demo seed (issue #516, byte-identical across two
 runs): an abstention citing no finding was handed five orders "covered by those findings", an answer
 citing one of two Amlodipine findings was handed the other's order, and an answer citing one finding
 was handed eight orders from the 23 chips it did not cite — orders an external reviewer then graded a

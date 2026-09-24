@@ -430,7 +430,7 @@ public class StandingChartAlertsTest {
 	 * {@code isDrugReferenceEnabled()} inside this method turned the case red with no behaviour
 	 * changed, and — the direction that matters — that deleting the gate outright and leaving
 	 * {@code // gate: if (!reportsStandingChartAlerts()) {} in its place left the whole class GREEN.
-	 * {@code SourceScan} also fails loudly on a needle that matches nothing or twice, which a
+	 * {@code SourceScan} also fails loudly on a declaration that matches nothing or twice, which a
 	 * "not found" answer would turn into a guard forbidding nothing.
 	 *
 	 * <p>What it asserts is that the entry gates on {@code reportsStandingChartAlerts()} and spells no

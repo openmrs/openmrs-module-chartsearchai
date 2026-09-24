@@ -218,8 +218,9 @@ public class QuestionPairRuleScanPerPassTest {
 	/**
 	 * And that NEITHER PAIRWISE ARM grows a rule read of its own — the screening arm included, which
 	 * is what makes this pointer as wide as the rule the instruction file states. <b>This is not what would have caught issue
-	 * #447</b> — that scan lived in a private static helper rather than in an arm's body, and this case
-	 * passes against the pre-change code, measured. The walk counts above are what fail there. What
+	 * #447</b> — that scan lived in a private static helper rather than in an arm's body, and this case's arm
+	 * loop passes against the pre-change code, measured before issue #458 added the control that
+	 * requires the join. The walk counts above are what fail there. What
 	 * this adds is the shape those counts cannot see: a NEW read of an entry's rule list inside any
 	 * body the list below names — a condition, a tie-break, a second pass over the pair — would
 	 * reinstate a
@@ -230,8 +231,9 @@ public class QuestionPairRuleScanPerPassTest {
 	 * reads {@link DrugReference#getInteractions} legitimately elsewhere — {@code bestRulePerPartner}
 	 * walks every in-play row once, which is linear and is not this defect — so a class-scoped needle
 	 * would forbid something correct and pass something wrong. {@link SourceScan} blanks comments and
-	 * string literals and hard-fails on a declaration it cannot locate uniquely, so this cannot
-	 * quietly start forbidding nothing.
+	 * string literals and hard-fails on a declaration it cannot locate uniquely; the NEEDLE is pinned
+	 * separately, by requiring it inside {@code AboveFloorRules.of}, because a needle matching
+	 * nothing leaves every arm's loop empty and the case green (issue #458).
 	 */
 	@Test
 	public void neitherPairwiseArmReadsARuleListOfItsOwn() throws IOException {
@@ -246,10 +248,21 @@ public class QuestionPairRuleScanPerPassTest {
 			// pairKeyNames above, so it reads nothing of its own today — which is the point of
 			// forbidding it here rather than discovering a second scan later.
 			"private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,");
+		String read = "getInteractions";
 
+		// The positive control (issue #458): the join is what every pairwise arm is told to ask
+		// instead, so the needle must still find the join's own read. A bare non-empty check would not
+		// do — bestRulePerPartner's read would keep it satisfied after the join's read had moved to a
+		// spelling this needle misses.
+		assertTrue(scan.names(scan.body("static AboveFloorRules of(List<DrugReference> screened, int floor)"),
+			read), "\"" + read + "\" no longer occurs inside AboveFloorRules.of, the join every arm is told"
+					+ " to ask instead, so the needle or the join's read has moved and the loop below may"
+					+ " forbid nothing in any arm. Re-point this control at wherever the join now reads an"
+					+ " entry's rule list, and make the needle"
+					+ " cover that spelling without dropping one still read elsewhere in the file.");
 		for (String arm : arms) {
 			SourceScan.Region body = scan.body(arm);
-			for (int at : scan.literalOffsets("getInteractions")) {
+			for (int at : scan.literalOffsets(read)) {
 				assertTrue(!body.contains(at), "\"" + arm.trim() + "\" reads an entry's interaction list"
 						+ " directly, at line " + scan.lineOf(at) + ": " + scan.statementAt(at)
 						+ ". That is the per-pair scan issue #447 removed: it made each arm's cost"

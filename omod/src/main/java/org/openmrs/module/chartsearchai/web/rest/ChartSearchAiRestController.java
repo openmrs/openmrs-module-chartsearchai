@@ -693,7 +693,7 @@ public class ChartSearchAiRestController {
 			// perceived completion no longer waits out the grounding tail. The audit's responseTimeMs
 			// deliberately measures to THIS point (what the user experienced); the [timing] service log
 			// still carries groundMs. A refused write unwinds like any mid-stream disconnect, through
-			// writeSseEventOrThrow; a serialization failure is not a disconnect and escapes as itself.
+			// writeSseEventOrThrow; a serialization failure is not a disconnect and is thrown as a failure.
 			Consumer<ChartAnswer> ungroundedConsumer = ungrounded -> {
 				if (!auditState.recordAnswerOnce(ungrounded)) {
 					// Interface contract is at-most-once; stay idempotent anyway. Keyed on this consumer

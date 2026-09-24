@@ -397,6 +397,9 @@ public class DosingCeilingFidelityTest {
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the ceiling written behind the comma is the strictest, so this "
+						+ "case reaches the separator rule only while that one sits at position 0");
 		TestableService service = newService(grouped);
 		service.setLlmProvider(answering("This substance publishes two ceilings: 2000 mg/day,"
 				+ "500 mg/day [" + mapping.getIndex() + "]."));
@@ -423,6 +426,9 @@ public class DosingCeilingFidelityTest {
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the ceiling written behind the comma is the strictest, so this "
+						+ "case reaches the comma's left edge only while that one sits at position 0");
 		TestableService service = newService(grouped);
 		service.setLlmProvider(answering("Ceilings: 2000 mg/day (route-unspecified),500 mg/day "
 				+ "(suspension) [" + mapping.getIndex() + "]."));
@@ -447,6 +453,9 @@ public class DosingCeilingFidelityTest {
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the ceiling written behind the full stop is the strictest, so this "
+						+ "case reaches the full stop's rule only while that one sits at position 0");
 		TestableService service = newService(grouped);
 		service.setLlmProvider(answering("The ceiling is 2000 mg/day (route-unspecified).500 mg/day "
 				+ "applies to the suspension [" + mapping.getIndex() + "]."));
@@ -472,6 +481,9 @@ public class DosingCeilingFidelityTest {
 		PatientChart decimals = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of levothyroxine?", "Levothyroxine (paediatric)");
 		RecordMapping mapping = soleRecordCarryingCeilings(decimals);
+		assertEquals(Arrays.asList("0.5 mg/day", "5 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the laxer ceiling's spelling is a SUFFIX of this text, so reading it out of "
+						+ "the naked decimal reports only while the stricter one sits at position 0");
 		TestableService service = newService(decimals);
 		service.setLlmProvider(answering("The maximum for this presentation is\u00A0.5 mg/day ["
 				+ mapping.getIndex() + "]."));
@@ -536,6 +548,10 @@ public class DosingCeilingFidelityTest {
 		PatientChart grouped = DrugReferenceTestSupport.injectedReferenceChartOver(EDGES, 30,
 				"What is the maximum daily dose of tinidazole?", "Tinidazole (oral suspension)");
 		RecordMapping mapping = soleRecordCarryingCeilings(grouped);
+		assertEquals(Arrays.asList("500 mg/day", "2000 mg/day"), mapping.getDosingCeilings(),
+				"the premise: the strictest ceiling is the LAST item of the list; were \"2000 mg/day\" "
+						+ "at position 0 the walk would return at its first test and never reach the comma "
+						+ "clause");
 		TestableService service = newService(grouped);
 		service.setLlmProvider(answering("Doses recorded: 300,4000,500 mg/day for the suspension; "
 				+ "the tablet ceiling is 2000 mg/day [" + mapping.getIndex() + "]."));

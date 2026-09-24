@@ -792,8 +792,21 @@ public final class DrugReferenceValidity {
 	 * {@code Sodium chloride} and {@code Amphotericin B, liposomal} do not — a single-word allergen has no
 	 * space at all, and a space preceded by a letter fails the left boundary. It takes a recorded name
 	 * with a non-alphanumeric before a space and a short word after it. The prose matcher is false on the
-	 * same string, which is the asymmetry issue #150 reports: #148 gave allergen resolution the
+	 * same string, which is the asymmetry issue #150 reports: #147 gave allergen resolution the
 	 * recorded-name rule, and the tail allowance is what opened this.
+	 *
+	 * <p><b>The same alias also failed CLOSED, through the dose arm, until issue #271.</b>
+	 * {@code DrugSafetyValidator.substanceOwnsDose} vetoes a dose that another substance's name sits
+	 * nearer to, and it located names with a raw {@code String.indexOf} over each alias, so a blank
+	 * alias on an entry of another substance was found at every space in the clause, and a space
+	 * nearer the stated dose than the drug's own name dropped the dose warning. Measured 2026-09-24
+	 * through {@code DrugSafetyValidator.validate} over the {@code setEntries} seam, which skips this
+	 * drop: with one unrelated entry carrying {@code " "} beside
+	 * {@code drug-reference-substance-dosing-rows.json}, {@code Give cefalexin 400 mg three times
+	 * daily.} for a six-year-old raised the Cefalexin dose warning without that entry and none with it
+	 * on the commit before #271 merged ({@code c39cc524^}), and raised it either way on #271's own
+	 * ({@code c39cc524}), which locates a name by the rule that decides the clause names it.
+	 * Recorded so this entry states both things that data defect did.
 	 *
 	 * <p>The offending token and not the entry, deliberately. The entry's other aliases, its ATC codes and
 	 * its rules are all valid and may be its only coverage — the ATC codes especially, since

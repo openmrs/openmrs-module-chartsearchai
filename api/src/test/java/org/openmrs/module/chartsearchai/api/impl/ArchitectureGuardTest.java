@@ -400,7 +400,9 @@ public class ArchitectureGuardTest {
 	 * the API module's classes that invokes a {@code RecordMapping} constructor carrying
 	 * {@code orderStopDate}, only {@code PatientChartSerializer}'s may pass anything but the null
 	 * constant — other than {@code RecordMapping}'s own date-carrying rungs, which forward their
-	 * parameter — and the field is {@code final}, so no method but a constructor can write it.
+	 * parameter — and the field is {@code final}, so no method but a constructor can write it, and
+	 * assigned in the widest constructor alone, so every other rung reaches it through
+	 * {@code this(...)}.
 	 * {@code DrugReferenceInjector} builds its order, reference and finding records through
 	 * rungs that carry the date, and must pass {@code null} at each of them.
 	 *
@@ -432,15 +434,25 @@ public class ArchitectureGuardTest {
 	 * class file is walked too, unlike in the shared helper, and exempts only its date-carrying rungs,
 	 * which forward their own PARAMETER through {@code this(...)}. So a copy method on the mapping
 	 * that takes a date is a writer, and a rung that carries no date must default it to the null
-	 * constant — which nothing behavioural pinned: making the order-currency rung default it to a date
-	 * left the api suite green, and it is the rung the injector's two note records reach through the
-	 * {@code this(...)} chain from the five-argument one they call.
+	 * constant through {@code this(...)} — which nothing behavioural pinned: making the
+	 * order-currency rung pass a date in place of that null left the api suite green, and it is the
+	 * rung the injector's two note records reach through the {@code this(...)} chain from the
+	 * five-argument one they call.
+	 *
+	 * <p><b>The field's assignments are read as well as the calls.</b> A rung that assigns the fields
+	 * itself instead of delegating makes no call this walk reads, so review measured one — the
+	 * five-argument rung assigning all of them, the stop date a live one — with this case and the api
+	 * suite green. So the mapping's own class file is also walked for every {@code putfield} of
+	 * {@code orderStopDate}, and there must be exactly one, in the widest constructor, which is the one
+	 * every other constructor's parameters are a prefix of. That rules out a second assignment in any
+	 * other constructor whatever value it stores, a null included, so a rung that carries no date
+	 * reaches the field only through the chain the call reading covers.
 	 *
 	 * <p><b>Why the field's {@code final} is asserted, and asserted positively.</b> Successive
 	 * reviews each wrote the date past the call-site reading one more way — a constructor reference,
 	 * then a setter on a field made non-final — and a list of routes is never closed. A {@code final}
-	 * field can be assigned only in a constructor, and the constructors are the part this case
-	 * reads, so the property is stated of the field rather than of each route.
+	 * field can be assigned only in its own class's constructors, and this case reads every
+	 * assignment of it there, so the property is stated of the field rather than of each route.
 	 *
 	 * <p><b>What it cannot answer.</b> It is class-grained on the allowed side: any value the
 	 * serializer passes is admitted, and what pins WHICH date that is are the behavioural cases in
@@ -476,6 +488,43 @@ public class ArchitectureGuardTest {
 				.getModifiers()), "RecordMapping.orderStopDate must stay final: a non-final field can be "
 						+ "written by a setter or any method of the mapping, which no constructor reading "
 						+ "sees — see this test's javadoc.");
+		String widest = null;
+		for (String candidate : constructors) {
+			boolean prefixOfAll = true;
+			for (String other : constructors) {
+				prefixOfAll &= parameters(candidate).startsWith(parameters(other));
+			}
+			if (prefixOfAll) {
+				widest = candidate;
+			}
+		}
+		assertTrue(widest != null, "no RecordMapping constructor has every other one's parameters as its "
+				+ "prefix, so there is no widest rung to hold the stop date's one assignment. Constructors: "
+				+ constructors);
+		List<String> assignments = new ArrayList<>();
+		for (javassist.bytecode.MethodInfo method : pool.get(mappingType).getClassFile().getMethods()) {
+			javassist.bytecode.CodeAttribute code = method.getCodeAttribute();
+			if (code == null) {
+				continue;
+			}
+			javassist.bytecode.ConstPool constants = method.getConstPool();
+			javassist.bytecode.CodeIterator it = code.iterator();
+			while (it.hasNext()) {
+				int at = it.next();
+				if (it.byteAt(at) != javassist.bytecode.Opcode.PUTFIELD) {
+					continue;
+				}
+				int ref = it.u16bitAt(at + 1);
+				if (mappingType.equals(constants.getFieldrefClassName(ref))
+						&& "orderStopDate".equals(constants.getFieldrefName(ref))) {
+					assignments.add(method.getName() + method.getDescriptor());
+				}
+			}
+		}
+		assertEquals(java.util.Collections.singletonList("<init>" + widest), assignments,
+				"RecordMapping.orderStopDate must be assigned once, in the widest constructor: a rung that "
+						+ "assigns it itself makes no this(...) call the call-site reading below sees, so "
+						+ "it could store a date with this case green — see this test's javadoc.");
 		List<String> writers = new ArrayList<>();
 		List<String> injectorSites = new ArrayList<>();
 		List<String> serializerWrites = new ArrayList<>();

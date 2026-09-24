@@ -126,6 +126,8 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		assertNotNull(answer, "a Major licenses the module's No: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
 		assertEquals(4, lines.size(), "was: " + answer);
+		assertEquals("No — this module's drug-safety check found a reason to withhold Rifampicin (rifampin).",
+			lines.get(0), "the lead, off the Major: " + answer);
 		assertTrue(lines.get(1).startsWith("Rifampicin (rifampin) interacts with active order Pyrazinamide — Major."),
 			"the Major under the No: " + answer);
 		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) interacts with active order Isoniazid")

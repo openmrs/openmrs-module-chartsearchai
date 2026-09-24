@@ -66,7 +66,7 @@ import org.slf4j.LoggerFactory;
  * stated. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
  * partner was named at all. An ordinary finding names one order and is measured like the rest, while
  * the merged finding and, since issue #477, the finding that a drug is already in several of her
- * orders and a screen's finding that several of her orders share a substance are where a list can be
+ * orders and the finding that several of her orders share a substance are where a list can be
  * under-stated in part.
  */
 public final class FindingPartnerCoverageCheck {

@@ -1093,15 +1093,14 @@ public class DrugSafetyValidator {
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
 			// Among the pairs by strength and outside their extent: it relates no pair (issue #477).
-			addOrdersSharingASubstance(warnings, screenedFrom, orderEntries, subjects, coMedications);
+			addOrdersSharingASubstance(warnings, screenedFrom, orderEntries, subjects, coMedications,
+				Collections.emptySet());
 		}
-		// The same finding on a question that puts a drug in play (issue #477), which the gate above can
-		// never reach — the two are mutually exclusive on questionDrugs, so a pass raises it at most once.
-		// questionDrugs and never inPlay, so both validate passes of one request agree. After every other
-		// finding: it is about her own orders and not the drug asked about, and the module's composed
-		// answer puts it after that drug's findings too. ADR Decision 116.
+		// The same finding on a question that resolves a drug (issue #477), appended after every other
+		// finding. See addOrdersSharingASubstance and ADR Decision 116.
 		if (warnInteractions && !questionDrugs.isEmpty()) {
-			addOrdersSharingASubstance(warnings, warnings.size(), orderEntries, subjects, coMedications);
+			addOrdersSharingASubstance(warnings, warnings.size(), orderEntries, subjects, coMedications,
+				questionSubstances);
 		}
 		// And where neither of them STATED one, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
@@ -4346,20 +4345,33 @@ public class DrugSafetyValidator {
 	 * resolves a drug, {@code screenedFrom} is the end of the list, so it is appended after every other
 	 * finding: it is about her own orders rather than the drug asked about, which is where the module's
 	 * composed answer puts it too ({@code DrugReferenceInjector.composeFromFindings}).
+	 *
+	 * <p><b>A set whose every substance the question named is left out</b> ({@code askedAbout}): for such
+	 * a substance {@link #alreadyInSeveralOrders} has already said it is in those orders, off the same
+	 * {@link CoMedications#ordersWhoseDisplayNames}, so this would state that fact a second time in the
+	 * other referent. A set that also shares a substance the question did not name is stated, naming them
+	 * all. The question's substances and not {@code inPlay}'s, so both passes agree.
 	 */
 	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, int screenedFrom,
-			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications) {
+			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications,
+			Set<Object> askedAbout) {
 		Map<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> shared =
 				new LinkedHashMap<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>();
+		Set<List<PatientClinicalContext.ActiveDrugOrder>> sharingOneNotAskedAbout =
+				new HashSet<List<PatientClinicalContext.ActiveDrugOrder>>();
 		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
-			List<PatientClinicalContext.ActiveDrugOrder> carriers =
-					coMedications.ordersWhoseDisplayNames(rows.get(0).substanceGroupKey());
+			Object substance = rows.get(0).substanceGroupKey();
+			List<PatientClinicalContext.ActiveDrugOrder> carriers = coMedications.ordersWhoseDisplayNames(substance);
 			if (carriers.size() < 2) {
 				continue;
 			}
 			shared.computeIfAbsent(carriers, k -> new ArrayList<String>())
 					.add(subjects.subjectOf(rows.get(0)).displayLabel());
+			if (!askedAbout.contains(substance)) {
+				sharingOneNotAskedAbout.add(carriers);
+			}
 		}
+		shared.keySet().retainAll(sharingOneNotAskedAbout);
 		int at = screenedFrom;
 		while (at < warnings.size() && licensesWithholding(warnings.get(at))) {
 			at++;

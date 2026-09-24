@@ -10589,8 +10589,8 @@ orders A and B — possible duplicate therapy"*. One order states nothing: that 
   skip cannot state, which exists only where two or more orders carry the drug, so one order states
   nothing here. Two of her orders sharing a substance nobody asked about (the issue's Metformin
   question) state nothing either: this finding is raised only for a drug in play, and the screening arm,
-  which relates her own medications when no drug is in play, has no class leg. Decisions 114 and 116
-  later raised a finding for that shape.
+  which relates her own medications when no drug is in play, has no class leg. Decision 116 later raised
+  a finding for that shape.
 - An order whose display does not name the substance — a brand the data files under several
   substances, or an order known only by its codes — is not counted.
 
@@ -10817,8 +10817,9 @@ scope.
 Decision 114 raised `DrugSafetyValidator.addOrdersSharingASubstance`'s finding on a screening question
 only. It deleted a leg for questions putting a drug in play at plan time, because a current-medication
 finding beside the drug-in-play arm's proposal findings is the mixed-referent response Decision 112
-recorded on a model. On #477's reproduction patient, the Rifampicin and Metformin questions therefore
-said nothing about her two tuberculosis combinations sharing isoniazid, pyrazinamide and rifampicin.
+recorded on a model. On #477's reproduction patient, the Metformin question therefore said nothing
+about her two tuberculosis combinations sharing isoniazid, pyrazinamide and rifampicin, and the
+Rifampicin question said only that rifampicin is in both (Decision 112's finding).
 
 The issue's decision comment (2026-09-24) settles the scope: raise the same finding on a question that
 puts a drug in play, with the same wording, the same current-medication referent, unrated, once per set
@@ -10831,6 +10832,13 @@ of orders, and over #483's order predicate.
   used because the answer widens it, which was Decision 114's reason for refusing the earlier anchor.
   The screening gate needs `questionDrugs` empty, so a pass raises the finding at most once. A question
   that names no drug and is not a screen, and the standing chart alerts, raise nothing, as before.
+- **A set of orders whose every shared substance the question named is left out.** For such a
+  substance Decision 112's `alreadyInSeveralOrders` has already said it is in those orders, off the
+  same `ordersWhoseDisplayNames`, so this finding would restate it in the other referent (found in this
+  change's `/harden` Phase 2, reading two rifampicin orders on a rifampicin question). The issue's
+  decision scopes the finding to a substance that is not the drug in play. A set that also shares a
+  substance the question did not name is stated, naming them all, which is the reproduction's case →
+  `OrdersSharingASubstanceTest.aSetOfOrdersSharingOnlyTheDrugAskedAboutIsLeftToTheFindingThatAlreadyStatesIt`.
 - **Appended after every other finding.** The finding is about her own orders and not the drug asked
   about. `DrugReferenceInjector.composeFromFindings` puts it after the drug proposed's findings on a
   proposal, in the group it already kept for "any other finding about her own medications", which it
@@ -10840,7 +10848,9 @@ of orders, and over #483's order predicate.
     Decision 114's own #346 argument: appended, the chips and the prompt's records put it below the
     proposed drug's cautions, while the composer's strength sort put it above them. The drug-in-play list
     is not one ranked list, so no single insertion point makes the chips agree with a strength sort.
-    Moving the composer to the chips' order is the change that makes them agree.
+    So the composer puts it after the proposed drug's findings, as the chips do. Within the composer's
+    second group it is still strength-sorted against current-medication contraindications, which the
+    chips list earlier, so a current-medication caution can follow it there and precede it in the chips.
 - **Decision 112's `alreadyInSeveralOrders` is unchanged.** On the rifampicin question over the two
   combinations, both findings are raised: the proposal finding that rifampicin is already in both
   orders, and this finding naming all three substances they share.
@@ -10851,9 +10861,15 @@ of orders, and over #483's order predicate.
   One response can refuse a drug as a proposal and state a reason to change her current therapy. The
   proposal findings keep their proposal clause (`SubstanceInSeveralActiveOrdersTest.everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent`).
   Not measured on a model.
+- **The prompt's ranking sentence still ranks a reason to change her therapy above a caution.** On a
+  proposal whose own findings are all cautions the module does not answer (Decision 108), and the
+  model is told to lead with the strongest clause, which is this finding, while the chips and the
+  prompt's records list it last. Current-medication contraindications on a proposal already had that
+  arrangement. Not measured on a model.
 - **The #397 enumeration clause is withheld where it used to be sent.** This finding's `drug` is the
-  substances it names, so a drug question beside two orders sharing a substance has findings naming
-  two subjects, and `LlmInferenceService.severalFindingsAboutOneDrug` answers false. That is the gate's
+  substances it names, so a drug question beside two orders sharing a substance the question did not
+  name has findings naming two subjects, and `LlmInferenceService.severalFindingsAboutOneDrug` answers
+  false. That is the gate's
   designed direction, and widening it owes Decision 84's measurement →
   `FindingEnumerationClauseContextTest.aDrugQuestionBesideTwoOrdersSharingASubstanceAsksForNothing`.
 - **The class arm's tests now see this finding** wherever they ask a drug question beside two orders

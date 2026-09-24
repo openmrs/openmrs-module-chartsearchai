@@ -31,7 +31,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * Whether two of the patient's OWN active orders carrying one substance are said to, on a screen of
- * her medications and on a question about another drug — issue #477's remaining shape after #483,
+ * her medications and on a question that resolves a drug — issue #477's remaining shape after #483,
  * which states it only for the drug the question puts in play.
  *
  * <p><b>The defect.</b> A screening question puts no drug in play, so neither the class arm nor
@@ -237,6 +237,22 @@ public class OrdersSharingASubstanceTest {
 		assertTrue(details.get(1).contains(" — Minor."), "was: " + details);
 		assertEquals("Isoniazid is in active orders Isoniazid 300mg and Isoniazid 100mg — possible duplicate therapy",
 			details.get(2), "then this finding: " + details);
+	}
+
+	@Test
+	public void aSetOfOrdersSharingOnlyTheDrugAskedAboutIsLeftToTheFindingThatAlreadyStatesIt() throws IOException {
+		// Rifampicin asked about, and two rifampicin orders: that they share it is the drug-in-play arm's
+		// own finding (ADR Decision 112), which names the same orders. Stated again here it would be the
+		// same fact twice, once in each referent. The issue's decision scopes this finding to a
+		// substance that is not the drug in play.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(
+				DrugReferenceTestSupport.ddiFixtureService(FIXTURE)).validate("", "Is it safe to give rifampicin?",
+					contextOf(DrugReferenceTestSupport.activeOrder("order-rif-1", "Rifampicin 150mg"),
+						DrugReferenceTestSupport.activeOrder("order-rif-2", "Rifampicin 300mg")));
+
+		assertEquals(Arrays.asList("Rifampicin (rifampin) is already in active orders Rifampicin 150mg and"
+				+ " Rifampicin 300mg — possible duplicate therapy"), DrugReferenceTestSupport.details(warnings));
+		assertEquals(0, shared(warnings).size());
 	}
 
 	@Test

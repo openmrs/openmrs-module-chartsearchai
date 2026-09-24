@@ -1605,11 +1605,11 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * @return the {@code detail} sentences of the INTERACTION chips alone, except the finding that two of
-	 *         her orders share a substance ({@link #ordersSharingASubstance}, issue #477) — which over a
-	 *         rule-less dataset is the class arm's output, so a count of them is a count of co-medications
-	 *         that arm decided about. That finding is excluded because it is raised beside the class arm on
-	 *         a question putting a drug in play (ADR Decision 116) and decides nothing about a
+	 * @return the {@code detail} sentences of the INTERACTION chips alone — which over a rule-less
+	 *         dataset is the class arm's output, so a count of them is a count of co-medications that
+	 *         arm decided about. The finding that two of her orders share a substance
+	 *         ({@link #ordersSharingASubstance}, issue #477) is left out: it is raised beside the class arm
+	 *         on a question that resolves a drug (ADR Decision 116) and decides nothing about a
 	 *         co-medication.
 	 *
 	 *         <p>Here rather than in each file for the reason {@link #row} records: it was copied

@@ -43,7 +43,8 @@ import org.slf4j.LoggerFactory;
  * right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the partner was named
  * at all. Its population is every chip that names an order: an ordinary chip carries a one-name list
  * and is measured like the rest, while the merged chip and, since issue #477, the finding that a drug
- * is already in several of her orders are where a list can be under-stated in part.
+ * is already in several of her orders and a screen's finding that several of her orders share a
+ * substance are where a list can be under-stated in part.
  */
 public final class FindingPartnerCoverageCheck {
 

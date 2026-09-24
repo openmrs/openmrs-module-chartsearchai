@@ -119,6 +119,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 111: Drugs linked through one drug-disease condition are stated as one derived finding, and it is a caution](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)
 - [Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
 - [Decision 113: The sentence under a module-composed "No" is a finding that licensed it, and a contraindication about her own medication says so](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so)
+- [Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders](#decision-114-a-screen-of-her-medications-states-which-of-her-orders-share-a-substance-once-per-set-of-orders)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10610,3 +10611,84 @@ Two other routes were rejected:
 `.aMajorInteractionLeadsAnUnratedRuleUnderTheNo`,
 `.aMajorInteractionLeadsARuleRatedInAWordTheModuleDoesNotRecogniseUnderTheNo`,
 `.aScreensLinesKeepTheOrderTheArmRaisedThemIn`, `.aContraindicationAboutAMedicationSheAlreadyTakesSaysSo`.
+
+## Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close.
+
+### Context
+
+[Decision 112](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
+states a drug IN PLAY that two of her orders carry. A screening question puts no drug in play, and the
+screening arm relates substances pairwise with no identity leg. So a patient on `Isoniazid /
+pyrazinamide / rifampin` and `Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg`, asked
+"Are there any drug interactions with her current medications?", was told how their constituents
+interact and nothing saying the two orders duplicate each other.
+
+### The decision
+
+**`DrugSafetyValidator.addOrdersSharingASubstance` raises one finding per set of two or more of her
+active orders that carry the same substances**, naming them all: *"Isoniazid, Pyrazinamide and
+Rifampicin (rifampin) are in active orders A and B — possible duplicate therapy"*.
+
+- **Which orders carry a substance is Decision 112's predicate**, `CoMedications.ordersWhoseDisplayNames`,
+  judged on each order's display. The substances asked about are `orderEntries`, the pass's one
+  resolution of her orders (Decision 58). The candidates are not built from
+  `DrugReferenceService.findNamedSubstances`, which `reference/CLAUDE.md` forbids for a candidate set.
+  That rule was raised by gate pass 2 at plan time.
+- **One finding per set of orders, not one per substance** (Decision 99): on the reproduction, three
+  per-substance chips would name one pair of orders three times. Substances are listed in label
+  order.
+- **Raised on a screening question only**, inside the screening arm's own gate
+  (`questionDrugs.isEmpty() && isInteractionScreening`), which reads the question alone. Both
+  `validate` passes therefore agree. The first plan also raised it on a question putting a drug in
+  play, anchored on the orders carrying that drug. That leg was deleted at plan time.
+  `SubstanceInSeveralActiveOrdersTest.everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent` pins
+  that question's finding list. Beside the drug-in-play arm's proposal findings, a current-medication
+  finding is the mixed-referent response Decision 112 recorded on a model. The anchor also read
+  `inPlay`, which the ANSWER widens.
+- **Its referent is a current medication**, since both sides are her own prescriptions, and it is
+  unrated. The model therefore reads it as a reason to change her therapy. The caution's counterpart
+  would say "not a reason to change it", which is false of a duplicate.
+- **It relates no pair.** It is not counted into `PairChipExtent`. Nor does it admit a screen to
+  Decision 108's module answer: `answersFromFindings` refuses a screen whose only interaction finding
+  it is (`SafetyWarning.statesOrdersSharingASubstance`). A screen that related a pair is answered, and
+  ranks it by strength with the pairs, as the prompt's ranking sentence has the model do: as a reason
+  to change her therapy it ranks beside a rated Major and ahead of a caution. Ordering it after every
+  pair instead was written in Phase 2 and reverted in its second pass, because the model path, the
+  default, would still lead with it and one chart would open two ways by global property. The screening
+  arm inserts it at that same place among its own chips, before the first pair `licensesWithholding`
+  refuses. Appended after every pair, the chips and the prompt's records put it below a Minor while the
+  answer put it ahead of the cautions, and a truncated answer kept the cautions first (#346).
+  `OrdersSharingASubstanceTest.theChipListRanksTheFindingByStrengthAsTheModuleAnswerDoes` pins it. Nor does it stand in
+  for a screen result at [Decision 87](#decision-87-a-screen-that-related-nothing-says-so-in-the-prompt-instead-of-reaching-the-model-as-an-empty-slice)'s
+  note: beside it, a screen that related nothing still says so (`nothingButOrdersSharingASubstance`),
+  which `/harden`'s Phase 2 found after the pair gate alone had been written.
+
+### Consequences
+
+- **Still open on #477:** the same two orders on the rifampicin question (its isoniazid and
+  pyrazinamide), the Metformin question, whose words name neither order and for which
+  `QueryScopeRouter.asksAboutMedications` is false, and the one-order referent Decision 112 defers to
+  [#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402). The standing chart
+  alerts carry none of it.
+- **A local and a systemic presentation of one substance are stated as a duplicate.** Measured
+  2026-09-24 by a throwaway test driving `validate` on a screening question over the shipped
+  knowledge base, with this change: `Hydrocortisone cream 1%` + `Hydrocortisone 10mg tablet`,
+  `Prednisolone eye drops` + `Prednisolone 5mg`, and `Lidocaine` + `Lidocaine / epinephrine` each
+  raised it. #234's site narrowing removes codes and never a partner, and this finding reads no codes.
+  In the same run, `Amlodipine` + `Amlodipine / valsartan` raised it, a real duplicate. `Paracetamol` +
+  `Codeine / paracetamol` raised nothing — a real duplicate this finding misses, and it is not this
+  finding's defect but the resolution under it: measured the same day through the real
+  `DrugReferenceService.findImpliedByDrugName` over the shipped knowledge base, `Paracetamol` and
+  `Paracetamol 1g` resolve to no entry, `Codeine / paracetamol` to `Codeine` alone and `Acetaminophen
+  500mg` to `Acetaminophen`, so no two orders ever carry the substance. `Acetaminophen 500mg` +
+  `Paracetamol 1g` raised nothing for the same reason. `Omeprazole 20mg` + `Esomeprazole 40mg` also raised nothing,
+  as Decision 112's display rule intends.
+- **Not measured on a model**, and two prompt arrangements are new with it: Decision 87's note ("No
+  interactions were found …") beside this finding's reason to change, on a screen that related no
+  pair; and, where it and another finding key on one `drug`, the #397 enumeration clause asking for a
+  severity this finding does not state (Decision 112's finding has that shape too).
+
+→ `OrdersSharingASubstanceTest`, `OrdersSharingASubstanceModuleAnswerContextTest`.

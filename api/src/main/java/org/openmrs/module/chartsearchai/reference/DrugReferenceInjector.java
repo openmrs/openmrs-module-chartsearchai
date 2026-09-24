@@ -621,6 +621,9 @@ public class DrugReferenceInjector {
 		//     describe, and the failure this note exists to stop is the model describing an EMPTY slice
 		//     as the records not addressing interactions. A screen that related nothing beside a
 		//     contraindication finding therefore states no note — a stated residue, not an oversight.
+		//     The finding that two of her orders share a substance (issue #477) does not count as
+		//     something here: it relates no pair, so beside it the screen still ran and related nothing,
+		//     and without the note the model can present the duplicate as the interaction it found.
 		//
 		// → ADR Decision 87; InteractionScreenSilenceNoteTest.
 		Set<Object> screenedSubstances = new LinkedHashSet<Object>();
@@ -632,7 +635,8 @@ public class DrugReferenceInjector {
 		// Resolved once and read by both the note's gate and the early return below, so the two cannot
 		// come to disagree about whether this injection had anything to say.
 		boolean nothingResolved = matched.isEmpty() && findings.isEmpty() && namedClass == null;
-		boolean screenRelatedNothing = nothingResolved && questionDrugs.isEmpty()
+		boolean screenRelatedNothing = matched.isEmpty() && namedClass == null
+				&& nothingButOrdersSharingASubstance(findings) && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing) {
@@ -2407,7 +2411,9 @@ public class DrugReferenceInjector {
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication
 	 *     question also raises the order-driven arm's allergy finding and an answer of that alone says
-	 *     nothing of what the screen found.</li>
+	 *     nothing of what the screen found — and not the finding that two of her orders share a
+	 *     substance ({@code SafetyWarning.statesOrdersSharingASubstance}, issue #477), which relates no
+	 *     pair either.</li>
 	 * </ul>
 	 *
 	 * <p>Both need {@code chartRead}: the chart-read verdict this pass stamped, AND every active order
@@ -2428,7 +2434,9 @@ public class DrugReferenceInjector {
 				return false;
 			}
 			for (SafetyWarning finding : findings) {
-				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				// A PAIR the screen related — see this method's javadoc (issue #477).
+				if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+						&& !finding.statesOrdersSharingASubstance()) {
 					return true;
 				}
 			}
@@ -2513,6 +2521,20 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * Whether {@code findings} holds nothing but the finding that two of her orders share a substance
+	 * — empty included (issue #477, {@code SafetyWarning.statesOrdersSharingASubstance}), which
+	 * relates no pair. The #401 screen note's gate asks it.
+	 */
+	private static boolean nothingButOrdersSharingASubstance(List<SafetyWarning> findings) {
+		for (SafetyWarning finding : findings) {
+			if (!finding.statesOrdersSharingASubstance()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * The module's own answer to a question {@link #answersFromFindings} admitted: one line per
 	 * finding, each in its record's own words and cited by its own number — issue #469 — with the one
 	 * addition described below for a contraindication about a medication she already takes.
@@ -2527,13 +2549,16 @@ public class DrugReferenceInjector {
 	 * group, strongest first — withhold, change a current medication, then the two cautions, the order
 	 * the prompt gives the model for the first three and this module's own choice between the last two
 	 * — read off {@link #strengthClause} and never off the severity word; stable, so the injection order
-	 * stands within a class except for the key below.
+	 * stands within a class except for the key below. A screen's finding that her orders share a
+	 * substance (issue #477) is an interaction finding and ranks by strength with the pairs, as the
+	 * prompt's ranking sentence has the model rank it, so the two paths open alike.
 	 *
-	 * <p><b>The strength sort is a defence nothing observes today.</b> The arms already append a
-	 * proposed drug's findings strongest first — its contraindications, which always withhold, and
-	 * then its interactions, which {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING} orders, in
-	 * every arrangement this change's tests and reviews built. It stays because the lead is decided by
-	 * the FIRST line, and that must not depend on the order the arms happen to run in.
+	 * <p><b>On a screen that sort and the arm agree</b>: the screening arm inserts the finding that her
+	 * orders share a substance among its pairs by the same strength
+	 * ({@code DrugSafetyValidator.addOrdersSharingASubstance}), so the chips, the prompt's records and
+	 * this answer order it alike, and {@code OrdersSharingASubstanceModuleAnswerContextTest} no longer
+	 * reddens without the sort. It stays because the lead is decided by the FIRST line, and that must
+	 * not depend on the order the arms happen to run in.
 	 *
 	 * <p><b>Within the withholding class, a finding that licensed the "No" comes first</b> — {@link
 	 * #licensesTheModulesNo}, the test {@link #answersFromFindings} admitted the question by. That same

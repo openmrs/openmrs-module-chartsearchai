@@ -1089,8 +1089,11 @@ public class DrugSafetyValidator {
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
+			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
+			// Among the pairs by strength and outside their extent: it relates no pair (issue #477).
+			addOrdersSharingASubstance(warnings, screenedFrom, orderEntries, subjects, coMedications);
 		}
 		// And where neither of them STATED one, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
@@ -4263,25 +4266,100 @@ public class DrugSafetyValidator {
 		if (carriers.size() < 2) {
 			return null;
 		}
-		// Each distinct display once, with how many orders carry it where that is more than one: two
-		// orders recorded under one name would otherwise print that name twice, which a clinician cannot
-		// tell from a name pasted twice, and would count it twice into findingPartners. The count says
-		// "orders" and never ACTIVE_ORDER_NOUN: ActiveOrderCitationFidelityCheck counts one claim per
-		// occurrence of that noun, so a second one would split this sentence into two claims.
+		Map<String, Integer> ordersByDisplay = ordersByDisplay(carriers);
+		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
+			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
+					+ " — possible duplicate therapy",
+			new ArrayList<String>(ordersByDisplay.keySet()));
+	}
+
+	/**
+	 * Each distinct display of {@code carriers} once, in chart order, with how many orders carry it —
+	 * the one reading of a carrier list both of issue #477's findings print. Two orders recorded under
+	 * one name would otherwise print that name twice, which a clinician cannot tell from a name pasted
+	 * twice, and would count it twice into findingPartners.
+	 */
+	private static Map<String, Integer> ordersByDisplay(List<PatientClinicalContext.ActiveDrugOrder> carriers) {
 		Map<String, Integer> ordersByDisplay = new LinkedHashMap<String, Integer>();
 		for (PatientClinicalContext.ActiveDrugOrder order : carriers) {
 			Integer n = ordersByDisplay.get(order.getDisplay());
 			ordersByDisplay.put(order.getDisplay(), n == null ? 1 : n + 1);
 		}
+		return ordersByDisplay;
+	}
+
+	/**
+	 * "active orders A and B", a display several orders carry followed by their count. The count says
+	 * "orders" and never {@link #ACTIVE_ORDER_NOUN}: {@code ActiveOrderCitationFidelityCheck} counts one
+	 * claim per occurrence of that noun, so a second one would split the sentence into two claims.
+	 */
+	private static String ordersNamed(Map<String, Integer> ordersByDisplay) {
 		List<String> labels = new ArrayList<String>(ordersByDisplay.size());
 		for (Map.Entry<String, Integer> display : ordersByDisplay.entrySet()) {
 			labels.add(display.getValue() == 1 ? display.getKey()
 					: display.getKey() + " (" + display.getValue() + " orders)");
 		}
-		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
-			ref.displayLabel() + " is already in " + ACTIVE_ORDER_NOUN + "s " + joinPartners(labels)
-					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()));
+		return ACTIVE_ORDER_NOUN + "s " + joinPartners(labels);
+	}
+
+	/**
+	 * On a screen of her medications, one finding per set of two or more of the patient's own active
+	 * orders that carry the same substances, naming every substance the set shares — issue #477's
+	 * remaining shape after {@link #alreadyInSeveralOrders}, which states it only for a drug in play.
+	 * A screening question puts none in play, and the screening arm relates substances PAIRWISE and has
+	 * no identity leg, so two tuberculosis combinations sharing three substances raised nothing saying
+	 * they duplicate each other.
+	 *
+	 * <p><b>Which orders carry a substance is #483's predicate</b>,
+	 * {@link CoMedications#ordersWhoseDisplayNames}, and the substances asked about are the ones this
+	 * pass resolved her orders to ({@code orderEntries}, which {@code validate} already holds), so the
+	 * candidates are never built from {@link DrugReferenceService#findNamedSubstances}. Substances are
+	 * named by the row this response names them by ({@link SubstanceSubjects#subjectOf}) and listed in
+	 * label order; sets in the order {@code orderEntries} first reaches one of their substances.
+	 *
+	 * <p><b>Raised on a screening question and nowhere else</b> — the screening arm's own gate, read off
+	 * the question alone, so both {@code validate} passes of a request agree. Not on a question putting a
+	 * drug in play, whose finding list is its arm's, and not on the standing chart alerts. Its referent
+	 * is a current medication, and it is unrated, so the model reads it as a reason to change her
+	 * therapy. It relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decision 114
+	 * carries the scope and what it leaves open.
+	 *
+	 * <p><b>Inserted among the screen's pairs by strength</b>, before the first of them from
+	 * {@code screenedFrom} on that {@link #licensesWithholding} refuses: as a reason to change her
+	 * therapy it ranks beside a Major and ahead of a caution, which is where
+	 * {@code DrugReferenceInjector.composeFromFindings} and the prompt's ranking sentence put it, so the
+	 * chips, the prompt's record order and the module's answer order it alike, and a truncated answer
+	 * keeps it as the module's answer would (issue #346). The pairs arrive withholding first, since
+	 * {@link #severityPriority} ranks an unrated rule above a Major and every caution below both, so
+	 * this is the boundary between the two, and the pairs' own order is untouched.
+	 */
+	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, int screenedFrom,
+			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications) {
+		Map<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> shared =
+				new LinkedHashMap<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>();
+		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
+			List<PatientClinicalContext.ActiveDrugOrder> carriers =
+					coMedications.ordersWhoseDisplayNames(rows.get(0).substanceGroupKey());
+			if (carriers.size() < 2) {
+				continue;
+			}
+			shared.computeIfAbsent(carriers, k -> new ArrayList<String>())
+					.add(subjects.subjectOf(rows.get(0)).displayLabel());
+		}
+		int at = screenedFrom;
+		while (at < warnings.size() && licensesWithholding(warnings.get(at))) {
+			at++;
+		}
+		for (Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> set : shared.entrySet()) {
+			List<String> substances = set.getValue();
+			Collections.sort(substances, String.CASE_INSENSITIVE_ORDER);
+			Map<String, Integer> ordersByDisplay = ordersByDisplay(set.getKey());
+			String named = joinPartners(substances);
+			warnings.add(at++, SafetyWarning.ordersSharingASubstance(named,
+				named + (substances.size() == 1 ? " is in " : " are in ") + ordersNamed(ordersByDisplay)
+						+ " — possible duplicate therapy",
+				new ArrayList<String>(ordersByDisplay.keySet())));
+		}
 	}
 
 	/**
@@ -10841,7 +10919,8 @@ public class DrugSafetyValidator {
 
 		/**
 		 * The patient's active orders whose DISPLAY names {@code substance} — the orders
-		 * {@link DrugSafetyValidator#alreadyInSeveralOrders} prints, in chart order (issue #477).
+		 * {@link DrugSafetyValidator#alreadyInSeveralOrders} and
+		 * {@link DrugSafetyValidator#addOrdersSharingASubstance} print, in chart order (issue #477).
 		 *
 		 * <p>The DISPLAY and nothing else the order records (issue #293), only for an order
 		 * {@link DrugSafetyValidator#displayNamesADrug} admits (issue #290), and deliberately narrower

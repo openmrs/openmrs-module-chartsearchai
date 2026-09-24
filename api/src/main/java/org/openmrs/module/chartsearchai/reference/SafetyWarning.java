@@ -130,6 +130,9 @@ public class SafetyWarning {
 	/** @see #endedOrderRows() */
 	private final List<DrugReference> endedOrderRows;
 
+	/** @see #statesOrdersSharingASubstance() */
+	private final boolean ordersSharingASubstance;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -306,6 +309,23 @@ public class SafetyWarning {
 				Collections.<ChartOrderBridge> emptyList(), false, null, false, orders);
 	}
 
+	/**
+	 * The warning that two or more of the patient's own active orders carry the same substances, raised
+	 * on a screen of her medications (issue #477). The one construction site is
+	 * {@code DrugSafetyValidator.addOrdersSharingASubstance}, canonical for why it exists and when.
+	 *
+	 * <p>{@link #substanceInSeveralActiveOrders}' shape, with two differences: both sides are her own
+	 * prescriptions and nothing is proposed, so {@link #isAboutACurrentMedication()} is TRUE; and it
+	 * answers {@link #statesOrdersSharingASubstance()}.
+	 *
+	 * @param drug the substances the detail names, as it names them
+	 * @param orders the displays of the orders the detail names — {@link #namedPartners()}
+	 */
+	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true);
+	}
+
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
@@ -341,7 +361,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null, null);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null, false);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -350,7 +370,8 @@ public class SafetyWarning {
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
-			List<DrugReference> endedOrderRows) {
+			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance) {
+		this.ordersSharingASubstance = ordersSharingASubstance;
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
 		this.endedOrderStopDate = aboutAnEndedOrder ? endedOrderStopDate : null;
 		this.endedOrderRows = !aboutAnEndedOrder || endedOrderRows == null || endedOrderRows.isEmpty()
@@ -461,7 +482,7 @@ public class SafetyWarning {
 	 * "did the answer state all of them?" of.
 	 *
 	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
-	 * one or for the finding that a drug is already in several of her orders (issue #477), where a
+	 * one or for the two findings that a substance is in several of her orders (issue #477), where a
 	 * display several orders carry appears once — and so does every CONDITION-MEDIATED chip, one name
 	 * per active order it links; so a reader never has to tell a chip that carries no list from a chip
 	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
@@ -486,7 +507,9 @@ public class SafetyWarning {
 	/**
 	 * The reference drug the warning is about — its display label, which may carry a parenthesized
 	 * generic synonym when the dataset's display name diverges from it, e.g.
-	 * {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}).
+	 * {@code "Acetylsalicylic acid (aspirin)"} (see {@link DrugReference#displayLabel()}). On
+	 * {@link #ordersSharingASubstance(String, String, List)}' finding it is every substance the
+	 * finding names, listed as its detail lists them (issue #477).
 	 *
 	 * <p>Since issue #206 this names a SUBSTANCE, not a finding, and not the dataset row an arm
 	 * happened to match. Several warnings about one substance therefore carry the same string by
@@ -944,13 +967,15 @@ public class SafetyWarning {
 	 * drug something proposed (issue #348) — which decides which COLUMN of the strength clauses
 	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
 	 *
-	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> Only the two
-	 * ORDER-DRIVEN arms ever answer true: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
+	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> The two
+	 * ORDER-DRIVEN arms answer true: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
 	 * (issue #113), whose subject is drawn from the resolved active-order entries and whose partner is
 	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
 	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries — and that
 	 * second arm answers true only where no SIBLING ROW put the substance in play, because its chips
-	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction. The
+	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction. Beside
+	 * the first of them, inside its gate, {@link #ordersSharingASubstance(String, String, List)} (issue
+	 * #477) answers true too: every order it names is hers, and a screen proposes nothing. The
 	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
 	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because
@@ -1039,7 +1064,18 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
-				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows);
+				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance);
+	}
+
+	/**
+	 * Whether this is {@link #ordersSharingASubstance(String, String, List)}' finding — that two or
+	 * more of her own orders carry the same substances — rather than a relationship between two. An INTERACTION finding that
+	 * relates no PAIR, so {@code DrugReferenceInjector.answersFromFindings} asks this to keep a screen
+	 * the module answers itself one that related at least one pair (ADR Decision 108). Package-private,
+	 * matching the factory: it is on neither the wire nor either collapse key.
+	 */
+	boolean statesOrdersSharingASubstance() {
+		return ordersSharingASubstance;
 	}
 
 	/**

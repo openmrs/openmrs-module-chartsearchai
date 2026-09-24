@@ -73,7 +73,7 @@ public interface LlmEngine {
 	 * behaviour reproduces with no inference server at all, against a socket that sends headers and
 	 * then stalls, on Java 11, 17 and 21 alike and with {@code ofString()} as well. It is also a
 	 * PER-CALL budget rather than a per-invocation one: {@link LocalLlmEngine} spends it again on
-	 * each KV-cache slot call the six-argument form below can make around the completion.</p>
+	 * each KV-cache slot call the KV-scoped forms below can make around the completion.</p>
 	 *
 	 * <p>The non-streaming forms, {@link #infer(String, String, int)} and
 	 * {@link #warmup(String, String, int)}, keep the "maximum wall-clock seconds" wording

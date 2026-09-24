@@ -160,12 +160,12 @@ public class ProjectInstructionsGuardTest {
 	 * <p><b>Four raises now, three of them in eight days, and the pattern is worth naming rather
 	 * than repeated.</b> Every one followed real trimming and every one was spent by the next
 	 * ordinary ticket. That is not a number problem: the root file is the union of every rule that
-	 * binds more than one package, and this module adds such rules faster than it retires them. The
-	 * next reader to trip this should consider whether the chart-assembly rules have become a
+	 * binds more than one package, and this module adds such rules faster than it retires them. This
+	 * paragraph advised the next reader to trip this to consider whether the chart-assembly rules have become a
 	 * package's worth of their own — {@code serializer/} is where both order stamps and the mapping
 	 * ladder live — before trimming a fifth time, because a split is the move that made the
 	 * drug-safety budget tractable and no amount of trimming has made this one so.
-	 * <b>That split was considered on 2026-09-24 and rejected (issue #432), so do not re-propose it on
+	 * <b>That split was then considered, on 2026-09-24, and rejected (issue #432), so do not re-propose it on
 	 * the same grounds:</b> the chart-assembly rules bind {@code api/impl} — their writer
 	 * {@code QueryStoreChartBuilder}, and {@code ChartBuildingStrategy} — as well as the carriers in
 	 * {@code serializer/}, and a rule binding two packages belongs in the root file by that file's own

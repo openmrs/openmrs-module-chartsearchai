@@ -701,8 +701,9 @@ public class PatientChartSerializer {
 		 * <p>Written in exactly ONE place, {@code QueryStoreChartBuilder.toSerializedRecords}, beside
 		 * {@link #orderActive} and off the same one authoritative order read, and pinned there by
 		 * {@code ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace}. That guard is over
-		 * {@code SerializedRecord}; what keeps any other class from passing a date into THIS field is
-		 * {@code ArchitectureGuardTest.theOrderStopDateReachesAMappingFromTheSerializerAlone} (issue #432).
+		 * {@code SerializedRecord}; what holds every other API-module class to a null here is
+		 * {@code ArchitectureGuardTest.theOrderStopDateReachesAMappingFromTheSerializerAlone} (issue #432),
+		 * within the limits its javadoc states.
 		 * {@code SerializedRecord.orderStopDate} is canonical for what it is and for the asymmetry that
 		 * is its contract; pointed at rather than restated, so this javadoc cannot go stale against it.
 		 */

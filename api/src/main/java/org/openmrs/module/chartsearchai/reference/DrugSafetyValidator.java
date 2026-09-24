@@ -1070,7 +1070,7 @@ public class DrugSafetyValidator {
 		//
 		// Composition with the question-pair arm of issue #114, now that both arms are live, both group
 		// chips and both cap: the two gates are mutually EXCLUSIVE, so on any one question at most one
-		// of them runs at all. That arm needs questionDrugs.size() >= 2; this one needs it empty. No
+		// of them runs at all. That arm needs entries of two or more substances; this one, none. No
 		// pair can therefore be reported by one and suppressed by the other, the cap never applies to
 		// overlapping sets (only one arm is ever reachable per question — which is also why the two
 		// share ONE configured limit, #131), and no shared "who owns this pair" decision is needed
@@ -1100,8 +1100,9 @@ public class DrugSafetyValidator {
 		// screen, so the drug-in-play arm above is the whole of the interaction check on the canonical
 		// prescribing question — and a completed negative screen was published as `null`, the value
 		// PairChipExtent defines as "the producer stated nothing". Typically and not always: a name
-		// that resolves to several reference entries opens the question-pair arm, which then owns the
-		// field. See PairChipExtent, which is canonical for what that costs a reader.
+		// that resolves to entries of several substances opens the question-pair arm, which then owns
+		// the field — several rows of ONE substance do not, since issue #433. See PairChipExtent, which
+		// is canonical for what that costs a reader.
 		//
 		// The gate is "neither STATED one" and not "neither ran", which since issue #336's
 		// verification round is a real difference: a question-pair pass that related pairs and ceded
@@ -1432,7 +1433,7 @@ public class DrugSafetyValidator {
 	 * wants 5, and that belongs in a deployment's hands.
 	 *
 	 * <p><b>One property for both arms</b>, deliberately: their gates are mutually exclusive — the pair
-	 * arm needs the question to resolve two or more reference drugs, the screen needs it to resolve none
+	 * arm needs the question to resolve entries of two or more substances, the screen to resolve none
 	 * — so at most one of them runs per question and no question can be subject to both. Two separately
 	 * tunable limits for one concept would be arbitrary. It bounds those two and nothing else: the
 	 * drug-in-play arm raises one chip per partner it relates and has never been capped, which is why
@@ -3817,8 +3818,9 @@ public class DrugSafetyValidator {
 	 * <p><b>It reports how many pairs it related, and that is what reaches the wire</b> (issue #356).
 	 * "Can I give this patient X?" usually resolves ONE drug, so neither pairwise arm runs — the
 	 * question-pair arm needs two and the screen needs none — and this arm is then the whole of the
-	 * interaction check on the canonical prescribing question. Where the name resolves to several
-	 * reference entries the question-pair arm owns the field instead and this count is discarded —
+	 * interaction check on the canonical prescribing question. Where the name resolves to entries of
+	 * several substances the question-pair arm owns the field instead and this count is discarded —
+	 * rows of one substance do not open it (issue #433) —
 	 * unless a cede left that arm with no pair of its own, where it states nothing and this count is
 	 * what reaches the wire (issue #336, ADR Decision 69). The SCREENING arm's silence is not that
 	 * case, and the difference is worth knowing here: this count is gated on the QUESTION's own
@@ -6236,7 +6238,8 @@ public class DrugSafetyValidator {
 	 *        in {@code inPlay}, so its substance is always in that lookup's group map and the
 	 *        ungrouped-row fallback is unreachable from here.
 	 * @return what this arm measured about its own list, or {@code null} where it measured no list —
-	 *         which is a question resolving fewer than two drugs (the arm did not run) and, since
+	 *         which is a question resolving fewer than two drugs, or rows of only one substance (the
+	 *         arm did not run; issue #433), and, since
 	 *         issue #336's verification round, a pass that related pairs and ceded EVERY one of them
 	 *         to the chart arm. The two are one statement to a reader, and both are unlike
 	 *         {@code of(0, 0)}, which asserts that the reference data related none of the pairs this
@@ -6253,6 +6256,12 @@ public class DrugSafetyValidator {
 			// extent of. Null, never a zero — see PairChipExtent for what the two say differently. It is
 			// this arm's answer and no longer the response's: on a question naming exactly one drug the
 			// drug-in-play arm states one instead, from validate's own fallback (issue #356).
+			return null;
+		}
+		if (oneSubstance(questionDrugs)) {
+			// Nor are several rows of one substance — one word resolves a row per route or
+			// formulation (issue #433). The same null as one row, for the same reason; ADR Decision
+			// 115 carries why, and what a curated source gives up.
 			return null;
 		}
 		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
@@ -6346,6 +6355,20 @@ public class DrugSafetyValidator {
 			warnings.add(endedOrders.stamp(finding.row, finding.warning));
 		}
 		return PairChipExtent.of(found.size(), shown);
+	}
+
+	/**
+	 * @return true when every entry of {@code drugs} answers one {@link DrugReference#substanceGroupKey()}
+	 *         — the rows of ONE substance, which {@link #addQuestionPairInteractions} treats as it treats
+	 *         one row (issue #433). An entry from a source publishing no substance name keys on itself,
+	 *         so two such entries are two drugs, the conservative reading {@code isSelfPair} takes too.
+	 */
+	private static boolean oneSubstance(Set<DrugReference> drugs) {
+		Set<Object> substances = new HashSet<Object>();
+		for (DrugReference drug : drugs) {
+			substances.add(drug.substanceGroupKey());
+		}
+		return substances.size() == 1;
 	}
 
 	/** Orders candidate pair chips most-severe first; see {@link #severityPriority}. */
@@ -6871,13 +6894,14 @@ public class DrugSafetyValidator {
 	 * naming no route before falling back to its first.
 	 *
 	 * <p>Two entries that end up with the SAME name are one drug, not a pair, and raise nothing. That is
-	 * reachable from a question naming a single drug: the two-drugs guard counts ENTRIES, and one word
-	 * resolves several when the KB carries variants of it — 33 above-floor rows in the full KB join two
-	 * entries sharing one token (29 drug words: minoxidil, timolol, lidocaine, atropine, neomycin,
-	 * paclitaxel …). Reporting one would assert a combination the clinician never proposed (issue #105's
-	 * over-reach), and where the variants are named after different substances it would name two drugs
-	 * the question never mentioned, which is #86. The measured cost of that suppression is bounded: only
-	 * 6 of the full KB's 2093 distinct tokens are an exact alias of entries with different
+	 * reachable because the two-drugs guard counts ENTRIES, refusing only a set whose entries all answer one
+	 * {@link DrugReference#substanceGroupKey()} (issue #433), and one word resolves several when the
+	 * KB carries variants of it — 33 above-floor rows in the full KB join two entries sharing one
+	 * token (29 drug words: minoxidil, timolol, lidocaine, atropine, neomycin, paclitaxel …).
+	 * Reporting one would assert a combination the clinician never proposed (issue #105's
+	 * over-reach), and where the variants are named after different substances it would name two
+	 * drugs the question never mentioned, which is #86. The measured cost of that suppression is
+	 * bounded: only 6 of the full KB's 2093 distinct tokens are an exact alias of entries with different
 	 * {@code rxnorm_name}s, and all 6 are one substance family (the trastuzumab conjugates, isosorbide
 	 * and its mononitrate, the COVID-19 vaccines), so a pair genuinely worth reporting is not among them.
 	 *

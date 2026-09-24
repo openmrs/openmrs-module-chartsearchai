@@ -4814,7 +4814,7 @@ public class DrugReferenceInjector {
 	 *         {@code aRecordStatingNoReadingStillRendersASharedNoteOnce} and {@code
 	 *         aRecordWithNoPatientContextStillRendersASharedNoteOnce} for the list where no reading is
 	 *         stated because the chart was not read or there is no context (issue #407) — the two
-	 *         {@code drugSafety} switches are that cause's third and fourth, pinned in {@code
+	 *         {@code drugSafety} switches are pinned in {@code
 	 *         InjectedContraindicationReadingToggleContextTest} because they are global properties —
 	 *         {@code aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder} for the RECORDED section's
 	 *         order and {@code theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo} for the other two.

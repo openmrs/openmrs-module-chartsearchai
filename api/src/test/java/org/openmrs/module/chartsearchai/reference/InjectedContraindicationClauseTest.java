@@ -333,8 +333,7 @@ public class InjectedContraindicationClauseTest {
 
 	@Test
 	public void aRecordStatingNoReadingStillRendersASharedNoteOnce() throws Exception {
-		// Issue #407: the case above renders WITH a reading, and nothing else in this class renders
-		// without one, so a de-duplication moved inside `if (reading.states())` left the whole suite green
+		// Issue #407: a de-duplication moved inside `if (reading.states())` left the whole suite green
 		// while this record read "opioid reaction; opioid reaction" again. The list is rendered either
 		// way, so its de-duplication has to hold either way. statesTheChartsContraindicationReading answers
 		// false three ways, and a regression can be keyed on any one of them rather than on the boolean,

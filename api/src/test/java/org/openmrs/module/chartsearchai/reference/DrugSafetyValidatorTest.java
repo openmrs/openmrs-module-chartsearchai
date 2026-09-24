@@ -135,7 +135,7 @@ public class DrugSafetyValidatorTest {
 	public void frequencyParsingMapsEveryNHoursToDosesPerDay() {
 		// Read through validate, so the frequency is parsed from the folded clause production builds
 		// (issue #272). 1300 mg is over the 1200 mg/day age 2-11 ceiling at any frequency, so the chip
-		// always fires and the daily total it states is 1300 x the doses-per-day parsed.
+		// always fires and the daily total it states moves with the doses-per-day parsed.
 		assertStatedDailyDose("Ibuprofen 1300 mg one tablet every 6 hours.", "~5200 mg/day");
 		assertStatedDailyDose("Ibuprofen 1300 mg every 8 hours.", "~3900 mg/day");
 		assertStatedDailyDose("Ibuprofen 1300 mg twice daily.", "~2600 mg/day");

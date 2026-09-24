@@ -1233,6 +1233,90 @@ public class InteractionClaimPairFidelityTest {
 		assertEquals(1, pairs.getJudged(), "was: " + pairs);
 	}
 
+	/**
+	 * A claim with no marker ends where its sentence ends, and the sentence's own terminator is not a word
+	 * of the partner it names (round 5 of #514's review). The partner span of <em>"Clarithromycin
+	 * interacts with active order Rifampicin."</em> ran to the full stop, and <em>rifampicin.</em> is
+	 * contained in neither the finding's label <em>Rifampicin (rifampin)</em> nor her order's display,
+	 * so a claim stating exactly the pair a carried finding relates was published unfounded — while the
+	 * same words without the full stop, or cited to the finding, were not. On her chart and on one where
+	 * two combination orders carry rifampin, on a question naming the new drug and on an interaction
+	 * screen.
+	 */
+	@Test
+	public void anUncitedClaimEndingItsSentenceIsAboutThePairTheFindingRelates() {
+		DrugReferenceService shipped = DrugReferenceTestSupport.shippedServiceWithGroups();
+		String clarithromycinQuestion = "Is it safe to give clarithromycin?";
+		String display = "Rifampicin 300mg capsule";
+		Arrangement hers = new Arrangement(shipped, clarithromycinQuestion, setOf(display), setOf("J04AB02"),
+				Collections.singletonList(new PatientClinicalContext.ActiveDrugOrder("order-rifampicin", display,
+						setOf(display), setOf("J04AB02"))));
+		hers.finding("Clarithromycin", "Rifampicin (rifampin)");
+		for (String partner : Arrays.asList("Rifampicin", "Rifampin")) {
+			assertFounded(hers, clarithromycinQuestion, "Clarithromycin interacts with active order " + partner
+					+ ".");
+		}
+		// Every member of the shared set ends a sentence, not the full stop alone.
+		assertFounded(hers, clarithromycinQuestion, "Clarithromycin interacts with active order Rifampicin!");
+		for (String question : Arrays.asList(clarithromycinQuestion,
+				"Are there any drug interactions with her current medications?")) {
+			Arrangement rose = roseLike(shipped, question);
+			for (String subject : Arrays.asList("Clarithromycin", "Efavirenz")) {
+				assertFounded(rose, question, subject + " interacts with active order Rifampin.");
+			}
+		}
+	}
+
+	/**
+	 * The other value of the case above: an uncited claim ending its sentence on a partner no finding
+	 * relates to its subject is still unfounded once the full stop is no part of the partner.
+	 */
+	@Test
+	public void anUncitedClaimEndingItsSentenceOnAPartnerNoFindingRelatesIsStillUnfounded() {
+		DrugReferenceService shipped = DrugReferenceTestSupport.shippedServiceWithGroups();
+		String question = "Is it safe to give clarithromycin?";
+		String display = "Rifampicin 300mg capsule";
+		Arrangement hers = new Arrangement(shipped, question, setOf(display), setOf("J04AB02"),
+				Collections.singletonList(new PatientClinicalContext.ActiveDrugOrder("order-rifampicin", display,
+						setOf(display), setOf("J04AB02"))));
+		for (Arrangement arrangement : Arrays.asList(hers, roseLike(shipped, question))) {
+			String answer = "Clarithromycin interacts with active order Metformin.";
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), question)
+					.getInteractionClaimPairs();
+
+			assertNotNull(pairs, "the check ran, for: " + answer);
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
+			assertEquals(1, pairs.getUnfounded(), "no finding relates this pair, was: " + pairs);
+			assertEquals(1, pairs.getJudged(), "was: " + pairs);
+		}
+	}
+
+	/** A chart like the external evaluation's: two combination orders carrying rifampin, and efavirenz. */
+	private static Arrangement roseLike(DrugReferenceService dataset, String question) {
+		String rhz = "Isoniazid / pyrazinamide / rifampin 75/400/150mg";
+		String rhze = "Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg";
+		String efavirenz = "Efavirenz 600mg tablet";
+		return new Arrangement(dataset, question, setOf(rhz, rhze, efavirenz), setOf("J04AM05", "J04AM06",
+				"J05AG03"), Arrays.asList(
+						new PatientClinicalContext.ActiveDrugOrder("order-rhz", rhz, setOf(rhz), setOf("J04AM05")),
+						new PatientClinicalContext.ActiveDrugOrder("order-rhze", rhze, setOf(rhze), setOf("J04AM06")),
+						new PatientClinicalContext.ActiveDrugOrder("order-efavirenz", efavirenz, setOf(efavirenz),
+								setOf("J05AG03"))));
+	}
+
+	/** Asserts the answer's one claim is judged, and neither misattributed nor unfounded. */
+	private static void assertFounded(Arrangement arrangement, String question, String answer) {
+		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), question)
+				.getInteractionClaimPairs();
+
+		assertNotNull(pairs, "the check ran, for: " + answer);
+		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+				"was: " + pairs + " for: " + answer + " on: " + question);
+		assertEquals(0, pairs.getUnfounded(), "a finding relates this pair, was: " + pairs + " for: " + answer
+				+ " on: " + question);
+		assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer + " on: " + question);
+	}
+
 	/** Issue #477's arrangement: two of her orders carrying rifampicin, the finding that the drug is
 	 *  already in both, and the chips the real validator raises over them. */
 	private static final class SeveralOrders {

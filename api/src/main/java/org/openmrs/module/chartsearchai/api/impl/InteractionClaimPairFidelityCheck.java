@@ -145,7 +145,9 @@ import org.slf4j.LoggerFactory;
  * other way, because it is ungated: a partner the answer names by a brand or a paraphrase no finding
  * prints reads as unrelated and can be REPORTED — the displays of the orders the finding's arm matched
  * are what keep her prescription's own display, as its record prints it, out of that case, and a
- * paraphrase of that display is still in it. A claim pairing two orders one finding names reads as
+ * paraphrase of that display is still in it. So is a partner its sentence ends on with a closing
+ * parenthesis or quote after the terminator, which {@link #withoutItsSentenceEnd} does not reach past
+ * (<em>"… active order Rifampicin.)"</em>). A claim pairing two orders one finding names reads as
  * related, so an order put in for a merged finding's subject passes — {@link #anyRelates} says why.
  * The trailing-run gates read names the findings carry and the phrase's own verb, so a later clause
  * naming another drug only by a name no finding prints, citing a finding that names the claim's
@@ -293,7 +295,7 @@ final class InteractionClaimPairFidelityCheck {
 			for (ActiveOrderCitationFidelityCheck.Claim claim : claims) {
 				String subject = FindingPartnerCoverageCheck.comparable(afterItsLead(claim.subject()));
 				Set<String> subjectNames = namedIn(subject, vocabulary);
-				String partner = normalized(claim.partner());
+				String partner = normalized(withoutItsSentenceEnd(claim.partner()));
 				if (subjectNames.isEmpty() || partner.isEmpty() || containsAWordOf(subject, SUBJECT_STAND_INS)
 						|| deniesItsClause(subject)) {
 					continue;
@@ -608,6 +610,31 @@ final class InteractionClaimPairFidelityCheck {
 	 *          span is compared untrimmed, only ever searched by containment. */
 	private static String normalized(String text) {
 		return text == null ? "" : FindingPartnerCoverageCheck.comparable(text).trim();
+	}
+
+	/**
+	 * @return {@code span} less its trailing whitespace and members of
+	 *         {@link ChartSearchAiUtils#SENTENCE_TERMINATORS} — the SENTENCE's own end, which a claim with
+	 *         no marker carries in its partner span because {@code SENTENCE_BOUNDARY} leaves the terminator
+	 *         on the sentence and {@code clauseBound} does not cut there. Left in, it is a character of the
+	 *         partner: <em>rifampicin.</em> is contained in neither <em>Rifampicin (rifampin)</em> nor
+	 *         <em>Rifampicin 300mg capsule</em>, so a claim stating the very pair a carried finding
+	 *         relates was published unfounded (round 5 of #514's review). The set is read, never
+	 *         spelled here. Only the partner span: {@code ActiveOrderCitationFidelityCheck.claims} and
+	 *         its other readers are unchanged. A character after the terminator that is not one — a
+	 *         closing parenthesis or quote, <em>"Rifampicin.)"</em> — stops the trim, so such a claim
+	 *         is still compared with its terminator in it.
+	 */
+	private static String withoutItsSentenceEnd(String span) {
+		if (span == null) {
+			return null;
+		}
+		int end = span.length();
+		while (end > 0 && (Character.isWhitespace(span.charAt(end - 1))
+				|| ChartSearchAiUtils.SENTENCE_TERMINATORS.indexOf(span.charAt(end - 1)) >= 0)) {
+			end--;
+		}
+		return span.substring(0, end);
 	}
 
 	/** @return whether two names, in comparable form, are read as naming one drug: either contains the

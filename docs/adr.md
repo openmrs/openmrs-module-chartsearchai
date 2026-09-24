@@ -11210,7 +11210,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   the other way: it reads as unrelated and can be reported. The partner side is ungated for the
   ticket's invented-partner shape, and the displays of the orders the finding's arm matched are what
   keep her prescription's own display, as its record prints it, from being that case; a paraphrase of
-  that display still is. No case pins the naming direction (a span names a drug only by
+  that display still is. The sentence's own end is no part of the partner: round 5 of the PR's review
+  found *"… active order Rifampicin."*, uncited, published unfounded, *rifampicin.* being contained in
+  no name the finding carries, so trailing whitespace and members of
+  `ChartSearchAiUtils.SENTENCE_TERMINATORS` are dropped from the partner span. A closing parenthesis
+  or quote after the terminator stops that, so *"… active order Rifampicin.)"* can still be reported.
+  No case pins the naming direction (a span names a drug only by
   containing it); the check's javadoc says what it decides.
 - **−** **The trailing-run gates read names the findings carry and the phrase's own verb.** A later
   clause naming another drug only by a name no finding prints, citing a finding that names the claim's

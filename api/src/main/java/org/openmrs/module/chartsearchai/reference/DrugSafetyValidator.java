@@ -12866,7 +12866,7 @@ public class DrugSafetyValidator {
 	/** @return doses-per-day implied by a frequency phrase in {@code window}, or 0 when none found.
 	 *          Word-forms are word-boundary anchored, so "bd"/"od" do not match inside larger words
 	 *          such as "abdominal" or "blood". */
-	static int frequencyPerDay(String window) {
+	private static int frequencyPerDay(String window) {
 		Matcher hours = EVERY_N_HOURS.matcher(window);
 		if (hours.find()) {
 			String n = hours.group(1) != null ? hours.group(1)

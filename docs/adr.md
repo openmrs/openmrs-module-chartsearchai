@@ -8010,7 +8010,7 @@ the orders of the findings it CITES, and the chips beside it carry the orders ea
 **Amended by [#446](https://github.com/openmrs/openmrs-module-chartsearchai/issues/446), which took DEBUG for a different case rather than departing from this one.** What this decision refused was a SECOND channel for something the reader already receives. `RemoteLlmEngine.logErrorBody` writes the remote endpoint's own error body — text a compromised endpoint can fill with the prompt it was sent, i.e. this patient's chart — and that has no first channel: both routes replace the exception's message with a generic failure string, so there is no "answer" carrying it. The choice there is the body at DEBUG or no diagnosis of a misconfigured endpoint at all, and the level is what keeps it out of the default log. The test on that side asserts from DEBUG up that it appears nowhere else, the same enforcement this decision's own round 2 added.
 
 **And that refusal is enforced rather than merely recorded**, which it was not until round 2 of this
-PR's review. The negative at each of the three sites now captures from DEBUG up and asserts over every
+PR's review. The negative at each of the three sites then captured from DEBUG up (TRACE since #443, below) and asserted over every
 captured event, so a re-added name at INFO or DEBUG reddens the case for the site it was added to. A
 WARN-only capture leaves the declined alternative implementable with the suite green, which the
 reviewer demonstrated: `log.info("Withheld pairs in full: {}", …)` beside the third site's cap WARN,
@@ -8051,7 +8051,7 @@ through any sibling file that captures a logger beneath that package by name, an
 module-root capture from the other direction, which is why that file named a package until round 4
 undid a narrowing this fix had made unnecessary; and each fidelity check's own logger inside
 `api.impl`, along with `LlmAnswerExtractor`'s and `QueryStoreChartBuilder`'s, is captured by name by its own test
-file. Beside that, the two reference-package negatives now assert that the capture is live BELOW warn
+file. Beside that, the two reference-package negatives (module-root since #443) now assert that the capture is live BELOW warn
 for the very logger they are about — `DrugSafetyValidator`'s end-of-pass INFO line and the injector's
 end-of-pass DEBUG line — so a filtered capture fails the case instead of satisfying it. That belt is
 independent of the helper: with `close()` reverted and no probe present at all, it is what reddens

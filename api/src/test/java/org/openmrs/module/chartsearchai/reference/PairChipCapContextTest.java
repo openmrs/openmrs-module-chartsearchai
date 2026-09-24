@@ -232,8 +232,8 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		// themselves raises the cap and re-asks, which puts them on the wire as chips.
 		configureCap("3");
 		// The module root and not just the reference package, because a drug name leaking from any
-		// logger on this pass is the same disclosure — the argument FindingPartnerLogDisclosureTest's
-		// PACKAGE makes (issue #443, ADR Decision 102).
+		// logger on this pass is the same disclosure — the argument LogCapture.MODULE_LOGGER's javadoc
+		// makes (issue #443, ADR Decision 102).
 		try (LogCapture capture = LogCapture.on(LogCapture.MODULE_LOGGER, Level.TRACE)) {
 			screeningChips();
 

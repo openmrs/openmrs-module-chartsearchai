@@ -49,8 +49,8 @@ import org.apache.logging.log4j.core.config.Property;
  * <p><b>A negative asserted over a PACKAGE capture has to assert liveness for the LOGGER it is
  * about, not just for the package</b>, and below WARN where that is what it claims: one logger's
  * events can be filtered while the package's neighbours arrive, so "nothing was logged from there"
- * and "nothing is reaching us from there" look identical. Name a line that logger writes at the
- * captured level and assert it first — {@code PairChipCapContextTest}'s screening case and
+ * and "nothing is reaching us from there" look identical. Name a line that logger writes below
+ * WARN and assert it first — {@code PairChipCapContextTest}'s screening case and
  * {@code ActiveOrderReconciliationTest}'s reconciliation case each do (issue #439). Where that
  * logger writes nothing at the captured level — a check that only WARNs, or any logger at TRACE,
  * which no production line in this module writes — there is no line to name, and the case writes

@@ -4811,6 +4811,8 @@ public class DrugReferenceInjector {
 	 *         <p>Both halves of issue #310 are pinned in that class —
 	 *         {@code twoRulesOfOneEntrySharingANoteRenderThatClauseOnce} and
 	 *         {@code aClauseTwoKeysRenderIsListedOnceWithAnotherClauseBetweenThem} for the list,
+	 *         {@code aRecordStatingNoReadingStillRendersASharedNoteOnce} for the list where no reading
+	 *         is stated (issue #407 — the list is built outside {@code if (reading.states())} for that),
 	 *         {@code aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder} for the RECORDED section's
 	 *         order and {@code theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo} for the other two.
 	 *         {@code clausesDifferingOnlyInCaseOrSpacingAreEachTheirOwnClause} and {@code
@@ -4896,7 +4898,9 @@ public class DrugReferenceInjector {
 		// is per KEY, and two keys of one entry may render one string, so "; ".join(byRule.values()) read
 		// "opioid reaction; opioid reaction" for the "recorded either way" shape the walk below names. A
 		// LinkedHashMap into a LinkedHashSet, so the survivor keeps the earlier key's slot and the list
-		// stays in clause order.
+		// stays in clause order. Outside `if (reading.states())` below, deliberately: the list is rendered
+		// with or without a reading, so its de-duplication must hold on both paths (issue #407;
+		// InjectedContraindicationClauseTest.aRecordStatingNoReadingStillRendersASharedNoteOnce).
 		Set<String> clauses = new LinkedHashSet<String>(byRule.values());
 		Set<Object> recordedRules = new HashSet<Object>();
 		Set<Object> uncorroboratedRules = new HashSet<Object>();

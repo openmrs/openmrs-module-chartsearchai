@@ -429,9 +429,10 @@ public class ActiveOrderReconciliationTest {
 		// (ADR Decision 102, "the names at DEBUG, was not taken"), and a capture raised only to INFO
 		// would leave that implementable with this case green — as DEBUG left a log.trace (#443).
 		// The module ROOT, because a name leaking from any logger on this pass is the same disclosure
-		// — the argument LogCapture.MODULE_LOGGER's javadoc makes (issue #443, ADR Decision 102). Through the shared constant and never a literal of this file's own: a second
-		// spelling of a package name is how a rename leaves a capture receiving nothing, which is the
-		// vacuous-pass this negative exists to avoid.
+		// — the argument LogCapture.MODULE_LOGGER's javadoc makes (issue #443, ADR Decision 102).
+		// Through the shared constant and never a literal of this file's own: a second spelling of a
+		// package name is how a rename leaves a capture receiving nothing, which is the vacuous-pass
+		// this negative exists to avoid.
 		try (LogCapture capture = LogCapture.on(LogCapture.MODULE_LOGGER, Level.TRACE)) {
 			injector().injectRecords(DrugReferenceTestSupport.oneRecordChart(), oneActiveOrder(),
 					"what are her active medications?");

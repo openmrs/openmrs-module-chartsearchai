@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -66,27 +67,30 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * repeats until the client stops reading stops itself at {@link #SAFETY_LIMIT} — so a peer being
  * read to the end reaches that limit and records it, while a peer the module stopped reading is
  * cut off short of it. That flag, read once the handler thread has stopped writing, is what every
- * OVERSIZED case asserts, together with a floor: the peer must have got onto the wire at least the
+ * such FLOOD case asserts, together with a floor: the peer must have got onto the wire at least the
  * bytes the module reads before it stops, so a handler that failed at the start cannot pass for
- * one that was cut off. Of the positive controls only the at-the-ceiling one asserts a write
- * total, and it asserts EQUALITY, because the fixture has to sit ON the boundary for that case to
- * be about the boundary; the rest assert content.
+ * one that was cut off. Of the positive controls only the ones that sit ON a boundary assert a
+ * write total, and they assert EQUALITY, because the fixture has to sit on the boundary for the
+ * case to be about it; the rest assert content.
  *
  * <p><b>What that does and does not discriminate.</b> It separates a read that stops from one that
  * does not, and the two verdicts are {@link #SAFETY_LIMIT} minus the ceiling apart — megabytes, on
  * any platform, which is the whole point of stating it this way. It does NOT say WHERE the ceiling
- * is: {@link #SAFETY_LIMIT} is itself a multiple of {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}, so
- * raising that constant moves both sides together, and raising
- * {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES} to megabytes leaves the peer cut off just the same
- * — measured green at 2 MiB. What pins the ceilings from BELOW is the positive controls:
- * {@link #aBodyOfExactlyTheCeilingArrivesWholeRatherThanCutOff} for the response ceiling and
- * {@link #anOrdinaryErrorBodyReachesTheLogWhole} for the error one. Nothing here pins either from
- * above, and the byte budget this replaced did not reliably do it either: calibrated against macOS
- * loopback, where the peer got 0.7 to 0.8 MB onto the wire past the 8192-byte error ceiling and
- * 0.8 to 1.9 MB past the 4 MiB response one (measured 2026-09-17, after the handler stopped), it
- * was red on GitHub's Linux runners, which got 2.7 MB past that same error ceiling with the module
- * working (issue #446, run 35173250728). A budget on the peer's wire total measures the kernel the
- * suite happens to run on; this measures the handler.
+ * is: a peer is cut off at the ceiling plus whatever the kernel absorbed, which is how a peer
+ * under a raised ceiling can still stop short of {@link #SAFETY_LIMIT} — that constant's javadoc
+ * has the measured case — and raising {@link RemoteLlmEngine#MAX_ERROR_BODY_BYTES} to megabytes
+ * leaves the peer cut off just the same — measured green at 2 MiB. What pins the response
+ * ceiling's VALUE, from both sides, is the pair of fixed-size cases {@link #STATED_RESPONSE_BUDGET}
+ * names (issue #454). {@link #aBodyOfExactlyTheCeilingArrivesWholeRatherThanCutOff} pins its
+ * BOUNDARY — that a body of exactly the ceiling fits — relative to the constant.
+ * {@link #anOrdinaryErrorBodyReachesTheLogWhole} pins the error ceiling from below: one shorter
+ * than {@link #SHORT_ERROR_BODY} cuts the body that case asserts arrives whole. Nothing here pins
+ * the error ceiling from above, and the byte budget this replaced did not reliably do it either:
+ * calibrated against macOS loopback, where the peer got 0.7 to 0.8 MB onto the wire past the
+ * 8192-byte error ceiling and 0.8 to 1.9 MB past the 4 MiB response one (measured 2026-09-17,
+ * after the handler stopped), it was red on GitHub's Linux runners, which got 2.7 MB past that
+ * same error ceiling with the module working (issue #446, run 35173250728). A budget on the peer's
+ * wire total measures the kernel the suite happens to run on; this measures the handler.
  *
  * <p><b>Two of the streaming cases are about WHERE the ceiling is counted</b>, not merely
  * that there is one: a peer whose first line never ends
@@ -105,20 +109,44 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensitiveTest {
 
 	/**
+	 * The most one response may deliver, stated as a literal and deliberately NOT derived from
+	 * {@link RemoteLlmEngine#MAX_RESPONSE_BYTES} (issue #454): it is the number deciding how much
+	 * of the shared OpenMRS heap an untrusted endpoint may occupy per query, and a figure computed
+	 * from the constant under test moves with it.
+	 *
+	 * <p>Two cases pin the ceiling to it, one from each side:
+	 * {@link #aCompletionOfExactlyTheStatedBudgetArrivesWhole} reddens a ceiling lowered below it
+	 * and {@link #aCompletionOneByteOverTheStatedBudgetIsRefused} one raised past it — whether
+	 * through {@code BYTE_ALLOWANCE_PER_OUTPUT_TOKEN} or through
+	 * {@link ChartSearchAiConstants#DEFAULT_LLM_MAX_OUTPUT_TOKENS} — so that moving it is a
+	 * decision made here rather than one that ships unseen. Each sends a well-formed completion of
+	 * fixed length, once, so the verdict is whether the module read it whole, never how much of it
+	 * the kernel absorbed. Why the flood cases cannot say this is {@link #SAFETY_LIMIT}'s javadoc.</p>
+	 */
+	private static final long STATED_RESPONSE_BUDGET = 4L * 1024 * 1024;
+
+	/**
 	 * Where a handler gives up — and, since {@link #assertPeerWasCutOff} asks whether the handler
 	 * REACHED it, the distance by which an unbounded read is separated from a bounded one. Four
-	 * times {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}, so that distance is megabytes rather than
-	 * anything a socket buffer could account for, and small enough that the pre-fix run's
-	 * accumulated {@code StringBuilder} does not itself exhaust the test JVM. A handler that
-	 * reaches this wrote every byte it was ever going to; one the module stopped reading did not.
+	 * times {@link #STATED_RESPONSE_BUDGET}, so that distance is megabytes rather than anything a
+	 * socket buffer could account for, and small enough that the pre-fix run's accumulated
+	 * {@code StringBuilder} does not itself exhaust the test JVM. A handler that reaches this wrote
+	 * every byte it was ever going to; one the module stopped reading did not.
+	 *
+	 * <p>Absolute rather than a multiple of {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}, so raising
+	 * that constant no longer moves this with it — but this is not what pins the ceiling's value.
+	 * A flood peer is cut off at the ceiling plus whatever the kernel absorbed, which stays under
+	 * this for a ceiling raised to 12 MiB: that mutation left every flood case green with this
+	 * limit in place (measured 2026-09-24, macOS loopback). {@link #STATED_RESPONSE_BUDGET} names
+	 * what reddens it.</p>
 	 */
-	private static final long SAFETY_LIMIT = 4L * RemoteLlmEngine.MAX_RESPONSE_BYTES;
+	private static final long SAFETY_LIMIT = 4L * STATED_RESPONSE_BUDGET;
 
 	/**
 	 * How long a cut-off handler is given to notice. It notices on its next write — the module has
 	 * closed the body, and closing it cancels the exchange — so this is a hang detector and not a
 	 * tuned wait: a handler still writing after this was not cut off at all, which is the failure
-	 * the oversized cases are looking for and must be reported rather than waited out.
+	 * the flood cases are looking for and must be reported rather than waited out.
 	 */
 	private static final int PEER_EXIT_SECONDS = 30;
 
@@ -144,7 +172,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 
 	/**
 	 * Set by a repeating handler that ran out of {@link #SAFETY_LIMIT} instead of being cut off —
-	 * i.e. by a peer nothing stopped reading. The verdict of every oversized case is this flag and
+	 * i.e. by a peer nothing stopped reading. The verdict of every flood case is this flag and
 	 * not a byte count, because a byte count of the peer's wire total is a measurement of the
 	 * kernel that ran the test. Never set by {@link #respondOnce}, which writes a fixed body.
 	 */
@@ -170,7 +198,12 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		server.createContext("/flood-error", exchange -> floodBody(exchange, 500));
 		server.createContext("/ordinary-body", this::ordinaryBody);
 		server.createContext("/ordinary-stream", this::ordinaryStream);
-		server.createContext("/exactly-at-the-ceiling", this::exactlyAtTheCeiling);
+		server.createContext("/exactly-at-the-ceiling",
+				exchange -> respondWithCompletionOf(exchange, RemoteLlmEngine.MAX_RESPONSE_BYTES));
+		server.createContext("/exactly-the-budget",
+				exchange -> respondWithCompletionOf(exchange, STATED_RESPONSE_BUDGET));
+		server.createContext("/one-byte-over-the-budget",
+				exchange -> respondWithCompletionOf(exchange, STATED_RESPONSE_BUDGET + 1));
 		server.createContext("/short-error", this::shortError);
 		server.start();
 		Context.getAdministrationService().setGlobalProperty(
@@ -302,6 +335,13 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	/**
 	 * The boundary the ceiling is written on: a body of EXACTLY the ceiling is a body that fits, so
 	 * it must arrive whole. Off by one here and the largest legitimate answer is the one that fails.
+	 *
+	 * <p>While the ceiling equals {@link #STATED_RESPONSE_BUDGET} this sends the same body as
+	 * {@link #aCompletionOfExactlyTheStatedBudgetArrivesWhole}, and a stream-side off-by-one alone
+	 * (the throw in {@code BoundedResponseStream.count} written as {@code >=}) reddens both. What
+	 * this case adds is that its body moves with the constant: that same {@code >=} with the ceiling
+	 * raised by one byte to compensate reddened this case and neither budget case in this class
+	 * (measured 2026-09-24).</p>
 	 */
 	@Test
 	public void aBodyOfExactlyTheCeilingArrivesWholeRatherThanCutOff() {
@@ -312,8 +352,40 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		awaitPeer("the at-the-ceiling body");
 		assertEquals(RemoteLlmEngine.MAX_RESPONSE_BYTES, written.get(),
 				"the fixture has to sit ON the boundary for this case to be about the boundary");
-		assertEquals(ceilingPadding(), result.getText().length(),
+		assertEquals(paddingFor(RemoteLlmEngine.MAX_RESPONSE_BYTES), result.getText().length(),
 				"a response of exactly the ceiling is within it and must not be abandoned");
+	}
+
+	/** The ceiling's VALUE, pinned from below — {@link #STATED_RESPONSE_BUDGET} says how (#454). */
+	@Test
+	public void aCompletionOfExactlyTheStatedBudgetArrivesWhole() {
+		pointEngineAt("/exactly-the-budget");
+
+		LlmEngine.InferenceResult result = assertDoesNotThrow(
+				() -> engine.infer("system", "user", 60),
+				"a completion of exactly the stated budget, " + STATED_RESPONSE_BUDGET + " bytes, "
+						+ "must arrive whole, and the ceiling is now "
+						+ RemoteLlmEngine.MAX_RESPONSE_BYTES + " bytes. Moving it is decided in "
+						+ "STATED_RESPONSE_BUDGET.");
+
+		awaitPeer("the at-the-budget body");
+		assertEquals(STATED_RESPONSE_BUDGET, written.get(),
+				"the fixture has to sit ON the budget for this case to be about it");
+		assertEquals(paddingFor(STATED_RESPONSE_BUDGET), result.getText().length());
+	}
+
+	/** The ceiling's VALUE, pinned from above — {@link #STATED_RESPONSE_BUDGET} says how (#454). */
+	@Test
+	public void aCompletionOneByteOverTheStatedBudgetIsRefused() {
+		pointEngineAt("/one-byte-over-the-budget");
+
+		APIException raised = callAndCatch(() -> engine.infer("system", "user", 60));
+
+		assertNotNull(raised, "a completion of " + (STATED_RESPONSE_BUDGET + 1) + " bytes came "
+				+ "back whole, one byte over the stated budget; MAX_RESPONSE_BYTES is now "
+				+ RemoteLlmEngine.MAX_RESPONSE_BYTES + ". Moving the ceiling is decided in "
+				+ "STATED_RESPONSE_BUDGET.");
+		assertCeilingFailureIsReportable(raised);
 	}
 
 	/**
@@ -397,7 +469,9 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	 * Runs the call and hands back the {@link APIException} it raised, or {@code null}. Deliberately
 	 * not {@code assertThrows}: the byte assertion is the one that says the heap was bounded, and it
 	 * has to be reached even on the run where no exception was raised at all — which is precisely
-	 * the unbounded case.
+	 * the unbounded case. {@link #aCompletionOneByteOverTheStatedBudgetIsRefused} makes no byte
+	 * assertion and uses it for its failure message instead, which says what a body read whole
+	 * means there.
 	 */
 	private APIException callAndCatch(Runnable call) {
 		try {
@@ -508,17 +582,19 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 				SHORT_ERROR_BODY.getBytes(StandardCharsets.UTF_8));
 	}
 
-	/** A well-formed completion whose body is exactly {@link RemoteLlmEngine#MAX_RESPONSE_BYTES}. */
-	private void exactlyAtTheCeiling(HttpExchange exchange) throws IOException {
+	/** A well-formed completion whose body is exactly {@code totalBytes}, sent once. */
+	private void respondWithCompletionOf(HttpExchange exchange, long totalBytes) throws IOException {
 		respondOnce(exchange, 200, "application/json",
-				(COMPLETION_PREFIX + "z".repeat(ceilingPadding()) + COMPLETION_SUFFIX)
+				(COMPLETION_PREFIX + "z".repeat(paddingFor(totalBytes)) + COMPLETION_SUFFIX)
 						.getBytes(StandardCharsets.UTF_8));
 	}
 
-	/** How much filler makes {@link #COMPLETION_PREFIX} + filler + {@link #COMPLETION_SUFFIX} the ceiling. */
-	private static int ceilingPadding() {
-		return (int) RemoteLlmEngine.MAX_RESPONSE_BYTES - COMPLETION_PREFIX.length()
-				- COMPLETION_SUFFIX.length();
+	/**
+	 * How much filler makes {@link #COMPLETION_PREFIX}, filler and {@link #COMPLETION_SUFFIX} add up
+	 * to {@code totalBytes}.
+	 */
+	private static int paddingFor(long totalBytes) {
+		return (int) totalBytes - COMPLETION_PREFIX.length() - COMPLETION_SUFFIX.length();
 	}
 
 	/** An SSE stream that never reaches {@code [DONE]} — one content chunk after another. */

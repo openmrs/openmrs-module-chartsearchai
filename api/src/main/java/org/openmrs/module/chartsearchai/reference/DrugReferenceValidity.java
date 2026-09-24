@@ -823,7 +823,8 @@ public final class DrugReferenceValidity {
 	 * a property of the PARSERS: {@link DdiDrugReferenceSource} makes an entry's display name its first
 	 * alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of those the strongest
 	 * claimant on any alias an entry carries is itself in the matched set. A hand-authored {@code json}
-	 * file need not do that, and {@code json} is the DEFAULT format — there the rank-2 claimant can be an
+	 * file need not do that, and {@code json} was the DEFAULT format until ADR Decision 36 and is still what a
+	 * deployment needing dosing selects — there the rank-2 claimant can be an
 	 * entry the matcher never reached, and then no matched row's alias denotes its own substance and every
 	 * one is dropped ({@code DrugReferenceService.rowsOf} bounds that to "never emptied", which is a floor
 	 * rather than a fix). Giving the entry its own display name asserts nothing the file does not already

@@ -21,7 +21,7 @@ import org.openmrs.module.chartsearchai.LogCapture;
 /**
  * Exercises the real {@link JsonDrugReferenceSource#load()} path. With no OpenMRS
  * context available it falls back to the bundled {@code /chartsearchai/drug-reference.json}
- * — the production default — so this runs the real load path against the real dataset.
+ * — the production default until ADR Decision 36 — so this runs the real load path against the real dataset.
  *
  * <p>One case does not, and says so in its own javadoc: the issue #242 case feeds the real
  * {@link JsonDrugReferenceSource#parse} a fixture of ANOTHER format, because what it is about is the
@@ -38,8 +38,9 @@ public class JsonDrugReferenceSourceTest {
 	}
 
 	/**
-	 * Issue #242 from the curated side, which is the likelier of the two directions: this is the DEFAULT
-	 * format, so the document this parser is most often handed by mistake is one of another format. A
+	 * Issue #242 from the curated side, which was the likelier of the two directions while this was the
+	 * DEFAULT format (until ADR Decision 36): the document this parser was most often handed by mistake was
+	 * one of another format. A
 	 * DDInter export declares no {@code entries} and used to read as zero in the same silence.
 	 *
 	 * <p>Through {@link DrugReferenceTestSupport#fixtureEntries}, the helper every curated fixture test

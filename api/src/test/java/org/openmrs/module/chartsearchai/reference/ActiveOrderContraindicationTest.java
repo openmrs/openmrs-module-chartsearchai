@@ -86,8 +86,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *       {@link #everyActiveOrderIsCheckedRatherThanOnlyTheFirst},
  *       {@link #thePatientsOwnContraindicationsLeadTheScreensPairChips}) pass {@code null} mappings,
  *       the documented no-scoping shape, so nothing about them depends on it.</li>
- *   <li>All but one run on the real bundled curated dataset (the production default
- *       {@code sourceFormat=json}, whose ibuprofen entry carries both a curated allergy rule and an
+ *   <li>All but one run on the real bundled curated dataset (the production default until ADR
+ *       Decision 36, {@code sourceFormat=json}, whose ibuprofen entry carries both a curated allergy rule and an
  *       identity-resolvable name).
  *       {@link #aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck} needs the bundled
  *       DDInter sample instead: the partner its answer recites has to be an ENTRY in the loaded

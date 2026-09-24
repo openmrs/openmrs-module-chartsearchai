@@ -286,7 +286,7 @@ public class SubstanceCandidateSetTest {
 		// names always survives. The middle step is a property of the PARSERS, not of this filter —
 		// DdiDrugReferenceSource makes the display name alias[0] and AtcDrugReferenceSource makes it the
 		// only alias, so on both of those an entry always names itself. A hand-authored `json` dataset
-		// need not, and `json` is the DEFAULT sourceFormat.
+		// need not, and `json` was the DEFAULT sourceFormat until ADR Decision 36.
 		//
 		// Here `Ibuprofen` publishes only `ibuprof`. The recorded-name matcher reaches `ibuprofen` from
 		// that stem by its two-letter inflection allowance, so it is the rank-2 claimant on the word; the

@@ -1229,8 +1229,8 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 			assertTrue(
 					capture.messagesAt(Level.WARN).toString()
 							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
-					"same log leg, and it matters more here: this is the default format, so an operator "
-							+ "hitting it has changed nothing but the path. Captured: "
+					"same log leg, and it matters more here: this was the default format until ADR Decision 36, "
+							+ "so an operator hitting it then had changed nothing but the path. Captured: "
 							+ capture.describeAll());
 		}
 

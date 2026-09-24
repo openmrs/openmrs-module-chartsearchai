@@ -811,7 +811,8 @@ public final class DrugReferenceValidity {
 	 * {@code drug-reference-substance-dosing-rows.json}: the Cefalexin dose warning that
 	 * {@code Give cefalexin 400 mg three times daily.} raised for a six-year-old without that entry was
 	 * not raised with it on the commit before the fix ({@code c39cc524^}), and was raised either way on
-	 * the fix's own ({@code c39cc524}). What that fix leaves of it was not measured.
+	 * the fix's own ({@code c39cc524}). Whether any other shape of it survives that fix was not
+	 * measured.
 	 *
 	 * <p><b>An entry no alias of its own names is REPAIRED</b> (#210, #211) — <b>except where its display
 	 * NAME is itself a string that names nothing, which is REPORTED instead</b> (#296). Repairing that

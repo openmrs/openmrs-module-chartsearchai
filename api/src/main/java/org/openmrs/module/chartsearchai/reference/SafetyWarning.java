@@ -998,10 +998,10 @@ public class SafetyWarning {
 	 * beside the question's unless a record the answer is attributable to already names it
 	 * ({@code DrugSafetyValidator.isEchoOfAttributableRecord}); the injected record of every finding the
 	 * first pass raised names that finding's drug, and the attributable records include the module's own
-	 * uncited. {@code answerFromTheModule} hands it the EMPTY answer, as the pass that raised the findings
-	 * had. The ways the two passes' answers can still differ are not listed here: two lists written here
-	 * were each found incomplete. Nothing compares the two passes' warnings; ADR Decision 118 records the
-	 * divergence as a residue.
+	 * reference records, cited or not. {@code answerFromTheModule} hands it the EMPTY answer, as the pass
+	 * that raised the findings had. The ways the two passes' answers can still differ are not listed here:
+	 * two lists written here were each found incomplete. Nothing compares the two passes' warnings; ADR
+	 * Decision 118 records the divergence as a residue.
 	 * Said here because a reader checking for pass-stability will look for it.
 	 *
 	 * <p>It is not derivable from anything else the warning carries, which is why it travels. In

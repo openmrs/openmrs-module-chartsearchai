@@ -426,9 +426,8 @@ public class ChartSearchAiChartAlertsTest {
 	 * case included — and every standing alert is a contraindication, which carries no bridge, and
 	 * {@code SafetyWarning} stores an empty one as {@code Collections.emptyList()}. So this surface hands
 	 * the marshaller the refused shape on its ordinary path, not an exotic one. The unscreened half is here
-	 * because that
-	 * payload's {@code alerts} is empty, which is the arrangement an XML client sees on a disabled
-	 * install.
+	 * because that payload's {@code alerts} is empty, which is the arrangement an XML client sees on a
+	 * disabled install.
 	 */
 	@Test
 	public void theWholePayloadMarshalsForAnXmlClient() throws Exception {

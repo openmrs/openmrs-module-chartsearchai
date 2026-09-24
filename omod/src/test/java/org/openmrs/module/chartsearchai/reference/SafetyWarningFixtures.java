@@ -14,8 +14,9 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Builds a {@link SafetyWarning} through a factory {@code SafetyWarning} keeps package-private, for
- * an omod test that cannot reach one from {@code org.openmrs.module.chartsearchai.web.rest}.
+ * Builds a {@link SafetyWarning} through a factory or method {@code SafetyWarning} keeps
+ * package-private, for an omod test that cannot reach one from
+ * {@code org.openmrs.module.chartsearchai.web.rest}.
  *
  * <p><b>Why it exists, and why it is not a widening of production API.</b> The chip-serialization
  * guards live in {@code web.rest}, and the facts these shapes carry are set only through

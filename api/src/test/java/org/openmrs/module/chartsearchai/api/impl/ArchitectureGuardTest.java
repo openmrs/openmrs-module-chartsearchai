@@ -539,6 +539,50 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Issue #512: the local engine's two {@code ReferenceRecords} arities must hand that value to
+	 * the body builder, which is the only place the DRY sampler is decided. Nothing behavioural can
+	 * see this link: {@code ReferenceRecordsReachTheEngineTest} records the value at a stub engine and
+	 * {@code LocalLlmEngineTest} builds a body directly, and a real call needs the spawned server
+	 * this module cannot start in a test. So an override calling the builder's narrower overload,
+	 * which pins {@code ABSENT}, would keep the penalty on every request with both green.
+	 *
+	 * <p>Read as {@link #theLaunchPathStillCallsEachProtection} is, through
+	 * {@link #methodBodyWithoutLiterals}, and with that method's residue: text cannot see
+	 * reachability, so a call in a branch that never runs satisfies it.
+	 */
+	@Test
+	public void theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder() throws IOException {
+		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
+		java.util.regex.Pattern forwarded = java.util.regex.Pattern.compile(
+				"buildRequestBody\\([^;]*\\breferenceRecords\\s*\\)");
+
+		List<String> violations = new ArrayList<>();
+		for (String signature : java.util.Arrays.asList(
+				"public synchronized InferenceResult infer(String systemPrompt, String userMessage,\n"
+						+ "\t\t\tint timeoutSeconds, ReferenceRecords referenceRecords)",
+				"public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,\n"
+						+ "\t\t\tint timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, "
+						+ "String cacheSeed,\n\t\t\tReferenceRecords referenceRecords)")) {
+			String body = methodBodyWithoutLiterals(source, signature);
+			assertTrue(body != null && !body.isEmpty(),
+					"could not slice the body of " + signature + " out of LocalLlmEngine.java — a guard"
+							+ " that reads nothing reports no violations, so this is a failure and not a"
+							+ " pass");
+			int calls = body.split("buildRequestBody\\(", -1).length - 1;
+			int forwarding = 0;
+			for (java.util.regex.Matcher m = forwarded.matcher(body); m.find();) {
+				forwarding++;
+			}
+			if (calls == 0 || forwarding != calls) {
+				violations.add(signature.replaceAll("\\s+", " ") + " builds its request without"
+						+ " handing the body builder its referenceRecords (" + forwarding + " of " + calls
+						+ " calls) — the DRY sampler is then sent whatever the prompt carries");
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
 	 * The body of the method whose declaration is {@code signature}, with comments and string and
 	 * character literals blanked. Literals go because a class-wide version of
 	 * {@link #theLaunchPathStillCallsEachProtection} was satisfied by a log line that merely

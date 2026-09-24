@@ -147,6 +147,42 @@ public class LocalLlmEngineTest {
 	}
 
 	@Test
+	public void buildRequestBody_sendsNoDrySamplerForAPromptCarryingReferenceRecords() throws IOException {
+		for (boolean stream : new boolean[] { false, true }) {
+			ObjectNode present = (ObjectNode) MAPPER.readTree(
+				engine.buildRequestBody("sys", "usr", stream, LlmEngine.ReferenceRecords.PRESENT));
+
+			JsonNode samplers = present.get("samplers");
+			assertEquals(1, samplers.size(),
+				"issue #512: an answer over the module's reference records restates them, and DRY "
+						+ "penalises every copy longer than dry_allowed_length out of a prompt it counts "
+						+ "whole (dry_penalty_last_n=-1) — the measured 'riframpin', 'zidovudeine'. So "
+						+ "the chain is temperature alone. Was: " + samplers);
+			assertEquals("temperature", samplers.get(0).asText());
+			List<String> dryFields = new java.util.ArrayList<String>();
+			present.fieldNames().forEachRemaining(name -> {
+				if (name.startsWith("dry")) {
+					dryFields.add(name);
+				}
+			});
+			assertEquals(java.util.Collections.emptyList(), dryFields,
+				"and no dry_* field is sent, the decision being to send no DRY sampler at all");
+
+			ObjectNode absent = (ObjectNode) MAPPER.readTree(
+				engine.buildRequestBody("sys", "usr", stream, LlmEngine.ReferenceRecords.ABSENT));
+			assertEquals(engine.buildRequestBody("sys", "usr", stream),
+				engine.buildRequestBody("sys", "usr", stream, LlmEngine.ReferenceRecords.ABSENT),
+				"a prompt without reference records sends today's body byte for byte, which is what "
+						+ "keeps the #15 and d2d7d361 measurements covering it");
+			absent.remove(java.util.Arrays.asList("samplers", "dry_multiplier", "dry_base",
+				"dry_allowed_length", "dry_penalty_last_n"));
+			present.remove("samplers");
+			assertEquals(absent, present,
+				"and the sampler chain is the ONLY thing the value changes (stream=" + stream + ")");
+		}
+	}
+
+	@Test
 	public void buildServerCommand_shouldPinCacheReuseToZero() {
 		// --cache-reuse pinned to 0 (llama.cpp's default). The previous value of 256 enabled
 		// KV shifting (re-applying RoPE to cached K blocks for fuzzy prefix matching when the

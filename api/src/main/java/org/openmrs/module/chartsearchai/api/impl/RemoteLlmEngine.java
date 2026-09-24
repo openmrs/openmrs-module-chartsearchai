@@ -101,7 +101,29 @@ public class RemoteLlmEngine implements LlmEngine {
 
 	@Override
 	public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds) {
-		return infer(systemPrompt, userMessage, timeoutSeconds, null);
+		return infer(systemPrompt, userMessage, timeoutSeconds, (ObjectNode) null);
+	}
+
+	/**
+	 * The same request whatever the prompt carries: this engine sends no repetition penalty at all,
+	 * so there is nothing for a prompt carrying reference records to switch off (issue #512).
+	 */
+	@Override
+	public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+			ReferenceRecords referenceRecords) {
+		return infer(systemPrompt, userMessage, timeoutSeconds);
+	}
+
+	/**
+	 * The same request whatever the prompt carries, for the reason the blocking form gives; and, as
+	 * {@link LlmEngine}'s default six-argument form does, it keeps no KV cache to scope.
+	 */
+	@Override
+	public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			ReferenceRecords referenceRecords) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, cacheScope,
+				cacheSeed);
 	}
 
 	@Override

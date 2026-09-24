@@ -122,6 +122,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 114: A screen of her medications states which of her orders share a substance, once per set of orders](#decision-114-a-screen-of-her-medications-states-which-of-her-orders-share-a-substance-once-per-set-of-orders)
 - [Decision 115: Several rows of one substance are not a pair, so the question-pair arm leaves the field to the arm that screened](#decision-115-several-rows-of-one-substance-are-not-a-pair-so-the-question-pair-arm-leaves-the-field-to-the-arm-that-screened)
 - [Decision 116: A question about a drug states which of her orders share a substance too](#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)
+- [Decision 117: A prompt carrying the module's reference records is decoded without the DRY sampler](#decision-117-a-prompt-carrying-the-modules-reference-records-is-decoded-without-the-dry-sampler)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10880,3 +10881,66 @@ of orders, and over #483's order predicate.
   local-and-systemic residue reaches these questions too (hydrocortisone cream beside a tablet).
 
 → `OrdersSharingASubstanceTest`, `OrdersSharingASubstanceModuleAnswerContextTest.onAProposalTheFindingFollowsTheProposedDrugsCautionsInTheModulesAnswer`.
+
+## Decision 117: A prompt carrying the module's reference records is decoded without the DRY sampler
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#512](https://github.com/openmrs/openmrs-module-chartsearchai/issues/512), which it closes. The scope
+is the issue owner's decision, recorded in the issue's first comment.
+
+### Context
+
+`LocalLlmEngine.buildRequestBody` pinned every request to `samplers: [dry, temperature]` with
+`dry_allowed_length=8` and `dry_penalty_last_n=-1`, so the whole context — prompt included — is in
+DRY's window. A safety answer restates the findings the module injected, so every copy of one longer
+than eight tokens was penalised and the model was pushed off it mid-word. The issue measured it
+through the real module on the external DDI evaluation's twelve questions for its three demo
+patients, changing only `dry_multiplier` 0.8 → 0.0: E2B's answers carried nine misspelled forms with
+DRY on ("riframpin", "zidovudeine") and none with it off, and the published
+`unfaithfullyRenderedCitations` summed over the twelve went from 7 to 1; on E4B, one form to none and
+3 to 1. The forms were found by comparing each answer's words with the chip text and confirmed by
+reading; the second figure is `ReferenceProseFidelityCheck` as published on the wire. The comment
+above those parameters already recorded the same dodge at `allowed_length=4` ("Serum potassium" →
+"Serum पोटेशियम").
+
+### The decision
+
+**A chart-answer request whose chart carries a reference-group record sends `samplers:
+["temperature"]` and no `dry_*` field. Every other request is byte-identical to before.**
+
+- **Decided off the chart, never off the prompt text or a type name.** `LlmEngine.ReferenceRecords.in`
+  reads `ChartSearchAiUtils.referenceSlice`, the slice the audit row already carries, which asks
+  `referenceGroup`. `LlmInferenceService` reads it off the post-inject chart once per request and hands
+  it to the answer, the #398 repair and — off its own chart — the progressive-reasoning preview.
+- **Only the answer arities carry it.** `entails`, `entailsBatch` and `warmup` send what they sent: a
+  verdict is YES or NO rather than a copy, and a warmup generates one token.
+- **The two engine methods are abstract, not defaults that drop the value.** An engine that does not
+  handle it fails to compile rather than keeping the penalty. `RemoteLlmEngine` sends no repetition
+  penalty at all and ignores it.
+
+**Rejected:**
+
+- **Re-running #15's 14-model loop benchmark and re-tuning DRY for every request.** Its harness and
+  question set are not in the repository, and its MedGemma Q6 variants are not on disk.
+- **A positive `dry_penalty_last_n`.** In the pinned llama.cpp, prompt tokens enter DRY's history (the
+  issue owner's reading of `server-context.cpp`, recorded in the issue), and
+  the answer is written after the `reasoning` field, so a window over generated text still penalises
+  the answer for restating what the reasoning restated. That would need its own A/B.
+
+### Consequences
+
+- **+** Pinned by `LocalLlmEngineTest.buildRequestBody_sendsNoDrySamplerForAPromptCarryingReferenceRecords`
+  (the body, and that `ABSENT` is today's body byte for byte), `ReferenceRecordsReachTheEngineTest` (the
+  value each answer call hands the engine, through a real `LlmProvider` over a chart the real injector
+  built) and `ArchitectureGuardTest.theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder`
+  (the one link a test cannot run: that guard reads source, with its residue named in its javadoc).
+- **−** **The changed path has no loop guard.** No loop was observed in the issue's 24 DRY-off answers,
+  the longest 2,265 characters; `max_tokens` bounds the worst case; and the remote engine has never
+  sent DRY. That is not #15's benchmark.
+- **−** **How many requests take the changed path was not measured.** It depends on
+  `chartsearchai.drugReference.enabled`, on the question and on the patient's medications, which
+  together decide whether the injector appends any record.
+- **−** **Copying a CHART record is still penalised.** A request whose chart carries no reference record
+  keeps DRY, so a misspelling copied from the patient's own records is not addressed by this decision.
+
+→ `ReferenceRecordsReachTheEngineTest`.

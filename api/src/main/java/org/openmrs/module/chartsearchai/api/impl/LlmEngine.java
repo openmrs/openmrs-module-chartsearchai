@@ -13,6 +13,8 @@ import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+
 /**
  * Abstraction for LLM inference engines. Implementations handle the actual
  * model invocation (local or remote) while prompt construction and response
@@ -109,6 +111,62 @@ public interface LlmEngine {
 	default InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
 			Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
 		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer);
+	}
+
+	/**
+	 * As {@link #infer(String, String, int)}, for a chart-answer prompt whose chart may carry the
+	 * module's own reference records — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/512">#512</a>. An
+	 * answer over such a prompt is expected to restate those records, and an engine that penalises
+	 * repeating the prompt has to stop doing so for it; {@link LocalLlmEngine} is the engine that
+	 * does, and ADR Decision 117 is canonical for why and for what the other requests keep.
+	 *
+	 * <p>Abstract rather than a default that falls back to the 3-arg form, deliberately: such a
+	 * default is how an engine silently drops the argument and keeps the penalty, with every test
+	 * double recording the value it was handed and never seeing what the engine did with it.
+	 *
+	 * @param referenceRecords whether the prompt carries reference-group records, from
+	 *        {@link ReferenceRecords#in}
+	 */
+	InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+			ReferenceRecords referenceRecords);
+
+	/**
+	 * As {@link #inferStreaming(String, String, int, Consumer, String, String)}, for a chart-answer
+	 * prompt whose chart may carry the module's own reference records. Abstract for the reason
+	 * {@link #infer(String, String, int, ReferenceRecords)} gives.
+	 *
+	 * @param referenceRecords whether the prompt carries reference-group records, from
+	 *        {@link ReferenceRecords#in}
+	 */
+	InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
+			Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			ReferenceRecords referenceRecords);
+
+	/**
+	 * Whether a prompt's chart carries reference-group records (issue #512). Read off the chart the
+	 * model is handed, through {@link #in}, and never off a resource-type name or the rendered text.
+	 */
+	enum ReferenceRecords {
+
+		/** The chart carries no reference-group record. */
+		ABSENT,
+
+		/** The chart carries at least one reference-group record. */
+		PRESENT;
+
+		/**
+		 * The one reading of a chart's {@link ChartSearchAiUtils#referenceSlice}: present when it
+		 * counts a record. The slice is what already decides "reference material" for the audit row,
+		 * through {@link ChartSearchAiUtils#referenceGroup}, so this question has no type list of its
+		 * own.
+		 *
+		 * @param slice the slice of the chart the prompt is built from, may be null
+		 * @return {@link #PRESENT} when the slice counts at least one record, else {@link #ABSENT}
+		 */
+		public static ReferenceRecords in(ChartSearchAiUtils.ReferenceSlice slice) {
+			return slice != null && slice.getRecords() > 0 ? PRESENT : ABSENT;
+		}
 	}
 
 	/**

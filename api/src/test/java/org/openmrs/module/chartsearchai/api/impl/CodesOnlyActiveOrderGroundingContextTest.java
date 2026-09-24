@@ -477,7 +477,7 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			Matcher matcher = ACTIVE_ORDER_LINE.matcher(numberedRecords);
 			if (!matcher.find()) {
 				throw new IllegalStateException(

@@ -204,7 +204,7 @@ public class LlmInferenceServiceAsyncGroundingTest {
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
 			return new LlmResponse("Active Tuberculosis [8]. CD4 988.0 [9].", Arrays.asList(8, 9));
 		}
 	}

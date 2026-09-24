@@ -444,9 +444,9 @@ public class ArchitectureGuardTest {
 	 * {@code DrugOrderCurrencyMarkTest} — mutate the serializer's argument and read the failures. It is
 	 * conservative on the forbidden side: a null reached through a cast, a static field or a helper is
 	 * reported as a write. Its reach is the API module's classes, as every constant-pool case here
-	 * states for its own, and a REFLECTIVE construction names no descriptor in any pool, so no case
-	 * here can see it. A date-carrying rung that passed a value of its own in place of the
-	 * parameter it forwards is exempt with the rest of its rung. And the case reads the field, not the
+	 * states for its own, and a REFLECTIVE construction or field write names no descriptor this reads,
+	 * so no case here can see it. A date-carrying rung that passed, or the widest that assigned, a
+	 * value of its own in place of the parameter it takes is exempt with the rest of its rung. And the case reads the field, not the
 	 * getter: a {@code getOrderStopDate()} that derived a value instead of returning the field, or a
 	 * subclass overriding it — {@code RecordMapping} is not final — publishes a date no constructor
 	 * wrote.

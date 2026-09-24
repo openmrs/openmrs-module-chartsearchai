@@ -11137,19 +11137,25 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   asked only the stretches BETWEEN names, so the tail was the one end left open. The test is
   punctuation, `clauseBound`'s reason, and #477's finding copied verbatim closes its list with a dash.
   Both refuse only.
-- **Three of those refusals had cost reach they did not need** (round 2 of the second review loop,
+- **Two of those refusals had cost reach they did not need** (round 2 of the second review loop,
   each a swapped subject left unjudged). *A list running on* first refused the whole claim, so
   *"Clarithromycin interacts with active order Amiodarone and Digoxin which is a Major problem [6]"*,
   [6] Simvastatin's, went silent where the one-partner form is reported; `partnerReadings` now reads
   the claim with its last drug as a partner and without it, judged only where both reach one verdict
   — the subject side's rule — so a citation relating none of the drugs is reported and one relating
-  only the last is not accused. *A claim after one with no run and no comma* had an empty subject
-  span, its predecessor's partner span running up to its noun; `claims` now starts it where that
-  partner began, and the drugs in between are readings that must agree. *A lead the prompt invites*
+  only the last is not accused. *A lead the prompt invites*
   — it asks a withhold finding to open with *"No"* and what to avoid — put its negator or its drug in
   the subject span: `afterItsLead` starts the span past a colon followed by a space or a spaced em or
   en dash, locally, so `clauseBound` and the sibling's answers are unchanged. The spaces are required
   because a dash can join a combination's names, and a colon sits inside two knowledge-base names.
+  Round 2 widened a third — *a claim after one with no run and no comma*, whose subject span is empty,
+  its predecessor's partner span running up to its noun — by starting that span where the previous
+  partner BEGAN. Round 3 withdrew it: one subject stated against two orders with the noun repeated,
+  *"Clarithromycin interacts with active order Amiodarone and active order Digoxin [12]"*, then read as
+  *"Amiodarone interacts with Digoxin"* and published Clarithromycin's own Digoxin finding as
+  misattributed — a false accusation in a faithful answer, and in the withhold lead the prompt invites.
+  The words between the two nouns do not say whether they are a subject or a partner list, so the
+  span again begins where the previous claim's partner or run ended, and that swap is unjudged.
 - **Silence over accusation wherever the operands cannot be read**: a subject naming no drug any
   interaction or condition-mediated finding names, nothing after the noun, a run citing a reference
   record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
@@ -11217,7 +11223,9 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   Digoxin"* — is cut at it. Catching either needs a drug vocabulary on the answer path, which this
   check does not have.
 - **−** **A swapped subject in a clause naming several drugs is unjudged, not reported** — behind a
-  lead clause, a pronoun or a parenthesis — since its readings disagree.
+  lead clause, a pronoun or a parenthesis — since its readings disagree. So is one after a claim with
+  no marker and no comma (*"… active order Amiodarone and Simvastatin interacts with active order
+  Digoxin [6]"*), whose subject span is empty; the round-2 bullet above says why it is not read.
 - **−** **Two orders one finding names read as related**, so a claim pairing two orders of a merged
   (Decision 99) finding is not reported — the price of not falsely reporting #477's findings; the
   relation bullet above says why.

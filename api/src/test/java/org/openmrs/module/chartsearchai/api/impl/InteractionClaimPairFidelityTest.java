@@ -927,48 +927,11 @@ public class InteractionClaimPairFidelityTest {
 	}
 
 	@Test
-	public void aSwappedSubjectAfterAClaimWithNoMarkerIsStillReported() {
-		// Round 2 of #514's second review. The first claim carries no marker and no comma, so its span ran
-		// to the second claim's noun and the second claim's subject span began there — empty, and the claim
-		// unjudged whatever it cited. Its subject span begins where the first claim's partner does, so its
-		// readings are the drugs named between the two nouns, and a citation relating none of them is
-		// reported as it is with a marker on the first claim.
-		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
-		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
-		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
-				"Simvastatin"), "the premise: no finding relates Simvastatin to Digoxin, chart was: "
-						+ arrangement.chart.getText());
-		String answer = "Clarithromycin interacts with active order Amiodarone and Simvastatin interacts with "
-				+ "active order Digoxin [" + simvastatinsFinding + "].";
-
-		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
-				.getInteractionClaimPairs();
-
-		assertEquals(Collections.singletonList(Integer.valueOf(simvastatinsFinding)),
-				pairs.getMisattributedCitations(), "was: " + pairs);
-		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
-
-		// The span begins at the first claim's PARTNER, not its subject: read from the sentence start,
-		// Simvastatin — the first claim's subject — would be a reading [6] relates, and the swap unjudged.
-		// The first claim's own pair is one no finding relates, so it is unfounded.
-		String afterItsPartner = "Simvastatin interacts with active order Digoxin and Clarithromycin interacts "
-				+ "with active order Amiodarone [" + simvastatinsFinding + "].";
-		assertFalse(arrangement.chipsOver(afterItsPartner).stream().anyMatch(chip -> relates(chip, "Simvastatin",
-				"Digoxin")), "nor does a chip, were: " + arrangement.chipsOver(afterItsPartner));
-
-		InteractionClaimPairs afterItsPartnerPairs = arrangement.service(afterItsPartner)
-				.search(patient(), LISTING_QUESTION).getInteractionClaimPairs();
-
-		assertEquals(Collections.singletonList(Integer.valueOf(simvastatinsFinding)),
-				afterItsPartnerPairs.getMisattributedCitations(), "was: " + afterItsPartnerPairs);
-		assertEquals(1, afterItsPartnerPairs.getUnfounded(), "was: " + afterItsPartnerPairs);
-		assertEquals(2, afterItsPartnerPairs.getJudged(), "was: " + afterItsPartnerPairs);
-	}
-
-	@Test
 	public void aCorrectCitationAfterAClaimWithNoMarkerIsNotAccused() {
-		// The faithful side of the case above: [6] is Simvastatin's own Amiodarone finding. The second
-		// claim's readings are Digoxin and Simvastatin, which disagree, so it is unjudged and [6] not accused.
+		// [6] is Simvastatin's own Amiodarone finding. The first claim carries no marker and no comma, so its
+		// partner span runs to the second claim's noun and the second claim's subject span begins there —
+		// empty, so it is unjudged and [6] not accused. A swapped subject in this shape is unjudged too, the
+		// residue ADR Decision 119 names.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 		String answer = "Clarithromycin interacts with active order Digoxin and Simvastatin interacts with "
 				+ "active order Amiodarone [" + arrangement.finding("Simvastatin", "Amiodarone") + "].";
@@ -978,6 +941,50 @@ public class InteractionClaimPairFidelityTest {
 
 		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
 		assertEquals(0, pairs.getUnfounded(), "was: " + pairs);
+	}
+
+	@Test
+	public void oneSubjectStatedAgainstTwoOrdersWithTheNounRepeatedIsNotReadAsTheFirstOrdersClaim() {
+		// Round 3 of #514's second review. One subject, two of her orders, "active order" repeated and no
+		// marker after the first: the second claim's subject is Clarithromycin, stated once. Starting its
+		// subject span where the first claim's PARTNER began read it as "Amiodarone interacts with Digoxin",
+		// so Clarithromycin's own Digoxin finding was published as misattributed, and a pair the answer never
+		// stated counted unfounded. The second claim's subject span is empty instead, so it is unjudged —
+		// the residue ADR Decision 119 names — and the first claim is still judged where its subject is.
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int warfarin = arrangement.finding("Clarithromycin", "Warfarin");
+		int digoxin = arrangement.finding("Clarithromycin", "Digoxin");
+		int amiodarone = arrangement.finding("Clarithromycin", "Amiodarone");
+		assertTrue(arrangement.hasFinding("Amiodarone", "Digoxin"), "the premise: the false reading's own pair is "
+				+ "one a finding relates, chart was: " + arrangement.chart.getText());
+		assertFalse(arrangement.hasFinding("Warfarin", "Digoxin") || arrangement.hasFinding("Digoxin", "Warfarin"),
+				"the premise: no finding relates Warfarin to Digoxin, chart was: " + arrangement.chart.getText());
+		Object[][] cases = {
+				{ "Clarithromycin interacts with active order Amiodarone and active order Digoxin [" + digoxin + "].",
+						1 },
+				{ "Clarithromycin interacts with active order Amiodarone and with active order Digoxin [" + amiodarone
+						+ "], [" + digoxin + "].", 1 },
+				{ "Clarithromycin interacts with active order Amiodarone and active order Digoxin, both a reason to "
+						+ "withhold it [" + amiodarone + "][" + digoxin + "].", 1 },
+				{ "No — Clarithromycin should not be given: it interacts with active order Amiodarone and active "
+						+ "order Digoxin, a Major problem [" + amiodarone + "][" + digoxin + "].", 0 },
+				{ "Clarithromycin interacts with active order Warfarin and active order Digoxin.", 1 },
+				{ "Clarithromycin interacts with active order Warfarin and active order Digoxin [" + warfarin + "]["
+						+ digoxin + "].", 1 },
+				// The control: a marker after the first order bounds the second claim's subject span at it.
+				{ "Clarithromycin interacts with active order Amiodarone [" + amiodarone + "] and active order Digoxin ["
+						+ digoxin + "].", 1 } };
+		for (Object[] each : cases) {
+			String answer = (String) each[0];
+
+			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
+					.getInteractionClaimPairs();
+
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			assertEquals(((Integer) each[1]).intValue(), pairs.getJudged(), "was: " + pairs + " for: " + answer);
+		}
 	}
 
 	@Test

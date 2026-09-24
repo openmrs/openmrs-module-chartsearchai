@@ -46,8 +46,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>The unit is {@link ActiveOrderCitationFidelityCheck#claims}'s</b>: an occurrence of
  * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, the words before it in its clause as the SUBJECT — from
- * past a lead's colon or spaced dash ({@link #afterItsLead}), and after a claim with no run from where
- * that claim's partner began —
+ * past a lead's colon or spaced dash ({@link #afterItsLead}), and no further back than the end of the
+ * previous claim's partner span or run —
  * the words after it up to its marker run (or clause bound) as the PARTNER, and that run as what it
  * cites. One walk, so this check and that one cannot disagree about which claims the answer made or
  * which markers each offered. A marker past the claim's comma is not in its run — the ticket's cases
@@ -159,7 +159,10 @@ import org.slf4j.LoggerFactory;
  * and Heparin"</em> — is no name to this check, so it reads as more words of the related partner and
  * passes; a partner list continued past a comma is cut at it, so <em>"active order Amiodarone, Heparin
  * and Digoxin"</em> is judged on Amiodarone alone. A swapped subject in a clause naming several drugs is
- * left unjudged, not reported — a pronoun or a parenthesis included.
+ * left unjudged, not reported — a pronoun or a parenthesis included — and so is one after a claim with no
+ * marker and no comma, whose partner span runs to its noun and leaves its subject span empty. Starting that
+ * span where the previous partner BEGAN reported the swap and read <em>"X interacts with active order A and
+ * active order B [b]"</em> as A's claim, accusing X's own B finding (round 3 of #514's second review).
  * And a claim not written in the
  * active-order form — the ticket's first case, <em>"a caution to note regarding interactions with
  * Lopinavir / ritonavir, Didanosine, and Nevirapine [288], [290]"</em> — is not a claim to this check

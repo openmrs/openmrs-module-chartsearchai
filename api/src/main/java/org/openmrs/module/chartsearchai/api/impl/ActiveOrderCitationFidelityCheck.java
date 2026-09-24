@@ -336,13 +336,12 @@ final class ActiveOrderCitationFidelityCheck {
 		String phrase = DrugSafetyValidator.ACTIVE_ORDER_NOUN;
 		for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(answer)) {
 			int at = sentence.indexOf(phrase);
-			// Where the next claim's subject span may begin: the previous claim's run end, so a subject span
-			// never reaches back into a claim that cited something — or, where it carried no run, where its
-			// PARTNER began. A run-less claim with no comma has a partner span running up to the next noun,
-			// so starting at its end gave the next claim an empty subject and left it unjudged whatever it
-			// cited (round 2 of #514's second review); the pair check reads each drug in between as a
-			// reading of that subject, judged only where they agree. With a comma, clauseStart finds it
-			// either way.
+			// Where the previous claim of this sentence ended — its run's end, or its partner's where it
+			// carried no run — so a subject span never reaches back into the claim before it. Not where that
+			// partner BEGAN: one subject stated against two orders with the noun repeated ("X interacts with
+			// active order A and active order B") then reads A as the second claim's subject and accuses X's
+			// own B finding (round 3 of #514's second review). What that gives up — a swapped subject after a
+			// run-less claim with no comma between, its subject span empty — is unjudged, ADR Decision 119.
 			int previousEnd = 0;
 			while (at >= 0) {
 				int next = sentence.indexOf(phrase, at + phrase.length());
@@ -366,7 +365,7 @@ final class ActiveOrderCitationFidelityCheck {
 						run == null ? "" : sentence.substring(run[0], run[1]),
 						trailing == null ? partnerTo : trailing[0],
 						trailing == null ? "" : sentence.substring(trailing[0], trailing[1])));
-				previousEnd = run == null ? from : run[1];
+				previousEnd = run == null ? partnerTo : run[1];
 				at = next;
 			}
 		}
@@ -613,8 +612,7 @@ final class ActiveOrderCitationFidelityCheck {
 
 	/**
 	 * One active-order claim — see {@link #claims}. Its three spans are substrings of one sentence: the
-	 * SUBJECT from the start of the claim's clause to the noun — where the claim before it in the clause
-	 * carried no run, from where that claim's partner began — the PARTNER from after the noun to its
+	 * SUBJECT from the start of the claim's clause to the noun, the PARTNER from after the noun to its
 	 * marker run or, where it has none, to its clause bound, and the RUN itself. A claim with no run
 	 * also carries the first run past its clause and the GAP before it (issue #514, round 1 of its
 	 * review) — read by the pair check alone, never by {@link ActiveOrderCitationFidelityCheck}.

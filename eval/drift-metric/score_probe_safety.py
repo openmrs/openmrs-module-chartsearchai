@@ -1788,9 +1788,13 @@ def selftest():
     # narrowing needs no guard, an element-indexing reader raising loudly on the old-shape fixture
     # the moment the arms are scored.
     objects = [{"citation": 349, "rating": "Major"}, {"citation": 350, "rating": "Moderate"}]
-    shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, objects)) == objects,
+    # Bound once and length-guarded: on the narrowing these rows exist for, the reader returns None,
+    # and a bare `len(...)` raised while `shapes` was still being built — a traceback in place of
+    # the row message naming what broke (issue #408).
+    got = unstated_ratings(_cell({"carried": 7, "cited": 7}, objects))
+    shapes.append((got == objects,
                    "unstated_ratings must read the post-#387 object shape too"))
-    shapes.append((len(unstated_ratings(_cell({"carried": 7, "cited": 7}, objects))) == 2
+    shapes.append((isinstance(got, list) and len(got) == 2
                    and ratings_dropped(_cell({"carried": 7, "cited": 7}, objects))
                    and has_rating_measurement(_cell({"carried": 7, "cited": 7}, objects)),
                    "and every reader must score it as two dropped ratings, as it would the "

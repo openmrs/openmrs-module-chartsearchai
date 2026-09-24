@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -743,15 +744,23 @@ public class ChartSearchAiRestController {
 			// answer; citations must show as unverified until verdicts arrive. All unwind on client
 			// disconnect via writeSseEventOrThrow, as do the early done above and the terminal events
 			// below.
+			//
+			// Each raw-text channel holds back its own half of a code point split across two chunks,
+			// so both halves reach one encode (issue #438 — see WholeCodePoints). The audit state
+			// records each chunk as it arrived: it only concatenates, and a split pair concatenates
+			// whole.
+			final WholeCodePoints tokenText = new WholeCodePoints();
+			final WholeCodePoints thinkingText = new WholeCodePoints();
+			final WholeCodePoints preliminaryText = new WholeCodePoints();
 			ChartAnswer chartAnswer = chartSearchService.searchStreaming(
 					patient, sanitizedQuestion,
 					token -> {
 						auditState.recordToken(token);
-						writeSseEventOrThrow(out, "token", token);
+						writeTextEventOrThrow(out, "token", tokenText.take(token));
 					},
 					reasoning -> {
 						auditState.recordOutput();
-						writeSseEventOrThrow(out, "thinking", reasoning);
+						writeTextEventOrThrow(out, "thinking", thinkingText.take(reasoning));
 					},
 					citations -> {
 						auditState.recordOutput();
@@ -760,7 +769,7 @@ public class ChartSearchAiRestController {
 					ungroundedConsumer,
 					preliminary -> {
 						auditState.recordOutput();
-						writeSseEventOrThrow(out, "preliminary", preliminary);
+						writeTextEventOrThrow(out, "preliminary", preliminaryText.take(preliminary));
 					});
 
 			if (!auditState.earlyDoneSent) {
@@ -2246,6 +2255,56 @@ public class ChartSearchAiRestController {
 				stopped = true;
 			}
 			timer.shutdownNow();
+		}
+	}
+
+	/**
+	 * One raw-text channel's held-back half character: a chunk ending in the high half of a surrogate
+	 * pair keeps that half here and prepends it to the channel's next chunk, so the two halves of one
+	 * code point are always encoded by the same {@link #writeSseEvent} call (issue #438).
+	 *
+	 * <p>Each frame is encoded on its own, and an encoder handed an unpaired surrogate substitutes
+	 * {@code ?} for it — so a code point the model streamed across two chunks reached the client as
+	 * {@code ??}. One encoder held for the whole response cannot fix that: the frame syntax between the
+	 * two halves is encoded between them too. The half has to be withheld, and per CHANNEL, because the
+	 * next frame written may belong to another channel whose text it is not part of.</p>
+	 *
+	 * <p>What it does with malformed text: a held half followed by anything but a low half is prepended
+	 * all the same and encoded as {@code ?}, as before; a held half still pending when the channel ends
+	 * is never written. Neither is a character.</p>
+	 */
+	private static final class WholeCodePoints {
+
+		/** The high half held back from the last chunk, or {@code 0} when none is. */
+		private char pending;
+
+		/**
+		 * The text of {@code chunk} that is safe to encode now, or {@code null} when the whole of it
+		 * was held back and no frame should be written.
+		 *
+		 * @throws NullPointerException on a {@code null} chunk, which the writer's split refused before
+		 *         this existed and which must not now read as "held back"
+		 */
+		String take(String chunk) {
+			Objects.requireNonNull(chunk, "a streamed chunk");
+			String text = pending == 0 ? chunk : pending + chunk;
+			pending = 0;
+			if (!text.isEmpty() && Character.isHighSurrogate(text.charAt(text.length() - 1))) {
+				pending = text.charAt(text.length() - 1);
+				text = text.substring(0, text.length() - 1);
+				return text.isEmpty() ? null : text;
+			}
+			return text;
+		}
+	}
+
+	/**
+	 * {@link #writeSseEventOrThrow} for a raw-text channel's chunk once {@link WholeCodePoints#take}
+	 * has had it: writes nothing when {@code text} is {@code null}, a chunk held back whole.
+	 */
+	private void writeTextEventOrThrow(OutputStream out, String event, String text) {
+		if (text != null) {
+			writeSseEventOrThrow(out, event, text);
 		}
 	}
 

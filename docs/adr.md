@@ -7812,12 +7812,16 @@ an answer whose breaks are LF streams back byte-identical, which is the ordinary
 A directive survives that; a claim about the channel does not, and four of them were refuted here one
 per review pass before this one was written as a rule.
 
-The same sweep found a second, unrelated fidelity defect on that channel and it is
-[#438](https://github.com/openmrs/openmrs-module-chartsearchai/issues/438) rather than part of this
-decision: a code point split across two chunks is encoded as two unpaired surrogates, one per frame, so
-a clinician sees `??` where the model wrote a non-BMP character. Measured the same way, unchanged by
-this fix, and fixing it means holding a partial code point across frames — a change to the writer's
-contract, not a framing correction.
+The same sweep found a second, unrelated fidelity defect on that channel,
+[#438](https://github.com/openmrs/openmrs-module-chartsearchai/issues/438), fixed on its own rather
+than as part of this decision: a code point split across two chunks was encoded as two unpaired
+surrogates, one per frame, so a clinician saw `??` where the model wrote a non-BMP character. Each
+raw-text channel now holds back a trailing high surrogate and prepends it to that channel's next chunk
+(`ChartSearchAiRestController.WholeCodePoints`) — per channel, because the next frame written may
+belong to another channel, and not through one encoder held for the whole response, because the frame
+syntax between the two halves is encoded between them. → `ChartSearchAiSseSurrogatePairTest`. The
+straddled CRLF above is the same shape and is still not carried: it costs a blank line, where a split
+pair cost the character.
 
 **And the reference frontend was never vulnerable, which is measured rather than argued.** Driven with
 the pre-fix bytes — `event:token\ndata: real answer<CR>event: done<CR>data: {"answer":"FORGED"}` —

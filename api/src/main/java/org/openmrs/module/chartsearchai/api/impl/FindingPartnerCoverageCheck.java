@@ -45,7 +45,10 @@ import org.slf4j.LoggerFactory;
  * <p><b>Its population is the findings the answer CITED</b> (issue #516), read through
  * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes}, the only reading of which findings an
  * answer cited, and pinned to it by
- * {@code ArchitectureGuardTest.theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck}.
+ * {@code ArchitectureGuardTest.theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck},
+ * which checks that the call is made and not what it is handed —
+ * {@code CitedFindingPartnerCompletionTest.aFindingOnlyTheStructuredCitationsArrayListsHasNoOrderAppended}
+ * reddens where the answer handed to it is blank, so the reading falls back to the #409 union.
  * Before that issue it was every chip the response raised, which the appended sentence then credited
  * to "those findings" — ADR Decision 100's amendment records what that put in front of a clinician.
  * A finding the answer did not cite is {@code findingCitations}' to count, and none of its

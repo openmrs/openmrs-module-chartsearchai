@@ -1499,6 +1499,12 @@ public class ArchitectureGuardTest {
 	 * does NOT forbid a {@code Pattern.compile}: this class needs one to compare order names, and that
 	 * pattern recognises no citation shape. The marker-dialect negatives are what stand in for that
 	 * clause here, and the residues the sibling's javadoc names are this case's too.
+	 *
+	 * <p>It does not read the call's ARGUMENTS. A call handed {@code null} for the answer satisfies it
+	 * and takes the blank-answer branch, which returns the whole resolution — the issue #409 union of
+	 * the structured {@code citations} array and the prose markers. That reading IS behaviourally
+	 * visible: {@code CitedFindingPartnerCompletionTest.aFindingOnlyTheStructuredCitationsArrayListsHasNoOrderAppended}
+	 * and its {@code searchStreaming_} twin redden on it.
 	 */
 	@Test
 	public void theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck() throws IOException {

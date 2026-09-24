@@ -7759,7 +7759,10 @@ data leak. So:
 
 - The population is the `safety_finding` records the answer's markers resolve to, read through
   `SafetyFindingCitationExtentCheck.citedFindingIndexes` and nothing else
-  (`ArchitectureGuardTest.theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck`). A
+  (`ArchitectureGuardTest.theFindingPartnerCompletionTakesItsCitedReadingFromTheExtentCheck`, which
+  checks the call is made and not what it is handed; handing it a blank answer reads the #409 union,
+  and `CitedFindingPartnerCompletionTest.aFindingOnlyTheStructuredCitationsArrayListsHasNoOrderAppended`
+  reddens on that). A
   record carries its finding's orders as `RecordMapping.getFindingPartners()`, written where the
   record is, in `DrugReferenceInjector`'s findings loop — a `resourceKey` is not unique, so the chips
   cannot be joined back to a cited record.

@@ -27,6 +27,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingPartnerCoverage;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -54,7 +55,8 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * one, whose failure on that code is that it appended nothing — the post-answer validator hands back the
  * REAL chips the same arrangement raises: every chip, which is the population the defect read from, so
  * each case fails on the code that read it. Only the model is stubbed:
- * answer prose is not reproducible on a live engine, and the answer is the input these cases vary.
+ * answer prose is not reproducible on a live engine, and the answer is the input these cases vary —
+ * with, in the two structured-array cases, the citations array the model emits beside it.
  * Every order name an answer carries is read off the chips or the records, except the spacing case's,
  * whose two displays are spelled here and asserted against the chip before the answer is built.
  */
@@ -180,6 +182,70 @@ public class CitedFindingPartnerCompletionTest {
 	}
 
 	@Test
+	public void aFindingOnlyTheStructuredCitationsArrayListsHasNoOrderAppended() throws IOException {
+		// A real model also emits a structured citations array, and extractCitedReferences unions it with
+		// the prose markers (issue #409). A finding the array lists and no sentence marks is in that
+		// resolution and is not a finding the answer cited, so a completion reading the union — measured
+		// by handing citedFindingIndexes a null answer — names its order under "those findings". The
+		// other cases here stub an empty array, and stayed green on that.
+		SharedMechanism arrangement = new SharedMechanism();
+		String modelAnswer = "No — aspirin should not be given: it interacts with her "
+				+ arrangement.mergedOrders.get(0) + " [" + arrangement.merged.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer, arrangement.bothFindings()).search(patient(),
+				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
+
+		assertOnlyTheMarkedFindingIsCompleted(arrangement, answer);
+	}
+
+	@Test
+	public void searchStreaming_aFindingOnlyTheStructuredCitationsArrayListsHasNoOrderAppended()
+			throws IOException {
+		// The streaming path completes the answer at its own call site, so it is asked the same.
+		SharedMechanism arrangement = new SharedMechanism();
+		String modelAnswer = "No — aspirin should not be given: it interacts with her "
+				+ arrangement.mergedOrders.get(0) + " [" + arrangement.merged.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer, arrangement.bothFindings()).searchStreaming(
+				patient(), DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION, token -> { });
+
+		assertOnlyTheMarkedFindingIsCompleted(arrangement, answer);
+	}
+
+	/** The answer both structured-array cases assert: the array's other finding reached the
+	 *  resolution, and neither the appended sentence nor {@code findingPartners} covers it. */
+	private static void assertOnlyTheMarkedFindingIsCompleted(SharedMechanism arrangement,
+			ChartAnswer answer) {
+		boolean resolved = false;
+		for (RecordReference ref : answer.getReferences()) {
+			if (ref.getIndex() == arrangement.other.getIndex()) {
+				resolved = true;
+			}
+		}
+		assertTrue(resolved, "the premise: the finding only the structured array lists is in the answer's "
+				+ "resolution, was: " + answer.getReferences());
+		assertNotNull(answer.getFindingCitationExtent(), "the premise: findingCitations is measured");
+		assertEquals(1, answer.getFindingCitationExtent().getCited(),
+				"and findingCitations counts the one finding the prose marked, was: "
+						+ answer.getFindingCitationExtent());
+		String completed = answer.getAnswer().toLowerCase(Locale.ROOT);
+		assertFalse(completed.contains(arrangement.otherOrder.toLowerCase(Locale.ROOT)),
+				"the order of a finding only the structured array lists is not \"covered by those "
+						+ "findings\", was: " + answer.getAnswer());
+		for (String order : arrangement.mergedOrders) {
+			assertTrue(completed.contains(order.toLowerCase(Locale.ROOT)),
+					"and the marked finding's own orders still reach it. Missing " + order + " from: "
+							+ answer.getAnswer());
+		}
+		FindingPartnerCoverage coverage = answer.getFindingPartnerCoverage();
+		assertNotNull(coverage, "the answer cited a finding, so it is measured");
+		assertEquals(arrangement.mergedOrders.size(), coverage.getNamed(),
+				"named counts the orders of the one finding findingCitations says was cited, was: "
+						+ coverage);
+		assertEquals(1, coverage.getStated(), "and stated the one the prose named, was: " + coverage);
+	}
+
+	@Test
 	public void anOrderTheAnswerSpelledWithoutTheSpacesAroundASlashIsNotListedAgain() throws IOException {
 		// The issue's fourth case: the answer wrote an order with one slash unspaced, and a case-folded
 		// containment test read it as unstated and appended it under "not named above" — a false
@@ -281,6 +347,9 @@ public class CitedFindingPartnerCompletionTest {
 		/** The record of the finding naming two of her orders under one mechanism. */
 		private final RecordMapping merged;
 
+		/** The record of the other finding. */
+		private final RecordMapping other;
+
 		/** The orders that finding names, as its chip names them. */
 		private final List<String> mergedOrders;
 
@@ -291,12 +360,14 @@ public class CitedFindingPartnerCompletionTest {
 			chips = DrugReferenceTestSupport.sharedMechanismInteractionChips(new PairChipExtent.Sink());
 			chart = DrugReferenceTestSupport.sharedMechanismFindingsOver(baseChart());
 			RecordMapping mergedRecord = null;
+			RecordMapping otherRecord = null;
 			int others = 0;
 			for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
 				if (finding.getText().contains(CORTICOSTEROID_MECHANISM)) {
 					mergedRecord = finding;
 				}
 				else {
+					otherRecord = finding;
 					others++;
 				}
 			}
@@ -304,6 +375,7 @@ public class CitedFindingPartnerCompletionTest {
 					+ chart.getText());
 			assertEquals(1, others, "and exactly one other finding, was: " + chart.getText());
 			merged = mergedRecord;
+			other = otherRecord;
 			List<String> mergedNames = null;
 			List<String> otherNames = null;
 			for (SafetyWarning chip : chips) {
@@ -329,7 +401,17 @@ public class CitedFindingPartnerCompletionTest {
 		}
 
 		private LlmInferenceService service(String modelAnswer) {
-			return CitedFindingPartnerCompletionTest.service(chart, chips, modelAnswer);
+			return service(modelAnswer, Collections.<Integer> emptyList());
+		}
+
+		private LlmInferenceService service(String modelAnswer, List<Integer> structuredCitations) {
+			return CitedFindingPartnerCompletionTest.service(chart, chips, modelAnswer, structuredCitations);
+		}
+
+		/** A structured citations array listing both findings, merged first. */
+		private List<Integer> bothFindings() {
+			return java.util.Arrays.asList(Integer.valueOf(merged.getIndex()),
+					Integer.valueOf(other.getIndex()));
 		}
 	}
 
@@ -351,11 +433,17 @@ public class CitedFindingPartnerCompletionTest {
 		return new PatientChartSerializer().serialize(null, records, Collections.<String> emptySet());
 	}
 
-	/** The real inference service over {@code chart}, the chart the real injector already produced —
-	 *  handed back from {@code inject} as the very object the answers' markers were numbered against —
-	 *  with {@code chips} as the post-answer pass's chips and {@code modelAnswer} as the model's. */
 	private static LlmInferenceService service(PatientChart chart, List<SafetyWarning> chips,
 			String modelAnswer) {
+		return service(chart, chips, modelAnswer, Collections.<Integer> emptyList());
+	}
+
+	/** The real inference service over {@code chart}, the chart the real injector already produced —
+	 *  handed back from {@code inject} as the very object the answers' markers were numbered against —
+	 *  with {@code chips} as the post-answer pass's chips, {@code modelAnswer} as the model's prose and
+	 *  {@code structuredCitations} as its structured citations array. */
+	private static LlmInferenceService service(PatientChart chart, List<SafetyWarning> chips,
+			String modelAnswer, List<Integer> structuredCitations) {
 		TestableService created = new TestableService();
 		created.setChartBuildingStrategy(new StubStrategy(chart));
 		created.setDrugReferenceInjector(new DrugReferenceInjector() {
@@ -377,7 +465,7 @@ public class CitedFindingPartnerCompletionTest {
 				return chips;
 			}
 		});
-		created.setLlmProvider(new StubProvider(modelAnswer));
+		created.setLlmProvider(new StubProvider(modelAnswer, structuredCitations));
 		return created;
 	}
 
@@ -418,12 +506,15 @@ public class CitedFindingPartnerCompletionTest {
 
 		private final String answer;
 
-		private StubProvider(String answer) {
+		private final List<Integer> citations;
+
+		private StubProvider(String answer, List<Integer> citations) {
 			this.answer = answer;
+			this.citations = citations;
 		}
 
 		private LlmResponse canned() {
-			return new LlmResponse(answer, Collections.<Integer> emptyList());
+			return new LlmResponse(answer, citations);
 		}
 
 		@Override

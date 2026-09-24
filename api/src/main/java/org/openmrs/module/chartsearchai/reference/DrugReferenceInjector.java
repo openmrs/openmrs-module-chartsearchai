@@ -2553,10 +2553,12 @@ public class DrugReferenceInjector {
 	 * substance (issue #477) is an interaction finding and ranks by strength with the pairs, as the
 	 * prompt's ranking sentence has the model rank it, so the two paths open alike.
 	 *
-	 * <p><b>That last sort is observed on a screen</b>: the screening arm appends the finding that her
-	 * orders share a substance after its pairs, and the sort is what moves it ahead of a caution —
-	 * {@code OrdersSharingASubstanceModuleAnswerContextTest} reddens without it. The lead is decided by
-	 * the FIRST line, and that must not depend on the order the arms happen to run in.
+	 * <p><b>On a screen that sort and the arm agree</b>: the screening arm inserts the finding that her
+	 * orders share a substance among its pairs by the same strength
+	 * ({@code DrugSafetyValidator.addOrdersSharingASubstance}), so the chips, the prompt's records and
+	 * this answer order it alike, and {@code OrdersSharingASubstanceModuleAnswerContextTest} no longer
+	 * reddens without the sort. It stays because the lead is decided by the FIRST line, and that must
+	 * not depend on the order the arms happen to run in.
 	 *
 	 * <p><b>Within the withholding class, a finding that licensed the "No" comes first</b> — {@link
 	 * #licensesTheModulesNo}, the test {@link #answersFromFindings} admitted the question by. That same

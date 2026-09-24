@@ -1089,10 +1089,11 @@ public class DrugSafetyValidator {
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
+			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
-			// After the pairs and outside their extent: it relates no pair (issue #477).
-			addOrdersSharingASubstance(warnings, orderEntries, subjects, coMedications);
+			// Among the pairs by strength and outside their extent: it relates no pair (issue #477).
+			addOrdersSharingASubstance(warnings, screenedFrom, orderEntries, subjects, coMedications);
 		}
 		// And where neither of them STATED one, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
@@ -4322,9 +4323,18 @@ public class DrugSafetyValidator {
 	 * is a current medication, and it is unrated, so the model reads it as a reason to change her
 	 * therapy. It relates no pair, so it is not counted into {@link PairChipExtent}. ADR Decision 114
 	 * carries the scope and what it leaves open.
+	 *
+	 * <p><b>Inserted among the screen's pairs by strength</b>, before the first of them from
+	 * {@code screenedFrom} on that {@link #licensesWithholding} refuses: as a reason to change her
+	 * therapy it ranks beside a Major and ahead of a caution, which is where
+	 * {@code DrugReferenceInjector.composeFromFindings} and the prompt's ranking sentence put it, so the
+	 * chips, the prompt's record order and the module's answer order it alike, and a truncated answer
+	 * keeps it as the module's answer would (issue #346). The pairs arrive withholding first, since
+	 * {@link #severityPriority} ranks an unrated rule above a Major and every caution below both, so
+	 * this is the boundary between the two, and the pairs' own order is untouched.
 	 */
-	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, List<DrugReference> orderEntries,
-			SubstanceSubjects subjects, CoMedications coMedications) {
+	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, int screenedFrom,
+			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications) {
 		Map<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> shared =
 				new LinkedHashMap<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>();
 		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
@@ -4336,12 +4346,16 @@ public class DrugSafetyValidator {
 			shared.computeIfAbsent(carriers, k -> new ArrayList<String>())
 					.add(subjects.subjectOf(rows.get(0)).displayLabel());
 		}
+		int at = screenedFrom;
+		while (at < warnings.size() && licensesWithholding(warnings.get(at))) {
+			at++;
+		}
 		for (Map.Entry<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> set : shared.entrySet()) {
 			List<String> substances = set.getValue();
 			Collections.sort(substances, String.CASE_INSENSITIVE_ORDER);
 			Map<String, Integer> ordersByDisplay = ordersByDisplay(set.getKey());
 			String named = joinPartners(substances);
-			warnings.add(SafetyWarning.ordersSharingASubstance(named,
+			warnings.add(at++, SafetyWarning.ordersSharingASubstance(named,
 				named + (substances.size() == 1 ? " is in " : " are in ") + ordersNamed(ordersByDisplay)
 						+ " — possible duplicate therapy",
 				new ArrayList<String>(ordersByDisplay.keySet())));

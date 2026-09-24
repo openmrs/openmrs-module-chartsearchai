@@ -150,22 +150,72 @@ public class OrdersSharingASubstanceTest {
 	}
 
 	@Test
-	public void aQuestionPuttingADrugInPlayRaisesNoneOfThem() {
-		// The ticket's two questions over its six orders and the shipped knowledge base, where both put
-		// drugs in play: the rifampicin question's finding list is SubstanceInSeveralActiveOrdersTest's,
-		// and the Metformin question names neither combination. Both stay with issue #477 (ADR
-		// Decision 114).
+	public void aQuestionPuttingADrugInPlayStatesNoCurrentMedicationFindingBesideItsProposalFindings() {
+		// The ticket's two questions over its six orders and the shipped knowledge base, both putting
+		// drugs in play. What they state about her orders sharing a substance is still open on issue
+		// #477, so this pins not that silence but the constraint any statement there must keep: this
+		// finding's current-medication referent never sits beside the proposal findings of a drug in
+		// play, the mixed-referent response ADR Decision 112 recorded on a model (Decision 114).
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 				DrugReferenceTestSupport.shippedEntries());
 		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
 				"Lamivudine / zidovudine", "Efavirenz", "Cotrimoxazole 960mg", RHZ, RHZE, "Stavudine");
+		int proposals = 0;
 		for (String drug : Arrays.asList("Rifampicin", "Metformin")) {
 			String question = "The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and"
 					+ " sulfamethoxazole is it safe to give " + drug + "?";
 			assertTrue(service.findImpliedByQuery(question).size() > 0, "precondition: drugs in play: " + question);
 			List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("", question, context);
-			assertEquals(0, shared(warnings).size(), question + " was: " + DrugReferenceTestSupport.details(warnings));
+			boolean proposal = false;
+			for (SafetyWarning warning : warnings) {
+				proposal |= !warning.isAboutACurrentMedication();
+			}
+			if (!proposal) {
+				continue;
+			}
+			proposals++;
+			for (SafetyWarning finding : shared(warnings)) {
+				assertTrue(!finding.isAboutACurrentMedication(), "a current-medication finding beside proposal"
+						+ " findings on " + question + ": " + DrugReferenceTestSupport.details(warnings));
+			}
 		}
+		assertTrue(proposals > 0, "precondition: a question raised proposal findings");
+	}
+
+	@Test
+	public void theChipListRanksTheFindingByStrengthAsTheModuleAnswerDoes() throws IOException {
+		// A reason to change her therapy, so beside a Major and ahead of a caution, on the chips and the
+		// prompt's record order as in the module's answer (OrdersSharingASubstanceModuleAnswerContextTest):
+		// one response must not order one set of findings two ways, and a truncated answer keeps what
+		// the arm appended first (issue #346).
+		List<String> major = DrugReferenceTestSupport.details(screen(FIXTURE, contextOf(
+			DrugReferenceTestSupport.activeOrder("order-rhz", RHZ),
+			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg"))));
+
+		assertEquals(3, major.size(), "was: " + major);
+		assertTrue(major.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+			"the Major leads: " + major);
+		assertEquals("Rifampicin (rifampin) is in active orders " + RHZ + " and Rifampicin 150mg"
+				+ " — possible duplicate therapy", major.get(1), "then this finding: " + major);
+		assertTrue(major.get(2).startsWith("Isoniazid interacts with active order Rifampicin (rifampin) — Minor."),
+			"then the caution: " + major);
+
+		List<String> cautions = DrugReferenceTestSupport.details(screen(FIXTURE, contextOf(
+			DrugReferenceTestSupport.activeOrder("order-rhze", RHZE),
+			DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid 300mg"),
+			DrugReferenceTestSupport.activeOrder("order-emb", "Ethambutol 400mg"))));
+		int lastShared = -1;
+		int firstPair = -1;
+		for (int i = 0; i < cautions.size(); i++) {
+			if (cautions.get(i).endsWith(" — possible duplicate therapy")) {
+				lastShared = i;
+			}
+			if (firstPair < 0 && cautions.get(i).contains(" interacts with active order ")) {
+				firstPair = i;
+			}
+		}
+		assertTrue(firstPair >= 0, "precondition: the screen related pairs: " + cautions);
+		assertTrue(lastShared >= 0 && lastShared < firstPair, "the reasons to change lead the cautions: " + cautions);
 	}
 
 	@Test

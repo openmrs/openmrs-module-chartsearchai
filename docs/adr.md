@@ -10657,7 +10657,11 @@ Rifampicin (rifampin) are in active orders A and B — possible duplicate therap
   ranks it by strength with the pairs, as the prompt's ranking sentence has the model do: as a reason
   to change her therapy it ranks beside a rated Major and ahead of a caution. Ordering it after every
   pair instead was written in Phase 2 and reverted in its second pass, because the model path, the
-  default, would still lead with it and one chart would open two ways by global property. Nor does it stand in
+  default, would still lead with it and one chart would open two ways by global property. The screening
+  arm inserts it at that same place among its own chips, before the first pair `licensesWithholding`
+  refuses. Appended after every pair, the chips and the prompt's records put it below a Minor while the
+  answer put it ahead of the cautions, and a truncated answer kept the cautions first (#346).
+  `OrdersSharingASubstanceTest.theChipListRanksTheFindingByStrengthAsTheModuleAnswerDoes` pins it. Nor does it stand in
   for a screen result at [Decision 87](#decision-87-a-screen-that-related-nothing-says-so-in-the-prompt-instead-of-reaching-the-model-as-an-empty-slice)'s
   note: beside it, a screen that related nothing still says so (`nothingButOrdersSharingASubstance`),
   which `/harden`'s Phase 2 found after the pair gate alone had been written.
@@ -10675,8 +10679,12 @@ Rifampicin (rifampin) are in active orders A and B — possible duplicate therap
   `Prednisolone eye drops` + `Prednisolone 5mg`, and `Lidocaine` + `Lidocaine / epinephrine` each
   raised it. #234's site narrowing removes codes and never a partner, and this finding reads no codes.
   In the same run, `Amlodipine` + `Amlodipine / valsartan` raised it, a real duplicate. `Paracetamol` +
-  `Codeine / paracetamol` raised nothing — a real duplicate this finding misses, whose cause this
-  measurement does not establish. `Omeprazole 20mg` + `Esomeprazole 40mg` also raised nothing,
+  `Codeine / paracetamol` raised nothing — a real duplicate this finding misses, and it is not this
+  finding's defect but the resolution under it: measured the same day through the real
+  `DrugReferenceService.findImpliedByDrugName` over the shipped knowledge base, `Paracetamol` and
+  `Paracetamol 1g` resolve to no entry, `Codeine / paracetamol` to `Codeine` alone and `Acetaminophen
+  500mg` to `Acetaminophen`, so no two orders ever carry the substance. `Acetaminophen 500mg` +
+  `Paracetamol 1g` raised nothing for the same reason. `Omeprazole 20mg` + `Esomeprazole 40mg` also raised nothing,
   as Decision 112's display rule intends.
 - **Not measured on a model**, and two prompt arrangements are new with it: Decision 87's note ("No
   interactions were found …") beside this finding's reason to change, on a screen that related no

@@ -80,8 +80,8 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 	@Test
 	public void theSharedSubstanceFollowsARatedMajorAndPrecedesACaution() throws IOException {
 		// A Major pair about her current therapy and the shared-substance finding state the same clause,
-		// a reason to change it, so the strength sort ties them and keeps the order the arms raised them
-		// in: the screen's pairs, then this finding. Only a caution falls behind it.
+		// a reason to change it, so the strength sort ties them and keeps the order the arm raised them
+		// in: the Major, then this finding. Only a caution falls behind it.
 		PatientChart chart = screen(
 			DrugReferenceTestSupport.activeOrder("order-rhz", "Isoniazid / pyrazinamide / rifampin"),
 			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg"));

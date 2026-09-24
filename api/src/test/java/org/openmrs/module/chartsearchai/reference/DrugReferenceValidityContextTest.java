@@ -593,7 +593,7 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	}
 
 	/**
-	 * Issue #196 item 4, over a verbatim slice of the shipped 19 MB knowledge base. The rule above
+	 * Issue #196 item 4, over a slice of the shipped 19 MB knowledge base. The rule above
 	 * cannot see this one and never could: it reports a published name denoting a DIFFERENT substance,
 	 * and here the two rows are the SAME substance to {@link DrugReference#substanceGroupKey()}, so its
 	 * first exclusion removes the case by construction. Measured on the shipped file 2026-08-13 by

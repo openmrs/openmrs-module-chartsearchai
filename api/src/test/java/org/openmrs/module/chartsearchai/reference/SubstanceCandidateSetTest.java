@@ -54,7 +54,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * and a localized order name still resolves at all ({@link #aLocalizedOrderNameStillResolves}, issue
  * #147's shape).
  *
- * <p>Slices taken verbatim from the shipped KB, driven through the real {@link DdiDrugReferenceSource}
+ * <p>Slices taken from the shipped KB, driven through the real {@link DdiDrugReferenceSource}
  * parser and the real {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}.
  */
 public class SubstanceCandidateSetTest {

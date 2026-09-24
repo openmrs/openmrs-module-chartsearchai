@@ -62,7 +62,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  *       Nothing here asserts them either way, so this class does not fossilize them.</li>
  * </ul>
  *
- * <p>Every scenario runs the real pipeline: a verbatim KB slice parsed by the real
+ * <p>Every scenario runs the real pipeline: a KB slice parsed by the real
  * {@link DdiDrugReferenceSource}, the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}, GP reads on their
  * no-context defaults (so the severity floor is the production {@code minor}, which filters the
@@ -72,7 +72,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 public class DrugSafetyDiacriticOrderNameTest {
 
 	/**
-	 * A verbatim slice of the full DDInter KB (2283 drugs / 295,184 rows): four subject drugs whose
+	 * A slice of the full DDInter KB (2283 drugs / 295,184 rows): four subject drugs whose
 	 * rule lists carry, between them, every token of the #128 kill set above the {@code minor} floor,
 	 * plus the partners the accented names must resolve to. The 16-drug DDInter excerpt contains none
 	 * of them, and {@code ddi-order-name-collisions.json} carries only the two collisions #128

@@ -43,14 +43,14 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@code bestRulePerPartner} has collapsed several rules naming one partner into a single
  * most-severe chip since issue #115, while this path still listed all of them.
  *
- * <p>Every scenario runs the REAL production path: verbatim DDInter KB slices parsed by the real
+ * <p>Every scenario runs the REAL production path: DDInter KB slices parsed by the real
  * {@link DdiDrugReferenceSource}, the real {@code injectRecords} entry point, GP reads on their
  * no-context defaults (severity floor {@code minor}).
  */
 public class InjectedInteractionNoteCollapseTest {
 
 	/**
-	 * The verbatim KB slice whose Voxelotor entry carries SEVEN interaction rows naming FOUR
+	 * The KB slice whose Voxelotor entry carries SEVEN interaction rows naming FOUR
 	 * partners: three rows against the dexamethasone family (Major, Moderate, Moderate — the
 	 * measured case {@code orderedInteractionNotes} names in its own javadoc), two against the
 	 * sirolimus family (Major, Moderate), one lapatinib and one phenytoin. Both multi-row families

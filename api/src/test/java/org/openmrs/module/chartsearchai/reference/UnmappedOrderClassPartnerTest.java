@@ -44,13 +44,13 @@ import org.junit.jupiter.api.Test;
  * order, and a combination order must stay as many co-medications as it has substances rather than
  * silencing the chip that names one of them.
  *
- * <p>Every scenario runs the REAL production path — a verbatim KB slice parsed by the real
+ * <p>Every scenario runs the REAL production path — a KB slice parsed by the real
  * {@link DdiDrugReferenceSource}, or the curated fixture parsed by the real
  * {@link JsonDrugReferenceSource}, through the real {@code validate} entry point.
  */
 public class UnmappedOrderClassPartnerTest {
 
-	/** Verbatim KB rows. Dexamethasone {@code H02AB02} and Hydrocortisone {@code H02AB09} are the
+	/** KB rows, brand_names omitted and not in KB order. Dexamethasone {@code H02AB02} and Hydrocortisone {@code H02AB09} are the
 	 *  issue's own measured pair, and hydrocortisone is filed as four rows spanning two substances, so
 	 *  naming its partner is a real choice among rows rather than reading one row's name. */
 	private static final String FIXTURE = DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS;

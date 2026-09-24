@@ -54,14 +54,14 @@ import org.junit.jupiter.api.Test;
  * both halves.
  *
  * <p>Both directions are asserted here — and so is the ordering the collapse cannot assume, a group
- * whose allergen row is not its first — against slices taken verbatim from the shipped KB, through
+ * whose allergen row is not its first — against slices taken from the shipped KB, through
  * the real {@link DdiDrugReferenceSource} parser and the real {@link DrugSafetyValidator#validate}
  * entry points.
  */
 public class ContraindicationRouteVariantTest {
 
 	/**
-	 * Verbatim KB rows, in KB order: the two PPI entries the KB files under one substance name
+	 * KB rows, brand_names omitted and not in KB order: the two PPI entries the KB files under one substance name
 	 * ({@code Omeprazole} + {@code Esomeprazole}) with a third PPI to be allergic to
 	 * ({@code Pantoprazole}, {@code A02BC02}, so the shared level-4 subgroup is {@code A02BC}), and
 	 * the four {@code hydrocortisone} rows with {@code Dexamethasone} to be allergic to (both carry

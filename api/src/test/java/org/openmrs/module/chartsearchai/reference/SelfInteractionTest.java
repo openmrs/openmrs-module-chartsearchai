@@ -48,7 +48,7 @@ import org.junit.jupiter.api.Test;
  * such a pair, so the leg cannot be exercised by any verbatim slice — the last three cases below use the
  * one fixture that authors that row, and say so.
  *
- * <p>Slices taken verbatim from the shipped KB — apart from that one authored row, which its fixture's
+ * <p>Slices taken from the shipped KB — apart from that one authored row, which its fixture's
  * {@code metadata.note} identifies — through the real {@link DdiDrugReferenceSource} parser and the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)}.
  */
@@ -58,7 +58,7 @@ public class SelfInteractionTest {
 	private static final String FIXTURE = DrugReferenceTestSupport.DDI_SELF_INTERACTION;
 
 	/**
-	 * The shape only the guard's ID leg can catch: verbatim KB rows publishing NO {@code rxnorm_name},
+	 * The shape only the guard's ID leg can catch: KB rows publishing NO {@code rxnorm_name},
 	 * one of them paired with itself. That last row is the fixture's one authored row — see its own
 	 * {@code metadata.note} for why no verbatim slice can carry it.
 	 */

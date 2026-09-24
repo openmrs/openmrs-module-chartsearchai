@@ -1,7 +1,7 @@
 {
  "metadata": {
   "title": "Test fixture — a DDInter entry carrying no ATC codes (issue #135)",
-  "note": "Verbatim excerpt of the full openmrs-ddi-knowledge-base DDInter 2.0 dataset (2283 drugs, 295184 interaction rows): two of its 444 ATC-less drugs (Ledipasvir, Leucovorin) and one same-ATC-subgroup pair (Ciprofloxacin J01MA02, Levofloxacin J01MA12), with every interaction row and mechanism text that falls wholly inside that slice. Rows, ids, codes and mechanism texts are the dataset's own; nothing here is hand-authored.",
+  "note": "Excerpt of the full openmrs-ddi-knowledge-base DDInter 2.0 dataset (2283 drugs, 295184 interaction rows): two of its 444 ATC-less drugs (Ledipasvir, Leucovorin) and one same-ATC-subgroup pair (Ciprofloxacin J01MA02, Levofloxacin J01MA12), with every interaction row and mechanism text that falls wholly inside that slice. Ids, codes and mechanism texts are the dataset's own and nothing here is hand-authored; each row is its shipped row with brand_names omitted, and the rows are not in the dataset's order.",
   "source": {
    "name": "DDInter 2.0",
    "url": "https://ddinter2.scbdd.com/",

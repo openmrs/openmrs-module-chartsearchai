@@ -35,10 +35,13 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * and the second of them keeps its file locator apart from {@code ModuleSourceRoot} for a reason its
  * own javadoc states.
  *
- * <p><b>Every lookup fails LOUDLY rather than answering "not found".</b> A needle that matches nothing
- * leaves a guard forbidding nothing, and one that matches twice cannot say which body it delimited —
- * so both are assertion failures here rather than a best guess returned to the caller. The read
- * asserts the file exists and is not truncated for the same reason: a guard that reads nothing
+ * <p><b>Every DECLARATION lookup fails LOUDLY rather than answering "not found".</b> A declaration
+ * that matches nothing leaves a guard forbidding nothing, and one that matches twice cannot say which
+ * body it delimited — so both are assertion failures here rather than a best guess returned to the
+ * caller. {@link #literalOffsets}, {@link #matches} and {@link #names} do NOT fail: they answer empty
+ * and {@code false}, so a guard that forbids a needle forbids nothing once the needle has gone,
+ * unless it also checks that the needle still occurs (issue #458). The read asserts the file exists
+ * and is not truncated for the same reason as the declaration lookups: a guard that reads nothing
  * satisfies every "is not called here" assertion by containing nothing.
  */
 final class SourceScan {

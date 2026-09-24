@@ -647,9 +647,8 @@ public class ChartSearchAiRestController {
 	 * pipeline producing something, not only on the one that reaches its own write site</b> —
 	 * {@link #auditStreamedQueryIfUnrecorded} in the {@code finally} is what owes it and what states
 	 * the gate, and issue #450 is what a delivered answer with no row cost before that. One row per
-	 * query at most, for any implementation of the consumer contract — which includes the requirement
-	 * {@code ChartSearchService}'s own javadoc states, that any consumer an implementation invokes runs
-	 * on the calling thread before the call returns (issue #459).</p>
+	 * query at most, for any implementation of the consumer contract — which includes the threading
+	 * requirement {@code ChartSearchService}'s own javadoc states (issue #459).</p>
 	 *
 	 * <p>Package-private and free of {@code Context} reads so event-order behavior is unit-tested
 	 * directly (see {@code ChartSearchAiStreamEventOrderTest}); {@code searchStream} resolves all
@@ -945,8 +944,8 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>Unsynchronized, and that is not an oversight of the kind {@code SseKeepAlive} is careful
 	 * about: {@code ChartSearchService}'s javadoc requires any consumer an implementation invokes to
-	 * run on the calling thread — here the REQUEST thread — before {@code searchStreaming} returns, and
-	 * the {@code finally} that reads this runs on that same thread (issue #459). The keep-alive's own
+	 * run on the calling thread — here the REQUEST thread — before {@code searchStreaming} returns or
+	 * throws, and the {@code finally} that reads this runs on that same thread (issue #459). The keep-alive's own
 	 * thread shares {@code out} and never this.
 	 */
 	private static final class StreamAuditState {

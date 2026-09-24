@@ -491,10 +491,9 @@ public class ChartSearchAiStreamDisconnectAuditTest {
 
 	/**
 	 * Holds the request until the wall clock has moved past the millisecond it arrived in, then streams
-	 * as the base stub does — so the elapsed time the controller measures is at least a millisecond. A
-	 * spin on the clock rather than a sleep, because the wait it needs is the clock's own granularity,
-	 * and capped by a monotonic deadline so a backward step of the wall clock cannot hold it for the
-	 * length of the step. Such a step during the call can redden the case instead; that is the residue.
+	 * as the base stub does — see {@code anEndedStreamsRowStatesHowLongItRanNotTheClock} for why. The
+	 * monotonic deadline stops a backward step of the wall clock holding it for the length of the step;
+	 * such a step during the call can redden the case instead, which is the residue.
 	 */
 	private static final class ClockAdvancingStub extends StreamingChartSearchStub {
 

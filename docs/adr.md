@@ -8642,7 +8642,7 @@ second ROW, `saveAuditLog` building a fresh one each time, and the module should
 shape to a collaborator's good behaviour. What lets the controller keep its audit state in unsynchronized
 fields is a requirement of the interface rather than a property of the two shipped implementations:
 whenever an implementation invokes a consumer, it does so on the calling thread before the call
-returns, which `ChartSearchService`'s own javadoc states (issue #459).
+returns or throws, which `ChartSearchService`'s own javadoc states (issue #459).
 
 **What it files, and why not a "query started" row.** The ticket's own first suggestion — persist a
 row before streaming and update it afterwards — was not taken, and what stands against it is a

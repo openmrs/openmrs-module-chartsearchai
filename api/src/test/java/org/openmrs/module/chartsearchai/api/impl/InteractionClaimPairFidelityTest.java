@@ -187,10 +187,9 @@ public class InteractionClaimPairFidelityTest {
 	@Test
 	public void aFindingMarkerPastTheClaimsClauseLeavesTheClaimUncitedAndItIsStillJudged() {
 		// The claim's marker run is the one ActiveOrderCitationFidelityCheck reads, and a marker past
-		// the clause break is not in it. The finding past it is taken for the claim only where it names
-		// the claim's PARTNER (the next case); the Simvastatin finding names no Digoxin, so this claim is
-		// judged as citing nothing, and a finding relates Clarithromycin × Digoxin. Heparin, a partner no
-		// finding or chip names, is unjudged under the owner's decision on #514, and its marker unaccused.
+		// the clause break is not in it, so this claim is judged as citing nothing, and a finding relates
+		// Clarithromycin × Digoxin. Heparin, a partner no finding or chip names, is unjudged under the
+		// owner's decision on #514, and its marker unaccused.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
 		String invented = "Clarithromycin interacts with active order Heparin, which is a caution to "
@@ -220,12 +219,15 @@ public class InteractionClaimPairFidelityTest {
 	}
 
 	@Test
-	public void aFindingMarkerPastTheClaimsClauseIsTheClaimsWhereTheFindingNamesItsPartner() {
+	public void aFindingMarkerPastTheClaimsClauseIsNotTheClaimsEvenWhereTheFindingNamesItsPartner() {
 		// The ticket's cases 2 and 4 put the marker after a comma — "…active order Lamivudine /
 		// zidovudine, and this is a caution to note, not a reason to withhold it [353]", [353] being
-		// Stavudine's finding against that order. Nothing between the clause break and the marker names
-		// a drug, and the finding cited names the claim's partner: that is the evidence the marker is
-		// the claim's, so the finding about another drug is reported rather than read as no citation.
+		// Stavudine's finding against that order. Taking it for the claim, where nothing between named a
+		// drug and the finding named the partner, accused a later clause's own correct citation (round 2
+		// of #514's third review: aCorrectCitationOfALaterClauseNamingItsDrugByAWordNoFindingPrintsIsNotAccused),
+		// so the claim is judged as citing nothing: here a finding relates Clarithromycin × Amiodarone,
+		// and a pair none relates is still unfounded
+		// (aClaimWhoseOnlyMarkerSitsPastItsClauseIsStillUnfoundedWhereNoFindingRelatesItsPair).
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
 		for (String tail : Arrays.asList(", and this is a caution to note, not a reason to withhold it [",
@@ -236,9 +238,9 @@ public class InteractionClaimPairFidelityTest {
 			InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
 					.getInteractionClaimPairs();
 
-			assertEquals(Collections.singletonList(Integer.valueOf(simvastatinsFinding)),
-					pairs.getMisattributedCitations(), "was: " + pairs + " for: " + answer);
-			assertEquals(0, pairs.getUnfounded(), "it cited a finding, was: " + pairs + " for: " + answer);
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"was: " + pairs + " for: " + answer);
+			assertEquals(0, pairs.getUnfounded(), "a finding relates the pair, was: " + pairs + " for: " + answer);
 			assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
 		}
 	}
@@ -246,8 +248,7 @@ public class InteractionClaimPairFidelityTest {
 	@Test
 	public void aFindingMarkerPastTheClaimsClauseIsNotTheClaimsWhereTheWordsBeforeItNameAnotherDrug() {
 		// A later clause about another drug, carrying its own correct citation, is not the claim's —
-		// Decision 76's cry-wolf shape. The Simvastatin finding names the claim's partner Amiodarone, so
-		// the partner gate alone would take it; the words before it name Simvastatin, so it is not taken.
+		// Decision 76's cry-wolf shape. The Simvastatin finding names the claim's partner Amiodarone.
 		// The second answer is the plan's refutation example, a finding about the claim's own drug and a
 		// different order. Both claims are then uncited, and a finding relates Clarithromycin × Amiodarone.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
@@ -434,7 +435,9 @@ public class InteractionClaimPairFidelityTest {
 	@Test
 	public void aVerbatimCopyOfTheAlreadyInSeveralOrdersFindingIsNotReported() throws Exception {
 		// Issue #477's finding reads "Rifampicin is already in active orders A and B" — the noun in its
-		// plural, and two of her orders after it. A model copying it verbatim states that finding's pair.
+		// plural, and two of her orders after it. A model copying it verbatim states that finding's pair,
+		// but not in the phrase's own verb, so it is left unjudged (round 2 of #514's third review) and
+		// never reported: the order-to-order case below is the pair judged related.
 		SeveralOrders arrangement = new SeveralOrders();
 		List<SafetyWarning> chips = arrangement.chips;
 		PatientChart chart = arrangement.chart;
@@ -455,7 +458,8 @@ public class InteractionClaimPairFidelityTest {
 
 		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
 				"the claim is the cited finding's own, was: " + pairs + " for: " + answer);
-		assertEquals(1, pairs.getJudged(), "and it was judged, was: " + pairs + " for: " + answer);
+		assertEquals(0, pairs.getJudged(), "its verb is not the phrase's, was: " + pairs + " for: " + answer);
+		assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
 	}
 
 	@Test
@@ -807,10 +811,8 @@ public class InteractionClaimPairFidelityTest {
 	@Test
 	public void aFindingMarkerPastAClauseStatingAnotherInteractionIsNotTheClaims() {
 		// Round 3 of #514's review. The later clause names the other drug by its class, which no finding
-		// prints, so the gap gate saw no drug and [6] — Simvastatin's Amiodarone finding, right for that
-		// clause — was taken for the claim and accused. A gap stating the relationship again is another
-		// claim's, so the marker is not this one's; the claim is judged as citing nothing, and a finding
-		// relates its pair.
+		// prints, and [6] — Simvastatin's Amiodarone finding, right for that clause — was taken for the
+		// claim and accused. The claim is judged as citing nothing, and a finding relates its pair.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 		String answer = "Clarithromycin interacts with active order Amiodarone, which also interacts with a "
 				+ "statin [" + arrangement.finding("Simvastatin", "Amiodarone") + "].";
@@ -1439,6 +1441,105 @@ public class InteractionClaimPairFidelityTest {
 						"was: " + pairs + " for: " + answer);
 				assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
 			}
+		}
+	}
+
+	/**
+	 * Round 2 of #514's third review. A marker past a claim's clause may be a later clause's own, where that
+	 * clause names its drug by a word no finding prints and says it in a verb other than the phrase's —
+	 * <em>"the other statin does too"</em>, <em>"as does her cholesterol medicine"</em>. [6] is Simvastatin's
+	 * own Amiodarone finding, right for that clause, and it was taken for the claim and published as
+	 * misattributed against a claim a finding does relate: a false report, the only kind the owner's
+	 * decision on #514 lets block. A marker past a claim's clause is never the claim's, so the claim is
+	 * judged as citing nothing. On both answer paths.
+	 */
+	@Test
+	public void aCorrectCitationOfALaterClauseNamingItsDrugByAWordNoFindingPrintsIsNotAccused() {
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		assertTrue(arrangement.hasFinding("Clarithromycin", "Amiodarone"), "the premise: a finding relates the "
+				+ "claim's pair, chart was: " + arrangement.chart.getText());
+		for (String tail : Arrays.asList(", and the other statin does too [", ", as does her cholesterol medicine [")) {
+			String answer = "Clarithromycin interacts with active order Amiodarone" + tail + simvastatinsFinding + "].";
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, answer)) {
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"the Simvastatin finding is the later clause's correct citation, was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "a finding relates the claim's pair, was: " + pairs + " for: "
+						+ answer);
+				assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * The other value of the case above: a claim whose only marker sits past its clause, naming a pair no
+	 * finding or chip relates, is still reported — as unfounded, never as misattributing that marker.
+	 * Simvastatin × Digoxin is related by nothing, and [digoxin], Clarithromycin's own Digoxin finding, names
+	 * the claim's partner: it was taken for the claim and accused.
+	 */
+	@Test
+	public void aClaimWhoseOnlyMarkerSitsPastItsClauseIsStillUnfoundedWhereNoFindingRelatesItsPair() {
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int digoxin = arrangement.finding("Clarithromycin", "Digoxin");
+		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+				"Simvastatin"), "the premise: no finding relates Simvastatin to Digoxin, chart was: "
+						+ arrangement.chart.getText());
+		for (String tail : Arrays.asList(", and this is a caution to note, not a reason to withhold it [",
+				", which is a reason to withhold it [")) {
+			String answer = "Simvastatin interacts with active order Digoxin" + tail + digoxin + "].";
+			assertFalse(arrangement.chipsOver(answer).stream().anyMatch(chip -> relates(chip, "Simvastatin",
+					"Digoxin")), "nor does a chip, were: " + arrangement.chipsOver(answer));
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, answer)) {
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"a marker past the claim's clause is not the claim's, was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getUnfounded(), "no finding relates the pair, was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * Round 2 of #514's third review. A denial or a doubt worded outside the negators — <em>"is unlikely to
+	 * interact with"</em>, <em>"rarely interacts with"</em> — was judged as asserting the pair it names, and
+	 * Simvastatin × Digoxin, related by no finding, was published unfounded against a sentence that does not
+	 * assert it. A claim is judged only where the words before the noun END in a drug's name and then the
+	 * phrase's own verb; anything else between the two leaves it unjudged. On both answer paths.
+	 */
+	@Test
+	public void aClaimWhoseVerbIsNotThePhrasesOwnDirectlyAfterItsDrugIsNotJudged() {
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+				"Simvastatin"), "the premise: no finding relates Simvastatin to Digoxin, chart was: "
+						+ arrangement.chart.getText());
+		for (String answer : Arrays.asList(
+				"Simvastatin is unlikely to interact with active order Digoxin.",
+				"Simvastatin rarely interacts with active order Digoxin.",
+				"Simvastatin is unlikely to interact with active order Digoxin [" + simvastatinsFinding + "].")) {
+			assertFalse(arrangement.chipsOver(answer).stream().anyMatch(chip -> relates(chip, "Simvastatin",
+					"Digoxin")), "nor does a chip, were: " + arrangement.chipsOver(answer));
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, answer)) {
+				assertEquals(0, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"was: " + pairs + " for: " + answer);
+			}
+		}
+
+		// The same rule reaches a clause naming another drug and then its own by a brand no finding prints:
+		// read as Simvastatin, Clarithromycin's own Amiodarone finding was accused.
+		String branded = "Clarithromycin can be given, but alongside Simvastatin Biaxin interacts with active order "
+				+ "Amiodarone [" + arrangement.finding("Clarithromycin", "Amiodarone") + "].";
+		for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, branded)) {
+			assertEquals(0, pairs.getJudged(), "was: " + pairs);
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
+		}
+
+		// The control: the phrase's own verb straight after the drug still asserts the pair, and is reported.
+		String asserted = "Simvastatin interacts with active order Digoxin.";
+		for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, asserted)) {
+			assertEquals(1, pairs.getJudged(), "was: " + pairs);
+			assertEquals(1, pairs.getUnfounded(), "no finding relates the pair, was: " + pairs);
 		}
 	}
 

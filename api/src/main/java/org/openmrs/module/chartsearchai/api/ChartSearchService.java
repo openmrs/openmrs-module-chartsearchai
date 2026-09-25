@@ -767,14 +767,14 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>What a claim is</b> is {@code ActiveOrderCitationFidelityCheck}'s: an occurrence of
 	 * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, and the markers it cites are its own marker RUN.
-	 * A marker past the claim's clause break is not in that run. A claim with no run of its own also
-	 * cites the findings of the first run past its clause that name its PARTNER, where nothing between
-	 * the break and that run names a drug any finding names or states the relationship again in the
-	 * phrase's own verb; otherwise it is judged as citing nothing.
+	 * A marker past the claim's clause break is not in that run and never the claim's: a claim with no
+	 * run of its own is judged as citing nothing.
 	 *
 	 * <p><b>What {@code judged} counts.</b> The claims the check could reach a verdict on: the
 	 * words before the noun name a drug some interaction or condition-mediated finding or chip
-	 * names and carry no word standing for a drug without naming it (<em>it</em>, <em>this</em>,
+	 * names, END in such a drug followed straight by the phrase's own verb (<em>interacts with</em> —
+	 * never <em>"is unlikely to interact with"</em> or <em>"rarely interacts with"</em>), and carry no
+	 * word standing for a drug without naming it (<em>it</em>, <em>this</em>,
 	 * <em>which</em>, <em>the</em> …), the words after it START with a name some such finding or chip
 	 * names — judged on that name and never on the words following it — and where they name several
 	 * drugs they join them as a list (<em>and</em>, <em>or</em>), the run cites no reference record

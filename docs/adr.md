@@ -11193,13 +11193,19 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   order Rifampin, and its interaction with Trimethoprim is also a caution [349]"*, [349] being
   Metformin × Trimethoprim. The first version therefore read such a claim as citing nothing, and
   round 1 of the PR's review showed the cost: cases 2 and 4 could then only be UNFOUNDED, and the
-  finding they misattribute was never named. **So a claim with no run of its own takes the findings of
-  the first run past its clause on two gates**, each against that false report — a third joined in
-  round 3, below: nothing between the clause break and the run names a drug any finding or chip
-  names, and the finding names the claim's PARTNER — the evidence the marker is about this claim.
-  The refutation's example fails both; case 2's [353] names Lamivudine / zidovudine and its gap
-  names no drug. The trailing run is a separate span of `claims`, so
-  `ActiveOrderCitationFidelityCheck`'s run and both its answers are unchanged.
+  finding they misattribute was never named. **So a claim with no run of its own took the findings of
+  the first run past its clause on gates** — nothing between the clause break and the run naming a
+  drug any finding or chip names, the finding naming the claim's PARTNER, and from round 3 the gap
+  not stating the phrase's own verb — **and round 2 of the PR's third review loop removed it.** A later
+  clause naming its drug by a word no finding prints, in a verb other than the phrase's (*"…active
+  order Amiodarone, and the other statin does too [6]"*, [6] Simvastatin × Amiodarone), passes every
+  gate, so its own correct citation was published misattributed against a claim a finding does
+  relate: a false report, which the owner's rule below lets block. A finding the trailing run took
+  that relates the pair is in the population an uncited claim is judged against already, so removing
+  it can only turn a MISATTRIBUTED verdict into RELATED or UNFOUNDED, or leave unjudged a claim whose
+  population carries a class-only finding about its drug. Cases 2 and 4 are UNFOUNDED where no
+  finding relates their pair, and the finding they misattribute is not named — a missed report.
+  `claims` carries no trailing span.
 - **What a finding relates is read structurally.** A finding goes by its subject
   (`ChartSearchAiUtils.findingSubject`, the half of `resourceKey` that `findingSubjects` already
   split), the orders it names (`getFindingPartners()`), and the prescriptions and substances its
@@ -11243,10 +11249,9 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   interacts with active order Amiodarone [13]"*, [13] Clarithromycin's own, was accused. A partner
   span naming several drugs is a list only where `PARTNER_LIST_WORDS` (*and*, *or*) join them;
   *"active order Amiodarone but not with Digoxin [6]"* ran on into a clause denying the second pair and
-  called it unfounded. And a trailing gap stating the phrase's own verb again, `RELATIONSHIP_VERB`
-  derived from `ACTIVE_ORDER_INTERACTION_PHRASE`, is another claim's clause — *", which also interacts
-  with a statin [6]"* names its drug by a class no finding prints, so the name gate let its correct
-  citation be accused. Both word sets are closed and used only to REFUSE, never to decide what a claim
+  called it unfounded. And a trailing gap stating the phrase's own verb again (*", which also interacts
+  with a statin [6]"*) had its correct citation accused; that gate went with the trailing run in the
+  third loop (the unit bullet above). Both word sets are closed and used only to REFUSE, never to decide what a claim
   offered, which is what `ActiveOrderCitationFidelityCheck.clauseBound` declines a vocabulary for: a
   word taken out of the stand-ins or put into the list words judges a claim as round 2 did, and the
   opposite edit can only silence.
@@ -11261,7 +11266,14 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   whose span runs to the next claim's subject, had counted that drug a partner. The list test had
   asked only the stretches BETWEEN names, so the tail was the one end left open. The test is
   punctuation, `clauseBound`'s reason, and #477's finding copied verbatim closes its list with a dash.
-  Both refuse only.
+  Both refuse only. Round 2 of the third loop found a denial outside the set published `unfounded`
+  (*"Simvastatin is unlikely to interact with active order Digoxin"*), so a claim is also judged only
+  where its subject span ENDS in a drug it names followed straight by `RELATIONSHIP_VERB`, derived
+  from `ACTIVE_ORDER_INTERACTION_PHRASE` (`statesTheVerbOfItsDrug`) — a structural refusal rather than
+  a longer list. It also leaves unjudged *"rarely interacts with"*, a hedge, *"also interacts with"*, a
+  verbatim copy of #477's *"is already in"*, and a clause naming its own drug by a brand after another
+  drug (*"… alongside Simvastatin Biaxin interacts with active order Amiodarone [13]"*, [13]
+  Clarithromycin's own, had been accused).
 - **Two of those refusals had cost reach they did not need** (round 2 of the second review loop,
   each a swapped subject left unjudged). *A list running on* first refused the whole claim, so
   *"Clarithromycin interacts with active order Amiodarone and Digoxin which is a Major problem [6]"*,
@@ -11309,8 +11321,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 ### Alternatives considered
 
 - **Sentence scoping, or letting a run-less claim reach past its clause ungated.** Refuted at plan
-  time; see above. Reading every such claim as citing nothing shipped first and was reverted by
-  round 1 of the review, for the cost stated there.
+  time; see above. Reading every such claim as citing nothing shipped first, was reverted by round 1
+  of the review for the cost stated there, and ships again since the third loop: the gated reach was
+  a false report (the unit bullet above).
+- **One more trailing gate** — the verbs a later clause may restate its interaction in (*does too*,
+  *as does*). Each gate had been added for the previous round's false report; a list of them is the
+  widening the owner's decision on #514 stopped.
 - **A vocabulary of her active orders on the partner side.** No structural source reaches the answer
   path, and parsing the rendered `drug_order` text for one is the re-derivation `getOrderActive`'s
   rule (#317) refuses.
@@ -11342,17 +11358,17 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   finding or chip names (*"active order Heparin"*) are all unjudged, a swap among them included. The
   first words of a name two drugs share read as either drug, toward silence. No case pins the
   part-start refusal, nor taking every form of the name over the longest or shortest alone.
-- **−** **The trailing-run gates read names the findings carry and the phrase's own verb.** A later
-  clause naming another drug only by a name no finding prints, citing a finding that names the claim's
-  partner and stating its interaction in other words than *interacts with*, is taken for the claim and
-  can be reported.
-- **−** **The stand-in words are a closed list, and the refusals cost claims.** A subject clause naming
-  another drug and then its own subject by a word the list lacks — a brand no finding prints, a bare
-  class noun (*"Unlike Simvastatin Biaxin interacts with …"*) — is read as that other drug and can be
-  reported. The other direction is silence: a clause carrying a stand-in for another reason
-  (*"note that X interacts …"*), and a list joined by other words (*"as well as"*), are unjudged.
+- **−** **A claim whose only marker sits past its clause names no citation.** A swap that marker
+  carries — the ticket's cases 2 and 4 — is reported only as UNFOUNDED, and only where no finding
+  relates the claim's pair; where one does, it is a missed report.
+- **−** **The stand-in words are a closed list, and the refusals cost claims.** A clause carrying a
+  stand-in for another reason (*"note that X interacts …"*), and a list joined by other words (*"as
+  well as"*), are unjudged. A subject clause naming another drug and then its own by a word the list
+  lacks is unjudged too, since the word before the verb is no name the findings carry.
 - **−** **The negators are a closed set, and punctuation ends a list.** A denial worded outside the
-  set (*"is unlikely to interact"*) is judged as the pair it names and can be reported; a negator in an
+  set is left to the verb rule, which leaves unjudged every claim whose verb is not the phrase's own
+  straight after its drug — a hedge (*"may interact with"*) and *"also interacts with"* included, a
+  missed report; a negator in an
   earlier clause the subject span reaches with no comma, semicolon, colon or spaced em or en dash
   (*"X should not be given because X interacts …"*, a lead ending in a spaced hyphen) leaves an
   asserting claim unjudged. A list's last partner followed by punctuation and then a clause of its own

@@ -51,15 +51,12 @@ import org.slf4j.LoggerFactory;
  * the words after it up to its marker run (or clause bound) as the PARTNER, and that run as what it
  * cites. One walk, so this check and that one cannot disagree about which claims the answer made or
  * which markers each offered. A marker past the claim's comma is not in its run — the ticket's cases
- * 2 and 4 put it there — and a claim with no run of its own takes the findings of the first run past
- * its clause on three gates only: the words between the comma and that run name no drug any finding
- * names and do not state the relationship again in the phrase's own verb ({@link #RELATIONSHIP_VERB}),
- * and the finding names the claim's PARTNER. Each gate is against the report ADR Decision 76 calls
- * crying wolf, a later clause's own correct citation: the first where that clause names another drug a
- * finding carries, the second where it states another interaction naming its drug by a class or a word
- * no finding prints (round 3 of #514's review), the third where it names one no finding carries. A
- * claim the gates do not let through is judged as citing nothing, and is still reported where no
- * finding relates its pair.
+ * 2 and 4 put it there — and is never taken for the claim, which is judged as citing nothing. Taken on
+ * gates reading the words before it, it accused a later clause's own correct citation, the report ADR
+ * Decision 76 calls crying wolf, where that clause named its drug by a word no finding prints in a verb
+ * other than the phrase's (<em>"…, and the other statin does too [6]"</em>, round 2 of #514's third
+ * review). A finding it would have taken that relates the pair is in the population an uncited claim is
+ * judged against, so such a claim is reported only where no finding relates its pair — as unfounded.
  *
  * <p><b>What a finding relates is read structurally, never from its text.</b> Every name a finding
  * goes by: its subject ({@link ChartSearchAiUtils#findingSubject} on a record,
@@ -98,7 +95,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Two answers.</b>
  * <ul>
- *   <li>A claim whose run — or the trailing run it takes — cites findings, none of which relates its
+ *   <li>A claim whose run cites findings, none of which relates its
  *       subject to any of its partners: every one of them is MISATTRIBUTED. A run citing one that
  *       relates and one that does not is silent.</li>
  *   <li>A claim citing no finding, or citing one that relates another of its partners, where a partner
@@ -126,6 +123,9 @@ import org.slf4j.LoggerFactory;
  *   <li>the subject clause carries a word denying what it states — {@link #NEGATORS}: <em>"Simvastatin
  *       does not interact with active order Digoxin"</em> names a pair it denies (round 1 of #514's
  *       second review);</li>
+ *   <li>the subject span does not END in a drug it names followed straight by the phrase's own verb
+ *       ({@link #statesTheVerbOfItsDrug}) — <em>"is unlikely to interact with"</em> or <em>"rarely
+ *       interacts with"</em> may not assert the pair it names (round 2 of #514's third review);</li>
  *   <li>the partner span names several drugs joined by words other than a list's
  *       ({@link #PARTNER_LIST_WORDS}) — <em>"active order Amiodarone but not with Digoxin"</em> ran on
  *       into a clause of its own, which may deny the second pair (round 3) — or followed by a word
@@ -155,18 +155,16 @@ import org.slf4j.LoggerFactory;
  * combination's display) rather than the start of one. The first words of a name two drugs share read
  * as either, toward silence. A claim pairing two orders one finding names reads as
  * related, so an order put in for a merged finding's subject passes — {@link #anyRelates} says why.
- * The trailing-run gates read names the findings carry and the phrase's own verb, so a later clause
- * naming another drug only by a name no finding prints, citing a finding that names the claim's
- * partner, is taken for the claim unless it says <em>interacts with</em> — one restating the
- * relationship in other words is still taken. The stand-in words and the list words are closed sets
- * used only to refuse: a subject clause naming another drug and then its own by a word the stand-ins
- * lack — a brand no finding prints, a bare class noun — is still read as that other drug and can be
- * reported, while a clause carrying one for another reason (<em>"note that X interacts…"</em>) and a
- * list joined by other words (<em>"as well as"</em>) are left unjudged. The negators are a closed set
- * too: a denial worded outside it (<em>"is unlikely to interact"</em>) is judged as the pair it names,
- * and a negator in an earlier clause the subject span reaches — no comma, semicolon, colon or spaced
- * em or en dash between, as in <em>"X should not be given because X interacts…"</em> or a lead ending
- * in a spaced hyphen — leaves an asserting claim unjudged. A list's last partner followed by
+ * A claim whose only marker sits past its clause names no citation, so a swap the marker carries is
+ * reported only where no finding relates the claim's pair. A claim whose verb is not the phrase's own
+ * straight after its drug — a hedge (<em>"may interact with"</em>), <em>"also interacts with"</em>, a
+ * verbatim copy of another finding's wording — is left unjudged, as is one naming its drug by a brand
+ * no finding prints. The stand-in words and the list words are closed sets used only to refuse: a
+ * clause carrying one for another reason (<em>"note that X interacts…"</em>) and a list joined by
+ * other words (<em>"as well as"</em>) are left unjudged. The negators are a closed set too, and a
+ * negator in an earlier clause the subject span reaches — no comma, semicolon, colon or spaced em or
+ * en dash between, as in <em>"X should not be given because X interacts…"</em> or a lead ending in a
+ * spaced hyphen — leaves an asserting claim unjudged. A list's last partner followed by
  * punctuation and then a clause of its own is still read as a partner.
  * A second partner no finding or chip names at all — <em>Heparin</em> in <em>"active order Amiodarone
  * and Heparin"</em> — is no name to this check, so it reads as words after the related partner and
@@ -214,8 +212,9 @@ final class InteractionClaimPairFidelityCheck {
 	 * order Digoxin"</em> was published unfounded (round 1 of #514's second review) — so the claim is left
 	 * unjudged. The verdict lead's <em>"No —"</em> is followed by a dash, not a word, so it is not one. A
 	 * closed set used only to REFUSE, as {@link #SUBJECT_STAND_INS} is: a denial worded outside it
-	 * (<em>"is unlikely to interact"</em>) is judged as an assertion, and a negator in an earlier clause the
-	 * subject span reaches with no comma, semicolon or {@link #afterItsLead} separator between
+	 * (<em>"is unlikely to interact"</em>) is left to {@link #statesTheVerbOfItsDrug}, and a negator in
+	 * an earlier clause the subject span reaches with no comma, semicolon or {@link #afterItsLead}
+	 * separator between
 	 * (<em>"X should not be given because X interacts…"</em>) silences a claim that asserts.
 	 */
 	private static final Set<String> NEGATORS = Collections.unmodifiableSet(new HashSet<String>(
@@ -231,8 +230,8 @@ final class InteractionClaimPairFidelityCheck {
 
 	/**
 	 * The verb of {@link DrugSafetyValidator#ACTIVE_ORDER_INTERACTION_PHRASE} — the phrase less its
-	 * {@link DrugSafetyValidator#ACTIVE_ORDER_NOUN}, derived and never spelled again. A trailing gap
-	 * stating it states another relationship, whose marker is that clause's own.
+	 * {@link DrugSafetyValidator#ACTIVE_ORDER_NOUN}, derived and never spelled again. A claim is judged
+	 * only where its subject span ends in a drug and then this ({@link #statesTheVerbOfItsDrug}).
 	 */
 	private static final String RELATIONSHIP_VERB = relationshipVerb();
 
@@ -302,7 +301,7 @@ final class InteractionClaimPairFidelityCheck {
 				String subject = FindingPartnerCoverageCheck.comparable(afterItsLead(claim.subject()));
 				Set<String> subjectNames = namedIn(subject, vocabulary);
 				if (subjectNames.isEmpty() || containsAWordOf(subject, SUBJECT_STAND_INS)
-						|| deniesItsClause(subject)) {
+						|| deniesItsClause(subject) || !statesTheVerbOfItsDrug(subject, subjectNames)) {
 					continue;
 				}
 				// A partner is judged only where the span STARTS with a name the findings carry, and on that
@@ -336,25 +335,14 @@ final class InteractionClaimPairFidelityCheck {
 						unreadable = true;
 					}
 				}
-				// A claim with no run of its own takes a finding marker past its clause only on three gates,
-				// each against a false report Decision 76 names: nothing between the clause break and the
-				// marker names a drug any finding names — a later clause about another drug carries its own
-				// citation — and the finding names the claim's PARTNER, the evidence the marker is about this
-				// claim. Round 1 of #514's review: without it the ticket's own cases 2 and 4, whose markers
-				// sit after a comma, named no citation. Round 3: a gap stating the relationship again
-				// ("…, which also interacts with a statin [6]") is another claim naming its drug by a word no
-				// finding prints, so its marker is not taken either.
-				String trailingGap = FindingPartnerCoverageCheck.comparable(claim.trailingGap());
-				if (namedIn(trailingGap, vocabulary).isEmpty() && (RELATIONSHIP_VERB.isEmpty()
-						|| !trailingGap.contains(RELATIONSHIP_VERB))) {
-					for (Integer index : claim.admittedTrailingRunIndexes(admitted)) {
-						Finding finding = citedFindings.contains(index) ? citableFindings.get(index) : null;
-						if (finding != null && finding.relatesDrugs && namesAny(partners, finding.names)) {
-							runFindings.add(finding);
-							runIndexes.add(index);
-						}
-					}
-				}
+				// A marker past the claim's clause is never the claim's, and a claim with no run of its own is
+				// judged as citing nothing. Taking the first run past its clause — gated on the words before it
+				// naming no drug a finding names, not stating the phrase's verb, and the finding naming the
+				// partner — accused a later clause's own correct citation where that clause names its drug by a
+				// word no finding prints, in a verb other than the phrase's ("…, and the other statin does too
+				// [6]"; round 2 of #514's third review): a false report, which the owner's decision on #514 lets
+				// block. A taken finding relating the pair is in the population an uncited claim is judged
+				// against already.
 				List<Finding> candidates = runFindings.isEmpty() ? population : runFindings;
 				if (unreadable || anyUndecidable(candidates, subjectNames, partners)) {
 					continue;
@@ -473,6 +461,37 @@ final class InteractionClaimPairFidelityCheck {
 				}
 			}
 			at = end;
+		}
+		return false;
+	}
+
+	/**
+	 * @return whether {@code subject} ENDS in one of {@code subjectNames}, on a word's boundary, and then
+	 *         {@link #RELATIONSHIP_VERB} with nothing but spacing between — the phrase's own verb stated of
+	 *         a drug the span names. Anything else between the drug and the noun says the clause may not
+	 *         assert the pair: <em>"is unlikely to interact with"</em>, <em>"rarely interacts with"</em>,
+	 *         a hedge, a verbatim copy of another finding's wording (<em>"is already in"</em>). Round 2
+	 *         of #514's third review found a denial outside {@link #NEGATORS} published unfounded; a
+	 *         structural rule and not a longer word list, and used only to refuse. False where the verb
+	 *         cannot be derived, so a reworded phrase silences the check rather than widening it. A
+	 *         character comparison, as {@link #deniesItsClause} is, for its reason. No case pins the space
+	 *         before the verb or the word boundary before the name.
+	 */
+	private static boolean statesTheVerbOfItsDrug(String subject, Set<String> subjectNames) {
+		String span = subject.trim();
+		if (RELATIONSHIP_VERB.isEmpty() || !span.endsWith(RELATIONSHIP_VERB)) {
+			return false;
+		}
+		int verbAt = span.length() - RELATIONSHIP_VERB.length();
+		if (verbAt == 0 || !Character.isWhitespace(span.charAt(verbAt - 1))) {
+			return false;
+		}
+		String before = span.substring(0, verbAt).trim();
+		for (String name : subjectNames) {
+			int at = before.length() - name.length();
+			if (before.endsWith(name) && (at == 0 || !Character.isLetterOrDigit(before.charAt(at - 1)))) {
+				return true;
+			}
 		}
 		return false;
 	}

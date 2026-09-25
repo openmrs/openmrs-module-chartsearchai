@@ -1543,6 +1543,85 @@ public class InteractionClaimPairFidelityTest {
 		}
 	}
 
+	/**
+	 * Round 3 of #514's third review (r3-1). The subject span names the drug the verb follows, but the
+	 * claim's real subject sits where the span cannot read it — before a comma the clause never closes
+	 * (<em>"Clarithromycin, like Simvastatin interacts…"</em>), or named by a word no finding prints
+	 * (<em>"Biaxin with Simvastatin interacts…"</em>). The lone reading was then the other drug, and [13],
+	 * Clarithromycin's own Amiodarone finding, was published misattributed. A claim is judged only where
+	 * its drug opens its clause — nothing but punctuation before it, an <em>and</em> alone, or a
+	 * <em>but</em> after no denial — and a claim citing a finding is not judged where a drug before the
+	 * clause's comma may be a subject beside it: a list (<em>"Clarithromycin, Simvastatin
+	 * interacts…"</em>). The comma-closed form names no drug before the verb at all. On both answer paths.
+	 */
+	@Test
+	public void aClaimWhoseSubjectMayBeADrugBeforeItsReadingIsNotAccusedOnThatReading() {
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int clarithromycinsFinding = arrangement.finding("Clarithromycin", "Amiodarone");
+		assertFalse(arrangement.hasFinding("Biaxin", "Amiodarone"), "the premise: no finding prints the brand, "
+				+ "chart was: " + arrangement.chart.getText());
+		String claim = " interacts with active order Amiodarone [" + clarithromycinsFinding + "].";
+		for (String subject : Arrays.asList(
+				"Clarithromycin, like Simvastatin",
+				"Biaxin with Simvastatin",
+				"Clarithromycin, just as Simvastatin",
+				"Clarithromycin, together with Simvastatin",
+				"Clarithromycin, like Simvastatin,",
+				"Clarithromycin, and Simvastatin",
+				"Biaxin and Simvastatin",
+				"Clarithromycin, Simvastatin",
+				"Clarithromycin can be given, but like Simvastatin",
+				"Not only Clarithromycin, but Simvastatin")) {
+			String answer = subject + claim;
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, answer)) {
+				assertEquals(0, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * The other side of the case above: a drug opening its own clause — at a sentence or numbered or
+	 * bulleted list item's start, after a <em>but</em>, or after an <em>and</em> joining it to the claim
+	 * before — is still judged, and a swap there is still reported. [6] is Simvastatin's Amiodarone
+	 * finding, cited for Clarithromycin. And an uncited claim after a comma — a lead word's, or an
+	 * <em>and</em>'s after a clause naming another drug — is still judged, since its drug is asserted to
+	 * interact with its partner whether or not a subject stands before it. On both answer paths.
+	 */
+	@Test
+	public void aSwapWhoseDrugOpensItsOwnClauseIsStillReported() {
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		String swap = "Clarithromycin interacts with active order Amiodarone [" + simvastatinsFinding + "].";
+		for (String answer : Arrays.asList(
+				swap,
+				"Her orders:\n1. " + swap,
+				"Her orders:\n- " + swap,
+				"Simvastatin can be given, but " + swap,
+				"Simvastatin interacts with active order Amiodarone [" + simvastatinsFinding + "] and " + swap)) {
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, answer)) {
+				assertEquals(answer.startsWith("Simvastatin interacts") ? 2 : 1, pairs.getJudged(),
+						"was: " + pairs + " for: " + answer);
+				assertEquals(Collections.singletonList(Integer.valueOf(simvastatinsFinding)),
+						pairs.getMisattributedCitations(), "was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			}
+		}
+
+		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+				"Simvastatin"), "the premise: no finding relates Simvastatin to Digoxin, chart was: "
+						+ arrangement.chart.getText());
+		for (String answer : Arrays.asList("However, Simvastatin interacts with active order Digoxin.",
+				"Clarithromycin, and Simvastatin interacts with active order Digoxin.")) {
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, answer)) {
+				assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getUnfounded(), "no finding relates the pair, was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
 	/** What the real {@code search} AND {@code searchStreaming} publish for {@code answer}, asserted to be
 	 *  one statement. */
 	private static List<InteractionClaimPairs> onBothPaths(Arrangement arrangement, String question,

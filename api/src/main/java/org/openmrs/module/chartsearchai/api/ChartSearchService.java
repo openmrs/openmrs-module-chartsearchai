@@ -775,15 +775,20 @@ public interface ChartSearchService {
 	 * names, END in such a drug followed straight by the phrase's own verb (<em>interacts with</em> —
 	 * never <em>"is unlikely to interact with"</em> or <em>"rarely interacts with"</em>), and carry no
 	 * word standing for a drug without naming it (<em>it</em>, <em>this</em>,
-	 * <em>which</em>, <em>the</em> …), the words after it START with a name some such finding or chip
-	 * names — judged on that name and never on the words following it — and where they name several
-	 * drugs they join them as a list (<em>and</em>, <em>or</em>), the run cites no reference record
-	 * other than an
+	 * <em>which</em>, <em>the</em> …) and no word straight before that drug but a lone <em>and</em> or a
+	 * <em>but</em> after no denial — so <em>"Clarithromycin, like Simvastatin interacts with …"</em> is
+	 * unjudged, its subject perhaps the drug before the comma — the words after it START with a name
+	 * some such finding or chip names — judged on that name and never on the words following it — and
+	 * where they name several drugs they join them as a list (<em>and</em>, <em>or</em>), the run cites
+	 * no reference record other than an
 	 * interaction or condition-mediated finding, no finding naming no order (a class-only
 	 * relationship) among those the claim is judged against — the ones it cites, or where it cites
 	 * none, every finding and chip — is about a drug it names, and every drug the words before the noun
 	 * name reaches the same verdict as the claim's subject — so a clause naming another drug before the
-	 * noun with no comma or semicolon between is judged only where both readings agree.
+	 * noun with no comma or semicolon between is judged only where both readings agree — and, where
+	 * nothing but a lone <em>and</em> stands before that drug and a word stands before the comma or
+	 * semicolon its clause begins past, the claim cites no finding, since the drug before that comma
+	 * may be a subject beside it (<em>"Clarithromycin, Simvastatin interacts with …"</em>).
 	 * Every other claim is outside all three numbers.
 	 *
 	 * <p><b>What {@code misattributedCitations} holds.</b> The findings a judged claim cites where
@@ -810,10 +815,10 @@ public interface ChartSearchService {
 	 * leaves its claim unjudged. A short name inside a longer one reads as the same drug, toward
 	 * silence. A second partner no finding or chip names at all reads as more words of the first, and
 	 * a partner list continued past a comma is cut at it, so neither invented partner is counted; and a
-	 * swapped subject in a clause naming several drugs is unjudged, not reported. The stand-in words
-	 * are a closed list, so a clause naming another drug and then its own subject by a word the list
-	 * lacks — a brand no finding prints, a bare class noun — is read as that other drug and can be
-	 * reported.
+	 * swapped subject in a clause naming several drugs is unjudged, not reported. So is a swap whose
+	 * drug has a word before it in its clause other than <em>and</em> or <em>but</em>, and one citing a
+	 * finding after a comma a word stands before (<em>"However, X interacts with …"</em>, <em>"No,
+	 * X …"</em>).
 	 */
 	final class InteractionClaimPairs {
 

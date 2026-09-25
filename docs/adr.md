@@ -11274,6 +11274,25 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   verbatim copy of #477's *"is already in"*, and a clause naming its own drug by a brand after another
   drug (*"… alongside Simvastatin Biaxin interacts with active order Amiodarone [13]"*, [13]
   Clarithromycin's own, had been accused).
+- **The drug the verb follows must open its clause** (round 3 of the PR's third review loop, r3-1).
+  The span's lone reading was the other drug, and [13] — Clarithromycin's own Amiodarone finding —
+  was published misattributed, where the claim's real subject sat before a comma the clause never
+  closed (*"Clarithromycin, like Simvastatin interacts with active order Amiodarone [13]"*, also *just
+  as*, *together with*) or was named by a word no finding prints (*"Biaxin with Simvastatin interacts
+  …"*); closing the comma made the claim unjudged, so one missing comma turned silence into an
+  accusation. `opensItsClause` refuses a claim where a word stands straight before that drug in the
+  span, but for two: a lone *and*, which asserts the drug whatever stands before it, and a *but*,
+  which leaves the drug after it the subject alone, where the words before the span's comma deny
+  nothing (*"Not only X, but Y"* asserts both). The *and* must stand alone, since *"Biaxin and
+  Simvastatin"* is two subjects whose first no finding prints. A list is the same failure with no
+  word at all (*"Clarithromycin, Simvastatin interacts … [13]"*, *"Clarithromycin, and Simvastatin
+  …"*), so `mayShareItsSubject` leaves a claim CITING a finding unjudged where a word stands before
+  the comma its span begins past and nothing but a lone *and* before its drug; one citing nothing is
+  still judged, its drug being asserted under either reading. The reviewer's own suggestion —
+  refuse wherever the words before the span name another drug — would also have silenced *"…, but
+  Clarithromycin interacts … [6]"* (`theSubjectIsTheClaimsOwnClauseAndNotTheClauseBeforeIt`) and
+  would not have reached the brand. The two words are the only ones whose relation to what precedes
+  them the check can read, and they are used only to refuse.
 - **Two of those refusals had cost reach they did not need** (round 2 of the second review loop,
   each a swapped subject left unjudged). *A list running on* first refused the whole claim, so
   *"Clarithromycin interacts with active order Amiodarone and Digoxin which is a Major problem [6]"*,
@@ -11384,6 +11403,11 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   lead clause, a pronoun or a parenthesis — since its readings disagree. So is one after a claim with
   no marker and no comma (*"… active order Amiodarone and Simvastatin interacts with active order
   Digoxin [6]"*), whose subject span is empty; the round-2 bullet above says why it is not read.
+- **−** **A drug that does not open its clause is a missed report**, a swap included: any word before
+  it but a lone *and* or a *but* (*"Also X interacts …"*, an item number *"1)"*; a markdown bold name
+  already fails the verb rule), and a claim citing a finding after a comma a word stands before
+  (*"However, X interacts … [6]"*, *"No, X interacts … [6]"*). No case pins taking the longest name
+  ending the span as the drug; the shortest can only refuse more.
 - **−** **Two orders one finding names read as related**, so a claim pairing two orders of a merged
   (Decision 99) finding is not reported — the price of not falsely reporting #477's findings; the
   relation bullet above says why.

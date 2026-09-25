@@ -354,8 +354,8 @@ final class ActiveOrderCitationFidelityCheck {
 				int from = at + phrase.length();
 				int[] run = firstMarkerRun(sentence, from, limit);
 				int partnerTo = run == null ? clauseBound(sentence, from, limit) : run[0];
-				claims.add(new Claim(sentence, clauseStart(sentence, previousEnd, at), at, from, partnerTo,
-						run == null ? "" : sentence.substring(run[0], run[1])));
+				claims.add(new Claim(sentence, previousEnd, clauseStart(sentence, previousEnd, at), at, from,
+						partnerTo, run == null ? "" : sentence.substring(run[0], run[1])));
 				previousEnd = run == null ? partnerTo : run[1];
 				at = next;
 			}
@@ -609,6 +609,8 @@ final class ActiveOrderCitationFidelityCheck {
 
 		private final String sentence;
 
+		private final int clauseFrom;
+
 		private final int subjectFrom;
 
 		private final int nounAt;
@@ -619,9 +621,10 @@ final class ActiveOrderCitationFidelityCheck {
 
 		private final String run;
 
-		private Claim(String sentence, int subjectFrom, int nounAt, int partnerFrom, int partnerTo,
-				String run) {
+		private Claim(String sentence, int clauseFrom, int subjectFrom, int nounAt, int partnerFrom,
+				int partnerTo, String run) {
 			this.sentence = sentence;
+			this.clauseFrom = clauseFrom;
 			this.subjectFrom = subjectFrom;
 			this.nounAt = nounAt;
 			this.partnerFrom = partnerFrom;
@@ -632,6 +635,15 @@ final class ActiveOrderCitationFidelityCheck {
 		/** @return the words before the noun in the claim's own clause — "Metformin interacts with" */
 		String subject() {
 			return sentence.substring(subjectFrom, nounAt);
+		}
+
+		/**
+		 * @return the words of the sentence between where the previous claim ended (or the sentence's
+		 *         start) and the subject span — the clause separator the span begins past, and what stands
+		 *         before it; empty where the span begins at the previous claim's end
+		 */
+		String beforeSubject() {
+			return sentence.substring(clauseFrom, subjectFrom);
 		}
 
 		/** @return the words after the noun, up to the claim's run or its clause bound */

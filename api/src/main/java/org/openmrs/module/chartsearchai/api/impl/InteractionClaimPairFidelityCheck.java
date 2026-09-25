@@ -126,6 +126,14 @@ import org.slf4j.LoggerFactory;
  *   <li>the subject span does not END in a drug it names followed straight by the phrase's own verb
  *       ({@link #statesTheVerbOfItsDrug}) — <em>"is unlikely to interact with"</em> or <em>"rarely
  *       interacts with"</em> may not assert the pair it names (round 2 of #514's third review);</li>
+ *   <li>that drug does not OPEN its clause ({@link #opensItsClause}) — a word stands straight before
+ *       it other than a lone <em>and</em> or a <em>but</em> after no denial, so its subject may be a
+ *       drug before a comma the clause never closed or one named by a word no finding prints:
+ *       <em>"Clarithromycin, like Simvastatin interacts…"</em>, <em>"Biaxin with Simvastatin
+ *       interacts…"</em> (round 3 of #514's third review) — or, citing a finding, a word stands before
+ *       the comma its clause begins past and the drug has nothing but a lone <em>and</em> before it
+ *       ({@link #mayShareItsSubject}), since a drug there may be a subject beside it
+ *       (<em>"Clarithromycin, Simvastatin interacts…"</em>);</li>
  *   <li>the partner span names several drugs joined by words other than a list's
  *       ({@link #PARTNER_LIST_WORDS}) — <em>"active order Amiodarone but not with Digoxin"</em> ran on
  *       into a clause of its own, which may deny the second pair (round 3) — or followed by a word
@@ -159,7 +167,11 @@ import org.slf4j.LoggerFactory;
  * reported only where no finding relates the claim's pair. A claim whose verb is not the phrase's own
  * straight after its drug — a hedge (<em>"may interact with"</em>), <em>"also interacts with"</em>, a
  * verbatim copy of another finding's wording — is left unjudged, as is one naming its drug by a brand
- * no finding prints. The stand-in words and the list words are closed sets used only to refuse: a
+ * no finding prints. So is a claim whose drug has a word before it in its clause other than a lone
+ * <em>and</em> or a <em>but</em> (<em>"Also X interacts…"</em>, an item number <em>"1)"</em>), and one
+ * citing a finding after a comma a word stands before (<em>"However, X interacts… [n]"</em>, <em>"No,
+ * X interacts… [n]"</em>) — a swap there is a missed report; the same claim citing nothing is judged.
+ * The stand-in words and the list words are closed sets used only to refuse: a
  * clause carrying one for another reason (<em>"note that X interacts…"</em>) and a list joined by
  * other words (<em>"as well as"</em>) are left unjudged. The negators are a closed set too, and a
  * negator in an earlier clause the subject span reaches — no comma, semicolon, colon or spaced em or
@@ -235,6 +247,22 @@ final class InteractionClaimPairFidelityCheck {
 	 */
 	private static final String RELATIONSHIP_VERB = relationshipVerb();
 
+	/**
+	 * The one word that may stand straight before a claim's drug with other words before it, since it
+	 * CONTRASTS the drug with what precedes and so leaves it the subject alone — <em>"Simvastatin can be
+	 * given, but Clarithromycin interacts…"</em>. Read by {@link #opensItsClause}, used only to refuse.
+	 */
+	private static final String CONTRASTING_WORD = "but";
+
+	/**
+	 * The one word that may stand before a claim's drug as the only word of its span — <em>"…, and
+	 * Simvastatin interacts…"</em>, <em>"X interacts with active order A [a] and Y interacts…"</em>. It
+	 * adds the drug as a subject, alone or beside one before it, so the drug is asserted either way, and
+	 * {@link #mayShareItsSubject} says when the citation may be the other subject's. Read by
+	 * {@link #opensItsClause}, used only to refuse.
+	 */
+	private static final String JOINING_WORD = "and";
+
 	private InteractionClaimPairFidelityCheck() {
 	}
 
@@ -301,7 +329,8 @@ final class InteractionClaimPairFidelityCheck {
 				String subject = FindingPartnerCoverageCheck.comparable(afterItsLead(claim.subject()));
 				Set<String> subjectNames = namedIn(subject, vocabulary);
 				if (subjectNames.isEmpty() || containsAWordOf(subject, SUBJECT_STAND_INS)
-						|| deniesItsClause(subject) || !statesTheVerbOfItsDrug(subject, subjectNames)) {
+						|| deniesItsClause(subject) || !statesTheVerbOfItsDrug(subject, subjectNames)
+						|| !opensItsClause(subject, subjectNames, claim.beforeSubject())) {
 					continue;
 				}
 				// A partner is judged only where the span STARTS with a name the findings carry, and on that
@@ -344,7 +373,9 @@ final class InteractionClaimPairFidelityCheck {
 				// block. A taken finding relating the pair is in the population an uncited claim is judged
 				// against already.
 				List<Finding> candidates = runFindings.isEmpty() ? population : runFindings;
-				if (unreadable || anyUndecidable(candidates, subjectNames, partners)) {
+				if (unreadable || anyUndecidable(candidates, subjectNames, partners)
+						|| !runFindings.isEmpty()
+								&& mayShareItsSubject(subject, subjectNames, claim.beforeSubject())) {
 					continue;
 				}
 				// Each drug the subject span names is a READING of the claim's subject, and the claim is
@@ -490,6 +521,87 @@ final class InteractionClaimPairFidelityCheck {
 		for (String name : subjectNames) {
 			int at = before.length() - name.length();
 			if (before.endsWith(name) && (at == 0 || !Character.isLetterOrDigit(before.charAt(at - 1)))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return whether the drug the verb follows ({@link #statesTheVerbOfItsDrug}) OPENS its clause, so
+	 *         no other subject can stand inside the span unread: nothing but punctuation before it there, a
+	 *         {@link #JOINING_WORD} as the span's only word, or a {@link #CONTRASTING_WORD} straight
+	 *         before it with no denial in the words before the span's separator
+	 *         ({@code beforeSubject} — <em>"Not only X, but Y interacts…"</em> asserts both). Round 3 of
+	 *         #514's third review (r3-1): the real subject sat before a comma the clause never closed
+	 *         (<em>"Clarithromycin, like Simvastatin interacts…"</em>) or was named by a word no finding
+	 *         prints (<em>"Biaxin with Simvastatin interacts…"</em>), the span's lone reading was the other
+	 *         drug, and the claim's own correct citation was published misattributed. Every word but the two
+	 *         may make another drug the subject or a co-subject; those two are the only ones whose relation to
+	 *         what precedes them this check can read — a contrast leaves the drug after it the subject alone,
+	 *         a join asserts it — so a word list is unavoidable, and it is used only to refuse: a word
+	 *         missing from it leaves a claim unjudged. The <em>and</em> must be the span's only word, since
+	 *         <em>"Biaxin and Simvastatin"</em> is a subject of two drugs whose first no finding prints.
+	 */
+	private static boolean opensItsClause(String subject, Set<String> subjectNames, String beforeSubject) {
+		List<String> words = wordsBeforeItsDrug(subject, subjectNames);
+		if (words.isEmpty()) {
+			return true;
+		}
+		String last = words.get(words.size() - 1);
+		if (CONTRASTING_WORD.equals(last)) {
+			return !deniesItsClause(FindingPartnerCoverageCheck.comparable(beforeSubject));
+		}
+		return JOINING_WORD.equals(last) && words.size() == 1;
+	}
+
+	/**
+	 * @return whether a drug before the span's comma or semicolon may be the claim's subject BESIDE the one
+	 *         it reads, so a finding cited for the claim may be that drug's: where nothing, or only a
+	 *         {@link #JOINING_WORD}, stands before the drug in the span, and a word stands before the
+	 *         separator since the previous claim — <em>"Clarithromycin, and Simvastatin interacts…"</em>,
+	 *         <em>"Clarithromycin, Simvastatin interacts…"</em> may list two subjects, and that first one
+	 *         may be named by a word no finding prints. Then a claim citing a finding is left unjudged,
+	 *         never accused; one citing none is still judged, since the drug it reads is asserted to
+	 *         interact with its partner under either reading. Where only the previous claim stands before
+	 *         the span — <em>"… [a] and Y interacts…"</em> — no other subject can.
+	 */
+	private static boolean mayShareItsSubject(String subject, Set<String> subjectNames, String beforeSubject) {
+		List<String> words = wordsBeforeItsDrug(subject, subjectNames);
+		return (words.isEmpty() || words.size() == 1 && JOINING_WORD.equals(words.get(0)))
+				&& containsAWord(beforeSubject);
+	}
+
+	/**
+	 * @return the words of {@code subject} before the drug the verb follows — the longest of
+	 *         {@code subjectNames} ending the span less its verb on a word's boundary, so a combination's name
+	 *         is not read as a word before its last part. Asked only of a span
+	 *         {@link #statesTheVerbOfItsDrug} admitted.
+	 */
+	private static List<String> wordsBeforeItsDrug(String subject, Set<String> subjectNames) {
+		String span = subject.trim();
+		String before = span.substring(0, span.length() - RELATIONSHIP_VERB.length()).trim();
+		String drug = "";
+		for (String name : subjectNames) {
+			int at = before.length() - name.length();
+			if (before.endsWith(name) && name.length() > drug.length()
+					&& (at == 0 || !Character.isLetterOrDigit(before.charAt(at - 1)))) {
+				drug = name;
+			}
+		}
+		List<String> words = new ArrayList<String>();
+		for (String word : before.substring(0, before.length() - drug.length()).split("[^\\p{L}\\p{N}]+")) {
+			if (!word.isEmpty()) {
+				words.add(word);
+			}
+		}
+		return words;
+	}
+
+	/** @return whether {@code text} has a letter or a digit — a word, of any kind */
+	private static boolean containsAWord(String text) {
+		for (int at = 0; at < text.length(); at++) {
+			if (Character.isLetterOrDigit(text.charAt(at))) {
 				return true;
 			}
 		}

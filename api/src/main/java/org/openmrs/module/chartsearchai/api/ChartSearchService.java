@@ -753,6 +753,111 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * Whether the pair each <em>"X interacts with active order Y"</em> claim in the answer states is a
+	 * pair the module's own findings relate — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/514">#514</a>, ADR
+	 * Decision 120. {@code InteractionClaimPairFidelityCheck} states it. This type is CANONICAL for what
+	 * its three parts do and do not assert; README states the same contract for a client author.
+	 *
+	 * <p><b>Why a client could not read it off anything already published.</b> On the ticket's cells
+	 * the answer gave Stavudine's finding to Metformin, or stated a Metformin pair no finding raised,
+	 * and {@code misattributedOrderCitations}, {@code unfaithfullyRenderedCitations} and
+	 * {@code unstatedFindingSeverities} each read {@code []} or flagged something else: the first
+	 * judges CHART citations, the second needs copied words, the third judges ratings.
+	 *
+	 * <p><b>What a claim is</b> is {@code ActiveOrderCitationFidelityCheck}'s: an occurrence of
+	 * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, and the markers it cites are its own marker RUN.
+	 * A marker past the claim's clause break is not in that run and never the claim's: a claim with no
+	 * run of its own is judged as citing nothing.
+	 *
+	 * <p><b>What {@code judged} counts.</b> The claims the check could reach a verdict on: the
+	 * words before the noun name a drug some interaction or condition-mediated finding or chip
+	 * names, END in such a drug followed straight by the phrase's own verb (<em>interacts with</em> —
+	 * never <em>"is unlikely to interact with"</em> or <em>"rarely interacts with"</em>), and carry no
+	 * word standing for a drug without naming it (<em>it</em>, <em>this</em>,
+	 * <em>which</em>, <em>the</em> …) and no word straight before that drug but a lone <em>and</em> or a
+	 * <em>but</em> after no denial — so <em>"Clarithromycin, like Simvastatin interacts with …"</em> is
+	 * unjudged, its subject perhaps the drug before the comma — the words after it START with a name
+	 * some such finding or chip names — judged on that name and never on the words following it — and
+	 * where they name several drugs they join them as a list (<em>and</em>, <em>or</em>), the run cites
+	 * no reference record other than an
+	 * interaction or condition-mediated finding, no finding naming no order (a class-only
+	 * relationship) among those the claim is judged against — the ones it cites, or where it cites
+	 * none, every finding and chip — is about a drug it names, and every drug the words before the noun
+	 * name reaches the same verdict as the claim's subject — so a clause naming another drug before the
+	 * noun with no comma or semicolon between is judged only where both readings agree — and, where
+	 * nothing but a lone <em>and</em> stands before that drug and a word stands before the comma or
+	 * semicolon its clause begins past, the claim cites no finding, since the drug before that comma
+	 * may be a subject beside it (<em>"Clarithromycin, Simvastatin interacts with …"</em>).
+	 * Every other claim is outside all three numbers.
+	 *
+	 * <p><b>What {@code misattributedCitations} holds.</b> The findings a judged claim cites where
+	 * NONE of them relates its subject to any drug the words after the noun name: each drug must be one
+	 * the finding names — its
+	 * subject, an order it names, or a prescription its chart-order clause resolved a drug from — read
+	 * structurally, never from its text. Two orders one finding names therefore read as related, which
+	 * is what issue #477's findings state and is a miss on a merged finding. Distinct, in the order the
+	 * answer states them.
+	 *
+	 * <p><b>What {@code unfounded} counts.</b> The judged claims naming, after the noun, a drug some
+	 * finding or chip names that no finding in the prompt and no chip beside the answer relates to the
+	 * subject, where the claim cites
+	 * no finding or cites one relating another drug it names there — an unrelated partner, alone or
+	 * beside a related one. It is a count of CLAIMS, and the list is of CITATIONS, so a client must not add
+	 * them.
+	 *
+	 * <p><b>Zero is a measurement and absence is not; neither empty list nor zero is a
+	 * certificate.</b> A null {@code InteractionClaimPairs} says the producer stated no measurement —
+	 * the async-grounding early {@code done}, a module-composed answer, or a check that failed.
+	 * {@code judged: 0} says there was nothing it could judge, which is not the same statement as
+	 * "every claim was right". Names are compared by containment, and a SUBJECT or PARTNER spelled
+	 * differently from every name the findings carry — a brand, a paraphrase, an invented drug —
+	 * leaves its claim unjudged. A short name inside a longer one reads as the same drug, toward
+	 * silence. A second partner no finding or chip names at all reads as more words of the first, and
+	 * a partner list continued past a comma is cut at it, so neither invented partner is counted; and a
+	 * swapped subject in a clause naming several drugs is unjudged, not reported. So is a swap whose
+	 * drug has a word before it in its clause other than <em>and</em> or <em>but</em>, and one citing a
+	 * finding after a comma a word stands before (<em>"However, X interacts with …"</em>, <em>"No,
+	 * X …"</em>).
+	 */
+	final class InteractionClaimPairs {
+
+		private final int judged;
+
+		private final List<Integer> misattributedCitations;
+
+		private final int unfounded;
+
+		public InteractionClaimPairs(int judged, List<Integer> misattributedCitations, int unfounded) {
+			this.judged = judged;
+			this.misattributedCitations = java.util.Collections.unmodifiableList(
+					new java.util.ArrayList<Integer>(misattributedCitations));
+			this.unfounded = unfounded;
+		}
+
+		/** @return how many active-order claims the check reached a verdict on */
+		public int getJudged() {
+			return judged;
+		}
+
+		/** @return the findings cited for a judged claim none of them relates, in answer order */
+		public List<Integer> getMisattributedCitations() {
+			return misattributedCitations;
+		}
+
+		/** @return how many judged claims name a partner no finding relates, citing no finding for it */
+		public int getUnfounded() {
+			return unfounded;
+		}
+
+		@Override
+		public String toString() {
+			return "InteractionClaimPairs{judged=" + judged + ", misattributedCitations="
+					+ misattributedCitations + ", unfounded=" + unfounded + "}";
+		}
+	}
+
+	/**
 	 * A withholding safety finding about the drug an answer's CAUTION LEAD says can be given — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>, ADR
 	 * Decision 119. {@code CautionLeadOverWithholdingCheck} is canonical for how the lead is read and
@@ -852,6 +957,9 @@ public interface ChartSearchService {
 		/** @see #isAnsweredByTheModule() */
 		private final boolean answeredByTheModule;
 
+		/** @see #getInteractionClaimPairs() */
+		private final InteractionClaimPairs interactionClaimPairs;
+
 		/** @see #getCautionLedOverWithholding() */
 		private final List<CautionLedOverWithholding> cautionLedOverWithholding;
 
@@ -915,7 +1023,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null);
+					null, null, null, null, null, null, null, null, null, false, null, null);
 		}
 
 		/**
@@ -952,13 +1060,16 @@ public interface ChartSearchService {
 				List<OrderStopDate> orderStopDates,
 				FindingPartnerCoverage findingPartnerCoverage,
 				boolean answeredByTheModule,
+				InteractionClaimPairs interactionClaimPairs,
 				List<CautionLedOverWithholding> cautionLedOverWithholding) {
+			this.findingPartnerCoverage = findingPartnerCoverage;
+			this.answeredByTheModule = answeredByTheModule;
+			// Immutable, so carried rather than copied; null is the absence of a measurement (issue #514).
+			this.interactionClaimPairs = interactionClaimPairs;
 			// Null survives as null, the rule every list above shares (issue #515).
 			this.cautionLedOverWithholding = cautionLedOverWithholding == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<CautionLedOverWithholding>(cautionLedOverWithholding));
-			this.findingPartnerCoverage = findingPartnerCoverage;
-			this.answeredByTheModule = answeredByTheModule;
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -1388,8 +1499,8 @@ public interface ChartSearchService {
 		 * what a model WROTE — {@link #getUnfaithfullyRenderedCitations()},
 		 * {@link #getMisattributedOrderCitations()}, {@link #getActiveOrderClaims()},
 		 * {@link #getUnstatedFindingSeverities()}, {@link #getFindingCitationExtent()},
-		 * {@link #getUnstatedDosingCeilings()}, {@link #getFindingPartnerCoverage()} and
-		 * {@link #getCautionLedOverWithholding()} — state
+		 * {@link #getUnstatedDosingCeilings()}, {@link #getFindingPartnerCoverage()},
+		 * {@link #getInteractionClaimPairs()} and {@link #getCautionLedOverWithholding()} — state
 		 * {@code null}, no measurement, because no model wrote anything for them to judge. {@code null}
 		 * is also what those keys state for other reasons, and a token count of zero is also what an
 		 * engine reporting no usage produces, so neither pattern tells a consumer that no model ran;
@@ -1399,6 +1510,20 @@ public interface ChartSearchService {
 		 */
 		public boolean isAnsweredByTheModule() {
 			return answeredByTheModule;
+		}
+
+		/**
+		 * Whether each <em>"X interacts with active order Y"</em> claim the MODEL wrote states a pair the
+		 * module's findings relate — issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/514">#514</a>. Judged on
+		 * the model's own prose, before the module appends anything to it.
+		 * {@link InteractionClaimPairs} is canonical for what each part and a null assert; ADR Decision
+		 * 120 carries the decision.
+		 *
+		 * @return the statement, or null where the producer made no measurement
+		 */
+		public InteractionClaimPairs getInteractionClaimPairs() {
+			return interactionClaimPairs;
 		}
 
 		/**

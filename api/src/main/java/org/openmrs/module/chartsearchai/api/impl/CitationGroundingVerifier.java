@@ -115,7 +115,9 @@ import org.springframework.stereotype.Service;
  * states nowhere (the same issue, round three), published as {@code unstatedFindingSeverities}; and
  * {@link DosingCeilingFidelityCheck} for an answer that quoted one of a cited record's dosing
  * ceilings while leaving a STRICTER one from that same record unstated (issue #276), published as
- * {@code unstatedDosingCeilings}.
+ * {@code unstatedDosingCeilings}; and {@link InteractionClaimPairFidelityCheck} for a cited safety
+ * finding that does not relate the pair an active-order claim names (issue #514), published as
+ * {@code interactionClaimPairs}.
  * None of those is published as a verdict on these citations, which stay withheld.
  * {@link ActiveOrderCitationFidelityCheck} runs after every answer too and is NOT one of them: it
  * reads no reference content, asking instead which CHART record a sentence cited, published as

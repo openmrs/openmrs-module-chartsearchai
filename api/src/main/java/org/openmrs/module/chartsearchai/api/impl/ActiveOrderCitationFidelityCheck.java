@@ -215,6 +215,11 @@ final class ActiveOrderCitationFidelityCheck {
 	 *  asymmetry {@link #clauseBound} carries. */
 	private static final String RUN_SEPARATORS = " \t,";
 
+	/** The characters that end a claim's clause going forward ({@link #clauseBound}) and begin it going
+	 *  back ({@link #clauseStart}) — one set, so the partner span and the subject span cannot come to
+	 *  disagree about where a clause breaks (issue #514). */
+	private static final String CLAUSE_SEPARATORS = ",;";
+
 	private ActiveOrderCitationFidelityCheck() {
 	}
 
@@ -251,17 +256,15 @@ final class ActiveOrderCitationFidelityCheck {
 			if (answer == null
 					|| !answer.contains(DrugSafetyValidator.ACTIVE_ORDER_NOUN)) {
 				// A short-circuit and NOT the rule — deleting it was measured byte-identical over the
-				// same 66,429 arrangements, because examine's own per-sentence indexOf is what
+				// same 66,429 arrangements, because the per-sentence indexOf in claims() is what
 				// scopes the check to an active-order claim. What it buys is that the overwhelmingly
 				// common answer, which states no such claim, costs one containment scan and neither
 				// map below — ADR Decision 76 carries the figures, and carries them once. Its
 				// CONTAINMENT half stays a short-circuit and not a rule for the claim count either:
 				// removing that half leaves this class green, an answer with no phrase occurrence
 				// producing this same zeroed statement through the walk (re-measured for issue
-				// #379's second answer). The null half is not the same kind of claim: no case
-				// constructs a null answer, so it rests on the mechanism rather than on a red test
-				// — without it one reaches the splitter, throws, and the whole report becomes no
-				// measurement rather than a zeroed one.
+				// #379's second answer). Since issue #514 claims() makes the same two tests of its own,
+				// so neither half here is load-bearing.
 				// Zero claims is a MEASUREMENT of none, which a client has to be able to tell
 				// from the failed check's null.
 				return new Report(offending, new ActiveOrderClaims(0, 0));
@@ -272,17 +275,12 @@ final class ActiveOrderCitationFidelityCheck {
 					byIndex.put(Integer.valueOf(mapping.getIndex()), mapping);
 				}
 			}
-			Set<Integer> citedIndexes = new HashSet<Integer>();
-			if (cited != null) {
-				for (RecordReference reference : cited) {
-					citedIndexes.add(Integer.valueOf(reference.getIndex()));
-				}
-			}
+			Set<Integer> citedIndexes = admittedIndexes(cited);
 			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();
 			Tally tally = new Tally();
-			for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(answer)) {
-				examine(sentence, byIndex, citedIndexes, seen, reasons, tally);
+			for (Claim claim : claims(answer)) {
+				examine(claim, byIndex, citedIndexes, seen, reasons, tally);
 			}
 			offending.addAll(seen);
 			if (!offending.isEmpty()) {
@@ -310,7 +308,80 @@ final class ActiveOrderCitationFidelityCheck {
 	}
 
 	/**
-	 * Examines one sentence, adding every offending citation to {@code seen} and its reason to
+	 * Every active-order CLAIM {@code answer} states, in the order it states them — the one walk both
+	 * of this class's answers are read off, and the unit issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/514">#514</a>'s
+	 * {@code InteractionClaimPairFidelityCheck} judges the stated PAIR over, so the three answers
+	 * cannot disagree about which claims the answer made or which markers each one offered.
+	 *
+	 * <p>A claim is one occurrence of {@link DrugSafetyValidator#ACTIVE_ORDER_NOUN} inside one
+	 * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} unit, and its markers are {@link #firstMarkerRun}
+	 * between the noun and the next occurrence. The SUBJECT and PARTNER spans each claim carries are
+	 * read by the pair check only; this class never reads them.
+	 *
+	 * @param answer the answer prose; null answers no claims
+	 */
+	static List<Claim> claims(String answer) {
+		List<Claim> claims = new ArrayList<Claim>();
+		if (answer == null || !answer.contains(DrugSafetyValidator.ACTIVE_ORDER_NOUN)) {
+			return claims;
+		}
+		// The NOUN and not the whole phrase: a model that paraphrases the verb ("has a Major
+		// interaction with active order X") still names the record the same way, and anchoring on the
+		// verb made this check examine nothing while reporting a clean zero. See ACTIVE_ORDER_NOUN,
+		// which is derived from the phrase so the renderer still has exactly one spelling.
+		String phrase = DrugSafetyValidator.ACTIVE_ORDER_NOUN;
+		for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(answer)) {
+			int at = sentence.indexOf(phrase);
+			// Where the previous claim of this sentence ended — its run's end, or its partner's where it
+			// carried no run — so a subject span never reaches back into the claim before it. Not where that
+			// partner BEGAN: one subject stated against two orders with the noun repeated ("X interacts with
+			// active order A and active order B") then reads A as the second claim's subject and accuses X's
+			// own B finding (round 3 of #514's second review). What that gives up — a swapped subject after a
+			// run-less claim with no comma between, its subject span empty — is unjudged, ADR Decision 120.
+			int previousEnd = 0;
+			while (at >= 0) {
+				int next = sentence.indexOf(phrase, at + phrase.length());
+				// Where the next claim begins. It bounds the SCAN and not the answer, and it stays
+				// because firstMarkerRun makes it the region bound that keeps the scan linear. #377
+				// measured passing sentence.length() instead as byte-identical for the ACCUSATION; that
+				// measurement does not carry to the claim count, where the substitution moves an uncited
+				// claim to cited. Since #379's round-one review that half IS pinned:
+				// ActiveOrderCitationFidelityTest.aClaimWithNoMarkersOfItsOwnDoesNotTakeTheNextClaimsCitation
+				// states two claims in one comma-free sentence, where clauseBound stops nothing, so this
+				// bound is what keeps the second claim's citation out of the first claim's run.
+				int limit = next < 0 ? sentence.length() : next;
+				int from = at + phrase.length();
+				int[] run = firstMarkerRun(sentence, from, limit);
+				int partnerTo = run == null ? clauseBound(sentence, from, limit) : run[0];
+				claims.add(new Claim(sentence, previousEnd, clauseStart(sentence, previousEnd, at), at, from,
+						partnerTo, run == null ? "" : sentence.substring(run[0], run[1])));
+				previousEnd = run == null ? partnerTo : run[1];
+				at = next;
+			}
+		}
+		return claims;
+	}
+
+	/**
+	 * @return the indexes the answer's own resolution admits — the set {@link Claim#admittedRunIndexes}
+	 *         is asked against, and the one method both checks that read a claim build it with (issue
+	 *         #514)
+	 * @param cited the references {@link LlmInferenceService#extractCitedReferences} resolved; null
+	 *        admits nothing
+	 */
+	static Set<Integer> admittedIndexes(List<RecordReference> cited) {
+		Set<Integer> admitted = new HashSet<Integer>();
+		if (cited != null) {
+			for (RecordReference reference : cited) {
+				admitted.add(Integer.valueOf(reference.getIndex()));
+			}
+		}
+		return admitted;
+	}
+
+	/**
+	 * Examines one claim, adding every offending citation to {@code seen} and its reason to
 	 * {@code reasons}.
 	 *
 	 * <p>Split out so the run walk reads as the one thing it is. The three accumulators are carried
@@ -321,65 +392,44 @@ final class ActiveOrderCitationFidelityCheck {
 	 * occurrence however many sentences the answer spreads them over, so the count cannot be
 	 * recovered from either collection afterwards.
 	 */
-	private static void examine(String sentence, Map<Integer, RecordMapping> byIndex,
+	private static void examine(Claim claim, Map<Integer, RecordMapping> byIndex,
 			Set<Integer> citedIndexes, Set<Integer> seen, List<String> reasons, Tally tally) {
-		// The NOUN and not the whole phrase: a model that paraphrases the verb ("has a Major
-		// interaction with active order X") still names the record the same way, and anchoring on the
-		// verb made this check examine nothing while reporting a clean zero. See ACTIVE_ORDER_NOUN,
-		// which is derived from the phrase so the renderer still has exactly one spelling.
-		String phrase = DrugSafetyValidator.ACTIVE_ORDER_NOUN;
-		int at = sentence.indexOf(phrase);
-		while (at >= 0) {
-			// One occurrence of the phrase is one CLAIM, counted before anything is read about what
-			// it offered — a claim the module can say nothing else about is still a claim the answer
-			// made, and the count is the base the uncited number is a share of.
-			tally.stated++;
-			boolean offeredChartEvidence = false;
-			int next = sentence.indexOf(phrase, at + phrase.length());
-			// Where the next claim begins. It bounds the SCAN and not the answer, and it stays
-			// because firstMarkerRun makes it the region bound that keeps the scan linear. #377
-			// measured passing sentence.length() instead as byte-identical for the ACCUSATION; that
-			// measurement does not carry to the claim count, where the substitution moves an uncited
-			// claim to cited. Since #379's round-one review that half IS pinned:
-			// ActiveOrderCitationFidelityTest.aClaimWithNoMarkersOfItsOwnDoesNotTakeTheNextClaimsCitation
-			// states two claims in one comma-free sentence, where clauseBound stops nothing, so this
-			// bound is what keeps the second claim's citation out of the first claim's run.
-			int limit = next < 0 ? sentence.length() : next;
-			for (Integer index : ChartSearchAiUtils.citedIndexes(
-					firstMarkerRun(sentence, at + phrase.length(), limit))) {
-				if (!citedIndexes.contains(index)) {
-					continue;
-				}
-				RecordMapping mapping = byIndex.get(index);
-				if (offersChartEvidence(mapping)) {
-					// Asked of every admitted index in the run and NOT only of the ones the refusal
-					// below clears: a claim citing a record that cannot be its order still OFFERED a
-					// chart record, and counting it here as well would count one failure twice.
-					offeredChartEvidence = true;
-				}
-				String reason = refusal(mapping);
-				if (reason != null && seen.add(index)) {
-					reasons.add("[" + index + "] " + reason);
-				}
+		// One occurrence of the phrase is one CLAIM, counted before anything is read about what it
+		// offered — a claim the module can say nothing else about is still a claim the answer made,
+		// and the count is the base the uncited number is a share of.
+		tally.stated++;
+		boolean offeredChartEvidence = false;
+		for (Integer index : claim.admittedRunIndexes(citedIndexes)) {
+			RecordMapping mapping = byIndex.get(index);
+			if (offersChartEvidence(mapping)) {
+				// Asked of every admitted index in the run and NOT only of the ones the refusal
+				// below clears: a claim citing a record that cannot be its order still OFFERED a
+				// chart record, and counting it here as well would count one failure twice.
+				offeredChartEvidence = true;
 			}
-			if (!offeredChartEvidence) {
-				tally.uncited++;
+			String reason = refusal(mapping);
+			if (reason != null && seen.add(index)) {
+				reasons.add("[" + index + "] " + reason);
 			}
-			at = next;
+		}
+		if (!offeredChartEvidence) {
+			tally.uncited++;
 		}
 	}
 
 	/**
-	 * @return the text of the first run of citation markers in {@code sentence} between
-	 *         {@code from} and {@code limit} — markers separated by nothing but
-	 *         {@link #RUN_SEPARATORS} — or an empty string when none begins there.
+	 * @return the {@code {start, end}} offsets of the first run of citation markers in
+	 *         {@code sentence} between {@code from} and {@code limit} — markers separated by nothing
+	 *         but {@link #RUN_SEPARATORS} — or null when none begins there.
 	 *
-	 *         <p>Returns the SUBSTRING rather than the indexes it contains so that decoding stays
-	 *         {@link ChartSearchAiUtils#citedIndexes}' job (CLAUDE.md's inline-citation rule). What
-	 *         this method needs the shared pattern's matcher for is the one thing a set of indexes
-	 *         cannot carry: where each marker sits, so the run can be told from the next claim's.
+	 *         <p>Returns OFFSETS rather than the indexes the run contains so that decoding stays
+	 *         {@link ChartSearchAiUtils#citedIndexes}' job (CLAUDE.md's inline-citation rule), applied
+	 *         to the substring {@link #claims} cuts. What this method needs the shared pattern's
+	 *         matcher for is the one thing a set of indexes cannot carry: where each marker sits, so the
+	 *         run can be told from the next claim's — and, since issue #514, where the claim's partner
+	 *         ends.
 	 */
-	private static String firstMarkerRun(String sentence, int from, int limit) {
+	private static int[] firstMarkerRun(String sentence, int from, int limit) {
 		// Where the claim's own clause ends. The run may only BEGIN before it — a claim whose clause
 		// carries no markers takes none, rather than annexing the next clause's. Round 1 of this PR's
 		// review found the unbounded form crying wolf on
@@ -412,7 +462,24 @@ final class ActiveOrderCitationFidelityCheck {
 			}
 			end = marker.end();
 		}
-		return start < 0 ? "" : sentence.substring(start, end);
+		return start < 0 ? null : new int[] { start, end };
+	}
+
+	/**
+	 * @return the offset just past the last clause separator in {@code sentence} between {@code from}
+	 *         and {@code to}, or {@code from} where there is none — where a claim's SUBJECT span
+	 *         begins. The two separators {@link #clauseBound} ends a claim at, read backwards from the
+	 *         noun, so "…can be given, but Metformin interacts with active order X" names Metformin
+	 *         and not the drug of the clause before it.
+	 */
+	private static int clauseStart(String sentence, int from, int to) {
+		for (int at = to - 1; at >= from; at--) {
+			char c = sentence.charAt(at);
+			if (CLAUSE_SEPARATORS.indexOf(c) >= 0) {
+				return at + 1;
+			}
+		}
+		return from;
 	}
 
 	/**
@@ -439,7 +506,7 @@ final class ActiveOrderCitationFidelityCheck {
 	private static int clauseBound(String sentence, int from, int limit) {
 		for (int at = from; at < limit; at++) {
 			char c = sentence.charAt(at);
-			if (c == ',' || c == ';') {
+			if (CLAUSE_SEPARATORS.indexOf(c) >= 0) {
 				return at;
 			}
 		}
@@ -533,9 +600,77 @@ final class ActiveOrderCitationFidelityCheck {
 		return null;
 	}
 
+	/**
+	 * One active-order claim — see {@link #claims}. Its three spans are substrings of one sentence: the
+	 * SUBJECT from the start of the claim's clause to the noun, the PARTNER from after the noun to its
+	 * marker run or, where it has none, to its clause bound, and the RUN itself.
+	 */
+	static final class Claim {
+
+		private final String sentence;
+
+		private final int clauseFrom;
+
+		private final int subjectFrom;
+
+		private final int nounAt;
+
+		private final int partnerFrom;
+
+		private final int partnerTo;
+
+		private final String run;
+
+		private Claim(String sentence, int clauseFrom, int subjectFrom, int nounAt, int partnerFrom,
+				int partnerTo, String run) {
+			this.sentence = sentence;
+			this.clauseFrom = clauseFrom;
+			this.subjectFrom = subjectFrom;
+			this.nounAt = nounAt;
+			this.partnerFrom = partnerFrom;
+			this.partnerTo = partnerTo;
+			this.run = run;
+		}
+
+		/** @return the words before the noun in the claim's own clause — "Metformin interacts with" */
+		String subject() {
+			return sentence.substring(subjectFrom, nounAt);
+		}
+
+		/**
+		 * @return the words of the sentence between where the previous claim ended (or the sentence's
+		 *         start) and the subject span — the clause separator the span begins past, and what stands
+		 *         before it; empty where the span begins at the previous claim's end
+		 */
+		String beforeSubject() {
+			return sentence.substring(clauseFrom, subjectFrom);
+		}
+
+		/** @return the words after the noun, up to the claim's run or its clause bound */
+		String partner() {
+			return sentence.substring(partnerFrom, partnerTo);
+		}
+
+		/**
+		 * @return the indexes the claim's run cites that {@code admitted} — the answer's own resolution
+		 *         — admits, in run order: the ONE admission step both checks reading a claim take, so an
+		 *         index is not a citation of the claim until the answer's resolution says it is
+		 *         (CLAUDE.md's inline-citation rule) in either of them alike
+		 */
+		List<Integer> admittedRunIndexes(Set<Integer> admitted) {
+			List<Integer> indexes = new ArrayList<Integer>();
+			for (Integer index : ChartSearchAiUtils.citedIndexes(run)) {
+				if (admitted.contains(index)) {
+					indexes.add(index);
+				}
+			}
+			return indexes;
+		}
+	}
+
 	/** The claim counts as one walk accumulates them. A mutable holder rather than a return value
 	 *  because {@link #examine} already carries the other accumulators for the reason its javadoc gives,
-	 *  and a third return channel would make the per-sentence loop assemble what the walk knows. */
+	 *  and a third return channel would make the per-claim loop assemble what the walk knows. */
 	private static final class Tally {
 
 		private int stated;

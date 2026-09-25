@@ -186,6 +186,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertNull(answer.getFindingCitationExtent(), "findingCitations");
 		assertNull(answer.getUnstatedDosingCeilings(), "unstatedDosingCeilings");
 		assertNull(answer.getFindingPartnerCoverage(), "findingPartners");
+		assertNull(answer.getInteractionClaimPairs(), "interactionClaimPairs");
 	}
 
 	@Test

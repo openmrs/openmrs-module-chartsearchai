@@ -124,6 +124,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 116: A question about a drug states which of her orders share a substance too](#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)
 - [Decision 117: A prompt carrying the module's reference records is decoded without the DRY sampler](#decision-117-a-prompt-carrying-the-modules-reference-records-is-decoded-without-the-dry-sampler)
 - [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
+- [Decision 119: A question that lists her medications is held to her chart](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)
+- [Decision 120: An active-order claim is held to the findings that relate its pair](#decision-120-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -9702,7 +9704,8 @@ counts its paste into an answer as a loss (R7, M4).
 
 **What is published beside it.** `answeredByTheModule: true`, because the keys that judge a model's
 prose — `unfaithfullyRenderedCitations`, `misattributedOrderCitations`, `activeOrderClaims`,
-`unstatedFindingSeverities`, `unstatedDosingCeilings`, `findingCitations`, `findingPartners` — state
+`unstatedFindingSeverities`, `unstatedDosingCeilings`, `findingCitations`, `findingPartners`,
+`interactionClaimPairs`, `cautionLedOverWithholding` — state
 `null` and a null alone could mean a check that failed. The chips pass is handed the empty answer, as
 the pass that raised the findings was, so the chips beside the answer are the findings it states; scoping
 the order-driven arm by text the module itself just wrote would be circular (the issue's M8 and N5 are a
@@ -11157,3 +11160,277 @@ takes one asked substance, ships off, and was left alone.
 `.aDuplicateTherapyFindingAboutTheDrugInPlayBesideACautionLeadOnItIsReported` and
 `.aFindingThatHerOrdersShareASubstanceIsReportedBesideACautionLeadOnAnyOfItsSubstances`),
 `ChartSearchAiCautionLedOverWithholdingTest`.
+
+## Decision 120: An active-order claim is held to the findings that relate its pair
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#514](https://github.com/openmrs/openmrs-module-chartsearchai/issues/514).
+
+### Context
+
+The external DDI evaluation's questions list the patient's medications before asking about a new
+drug, which puts findings about several SUBJECTS in the prompt (#513). On its demo patients
+(chartsearchai `main` @ `627449a7`, Gemma 4 E2B, each cell byte-identical across two runs, per the
+issue) the answer gave one drug's finding to another — *"Metformin interacts with active order
+Lamivudine / zidovudine … [353]"*, where [353] is Stavudine's — or stated a Metformin pair no
+finding raised, citing nothing. `misattributedOrderCitations`, `unfaithfullyRenderedCitations` and
+`unstatedFindingSeverities` read `[]` or flagged something else: the first judges CHART citations,
+the second needs `MIN_REPRODUCED_WORDS` copied words, the third judges ratings. Nothing compared the
+pair a claim states with the finding it cites.
+
+### The decision
+
+**`InteractionClaimPairFidelityCheck` judges every claim `ActiveOrderCitationFidelityCheck.claims`
+yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations`, `unfounded`.**
+
+- **The unit is the sibling's, extracted rather than respelled.** `claims(answer)` is now the one
+  walk: a claim is an occurrence of `ACTIVE_ORDER_NOUN`, its markers are its marker RUN, and it
+  carries the SUBJECT span (its clause, up to the noun) and the PARTNER span (after the noun, to the
+  run or the clause bound). A first plan let a claim with no run take finding markers up to the next
+  claim, to reach the ticket's cases 2 and 4, whose markers sit after a comma; it was refuted before
+  any code on the ground [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)
+  gives for the run unit — a later clause's own correct citation, *"Metformin interacts with active
+  order Rifampin, and its interaction with Trimethoprim is also a caution [349]"*, [349] being
+  Metformin × Trimethoprim. The first version therefore read such a claim as citing nothing, and
+  round 1 of the PR's review showed the cost: cases 2 and 4 could then only be UNFOUNDED, and the
+  finding they misattribute was never named. **So a claim with no run of its own took the findings of
+  the first run past its clause on gates** — nothing between the clause break and the run naming a
+  drug any finding or chip names, the finding naming the claim's PARTNER, and from round 3 the gap
+  not stating the phrase's own verb — **and round 2 of the PR's third review loop removed it.** A later
+  clause naming its drug by a word no finding prints, in a verb other than the phrase's (*"…active
+  order Amiodarone, and the other statin does too [6]"*, [6] Simvastatin × Amiodarone), passes every
+  gate, so its own correct citation was published misattributed against a claim a finding does
+  relate: a false report, which the owner's rule below lets block. A finding the trailing run took
+  that relates the pair is in the population an uncited claim is judged against already, so removing
+  it can only turn a MISATTRIBUTED verdict into RELATED or UNFOUNDED, or leave unjudged a claim whose
+  population carries a class-only finding about its drug. Cases 2 and 4 are UNFOUNDED where no
+  finding relates their pair, and the finding they misattribute is not named — a missed report.
+  `claims` carries no trailing span.
+- **What a finding relates is read structurally.** A finding goes by its subject
+  (`ChartSearchAiUtils.findingSubject`, the half of `resourceKey` that `findingSubjects` already
+  split), the orders it names (`getFindingPartners()`), and the prescriptions and substances its
+  chart-order clause resolved them from — the new `RecordMapping.getFindingBridgeNames()`, written
+  beside `findingPartners` by the injector off `SafetyWarning.orderNamesOf`. The bridges
+  are there because the plan's first version omitted them and the refutation showed the false alarm:
+  a brand-named order's finding tells the model *"Warfarin from Coumadin 5mg"*, so a claim naming
+  `Coumadin 5mg` is about the pair the finding relates. **Round 4 of the PR's review added the
+  displays of the orders a finding's arm matched**, bridged or not, written off the same walk
+  `DrugSafetyValidator.chartOrderBridges` makes (its `matchedNames`, filled before the display
+  silence test is asked, so no bridge moves) and carried as `SafetyWarning.orderNamesOf`, which
+  prints and publishes nothing. A bridge is stated only where the display does NOT name the
+  substance, so a finding naming its partner by the knowledge base's label — *Rifampicin
+  (rifampin)*, *Salbutamol (albuterol)* — against her order *Rifampicin 300mg capsule* carried no
+  name that display contains: a claim naming the order as its record prints it was reported
+  misattributed where it cited the finding, and unfounded in the prompt's own few-shot shape, where
+  its run is the order record. Only the orders a side of THAT finding resolves from are named —
+  another order's display is no name of it — so a claim naming her other order and citing it is
+  still reported. **Round 4 of the fourth review added, beside each such display, the label this
+  response names every substance that order resolves by** (`DrugSafetyValidator.addSubstanceLabelsOf`,
+  through `SubstanceSubjects.subjectOf`, the name a finding about that substance prints). The mirror
+  case: on the ticket's chart the finding about Metformin names her order *Isoniazid / pyrazinamide /
+  rifampin*, which names rifampin and so states no bridge, while the prompt's findings about rifampicin
+  print *Rifampicin (rifampin)*, a name no word of that display starts; a claim naming the order by that
+  label was reported misattributed citing the finding and unfounded citing nothing. Every substance the
+  order resolves, not only the one the finding's rule is about, since the display names them all and a
+  claim naming the order by any word of it already read as about that order. A finding about her other
+  order carries none of them, so the same claim citing it is still reported. A finding relates a claim when each side
+  names one of those names, either way round — so two orders one finding names read as related.
+  Requiring one side to be the SUBJECT was tried after a review pass found a merged shared-mechanism
+  finding hiding an order-for-drug swap that way, and reverted in the next pass: issue #477's
+  findings relate two of her orders to each other, nothing on the record tells them apart, and the
+  split called a verbatim copy of one misattributed — a false report, where the flat set costs a miss.
+- **The chips are part of the population for an uncited claim.** A drug only the answer names is put
+  in play after the answer, so its pair can be a chip no carried finding is; that is not a pair "no
+  finding raised".
+- **A claim can state several pairs, and its subject can be read several ways** (round 2 of the PR's
+  review). Every drug the partner span names that a finding or chip names is a partner: containment of
+  one related name had read *"active order Amiodarone and Digoxin [6]"*, [6] about Amiodarone alone,
+  as related — the ticket's invented-partner shape in this form. A partner the run leaves unrelated
+  that no finding or chip relates makes the claim UNFOUNDED, and the citation that relates its other
+  partner is not accused. Every such drug the subject span names is a reading, and the claim is judged
+  only where every reading reaches one verdict: a clause naming another drug before the noun with no
+  comma between had passed a swap wherever any reading related.
+- **Where the clause may not name what the claim is about, the claim is unjudged** (round 3 of the
+  PR's review, three false reports the round-2 widening had opened). A subject clause carrying a word
+  that stands for a drug without naming it — `SUBJECT_STAND_INS`: *it*, *this*, *which*, the *the* of
+  *"the drug"* — may have its subject before its comma or in the sentence before, and the one drug it
+  does name was then the only reading: *"Clarithromycin can be given, but together with Simvastatin it
+  interacts with active order Amiodarone [13]"*, [13] Clarithromycin's own, was accused. A partner
+  span naming several drugs is a list only where `PARTNER_LIST_WORDS` (*and*, *or*) join them;
+  *"active order Amiodarone but not with Digoxin [6]"* ran on into a clause denying the second pair and
+  called it unfounded. And a trailing gap stating the phrase's own verb again (*", which also interacts
+  with a statin [6]"*) had its correct citation accused; that gate went with the trailing run in the
+  third loop (the unit bullet above). Both word sets are closed and used only to REFUSE, never to decide what a claim
+  offered, which is what `ActiveOrderCitationFidelityCheck.clauseBound` declines a vocabulary for: a
+  word taken out of the stand-ins or put into the list words judges a claim as round 2 did, and the
+  opposite edit can only silence.
+- **A denial is not the pair it names, and a list ends at its last partner** (round 1 of the PR's
+  second review loop, two false reports on the answer shape a *"is it safe to give X?"* question
+  invites). A subject clause `deniesItsClause` — a word of `NEGATORS` (*not*, *never*, *without*, *cannot*,
+  *neither*, *nor*, *none*), a contracted *n't*, or *no* where a word follows it — is unjudged: *"Simvastatin does not
+  interact with active order Digoxin"* had been published `unfounded`, and with a marker its citation
+  accused. *No* counts only before a word so the verdict lead *"No —"* stays judged. And a partner
+  span naming several drugs is a list only where the last of them is followed by the span's end or by
+  punctuation: *"active order Amiodarone and Digoxin is unaffected"*, and a first claim with no marker
+  whose span runs to the next claim's subject, had counted that drug a partner. The list test had
+  asked only the stretches BETWEEN names, so the tail was the one end left open. The test is
+  punctuation, `clauseBound`'s reason, and #477's finding copied verbatim closes its list with a dash.
+  Both refuse only. Round 2 of the third loop found a denial outside the set published `unfounded`
+  (*"Simvastatin is unlikely to interact with active order Digoxin"*), so a claim is also judged only
+  where its subject span ENDS in a drug it names followed straight by `RELATIONSHIP_VERB`, derived
+  from `ACTIVE_ORDER_INTERACTION_PHRASE` (`statesTheVerbOfItsDrug`) — a structural refusal rather than
+  a longer list. It also leaves unjudged *"rarely interacts with"*, a hedge, *"also interacts with"*, a
+  verbatim copy of #477's *"is already in"*, and a clause naming its own drug by a brand after another
+  drug (*"… alongside Simvastatin Biaxin interacts with active order Amiodarone [13]"*, [13]
+  Clarithromycin's own, had been accused).
+- **The drug the verb follows must open its clause** (round 3 of the PR's third review loop, r3-1).
+  The span's lone reading was the other drug, and [13] — Clarithromycin's own Amiodarone finding —
+  was published misattributed, where the claim's real subject sat before a comma the clause never
+  closed (*"Clarithromycin, like Simvastatin interacts with active order Amiodarone [13]"*, also *just
+  as*, *together with*) or was named by a word no finding prints (*"Biaxin with Simvastatin interacts
+  …"*); closing the comma made the claim unjudged, so one missing comma turned silence into an
+  accusation. `opensItsClause` refuses a claim where a word stands straight before that drug in the
+  span, but for two: a lone *and*, which asserts the drug whatever stands before it, and a *but*,
+  which leaves the drug after it the subject alone, where the words before the span's comma deny
+  nothing (*"Not only X, but Y"* asserts both). The *and* must stand alone, since *"Biaxin and
+  Simvastatin"* is two subjects whose first no finding prints. A list is the same failure with no
+  word at all (*"Clarithromycin, Simvastatin interacts … [13]"*, *"Clarithromycin, and Simvastatin
+  …"*), so `mayShareItsSubject` leaves a claim CITING a finding unjudged where a word stands before
+  the comma its span begins past and nothing but a lone *and* before its drug; one citing nothing is
+  still judged, its drug being asserted under either reading. The reviewer's own suggestion —
+  refuse wherever the words before the span name another drug — would also have silenced *"…, but
+  Clarithromycin interacts … [6]"* (`theSubjectIsTheClaimsOwnClauseAndNotTheClauseBeforeIt`) and
+  would not have reached the brand. The two words are the only ones whose relation to what precedes
+  them the check can read, and they are used only to refuse.
+- **Two of those refusals had cost reach they did not need** (round 2 of the second review loop,
+  each a swapped subject left unjudged). *A list running on* first refused the whole claim, so
+  *"Clarithromycin interacts with active order Amiodarone and Digoxin which is a Major problem [6]"*,
+  [6] Simvastatin's, went silent where the one-partner form is reported; `partnerReadings` now reads
+  the claim with its last drug as a partner and without it, judged only where both reach one verdict
+  — the subject side's rule — so a citation relating none of the drugs is reported and one relating
+  only the last is not accused. *A lead the prompt invites*
+  — it asks a withhold finding to open with *"No"* and what to avoid — put its negator or its drug in
+  the subject span: `afterItsLead` starts the span past a colon followed by a space or a spaced em or
+  en dash, locally, so `clauseBound` and the sibling's answers are unchanged. The spaces are required
+  because a dash can join a combination's names, and a colon sits inside two knowledge-base names.
+  Round 2 widened a third — *a claim after one with no run and no comma*, whose subject span is empty,
+  its predecessor's partner span running up to its noun — by starting that span where the previous
+  partner BEGAN. Round 3 withdrew it: one subject stated against two orders with the noun repeated,
+  *"Clarithromycin interacts with active order Amiodarone and active order Digoxin [12]"*, then read as
+  *"Amiodarone interacts with Digoxin"* and published Clarithromycin's own Digoxin finding as
+  misattributed — a false accusation in a faithful answer, and in the withhold lead the prompt invites.
+  The words between the two nouns do not say whether they are a subject or a partner list, so the
+  span again begins where the previous claim's partner or run ended, and that swap is unjudged.
+- **Silence over accusation wherever the operands cannot be read**: a subject naming no drug any
+  interaction or condition-mediated finding names, nothing after the noun, a run citing a reference
+  record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
+  — #357), and a finding naming no order (class-only) about a drug the claim names, among those it
+  cites or, citing none, among all of them. Contraindication and overdose findings relate no drug to
+  an order: an uncited claim is not judged against them, and a run citing one is unjudged.
+- **A partner is judged only where its span STARTS with a name the findings carry** (the owner's
+  decision on #514, after round 6 of the review found *"… active order Rifampicin — Moderate [4]"*
+  accusing its own finding). Each review round had widened the free-prose reading of the partner —
+  a negated claim, a repeated *active order*, the chart's order name against the reference-data name,
+  a trailing full stop, text after the name — and each widening opened the next round's false report,
+  so the reading was narrowed instead. A known name is a finding's or chip's subject, an order it
+  names, or a bridge name, which carries the displays of the orders its arm matched and the labels of
+  the substances those orders resolve; the span must
+  begin, on a word boundary, with the start of one of them or of one of its parts (past a parenthesis
+  or a slash: *rifampin* of *Rifampicin (rifampin)*), and whatever follows is ignored — a strength, a
+  form, *" — Moderate"*, a full stop — so the terminator trim round 5 added is gone. Every run of words
+  from the start that begins such a name is a form of the partner, and a finding relates it where one
+  form is one of its names. A later partner of a list is read the same way from just after *and* or
+  *or*. A span starting otherwise is **unjudged, never compared whole**; that includes a partner no
+  finding or chip names, which the check had counted `unfounded` as the ticket's second shape.
+  **From this decision on, only a false report blocks the check; a missed one is a residue below.**
+- **Which findings a claim cites is `SafetyFindingCitationExtentCheck.citedFindingIndexes`**, the one
+  reading `findingCitations` publishes, intersected with the run — so this key cannot accuse a finding
+  that key says the answer never cited (#409's shape).
+
+### Alternatives considered
+
+- **Sentence scoping, or letting a run-less claim reach past its clause ungated.** Refuted at plan
+  time; see above. Reading every such claim as citing nothing shipped first, was reverted by round 1
+  of the review for the cost stated there, and ships again since the third loop: the gated reach was
+  a false report (the unit bullet above).
+- **One more trailing gate** — the verbs a later clause may restate its interaction in (*does too*,
+  *as does*). Each gate had been added for the previous round's false report; a list of them is the
+  widening the owner's decision on #514 stopped.
+- **A vocabulary of her active orders on the partner side.** No structural source reaches the answer
+  path, and parsing the rendered `drug_order` text for one is the re-derivation `getOrderActive`'s
+  rule (#317) refuses.
+- **The subject as the drug nearest the noun**, the review's suggestion. *"X can be given alongside
+  Y but X interacts with …"* and *"… alongside Y but it interacts with …"* put the same readings in
+  the same positions, and the nearest is the subject in the first and not in the second, so it
+  accuses a correct citation there — `InteractionClaimPairFidelityTest.aCorrectCitationBehindAPronounIsNotAccusedOnTheDrugNearestTheNoun`
+  reddens on it. Splitting the clause at *but*/*and* is the conjunction vocabulary
+  `ActiveOrderCitationFidelityCheck.clauseBound` refuses.
+- **Comparing the partner name against a chart record's text** — Decision 76's recorded alternative
+  — is a different question: that one compares a CHART citation, this one the module's own finding's
+  structure, which is what the ticket's direction names.
+
+### Consequences
+
+- **+** Pinned by `InteractionClaimPairFidelityTest` over the real `search`/`searchStreaming`, the real
+  injector's findings and the real validator's chips over the answer. Not every leg has a case of its
+  own, and successive review passes kept finding one more: mutate a leg and read the failures rather
+  than trusting a list. `ArchitectureGuardTest.theInteractionClaimPairCheckTakesItsCitedReadingFromTheExtentCheck`
+  pins the shared reading; `ChartSearchAiInteractionClaimPairsTest` the wire.
+- **−** **Containment is the comparison**, `FindingPartnerCoverageCheck.comparable`'s form, so a swap
+  between a short name and a longer one containing it (*Lamivudine*, *Lamivudine / zidovudine*) passes,
+  and a subject spelled as no finding spells it leaves the claim unjudged. The same holds for the
+  labels of a combination order's substances: a finding matched against the order goes by all of them,
+  so a claim naming the order by a substance other than the one the finding's rule is about passes, as
+  it does by that substance's word in the display. No case pins the naming
+  direction (a span names a drug only by containing it); the check's javadoc says what it decides.
+- **−** **A partner not starting with a known name is a missed report** (the start-rule bullet
+  above). A brand or paraphrase no finding prints, a word before the name (*"active order her
+  Amiodarone"*), markup, a partner named by a word inside a part of a name rather than its start
+  (*isoniazid* of *Rifampicin isoniazid pyrazinamide and ethambutol …*), and an invented partner no
+  finding or chip names (*"active order Heparin"*) are all unjudged, a swap among them included. The
+  first words of a name two drugs share read as either drug, toward silence. No case pins the
+  part-start refusal, nor taking every form of the name over the longest or shortest alone.
+- **−** **A claim whose only marker sits past its clause names no citation.** A swap that marker
+  carries — the ticket's cases 2 and 4 — is reported only as UNFOUNDED, and only where no finding
+  relates the claim's pair; where one does, it is a missed report.
+- **−** **The stand-in words are a closed list, and the refusals cost claims.** A clause carrying a
+  stand-in for another reason (*"note that X interacts …"*), and a list joined by other words (*"as
+  well as"*), are unjudged. A subject clause naming another drug and then its own by a word the list
+  lacks is unjudged too, since the word before the verb is no name the findings carry.
+- **−** **The negators are a closed set, and punctuation ends a list.** A denial worded outside the
+  set is left to the verb rule, which leaves unjudged every claim whose verb is not the phrase's own
+  straight after its drug — a hedge (*"may interact with"*) and *"also interacts with"* included, a
+  missed report; a negator in an
+  earlier clause the subject span reaches with no comma, semicolon, colon or spaced em or en dash
+  (*"X should not be given because X interacts …"*, a lead ending in a spaced hyphen) leaves an
+  asserting claim unjudged. A list's last partner followed by punctuation and then a clause of its own
+  (*"… and Digoxin — which is unaffected"*) is still read as a partner, and one followed by a word
+  that is not a clause (*"… and Digoxin tablets"*) is judged only where the claim reads alike with and
+  without it.
+- **−** **An invented partner no finding or chip names at all is not seen.** *Heparin* in *"active
+  order Amiodarone and Heparin [13]"* is no name to the check, so it reads as words after the related
+  partner; and a partner list continued past a comma — *"active order Amiodarone, Heparin and
+  Digoxin"* — is cut at it. Catching either needs a drug vocabulary on the answer path, which this
+  check does not have.
+- **−** **A swapped subject in a clause naming several drugs is unjudged, not reported** — behind a
+  lead clause, a pronoun or a parenthesis — since its readings disagree. So is one after a claim with
+  no marker and no comma (*"… active order Amiodarone and Simvastatin interacts with active order
+  Digoxin [6]"*), whose subject span is empty; the round-2 bullet above says why it is not read.
+- **−** **A drug that does not open its clause is a missed report**, a swap included: any word before
+  it but a lone *and* or a *but* (*"Also X interacts …"*, an item number *"1)"*; a markdown bold name
+  already fails the verb rule), and a claim citing a finding after a comma a word stands before
+  (*"However, X interacts … [6]"*, *"No, X interacts … [6]"*). No case pins taking the longest name
+  ending the span as the drug; the shortest can only refuse more.
+- **−** **Two orders one finding names read as related**, so a claim pairing two orders of a merged
+  (Decision 99) finding is not reported — the price of not falsely reporting #477's findings; the
+  relation bullet above says why.
+- **−** **The ticket's first case is not covered.** *"… a caution to note regarding interactions with
+  Lopinavir / ritonavir, Didanosine, and Nevirapine [288], [290]"* carries no `active order` claim,
+  and nothing here recognises an interaction stated in other words — out of scope by design, per the
+  owner's decision on #514.
+- **−** **Unmeasured on the evaluation's own cells.** Whether cases 3 and 4 are judged depends on
+  whether any finding or chip on those cells names the subject; the issue's captured prompts would
+  measure it and were not available here. Since the start-rule bullet, a case is judged only where a
+  finding or chip also names its partner.
+
+→ `InteractionClaimPairFidelityTest`, `ChartSearchAiInteractionClaimPairsTest`.

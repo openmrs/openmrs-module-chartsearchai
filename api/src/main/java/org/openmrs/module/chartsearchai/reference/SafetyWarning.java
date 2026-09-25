@@ -115,6 +115,9 @@ public class SafetyWarning {
 	/** @see #chartOrderBridges() */
 	private final List<ChartOrderBridge> chartOrderBridges;
 
+	/** @see #orderNamesOf(SafetyWarning) */
+	private final List<String> matchedOrderNames;
+
 	/** @see #isAboutACurrentMedication() */
 	private final boolean aboutACurrentMedication;
 
@@ -326,7 +329,8 @@ public class SafetyWarning {
 	 */
 	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true, null);
+				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true,
+				null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -364,7 +368,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -374,8 +378,12 @@ public class SafetyWarning {
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
-			List<DrugReference> subjectRows) {
+			Collection<String> matchedOrderNames, List<DrugReference> subjectRows) {
 		this.ordersSharingASubstance = ordersSharingASubstance;
+		// Copied and wrapped for the reason chartOrderBridges is; never null.
+		this.matchedOrderNames = matchedOrderNames == null || matchedOrderNames.isEmpty()
+				? Collections.<String> emptyList()
+				: Collections.unmodifiableList(new ArrayList<String>(new LinkedHashSet<String>(matchedOrderNames)));
 		this.subjectRows = subjectRows == null || subjectRows.isEmpty() ? Collections.<DrugReference> emptyList()
 				: Collections.unmodifiableList(new ArrayList<DrugReference>(subjectRows));
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
@@ -1090,7 +1098,50 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
-				subjectRows);
+				matchedOrderNames, subjectRows);
+	}
+
+	/**
+	 * This warning, carrying {@code names} as the displays of the active orders its arm matched its
+	 * substances against and the labels of the substances those orders resolve — see
+	 * {@link #orderNamesOf(SafetyWarning)}. Package-private: written only by {@code DrugSafetyValidator},
+	 * off the same walk {@code chartOrderBridges} makes, at each site that resolves bridges. Changes
+	 * nothing this warning prints or publishes.
+	 */
+	SafetyWarning withMatchedOrderNames(Collection<String> names) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, names, subjectRows);
+	}
+
+	/** @return the names {@link #withMatchedOrderNames} set, never null */
+	List<String> matchedOrderNames() {
+		return matchedOrderNames;
+	}
+
+	/**
+	 * Every name {@code finding}'s drugs go by through this patient's own active orders, each once: the
+	 * substances and order displays of its {@link #chartOrderBridges()}, then the display of every active
+	 * order its arm matched a substance it names against (issue #514, round 4 of its review) — including
+	 * an order whose display already names the substance, which states no bridge — each followed by the
+	 * label this response names every substance that order resolves by (round 4 of the fourth review).
+	 * The display is what lets a sentence naming her order as the chart's own record prints it
+	 * (<em>"Rifampicin 300mg capsule"</em>) be read as about the finding's partner, where the finding
+	 * prints the knowledge base's label (<em>"Rifampicin (rifampin)"</em>) and the display does not
+	 * contain it; the label is the mirror, a sentence naming her order <em>"Isoniazid / pyrazinamide /
+	 * rifampin"</em> by the label <em>"Rifampicin (rifampin)"</em> the prompt's other findings print.
+	 *
+	 * <p>Read by {@code InteractionClaimPairFidelityCheck} off a chip, and carried onto the finding's
+	 * record by {@code DrugReferenceInjector} as {@code RecordMapping.getFindingBridgeNames()} — one
+	 * projection, so a record and its chip cannot go by different names. Static rather than an
+	 * accessor: it is NOT published, and prints nothing — the chip's {@code detail}, its
+	 * {@code chartOrderBridges} key and the finding's rendered text are unchanged by it.
+	 */
+	public static List<String> orderNamesOf(SafetyWarning finding) {
+		Set<String> names = new LinkedHashSet<String>(ChartOrderBridge.namesOf(finding.chartOrderBridges));
+		names.addAll(finding.matchedOrderNames);
+		return new ArrayList<String>(names);
 	}
 
 	/**
@@ -1107,7 +1158,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, rows);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows);
 	}
 
 	/**
@@ -1262,6 +1313,23 @@ public class SafetyWarning {
 		public ChartOrderBridge(String substance, String orderDisplay) {
 			this.substance = substance;
 			this.orderDisplay = orderDisplay;
+		}
+
+		/**
+		 * Every substance and order display {@code bridges} state, each once, in the order they state
+		 * them — the names a finding's chart-order clause gives its drugs besides
+		 * {@link SafetyWarning#getDrug()} and {@link SafetyWarning#namedPartners()} (issue #514), and the
+		 * first part of {@link SafetyWarning#orderNamesOf}, the one projection both of its readers take.
+		 * Static and taking the list, not an accessor of the warning: it states nothing the chip's own
+		 * {@code chartOrderBridges} key does not already carry.
+		 */
+		public static List<String> namesOf(List<ChartOrderBridge> bridges) {
+			Set<String> names = new LinkedHashSet<String>();
+			for (ChartOrderBridge bridge : bridges) {
+				names.add(bridge.getSubstance());
+				names.add(bridge.getOrderDisplay());
+			}
+			return new ArrayList<String>(names);
 		}
 
 		/** @return the substance name the chip prints — the {@code substance} half of the wire pair. */

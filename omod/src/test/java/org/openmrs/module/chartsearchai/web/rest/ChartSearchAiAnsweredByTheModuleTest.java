@@ -76,7 +76,7 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 		return new ChartSearchService.ChartAnswer(COMPOSED,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-				null, null, null, null, null, null, byTheModule, null);
+				null, null, null, null, null, null, byTheModule, null, null);
 	}
 
 	@SuppressWarnings("unchecked")

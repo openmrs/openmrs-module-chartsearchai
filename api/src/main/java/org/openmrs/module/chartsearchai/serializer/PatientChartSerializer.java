@@ -690,7 +690,8 @@ public class PatientChartSerializer {
 	 *
 	 * <p>{@link #getFindingPartners()} (issue #516) is carried beside the record for
 	 * {@link #getFindingSeverity()}'s reason: the finding's text names those orders, and a consumer
-	 * reads them here rather than parsing for them.
+	 * reads them here rather than parsing for them. {@link #getFindingBridgeNames()} (issue #514) is
+	 * carried for the same reason.
 	 */
 	public static class RecordMapping {
 
@@ -778,6 +779,24 @@ public class PatientChartSerializer {
 		 * completion, and {@code findingPartners}, to the findings the answer cited.
 		 */
 		private final List<String> findingPartners;
+
+		/**
+		 * The names an injected {@code safety_finding}'s drugs go by through this patient's own
+		 * prescriptions — {@code SafetyWarning.orderNamesOf} of the finding the record renders: every
+		 * substance and order display of its {@code chartOrderBridges()}, then the display of every
+		 * active order its arm matched a drug against, bridged or not, each with the knowledge base's label
+		 * of every substance that order resolves. Empty on every other record and
+		 * on a finding matched against no order (issue #514). Written in exactly ONE place,
+		 * {@code DrugReferenceInjector}'s finding mapping, beside {@link #findingPartners} and for its
+		 * reason: a marker reaches this record, never the chip, and the record's text is never parsed
+		 * for it. Not rendered: a display here that the chart-order clause does not state is in no text.
+		 *
+		 * <p>Read by {@code InteractionClaimPairFidelityCheck}: a sentence naming the drug by the
+		 * prescription a brand-named order is (#349), by her order's display where the finding prints
+		 * the knowledge base's label (round 4 of #514's review), or by that label where the finding prints
+		 * the display (round 4 of its fourth review), is still about the pair the finding relates.
+		 */
+		private final List<String> findingBridgeNames;
 
 		/**
 		 * The numbers of the chart records this record was DERIVED from, empty where it was not
@@ -923,13 +942,13 @@ public class PatientChartSerializer {
 		 * each said "the full one is below" and were each overtaken by the next issue, this one
 		 * included, which is why every rung names the widest by the parameter only it takes rather than
 		 * by a count that the next insertion falsifies. Since issue #516 it defaults
-		 * {@link #findingPartners} to empty as well.
+		 * {@link #findingPartners} to empty as well, and since issue #514 {@link #findingBridgeNames}.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, null, null, null, null);
+					orderStopDate, findingSeverity, null, null, null, null, null);
 		}
 
 		/**
@@ -944,18 +963,19 @@ public class PatientChartSerializer {
 		 * not located, because the ladder has repeatedly grown under a "the one below is the full one"
 		 * sentence, which is what this javadoc used to say.
 		 *
-		 * <p>Since issue #516 it also takes {@link #findingPartners}, immediately after
+		 * <p>Since issue #516 it also takes {@link #findingPartners}, after
 		 * {@link #findingSeverity}, and so does the widest rung — for the tail constraint the widest
 		 * constructor's javadoc states: this rung keeps its list tail and the widest its list-then-Boolean
-		 * one. The finding-rating rung above defaults it to empty.
+		 * one. The finding-rating rung above defaults it to empty. Since issue #514
+		 * {@link #findingBridgeNames} follows it in both rungs, for the same constraint.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<Integer> derivedFrom) {
+				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
 					orderStopDate, findingSeverity, findingWithholds, findingSubjectRows, findingPartners,
-					derivedFrom, null, null);
+					findingBridgeNames, derivedFrom, null, null);
 		}
 
 		/**
@@ -983,12 +1003,13 @@ public class PatientChartSerializer {
 		 *
 		 * <p><b>Issue #516 answered it the same way again</b>, inserting {@link #findingPartners} after
 		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
-		 * was — and issue #515 once more, with {@link #findingWithholds} and {@link #findingSubjectRows}.
+		 * was — and issue #515 once more, with {@link #findingWithholds} and {@link #findingSubjectRows}
+		 * before it, and issue #514 with {@link #findingBridgeNames} after it, in both.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<Integer> derivedFrom,
+				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom,
 				List<String> dosingCeilings, Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
@@ -1009,6 +1030,10 @@ public class PatientChartSerializer {
 			this.findingPartners = findingPartners == null || findingPartners.isEmpty()
 					? Collections.<String> emptyList()
 					: Collections.unmodifiableList(new ArrayList<String>(findingPartners));
+			// Copied and wrapped, and never null, for the same reason.
+			this.findingBridgeNames = findingBridgeNames == null || findingBridgeNames.isEmpty()
+					? Collections.<String> emptyList()
+					: Collections.unmodifiableList(new ArrayList<String>(findingBridgeNames));
 			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
 			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
 			// reader branches on absence — empty is the honest answer wherever nothing was resolved.
@@ -1215,6 +1240,15 @@ public class PatientChartSerializer {
 		 */
 		public List<String> getFindingPartners() {
 			return findingPartners;
+		}
+
+		/**
+		 * @return the names this injected finding's drugs go by through her prescriptions — see
+		 *         {@link #findingBridgeNames} — never null, and empty on every record that is not an
+		 *         injected {@code safety_finding} matched against one of her orders
+		 */
+		public List<String> getFindingBridgeNames() {
+			return findingBridgeNames;
 		}
 	}
 }

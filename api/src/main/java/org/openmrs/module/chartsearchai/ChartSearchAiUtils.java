@@ -683,8 +683,12 @@ public class ChartSearchAiUtils {
 	 * @return a key in the format "resourceType:resourceUuid"
 	 */
 	public static String resourceKey(String resourceType, String resourceUuid) {
-		return resourceType + ":" + resourceUuid;
+		return resourceType + RESOURCE_KEY_SEPARATOR + resourceUuid;
 	}
+
+	/** What {@link #resourceKey} writes between its halves and {@link #keySeparator} looks for — one
+	 *  spelling for the writer and the reader (issue #514). */
+	private static final char RESOURCE_KEY_SEPARATOR = ':';
 
 	/**
 	 * The distinct reference drugs one assembled chart's injected {@code safety_finding} records
@@ -731,15 +735,47 @@ public class ChartSearchAiUtils {
 	public static Set<String> findingSubjects(List<RecordMapping> mappings) {
 		Set<String> subjects = new LinkedHashSet<String>();
 		for (RecordMapping mapping : safetyFindingMappings(mappings)) {
-			String key = mapping.getResourceUuid();
-			// Both fallbacks are unreachable given resourceKey's contract — it never returns null
-			// and always writes the separator — and are here so that a key some future writer
-			// builds differently reads as its own subject rather than as somebody else's.
-			// Defensive only: do not build a rule on either.
-			int separator = key == null ? -1 : key.indexOf(':');
-			subjects.add(separator < 0 ? key : key.substring(separator + 1));
+			subjects.add(findingSubject(mapping));
 		}
 		return subjects;
+	}
+
+	/**
+	 * The subject of ONE injected finding — {@code SafetyWarning.getDrug()} as the record's
+	 * {@link #resourceKey} carries it, the drug half of the composite {@link #findingSubjects}
+	 * collects. Split here, beside {@link #resourceKey}, for the reason that method's javadoc gives;
+	 * {@link #findingType} is the other half. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/514">#514</a> needed it
+	 * per record, to ask whether the finding a sentence cites is about the drug the sentence names.
+	 *
+	 * @param finding a record {@link #safetyFindingMappings} selected
+	 * @return the subject label; the whole key where it carries no separator
+	 */
+	public static String findingSubject(RecordMapping finding) {
+		String key = finding.getResourceUuid();
+		int separator = keySeparator(key);
+		return separator < 0 ? key : key.substring(separator + 1);
+	}
+
+	/**
+	 * The TYPE of one injected finding — {@code SafetyWarning.getType()}, the other half of
+	 * {@link #resourceKey}'s composite beside {@link #findingSubject}.
+	 *
+	 * @param finding a record {@link #safetyFindingMappings} selected
+	 * @return the type, or null where the key carries no separator
+	 */
+	public static String findingType(RecordMapping finding) {
+		String key = finding.getResourceUuid();
+		int separator = keySeparator(key);
+		return separator < 0 ? null : key.substring(0, separator);
+	}
+
+	/** Where {@link #resourceKey}'s separator sits in {@code key}, or -1 — the one split both halves use.
+	 *  Both fallbacks are unreachable given resourceKey's contract — it never returns null and always
+	 *  writes the separator — and are here so that a key some future writer builds differently reads
+	 *  as its own subject rather than as somebody else's. Defensive only: do not build a rule on either. */
+	private static int keySeparator(String key) {
+		return key == null ? -1 : key.indexOf(RESOURCE_KEY_SEPARATOR);
 	}
 
 	/**

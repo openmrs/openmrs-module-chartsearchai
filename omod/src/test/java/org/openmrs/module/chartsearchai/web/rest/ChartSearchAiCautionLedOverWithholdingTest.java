@@ -84,7 +84,7 @@ public class ChartSearchAiCautionLedOverWithholdingTest {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
-				null, null, null, null, null, null, null, false, stated);
+				null, null, null, null, null, null, null, false, null, stated);
 	}
 
 	@SuppressWarnings("unchecked")

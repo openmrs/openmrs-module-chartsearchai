@@ -521,6 +521,59 @@ public final class DrugReferenceTestSupport {
 		return injectedFindingsOver(base, question, activeDrugs, activeAtcCodes, allergies, null);
 	}
 
+	/**
+	 * The chips the REAL validator raises over {@code answer} for the patient
+	 * {@link #injectedFindingsOver(PatientChart, String, Set, Set, List)} injects findings for — the same
+	 * dataset, the same context and the same question, so the post-answer chips a case hands
+	 * {@code LlmInferenceService} and the records its answer cites are one arrangement (issue #514).
+	 * The ANSWER is read, as production reads it: a drug only the answer names is put in play and can
+	 * raise a chip no injected finding carries, which is the population a case about that difference
+	 * needs.
+	 */
+	public static List<SafetyWarning> chipsOverAnswer(String answer, String question,
+			Set<String> activeDrugs, Set<String> activeAtcCodes,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return chipsOverAnswer(ddinterServiceWithGroups(), answer, question, activeDrugs, activeAtcCodes,
+				orders);
+	}
+
+	/**
+	 * The service over the knowledge base the module SHIPS ({@link #shippedEntries()}) with the shipped
+	 * cross-reactivity groups — for a case outside this package whose premise is a substance the pinned
+	 * excerpt does not carry (issue #514: Rifampicin, whose label the shipped data spells
+	 * {@code Rifampicin (rifampin)}). Built once per case and handed to both overloads below, so the
+	 * chart and the chips are one arrangement over one dataset.
+	 */
+	public static DrugReferenceService shippedServiceWithGroups() {
+		return serviceWithGroups(shippedEntries());
+	}
+
+	/**
+	 * {@link #injectedFindingsOver(PatientChart, String, Set, Set, List)} over {@code service} rather
+	 * than the excerpt.
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding
+	 */
+	public static PatientChart injectedFindingsOver(DrugReferenceService service, PatientChart base,
+			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return injectedOrThrow(service, base, ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders),
+				question, "drugs " + activeDrugs);
+	}
+
+	/**
+	 * {@link #chipsOverAnswer(String, String, Set, Set, List)} over {@code service} rather than the
+	 * excerpt — the chips for the patient
+	 * {@link #injectedFindingsOver(DrugReferenceService, PatientChart, String, Set, Set, List)} injects
+	 * findings for.
+	 */
+	public static List<SafetyWarning> chipsOverAnswer(DrugReferenceService service, String answer,
+			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return validator(service).validate(answer, question,
+				ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders));
+	}
+
 	/** The one body the three public forms share, so the throw-on-empty contract each of them
 	 *  documents cannot come apart from the injection it is a contract about. */
 	private static PatientChart injectedFindingsOver(PatientChart base, String question,
@@ -1767,8 +1820,8 @@ public final class DrugReferenceTestSupport {
 				"precondition: querystore's rendered text for the order names its drug, or no case "
 						+ "using this record is about a record that names it: " + text);
 		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
-				order.getUuid() + "-" + index, null, text, null, 0, orderActive, stopDate, null, null, null, null, null,
-				null, null);
+				order.getUuid() + "-" + index, null, text, null, 0, orderActive, stopDate, null, null, null,
+				null, null, null, null, null);
 	}
 
 	/**

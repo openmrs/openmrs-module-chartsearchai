@@ -286,6 +286,12 @@ public class LlmInferenceService implements ChartSearchService {
 			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
 					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), cited,
 							chart.getMappings());
+			// And whether each "X interacts with active order Y" claim the model wrote states a pair the
+			// findings relate (issue #514). After validate() because the chips are part of what can
+			// relate a pair, and on the MODEL's prose, before anything below appends to it.
+			ChartSearchService.InteractionClaimPairs interactionClaimPairs =
+					InteractionClaimPairFidelityCheck.examine(patient, response.getAnswer(), cited,
+							chart.getMappings(), safetyWarnings);
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
 					response.getAnswer(), cited, chart.getMappings());
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
@@ -304,7 +310,7 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage, false, cautionLedOverWithholding);
+					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding);
 			outcome = "ok";
 			return answer;
 		}
@@ -703,7 +709,7 @@ public class LlmInferenceService implements ChartSearchService {
 
 			// Resolved ONCE for this method and handed to BOTH answers it produces, the ungrounded one
 			// below included (issue #315). It is a projection over the answer's own markers and its
-			// resolution, both already in hand here, so unlike the six checks further down it owes
+			// resolution, both already in hand here, so unlike the checks further down it owes
 			// nothing to the grounding pass and does not wait for it — the same argument
 			// unresolvedDrugClass, chartReadForSafety and conditionRuleCoverage are stated on the early
 			// `done` for, that being what a streaming user reads. Withholding it until the `grounded`
@@ -724,7 +730,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
-					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false,
+					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
 					cautionLedOverWithholding));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
@@ -813,6 +819,12 @@ public class LlmInferenceService implements ChartSearchService {
 			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
 					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), cited,
 							chart.getMappings());
+			// And whether each "X interacts with active order Y" claim the model wrote states a pair the
+			// findings relate (issue #514). After validate() because the chips are part of what can
+			// relate a pair, and on the MODEL's prose, before anything below appends to it.
+			ChartSearchService.InteractionClaimPairs interactionClaimPairs =
+					InteractionClaimPairFidelityCheck.examine(patient, response.getAnswer(), cited,
+							chart.getMappings(), safetyWarnings);
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
 					response.getAnswer(), cited, chart.getMappings());
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
@@ -831,7 +843,7 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage, false, cautionLedOverWithholding);
+					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding);
 			outcome = "ok";
 			return answer;
 		}
@@ -864,7 +876,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 *
 	 * <p><b>The checks of what a model WROTE are not run</b>: the class-code check logs nothing, and the
 	 * prose, active-order, finding-severity, finding-citation and dosing-ceiling keys,
-	 * {@code findingPartners} and {@code cautionLedOverWithholding} state null, no measurement. ADR Decision 85 already said two of them would otherwise
+	 * {@code findingPartners}, {@code interactionClaimPairs} and {@code cautionLedOverWithholding} state null, no measurement. ADR Decision 85 already said two of them would otherwise
 	 * report on prose no model wrote. {@code answeredByTheModule} says why they are null, since a null
 	 * alone could mean a check that failed. The statements that are not judgements of prose are made
 	 * as on the model's path: the references (inline markers, and the chart records a cited finding
@@ -915,10 +927,10 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null));
+				conditionRuleCoverage, orderStopDates, null, true, null, null));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
-				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null);
+				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null);
 	}
 
 	/**

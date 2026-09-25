@@ -680,7 +680,7 @@ public class DrugReferenceInjector {
 			// citation's own, and the verdict published was #201's defect one group over. Stamped
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
-					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null,
+					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null, null,
 					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -710,7 +710,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -764,7 +764,8 @@ public class DrugReferenceInjector {
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
 					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
-					finding.namedPartners(), chartRecordNumbers(finding, findingRecords)));
+					finding.namedPartners(), SafetyWarning.orderNamesOf(finding),
+					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}

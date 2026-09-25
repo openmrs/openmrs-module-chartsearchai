@@ -1848,6 +1848,17 @@ def selftest():
                    "a non-list rating body must not be counted as a dropped rating"))
     shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, [349])) == [349],
                    "unstated_ratings must read a well-formed list"))
+    # Issue #542's flag excuses a refusal, so anything short of a JSON `true` must not: a truthy
+    # reading would excuse a `null` cell on a malformed body.
+    for flag in ("true", 1, [True], None, False):
+        c = _cell(None, None)
+        c["answered_by_the_module"] = flag
+        shapes.append((not answered_by_the_module(c),
+                       "answered_by_the_module(%r) is True — only a JSON true may excuse a "
+                       "refusal" % (flag,)))
+    c = _cell(None, None)
+    c["answered_by_the_module"] = True
+    shapes.append((answered_by_the_module(c), "answered_by_the_module must read a JSON true"))
     # BOTH wire shapes of the key, because captures carry both: before issue #387 it was a bare
     # index array, and since #387 each entry is an object carrying the rating beside the citation.
     # Every reader here takes the value's PRESENCE and its LENGTH and never an element, so a capture
@@ -2129,9 +2140,8 @@ def main():
                            "`unstatedFindingSeverities` (issue #397)."
                            % len(rating_unexcused))
     # The cells either arm answered from the module, compared on the verdict and the lead with the
-    # predicates the columns above use, over their OWN denominator. They cannot be read by the
-    # completeness and rating columns below, which are scoped to cells both arms measured and so
-    # leave them out already.
+    # predicates the columns above use, over their OWN denominator, because the completeness and
+    # rating columns below are scoped to the cells both arms measured.
     a_module = set(k for k in both if answered_by_the_module(a[k]))
     b_module = set(k for k in both if answered_by_the_module(b[k]))
     print("answered from the module's own findings (answeredByTheModule): A=%d B=%d of %d shared cells"

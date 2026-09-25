@@ -9783,7 +9783,7 @@ The gate the issue names, not run in this change: the probe-safety corpus
 of the issue's three comments, both arms on one build, with only this property between them. On the ON
 arm every module-answered cell publishes `findingCitations` and `unstatedFindingSeverities` as `null`;
 since #542 `score_probe_safety.py` reads `answeredByTheModule`, leaves a cell out of both measurement
-refusals only where the arm that did not measure it was answered by the module, and compares those
+refusals only where that cell was answered by the module on the arm that did not measure it, and compares those
 cells on the verdict and the lead over their own denominator.
 What the arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
 yes, and which questions the shapes refuse that the issue's cells expected answered.

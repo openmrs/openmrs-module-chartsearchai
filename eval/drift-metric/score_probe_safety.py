@@ -1115,7 +1115,7 @@ def summarise(name, cells, done, expected=None):
           % (len(dropped_ratings), len(rated)))
     # Issue #542. Printed even at 0, so an arm where `answerFromFindings` fired reads differently
     # from one where it never did; such a cell states neither key above, which is why it is counted
-    # in the no-extent census and not in the defect counts.
+    # in the no-extent census and not in the stated-fewer or dropped-rating counts.
     print("answered from the module's own findings (answeredByTheModule): %d of %d"
           % (len([c for c in cells.values() if answered_by_the_module(c)]), len(cells)))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
@@ -2119,7 +2119,9 @@ def main():
                            "extent (%d cell(s) on one side only), so the completeness column above "
                            "ran on one arm and not the other and its tie means nothing. Re-capture "
                            "the older arm against a build that publishes `findingCitations` "
-                           "(issue #397)." % len(extent_unexcused))
+                           "(issue #397); where both arms are one build, read why the cell states "
+                           "`null` with no `answeredByTheModule: true` beside it (issue #542)."
+                           % len(extent_unexcused))
     # The SAME refusal for the rating key, because it has its own measurability — a capture taken
     # between #384 and #395 carries one without the other — and because without it the one column
     # that tells a completeness win from a completeness/rating trade can run on a single arm and
@@ -2137,7 +2139,9 @@ def main():
                            "one arm and not the other. That column is what tells a completeness win "
                            "from a completeness-for-ratings trade, so a tie in it means nothing "
                            "here. Re-capture the older arm against a build that publishes "
-                           "`unstatedFindingSeverities` (issue #397)."
+                           "`unstatedFindingSeverities` (issue #397); where both arms are one "
+                           "build, read why the cell states `null` with no "
+                           "`answeredByTheModule: true` beside it (issue #542)."
                            % len(rating_unexcused))
     # The cells either arm answered from the module, compared on the verdict and the lead with the
     # predicates the columns above use, over their OWN denominator, because the completeness and
@@ -2150,8 +2154,9 @@ def main():
           "the module, so left out of both refusals: extent %d, rating %d"
           % (len((a_measured ^ b_measured) - extent_unexcused),
              len((a_rated ^ b_rated) - rating_unexcused)))
-    mod_ans = [k for k in ans if k in a_module | b_module]
-    mod_abst = [k for k in abst if k in a_module | b_module]
+    either_module = a_module | b_module
+    mod_ans = [k for k in ans if k in either_module]
+    mod_abst = [k for k in abst if k in either_module]
     print("over the same %d ANSWER cell(s) either arm answered from the module:  verdict-led A=%d B=%d"
           "   abstained (defect) A=%d B=%d"
           % (len(mod_ans), n(mod_ans, a, verdict_led), n(mod_ans, b, verdict_led),

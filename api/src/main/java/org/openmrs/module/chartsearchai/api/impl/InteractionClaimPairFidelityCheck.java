@@ -68,7 +68,10 @@ import org.slf4j.LoggerFactory;
  * use (#349), and the display of every order its arm matched a drug against, because a finding names
  * its partner by the knowledge base's label (<em>Rifampicin (rifampin)</em>) while the chart's record of
  * the order prints its display (<em>Rifampicin 300mg capsule</em>), and the finding states no
- * chart-order clause where that display names the substance (round 4 of #514's review).
+ * chart-order clause where that display names the substance (round 4 of #514's review) — and beside
+ * each display the label of every substance that order resolves, for the mirror: a finding naming its
+ * partner by the order's display (<em>Isoniazid / pyrazinamide / rifampin</em>) while the prompt's
+ * findings about rifampicin print <em>Rifampicin (rifampin)</em> (round 4 of the fourth review).
  * A finding relates a subject to a partner when each names one of those names, whichever way round: an
  * interaction relates two drugs whichever the sentence leads with, the screening arm's two drugs are
  * both her orders, and issue #477's findings relate two of her orders to each other. So two orders one
@@ -157,7 +160,9 @@ import org.slf4j.LoggerFactory;
  * one.
  *
  * <p><b>What it cannot see.</b> Containment reads a short name inside a longer one as the same drug —
- * <em>Lamivudine</em> inside <em>Lamivudine / zidovudine</em> — so a swap between those two passes.
+ * <em>Lamivudine</em> inside <em>Lamivudine / zidovudine</em> — so a swap between those two passes,
+ * and so does a claim naming a combination order by the label of a substance in it other than the one
+ * the finding's rule is about, as it does by that substance's word in the display.
  * An invented pair whose subject or partner is a drug no finding or chip names is unjudged, and so is a
  * partner named by a brand, a paraphrase or a word inside a part of a name (<em>isoniazid</em> of a
  * combination's display) rather than the start of one. The first words of a name two drugs share read

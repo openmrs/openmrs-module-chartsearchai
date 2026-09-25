@@ -784,16 +784,17 @@ public class PatientChartSerializer {
 		 * The names an injected {@code safety_finding}'s drugs go by through this patient's own
 		 * prescriptions — {@code SafetyWarning.orderNamesOf} of the finding the record renders: every
 		 * substance and order display of its {@code chartOrderBridges()}, then the display of every
-		 * active order its arm matched a drug against, bridged or not. Empty on every other record and
+		 * active order its arm matched a drug against, bridged or not, each with the knowledge base's label
+		 * of every substance that order resolves. Empty on every other record and
 		 * on a finding matched against no order (issue #514). Written in exactly ONE place,
 		 * {@code DrugReferenceInjector}'s finding mapping, beside {@link #findingPartners} and for its
 		 * reason: a marker reaches this record, never the chip, and the record's text is never parsed
 		 * for it. Not rendered: a display here that the chart-order clause does not state is in no text.
 		 *
 		 * <p>Read by {@code InteractionClaimPairFidelityCheck}: a sentence naming the drug by the
-		 * prescription a brand-named order is (#349), or by her order's display where the finding prints
-		 * the knowledge base's label (round 4 of #514's review), is still about the pair the finding
-		 * relates.
+		 * prescription a brand-named order is (#349), by her order's display where the finding prints
+		 * the knowledge base's label (round 4 of #514's review), or by that label where the finding prints
+		 * the display (round 4 of its fourth review), is still about the pair the finding relates.
 		 */
 		private final List<String> findingBridgeNames;
 

@@ -116,7 +116,7 @@ public class SafetyWarning {
 	private final List<ChartOrderBridge> chartOrderBridges;
 
 	/** @see #orderNamesOf(SafetyWarning) */
-	private final List<String> matchedOrderDisplays;
+	private final List<String> matchedOrderNames;
 
 	/** @see #isAboutACurrentMedication() */
 	private final boolean aboutACurrentMedication;
@@ -378,12 +378,12 @@ public class SafetyWarning {
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
-			Collection<String> matchedOrderDisplays, List<DrugReference> subjectRows) {
+			Collection<String> matchedOrderNames, List<DrugReference> subjectRows) {
 		this.ordersSharingASubstance = ordersSharingASubstance;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
-		this.matchedOrderDisplays = matchedOrderDisplays == null || matchedOrderDisplays.isEmpty()
+		this.matchedOrderNames = matchedOrderNames == null || matchedOrderNames.isEmpty()
 				? Collections.<String> emptyList()
-				: Collections.unmodifiableList(new ArrayList<String>(new LinkedHashSet<String>(matchedOrderDisplays)));
+				: Collections.unmodifiableList(new ArrayList<String>(new LinkedHashSet<String>(matchedOrderNames)));
 		this.subjectRows = subjectRows == null || subjectRows.isEmpty() ? Collections.<DrugReference> emptyList()
 				: Collections.unmodifiableList(new ArrayList<DrugReference>(subjectRows));
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
@@ -1098,35 +1098,39 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
-				matchedOrderDisplays, subjectRows);
+				matchedOrderNames, subjectRows);
 	}
 
 	/**
-	 * This warning, carrying {@code displays} as the displays of the active orders its arm matched its
-	 * substances against — see {@link #orderNamesOf(SafetyWarning)}. Package-private: written only by
-	 * {@code DrugSafetyValidator}, off the same walk {@code chartOrderBridges} makes, at each site that
-	 * resolves bridges. Changes nothing this warning prints or publishes.
+	 * This warning, carrying {@code names} as the displays of the active orders its arm matched its
+	 * substances against and the labels of the substances those orders resolve — see
+	 * {@link #orderNamesOf(SafetyWarning)}. Package-private: written only by {@code DrugSafetyValidator},
+	 * off the same walk {@code chartOrderBridges} makes, at each site that resolves bridges. Changes
+	 * nothing this warning prints or publishes.
 	 */
-	SafetyWarning withMatchedOrderDisplays(Collection<String> displays) {
+	SafetyWarning withMatchedOrderNames(Collection<String> names) {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, displays, subjectRows);
+				endedOrderRows, ordersSharingASubstance, names, subjectRows);
 	}
 
-	/** @return the displays {@link #withMatchedOrderDisplays} set, never null */
-	List<String> matchedOrderDisplays() {
-		return matchedOrderDisplays;
+	/** @return the names {@link #withMatchedOrderNames} set, never null */
+	List<String> matchedOrderNames() {
+		return matchedOrderNames;
 	}
 
 	/**
 	 * Every name {@code finding}'s drugs go by through this patient's own active orders, each once: the
 	 * substances and order displays of its {@link #chartOrderBridges()}, then the display of every active
 	 * order its arm matched a substance it names against (issue #514, round 4 of its review) — including
-	 * an order whose display already names the substance, which states no bridge. That last is what
-	 * lets a sentence naming her order as the chart's own record prints it (<em>"Rifampicin 300mg
-	 * capsule"</em>) be read as about the finding's partner, where the finding prints the knowledge
-	 * base's label (<em>"Rifampicin (rifampin)"</em>) and the display does not contain it.
+	 * an order whose display already names the substance, which states no bridge — each followed by the
+	 * label this response names every substance that order resolves by (round 4 of the fourth review).
+	 * The display is what lets a sentence naming her order as the chart's own record prints it
+	 * (<em>"Rifampicin 300mg capsule"</em>) be read as about the finding's partner, where the finding
+	 * prints the knowledge base's label (<em>"Rifampicin (rifampin)"</em>) and the display does not
+	 * contain it; the label is the mirror, a sentence naming her order <em>"Isoniazid / pyrazinamide /
+	 * rifampin"</em> by the label <em>"Rifampicin (rifampin)"</em> the prompt's other findings print.
 	 *
 	 * <p>Read by {@code InteractionClaimPairFidelityCheck} off a chip, and carried onto the finding's
 	 * record by {@code DrugReferenceInjector} as {@code RecordMapping.getFindingBridgeNames()} — one
@@ -1136,7 +1140,7 @@ public class SafetyWarning {
 	 */
 	public static List<String> orderNamesOf(SafetyWarning finding) {
 		Set<String> names = new LinkedHashSet<String>(ChartOrderBridge.namesOf(finding.chartOrderBridges));
-		names.addAll(finding.matchedOrderDisplays);
+		names.addAll(finding.matchedOrderNames);
 		return new ArrayList<String>(names);
 	}
 
@@ -1154,7 +1158,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderDisplays, rows);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows);
 	}
 
 	/**

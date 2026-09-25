@@ -81,6 +81,14 @@ public class InteractionClaimPairFidelityTest {
 
 	private static final String CHECK = InteractionClaimPairFidelityCheck.class.getName();
 
+	/** The ticket's combination order carrying rifampin. */
+	private static final String TICKET_RHZ = "Isoniazid / pyrazinamide / rifampin";
+
+	/** A question like the ticket's, listing her orders before asking about a new drug. */
+	private static final String TICKET_QUESTION = "The patient is currently on Lamivudine / zidovudine, Nevirapine, "
+			+ "Stavudine, Isoniazid / pyrazinamide / rifampin and Trimethoprim and sulfamethoxazole, is it safe to give "
+			+ "metformin?";
+
 	@Test
 	public void aFindingAboutAnotherDrugCitedForTheClaimIsReportedAsMisattributed() {
 		// The ticket's case 2, with the marker in the claim's own run: the finding cited is about
@@ -1154,10 +1162,10 @@ public class InteractionClaimPairFidelityTest {
 							display, setOf(display), setOf("J04AB02"))));
 			int finding = arrangement.finding("Clarithromycin", "Rifampicin (rifampin)");
 			RecordMapping record = DrugReferenceTestSupport.findingAt(arrangement.chart, finding);
-			assertEquals(Collections.<String> emptyList(), record.getFindingBridgeNames().stream()
-					.filter(name -> !name.equals(display)).collect(java.util.stream.Collectors.toList()),
-					"the premise: no bridge name but the display itself — the display names the substance, "
-							+ "so the finding states no chart-order clause, was: " + record.getText());
+			assertEquals(Arrays.asList(display, "Rifampicin (rifampin)"), record.getFindingBridgeNames(),
+					"the premise: no name through her order but the display itself and the label of the substance "
+							+ "it resolves — the display names the substance, so the finding states no chart-order "
+							+ "clause, was: " + record.getText());
 			assertFalse(record.getText().contains(display),
 					"the premise: the finding does not print her order's display, was: " + record.getText());
 			int order = arrangement.orderRecord(display);
@@ -1620,6 +1628,107 @@ public class InteractionClaimPairFidelityTest {
 				assertEquals(1, pairs.getUnfounded(), "no finding relates the pair, was: " + pairs + " for: " + answer);
 			}
 		}
+	}
+
+	/**
+	 * A claim naming a combination order by the knowledge base's label of a substance in it is about the
+	 * pair the finding relates, where the finding names that partner by the order's display and the label
+	 * is spelled otherwise (round 4 of #514's fourth review). On the ticket's own chart the finding about
+	 * Metformin names her order <em>Isoniazid / pyrazinamide / rifampin</em>, which names rifampin, so it
+	 * states no chart-order clause, while the findings about rifampicin print it
+	 * <em>Rifampicin (rifampin)</em> — a name no word of that display starts. So a claim naming the order
+	 * by that label was compared against the display alone and accused the finding relating exactly its
+	 * pair, as misattributed where it cited the finding and unfounded where it cited nothing, whichever
+	 * drug the sentence led with and whichever substance of the order the finding's rule was about.
+	 */
+	@Test
+	public void aClaimNamingACombinationOrderByTheLabelOfASubstanceInItIsAboutThePairTheFindingRelates() {
+		Arrangement arrangement = ticketChart();
+		int metformin = arrangement.finding("Metformin", TICKET_RHZ);
+		int nevirapine = arrangement.finding("Nevirapine", TICKET_RHZ);
+		int stavudine = arrangement.finding("Stavudine", TICKET_RHZ);
+		assertTrue(arrangement.hasFinding("Rifampicin (rifampin)", "Nevirapine"),
+				"the premise: the prompt's findings about rifampicin print its label, was: " + arrangement.chart.getText());
+		for (String answer : Arrays.asList(
+				"Metformin interacts with active order Rifampicin (rifampin) [" + metformin + "].",
+				"Nevirapine interacts with active order Rifampicin (rifampin) [" + nevirapine + "].",
+				"Stavudine interacts with active order Rifampicin (rifampin) [" + stavudine + "].",
+				"Rifampicin (rifampin) interacts with active order Metformin [" + metformin + "].",
+				"Metformin interacts with active order Rifampicin.",
+				"Metformin interacts with active order Rifampicin (rifampin).")) {
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, TICKET_QUESTION, answer)) {
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"the finding cited relates exactly this pair, was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "a finding relates this pair, was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getJudged(), "the claim was judged, was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * The other value of the case above: the label of a substance in one of her orders is a name only of
+	 * the findings matched against THAT order. A claim naming her rifampin order by the label and citing
+	 * a finding about her other order is still misattributed.
+	 */
+	@Test
+	public void theLabelOfASubstanceInOneOrderIsNoNameOfAFindingAboutAnother() {
+		Arrangement arrangement = ticketChart();
+		int trimethoprim = arrangement.finding("Metformin", "Trimethoprim and sulfamethoxazole");
+		for (String subject : Arrays.asList("Metformin", "Nevirapine")) {
+			String answer = subject + " interacts with active order Rifampicin (rifampin) [" + trimethoprim + "].";
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, TICKET_QUESTION, answer)) {
+				assertEquals(Collections.singletonList(Integer.valueOf(trimethoprim)), pairs.getMisattributedCitations(),
+						"the finding cited relates Metformin to her other order, was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * Where the case above's names are WRITTEN: the finding's record and its chip carry the label the
+	 * response names each substance of the order by, beside the order's display, and a finding about her
+	 * other order carries neither — read off the real injector's record and the real validator's chip.
+	 */
+	@Test
+	public void aFindingMatchedAgainstACombinationOrderGoesByTheLabelOfEverySubstanceInIt() {
+		Arrangement arrangement = ticketChart();
+		RecordMapping rhz = DrugReferenceTestSupport.findingAt(arrangement.chart,
+				arrangement.finding("Metformin", TICKET_RHZ));
+		RecordMapping trimethoprim = DrugReferenceTestSupport.findingAt(arrangement.chart,
+				arrangement.finding("Metformin", "Trimethoprim and sulfamethoxazole"));
+		assertFalse(rhz.getText().contains("Rifampicin"), "the premise: the finding prints no label of the order's "
+				+ "substances, was: " + rhz.getText());
+		assertEquals(Arrays.asList(TICKET_RHZ, "Pyrazinamide", "Rifampicin (rifampin)", "Isoniazid"),
+				rhz.getFindingBridgeNames(), "was: " + rhz.getText());
+		assertFalse(trimethoprim.getFindingBridgeNames().contains("Rifampicin (rifampin)"),
+				"was: " + trimethoprim.getFindingBridgeNames());
+		String answer = "Metformin interacts with active order " + TICKET_RHZ + ".";
+		boolean chipCarriesTheLabel = false;
+		for (SafetyWarning chip : arrangement.chipsOver(answer)) {
+			if (relates(chip, "Metformin", TICKET_RHZ)) {
+				chipCarriesTheLabel = true;
+				assertTrue(SafetyWarning.orderNamesOf(chip).contains("Rifampicin (rifampin)"),
+						"the chip goes by its record's names, was: " + SafetyWarning.orderNamesOf(chip));
+				assertFalse(chip.getDetail().contains("Rifampicin"), "and prints none of them, was: " + chip.getDetail());
+			}
+		}
+		assertTrue(chipCarriesTheLabel, "the premise: a chip relates the pair, was: " + arrangement.chipsOver(answer));
+	}
+
+	/** The ticket's own chart: her five orders, and its question listing them before asking about metformin. */
+	private static Arrangement ticketChart() {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		Set<String> drugs = new LinkedHashSet<String>();
+		Set<String> atc = new LinkedHashSet<String>();
+		for (String[] order : new String[][] { { "Lamivudine / zidovudine", "J05AR01" }, { "Nevirapine", "J05AG01" },
+				{ "Stavudine", "J05AF04" }, { TICKET_RHZ, "J04AM05" }, { "Trimethoprim and sulfamethoxazole", "J01EE01" } }) {
+			drugs.add(order[0]);
+			atc.add(order[1]);
+			orders.add(new PatientClinicalContext.ActiveDrugOrder("order-" + order[1], order[0], setOf(order[0]),
+					setOf(order[1])));
+		}
+		return new Arrangement(DrugReferenceTestSupport.shippedServiceWithGroups(), TICKET_QUESTION, drugs, atc, orders);
 	}
 
 	/** What the real {@code search} AND {@code searchStreaming} publish for {@code answer}, asserted to be

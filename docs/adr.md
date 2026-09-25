@@ -11215,7 +11215,7 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   a brand-named order's finding tells the model *"Warfarin from Coumadin 5mg"*, so a claim naming
   `Coumadin 5mg` is about the pair the finding relates. **Round 4 of the PR's review added the
   displays of the orders a finding's arm matched**, bridged or not, written off the same walk
-  `DrugSafetyValidator.chartOrderBridges` makes (its `matchedDisplays`, filled before the display
+  `DrugSafetyValidator.chartOrderBridges` makes (its `matchedNames`, filled before the display
   silence test is asked, so no bridge moves) and carried as `SafetyWarning.orderNamesOf`, which
   prints and publishes nothing. A bridge is stated only where the display does NOT name the
   substance, so a finding naming its partner by the knowledge base's label — *Rifampicin
@@ -11224,7 +11224,16 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   misattributed where it cited the finding, and unfounded in the prompt's own few-shot shape, where
   its run is the order record. Only the orders a side of THAT finding resolves from are named —
   another order's display is no name of it — so a claim naming her other order and citing it is
-  still reported. A finding relates a claim when each side
+  still reported. **Round 4 of the fourth review added, beside each such display, the label this
+  response names every substance that order resolves by** (`DrugSafetyValidator.addSubstanceLabelsOf`,
+  through `SubstanceSubjects.subjectOf`, the name a finding about that substance prints). The mirror
+  case: on the ticket's chart the finding about Metformin names her order *Isoniazid / pyrazinamide /
+  rifampin*, which names rifampin and so states no bridge, while the prompt's findings about rifampicin
+  print *Rifampicin (rifampin)*, a name no word of that display starts; a claim naming the order by that
+  label was reported misattributed citing the finding and unfounded citing nothing. Every substance the
+  order resolves, not only the one the finding's rule is about, since the display names them all and a
+  claim naming the order by any word of it already read as about that order. A finding about her other
+  order carries none of them, so the same claim citing it is still reported. A finding relates a claim when each side
   names one of those names, either way round — so two orders one finding names read as related.
   Requiring one side to be the SUBJECT was tried after a review pass found a merged shared-mechanism
   finding hiding an order-for-drug swap that way, and reverted in the next pass: issue #477's
@@ -11324,7 +11333,8 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   a negated claim, a repeated *active order*, the chart's order name against the reference-data name,
   a trailing full stop, text after the name — and each widening opened the next round's false report,
   so the reading was narrowed instead. A known name is a finding's or chip's subject, an order it
-  names, or a bridge name, which carries the displays of the orders its arm matched; the span must
+  names, or a bridge name, which carries the displays of the orders its arm matched and the labels of
+  the substances those orders resolve; the span must
   begin, on a word boundary, with the start of one of them or of one of its parts (past a parenthesis
   or a slash: *rifampin* of *Rifampicin (rifampin)*), and whatever follows is ignored — a strength, a
   form, *" — Moderate"*, a full stop — so the terminator trim round 5 added is gone. Every run of words
@@ -11368,7 +11378,10 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   pins the shared reading; `ChartSearchAiInteractionClaimPairsTest` the wire.
 - **−** **Containment is the comparison**, `FindingPartnerCoverageCheck.comparable`'s form, so a swap
   between a short name and a longer one containing it (*Lamivudine*, *Lamivudine / zidovudine*) passes,
-  and a subject spelled as no finding spells it leaves the claim unjudged. No case pins the naming
+  and a subject spelled as no finding spells it leaves the claim unjudged. The same holds for the
+  labels of a combination order's substances: a finding matched against the order goes by all of them,
+  so a claim naming the order by a substance other than the one the finding's rule is about passes, as
+  it does by that substance's word in the display. No case pins the naming
   direction (a span names a drug only by containing it); the check's javadoc says what it decides.
 - **−** **A partner not starting with a known name is a missed report** (the start-rule bullet
   above). A brand or paraphrase no finding prints, a word before the name (*"active order her

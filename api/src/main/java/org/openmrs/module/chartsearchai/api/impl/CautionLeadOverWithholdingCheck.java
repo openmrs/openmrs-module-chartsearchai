@@ -53,8 +53,11 @@ import org.slf4j.LoggerFactory;
  *       finding, which states both of its drugs' rows, because that arm elects its subject by the
  *       dataset's order and never the question's. Its clause stays the subject's, so an entry reported for
  *       the partner is a reason to withhold the OTHER drug of the pair;</li>
- *   <li>a finding the screening arm or an order-driven INTERACTION arm raised, which states no subject
- *       rows; an order-driven contraindication does, through the step every contraindication passes.</li>
+ *   <li>a pair finding the screening arm (the order-driven INTERACTION arm) raised, which states no
+ *       subject rows. An order-driven contraindication does state them, through the step every
+ *       contraindication passes, as do the drug-in-play arm's duplicate-therapy finding, by its drug in
+ *       play's rows, and the finding that two of her orders share substances, by every substance it names,
+ *       so that one is reported beside a lead on any of them.</li>
  * </ul>
  *
  * <p>It reports the citation and the rating, never a word of the answer or of a record, and never that the

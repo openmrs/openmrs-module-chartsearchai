@@ -11080,8 +11080,12 @@ takes one asked substance, ships off, and was left alone.
   record ends in (for an interaction that clause is `DrugSafetyValidator.licensesWithholding`'s; a
   contraindication states a withholding-class clause without asking it), and
   `RecordMapping.getFindingSubjectRows()`, the ids of every row of the substance the arm named the finding's
-  subject by, carried on `SafetyWarning.subjectRows()` from `EndedOrders.stamp`, the step every
-  question-driven arm's chip and every contraindication chip passes through — and, for a question-pair
+  subject by, carried on `SafetyWarning.subjectRows()` from `EndedOrders.aboutTheSubject` — through
+  `EndedOrders.stamp`, the step every other question-driven arm's chip and every contraindication chip
+  passes through, and directly for the drug-in-play arm's duplicate-therapy finding
+  (`alreadyInSeveralOrders`), whose sentence says active orders carry the drug and so takes no ended-order
+  referent; `addOrdersSharingASubstance` states every substance its finding names, so that finding is
+  reported beside a lead on any of them — and, for a question-pair
   finding, of its partner's substance too (`EndedOrders.stampPair`), because that arm elects which of the
   two drugs is the subject by the dataset's order and never the question's, so reading the subject alone
   made the report depend on which of the two the question happened to list. Its clause stays the
@@ -11137,8 +11141,8 @@ takes one asked substance, ships off, and was left alone.
 - **A drug only the answer put in play** has chips and no record, so a lead on it reads nothing.
 - **A record is matched on its SUBJECT**, and a question-pair finding on both of its drugs, so a
   withholding finding of another arm whose subject is another drug and whose partner is the lead's is not
-  reported, and a finding the screening arm or an order-driven interaction arm raised carries no subject
-  rows.
+  reported, and a pair finding the screening arm (the order-driven interaction arm) raised carries no
+  subject rows.
 - **An order resolved to only some of its substances** passes the resolution gate, so a constituent it left
   out can be named as one she holds no active order for. Decision 110 measured how rarely a combination
   NAME does this over the shipped knowledge base, and names the brand that does.
@@ -11149,5 +11153,7 @@ takes one asked substance, ships off, and was left alone.
 `.aContraindicationBesideACautionLeadOnItsDrugIsReported`, `.aFoldedFindingWithholdingOnAMinorRatingIsReported`,
 `.aContraindicationAboutAMedicationSheAlreadyTakesBesideACautionLeadOnItIsReported` and
 `.aWithholdingFindingAboutAnEndedOrderBesideACautionLeadOnItsDrugIsReported` — the last two are what
-`DrugReferenceInjector.withholds`' current-medication and ended-order legs each redden when dropped),
+`DrugReferenceInjector.withholds`' current-medication and ended-order legs each redden when dropped —
+`.aDuplicateTherapyFindingAboutTheDrugInPlayBesideACautionLeadOnItIsReported` and
+`.aFindingThatHerOrdersShareASubstanceIsReportedBesideACautionLeadOnAnyOfItsSubstances`),
 `ChartSearchAiCautionLedOverWithholdingTest`.

@@ -756,8 +756,9 @@ public class PatientChartSerializer {
 
 		/**
 		 * The ids of every reference row of the substance an injected {@code safety_finding} is about —
-		 * its SUBJECT as the arm that raised it named it, and both drugs of a question-pair finding
-		 * ({@code SafetyWarning.subjectRows()}) — empty on
+		 * its SUBJECT as the arm that raised it named it, both drugs of a question-pair finding, and every
+		 * substance a finding that her orders share substances names ({@code SafetyWarning.subjectRows()}) —
+		 * empty on
 		 * every other record and on a finding whose chip carries none (issue #515). Written in
 		 * exactly ONE place, {@code DrugReferenceInjector}'s finding mapping. Never re-derived from the
 		 * record's {@code resourceKey}, whose drug half is a printed label and not a substance name.

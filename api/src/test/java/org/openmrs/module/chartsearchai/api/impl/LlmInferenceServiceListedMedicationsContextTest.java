@@ -497,6 +497,43 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER));
 	}
 
+	/**
+	 * The drug-in-play arm's DUPLICATE-THERAPY finding (issue #477) is about the drug in play, withholds on
+	 * a proposal, and is reported beside a caution lead on that drug as the arm's rule chips are. Two of her
+	 * active orders carry rifampicin ({@code ListedMedicationsSecondRifampicinOrderTestData.xml}), so a
+	 * question proposing rifampicin raises it. It is unrated, so its record states no rating.
+	 */
+	@Test
+	public void aDuplicateTherapyFindingAboutTheDrugInPlayBesideACautionLeadOnItIsReported() throws IOException {
+		executeDataSet("ListedMedicationsSecondRifampicinOrderTestData.xml");
+		String lead = "Rifampicin can be given, with one caution: monitor liver function.";
+		Recorder recorder = serviceAnswering(lead, obs());
+		ChartAnswer answer = recorder.service.search(patient, "Is it safe to give Rifampicin?");
+
+		assertReportedExactly(answer.getCautionLedOverWithholding(),
+				findingNumber(recorder.prompt, "Rifampicin (rifampin)", "possible duplicate therapy") + ":null");
+	}
+
+	/**
+	 * The finding that two of her orders share substances (issue #477) is about EVERY substance it names,
+	 * and states the current-medication clause, so it is reported beside a caution lead on any of them. Her
+	 * two {@code Lamivudine / stavudine} orders ({@code ListedMedicationsLamivudineStavudineOrdersTestData.xml})
+	 * share lamivudine and stavudine; the question names lamivudine alone, so the finding is stated, and the
+	 * lead gives stavudine, which no other finding is about.
+	 */
+	@Test
+	public void aFindingThatHerOrdersShareASubstanceIsReportedBesideACautionLeadOnAnyOfItsSubstances()
+			throws IOException {
+		executeDataSet("ListedMedicationsLamivudineStavudineOrdersTestData.xml");
+		String lead = "Stavudine can be given, with one caution: monitor for peripheral neuropathy.";
+		Recorder recorder = serviceAnswering(lead, obs());
+		ChartAnswer answer = recorder.service.search(patient, "Is it safe to give Lamivudine?");
+
+		assertReportedExactly(answer.getCautionLedOverWithholding(),
+				findingNumber(recorder.prompt, "Lamivudine and Stavudine", "possible duplicate therapy",
+					DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION) + ":null");
+	}
+
 	/** A recorder standing in for the model: answers {@code answer} and keeps the prompt's records. */
 	private static final class Recorder extends LlmProvider {
 

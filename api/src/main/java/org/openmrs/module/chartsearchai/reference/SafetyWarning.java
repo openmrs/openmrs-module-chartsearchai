@@ -133,6 +133,9 @@ public class SafetyWarning {
 	/** @see #statesOrdersSharingASubstance() */
 	private final boolean ordersSharingASubstance;
 
+	/** @see #subjectRows() */
+	private final List<DrugReference> subjectRows;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -323,7 +326,7 @@ public class SafetyWarning {
 	 */
 	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true);
+				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -361,7 +364,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null, null, false);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -370,8 +373,11 @@ public class SafetyWarning {
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
-			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance) {
+			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
+			List<DrugReference> subjectRows) {
 		this.ordersSharingASubstance = ordersSharingASubstance;
+		this.subjectRows = subjectRows == null || subjectRows.isEmpty() ? Collections.<DrugReference> emptyList()
+				: Collections.unmodifiableList(new ArrayList<DrugReference>(subjectRows));
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
 		this.endedOrderStopDate = aboutAnEndedOrder ? endedOrderStopDate : null;
 		this.endedOrderRows = !aboutAnEndedOrder || endedOrderRows == null || endedOrderRows.isEmpty()
@@ -1083,7 +1089,34 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
-				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance);
+				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
+				subjectRows);
+	}
+
+	/**
+	 * This warning, stated as about the substance {@code rows} are every reference row of — the finding's
+	 * SUBJECT, decided where the arm named it (issue #515). Package-private: {@code EndedOrders.stamp} is
+	 * its only caller, the step every question-driven arm's chip and every contraindication chip passes
+	 * through; the screening arm's and the order-driven interaction arm's chips carry no subject rows. See
+	 * {@link #subjectRows()}.
+	 */
+	SafetyWarning aboutSubstance(List<DrugReference> rows) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, rows);
+	}
+
+	/**
+	 * Every reference row of the substance this finding is about, as the arm that raised it named that
+	 * substance — issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>.
+	 * Empty on a chip {@link #aboutSubstance} was never asked of, never null. Package-private and not a getter, so it
+	 * reaches no wire: {@code DrugReferenceInjector} carries it onto the finding's record, as each row's id,
+	 * so a check of the answer asks which findings are about a drug of the rows that were decided rather
+	 * than of the {@link #getDrug()} label, which is not a substance name to group on.
+	 */
+	List<DrugReference> subjectRows() {
+		return subjectRows;
 	}
 
 	/**

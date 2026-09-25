@@ -23,6 +23,8 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -461,6 +463,18 @@ public class DrugReferenceInjector {
 	 */
 	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question,
 			List<DrugReference> orderEntries, List<RecordMapping> chartMappings) {
+		return preAnswerFindings(context, question, orderEntries, chartMappings, null);
+	}
+
+	/**
+	 * As above, additionally handing the pass a sink it states the drugs the question lists that her chart
+	 * holds no active order for into (issue #515) — {@link #injectRecords}' call, which stamps them on the
+	 * chart it builds. Through the validator's widest arity, naming the scope its six-argument delegate
+	 * would have supplied.
+	 */
+	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question,
+			List<DrugReference> orderEntries, List<RecordMapping> chartMappings,
+			ListedDrugsWithNoActiveOrder.Sink listedSink) {
 		// Gated on the SAME toggle that gates the chips, because the two must never disagree. The
 		// validator's public entry point checks this GP; the package-private overload used here does
 		// not, so without this an operator setting validateAnswers=false would switch the chips off
@@ -472,7 +486,8 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
 			return Collections.emptyList();
 		}
-		return drugSafetyValidator.validate("", question, context, chartMappings, orderEntries);
+		return drugSafetyValidator.validate("", question, context, chartMappings, orderEntries, null,
+				DrugSafetyValidator.SubjectMatterScope.OF_THE_RESPONSE, listedSink);
 	}
 
 	/**
@@ -592,7 +607,9 @@ public class DrugReferenceInjector {
 				: null;
 		// Handed the resolution above rather than left to derive it again (issue #255): validate used to
 		// resolve the same orders again, and this method already holds that answer.
-		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries, chart.getMappings());
+		ListedDrugsWithNoActiveOrder.Sink listed = new ListedDrugsWithNoActiveOrder.Sink();
+		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries, chart.getMappings(),
+				listed);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		// Whether the interaction SCREEN ran over a pair of this patient's own medications and related
 		// none of them — issue #401, and the one thing this injection has to say when it has nothing
@@ -639,7 +656,9 @@ public class DrugReferenceInjector {
 				&& nothingButOrdersSharingASubstance(findings) && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
-		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing) {
+		// A question listing drugs her chart holds no active order for is stated even where nothing else
+		// resolved (issue #515), so its chart is rebuilt to carry the stamp.
+		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && listed.stated().isEmpty()) {
 			return chart;
 		}
 
@@ -661,7 +680,7 @@ public class DrugReferenceInjector {
 			// citation's own, and the verdict published was #201's defect one group over. Stamped
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
-					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null,
+					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null,
 					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -691,7 +710,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -739,9 +758,12 @@ public class DrugReferenceInjector {
 			// The orders the finding names travel the same way and for the same reason (issue #516):
 			// ADR Decision 100's completion names the orders of the findings an answer CITES, and a
 			// marker reaches this record, never the chip.
+			// And, since issue #515, whether the clause this record ends in withholds, and the rows of the
+			// substance it is about — both off the finding in hand, the one place either is written.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
+					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
 					finding.namedPartners(), chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -843,6 +865,9 @@ public class DrugReferenceInjector {
 		if (moduleAnswer != null) {
 			injected.markModuleAnswer(moduleAnswer);
 		}
+		// And, for the same reason, the drugs the question lists that her chart holds no active order for
+		// (issue #515), which LlmInferenceService states after the answer.
+		injected.markListedDrugsWithNoActiveOrder(listed.stated());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
 		// derives its KV-cache decision from PatientChart.isQueryScoped() precisely so a mode-flip /
 		// GP-read race cannot mis-scope the persist; a fresh PatientChart defaults the flag to false,
@@ -2502,6 +2527,12 @@ public class DrugReferenceInjector {
 	 */
 	private static List<String> wordsBesideItsNames(String question, List<DrugReference> entries) {
 		String folded = DrugReference.foldedLower(question);
+		return markedWordsFrom(folded, namedCharacters(folded, entries), 0);
+	}
+
+	/** Which characters of {@code folded} one of {@code entries} names — the spans
+	 *  {@link DrugReference#namedOccurrences} reports. */
+	private static boolean[] namedCharacters(String folded, List<DrugReference> entries) {
 		boolean[] named = new boolean[folded.length()];
 		for (DrugReference entry : entries) {
 			for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
@@ -2510,17 +2541,82 @@ public class DrugReferenceInjector {
 				}
 			}
 		}
+		return named;
+	}
+
+	/** The words of {@code folded} from {@code from} on, each run of {@code named} characters marked
+	 *  {@code QueryScopeRouter.DRUG_NAME}. */
+	private static List<String> markedWordsFrom(String folded, boolean[] named, int from) {
 		// One mark per run of named characters, so overlapping names ("aspirin" inside "acetylsalicylic
 		// acid (aspirin)") are one name, and two separate mentions are two.
 		StringBuilder marked = new StringBuilder();
-		for (int k = 0; k < folded.length(); k++) {
+		for (int k = from; k < folded.length(); k++) {
 			if (!named[k]) {
 				marked.append(folded.charAt(k));
-			} else if (k == 0 || !named[k - 1]) {
+			} else if (k == from || !named[k - 1]) {
 				marked.append(' ').append(QueryScopeRouter.DRUG_NAME).append(' ');
 			}
 		}
 		return QueryScopeRouter.words(marked.toString());
+	}
+
+	/** Where a word of a question may start: a letter or a digit, as {@code QueryScopeRouter.words} reads one. */
+	private static final Pattern QUESTION_WORD = Pattern.compile("[\\p{L}\\p{N}]+");
+
+	/**
+	 * The drugs {@code question} lists before the one drug it proposes — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>. <em>"The patient
+	 * is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Amlodipine?"</em> lists the first
+	 * three: from the earliest word at which what follows, its drug names marked as
+	 * {@link #wordsBesideItsNames} marks them, is a proposal {@code QueryScopeRouter.asksWhetherToGiveADrug}
+	 * admits, every entry of {@code questionDrugs} named only before that word and of no substance that
+	 * clause names, in the order the question first names them.
+	 *
+	 * <p>Fail-CLOSED, as that grammar is: a question with no such trailing clause, or one that is that clause
+	 * alone, lists nothing. It asks nothing of the words before the clause — "is currently on", "takes" — so
+	 * every drug named there counts, the definition issue #515's decision gives.
+	 */
+	static List<DrugReference> listedBeforeTheProposal(String question, List<DrugReference> questionDrugs) {
+		if (question == null || questionDrugs.size() < 2) {
+			return Collections.emptyList();
+		}
+		String folded = DrugReference.foldedLower(question);
+		boolean[] named = namedCharacters(folded, questionDrugs);
+		Matcher word = QUESTION_WORD.matcher(folded);
+		while (word.find()) {
+			int from = word.start();
+			if (from == 0 || named[from]
+					|| !QueryScopeRouter.asksWhetherToGiveADrug(markedWordsFrom(folded, named, from))) {
+				continue;
+			}
+			Set<Object> proposed = new HashSet<Object>();
+			final Map<DrugReference, Integer> firstNamed = new LinkedHashMap<DrugReference, Integer>();
+			for (DrugReference entry : questionDrugs) {
+				for (DrugReference.NamedOccurrence occurrence : entry.namedOccurrences(folded, 0)) {
+					if (occurrence.getStart() >= from) {
+						proposed.add(entry.substanceGroupKey());
+					} else if (!firstNamed.containsKey(entry)
+							|| occurrence.getStart() < firstNamed.get(entry).intValue()) {
+						firstNamed.put(entry, Integer.valueOf(occurrence.getStart()));
+					}
+				}
+			}
+			List<DrugReference> listed = new ArrayList<DrugReference>();
+			for (DrugReference entry : firstNamed.keySet()) {
+				if (!proposed.contains(entry.substanceGroupKey())) {
+					listed.add(entry);
+				}
+			}
+			Collections.sort(listed, new Comparator<DrugReference>() {
+
+				@Override
+				public int compare(DrugReference a, DrugReference b) {
+					return firstNamed.get(a).compareTo(firstNamed.get(b));
+				}
+			});
+			return listed;
+		}
+		return Collections.emptyList();
 	}
 
 	/**
@@ -2622,6 +2718,31 @@ public class DrugReferenceInjector {
 			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
 		}
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * Whether {@code clause}, a finding's strength clause, states a reason to withhold the drug or to change
+	 * her own medication, rather than a caution — {@code null} for the empty clause a finding stating none
+	 * falls to. Issue #515: the {@code RecordMapping.getFindingWithholds()} stamp, read off the clause the
+	 * record ends in so it answers what the model read. For an interaction the clause is decided by
+	 * {@code DrugSafetyValidator.licensesWithholding}; a contraindication states a withholding-class clause
+	 * without asking it ({@link #strengthClause}).
+	 */
+	private static Boolean withholds(String clause) {
+		if (clause.isEmpty()) {
+			return null;
+		}
+		return Boolean.valueOf(STRENGTH_WITHHOLD.equals(clause) || STRENGTH_CHANGE_CURRENT_MEDICATION.equals(clause)
+				|| STRENGTH_WITHHOLD_ENDED_ORDER.equals(clause));
+	}
+
+	/** The ids of {@code rows}, in order — how a finding's subject rows travel on its record (issue #515). */
+	private static List<String> rowIds(List<DrugReference> rows) {
+		List<String> ids = new ArrayList<String>(rows.size());
+		for (DrugReference row : rows) {
+			ids.add(row.getId());
+		}
+		return ids;
 	}
 
 	/** The prompt's ranking of the four clauses it ranks, strongest first, or {@code -1} for any other

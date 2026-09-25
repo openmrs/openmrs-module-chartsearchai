@@ -112,17 +112,26 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 	 * {@code partner}, read off the prompt the model was handed — the citation a client would follow.
 	 */
 	private static int findingNumber(String prompt, String drug, String partner) {
+		return findingNumber(prompt, drug, partner, DrugReferenceInjector.STRENGTH_WITHHOLD);
+	}
+
+	/**
+	 * The number the prompt gave the one finding about {@code drug} whose line names {@code partner} and
+	 * ends in {@code clause} — one of the withholding-class clauses, which is what the case asserts the
+	 * record states.
+	 */
+	private static int findingNumber(String prompt, String drug, String partner, String clause) {
 		Matcher line = Pattern.compile("(?m)^\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX
 				+ drug + ": ") + "(.*)$").matcher(prompt);
 		List<Integer> numbers = new ArrayList<Integer>();
 		while (line.find()) {
 			String body = line.group(2);
-			if (body.toLowerCase().contains(partner) && body.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD)) {
+			if (body.toLowerCase().contains(partner) && body.endsWith(clause)) {
 				numbers.add(Integer.valueOf(line.group(1)));
 			}
 		}
-		assertEquals(1, numbers.size(), "precondition: the prompt carries exactly one withholding finding about "
-				+ drug + " naming " + partner + ", prompt was:\n" + prompt);
+		assertEquals(1, numbers.size(), "precondition: the prompt carries exactly one finding about " + drug
+				+ " naming " + partner + " ending \"" + clause + "\", prompt was:\n" + prompt);
 		return numbers.get(0).intValue();
 	}
 
@@ -447,6 +456,45 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 					findingNumber(recorder.prompt, "Rifampicin (rifampin)",
 							"amlodipine, also named in the question"));
 		}
+	}
+
+	/**
+	 * A contraindication about a medication she ALREADY TAKES states the current-medication clause — a
+	 * reason to change it rather than to withhold it — and is reported beside a caution lead on its drug as
+	 * the proposal clause is: README and ADR Decision 119 promise the key covers it. Her recorded allergy to
+	 * aspirin, recorded as free text, against her aspirin order 111; the question asks about her current
+	 * medications, which puts the order-driven arm's chip in subject matter.
+	 */
+	@Test
+	public void aContraindicationAboutAMedicationSheAlreadyTakesBesideACautionLeadOnItIsReported()
+			throws IOException {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		String lead = "Aspirin can be given, with one caution: it may interact with her other medications.";
+		Recorder recorder = serviceAnswering(lead, obs());
+		ChartAnswer answer = recorder.service.search(patient,
+				"Are there any drug interactions with her current medications?");
+
+		assertReportedExactly(answer.getCautionLedOverWithholding(), findingNumber(recorder.prompt,
+				"Acetylsalicylic acid (aspirin)", "allergy", DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)
+				+ ":null");
+	}
+
+	/**
+	 * A finding about a drug the chart holds only as an ENDED order states the ended-order clause (issue
+	 * #472) and is reported beside a caution lead on its drug as the proposal clause is. The question lists
+	 * amlodipine as current and proposes nothing, and the chart carries an amlodipine order no longer in
+	 * force, so amlodipine × her rifampicin order is about an ended order.
+	 */
+	@Test
+	public void aWithholdingFindingAboutAnEndedOrderBesideACautionLeadOnItsDrugIsReported() throws IOException {
+		String lead = "Amlodipine can be given, with one caution: it may interact with rifampicin.";
+		Recorder recorder = serviceAnswering(lead, obs(),
+			DrugReferenceTestSupport.drugOrderRecord(2, "Amlodipine 5mg", Boolean.FALSE, null));
+		ChartAnswer answer = recorder.service.search(patient,
+				"Her current medications are rifampicin and amlodipine. Any interactions?");
+
+		assertReported(answer.getCautionLedOverWithholding(), findingNumber(recorder.prompt, "Amlodipine", "rifamp",
+				DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER));
 	}
 
 	/** A recorder standing in for the model: answers {@code answer} and keeps the prompt's records. */

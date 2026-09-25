@@ -21,8 +21,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Reports an answer whose CAUTION LEAD says a drug can be given beside a finding about that drug stating a
- * reason to withhold it — issue
+ * Reports an answer whose CAUTION LEAD says a drug can be given beside a finding about that drug whose record
+ * states a reason to withhold — that drug, or, for a question-pair finding, the pair's subject, which need
+ * not be the lead's drug (see the list below; {@code ChartSearchService.CautionLedOverWithholding} is
+ * canonical for what an entry asserts) — issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>, ADR Decision 119.
  *
  * <p><b>The failure.</b> <em>"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to
@@ -49,7 +51,8 @@ import org.slf4j.LoggerFactory;
  *   <li>a drug only the ANSWER put in play, which has chips and no record;</li>
  *   <li>a finding whose SUBJECT is another drug and whose partner is the lead's — except a question-pair
  *       finding, which states both of its drugs' rows, because that arm elects its subject by the
- *       dataset's order and never the question's;</li>
+ *       dataset's order and never the question's. Its clause stays the subject's, so an entry reported for
+ *       the partner is a reason to withhold the OTHER drug of the pair;</li>
  *   <li>a finding the screening arm or an order-driven INTERACTION arm raised, which states no subject
  *       rows; an order-driven contraindication does, through the step every contraindication passes.</li>
  * </ul>

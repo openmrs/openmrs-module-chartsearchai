@@ -201,9 +201,10 @@ public class LlmInferenceService implements ChartSearchService {
 				inputTokens = response.getInputTokens();
 				cachedTokens = response.getCachedTokens();
 			}
-			// Issue #515: whether the answer's caution lead says a drug can be given beside a finding about it
-			// stating a reason to withhold it. Resolved here, after the repair, for the reason the searchStreaming
-			// twin states: one answer, and the one the early done carries there.
+			// Issue #515: whether the answer's caution lead says a drug can be given beside a withholding finding
+			// about it (ChartSearchService.CautionLedOverWithholding is canonical for what an entry asserts,
+			// and whose withholding a question-pair finding's clause states). Resolved here, after the repair,
+			// for the reason the searchStreaming twin states: one answer, and the one the early done carries there.
 			List<ChartSearchService.CautionLedOverWithholding> cautionLedOverWithholding =
 					CautionLeadOverWithholdingCheck.report(patient, response.getAnswer(), chart.getMappings(),
 							drugSafetyValidator);

@@ -760,7 +760,14 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>What it asserts.</b> That the answer opens <em>"X can be given, … caution …"</em>, and that
 	 * the prompt carried this finding about X with a clause stating a reason to withhold it (or to change
-	 * it, where X is her own medication) — the two disagree. Never that the lead is wrong: the finding is
+	 * it, where X is her own medication) — the two disagree. <b>A question-pair finding is the exception to
+	 * "a reason to withhold X"</b>: it relates two drugs the question names, is reported whichever of them
+	 * X is, and its clause is about the pair's SUBJECT — the drug its record is headed by, which the arm
+	 * elects by the dataset's order and which need not be X ({@code DrugSafetyValidator}'s
+	 * {@code EndedOrders.stampPair}). Beside <em>"Amlodipine can be given, …"</em> on <em>"The patient is
+	 * currently on Rifampicin, is it safe to give Amlodipine?"</em>, the entry is the record headed
+	 * {@code Rifampicin (rifampin)}, a reason to withhold rifampicin; what it asserts of X is a
+	 * withholding-class relationship with the other drug. Never that the lead is wrong: the finding is
 	 * this module's reading of a knowledge base, and the call is the clinician's. Whether the answer cited
 	 * the finding is not asked; the finding stood beside the answer either way.
 	 *

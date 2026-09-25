@@ -11084,7 +11084,10 @@ takes one asked substance, ships off, and was left alone.
   question-driven arm's chip and every contraindication chip passes through — and, for a question-pair
   finding, of its partner's substance too (`EndedOrders.stampPair`), because that arm elects which of the
   two drugs is the subject by the dataset's order and never the question's, so reading the subject alone
-  made the report depend on which of the two the question happened to list. A record is about the lead's
+  made the report depend on which of the two the question happened to list. Its clause stays the
+  subject's — `stampPair` keeps the ended-order referent on the subject, since "withhold it" names it — so
+  an entry reported for the partner is a reason to withhold the OTHER drug of the pair, and README's
+  `cautionLedOverWithholding` section tells a client so, with the rifampicin/amlodipine record. A record is about the lead's
   drug where the lead's name is of one of those rows' substance, by the entries the lead's name named. Neither is re-derived from the
   text or from the `resourceKey` label, which is not a substance name.
 - **The listed drugs her chart holds no active order for are stated**, in one appended sentence —
@@ -11143,5 +11146,8 @@ takes one asked substance, ships off, and was left alone.
   *"She had a reaction to penicillin, can I give her amoxicillin?"* can name penicillin.
 
 → `LlmInferenceServiceListedMedicationsContextTest` (`.aQuestionPairMajorIsReportedWhicheverOfItsTwoDrugsTheLeadGives`,
-`.aContraindicationBesideACautionLeadOnItsDrugIsReported`, `.aFoldedFindingWithholdingOnAMinorRatingIsReported`),
+`.aContraindicationBesideACautionLeadOnItsDrugIsReported`, `.aFoldedFindingWithholdingOnAMinorRatingIsReported`,
+`.aContraindicationAboutAMedicationSheAlreadyTakesBesideACautionLeadOnItIsReported` and
+`.aWithholdingFindingAboutAnEndedOrderBesideACautionLeadOnItsDrugIsReported` — the last two are what
+`DrugReferenceInjector.withholds`' current-medication and ended-order legs each redden when dropped),
 `ChartSearchAiCautionLedOverWithholdingTest`.

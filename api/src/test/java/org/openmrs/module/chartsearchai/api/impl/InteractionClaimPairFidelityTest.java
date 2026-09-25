@@ -932,7 +932,7 @@ public class InteractionClaimPairFidelityTest {
 		// [6] is Simvastatin's own Amiodarone finding. The first claim carries no marker and no comma, so its
 		// partner span runs to the second claim's noun and the second claim's subject span begins there —
 		// empty, so it is unjudged and [6] not accused. A swapped subject in this shape is unjudged too, the
-		// residue ADR Decision 119 names.
+		// residue ADR Decision 120 names.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 		String answer = "Clarithromycin interacts with active order Digoxin and Simvastatin interacts with "
 				+ "active order Amiodarone [" + arrangement.finding("Simvastatin", "Amiodarone") + "].";
@@ -951,7 +951,7 @@ public class InteractionClaimPairFidelityTest {
 		// subject span where the first claim's PARTNER began read it as "Amiodarone interacts with Digoxin",
 		// so Clarithromycin's own Digoxin finding was published as misattributed, and a pair the answer never
 		// stated counted unfounded. The second claim's subject span is empty instead, so it is unjudged —
-		// the residue ADR Decision 119 names — and the first claim is still judged where its subject is.
+		// the residue ADR Decision 120 names — and the first claim is still judged where its subject is.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
 		int warfarin = arrangement.finding("Clarithromycin", "Warfarin");
 		int digoxin = arrangement.finding("Clarithromycin", "Digoxin");

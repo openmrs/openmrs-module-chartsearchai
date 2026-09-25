@@ -1,0 +1,882 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #515, taken unedited from the shipped KB in the shipped file's own order: the rows for Lamivudine, Nevirapine, Rifampicin, Stavudine, Acetylsalicylic acid, Fluconazole and Amlodipine (shipped indices 23, 318, 657, 791, 1112, 1999 and 2050), every shipped interaction row falling wholly inside them, and the mechanism entries those rows reference. It carries the issue's chart shape: Rifampicin x Amlodipine and Rifampicin x Fluconazole are Major, Nevirapine x Amlodipine is Moderate, and the three drugs the clinician lists are rows the question resolves. Acetylsalicylic acid is here so patient 7's standing aspirin order resolves."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "2312": {
+   "text": "Coadministration with rifampin may substantially decrease the plasma concentrations of nevirapine, although a few studies have suggested that the combination may be used effectively without dosage adjustments. The mechanism is rifampin induction of nevirapine metabolism via CYP450 3A4.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "1440": {
+   "text": "Coadministration with fluconazole may increase the plasma concentrations of drugs that are substrates of CYP450 3A4. The mechanism is decreased clearance due to inhibition of CYP450 3A4-mediated metabolism by fluconazole, a moderate inhibitor of the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "2138": {
+   "text": "Coadministration with nevirapine may decrease the plasma concentrations and therapeutic efficacy of drugs that are substrates of CYP450 3A4. The proposed mechanism is increased clearance due to nevirapine-mediated induction of CYP450 3A4.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4738": {
+   "text": "Coadministration with rifampin may decrease the plasma concentrations of fluconazole. The precise mechanism of interaction has not been established, but may involve rifampin induction of fluconazole metabolism via CYP450 isoenzymes, although fluconazole is not extensively metabolized but is primarily (approximately 80%) eliminated unchanged by the kidney.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4474": {
+   "text": "Potent inducers of CYP450 3A4 may significantly decrease the plasma concentrations of calcium channel blockers, the majority of which are primarily metabolized by the isoenzyme.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "3104": {
+   "text": "Limited data indicate that some cyclooxygenase inhibitors may attenuate the antihypertensive effects of some calcium channel blockers. The mechanism appears to be related to an alteration of vascular tone, which is dependent on prostacyclins and other vasodilatory prostanoids. When a nonsteroidal anti-inflammatory drug (NSAID) is added to the regimen of a patient who is already taking a calcium channel blocker, increased blood pressure may result. Also, the clinician should be aware that the risk of hypotension is increased when NSAIDs are withdrawn from the regimen.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  },
+  "5287": {
+   "text": "Coadministration with azole antifungal agents may increase the plasma concentrations of calcium channel blockers (CCBs), especially the dihydropyridines (e.g., amlodipine, felodipine, nicardipine, nifedipine, nisoldipine). The mechanism involves inhibition of intestinal and hepatic CYP450 3A4, the isoenzyme primarily responsible for the metabolic clearance of most CCBs.",
+   "categories": [
+    "metabolism"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1019",
+   "name": "Lamivudine",
+   "rxcui": "68244",
+   "rxnorm_name": "lamivudine",
+   "drugbank_id": "DB00709",
+   "atc": [
+    "J05AF05"
+   ],
+   "brand_names": [
+    "Cimduo",
+    "Combivir",
+    "Delstrigo",
+    "Dovato",
+    "Epivir",
+    "Epzicom",
+    "Symfi",
+    "Temixys",
+    "Triumeq",
+    "Trizivir"
+   ],
+   "ciel": [
+    {
+     "code": "103166",
+     "uuid": "103166AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine"
+    },
+    {
+     "code": "161361",
+     "uuid": "161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "161363",
+     "uuid": "161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / stavudine"
+    },
+    {
+     "code": "161364",
+     "uuid": "161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "1652",
+     "uuid": "1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / zidovudine"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "165607",
+     "uuid": "165607AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir / zidovudine"
+    },
+    {
+     "code": "168597",
+     "uuid": "b0b9b204-de1f-430b-a55a-56e08a72e926",
+     "name": "Lamivudine / raltegravir"
+    },
+    {
+     "code": "169361",
+     "uuid": "0af318f4-94a2-4dbe-9727-fb1d682e75fb",
+     "name": "Dolutegravir / lamivudine / tenofovir alafenamide"
+    },
+    {
+     "code": "170472",
+     "uuid": "72f7a185-3673-4499-a314-9487a715eabc",
+     "name": "Dolutegravir / lamivudine"
+    },
+    {
+     "code": "170671",
+     "uuid": "b944c518-10b4-4a93-a928-d0e4d10a66e4",
+     "name": "Dolutegravir / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "630",
+     "uuid": "630AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / zidovudine"
+    },
+    {
+     "code": "78643",
+     "uuid": "78643AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine"
+    },
+    {
+     "code": "792",
+     "uuid": "792AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / stavudine"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1285",
+   "name": "Nevirapine",
+   "rxcui": "53654",
+   "rxnorm_name": "nevirapine",
+   "drugbank_id": "DB00238",
+   "atc": [
+    "J05AG01"
+   ],
+   "brand_names": [
+    "Viramune"
+   ],
+   "ciel": [
+    {
+     "code": "1652",
+     "uuid": "1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / zidovudine"
+    },
+    {
+     "code": "792",
+     "uuid": "792AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / stavudine"
+    },
+    {
+     "code": "80586",
+     "uuid": "80586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Nevirapine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1590",
+   "name": "Rifampicin",
+   "rxcui": "9384",
+   "rxnorm_name": "rifampin",
+   "drugbank_id": "DB01045",
+   "atc": [
+    "J04AB02"
+   ],
+   "brand_names": [
+    "Rifadin"
+   ],
+   "ciel": [
+    {
+     "code": "104943",
+     "uuid": "104943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / rifampin"
+    },
+    {
+     "code": "1131",
+     "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+    },
+    {
+     "code": "1194",
+     "uuid": "1194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin and isoniazid"
+    },
+    {
+     "code": "159851",
+     "uuid": "159851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin isoniazid and ethambutol"
+    },
+    {
+     "code": "767",
+     "uuid": "767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Rifampicin"
+    },
+    {
+     "code": "768",
+     "uuid": "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Isoniazid / pyrazinamide / rifampin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1710",
+   "name": "Stavudine",
+   "rxcui": "59763",
+   "rxnorm_name": "stavudine",
+   "drugbank_id": "DB00649",
+   "atc": [
+    "J05AF04"
+   ],
+   "brand_names": [],
+   "ciel": [
+    {
+     "code": "161363",
+     "uuid": "161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / stavudine"
+    },
+    {
+     "code": "792",
+     "uuid": "792AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / stavudine"
+    },
+    {
+     "code": "84309",
+     "uuid": "84309AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Stavudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter20",
+   "name": "Acetylsalicylic acid",
+   "rxcui": "1191",
+   "rxnorm_name": "aspirin",
+   "drugbank_id": "DB00945",
+   "atc": [
+    "A01AD05",
+    "B01AC06",
+    "N02BA01"
+   ],
+   "brand_names": [
+    "Alka-Seltzer",
+    "Anacin",
+    "Anacin Advanced Headache Formula",
+    "Anacin Aspirin Regimen",
+    "Arthriten Inflammatory Pain",
+    "Ascomp",
+    "Aspergum",
+    "Aspi-Cor",
+    "BC Arthritis",
+    "BC Original Formula",
+    "Backaid IPF",
+    "Bayer Aspirin",
+    "Bromo Seltzer Antacid Pain Reliever",
+    "Bufferin",
+    "Durlaza",
+    "Ecotrin",
+    "Equagesic",
+    "Exaprin",
+    "Exaprin Plus",
+    "Excedrin",
+    "Excedrin PM Triple Action",
+    "Miniprin",
+    "Norgesic",
+    "Norwich Aspirin",
+    "Orphengesic",
+    "Pamprin Max Formula",
+    "Saleto",
+    "St. Joseph Aspirin",
+    "Stanback Headache Powder Reformulated Jan 2011",
+    "Vazalore",
+    "Yosprala"
+   ],
+   "ciel": [
+    {
+     "code": "103170",
+     "uuid": "103170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / caffeine / magnesium hydroxide"
+    },
+    {
+     "code": "103171",
+     "uuid": "103171AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / salicylamide"
+    },
+    {
+     "code": "103172",
+     "uuid": "103172AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin"
+    },
+    {
+     "code": "103173",
+     "uuid": "103173AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine"
+    },
+    {
+     "code": "103174",
+     "uuid": "103174AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / calcium gluconate"
+    },
+    {
+     "code": "103175",
+     "uuid": "103175AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / codeine / salicylamide"
+    },
+    {
+     "code": "103176",
+     "uuid": "103176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103177",
+     "uuid": "103177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103178",
+     "uuid": "103178AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / codeine"
+    },
+    {
+     "code": "103179",
+     "uuid": "103179AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103304",
+     "uuid": "103304AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetanilide / aspirin / caffeine / ephedrine"
+    },
+    {
+     "code": "103520",
+     "uuid": "103520AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / calcium carbonate / magnesium hydroxide"
+    },
+    {
+     "code": "103521",
+     "uuid": "103521AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / codeine / magnesium hydroxide"
+    },
+    {
+     "code": "103522",
+     "uuid": "103522AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminum hydroxide / aspirin / magnesium hydroxide"
+    },
+    {
+     "code": "103680",
+     "uuid": "103680AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / brompheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103681",
+     "uuid": "103681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital"
+    },
+    {
+     "code": "103683",
+     "uuid": "103683AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / codeine"
+    },
+    {
+     "code": "103684",
+     "uuid": "103684AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / butalbital / caffeine / phenacetin"
+    },
+    {
+     "code": "103685",
+     "uuid": "103685AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine"
+    },
+    {
+     "code": "103686",
+     "uuid": "103686AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / chlorpheniramine"
+    },
+    {
+     "code": "103687",
+     "uuid": "103687AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / cinnamedrine"
+    },
+    {
+     "code": "103688",
+     "uuid": "103688AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / codeine"
+    },
+    {
+     "code": "103689",
+     "uuid": "103689AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine"
+    },
+    {
+     "code": "103690",
+     "uuid": "103690AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / dihydrocodeine / promethazine"
+    },
+    {
+     "code": "103691",
+     "uuid": "103691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103692",
+     "uuid": "103692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / ipecac / opium"
+    },
+    {
+     "code": "103693",
+     "uuid": "103693AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / magnesium salicylate"
+    },
+    {
+     "code": "103694",
+     "uuid": "103694AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / orphenadrine"
+    },
+    {
+     "code": "103695",
+     "uuid": "103695AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / propoxyphene"
+    },
+    {
+     "code": "103696",
+     "uuid": "103696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103697",
+     "uuid": "103697AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / calcium carbonate"
+    },
+    {
+     "code": "103699",
+     "uuid": "103699AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol"
+    },
+    {
+     "code": "103700",
+     "uuid": "103700AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / carisoprodol / codeine"
+    },
+    {
+     "code": "103701",
+     "uuid": "103701AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine"
+    },
+    {
+     "code": "103702",
+     "uuid": "103702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan"
+    },
+    {
+     "code": "103703",
+     "uuid": "103703AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103704",
+     "uuid": "103704AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103705",
+     "uuid": "103705AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / chlorpheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103706",
+     "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "103707",
+     "uuid": "103707AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / codeine"
+    },
+    {
+     "code": "103709",
+     "uuid": "103709AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine"
+    },
+    {
+     "code": "103710",
+     "uuid": "103710AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / diphenhydramine / phenylpropanolamine"
+    },
+    {
+     "code": "103711",
+     "uuid": "103711AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / dipyridamole"
+    },
+    {
+     "code": "103712",
+     "uuid": "103712AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / ethoheptazine / meprobamate"
+    },
+    {
+     "code": "103713",
+     "uuid": "103713AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / glycine"
+    },
+    {
+     "code": "103714",
+     "uuid": "103714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / hydrocodone"
+    },
+    {
+     "code": "103715",
+     "uuid": "103715AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / isosorbide"
+    },
+    {
+     "code": "103716",
+     "uuid": "103716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / meprobamate"
+    },
+    {
+     "code": "103717",
+     "uuid": "103717AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / methocarbamol"
+    },
+    {
+     "code": "103718",
+     "uuid": "103718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / oxycodone"
+    },
+    {
+     "code": "103720",
+     "uuid": "103720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pentazocine"
+    },
+    {
+     "code": "103721",
+     "uuid": "103721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenobarbital"
+    },
+    {
+     "code": "103722",
+     "uuid": "103722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylephrine"
+    },
+    {
+     "code": "103723",
+     "uuid": "103723AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103724",
+     "uuid": "103724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / phenyltoloxamine"
+    },
+    {
+     "code": "103725",
+     "uuid": "103725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pravastatin"
+    },
+    {
+     "code": "103726",
+     "uuid": "103726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / promethazine / pseudoephedrine"
+    },
+    {
+     "code": "103727",
+     "uuid": "103727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / propoxyphene"
+    },
+    {
+     "code": "103728",
+     "uuid": "103728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / pseudoephedrine"
+    },
+    {
+     "code": "169229",
+     "uuid": "1304b943-339f-403f-aca9-c47b7779c9c7",
+     "name": "Aspirin / clopidogrel"
+    },
+    {
+     "code": "71617",
+     "uuid": "71617AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin"
+    },
+    {
+     "code": "72488",
+     "uuid": "72488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Buffered aspirin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter743",
+   "name": "Fluconazole",
+   "rxcui": "4450",
+   "rxnorm_name": "fluconazole",
+   "drugbank_id": "DB00196",
+   "atc": [
+    "D01AC15",
+    "J02AC01"
+   ],
+   "brand_names": [
+    "Diflucan"
+   ],
+   "ciel": [
+    {
+     "code": "167983",
+     "uuid": "3a31f7c2-a39d-4a50-b79e-6be87ea6d8a4",
+     "name": "Azithromycin / fluconazole / ornidazole"
+    },
+    {
+     "code": "76488",
+     "uuid": "76488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Fluconazole"
+    }
+   ]
+  },
+  {
+   "id": "DDInter79",
+   "name": "Amlodipine",
+   "rxcui": "17767",
+   "rxnorm_name": "amlodipine",
+   "drugbank_id": "DB00381",
+   "atc": [
+    "C08CA01"
+   ],
+   "brand_names": [
+    "Amodip",
+    "Azor",
+    "Caduet",
+    "Consensi",
+    "Exforge",
+    "Exforge HCT",
+    "Katerzia",
+    "Lotrel",
+    "Norliqva",
+    "Norvasc",
+    "Prestalia",
+    "Sdamlo",
+    "Tribenzor",
+    "Twynsta",
+    "Widaplik"
+   ],
+   "ciel": [
+    {
+     "code": "103554",
+     "uuid": "103554AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amlodipine / atorvastatin"
+    },
+    {
+     "code": "103555",
+     "uuid": "103555AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amlodipine / benazepril"
+    },
+    {
+     "code": "165451",
+     "uuid": "165451AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amlodipine / irbesartan"
+    },
+    {
+     "code": "167975",
+     "uuid": "bb1836ee-c882-4a70-9345-8a74e5210626",
+     "name": "Amlodipine / indapamide"
+    },
+    {
+     "code": "167990",
+     "uuid": "91979c23-0f08-4e50-9950-012d714789f0",
+     "name": "Amlodipine / indapamide / perindopril"
+    },
+    {
+     "code": "168112",
+     "uuid": "8190895e-3709-4d7d-9bf3-8c7f0d8afdbb",
+     "name": "Amlodipine / perindopril"
+    },
+    {
+     "code": "168327",
+     "uuid": "d3b2efc1-a183-4a86-9b0b-d33a80b0f744",
+     "name": "Amlodipine / telmisartan"
+    },
+    {
+     "code": "168335",
+     "uuid": "faefe433-529e-4ef0-9ddd-95da883ae99f",
+     "name": "Amlodipine / hydrochlorothiazide"
+    },
+    {
+     "code": "170031",
+     "uuid": "6c73ff32-e5d0-4f1e-8bcc-34beee6958b0",
+     "name": "Amlodipine / atenolol"
+    },
+    {
+     "code": "170164",
+     "uuid": "633796ea-4cea-427a-96b0-6e1d661bf633",
+     "name": "Amlodipine / hydrochlorothiazide / olmesartan"
+    },
+    {
+     "code": "170522",
+     "uuid": "fce9f7f3-590b-4966-ac17-39a95769775a",
+     "name": "Amlodipine / rosuvastatin / telmisartan"
+    },
+    {
+     "code": "170523",
+     "uuid": "4f2babe2-3695-4c1e-b411-d46145ad49c1",
+     "name": "Amlodipine / ramipril / rosuvastatin"
+    },
+    {
+     "code": "170527",
+     "uuid": "36095d0e-b640-40ec-8b0e-938eff642312",
+     "name": "Amlodipine / indapamide / candesartan"
+    },
+    {
+     "code": "170528",
+     "uuid": "47e0824e-dfae-4e4c-a665-d1208e5ed16f",
+     "name": "Amlodipine / zofenopril"
+    },
+    {
+     "code": "170701",
+     "uuid": "f77778a3-9f7b-4115-83e6-73150ba94e28",
+     "name": "Amlodipine / hydrochlorothiazide / losartan"
+    },
+    {
+     "code": "71137",
+     "uuid": "71137AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amlodipine"
+    },
+    {
+     "code": "71138",
+     "uuid": "71138AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amlodipine besylate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1019",
+   "DDInter1285",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1590",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1710",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter79",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1285",
+   "DDInter1590",
+   "Major",
+   "2312"
+  ],
+  [
+   "DDInter1285",
+   "DDInter1710",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1285",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1285",
+   "DDInter743",
+   "Moderate",
+   "1440"
+  ],
+  [
+   "DDInter1285",
+   "DDInter79",
+   "Moderate",
+   "2138"
+  ],
+  [
+   "DDInter1590",
+   "DDInter1710",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1590",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1590",
+   "DDInter743",
+   "Major",
+   "4738"
+  ],
+  [
+   "DDInter1590",
+   "DDInter79",
+   "Major",
+   "4474"
+  ],
+  [
+   "DDInter1710",
+   "DDInter20",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1710",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1710",
+   "DDInter79",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter743",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter20",
+   "DDInter79",
+   "Moderate",
+   "3104"
+  ],
+  [
+   "DDInter743",
+   "DDInter79",
+   "Moderate",
+   "5287"
+  ]
+ ]
+}

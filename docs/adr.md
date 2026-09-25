@@ -124,7 +124,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 116: A question about a drug states which of her orders share a substance too](#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)
 - [Decision 117: A prompt carrying the module's reference records is decoded without the DRY sampler](#decision-117-a-prompt-carrying-the-modules-reference-records-is-decoded-without-the-dry-sampler)
 - [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
-- [Decision 119: An active-order claim is held to the findings that relate its pair](#decision-119-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
+- [Decision 119: A question that lists her medications is held to her chart](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)
+- [Decision 120: An active-order claim is held to the findings that relate its pair](#decision-120-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -9704,7 +9705,7 @@ counts its paste into an answer as a loss (R7, M4).
 **What is published beside it.** `answeredByTheModule: true`, because the keys that judge a model's
 prose — `unfaithfullyRenderedCitations`, `misattributedOrderCitations`, `activeOrderClaims`,
 `unstatedFindingSeverities`, `unstatedDosingCeilings`, `findingCitations`, `findingPartners`,
-`interactionClaimPairs` — state
+`interactionClaimPairs`, `cautionLedOverWithholding` — state
 `null` and a null alone could mean a check that failed. The chips pass is handed the empty answer, as
 the pass that raised the findings was, so the chips beside the answer are the findings it states; scoping
 the order-driven arm by text the module itself just wrote would be circular (the issue's M8 and N5 are a
@@ -11047,7 +11048,120 @@ the referent.
 `LlmInferenceServiceCurrentMedicationReferentContextTest`,
 `StandingChartAlertsTest.everyStandingAlertIsRaisedFromOneOfHerOwnActiveOrders`.
 
-## Decision 119: An active-order claim is held to the findings that relate its pair
+## Decision 119: A question that lists her medications is held to her chart
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#515](https://github.com/openmrs/openmrs-module-chartsearchai/issues/515). Both halves are the issue's
+decided directions, in their deterministic, module-owned form: no prompt text changes and no chip referent
+changes.
+
+### Context
+
+Clinicians ask *"The patient is currently on A, B, C, is it safe to give X?"*. The issue measured three of
+an external evaluation's twelve such questions on Gemma 4 E4B answering *"X can be given, with one
+caution"* while the chips beside the answer held a Major finding about X against an active order the list
+left out, whose record the model had read ending *"This finding is a reason to withhold it."*; asked
+without the list, the same patient, drug and model refused X on that Major. Nothing on the response said
+the chart held no order for the listed drugs, and no key compared the lead with the findings about the drug
+it gives. The composed answer ([Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them))
+takes one asked substance, ships off, and was left alone.
+
+### The decision
+
+- **A caution lead beside a withholding finding about its drug is reported, as
+  `cautionLedOverWithholding`.** `CautionLeadOverWithholdingCheck` reads the lead through
+  `DrugSafetyValidator.cautionLead` — `score_probe_safety.py`'s `caution_led` anchor and
+  `CAUTION_LEAD_TAIL`, caution included, moved into Java so the key names the lead class it reads — and
+  reports every injected `safety_finding` record about that drug whose clause withholds, as its citation
+  and the rating the record states.
+- **The population is the finding RECORDS, not the chips**, which is a deliberate reading of the issue's
+  "every chip about that drug". The key must be on the early `done`, and `searchStreaming` hands that off
+  before the chips pass runs; and only a record has a citation a client can join. The records are the
+  findings the model read.
+- **Both facts the check needs travel with the finding and are written once**, at
+  `DrugReferenceInjector`'s finding mapping: `RecordMapping.getFindingWithholds()`, off the clause the
+  record ends in (for an interaction that clause is `DrugSafetyValidator.licensesWithholding`'s; a
+  contraindication states a withholding-class clause without asking it), and
+  `RecordMapping.getFindingSubjectRows()`, the ids of every row of the substance the arm named the finding's
+  subject by, carried on `SafetyWarning.subjectRows()` from `EndedOrders.aboutTheSubject` — through
+  `EndedOrders.stamp`, the step every other question-driven arm's chip and every contraindication chip
+  passes through, and directly for the drug-in-play arm's duplicate-therapy finding
+  (`alreadyInSeveralOrders`), whose sentence says active orders carry the drug and so takes no ended-order
+  referent; `addOrdersSharingASubstance` states every substance its finding names, so that finding is
+  reported beside a lead on any of them — and, for a question-pair
+  finding, of its partner's substance too (`EndedOrders.stampPair`), because that arm elects which of the
+  two drugs is the subject by the dataset's order and never the question's, so reading the subject alone
+  made the report depend on which of the two the question happened to list. Its clause stays the
+  subject's — `stampPair` keeps the ended-order referent on the subject, since "withhold it" names it — so
+  an entry reported for the partner is a reason to withhold the OTHER drug of the pair, and README's
+  `cautionLedOverWithholding` section tells a client so, with the rifampicin/amlodipine record. A record is about the lead's
+  drug where the lead's name is of one of those rows' substance, by the entries the lead's name named. Neither is re-derived from the
+  text or from the `resourceKey` label, which is not a substance name.
+- **The listed drugs her chart holds no active order for are stated**, in one appended sentence —
+  *"The chart holds no active order for Lamivudine, Nevirapine or Stavudine."* — by `ListedDrugStatement`,
+  as [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal)'s
+  sentence is: no marker, no chip, no prompt change — and on the early `done` too, since unlike that
+  sentence it needs no chip. Decided inside the pre-answer
+  `validate` pass (`DrugSafetyValidator.listedWithNoActiveOrder`), which already holds her orders
+  resolved and the pass's one naming of each substance, and stamped on the chart the injector builds.
+  The listed drugs are `DrugReferenceInjector.listedBeforeTheProposal`'s: the question drugs named before
+  the trailing clause `QueryScopeRouter.asksWhetherToGiveADrug` admits, never the drug that clause
+  proposes, and nothing where no such clause separates them. The gates are `EndedOrders`': her active
+  orders read in full and every one resolved, and a drug named by a drug-order record of the chart is not
+  named.
+- **"No active order", not the issue's example "no order".** In the default `queryScoped` mode the chart
+  need not carry every order she ever had, so "no order" could be false where the gates guarantee "no
+  active order".
+
+### Alternatives
+
+- **The chips as the population.** Not taken, for the two reasons above.
+- **Matching a record's subject by its `resourceKey` label**, looked up against `displayLabel()`. Refuted
+  at plan time: a second resolution of a subject the arm already decided, and blind to a finding whose
+  label names several substances (`SafetyWarning.ordersSharingASubstance`).
+- **The listed statement as a separate validator entry point.** Refuted at plan time: a third resolution
+  of her orders, and a second election of each substance's name, which `ChipSubjectOneResolutionTest`
+  forbids.
+- **A permission lead without the caution tail.** Not taken, so Java and Python read one lead class; a bare
+  *"X can be given."* beside a withholding finding is a residue below. The two tails are held to one
+  pattern by `CautionLeadTailParityTest`.
+
+### Residues
+
+- **A lead the anchor refuses reads as `[]`**: a refusal, a bare permission naming no caution, and a word
+  before the drug. Pinned by `LlmInferenceServiceListedMedicationsContextTest.aNoBeforeAPermissionIsNotReadAsACautionLead`
+  and `.aPermissionNamingNoCautionIsNotReadAsACautionLead`.
+- **Issue [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513)'s item 2 is NOT
+  delivered by this decision, and #513 stays open for it.** #515's decision said this key reports it; it
+  cannot, and no code within that decision can. The item is the E2B verdict on the drug asked following the
+  LISTED drugs' own findings, and this key reports only findings about the drug the lead gives. Of its three
+  recorded leads, the fluconazole one is a refusal, and #513 recorded that none of fluconazole's own findings
+  withholds — the inverse disagreement, which a caution-lead check never reads; the other two open
+  *"No — … can be given"* and *"No. … can be given"*, which the anchor refuses, and #513 recorded that each of
+  those drugs, asked without the list, leads with the caution its own findings license, so even a looser
+  anchor would report `[]` beside them. Nothing in this module reports the item; #513 is where it is
+  tracked.
+- **A drug only the answer put in play** has chips and no record, so a lead on it reads nothing.
+- **A record is matched on its SUBJECT**, and a question-pair finding on both of its drugs, so a
+  withholding finding of another arm whose subject is another drug and whose partner is the lead's is not
+  reported, and a pair finding the screening arm (the order-driven interaction arm) raised carries no
+  subject rows.
+- **An order resolved to only some of its substances** passes the resolution gate, so a constituent it left
+  out can be named as one she holds no active order for. Decision 110 measured how rarely a combination
+  NAME does this over the shipped knowledge base, and names the brand that does.
+- **Every drug named before the proposal counts as listed**; the words before it are not read, so
+  *"She had a reaction to penicillin, can I give her amoxicillin?"* can name penicillin.
+
+→ `LlmInferenceServiceListedMedicationsContextTest` (`.aQuestionPairMajorIsReportedWhicheverOfItsTwoDrugsTheLeadGives`,
+`.aContraindicationBesideACautionLeadOnItsDrugIsReported`, `.aFoldedFindingWithholdingOnAMinorRatingIsReported`,
+`.aContraindicationAboutAMedicationSheAlreadyTakesBesideACautionLeadOnItIsReported` and
+`.aWithholdingFindingAboutAnEndedOrderBesideACautionLeadOnItsDrugIsReported` — the last two are what
+`DrugReferenceInjector.withholds`' current-medication and ended-order legs each redden when dropped —
+`.aDuplicateTherapyFindingAboutTheDrugInPlayBesideACautionLeadOnItIsReported` and
+`.aFindingThatHerOrdersShareASubstanceIsReportedBesideACautionLeadOnAnyOfItsSubstances`),
+`ChartSearchAiCautionLedOverWithholdingTest`.
+
+## Decision 120: An active-order claim is held to the findings that relate its pair
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#514](https://github.com/openmrs/openmrs-module-chartsearchai/issues/514).

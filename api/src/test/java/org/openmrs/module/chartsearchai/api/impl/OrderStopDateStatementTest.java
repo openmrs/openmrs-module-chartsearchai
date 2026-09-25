@@ -276,7 +276,7 @@ public class OrderStopDateStatementTest extends BaseModuleContextSensitiveTest {
 		int findingIndex = withFinding.size() + 1;
 		withFinding.add(new RecordMapping(findingIndex,
 				ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING, "contraindication:Triomune-30",
-				null, "Safety finding", null, 0, null, null, null, null, null,
+				null, "Safety finding", null, 0, null, null, null, null, null, null, null,
 				Arrays.asList(Integer.valueOf(lapsed))));
 		String answer = "There is a contraindication [" + findingIndex + "].";
 

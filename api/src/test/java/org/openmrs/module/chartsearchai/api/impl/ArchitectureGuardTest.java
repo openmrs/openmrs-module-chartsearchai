@@ -215,6 +215,8 @@ public class ArchitectureGuardTest {
 	 * stamp's writer to the injector CLASS as well. To the class and not to its findings loop, for the
 	 * reason the paragraph above gives of the provenance list: the pool cannot say which of the
 	 * class's constructions passes it.
+	 * Since issue #515 the same is true of {@code RecordMapping.getFindingWithholds()} and
+	 * {@code getFindingSubjectRows()}, which only these two rungs take.
 	 *
 	 * <p>The canaries that stop this forbidding nothing are enumerated once, on
 	 * {@link #assertSoleInjectorCallerOfMappingConstructor}, which holds them. A copy of that list

@@ -515,6 +515,9 @@ public class PatientChartSerializer {
 		 *  sets this on the chart it builds, which is the last one. */
 		private String moduleAnswer;
 
+		/** @see #getListedDrugsWithNoActiveOrder() */
+		private List<String> listedDrugsWithNoActiveOrder = Collections.<String> emptyList();
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -624,6 +627,26 @@ public class PatientChartSerializer {
 			return moduleAnswer;
 		}
 
+		/** Records the drugs the question lists that her chart holds no active order for — issue #515, and
+		 *  {@code DrugReferenceInjector} is the only caller. */
+		public void markListedDrugsWithNoActiveOrder(List<String> names) {
+			this.listedDrugsWithNoActiveOrder = names == null || names.isEmpty() ? Collections.<String> emptyList()
+					: Collections.unmodifiableList(new ArrayList<String>(names));
+		}
+
+		/**
+		 * The drugs a question listing the patient's medications named before the drug it proposes, that her
+		 * chart holds no active order for, each as the drug-safety layer names it — issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>. Empty, never
+		 * null, on every chart the injector did not state them on, which is every question not of that shape
+		 * and every chart whose orders the module could not read or resolve in full; which ones those are is
+		 * {@code DrugSafetyValidator.listedWithNoActiveOrder}'s. {@code LlmInferenceService} states them after
+		 * the answer.
+		 */
+		public List<String> getListedDrugsWithNoActiveOrder() {
+			return listedDrugsWithNoActiveOrder;
+		}
+
 		/** The types declared via {@link #markCompleteFor}, so a caller rebuilding this chart can
 		 *  carry the declaration across; empty on a full chart, which needs none. */
 		public Set<String> getCompleteResourceTypes() {
@@ -720,6 +743,28 @@ public class PatientChartSerializer {
 		 * can itself contain a rating word.
 		 */
 		private final String findingSeverity;
+
+		/**
+		 * Whether an injected {@code safety_finding}'s strength clause states a reason to withhold the
+		 * drug — or, for her own medication, to change it — rather than a caution: {@code TRUE} or
+		 * {@code FALSE} on such a record, {@code null} on every other record and on a finding stating no
+		 * clause (issue #515). Written in exactly ONE place, {@code DrugReferenceInjector}'s finding
+		 * mapping, off the clause {@code renderFinding} appended to this very record, so it answers what
+		 * the model READ. Never re-derived from {@link #getText()} or from {@link #getFindingSeverity()}:
+		 * a folded or an unrated finding withholds on a rating that says otherwise or says nothing.
+		 */
+		private final Boolean findingWithholds;
+
+		/**
+		 * The ids of every reference row of the substance an injected {@code safety_finding} is about —
+		 * its SUBJECT as the arm that raised it named it, both drugs of a question-pair finding, and every
+		 * substance a finding that her orders share substances names ({@code SafetyWarning.subjectRows()}) —
+		 * empty on
+		 * every other record and on a finding whose chip carries none (issue #515). Written in
+		 * exactly ONE place, {@code DrugReferenceInjector}'s finding mapping. Never re-derived from the
+		 * record's {@code resourceKey}, whose drug half is a printed label and not a substance name.
+		 */
+		private final List<String> findingSubjectRows;
 
 		/**
 		 * The active orders an injected {@code safety_finding} names, as its chip names them — empty on
@@ -902,7 +947,7 @@ public class PatientChartSerializer {
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, null, null, null);
+					orderStopDate, findingSeverity, null, null, null, null, null);
 		}
 
 		/**
@@ -917,7 +962,7 @@ public class PatientChartSerializer {
 		 * not located, because the ladder has repeatedly grown under a "the one below is the full one"
 		 * sentence, which is what this javadoc used to say.
 		 *
-		 * <p>Since issue #516 it also takes {@link #findingPartners}, immediately after
+		 * <p>Since issue #516 it also takes {@link #findingPartners}, after
 		 * {@link #findingSeverity}, and so does the widest rung — for the tail constraint the widest
 		 * constructor's javadoc states: this rung keeps its list tail and the widest its list-then-Boolean
 		 * one. The finding-rating rung above defaults it to empty. Since issue #514
@@ -925,11 +970,11 @@ public class PatientChartSerializer {
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, List<String> findingPartners, List<String> findingBridgeNames,
-				List<Integer> derivedFrom) {
+				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
+				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, findingPartners, findingBridgeNames, derivedFrom, null,
-					null);
+					orderStopDate, findingSeverity, findingWithholds, findingSubjectRows, findingPartners,
+					findingBridgeNames, derivedFrom, null, null);
 		}
 
 		/**
@@ -957,12 +1002,14 @@ public class PatientChartSerializer {
 		 *
 		 * <p><b>Issue #516 answered it the same way again</b>, inserting {@link #findingPartners} after
 		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
-		 * was — and issue #514 once more, inserting {@link #findingBridgeNames} after it in both.
+		 * was — and issue #515 once more, with {@link #findingWithholds} and {@link #findingSubjectRows}
+		 * before it, and issue #514 with {@link #findingBridgeNames} after it, in both.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, List<String> findingPartners, List<String> findingBridgeNames,
-				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
+				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
+				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom,
+				List<String> dosingCeilings, Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -973,6 +1020,11 @@ public class PatientChartSerializer {
 			this.orderActive = orderActive;
 			this.orderStopDate = orderStopDate;
 			this.findingSeverity = findingSeverity;
+			this.findingWithholds = findingWithholds;
+			// Copied and wrapped, and never null, for the reason derivedFrom below is.
+			this.findingSubjectRows = findingSubjectRows == null || findingSubjectRows.isEmpty()
+					? Collections.<String> emptyList()
+					: Collections.unmodifiableList(new ArrayList<String>(findingSubjectRows));
 			// Copied and wrapped, and never null, for the reason derivedFrom below is.
 			this.findingPartners = findingPartners == null || findingPartners.isEmpty()
 					? Collections.<String> emptyList()
@@ -1169,6 +1221,16 @@ public class PatientChartSerializer {
 		 */
 		public String getFindingSeverity() {
 			return findingSeverity;
+		}
+
+		/** @return see {@link #findingWithholds}; {@code null} on every record that is not an injected finding */
+		public Boolean getFindingWithholds() {
+			return findingWithholds;
+		}
+
+		/** @return see {@link #findingSubjectRows}; never null */
+		public List<String> getFindingSubjectRows() {
+			return findingSubjectRows;
 		}
 
 		/**

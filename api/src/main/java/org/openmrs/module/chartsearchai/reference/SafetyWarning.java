@@ -136,6 +136,9 @@ public class SafetyWarning {
 	/** @see #statesOrdersSharingASubstance() */
 	private final boolean ordersSharingASubstance;
 
+	/** @see #subjectRows() */
+	private final List<DrugReference> subjectRows;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -327,7 +330,7 @@ public class SafetyWarning {
 	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true,
-				null);
+				null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -365,7 +368,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -375,12 +378,14 @@ public class SafetyWarning {
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
-			Collection<String> matchedOrderDisplays) {
+			Collection<String> matchedOrderDisplays, List<DrugReference> subjectRows) {
 		this.ordersSharingASubstance = ordersSharingASubstance;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.matchedOrderDisplays = matchedOrderDisplays == null || matchedOrderDisplays.isEmpty()
 				? Collections.<String> emptyList()
 				: Collections.unmodifiableList(new ArrayList<String>(new LinkedHashSet<String>(matchedOrderDisplays)));
+		this.subjectRows = subjectRows == null || subjectRows.isEmpty() ? Collections.<DrugReference> emptyList()
+				: Collections.unmodifiableList(new ArrayList<DrugReference>(subjectRows));
 		this.aboutAnEndedOrder = aboutAnEndedOrder;
 		this.endedOrderStopDate = aboutAnEndedOrder ? endedOrderStopDate : null;
 		this.endedOrderRows = !aboutAnEndedOrder || endedOrderRows == null || endedOrderRows.isEmpty()
@@ -1093,7 +1098,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
-				matchedOrderDisplays);
+				matchedOrderDisplays, subjectRows);
 	}
 
 	/**
@@ -1106,7 +1111,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, displays);
+				endedOrderRows, ordersSharingASubstance, displays, subjectRows);
 	}
 
 	/** @return the displays {@link #withMatchedOrderDisplays} set, never null */
@@ -1133,6 +1138,38 @@ public class SafetyWarning {
 		Set<String> names = new LinkedHashSet<String>(ChartOrderBridge.namesOf(finding.chartOrderBridges));
 		names.addAll(finding.matchedOrderDisplays);
 		return new ArrayList<String>(names);
+	}
+
+	/**
+	 * This warning, stated as about the substance {@code rows} are every reference row of — the finding's
+	 * SUBJECT, decided where the arm named it (issue #515). Package-private: {@code EndedOrders.aboutTheSubject}
+	 * is its caller for a drug in play — through {@code EndedOrders.stamp}, the step every other question-driven
+	 * arm's chip and every contraindication chip passes through, and directly for
+	 * {@code alreadyInSeveralOrders}' finding, which takes no ended-order referent — and
+	 * {@code EndedOrders.stampPair} for a question-pair finding, which is about both of its drugs;
+	 * {@code addOrdersSharingASubstance} states every row of every substance its finding names. The
+	 * screening arm's pair chips carry no subject rows. See {@link #subjectRows()}.
+	 */
+	SafetyWarning aboutSubstance(List<DrugReference> rows) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderDisplays, rows);
+	}
+
+	/**
+	 * Every reference row of the substance this finding is about, as the arm that raised it named that
+	 * substance — issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a> —
+	 * and, for a question-pair finding, of its partner's substance too: that arm elects which of the two
+	 * drugs is the subject by the dataset's order, never the question's, so the finding is about both. For
+	 * {@link #ordersSharingASubstance(String, String, List)}' finding, of every substance it names.
+	 * Empty on a chip {@link #aboutSubstance} was never asked of, never null. Package-private and not a getter, so it
+	 * reaches no wire: {@code DrugReferenceInjector} carries it onto the finding's record, as each row's id,
+	 * so a check of the answer asks which findings are about a drug of the rows that were decided rather
+	 * than of the {@link #getDrug()} label, which is not a substance name to group on.
+	 */
+	List<DrugReference> subjectRows() {
+		return subjectRows;
 	}
 
 	/**

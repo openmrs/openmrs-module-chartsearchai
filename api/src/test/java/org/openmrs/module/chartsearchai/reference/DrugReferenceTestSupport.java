@@ -1821,7 +1821,7 @@ public final class DrugReferenceTestSupport {
 						+ "using this record is about a record that names it: " + text);
 		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
 				order.getUuid() + "-" + index, null, text, null, 0, orderActive, stopDate, null, null, null,
-				null, null, null);
+				null, null, null, null, null);
 	}
 
 	/**

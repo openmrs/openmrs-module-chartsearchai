@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #515: a SECOND active order for patient 7 of the drug ListedMedicationsRifampicinOrderTestData.xml
+  supplies (drug 9515, "Rifampicin isoniazid pyrazinamide and ethambutol"), loaded after that file, so
+  two of her active orders carry rifampicin and a question about rifampicin raises the drug-in-play arm's
+  duplicate-therapy finding (issue #477). The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<orders order_id="9516" order_type_id="1" order_number="ORD-9516" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9515" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9516dddd-0000-4000-8000-00000009516a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9516" drug_inventory_id="9515" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

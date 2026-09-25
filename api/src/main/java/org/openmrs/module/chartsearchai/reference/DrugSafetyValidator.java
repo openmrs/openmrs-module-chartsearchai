@@ -551,7 +551,7 @@ public class DrugSafetyValidator {
 			return StandingChartAlerts.notScreened();
 		}
 		return StandingChartAlerts.screened(
-			validate(null, null, context, null, null, null, SubjectMatterScope.UNBOUNDED));
+			validate(null, null, context, null, null, null, SubjectMatterScope.UNBOUNDED, null));
 	}
 
 	/**
@@ -670,7 +670,7 @@ public class DrugSafetyValidator {
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
 			PairChipExtent.Sink pairExtentSink) {
 		return validate(answer, question, rawContext, mappings, resolvedOrderEntries, pairExtentSink,
-			SubjectMatterScope.OF_THE_RESPONSE);
+			SubjectMatterScope.OF_THE_RESPONSE, null);
 	}
 
 	/**
@@ -730,14 +730,19 @@ public class DrugSafetyValidator {
 	 *        {@link PairChipExtent} for what an absent statement does and does not mean.
 	 *
 	 * @param scope what this pass is FOR — see {@link SubjectMatterScope}. Every caller but
-	 *        {@link #standingChartAlerts(PatientClinicalContext)} reaches this through the
-	 *        six-argument delegate above, which supplies
-	 *        {@link SubjectMatterScope#OF_THE_RESPONSE}, so no existing path can reach the unbounded
-	 *        gate by omission and a new one has to name it.
+	 *        {@link #standingChartAlerts(PatientClinicalContext)} and {@code DrugReferenceInjector}'s
+	 *        pre-answer pass reaches this through the six-argument delegate above, which supplies
+	 *        {@link SubjectMatterScope#OF_THE_RESPONSE}; the injector names that scope itself. So no
+	 *        existing path can reach the unbounded gate by omission and a new one has to name it.
+	 * @param listedSink a caller-supplied accumulator this pass states the drugs the question lists that
+	 *        her chart holds no active order for into ({@link #listedWithNoActiveOrder}, issue #515), or
+	 *        {@code null} from a caller that does not publish it — every caller but the injector's
+	 *        pre-answer pass, which holds her orders resolved and stamps the answer on its chart.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
-			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope) {
+			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,
+			ListedDrugsWithNoActiveOrder.Sink listedSink) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
 		// per validate, and none at all where the caller has already made it (issue #255) — feeding
@@ -879,6 +884,19 @@ public class DrugSafetyValidator {
 		EndedOrders endedOrders = EndedOrders.of(inPlay, questionDrugs, question, resolvedRows, orderEntries,
 				mappings, bridgedOrders, context);
 		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects, endedOrders);
+		// And, on the pass that states it, the drugs the question lists that her chart holds no active order
+		// for (issue #515) — off this pass's own resolution of her orders and its one naming of each
+		// substance, so the sentence names a drug as the chips do. See listedWithNoActiveOrder.
+		// In its own try: an informational sentence must never take the pass's findings down with it.
+		if (listedSink != null) {
+			try {
+				listedSink.state(listedWithNoActiveOrder(question, questionDrugs, resolvedRows, orderEntries,
+						mappings, bridgedOrders, context, subjects));
+			}
+			catch (RuntimeException e) {
+				log.warn("Listed-drug statement failed; stating none — the findings are unaffected", e);
+			}
+		}
 
 		// Which substances may still owe the interaction arm and the dose arm their one call — "may",
 		// because since the widening these also carry the substances only the ORDERS resolved, which owe
@@ -1989,6 +2007,111 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * What may stand between a caution lead's drug name and its modal, then the modal and the caution
+	 * — {@code CAUTION_LEAD_TAIL} of {@code eval/drift-metric/score_probe_safety.py}, whose comment is
+	 * canonical for why each part is what it is, moved into Java for issue #515 (ADR Decision 119).
+	 * Only NAME MATERIAL between the name and the modal: whitespace, a hyphen or dash, and one bracketed
+	 * group. Matched from the end of the name, in {@link DrugReference#foldedLower} form.
+	 */
+	static final Pattern CAUTION_LEAD_TAIL = Pattern.compile(
+			"[ \\-\u2013\u2014]*(?:\\([^()]{0,25}\\)[ \\-\u2013\u2014]*)?"
+					+ "\\bcan be (?:given|taken|delivered|started|used|prescribed|administered)\\b"
+					+ "[^.!?]*?\\bcautions?\\b");
+
+	/**
+	 * The drug an answer's CAUTION LEAD gives — <em>"Amlodipine can be given, with one caution: …"</em> —
+	 * or {@code null} where the answer does not open on one (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>). The lead class
+	 * is {@code score_probe_safety.py}'s {@code caution_led}: the answer opens on a drug name, after nothing
+	 * but non-word characters, and {@link #CAUTION_LEAD_TAIL} follows it. Where that scorer anchors on the
+	 * cell's own drug, this reads which drug the lead names: of the entries
+	 * {@link DrugReferenceService#findImpliedByQuery} puts in play for the whole answer, those naming, by
+	 * {@link DrugReference#namedOccurrences} (the accessor for WHERE a prose match sits), the longest name
+	 * starting where the answer's first word starts.
+	 *
+	 * <p>What the anchor refuses, as that scorer's does: a word before the drug (<em>"No — Amlodipine can
+	 * be given, but …"</em>, <em>"Yes, …"</em>), a permission naming no caution (<em>"Amlodipine can be
+	 * given."</em>), and anything but name material between the name and the modal. A shape evading the
+	 * anchor is a new case beside {@code CAUTION_LEAD_CASES}, never a looser anchor here alone;
+	 * {@code CautionLeadTailParityTest} holds the two tails to one pattern.
+	 */
+	public CautionLead cautionLead(String answer) {
+		if (ChartSearchAiUtils.isBlank(answer) || drugReferenceService == null) {
+			return null;
+		}
+		// The whole answer, as that scorer matches it: the tail bounds itself at the sentence's end, and a cut
+		// made here first would refuse a lead the scorer reads (a line break, "approx." in a bracket).
+		String lead = answer.trim();
+		String folded = DrugReference.foldedLower(lead);
+		int start = 0;
+		while (start < folded.length() && !Character.isLetterOrDigit(folded.charAt(start))
+				&& folded.charAt(start) != '_') {
+			start++;
+		}
+		if (start == folded.length() || !folded.contains("can be ")) {
+			return null;
+		}
+		int end = -1;
+		Map<DrugReference, Integer> reach = new LinkedHashMap<DrugReference, Integer>();
+		for (DrugReference ref : drugReferenceService.findImpliedByQuery(lead)) {
+			for (DrugReference.NamedOccurrence occurrence : ref.namedOccurrences(folded, 0)) {
+				if (occurrence.getStart() == start) {
+					Integer known = reach.get(ref);
+					if (known == null || occurrence.getEnd() > known.intValue()) {
+						reach.put(ref, Integer.valueOf(occurrence.getEnd()));
+					}
+					end = Math.max(end, occurrence.getEnd());
+				}
+			}
+		}
+		if (end < 0 || !CAUTION_LEAD_TAIL.matcher(folded).region(end, folded.length()).lookingAt()) {
+			return null;
+		}
+		Set<Object> substances = new HashSet<Object>();
+		for (Map.Entry<DrugReference, Integer> named : reach.entrySet()) {
+			if (named.getValue().intValue() == end) {
+				substances.add(named.getKey().substanceGroupKey());
+			}
+		}
+		return new CautionLead(substances);
+	}
+
+	/**
+	 * Whether {@code lead}'s drug is the substance of the reference rows {@code subjectRowIds} identify —
+	 * {@code RecordMapping.getFindingSubjectRows()}, the rows the arm that raised a finding named its subject
+	 * by, a question-pair finding's partner too, and every substance a finding that her orders share
+	 * substances names (issue #515). Substance identity
+	 * ({@link DrugReference#substanceGroupKey()}) between the entries the lead's name named and those rows;
+	 * {@code false} where no row carries one of the ids.
+	 */
+	public boolean namesTheFindingsSubject(CautionLead lead, List<String> subjectRowIds) {
+		if (lead == null || subjectRowIds == null || subjectRowIds.isEmpty() || drugReferenceService == null) {
+			return false;
+		}
+		Set<String> ids = new HashSet<String>(subjectRowIds);
+		for (DrugReference row : drugReferenceService.getAll()) {
+			if (ids.contains(row.getId()) && lead.substances.contains(row.substanceGroupKey())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The drug {@link #cautionLead} read an answer's caution lead to give, as the substances its name named
+	 * — opaque, so what travels between the two methods above is never a string a caller could mistake for
+	 * one of another form (issue #515).
+	 */
+	public static final class CautionLead {
+
+		private final Set<Object> substances;
+
+		private CautionLead(Set<Object> substances) {
+			this.substances = substances;
+		}
+	}
+
+	/**
 	 * What THIS response is about: the question, and the patient's own CHART records the answer cited.
 	 *
 	 * <p><b>Not the answer's own prose, and not a cited reference record — issue #143's second half.</b>
@@ -2518,9 +2641,6 @@ public class DrugSafetyValidator {
 	 */
 	private static final class EndedOrders {
 
-		private static final EndedOrders NONE = new EndedOrders(Collections.<Object, Date> emptyMap(),
-				Collections.<Object, List<DrugReference>> emptyMap());
-
 		/**
 		 * The substance group keys this pass holds as recorded only in ended orders, each to the LATEST
 		 * {@code RecordMapping.getOrderStopDate()} among the ended records naming it — {@code null}
@@ -2536,9 +2656,24 @@ public class DrugSafetyValidator {
 		 */
 		private final Map<Object, List<DrugReference>> rows;
 
-		private EndedOrders(Map<Object, Date> substances, Map<Object, List<DrugReference>> rows) {
+		/**
+		 * Every row this pass resolved of EVERY substance in play, ended or not — {@code resolvedRows},
+		 * handed to each chip {@link #aboutTheSubject} is given as the rows of its subject (issue #515).
+		 * Here because {@link #stamp} is the step every other question-driven arm's chip passes through.
+		 */
+		private final Map<Object, List<DrugReference>> subjectRows;
+
+		private EndedOrders(Map<Object, Date> substances, Map<Object, List<DrugReference>> rows,
+				Map<Object, List<DrugReference>> subjectRows) {
 			this.substances = substances;
 			this.rows = rows;
+			this.subjectRows = subjectRows;
+		}
+
+		/** A pass holding no substance as ended, which still states each chip's subject rows. */
+		private static EndedOrders none(Map<Object, List<DrugReference>> subjectRows) {
+			return new EndedOrders(Collections.<Object, Date> emptyMap(),
+					Collections.<Object, List<DrugReference>> emptyMap(), subjectRows);
 		}
 
 		/**
@@ -2558,32 +2693,20 @@ public class DrugSafetyValidator {
 				Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
 				List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context) {
 			if (context == null || mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
-				return NONE;
+				return none(resolvedRows);
 			}
 			// ENDED is the chart builder's stamp saying FALSE — never re-derived, and never a type name,
 			// the stamp being FALSE only for a drug-order record. Everything else a drug-order record can
 			// be, in force or unstamped ("the module cannot say"), may be an order she is on.
 			List<RecordMapping> ended = new ArrayList<RecordMapping>();
 			List<RecordMapping> notEnded = new ArrayList<RecordMapping>();
-			for (RecordMapping mapping : mappings) {
-				if (mapping.getText() == null) {
-					continue;
-				}
-				if (Boolean.FALSE.equals(mapping.getOrderActive())) {
-					ended.add(mapping);
-				} else if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER.equals(mapping.getResourceType())) {
-					notEnded.add(mapping);
-				}
-			}
+			partitionOrderRecords(mappings, ended, notEnded);
 			if (ended.isEmpty()) {
-				return NONE;
+				return none(resolvedRows);
 			}
 			List<String> endedTexts = lowered(ended);
 			List<String> notEndedTexts = lowered(notEnded);
-			Set<Object> active = new HashSet<Object>();
-			for (DrugReference entry : orderEntries) {
-				active.add(entry.substanceGroupKey());
-			}
+			Set<Object> active = substancesOf(orderEntries);
 			// A question PROPOSING the drug keeps it a proposal: there the call "withhold it" has its
 			// referent, which is exactly what the ended-order clause exists to supply where it has none.
 			// The admission grammar is issue #469's, over the same marking of the question's own names.
@@ -2624,9 +2747,41 @@ public class DrugSafetyValidator {
 			// The costlier question last, and only where there is a candidate to ask it for.
 			if (substances.isEmpty() || !context.activeDrugOrdersRead()
 					|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
-				return NONE;
+				return none(resolvedRows);
 			}
-			return new EndedOrders(substances, substanceRows);
+			return new EndedOrders(substances, substanceRows, resolvedRows);
+		}
+
+		/**
+		 * The chart's records this class reads as ORDERS, split into those the stamp calls ENDED and every
+		 * other drug-order record — in force, or unstamped, which may be an order she is on. ENDED is the
+		 * chart builder's stamp saying FALSE, never re-derived and never a type name. The one reading, for
+		 * {@link #of} and {@link DrugSafetyValidator#listedWithNoActiveOrder} (issue #515).
+		 */
+		static void partitionOrderRecords(List<RecordMapping> mappings, List<RecordMapping> ended,
+				List<RecordMapping> notEnded) {
+			if (mappings == null) {
+				return;
+			}
+			for (RecordMapping mapping : mappings) {
+				if (mapping.getText() == null) {
+					continue;
+				}
+				if (Boolean.FALSE.equals(mapping.getOrderActive())) {
+					ended.add(mapping);
+				} else if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER.equals(mapping.getResourceType())) {
+					notEnded.add(mapping);
+				}
+			}
+		}
+
+		/** The substances {@code orderEntries}, her active orders resolved, are of. */
+		static Set<Object> substancesOf(List<DrugReference> orderEntries) {
+			Set<Object> active = new HashSet<Object>();
+			for (DrugReference entry : orderEntries) {
+				active.add(entry.substanceGroupKey());
+			}
+			return active;
 		}
 
 		private static List<String> lowered(List<RecordMapping> records) {
@@ -2648,14 +2803,88 @@ public class DrugSafetyValidator {
 			return false;
 		}
 
-		/** {@code chip} stated as about an ended order, with the date its order stopped, where its
-		 *  subject's substance is one this pass holds as ended, else {@code chip} itself. */
+		/** {@code chip} {@link #aboutTheSubject stated as about} {@code subject}'s substance, and as about an
+		 *  ended order, with the date its order stopped, where that substance is one this pass holds as
+		 *  ended. */
 		SafetyWarning stamp(DrugReference subject, SafetyWarning chip) {
 			Object substance = subject.substanceGroupKey();
+			SafetyWarning stated = aboutTheSubject(subject, chip);
 			return substances.containsKey(substance)
-					? chip.asAboutAnEndedOrder(substances.get(substance), rows.get(substance))
-					: chip;
+					? stated.asAboutAnEndedOrder(substances.get(substance), rows.get(substance))
+					: stated;
 		}
+
+		/**
+		 * {@code chip} stated as about {@code subject}'s substance, by every row this pass resolved of it
+		 * ({@link SafetyWarning#subjectRows()}, issue #515), and nothing else: the one reading of which rows
+		 * are a drug in play's, for {@link #stamp} and for the one drug-in-play finding that must not take
+		 * the ended-order referent, {@code alreadyInSeveralOrders}', whose sentence says active orders carry
+		 * the drug.
+		 */
+		SafetyWarning aboutTheSubject(DrugReference subject, SafetyWarning chip) {
+			List<DrugReference> ofTheSubject = subjectRows.get(subject.substanceGroupKey());
+			return chip.aboutSubstance(ofTheSubject != null ? ofTheSubject : Collections.singletonList(subject));
+		}
+
+		/** {@code chip}, a question-pair finding, {@link #stamp stamped} for its {@code subject} and then
+		 *  stated as about {@code partner}'s substance too — the one arm whose finding is about both drugs
+		 *  it names, its subject being the dataset's order of the two (issue #515). Its ended-order referent
+		 *  stays the subject's: "withhold it" names the subject. */
+		SafetyWarning stampPair(DrugReference subject, DrugReference partner, SafetyWarning chip) {
+			SafetyWarning stated = stamp(subject, chip);
+			List<DrugReference> ofThePartner = subjectRows.get(partner.substanceGroupKey());
+			List<DrugReference> both = new ArrayList<DrugReference>(stated.subjectRows());
+			both.addAll(ofThePartner != null ? ofThePartner : Collections.singletonList(partner));
+			return stated.aboutSubstance(both);
+		}
+	}
+
+	/**
+	 * The drugs {@code question} lists before the drug it proposes that the patient's chart holds no active
+	 * order for, each named as this pass names its substance ({@link SubstanceSubjects#subjectOf}), in the
+	 * order the question lists them — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>, ADR Decision 119.
+	 * Empty wherever the module cannot say it.
+	 *
+	 * <p>The list is {@code DrugReferenceInjector.listedBeforeTheProposal}'s: the question drugs named
+	 * before the trailing clause {@code QueryScopeRouter.asksWhetherToGiveADrug} admits, never the drug that
+	 * clause proposes. A listed substance is named only where no active order this pass resolved is of it
+	 * and no chart record {@link EndedOrders} would read as an order names any of its rows — one the stamp
+	 * calls ended is issue #472's referent, and an unstamped one may be an order she is on. And only where
+	 * the module could say she is on nothing else: EndedOrders' own gates, her active orders read in full
+	 * and every one resolved ({@link #everyActiveOrderResolves}). The residue is theirs too: an order
+	 * resolved to only SOME of its substances passes, so a constituent it left out can be named here while
+	 * she takes it (ADR Decision 110 measured how rarely a combination NAME does that, and names the brand
+	 * that does).
+	 */
+	private static List<String> listedWithNoActiveOrder(String question, Set<DrugReference> questionDrugs,
+			Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
+			List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context,
+			SubstanceSubjects subjects) {
+		List<DrugReference> listed = DrugReferenceInjector.listedBeforeTheProposal(question,
+				new ArrayList<DrugReference>(questionDrugs));
+		if (listed.isEmpty() || context == null || !context.activeDrugOrdersRead()
+				|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
+			return Collections.emptyList();
+		}
+		Set<Object> active = EndedOrders.substancesOf(orderEntries);
+		List<RecordMapping> orderRecords = new ArrayList<RecordMapping>();
+		EndedOrders.partitionOrderRecords(mappings, orderRecords, orderRecords);
+		List<String> orderTexts = EndedOrders.lowered(orderRecords);
+		Set<Object> seen = new HashSet<Object>();
+		List<String> names = new ArrayList<String>();
+		for (DrugReference ref : listed) {
+			Object substance = ref.substanceGroupKey();
+			if (!seen.add(substance) || active.contains(substance)) {
+				continue;
+			}
+			List<DrugReference> rows = resolvedRows.get(substance);
+			if (EndedOrders.namesAnyRow(orderTexts, rows != null ? rows : Collections.singletonList(ref))) {
+				continue;
+			}
+			names.add(subjects.subjectOf(ref).displayLabel());
+		}
+		return names;
 	}
 
 	/**
@@ -2994,8 +3223,9 @@ public class DrugSafetyValidator {
 			// ContraindicationSubjectLabelTest.twoFindingsAboutOneSubjectStayTwoChips).
 			// Every contraindication chip passes through here, so this is the one place its REFERENT is
 			// stated for an ended order (issue #472) — before it is ledgered, so a replacement below
-			// carries it as the incumbent did. A no-op for the order-driven arm, whose subjects are her
-			// active substances and so never ones EndedOrders holds.
+			// carries it as the incumbent did. The ended-order half is a no-op for the order-driven arm, whose
+			// subjects are her active substances and so never ones EndedOrders holds; the subject rows (issue
+			// #515) are stated for it too.
 			chip = endedOrders.stamp(subject, chip);
 			List<Object> key = Arrays.asList(subject.substanceGroupKey(), finding);
 			RaisedChip already = raised.get(key);
@@ -4086,11 +4316,12 @@ public class DrugSafetyValidator {
 		// After the rule chips and outside their sort: unrated, it would otherwise head the list above
 		// the rated findings a clinician asked about, the reason the class-only chips below trail too
 		// (see FINDING_STRENGTH_DESCENDING). Not a pair, so not in relatedPairs (issue #477). Not
-		// stamped by endedOrders: it is raised only where active orders carry the drug, which is the
-		// case that stamp refuses.
+		// stamped as about an ended order: its sentence says active orders carry the drug. Its subject
+		// rows are stated as every other chip of this arm's are (issue #515), or no check of the answer
+		// can tell which drug it is about.
 		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications);
 		if (alreadyTaken != null) {
-			warnings.add(alreadyTaken);
+			warnings.add(endedOrders.aboutTheSubject(ref, alreadyTaken));
 		}
 		for (String detail : classOnly) {
 			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
@@ -4359,12 +4590,18 @@ public class DrugSafetyValidator {
 	 * {@link CoMedications#ordersWhoseDisplayNames}, so this would state that fact a second time in the
 	 * other referent. A set that also shares a substance the question did not name is stated, naming them
 	 * all. The question's substances and not {@code inPlay}'s, so both passes agree.
+	 *
+	 * <p>The finding is about every substance a set shares, so it states every row her orders resolved of
+	 * each as its subject rows ({@link SafetyWarning#subjectRows()}, issue #515).
 	 */
 	private static void addOrdersSharingASubstance(List<SafetyWarning> warnings, int screenedFrom,
 			List<DrugReference> orderEntries, SubstanceSubjects subjects, CoMedications coMedications,
 			Set<Object> askedAbout) {
 		Map<List<PatientClinicalContext.ActiveDrugOrder>, List<String>> shared =
 				new LinkedHashMap<List<PatientClinicalContext.ActiveDrugOrder>, List<String>>();
+		// Every row of every substance a set shares: the finding is about each of them (issue #515).
+		Map<List<PatientClinicalContext.ActiveDrugOrder>, List<DrugReference>> sharedRows =
+				new HashMap<List<PatientClinicalContext.ActiveDrugOrder>, List<DrugReference>>();
 		Set<List<PatientClinicalContext.ActiveDrugOrder>> sharingOneNotAskedAbout =
 				new HashSet<List<PatientClinicalContext.ActiveDrugOrder>>();
 		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
@@ -4375,6 +4612,7 @@ public class DrugSafetyValidator {
 			}
 			shared.computeIfAbsent(carriers, k -> new ArrayList<String>())
 					.add(subjects.subjectOf(rows.get(0)).displayLabel());
+			sharedRows.computeIfAbsent(carriers, k -> new ArrayList<DrugReference>()).addAll(rows);
 			if (!askedAbout.contains(substance)) {
 				sharingOneNotAskedAbout.add(carriers);
 			}
@@ -4392,7 +4630,7 @@ public class DrugSafetyValidator {
 			warnings.add(at++, SafetyWarning.ordersSharingASubstance(named,
 				named + (substances.size() == 1 ? " is in " : " are in ") + ordersNamed(ordersByDisplay)
 						+ " — possible duplicate therapy",
-				new ArrayList<String>(ordersByDisplay.keySet())));
+				new ArrayList<String>(ordersByDisplay.keySet())).aboutSubstance(sharedRows.get(set.getKey())));
 		}
 	}
 
@@ -6385,7 +6623,10 @@ public class DrugSafetyValidator {
 			// sort and the cap, which it cannot move (issue #472, see EndedOrders). A question naming
 			// two drugs her chart holds only as ended orders proposed neither, and "withhold it" had
 			// no referent there either.
-			warnings.add(endedOrders.stamp(finding.row, finding.warning));
+			// And about BOTH drugs of the pair (issue #515): which one is the subject is the dataset's
+			// order, never the question's, so a check asking which findings are about a drug must find
+			// this one from either side.
+			warnings.add(endedOrders.stampPair(finding.row, finding.partnerRow, finding.warning));
 		}
 		return PairChipExtent.of(found.size(), shown);
 	}
@@ -6429,12 +6670,17 @@ public class DrugSafetyValidator {
 
 		final DrugReference.Interaction rule;
 
+		/** The OTHER entry of the pair — the partner {@link #row}'s rule names (issue #515, see
+		 *  {@code EndedOrders.stampPair}). */
+		final DrugReference partnerRow;
+
 		PairFinding(SafetyWarning warning, String severity, DrugReference row,
-				DrugReference.Interaction rule) {
+				DrugReference.Interaction rule, DrugReference partnerRow) {
 			this.warning = warning;
 			this.severity = severity;
 			this.row = row;
 			this.rule = rule;
+			this.partnerRow = partnerRow;
 		}
 	}
 
@@ -6543,7 +6789,8 @@ public class DrugSafetyValidator {
 		// The chip carries the rating it is ORDERED on (issue #207), so the ordering is observable
 		// without reading it back out of the prose above.
 		candidates.put(pairKey, new PairFinding(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
-				subject.displayLabel(), detail, rule.getSeverity()), rule.getSeverity(), row, rule));
+				subject.displayLabel(), detail, rule.getSeverity()), rule.getSeverity(), row, rule,
+				fromFirst ? second : first));
 	}
 
 	/**

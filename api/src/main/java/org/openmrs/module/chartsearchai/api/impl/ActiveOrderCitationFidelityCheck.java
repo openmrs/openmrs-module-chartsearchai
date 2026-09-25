@@ -341,7 +341,7 @@ final class ActiveOrderCitationFidelityCheck {
 			// partner BEGAN: one subject stated against two orders with the noun repeated ("X interacts with
 			// active order A and active order B") then reads A as the second claim's subject and accuses X's
 			// own B finding (round 3 of #514's second review). What that gives up — a swapped subject after a
-			// run-less claim with no comma between, its subject span empty — is unjudged, ADR Decision 119.
+			// run-less claim with no comma between, its subject span empty — is unjudged, ADR Decision 120.
 			int previousEnd = 0;
 			while (at >= 0) {
 				int next = sentence.indexOf(phrase, at + phrase.length());

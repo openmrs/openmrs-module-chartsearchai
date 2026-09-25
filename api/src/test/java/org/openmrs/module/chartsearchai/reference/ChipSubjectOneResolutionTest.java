@@ -198,7 +198,8 @@ public class ChipSubjectOneResolutionTest {
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
 					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
-					+ "\t\t\tPairChipExtent.Sink pairExtentSink, SubjectMatterScope scope) {";
+					+ "\t\t\tPairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,\n"
+					+ "\t\t\tListedDrugsWithNoActiveOrder.Sink listedSink) {";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {

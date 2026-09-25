@@ -99,7 +99,7 @@ public class ChartSearchAiFindingCitationsTest {
 				Collections.<SafetyWarning> emptyList(), null, null, null, null,
 				Collections.<Integer> emptyList(), Collections.<Integer> emptyList(),
 				Collections.<ChartSearchService.UnstatedFindingSeverity> emptyList(), null, null, stated,
-				null, null, null, null, false);
+				null, null, null, null, false, null);
 	}
 
 	@SuppressWarnings("unchecked")

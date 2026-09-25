@@ -753,6 +753,57 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * A withholding safety finding about the drug an answer's CAUTION LEAD says can be given — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>, ADR
+	 * Decision 119. {@code CautionLeadOverWithholdingCheck} is canonical for how the lead is read and
+	 * which findings are about its drug.
+	 *
+	 * <p><b>What it asserts.</b> That the answer opens <em>"X can be given, … caution …"</em>, and that
+	 * the prompt carried this finding about X with a clause stating a reason to withhold it (or to change
+	 * it, where X is her own medication) — the two disagree. <b>A question-pair finding is the exception to
+	 * "a reason to withhold X"</b>: it relates two drugs the question names, is reported whichever of them
+	 * X is, and its clause is about the pair's SUBJECT — the drug its record is headed by, which the arm
+	 * elects by the dataset's order and which need not be X ({@code DrugSafetyValidator}'s
+	 * {@code EndedOrders.stampPair}). Beside <em>"Amlodipine can be given, …"</em> on <em>"The patient is
+	 * currently on Rifampicin, is it safe to give Amlodipine?"</em>, the entry is the record headed
+	 * {@code Rifampicin (rifampin)}, a reason to withhold rifampicin; what it asserts of X is a
+	 * withholding-class relationship with the other drug. Never that the lead is wrong: the finding is
+	 * this module's reading of a knowledge base, and the call is the clinician's. Whether the answer cited
+	 * the finding is not asked; the finding stood beside the answer either way.
+	 *
+	 * <p>Shaped on {@link UnstatedFindingSeverity}: the citation is the finding record's index, the
+	 * number a client joins to the response's {@code references}, and the rating is the one that record
+	 * states ({@code RecordMapping.getFindingSeverity()}). Unlike there the rating may be {@code null}: an
+	 * unrated authored rule withholds and has no rating word.
+	 */
+	final class CautionLedOverWithholding {
+
+		private final int citation;
+
+		private final String rating;
+
+		public CautionLedOverWithholding(int citation, String rating) {
+			this.citation = citation;
+			this.rating = rating;
+		}
+
+		/** @return the index of the withholding finding's record in the chart the model read */
+		public int getCitation() {
+			return citation;
+		}
+
+		/** @return the rating that finding's record states, or {@code null} where it states none */
+		public String getRating() {
+			return rating;
+		}
+
+		@Override
+		public String toString() {
+			return "[" + citation + "] " + rating;
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -800,6 +851,9 @@ public interface ChartSearchService {
 
 		/** @see #isAnsweredByTheModule() */
 		private final boolean answeredByTheModule;
+
+		/** @see #getCautionLedOverWithholding() */
+		private final List<CautionLedOverWithholding> cautionLedOverWithholding;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
@@ -861,7 +915,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false);
+					null, null, null, null, null, null, null, null, null, false, null);
 		}
 
 		/**
@@ -897,7 +951,12 @@ public interface ChartSearchService {
 				DrugReferenceLoad.Coverage conditionRuleCoverage,
 				List<OrderStopDate> orderStopDates,
 				FindingPartnerCoverage findingPartnerCoverage,
-				boolean answeredByTheModule) {
+				boolean answeredByTheModule,
+				List<CautionLedOverWithholding> cautionLedOverWithholding) {
+			// Null survives as null, the rule every list above shares (issue #515).
+			this.cautionLedOverWithholding = cautionLedOverWithholding == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<CautionLedOverWithholding>(cautionLedOverWithholding));
 			this.findingPartnerCoverage = findingPartnerCoverage;
 			this.answeredByTheModule = answeredByTheModule;
 			this.answer = answer;
@@ -1329,7 +1388,8 @@ public interface ChartSearchService {
 		 * what a model WROTE — {@link #getUnfaithfullyRenderedCitations()},
 		 * {@link #getMisattributedOrderCitations()}, {@link #getActiveOrderClaims()},
 		 * {@link #getUnstatedFindingSeverities()}, {@link #getFindingCitationExtent()},
-		 * {@link #getUnstatedDosingCeilings()} and {@link #getFindingPartnerCoverage()} — state
+		 * {@link #getUnstatedDosingCeilings()}, {@link #getFindingPartnerCoverage()} and
+		 * {@link #getCautionLedOverWithholding()} — state
 		 * {@code null}, no measurement, because no model wrote anything for them to judge. {@code null}
 		 * is also what those keys state for other reasons, and a token count of zero is also what an
 		 * engine reporting no usage produces, so neither pattern tells a consumer that no model ran;
@@ -1339,6 +1399,22 @@ public interface ChartSearchService {
 		 */
 		public boolean isAnsweredByTheModule() {
 			return answeredByTheModule;
+		}
+
+		/**
+		 * The withholding safety findings about the drug this answer's caution lead says can be given
+		 * — issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>,
+		 * ADR Decision 119, published as the {@code cautionLedOverWithholding} response key.
+		 * {@link CautionLedOverWithholding} is canonical for what an entry asserts.
+		 *
+		 * <p><b>Null is not empty.</b> {@code null} states no measurement: the module wrote the answer
+		 * ({@link #isAnsweredByTheModule()}), or the check could not run. {@code []} says it ran and
+		 * found no such finding — which covers an answer that does not open on a caution lead at all, so
+		 * it is <b>not</b> a certificate that the lead agrees with the findings. The one object is
+		 * resolved once per answer method and handed to the early {@code done} and the final answer alike.
+		 */
+		public List<CautionLedOverWithholding> getCautionLedOverWithholding() {
+			return cautionLedOverWithholding;
 		}
 
 		public FindingCitationExtent getFindingCitationExtent() {

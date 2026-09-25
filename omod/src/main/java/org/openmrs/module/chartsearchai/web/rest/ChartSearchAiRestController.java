@@ -1880,6 +1880,32 @@ public class ChartSearchAiRestController {
 		// and on every surface they reach, the early done included. ChartAnswer.isAnsweredByTheModule
 		// is canonical for what it does and does not assert.
 		target.put("answeredByTheModule", Boolean.valueOf(answer.isAnsweredByTheModule()));
+		// Issue #515: the withholding findings about the drug the answer's caution lead gives.
+		// ChartAnswer.getCautionLedOverWithholding() is canonical for null and for what [] does not say.
+		target.put("cautionLedOverWithholding",
+			serializeCautionLedOverWithholding(answer.getCautionLedOverWithholding()));
+	}
+
+	/**
+	 * The wire shape of {@code cautionLedOverWithholding}: one object per finding, {@code citation} its
+	 * record's index and {@code rating} the rating that record states — {@code null} where it states none,
+	 * an unrated authored rule — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>. {@code null}
+	 * for an answer whose check stated no measurement, as for every key {@link #putModuleStatements} writes.
+	 */
+	private List<Map<String, Object>> serializeCautionLedOverWithholding(
+			List<ChartSearchService.CautionLedOverWithholding> reported) {
+		if (reported == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (ChartSearchService.CautionLedOverWithholding entry : reported) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("rating", entry.getRating());
+			out.add(map);
+		}
+		return out;
 	}
 
 	/**

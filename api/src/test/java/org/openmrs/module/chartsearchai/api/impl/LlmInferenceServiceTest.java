@@ -234,7 +234,7 @@ public class LlmInferenceServiceTest {
 		List<RecordMapping> mappings = Arrays.asList(
 				new RecordMapping(1, "allergy", uuid(456), null, "Allergy: Aspirin"),
 				new RecordMapping(2, "safety_finding", "contraindication:Ibuprofen", null,
-						"Safety finding", null, 0, null, null, null, null, Arrays.asList(Integer.valueOf(1))));
+						"Safety finding", null, 0, null, null, null, null, null, null, Arrays.asList(Integer.valueOf(1))));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				"Ibuprofen should not be given: she is allergic to aspirin [1].",
@@ -267,7 +267,7 @@ public class LlmInferenceServiceTest {
 				new RecordMapping(1, "obs", uuid(456), null, "BP 120/80"),
 				new RecordMapping(2, "allergy", uuid(201), null, "Allergy: Ibuprofen (drug)"),
 				new RecordMapping(3, "safety_finding", "contraindication:Ibuprofen", null,
-						"Safety finding", null, 0, null, null, null, null, Arrays.asList(Integer.valueOf(2))));
+						"Safety finding", null, 0, null, null, null, null, null, null, Arrays.asList(Integer.valueOf(2))));
 
 		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 				"Her blood pressure is 120/80 [1].", Arrays.asList(Integer.valueOf(1)), mappings);
@@ -293,7 +293,7 @@ public class LlmInferenceServiceTest {
 	public void extractCitedReferences_shouldIgnoreADerivationWithNoMappingOfItsOwn() {
 		List<RecordMapping> mappings = Arrays.asList(
 				new RecordMapping(2, "safety_finding", "contraindication:Ibuprofen", null,
-						"Safety finding", null, 0, null, null, null, null, Arrays.asList(Integer.valueOf(9))));
+						"Safety finding", null, 0, null, null, null, null, null, null, Arrays.asList(Integer.valueOf(9))));
 
 		// The PACKAGE and not this class's own logger, and the reason is a leak rather than a
 		// preference: LogCapture restores the EFFECTIVE level it found, so capturing a class logger

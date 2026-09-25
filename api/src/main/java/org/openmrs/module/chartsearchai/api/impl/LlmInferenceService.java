@@ -201,6 +201,13 @@ public class LlmInferenceService implements ChartSearchService {
 				inputTokens = response.getInputTokens();
 				cachedTokens = response.getCachedTokens();
 			}
+			// Issue #515: whether the answer's caution lead says a drug can be given beside a withholding finding
+			// about it (ChartSearchService.CautionLedOverWithholding is canonical for what an entry asserts,
+			// and whose withholding a question-pair finding's clause states). Resolved here, after the repair,
+			// for the reason the searchStreaming twin states: one answer, and the one the early done carries there.
+			List<ChartSearchService.CautionLedOverWithholding> cautionLedOverWithholding =
+					CautionLeadOverWithholdingCheck.report(patient, response.getAnswer(), chart.getMappings(),
+							drugSafetyValidator);
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			// The prose check's own answer, carried rather than re-derived (issue #337 round two): a
@@ -286,6 +293,10 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
 					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
 							drugSafetyValidator));
+			// And the drugs the question listed as hers that her chart holds no active order for (issue
+			// #515), as the pre-answer pass stamped them on the chart.
+			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
+					chart.getListedDrugsWithNoActiveOrder());
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -293,7 +304,7 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage, false);
+					findingPartnerCoverage, false, cautionLedOverWithholding);
 			outcome = "ok";
 			return answer;
 		}
@@ -682,6 +693,14 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			citationsConsumer.accept(cited);
 
+			// Issue #515, resolved ONCE and handed to both answers this method produces, the early one
+			// included: it reads the prose and the injected finding records, both in hand here, and never
+			// the chips, which are raised only after grounding. Before the handoff for the reason
+			// orderStopDates below is — that event is what a streaming user reads.
+			List<ChartSearchService.CautionLedOverWithholding> cautionLedOverWithholding =
+					CautionLeadOverWithholdingCheck.report(patient, response.getAnswer(), chart.getMappings(),
+							drugSafetyValidator);
+
 			// Resolved ONCE for this method and handed to BOTH answers it produces, the ungrounded one
 			// below included (issue #315). It is a projection over the answer's own markers and its
 			// resolution, both already in hand here, so unlike the six checks further down it owes
@@ -697,11 +716,16 @@ public class LlmInferenceService implements ChartSearchService {
 			// caller before the grounding pass, so the REST layer can finish the user-visible
 			// response (emit "done", persist the audit row) without waiting out the Tier-2 tail.
 			// Fires regardless of whether grounding is enabled — see the interface contract.
-			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
+			// The listed-drug sentence (issue #515) is on this answer too: the chart stamped it before the
+			// model was asked, so unlike the ended-order sentence it owes the chips nothing.
+			ungroundedAnswerConsumer.accept(new ChartAnswer(
+					ListedDrugStatement.withListedDrugsStated(response.getAnswer(),
+							chart.getListedDrugsWithNoActiveOrder()), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
-					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false));
+					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false,
+					cautionLedOverWithholding));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -796,6 +820,10 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
 					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
 							drugSafetyValidator));
+			// And the drugs the question listed as hers that her chart holds no active order for (issue
+			// #515), as the pre-answer pass stamped them on the chart.
+			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
+					chart.getListedDrugsWithNoActiveOrder());
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -803,7 +831,7 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage, false);
+					findingPartnerCoverage, false, cautionLedOverWithholding);
 			outcome = "ok";
 			return answer;
 		}
@@ -835,8 +863,8 @@ public class LlmInferenceService implements ChartSearchService {
 	 * so every reference carries no verdict, exactly as with grounding off.
 	 *
 	 * <p><b>The checks of what a model WROTE are not run</b>: the class-code check logs nothing, and the
-	 * prose, active-order, finding-severity, finding-citation and dosing-ceiling keys and
-	 * {@code findingPartners} state null, no measurement. ADR Decision 85 already said two of them would otherwise
+	 * prose, active-order, finding-severity, finding-citation and dosing-ceiling keys,
+	 * {@code findingPartners} and {@code cautionLedOverWithholding} state null, no measurement. ADR Decision 85 already said two of them would otherwise
 	 * report on prose no model wrote. {@code answeredByTheModule} says why they are null, since a null
 	 * alone could mean a check that failed. The statements that are not judgements of prose are made
 	 * as on the model's path: the references (inline markers, and the chart records a cited finding
@@ -873,6 +901,9 @@ public class LlmInferenceService implements ChartSearchService {
 		answer = EndedOrderStatement.withEndedOrdersStated(answer,
 				EndedOrderStatement.unstatedEndedOrders(composed, safetyWarnings,
 						drugSafetyValidator));
+		// And issue #515's, for the same reason — though no composed answer is to a question listing
+		// drugs today: answersFromFindings admits one naming a single substance.
+		answer = ListedDrugStatement.withListedDrugsStated(answer, chart.getListedDrugsWithNoActiveOrder());
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);
@@ -884,10 +915,10 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true));
+				conditionRuleCoverage, orderStopDates, null, true, null));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
-				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true);
+				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null);
 	}
 
 	/**

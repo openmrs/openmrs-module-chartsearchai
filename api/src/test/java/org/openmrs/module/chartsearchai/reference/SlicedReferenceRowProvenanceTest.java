@@ -119,6 +119,7 @@ public class SlicedReferenceRowProvenanceTest {
 			"chartsearchai-test/ddi-folded-minor-class-pair.json",
 			"chartsearchai-test/ddi-folded-moderate-class-pair.json",
 			"chartsearchai-test/ddi-interaction-route-variants.json",
+			"chartsearchai-test/ddi-listed-medications-proposal.json",
 			"chartsearchai-test/ddi-multicode-class-chip.json",
 			"chartsearchai-test/ddi-one-order-two-order-entries.json",
 			"chartsearchai-test/ddi-presentation-alias-gap.json",

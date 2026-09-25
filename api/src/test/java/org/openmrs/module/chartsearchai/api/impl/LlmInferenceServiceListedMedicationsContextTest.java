@@ -353,6 +353,102 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		assertNull(answer.getCautionLedOverWithholding());
 	}
 
+	/**
+	 * {@code want}, each {@code "citation:rating"}, is exactly what the key reports, in any order — for a case
+	 * whose findings are not all rated Major, which {@link #assertReported} assumes.
+	 */
+	private static void assertReportedExactly(List<CautionLedOverWithholding> reported, String... want) {
+		assertNotNull(reported, "the check ran, so it states a measurement");
+		List<String> got = new ArrayList<String>();
+		for (CautionLedOverWithholding finding : reported) {
+			got.add(finding.getCitation() + ":" + finding.getRating());
+		}
+		List<String> expected = new ArrayList<String>();
+		Collections.addAll(expected, want);
+		Collections.sort(expected);
+		Collections.sort(got);
+		assertEquals(expected, got, "exactly these withholding findings about the drug the lead gives, each with "
+				+ "the rating its record states, and nothing else");
+	}
+
+	/**
+	 * A CONTRAINDICATION withholds without a rating — its clause is withholding-class and never asks
+	 * {@code licensesWithholding} — and it is reported beside a caution lead on its drug as the interaction
+	 * is. Her recorded allergy to amlodipine itself, recorded as free text; her rifampicin order's Major is
+	 * the finding the other cases report. The key's population is the finding the record ENDS in, so a stamp
+	 * re-derived from an interaction's rating would read this record as nothing.
+	 */
+	@Test
+	public void aContraindicationBesideACautionLeadOnItsDrugIsReported() throws IOException {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Amlodipine");
+		Recorder recorder = serviceAnswering(AMLODIPINE_CAUTION_LEAD, obs());
+		ChartAnswer answer = recorder.service.search(patient, "Is it safe to give Amlodipine?");
+
+		int allergy = findingNumber(recorder.prompt, "Amlodipine", "allergy");
+		int rifampicin = findingNumber(recorder.prompt, "Amlodipine", "rifamp");
+		assertReportedExactly(answer.getCautionLedOverWithholding(), allergy + ":null",
+				rifampicin + ":Major");
+	}
+
+	/**
+	 * A FOLDED finding withholds on a rating that says otherwise — methylphenidate's DDInter row against her
+	 * modafinil order is rated Minor, and the drug-in-play arm folds the two drugs' shared {@code N06BA}
+	 * class onto it ({@code SafetyWarning.carriesUnratedRelationship}) — so it is reported, with the Minor its
+	 * record states. A stamp read off the rating would report nothing here.
+	 */
+	@Test
+	public void aFoldedFindingWithholdingOnAMinorRatingIsReported() throws IOException {
+		executeDataSet("AnswerFromFindingsModafinilOrderTestData.xml");
+		String lead = "Methylphenidate can be given, with one caution: modafinil may interact with it.";
+		Recorder recorder = serviceAnswering(DrugReferenceTestSupport.ddiFixtureService(
+				"chartsearchai-test/ddi-folded-minor-class-pair-every-order-resolved.json"), lead, obs());
+		ChartAnswer answer = recorder.service.search(patient, "Is it safe to give methylphenidate?");
+
+		int folded = findingNumber(recorder.prompt, "Methylphenidate", "modafinil");
+		assertTrue(recorder.prompt.contains("N06BA"), "precondition: the class sentence is folded onto the Minor "
+				+ "row, prompt was:\n" + recorder.prompt);
+		assertReportedExactly(answer.getCautionLedOverWithholding(), folded + ":Minor");
+	}
+
+	/**
+	 * An unrated AUTHORED rule withholds (an unrated rule is not a low-rated one) and is reported with no
+	 * rating: paracetamol's curated rule against her warfarin order carries no severity.
+	 */
+	@Test
+	public void anUnratedAuthoredRuleIsReportedWithNoRating() throws IOException {
+		executeDataSet("AnswerFromFindingsWarfarinOrderTestData.xml");
+		String lead = "Paracetamol can be given, with one caution: it may potentiate warfarin.";
+		Recorder recorder = serviceAnswering(DrugReferenceTestSupport.curatedFixtureService(
+				"chartsearchai-test/drug-reference-answer-from-findings-unrated-rule.json"), lead, obs());
+		ChartAnswer answer = recorder.service.search(patient, "Can I give her paracetamol?");
+
+		assertReportedExactly(answer.getCautionLedOverWithholding(),
+				findingNumber(recorder.prompt, "Paracetamol", "warfarin") + ":null");
+	}
+
+	/**
+	 * A question-pair finding is about BOTH drugs of its pair, so it is reported whichever of the two the
+	 * lead gives. The arm names one of them the finding's subject by the dataset's own order, not the
+	 * question's — Rifampicin here, listed as current or proposed alike — so reading the subject alone made
+	 * the report depend on which drug the question happened to list. Patient 6 holds no active order, so the
+	 * Major pair is the question's own and no order-driven arm takes it.
+	 */
+	@Test
+	public void aQuestionPairMajorIsReportedWhicheverOfItsTwoDrugsTheLeadGives() throws IOException {
+		Patient noOrders = Context.getPatientService().getPatient(6);
+		for (String[] cell : new String[][] {
+				{ "The patient is currently on Rifampicin, is it safe to give Amlodipine?", "Amlodipine" },
+				{ "The patient is currently on Amlodipine, is it safe to give Rifampicin?", "Rifampicin" } }) {
+			String lead = cell[1] + " can be given, with one caution: it may interact with the other drug.";
+			Recorder recorder = serviceAnswering(lead, obs());
+			ChartAnswer answer = recorder.service.search(noOrders, cell[0]);
+
+			assertReported(answer.getCautionLedOverWithholding(),
+					findingNumber(recorder.prompt, "Rifampicin (rifampin)",
+							"amlodipine, also named in the question"));
+		}
+	}
+
 	/** A recorder standing in for the model: answers {@code answer} and keeps the prompt's records. */
 	private static final class Recorder extends LlmProvider {
 

@@ -43,10 +43,13 @@ import org.slf4j.LoggerFactory;
  * <p><b>What it cannot see</b>, stated so that {@code []} is not read as a certificate:
  * <ul>
  *   <li>any lead the anchor refuses — among them issue #513 item 2's recorded E2B shapes, a refusal and a
- *       "No" before a permission;</li>
+ *       "No" before a permission. That item is NOT delivered here and stays open on #513: its defect is a
+ *       verdict on the drug asked that follows the LISTED drugs' findings, which a check of the lead's own
+ *       drug's findings cannot report even where the anchor admits the lead (ADR Decision 119);</li>
  *   <li>a drug only the ANSWER put in play, which has chips and no record;</li>
- *   <li>a finding whose SUBJECT is another drug and whose partner is the lead's — a question-pair finding
- *       is raised once per pair, about one of its two drugs;</li>
+ *   <li>a finding whose SUBJECT is another drug and whose partner is the lead's — except a question-pair
+ *       finding, which states both of its drugs' rows, because that arm elects its subject by the
+ *       dataset's order and never the question's;</li>
  *   <li>a finding the screening arm or an order-driven INTERACTION arm raised, which states no subject
  *       rows; an order-driven contraindication does, through the step every contraindication passes.</li>
  * </ul>

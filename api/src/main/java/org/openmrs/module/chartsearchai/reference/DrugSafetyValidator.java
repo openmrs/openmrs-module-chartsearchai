@@ -2079,8 +2079,9 @@ public class DrugSafetyValidator {
 	/**
 	 * Whether {@code lead}'s drug is the substance of the reference rows {@code subjectRowIds} identify —
 	 * {@code RecordMapping.getFindingSubjectRows()}, the rows the arm that raised a finding named its subject
-	 * by (issue #515). Substance identity ({@link DrugReference#substanceGroupKey()}) between the entries the
-	 * lead's name named and those rows; {@code false} where no row carries one of the ids.
+	 * by, and a question-pair finding's partner too (issue #515). Substance identity
+	 * ({@link DrugReference#substanceGroupKey()}) between the entries the lead's name named and those rows;
+	 * {@code false} where no row carries one of the ids.
 	 */
 	public boolean namesTheFindingsSubject(CautionLead lead, List<String> subjectRowIds) {
 		if (lead == null || subjectRowIds == null || subjectRowIds.isEmpty() || drugReferenceService == null) {
@@ -2812,6 +2813,18 @@ public class DrugSafetyValidator {
 			return substances.containsKey(substance)
 					? stated.asAboutAnEndedOrder(substances.get(substance), rows.get(substance))
 					: stated;
+		}
+
+		/** {@code chip}, a question-pair finding, {@link #stamp stamped} for its {@code subject} and then
+		 *  stated as about {@code partner}'s substance too — the one arm whose finding is about both drugs
+		 *  it names, its subject being the dataset's order of the two (issue #515). Its ended-order referent
+		 *  stays the subject's: "withhold it" names the subject. */
+		SafetyWarning stampPair(DrugReference subject, DrugReference partner, SafetyWarning chip) {
+			SafetyWarning stated = stamp(subject, chip);
+			List<DrugReference> ofThePartner = subjectRows.get(partner.substanceGroupKey());
+			List<DrugReference> both = new ArrayList<DrugReference>(stated.subjectRows());
+			both.addAll(ofThePartner != null ? ofThePartner : Collections.singletonList(partner));
+			return stated.aboutSubstance(both);
 		}
 	}
 
@@ -6584,7 +6597,10 @@ public class DrugSafetyValidator {
 			// sort and the cap, which it cannot move (issue #472, see EndedOrders). A question naming
 			// two drugs her chart holds only as ended orders proposed neither, and "withhold it" had
 			// no referent there either.
-			warnings.add(endedOrders.stamp(finding.row, finding.warning));
+			// And about BOTH drugs of the pair (issue #515): which one is the subject is the dataset's
+			// order, never the question's, so a check asking which findings are about a drug must find
+			// this one from either side.
+			warnings.add(endedOrders.stampPair(finding.row, finding.partnerRow, finding.warning));
 		}
 		return PairChipExtent.of(found.size(), shown);
 	}
@@ -6628,12 +6644,17 @@ public class DrugSafetyValidator {
 
 		final DrugReference.Interaction rule;
 
+		/** The OTHER entry of the pair — the partner {@link #row}'s rule names (issue #515, see
+		 *  {@code EndedOrders.stampPair}). */
+		final DrugReference partnerRow;
+
 		PairFinding(SafetyWarning warning, String severity, DrugReference row,
-				DrugReference.Interaction rule) {
+				DrugReference.Interaction rule, DrugReference partnerRow) {
 			this.warning = warning;
 			this.severity = severity;
 			this.row = row;
 			this.rule = rule;
+			this.partnerRow = partnerRow;
 		}
 	}
 
@@ -6742,7 +6763,8 @@ public class DrugSafetyValidator {
 		// The chip carries the rating it is ORDERED on (issue #207), so the ordering is observable
 		// without reading it back out of the prose above.
 		candidates.put(pairKey, new PairFinding(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
-				subject.displayLabel(), detail, rule.getSeverity()), rule.getSeverity(), row, rule));
+				subject.displayLabel(), detail, rule.getSeverity()), rule.getSeverity(), row, rule,
+				fromFirst ? second : first));
 	}
 
 	/**

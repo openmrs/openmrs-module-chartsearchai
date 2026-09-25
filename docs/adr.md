@@ -11081,8 +11081,11 @@ takes one asked substance, ships off, and was left alone.
   contraindication states a withholding-class clause without asking it), and
   `RecordMapping.getFindingSubjectRows()`, the ids of every row of the substance the arm named the finding's
   subject by, carried on `SafetyWarning.subjectRows()` from `EndedOrders.stamp`, the step every
-  question-driven arm's chip and every contraindication chip passes through. A record is about the lead's drug where the lead's name is
-  of one of those rows' substance, by the entries the lead's name named. Neither is re-derived from the
+  question-driven arm's chip and every contraindication chip passes through — and, for a question-pair
+  finding, of its partner's substance too (`EndedOrders.stampPair`), because that arm elects which of the
+  two drugs is the subject by the dataset's order and never the question's, so reading the subject alone
+  made the report depend on which of the two the question happened to list. A record is about the lead's
+  drug where the lead's name is of one of those rows' substance, by the entries the lead's name named. Neither is re-derived from the
   text or from the `resourceKey` label, which is not a substance name.
 - **The listed drugs her chart holds no active order for are stated**, in one appended sentence —
   *"The chart holds no active order for Lamivudine, Nevirapine or Stavudine."* — by `ListedDrugStatement`,
@@ -11116,19 +11119,29 @@ takes one asked substance, ships off, and was left alone.
 ### Residues
 
 - **A lead the anchor refuses reads as `[]`**: a refusal, a bare permission naming no caution, and a word
-  before the drug. Issue #513's item 2, which the issue's decision handed here, is outside this key: of its
-  three recorded E2B leads, the fluconazole one is a refusal, and #513 recorded that none of fluconazole's
-  own findings withholds; the other two open *"No — … can be given"* and *"No. … can be given"*, which the
-  anchor refuses. Pinned by `LlmInferenceServiceListedMedicationsContextTest.aNoBeforeAPermissionIsNotReadAsACautionLead`
+  before the drug. Pinned by `LlmInferenceServiceListedMedicationsContextTest.aNoBeforeAPermissionIsNotReadAsACautionLead`
   and `.aPermissionNamingNoCautionIsNotReadAsACautionLead`.
+- **Issue [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513)'s item 2 is NOT
+  delivered by this decision, and #513 stays open for it.** #515's decision said this key reports it; it
+  cannot, and no code within that decision can. The item is the E2B verdict on the drug asked following the
+  LISTED drugs' own findings, and this key reports only findings about the drug the lead gives. Of its three
+  recorded leads, the fluconazole one is a refusal, and #513 recorded that none of fluconazole's own findings
+  withholds — the inverse disagreement, which a caution-lead check never reads; the other two open
+  *"No — … can be given"* and *"No. … can be given"*, which the anchor refuses, and #513 recorded that each of
+  those drugs, asked without the list, leads with the caution its own findings license, so even a looser
+  anchor would report `[]` beside them. Nothing in this module reports the item; #513 is where it is
+  tracked.
 - **A drug only the answer put in play** has chips and no record, so a lead on it reads nothing.
-- **A record is matched on its SUBJECT**, so a withholding question-pair finding whose subject is another
-  drug and whose partner is the lead's is not reported, and a finding the screening arm or an order-driven
-  interaction arm raised carries no subject rows.
+- **A record is matched on its SUBJECT**, and a question-pair finding on both of its drugs, so a
+  withholding finding of another arm whose subject is another drug and whose partner is the lead's is not
+  reported, and a finding the screening arm or an order-driven interaction arm raised carries no subject
+  rows.
 - **An order resolved to only some of its substances** passes the resolution gate, so a constituent it left
   out can be named as one she holds no active order for. Decision 110 measured how rarely a combination
   NAME does this over the shipped knowledge base, and names the brand that does.
 - **Every drug named before the proposal counts as listed**; the words before it are not read, so
   *"She had a reaction to penicillin, can I give her amoxicillin?"* can name penicillin.
 
-→ `LlmInferenceServiceListedMedicationsContextTest`, `ChartSearchAiCautionLedOverWithholdingTest`.
+→ `LlmInferenceServiceListedMedicationsContextTest` (`.aQuestionPairMajorIsReportedWhicheverOfItsTwoDrugsTheLeadGives`,
+`.aContraindicationBesideACautionLeadOnItsDrugIsReported`, `.aFoldedFindingWithholdingOnAMinorRatingIsReported`),
+`ChartSearchAiCautionLedOverWithholdingTest`.

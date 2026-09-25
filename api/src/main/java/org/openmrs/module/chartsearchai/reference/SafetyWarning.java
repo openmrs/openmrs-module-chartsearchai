@@ -1096,9 +1096,10 @@ public class SafetyWarning {
 	/**
 	 * This warning, stated as about the substance {@code rows} are every reference row of — the finding's
 	 * SUBJECT, decided where the arm named it (issue #515). Package-private: {@code EndedOrders.stamp} is
-	 * its only caller, the step every question-driven arm's chip and every contraindication chip passes
-	 * through; the screening arm's and the order-driven interaction arm's chips carry no subject rows. See
-	 * {@link #subjectRows()}.
+	 * its caller, the step every question-driven arm's chip and every contraindication chip passes
+	 * through, and {@code EndedOrders.stampPair} beside it for a question-pair finding, which is about both
+	 * of its drugs; the screening arm's and the order-driven interaction arm's chips carry no subject rows.
+	 * See {@link #subjectRows()}.
 	 */
 	SafetyWarning aboutSubstance(List<DrugReference> rows) {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
@@ -1109,7 +1110,9 @@ public class SafetyWarning {
 
 	/**
 	 * Every reference row of the substance this finding is about, as the arm that raised it named that
-	 * substance — issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>.
+	 * substance — issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a> —
+	 * and, for a question-pair finding, of its partner's substance too: that arm elects which of the two
+	 * drugs is the subject by the dataset's order, never the question's, so the finding is about both.
 	 * Empty on a chip {@link #aboutSubstance} was never asked of, never null. Package-private and not a getter, so it
 	 * reaches no wire: {@code DrugReferenceInjector} carries it onto the finding's record, as each row's id,
 	 * so a check of the answer asks which findings are about a drug of the rows that were decided rather

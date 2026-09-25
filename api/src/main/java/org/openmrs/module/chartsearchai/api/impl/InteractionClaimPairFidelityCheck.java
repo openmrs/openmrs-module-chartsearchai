@@ -78,9 +78,18 @@ import org.slf4j.LoggerFactory;
  * finding names read as related, and a claim pairing two orders of a merged finding is not reported —
  * {@link #anyRelates} says why that is the direction chosen.
  *
- * <p><b>A claim can state several pairs</b> (round 2 of #514's review). Every drug the partner span
- * names that a finding or chip names is a PARTNER of it — <em>"active order Amiodarone and
- * Digoxin"</em> states two — and a span naming none is compared whole. Every such drug the SUBJECT span
+ * <p><b>A partner is judged only where its span STARTS with a name the findings carry</b> — the owner's
+ * decision on #514 after round 6 of its review, where <em>"… active order Rifampicin — Moderate
+ * [4]"</em>, compared whole, accused its own finding. A known name is one of the findings' and chips'
+ * names above; the span must begin, on a word's boundary, with the start of one or of one of its parts
+ * ({@link #beginsAPartOf}), and whatever follows is ignored — a strength, a form, a severity, a full
+ * stop ({@link #nameAt}). A span starting otherwise — a brand or paraphrase no finding prints, a word
+ * before the name, a drug no finding or chip names — is left UNJUDGED, never compared whole. Only a
+ * false report blocks this check; a missed one is a residue of ADR Decision 120.
+ *
+ * <p><b>A claim can state several pairs</b> (round 2 of #514's review). Every further drug the partner
+ * span names that a finding or chip names is a PARTNER of it — <em>"active order Amiodarone and
+ * Digoxin"</em> states two ({@link #partnersNamed}). Every such drug the SUBJECT span
  * names is a READING of its subject, and the claim is judged only where every reading reaches one
  * verdict: which drug of <em>"X can be given alongside Y but X interacts with…"</em> is the subject is
  * the one nearest the noun, and of <em>"…alongside Y but it interacts with…"</em> is not, the same
@@ -107,7 +116,7 @@ import org.slf4j.LoggerFactory;
  *       containment in
  *       {@link FindingPartnerCoverageCheck#comparable} form, the form that class asks "did the answer
  *       name this order" in, so one question has one comparison;</li>
- *   <li>the partner side is blank;</li>
+ *   <li>the partner span is blank, or does not start with a known name;</li>
  *   <li>the subject clause carries a word standing for a drug without naming it —
  *       {@link #SUBJECT_STAND_INS}, <em>it</em>, <em>this</em>, <em>which</em>, the <em>the</em> of
  *       <em>"the drug"</em> — since its subject may then be a drug named before its comma or in the
@@ -141,13 +150,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>What it cannot see.</b> Containment reads a short name inside a longer one as the same drug —
  * <em>Lamivudine</em> inside <em>Lamivudine / zidovudine</em> — so a swap between those two passes.
- * An invented pair whose subject is a drug no finding names is unjudged. The partner side runs the
- * other way, because it is ungated: a partner the answer names by a brand or a paraphrase no finding
- * prints reads as unrelated and can be REPORTED — the displays of the orders the finding's arm matched
- * are what keep her prescription's own display, as its record prints it, out of that case, and a
- * paraphrase of that display is still in it. So is a partner its sentence ends on with a closing
- * parenthesis or quote after the terminator, which {@link #withoutItsSentenceEnd} does not reach past
- * (<em>"… active order Rifampicin.)"</em>). A claim pairing two orders one finding names reads as
+ * An invented pair whose subject or partner is a drug no finding or chip names is unjudged, and so is a
+ * partner named by a brand, a paraphrase or a word inside a part of a name (<em>isoniazid</em> of a
+ * combination's display) rather than the start of one. The first words of a name two drugs share read
+ * as either, toward silence. A claim pairing two orders one finding names reads as
  * related, so an order put in for a merged finding's subject passes — {@link #anyRelates} says why.
  * The trailing-run gates read names the findings carry and the phrase's own verb, so a later clause
  * naming another drug only by a name no finding prints, citing a finding that names the claim's
@@ -163,7 +169,7 @@ import org.slf4j.LoggerFactory;
  * in a spaced hyphen — leaves an asserting claim unjudged. A list's last partner followed by
  * punctuation and then a clause of its own is still read as a partner.
  * A second partner no finding or chip names at all — <em>Heparin</em> in <em>"active order Amiodarone
- * and Heparin"</em> — is no name to this check, so it reads as more words of the related partner and
+ * and Heparin"</em> — is no name to this check, so it reads as words after the related partner and
  * passes; a partner list continued past a comma is cut at it, so <em>"active order Amiodarone, Heparin
  * and Digoxin"</em> is judged on Amiodarone alone. A swapped subject in a clause naming several drugs is
  * left unjudged, not reported — a pronoun or a parenthesis included — and so is one after a claim with no
@@ -295,27 +301,24 @@ final class InteractionClaimPairFidelityCheck {
 			for (ActiveOrderCitationFidelityCheck.Claim claim : claims) {
 				String subject = FindingPartnerCoverageCheck.comparable(afterItsLead(claim.subject()));
 				Set<String> subjectNames = namedIn(subject, vocabulary);
-				String partner = normalized(withoutItsSentenceEnd(claim.partner()));
-				if (subjectNames.isEmpty() || partner.isEmpty() || containsAWordOf(subject, SUBJECT_STAND_INS)
+				if (subjectNames.isEmpty() || containsAWordOf(subject, SUBJECT_STAND_INS)
 						|| deniesItsClause(subject)) {
 					continue;
 				}
-				// Every drug the partner span names that a finding or chip names is a partner of the claim —
-				// "active order Amiodarone and Digoxin" states two pairs, and containment of the one related
-				// name read both as related (round 2 of #514's review). A span naming none is compared whole.
-				Set<String> partnerNames = namedIn(partner, vocabulary);
-				List<Set<String>> partnerReadings;
-				if (partnerNames.isEmpty()) {
-					partnerReadings = Collections.singletonList(Collections.singleton(partner));
+				// A partner is judged only where the span STARTS with a name the findings carry, and on that
+				// name alone — never the words after it, never the span compared whole (the owner's decision
+				// on #514, after round 6 of its review). Every further drug the span names is a partner too:
+				// "active order Amiodarone and Digoxin" states two pairs (round 2).
+				String partner = normalized(withoutItsNounsPlural(claim.partner()));
+				List<Partner> partners = partnersNamed(partner, vocabulary);
+				if (partners.isEmpty()) {
+					continue;
 				}
-				else {
-					partnerReadings = partnerReadings(partner, partnerNames);
-					if (partnerReadings.isEmpty()) {
-						// "…active order Amiodarone but not with Digoxin" — the span ran on into a clause of
-						// its own, and which of its drugs the claim offered cannot be read (round 3 of #514's
-						// review).
-						continue;
-					}
+				List<List<Partner>> partnerReadings = partnerReadings(partner, partners);
+				if (partnerReadings.isEmpty()) {
+					// "…active order Amiodarone but not with Digoxin" — the span ran on into a clause of its
+					// own, and which of its drugs the claim offered cannot be read (round 3 of #514's review).
+					continue;
 				}
 				List<Finding> runFindings = new ArrayList<Finding>();
 				List<Integer> runIndexes = new ArrayList<Integer>();
@@ -346,14 +349,14 @@ final class InteractionClaimPairFidelityCheck {
 						|| !trailingGap.contains(RELATIONSHIP_VERB))) {
 					for (Integer index : claim.admittedTrailingRunIndexes(admitted)) {
 						Finding finding = citedFindings.contains(index) ? citableFindings.get(index) : null;
-						if (finding != null && finding.relatesDrugs && matchesAny(partner, finding.names)) {
+						if (finding != null && finding.relatesDrugs && namesAny(partners, finding.names)) {
 							runFindings.add(finding);
 							runIndexes.add(index);
 						}
 					}
 				}
 				List<Finding> candidates = runFindings.isEmpty() ? population : runFindings;
-				if (unreadable || anyUndecidable(candidates, subjectNames, partner)) {
+				if (unreadable || anyUndecidable(candidates, subjectNames, partners)) {
 					continue;
 				}
 				// Each drug the subject span names is a READING of the claim's subject, and the claim is
@@ -366,8 +369,8 @@ final class InteractionClaimPairFidelityCheck {
 				Verdict verdict = null;
 				boolean readingsDisagree = false;
 				for (String reading : subjectNames) {
-					for (Set<String> partners : partnerReadings) {
-						Verdict read = verdict(reading, partners, runFindings, population);
+					for (List<Partner> partnersRead : partnerReadings) {
+						Verdict read = verdict(reading, partnersRead, runFindings, population);
 						if (verdict == null) {
 							verdict = read;
 						}
@@ -475,63 +478,183 @@ final class InteractionClaimPairFidelityCheck {
 	}
 
 	/**
-	 * @return the READINGS of which drugs of {@code partner} the claim names as its partners — empty where
-	 *         some stretch between two of the {@code names} it contains is more than
-	 *         {@link #PARTNER_LIST_WORDS} and punctuation, so the claim is left unjudged; otherwise
-	 *         {@code names} alone where the list ENDS at its last name — the span stops there, or
-	 *         punctuation follows it before any word does — and, where a word follows the last of
-	 *         several, {@code names} and {@code names} less the ones only that last occurrence carries.
-	 *         A word straight after the last name says that name may have opened a clause of its own —
-	 *         <em>"Amiodarone and Digoxin is unaffected"</em>, or the next claim's subject where the span
-	 *         runs up to it (round 1 of #514's second review) — or may not (<em>"Amiodarone and Digoxin
-	 *         tablets"</em>), so the claim is judged only where both readings reach one verdict: a citation
-	 *         relating the subject to none of the drugs named is misattributed under either (round 2 of
-	 *         that review), and one relating only that last drug is not accused. #477's finding, copied
-	 *         verbatim, closes its list with a dash (<em>"… A and B — possible duplicate therapy"</em>).
-	 *         Punctuation and not a vocabulary, {@code clauseBound}'s reason; what that gives up is a last
-	 *         name followed by punctuation and then a clause of its own, still read as a partner. A name
-	 *         inside another occurrence ({@code lamivudine} of {@code lamivudine/zidovudine}) is that
-	 *         occurrence, so it opens no stretch; the words before the first name are not asked, nor,
-	 *         where it names one drug, the words after it.
+	 * @return the drugs {@code span} names as the claim's partners, in span order — EMPTY, so the claim
+	 *         is left unjudged, where the span does not start with a name the findings carry. The first
+	 *         partner is the one it starts with ({@link #nameAt}); every name of the vocabulary the span
+	 *         contains, and every name starting just after a word of {@link #PARTNER_LIST_WORDS}, is one
+	 *         too, read by {@link #partnerReadings}'s refusals. A name inside another's extent
+	 *         ({@code lamivudine} of {@code lamivudine/zidovudine}) is that one, and its spelling one more
+	 *         form of it, so it is never a partner of its own.
 	 */
-	private static List<Set<String>> partnerReadings(String partner, Set<String> names) {
-		List<Object[]> occurrences = new ArrayList<Object[]>();
-		for (String name : names) {
-			for (int at = partner.indexOf(name); at >= 0; at = partner.indexOf(name, at + 1)) {
-				occurrences.add(new Object[] { Integer.valueOf(at), Integer.valueOf(at + name.length()), name });
+	private static List<Partner> partnersNamed(String span, Set<String> vocabulary) {
+		Partner first = nameAt(span, 0, vocabulary);
+		if (first == null) {
+			return Collections.emptyList();
+		}
+		List<Partner> found = new ArrayList<Partner>();
+		found.add(first);
+		for (String name : vocabulary) {
+			for (int at = span.indexOf(name); at >= 0; at = span.indexOf(name, at + 1)) {
+				found.add(new Partner(at, at + name.length(), Collections.singleton(name)));
 			}
 		}
-		Collections.sort(occurrences, (one, other) -> {
-			int start = Integer.compare((Integer) one[0], (Integer) other[0]);
-			return start != 0 ? start : Integer.compare((Integer) other[1], (Integer) one[1]);
-		});
-		int coveredTo = -1;
-		int lastFrom = -1;
-		for (Object[] occurrence : occurrences) {
-			int start = ((Integer) occurrence[0]).intValue();
-			if (coveredTo >= 0 && start >= coveredTo) {
-				for (String word : partner.substring(coveredTo, start).split("[^\\p{L}\\p{N}]+")) {
-					if (!word.isEmpty() && !PARTNER_LIST_WORDS.contains(word)) {
-						return Collections.emptyList();
-					}
+		int at = 0;
+		while (at < span.length()) {
+			int end = wordEnd(span, at);
+			if (end > at && PARTNER_LIST_WORDS.contains(span.substring(at, end))) {
+				int next = end;
+				while (next < span.length() && Character.isWhitespace(span.charAt(next))) {
+					next++;
 				}
-				lastFrom = start;
+				Partner listed = next > end ? nameAt(span, next, vocabulary) : null;
+				if (listed != null) {
+					found.add(listed);
+				}
 			}
-			coveredTo = Math.max(coveredTo, ((Integer) occurrence[1]).intValue());
+			at = end > at ? end : at + 1;
 		}
-		if (lastFrom >= 0) {
-			String after = partner.substring(coveredTo).trim();
+		Collections.sort(found, (one, other) -> one.start != other.start ? Integer.compare(one.start, other.start)
+				: Integer.compare(other.end, one.end));
+		List<Partner> partners = new ArrayList<Partner>();
+		for (Partner partner : found) {
+			Partner last = partners.isEmpty() ? null : partners.get(partners.size() - 1);
+			if (last != null && partner.start < last.end) {
+				last.forms.addAll(partner.forms);
+				last.end = Math.max(last.end, partner.end);
+			}
+			else {
+				partners.add(partner);
+			}
+		}
+		return partners;
+	}
+
+	/**
+	 * @return the name the span STARTS with at {@code from}, as every run of its words from there, ending
+	 *         on a word's end, that begins a known name or a part of one ({@link #beginsAPartOf}) — or null
+	 *         where the first word begins none, or {@code from} is not a word's start. Whatever follows the
+	 *         longest such run — a strength, a form, <em>"— Moderate"</em>, a full stop — is no part of
+	 *         the name (the owner's decision on #514: r6-1 was <em>"Rifampicin — Moderate [4]"</em>
+	 *         compared whole and its own finding accused). Every run is a FORM of the partner and a finding
+	 *         relates it where one form is read as one of its names, so a name the answer shortens to its
+	 *         first words (<em>Rifampicin</em> of <em>Rifampicin 300mg capsule</em>) and one it gives in
+	 *         full both read as the finding's, whichever of the two the finding carries. Chosen toward
+	 *         silence; no case pins every run over the longest or the shortest alone.
+	 */
+	private static Partner nameAt(String span, int from, Set<String> vocabulary) {
+		if (from >= span.length() || !Character.isLetterOrDigit(span.charAt(from))) {
+			return null;
+		}
+		Set<String> forms = new LinkedHashSet<String>();
+		int end = -1;
+		int at = wordEnd(span, from);
+		while (true) {
+			String words = span.substring(from, at);
+			boolean known = false;
+			for (String name : vocabulary) {
+				known |= beginsAPartOf(name, words);
+			}
+			if (!known) {
+				break;
+			}
+			forms.add(words);
+			end = at;
+			int next = nextWord(span, at);
+			if (next >= span.length()) {
+				break;
+			}
+			at = wordEnd(span, next);
+		}
+		return forms.isEmpty() ? null : new Partner(from, end, forms);
+	}
+
+	/**
+	 * @return whether {@code words} occur in {@code name} ending on a word's end and beginning at its
+	 *         start or at the start of one of its PARTS — past a character that is not a letter, digit or
+	 *         space, as a label's parenthesis (<em>Rifampicin (rifampin)</em>) or a combination's slash
+	 *         begins one. Never a word inside a part: <em>capsule</em> of <em>Rifampicin 300mg
+	 *         capsule</em> and the <em>and</em> of a combination's display begin no name. No case pins
+	 *         that refusal.
+	 */
+	private static boolean beginsAPartOf(String name, String words) {
+		for (int at = name.indexOf(words); at >= 0; at = name.indexOf(words, at + 1)) {
+			int end = at + words.length();
+			if (end < name.length() && Character.isLetterOrDigit(name.charAt(end))) {
+				continue;
+			}
+			int before = at - 1;
+			while (before >= 0 && Character.isWhitespace(name.charAt(before))) {
+				before--;
+			}
+			if (before < 0 || !Character.isLetterOrDigit(name.charAt(before))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** @return where the word starting at {@code at} ends — {@code at} itself where none starts there */
+	private static int wordEnd(String text, int at) {
+		int end = at;
+		while (end < text.length() && Character.isLetterOrDigit(text.charAt(end))) {
+			end++;
+		}
+		return end;
+	}
+
+	/** @return where the next word after {@code at} starts — the text's length where none does */
+	private static int nextWord(String text, int at) {
+		int next = at;
+		while (next < text.length() && !Character.isLetterOrDigit(text.charAt(next))) {
+			next++;
+		}
+		return next;
+	}
+
+	/**
+	 * @return the READINGS of which of {@code partners} the claim names — empty, so it is left unjudged,
+	 *         where some stretch between two of them is more than {@link #PARTNER_LIST_WORDS} and
+	 *         punctuation; otherwise all of them where the list ENDS at its last — the span stops there,
+	 *         or punctuation follows it before any word does — and, where a word follows the last of
+	 *         several, all of them and all but that last. A word straight after the last name says it may
+	 *         have opened a clause of its own — <em>"Amiodarone and Digoxin is unaffected"</em>, or the next
+	 *         claim's subject where the span runs up to it (round 1 of #514's second review) — or may not
+	 *         (<em>"Amiodarone and Digoxin tablets"</em>), so the claim is judged only where both readings
+	 *         reach one verdict: a citation relating the subject to none of the drugs named is
+	 *         misattributed under either (round 2 of that review), and one relating only that last drug
+	 *         is not accused. #477's finding, copied verbatim, closes its list with a dash (<em>"… A and B
+	 *         — possible duplicate therapy"</em>). Punctuation and not a vocabulary, {@code clauseBound}'s
+	 *         reason; what that gives up is a last name followed by punctuation and then a clause of its
+	 *         own, still read as a partner. Where the span names one drug, the words after it are not
+	 *         asked.
+	 */
+	private static List<List<Partner>> partnerReadings(String span, List<Partner> partners) {
+		for (int at = 1; at < partners.size(); at++) {
+			for (String word : span.substring(partners.get(at - 1).end, partners.get(at).start)
+					.split("[^\\p{L}\\p{N}]+")) {
+				if (!word.isEmpty() && !PARTNER_LIST_WORDS.contains(word)) {
+					return Collections.emptyList();
+				}
+			}
+		}
+		if (partners.size() > 1) {
+			String after = span.substring(partners.get(partners.size() - 1).end).trim();
 			if (!after.isEmpty() && Character.isLetterOrDigit(after.codePointAt(0))) {
-				Set<String> beforeTheLast = new HashSet<String>();
-				for (Object[] occurrence : occurrences) {
-					if (((Integer) occurrence[0]).intValue() < lastFrom) {
-						beforeTheLast.add((String) occurrence[2]);
-					}
-				}
-				return Arrays.asList(names, beforeTheLast);
+				return Arrays.asList(partners, partners.subList(0, partners.size() - 1));
 			}
 		}
-		return Collections.singletonList(names);
+		return Collections.singletonList(partners);
+	}
+
+	/**
+	 * @return {@code partner} less the {@code s} of the noun's plural — <em>"active orders A and B"</em>,
+	 *         #477's finding copied verbatim — which the claim walk leaves at the span's start, since it
+	 *         finds the noun in its singular. A span starting with a word is otherwise read as it is.
+	 */
+	private static String withoutItsNounsPlural(String partner) {
+		return partner.length() > 1 && partner.charAt(0) == 's' && !Character.isLetterOrDigit(partner.charAt(1))
+				? partner.substring(1)
+				: partner;
 	}
 
 	/**
@@ -587,11 +710,11 @@ final class InteractionClaimPairFidelityCheck {
 	 *         partner beside a cited one that relates; otherwise RELATED. A partner the run leaves
 	 *         unrelated that an uncited finding relates is not a pair "no finding raised".
 	 */
-	private static Verdict verdict(String reading, Set<String> partners, List<Finding> runFindings,
+	private static Verdict verdict(String reading, List<Partner> partners, List<Finding> runFindings,
 			List<Finding> population) {
 		boolean citationRelates = false;
 		boolean everyPartnerFounded = true;
-		for (String partner : partners) {
+		for (Partner partner : partners) {
 			if (!runFindings.isEmpty() && anyRelates(runFindings, reading, partner)) {
 				citationRelates = true;
 			}
@@ -612,35 +735,9 @@ final class InteractionClaimPairFidelityCheck {
 		return text == null ? "" : FindingPartnerCoverageCheck.comparable(text).trim();
 	}
 
-	/**
-	 * @return {@code span} less its trailing whitespace and members of
-	 *         {@link ChartSearchAiUtils#SENTENCE_TERMINATORS} — the SENTENCE's own end, which a claim with
-	 *         no marker carries in its partner span because {@code SENTENCE_BOUNDARY} leaves the terminator
-	 *         on the sentence and {@code clauseBound} does not cut there. Left in, it is a character of the
-	 *         partner: <em>rifampicin.</em> is contained in neither <em>Rifampicin (rifampin)</em> nor
-	 *         <em>Rifampicin 300mg capsule</em>, so a claim stating the very pair a carried finding
-	 *         relates was published unfounded (round 5 of #514's review). The set is read, never
-	 *         spelled here. Only the partner span: {@code ActiveOrderCitationFidelityCheck.claims} and
-	 *         its other readers are unchanged. A character after the terminator that is not one — a
-	 *         closing parenthesis or quote, <em>"Rifampicin.)"</em> — stops the trim, so such a claim
-	 *         is still compared with its terminator in it.
-	 */
-	private static String withoutItsSentenceEnd(String span) {
-		if (span == null) {
-			return null;
-		}
-		int end = span.length();
-		while (end > 0 && (Character.isWhitespace(span.charAt(end - 1))
-				|| ChartSearchAiUtils.SENTENCE_TERMINATORS.indexOf(span.charAt(end - 1)) >= 0)) {
-			end--;
-		}
-		return span.substring(0, end);
-	}
-
 	/** @return whether two names, in comparable form, are read as naming one drug: either contains the
-	 *          other — so a partner span running on past the name still matches it, and a partner named
-	 *          by the front of a longer name the finding carries ({@code coumadin} of
-	 *          {@code coumadin 5mg}) does too. That second direction is also what reads
+	 *          other — so a partner named by the front of a longer name the finding carries
+	 *          ({@code coumadin} of {@code coumadin 5mg}) matches it. That direction is also what reads
 	 *          {@code lamivudine} as {@code lamivudine/zidovudine}. */
 	private static boolean sameDrug(String one, String other) {
 		return one.contains(other) || other.contains(one);
@@ -665,9 +762,9 @@ final class InteractionClaimPairFidelityCheck {
 	 *         subject, so refusing the pair would call a verbatim copy of them misattributed. The cost is
 	 *         the other direction: a claim pairing two orders of a merged finding is not reported.
 	 */
-	private static boolean anyRelates(List<Finding> findings, String subject, String partner) {
+	private static boolean anyRelates(List<Finding> findings, String subject, Partner partner) {
 		for (Finding finding : findings) {
-			if (finding.namesAnOrder && matchesAny(partner, finding.names)
+			if (finding.namesAnOrder && namesAny(partner.forms, finding.names)
 					&& matchesAny(subject, finding.names)) {
 				return true;
 			}
@@ -685,14 +782,25 @@ final class InteractionClaimPairFidelityCheck {
 		return false;
 	}
 
+	/** @return whether a form of any of {@code partners} is read as one of {@code names} */
+	private static boolean namesAny(List<Partner> partners, Set<String> names) {
+		for (Partner partner : partners) {
+			if (namesAny(partner.forms, names)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** @return whether a finding naming no order is about a drug either side of the claim names — the
 	 *          class-only relationship, whose partner is a class this check cannot compare */
-	private static boolean anyUndecidable(List<Finding> findings, Set<String> subjectNames, String partner) {
+	private static boolean anyUndecidable(List<Finding> findings, Set<String> subjectNames,
+			List<Partner> partners) {
 		for (Finding finding : findings) {
 			if (finding.namesAnOrder) {
 				continue;
 			}
-			if (sameDrug(partner, finding.subject)) {
+			if (namesAny(partners, Collections.singleton(finding.subject))) {
 				return true;
 			}
 			if (namesAny(subjectNames, Collections.singleton(finding.subject))) {
@@ -707,6 +815,22 @@ final class InteractionClaimPairFidelityCheck {
 	private static boolean isReferenceMaterial(RecordMapping mapping) {
 		return mapping != null && ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
 				.equals(ChartSearchAiUtils.referenceGroup(mapping.getResourceType()));
+	}
+
+	/** One drug a claim's partner span names: where it sits in the span, and every form of its name. */
+	private static final class Partner {
+
+		private final int start;
+
+		private int end;
+
+		private final Set<String> forms;
+
+		private Partner(int start, int end, Set<String> forms) {
+			this.start = start;
+			this.end = end;
+			this.forms = new LinkedHashSet<String>(forms);
+		}
 	}
 
 	/** One finding, record or chip, as the names it goes by in comparable form. */

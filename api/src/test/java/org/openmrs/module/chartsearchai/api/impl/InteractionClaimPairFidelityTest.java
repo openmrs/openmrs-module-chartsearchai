@@ -152,12 +152,16 @@ public class InteractionClaimPairFidelityTest {
 	}
 
 	@Test
-	public void aPairNoFindingRelatesStatedWithNoCitationIsUnfounded() {
-		// The ticket's case 3: a pair no finding raised, and nothing cited for it. Heparin is not one of
-		// her orders and no finding names it — the invented partner.
+	public void aPairNoFindingRelatesStatedWithNoCitationIsUnfoundedWhereAFindingNamesItsPartner() {
+		// The ticket's case 3: a pair no finding raised, and nothing cited for it. Digoxin is one of her
+		// orders and a finding's partner, and no finding or chip relates it to Simvastatin.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
-		String answer = "Clarithromycin can be given with care, and Clarithromycin interacts with active "
-				+ "order Heparin.";
+		String answer = "Clarithromycin can be given with care, and Simvastatin interacts with active "
+				+ "order Digoxin.";
+		assertFalse(arrangement.hasFinding("Simvastatin", "Digoxin") || arrangement.hasFinding("Digoxin",
+				"Simvastatin"), "the premise: no finding relates the pair, chart was: " + arrangement.chart.getText());
+		assertFalse(arrangement.chipsOver(answer).stream().anyMatch(chip -> relates(chip, "Simvastatin",
+				"Digoxin")), "nor does a chip, were: " + arrangement.chipsOver(answer));
 
 		InteractionClaimPairs pairs = arrangement.service(answer).search(patient(), LISTING_QUESTION)
 				.getInteractionClaimPairs();
@@ -165,28 +169,52 @@ public class InteractionClaimPairFidelityTest {
 		assertEquals(1, pairs.getUnfounded(), "no finding relates the pair, was: " + pairs);
 		assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(), "was: " + pairs);
 		assertEquals(1, pairs.getJudged(), "was: " + pairs);
+
+		// Heparin is not one of her orders and no finding or chip names it — the invented partner. The
+		// owner's decision on #514 leaves a partner no finding or chip names unjudged, never compared
+		// whole, so this case is a missed report, not an unfounded one.
+		String invented = "Clarithromycin can be given with care, and Clarithromycin interacts with active "
+				+ "order Heparin.";
+
+		InteractionClaimPairs unjudged = arrangement.service(invented).search(patient(), LISTING_QUESTION)
+				.getInteractionClaimPairs();
+
+		assertEquals(0, unjudged.getUnfounded(), "was: " + unjudged);
+		assertEquals(Collections.<Integer> emptyList(), unjudged.getMisattributedCitations(), "was: " + unjudged);
+		assertEquals(0, unjudged.getJudged(), "was: " + unjudged);
 	}
 
 	@Test
 	public void aFindingMarkerPastTheClaimsClauseLeavesTheClaimUncitedAndItIsStillJudged() {
 		// The claim's marker run is the one ActiveOrderCitationFidelityCheck reads, and a marker past
 		// the clause break is not in it. The finding past it is taken for the claim only where it names
-		// the claim's PARTNER (the next case); the Simvastatin finding names no Heparin, so this claim is
-		// judged as citing nothing, and a pair no finding relates is unfounded.
+		// the claim's PARTNER (the next case); the Simvastatin finding names no Digoxin, so this claim is
+		// judged as citing nothing, and a finding relates Clarithromycin × Digoxin. Heparin, a partner no
+		// finding or chip names, is unjudged under the owner's decision on #514, and its marker unaccused.
 		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
-		String unfounded = "Clarithromycin interacts with active order Heparin, which is a caution to "
-				+ "note [" + arrangement.finding("Simvastatin", "Amiodarone") + "].";
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		String invented = "Clarithromycin interacts with active order Heparin, which is a caution to "
+				+ "note [" + simvastatinsFinding + "].";
+		String uncited = "Clarithromycin interacts with active order Digoxin, which is a caution to "
+				+ "note [" + simvastatinsFinding + "].";
 		String faithful = "Clarithromycin interacts with active order Amiodarone, which is a reason to "
 				+ "withhold it [" + arrangement.finding("Clarithromycin", "Amiodarone") + "].";
 
-		InteractionClaimPairs reported = arrangement.service(unfounded).search(patient(), LISTING_QUESTION)
+		InteractionClaimPairs unjudged = arrangement.service(invented).search(patient(), LISTING_QUESTION)
+				.getInteractionClaimPairs();
+		InteractionClaimPairs untaken = arrangement.service(uncited).search(patient(), LISTING_QUESTION)
 				.getInteractionClaimPairs();
 		InteractionClaimPairs clean = arrangement.service(faithful).search(patient(), LISTING_QUESTION)
 				.getInteractionClaimPairs();
 
-		assertEquals(1, reported.getUnfounded(), "was: " + reported);
-		assertEquals(Collections.<Integer> emptyList(), reported.getMisattributedCitations(),
-				"the marker is past the claim's run, so it is not accused, was: " + reported);
+		assertEquals(0, unjudged.getUnfounded(), "was: " + unjudged);
+		assertEquals(0, unjudged.getJudged(), "was: " + unjudged);
+		assertEquals(Collections.<Integer> emptyList(), unjudged.getMisattributedCitations(),
+				"the marker is past the claim's run, so it is not accused, was: " + unjudged);
+		assertEquals(Collections.<Integer> emptyList(), untaken.getMisattributedCitations(),
+				"the marker is past the claim's run and its finding names no Digoxin, was: " + untaken);
+		assertEquals(0, untaken.getUnfounded(), "a finding relates the pair, was: " + untaken);
+		assertEquals(1, untaken.getJudged(), "was: " + untaken);
 		assertEquals(0, clean.getUnfounded(), "a pair a finding relates is not unfounded, was: " + clean);
 		assertEquals(1, clean.getJudged(), "was: " + clean);
 	}
@@ -459,20 +487,31 @@ public class InteractionClaimPairFidelityTest {
 	@Test
 	public void anUncitedClaimIsNotSilencedByAContraindicationAboutItsDrug() {
 		// Contraindication findings are not in the population an uncited claim is judged against: an
-		// allergy to Clarithromycin says nothing about which of her orders it interacts with, so the
-		// invented Heparin pair is still unfounded.
+		// allergy to Clarithromycin says nothing about which of her orders it interacts with, so a claim
+		// about Clarithromycin is still judged — a finding naming no order about its drug would leave it
+		// unjudged (anUncitedClaimAboutADrugAClassOnlyFindingIsAboutIsNotJudged).
 		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOverWithRecordedAllergies(baseChart(),
 				LISTING_QUESTION, ORDERS, ORDER_ATC, setOf("Clarithromycin"));
 		assertTrue(DrugReferenceTestSupport.injectedFindings(chart).stream().anyMatch(finding ->
 				SafetyWarning.TYPE_CONTRAINDICATION.equals(ChartSearchAiUtils.findingType(finding))),
 				"the premise: a contraindication finding about the claim's drug, chart was: " + chart.getText());
-		String answer = "Clarithromycin interacts with active order Heparin.";
+		String answer = "Clarithromycin interacts with active order Digoxin.";
 
 		InteractionClaimPairs pairs = service(chart, unused -> Collections.<SafetyWarning> emptyList(), answer)
 				.search(patient(), LISTING_QUESTION).getInteractionClaimPairs();
 
 		assertEquals(1, pairs.getJudged(), "was: " + pairs);
-		assertEquals(1, pairs.getUnfounded(), "was: " + pairs);
+		assertEquals(0, pairs.getUnfounded(), "a finding relates this pair, was: " + pairs);
+
+		// The invented Heparin pair: a partner no finding or chip names, unjudged under the owner's
+		// decision on #514 rather than unfounded.
+		String invented = "Clarithromycin interacts with active order Heparin.";
+
+		InteractionClaimPairs unjudged = service(chart, unused -> Collections.<SafetyWarning> emptyList(), invented)
+				.search(patient(), LISTING_QUESTION).getInteractionClaimPairs();
+
+		assertEquals(0, unjudged.getJudged(), "was: " + unjudged);
+		assertEquals(0, unjudged.getUnfounded(), "was: " + unjudged);
 	}
 
 	@Test
@@ -1289,6 +1328,133 @@ public class InteractionClaimPairFidelityTest {
 			assertEquals(1, pairs.getUnfounded(), "no finding relates this pair, was: " + pairs);
 			assertEquals(1, pairs.getJudged(), "was: " + pairs);
 		}
+	}
+
+	/**
+	 * A partner is judged on the name its span STARTS with, and whatever follows that name — a severity,
+	 * a strength, a form, a closing parenthesis — is no part of it (the owner's decision on #514 after
+	 * round 6 of the review). A span containing no name the findings carry was compared WHOLE, and
+	 * <em>rifampicin — moderate</em> and <em>rifampicin 300 mg capsule</em> are contained in neither
+	 * the finding's label <em>Rifampicin (rifampin)</em> nor her order's display: the finding relating
+	 * exactly that pair was accused, and the uncited form published unfounded. On both answer paths.
+	 */
+	@Test
+	public void aPartnerIsJudgedOnTheNameItsSpanStartsWithAndNotOnTheWordsAfterIt() {
+		String question = "Is it safe to give clarithromycin?";
+		String display = "Rifampicin 300mg capsule";
+		Arrangement hers = new Arrangement(DrugReferenceTestSupport.shippedServiceWithGroups(), question,
+				setOf(display), setOf("J04AB02"), Collections.singletonList(new PatientClinicalContext.ActiveDrugOrder(
+						"order-rifampicin", display, setOf(display), setOf("J04AB02"))));
+		int finding = hers.finding("Clarithromycin", "Rifampicin (rifampin)");
+		for (String answer : Arrays.asList(
+				"Clarithromycin interacts with active order Rifampicin \u2014 Moderate [" + finding + "].",
+				"Clarithromycin interacts with active order Rifampicin 300 mg capsule [" + finding + "].",
+				"Clarithromycin interacts with active order Rifampicin \u2014 Moderate.",
+				"Clarithromycin interacts with active order Rifampicin 300 mg capsule.",
+				"Clarithromycin interacts with active order Rifampicin.)")) {
+			for (InteractionClaimPairs pairs : onBothPaths(hers, question, answer)) {
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"the finding cited relates exactly this pair, was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "a finding relates this pair, was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getJudged(), "the claim was judged, was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * The other value of the case above: the name a span starts with is still the partner judged, so a
+	 * finding about her other order cited for it is still misattributed whatever follows the name.
+	 */
+	@Test
+	public void aFindingAboutAnotherOrderIsStillMisattributedWhateverFollowsThePartnersName() {
+		String question = "Is it safe to give clarithromycin?";
+		String rifampicin = "Rifampicin 300mg capsule";
+		String simvastatin = "Simvastatin 20mg tablet";
+		Arrangement arrangement = new Arrangement(DrugReferenceTestSupport.shippedServiceWithGroups(), question,
+				setOf(rifampicin, simvastatin), setOf("J04AB02", "C10AA01"), Arrays.asList(
+						new PatientClinicalContext.ActiveDrugOrder("order-rifampicin", rifampicin,
+								setOf(rifampicin), setOf("J04AB02")),
+						new PatientClinicalContext.ActiveDrugOrder("order-simvastatin", simvastatin,
+								setOf(simvastatin), setOf("C10AA01"))));
+		int rifampicinsFinding = arrangement.finding("Clarithromycin", "Rifampicin (rifampin)");
+		for (String partner : Arrays.asList("Simvastatin \u2014 Moderate", "Simvastatin 20 mg tablet")) {
+			String answer = "Clarithromycin interacts with active order " + partner + " [" + rifampicinsFinding + "].";
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, question, answer)) {
+				assertEquals(Collections.singletonList(Integer.valueOf(rifampicinsFinding)),
+						pairs.getMisattributedCitations(), "was: " + pairs + " for: " + answer);
+				assertEquals(1, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/**
+	 * A later partner of a list is read the way the first is: from where its name starts, just after the
+	 * list word. <em>Rifampin</em> is no name the findings carry whole — the finding's label is
+	 * <em>Rifampicin (rifampin)</em> — so read only as whole names, the list below named Simvastatin
+	 * alone and the rifampicin finding cited for it was accused.
+	 */
+	@Test
+	public void aListedPartnerNamedByAPartOfAFindingsNameIsAPartnerToo() {
+		String question = "Is it safe to give clarithromycin?";
+		String rifampicin = "Rifampicin 300mg capsule";
+		String simvastatin = "Simvastatin 20mg tablet";
+		Arrangement arrangement = new Arrangement(DrugReferenceTestSupport.shippedServiceWithGroups(), question,
+				setOf(rifampicin, simvastatin), setOf("J04AB02", "C10AA01"), Arrays.asList(
+						new PatientClinicalContext.ActiveDrugOrder("order-rifampicin", rifampicin,
+								setOf(rifampicin), setOf("J04AB02")),
+						new PatientClinicalContext.ActiveDrugOrder("order-simvastatin", simvastatin,
+								setOf(simvastatin), setOf("C10AA01"))));
+		int rifampicinsFinding = arrangement.finding("Clarithromycin", "Rifampicin (rifampin)");
+		assertTrue(arrangement.hasFinding("Clarithromycin", "Simvastatin"), "the premise: a finding relates "
+				+ "Clarithromycin to Simvastatin, chart was: " + arrangement.chart.getText());
+		String answer = "Clarithromycin interacts with active order Simvastatin and Rifampin [" + rifampicinsFinding
+				+ "].";
+		for (InteractionClaimPairs pairs : onBothPaths(arrangement, question, answer)) {
+			assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+					"the finding cited relates the second partner, was: " + pairs);
+			assertEquals(0, pairs.getUnfounded(), "a finding relates each pair, was: " + pairs);
+			assertEquals(1, pairs.getJudged(), "was: " + pairs);
+		}
+	}
+
+	/**
+	 * A partner span that does not START with a name the findings carry is left unjudged, never compared
+	 * whole: a brand no finding prints, a word before the name, a drug no finding or chip names. Each of
+	 * these was reported before the owner's decision on #514 — the first two as misattributing a finding
+	 * that is not about Clarithromycin, the last as unfounded — and each is now a missed report, the
+	 * direction that decision chose.
+	 */
+	@Test
+	public void aPartnerSpanStartingWithNoNameTheFindingsCarryIsNotJudged() {
+		Arrangement arrangement = new Arrangement(LISTING_QUESTION, ORDERS, ORDER_ATC, null);
+		int simvastatinsFinding = arrangement.finding("Simvastatin", "Amiodarone");
+		for (String answer : Arrays.asList(
+				"Clarithromycin interacts with active order Cordarone [" + simvastatinsFinding + "].",
+				"Clarithromycin interacts with active order her Amiodarone [" + simvastatinsFinding + "].",
+				"Clarithromycin interacts with active order Heparin.")) {
+			for (InteractionClaimPairs pairs : onBothPaths(arrangement, LISTING_QUESTION, answer)) {
+				assertEquals(0, pairs.getJudged(), "was: " + pairs + " for: " + answer);
+				assertEquals(Collections.<Integer> emptyList(), pairs.getMisattributedCitations(),
+						"was: " + pairs + " for: " + answer);
+				assertEquals(0, pairs.getUnfounded(), "was: " + pairs + " for: " + answer);
+			}
+		}
+	}
+
+	/** What the real {@code search} AND {@code searchStreaming} publish for {@code answer}, asserted to be
+	 *  one statement. */
+	private static List<InteractionClaimPairs> onBothPaths(Arrangement arrangement, String question,
+			String answer) {
+		InteractionClaimPairs searched = arrangement.service(answer).search(patient(), question)
+				.getInteractionClaimPairs();
+		InteractionClaimPairs streamed = arrangement.service(answer).searchStreaming(patient(), question,
+				token -> { }, reasoning -> { }, citations -> { }, early -> { }).getInteractionClaimPairs();
+		assertNotNull(searched, "search ran the check, for: " + answer);
+		assertNotNull(streamed, "searchStreaming ran the check, for: " + answer);
+		assertEquals(String.valueOf(searched), String.valueOf(streamed), "both paths state one measurement, for: "
+				+ answer);
+		return Arrays.asList(searched, streamed);
 	}
 
 	/** A chart like the external evaluation's: two combination orders carrying rifampin, and efavirenz. */

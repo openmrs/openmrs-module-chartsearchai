@@ -11286,9 +11286,22 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   record that is not a relating finding (a `drug_reference` monograph states pairs no finding raises
   — #357), and a finding naming no order (class-only) about a drug the claim names, among those it
   cites or, citing none, among all of them. Contraindication and overdose findings relate no drug to
-  an order: an uncited claim is not judged against them, and a run citing one is unjudged. The partner side is deliberately NOT gated on a vocabulary: the chart
-  carries no structural list of her active orders, and an invented partner no finding names is the
-  ticket's own second shape.
+  an order: an uncited claim is not judged against them, and a run citing one is unjudged.
+- **A partner is judged only where its span STARTS with a name the findings carry** (the owner's
+  decision on #514, after round 6 of the review found *"… active order Rifampicin — Moderate [4]"*
+  accusing its own finding). Each review round had widened the free-prose reading of the partner —
+  a negated claim, a repeated *active order*, the chart's order name against the reference-data name,
+  a trailing full stop, text after the name — and each widening opened the next round's false report,
+  so the reading was narrowed instead. A known name is a finding's or chip's subject, an order it
+  names, or a bridge name, which carries the displays of the orders its arm matched; the span must
+  begin, on a word boundary, with the start of one of them or of one of its parts (past a parenthesis
+  or a slash: *rifampin* of *Rifampicin (rifampin)*), and whatever follows is ignored — a strength, a
+  form, *" — Moderate"*, a full stop — so the terminator trim round 5 added is gone. Every run of words
+  from the start that begins such a name is a form of the partner, and a finding relates it where one
+  form is one of its names. A later partner of a list is read the same way from just after *and* or
+  *or*. A span starting otherwise is **unjudged, never compared whole**; that includes a partner no
+  finding or chip names, which the check had counted `unfounded` as the ticket's second shape.
+  **From this decision on, only a false report blocks the check; a missed one is a residue below.**
 - **Which findings a claim cites is `SafetyFindingCitationExtentCheck.citedFindingIndexes`**, the one
   reading `findingCitations` publishes, intersected with the run — so this key cannot accuse a finding
   that key says the answer never cited (#409's shape).
@@ -11320,17 +11333,15 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   pins the shared reading; `ChartSearchAiInteractionClaimPairsTest` the wire.
 - **−** **Containment is the comparison**, `FindingPartnerCoverageCheck.comparable`'s form, so a swap
   between a short name and a longer one containing it (*Lamivudine*, *Lamivudine / zidovudine*) passes,
-  and a subject spelled as no finding spells it leaves the claim unjudged. A PARTNER spelled so fails
-  the other way: it reads as unrelated and can be reported. The partner side is ungated for the
-  ticket's invented-partner shape, and the displays of the orders the finding's arm matched are what
-  keep her prescription's own display, as its record prints it, from being that case; a paraphrase of
-  that display still is. The sentence's own end is no part of the partner: round 5 of the PR's review
-  found *"… active order Rifampicin."*, uncited, published unfounded, *rifampicin.* being contained in
-  no name the finding carries, so trailing whitespace and members of
-  `ChartSearchAiUtils.SENTENCE_TERMINATORS` are dropped from the partner span. A closing parenthesis
-  or quote after the terminator stops that, so *"… active order Rifampicin.)"* can still be reported.
-  No case pins the naming direction (a span names a drug only by
-  containing it); the check's javadoc says what it decides.
+  and a subject spelled as no finding spells it leaves the claim unjudged. No case pins the naming
+  direction (a span names a drug only by containing it); the check's javadoc says what it decides.
+- **−** **A partner not starting with a known name is a missed report** (the start-rule bullet
+  above). A brand or paraphrase no finding prints, a word before the name (*"active order her
+  Amiodarone"*), markup, a partner named by a word inside a part of a name rather than its start
+  (*isoniazid* of *Rifampicin isoniazid pyrazinamide and ethambutol …*), and an invented partner no
+  finding or chip names (*"active order Heparin"*) are all unjudged, a swap among them included. The
+  first words of a name two drugs share read as either drug, toward silence. No case pins the
+  part-start refusal, nor taking every form of the name over the longest or shortest alone.
 - **−** **The trailing-run gates read names the findings carry and the phrase's own verb.** A later
   clause naming another drug only by a name no finding prints, citing a finding that names the claim's
   partner and stating its interaction in other words than *interacts with*, is taken for the claim and
@@ -11349,7 +11360,7 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   that is not a clause (*"… and Digoxin tablets"*) is judged only where the claim reads alike with and
   without it.
 - **−** **An invented partner no finding or chip names at all is not seen.** *Heparin* in *"active
-  order Amiodarone and Heparin [13]"* is no name to the check, so it reads as more words of the related
+  order Amiodarone and Heparin [13]"* is no name to the check, so it reads as words after the related
   partner; and a partner list continued past a comma — *"active order Amiodarone, Heparin and
   Digoxin"* — is cut at it. Catching either needs a drug vocabulary on the answer path, which this
   check does not have.
@@ -11362,9 +11373,11 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   relation bullet above says why.
 - **−** **The ticket's first case is not covered.** *"… a caution to note regarding interactions with
   Lopinavir / ritonavir, Didanosine, and Nevirapine [288], [290]"* carries no `active order` claim,
-  and nothing here recognises an interaction stated in other words.
+  and nothing here recognises an interaction stated in other words — out of scope by design, per the
+  owner's decision on #514.
 - **−** **Unmeasured on the evaluation's own cells.** Whether cases 3 and 4 are judged depends on
   whether any finding or chip on those cells names the subject; the issue's captured prompts would
-  measure it and were not available here.
+  measure it and were not available here. Since the start-rule bullet, a case is judged only where a
+  finding or chip also names its partner.
 
 → `InteractionClaimPairFidelityTest`, `ChartSearchAiInteractionClaimPairsTest`.

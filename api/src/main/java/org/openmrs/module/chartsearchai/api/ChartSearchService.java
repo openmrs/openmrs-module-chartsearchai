@@ -775,7 +775,8 @@ public interface ChartSearchService {
 	 * <p><b>What {@code judged} counts.</b> The claims the check could reach a verdict on: the
 	 * words before the noun name a drug some interaction or condition-mediated finding or chip
 	 * names and carry no word standing for a drug without naming it (<em>it</em>, <em>this</em>,
-	 * <em>which</em>, <em>the</em> …), the words after it are not blank, and where they name several
+	 * <em>which</em>, <em>the</em> …), the words after it START with a name some such finding or chip
+	 * names — judged on that name and never on the words following it — and where they name several
 	 * drugs they join them as a list (<em>and</em>, <em>or</em>), the run cites no reference record
 	 * other than an
 	 * interaction or condition-mediated finding, no finding naming no order (a class-only
@@ -793,20 +794,20 @@ public interface ChartSearchService {
 	 * is what issue #477's findings state and is a miss on a merged finding. Distinct, in the order the
 	 * answer states them.
 	 *
-	 * <p><b>What {@code unfounded} counts.</b> The judged claims naming, after the noun, a drug no
-	 * finding in the prompt and no chip beside the answer relates to the subject, where the claim cites
-	 * no finding or cites one relating another drug it names there — the invented partner, alone or
-	 * beside a real one. It is a count of CLAIMS, and the list is of CITATIONS, so a client must not add
+	 * <p><b>What {@code unfounded} counts.</b> The judged claims naming, after the noun, a drug some
+	 * finding or chip names that no finding in the prompt and no chip beside the answer relates to the
+	 * subject, where the claim cites
+	 * no finding or cites one relating another drug it names there — an unrelated partner, alone or
+	 * beside a related one. It is a count of CLAIMS, and the list is of CITATIONS, so a client must not add
 	 * them.
 	 *
 	 * <p><b>Zero is a measurement and absence is not; neither empty list nor zero is a
 	 * certificate.</b> A null {@code InteractionClaimPairs} says the producer stated no measurement —
 	 * the async-grounding early {@code done}, a module-composed answer, or a check that failed.
 	 * {@code judged: 0} says there was nothing it could judge, which is not the same statement as
-	 * "every claim was right". Names are compared by containment, and the two sides fail in opposite
-	 * directions: a SUBJECT spelled differently from every name the findings carry leaves its claim
-	 * unjudged, while a PARTNER spelled so — a brand or paraphrase no finding prints — reads as
-	 * unrelated and can be reported. A short name inside a longer one reads as the same drug, toward
+	 * "every claim was right". Names are compared by containment, and a SUBJECT or PARTNER spelled
+	 * differently from every name the findings carry — a brand, a paraphrase, an invented drug —
+	 * leaves its claim unjudged. A short name inside a longer one reads as the same drug, toward
 	 * silence. A second partner no finding or chip names at all reads as more words of the first, and
 	 * a partner list continued past a comma is cut at it, so neither invented partner is counted; and a
 	 * swapped subject in a clause naming several drugs is unjudged, not reported. The stand-in words

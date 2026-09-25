@@ -9780,12 +9780,11 @@ chance of the two disagreeing.
 
 The gate the issue names, not run in this change: the probe-safety corpus
 (`eval/drift-metric/score_probe_safety.py`, including its abstention controls) and the thirty-nine cells
-of the issue's three comments, both arms on one build, with only this property between them. **The scorer cannot run that A/B as it
-stands**: on the ON arm every module-answered cell publishes `findingCitations` and
-`unstatedFindingSeverities` as `null`, and `score_probe_safety.py`'s `main` refuses, exiting 3, any
-pair whose arms disagree about which cells measured either key (`has_extent_measurement`,
-`has_rating_measurement`). It has to read `answeredByTheModule` first — comparing those cells on the
-verdict and the lead, and leaving them out of both refusals — before the gate can be run as written.
+of the issue's three comments, both arms on one build, with only this property between them. On the ON
+arm every module-answered cell publishes `findingCitations` and `unstatedFindingSeverities` as `null`;
+since #542 `score_probe_safety.py` reads `answeredByTheModule`, leaves a cell out of both measurement
+refusals only where the arm that did not measure it was answered by the module, and compares those
+cells on the verdict and the lead over their own denominator.
 What the arm should be read for, beyond the scorer: whether a withholding lead reaches a question whose answer is
 yes, and which questions the shapes refuse that the issue's cells expected answered.
 

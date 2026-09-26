@@ -5456,7 +5456,7 @@ The second row is the control that makes the first a cede rather than a chart th
 
 ## Decision 72: A finding about a medication the patient is already taking states a call about that medication
 
-**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its stance that a drug in play is always a proposal is superseded, for the drug-in-play arm, by [Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
+**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its stance that a drug in play is always a proposal is superseded, for the drug-in-play arm, by [Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site) (Proposed). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
 
 ### Context — the defect
 
@@ -10536,8 +10536,8 @@ them.
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
-[Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site):
-the finding still states its arm's referent, and that referent is now the current-medication one where
+[Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+(Proposed): the finding still states its arm's referent, and that referent is now the current-medication one where
 the drug is hers.
 
 ### Context
@@ -11441,8 +11441,9 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 
 ## Decision 121: A drug in play that is one of her own orders is stated as her medication, at every site
 
-**Status: Accepted** (September 2026) — implemented, issue
-[#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402). Supersedes, for the
+**Status: Proposed** (September 2026) — implemented on a draft for issue
+[#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402), which it does not close:
+the issue's own cell still opens by refusing (the live gate below). Supersedes, for the
 drug-in-play arm, the stance of [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)
 that a drug in play is a proposal because *"the question or the answer PROPOSED it"* (#348), and the
 referent bullet of [Decision 112](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints).
@@ -11471,7 +11472,8 @@ no longer refused. Every cell whose drug she does not take was byte-identical to
 
 ### The decision
 
-**`validate` resolves the substances her active orders are (`EndedOrders.substancesOf(orderEntries)`)
+**`validate` resolves the substances her active orders are (`DrugSafetyValidator.substancesOf(orderEntries)`,
+shared since review with `EndedOrders` and `DrugReferenceInjector`'s composed-answer gate)
 once per pass. It then states, for each drug in play, whether its `substanceGroupKey()` is one of them
 (`herOrder`), and hands that one answer to every site the drug-in-play arm builds a finding at.** Those
 sites are:
@@ -11559,8 +11561,8 @@ finding."*) to any finding whose severity is null, before the strength clause. A
 finding is skipped: its detail already says it has no severity of its own. The live arms D and E below
 ran an earlier wording, *"This finding has no severity of its own."*. It was changed after them
 because it opened as the strength clause does, which made `ReferenceProseFidelityCheck` report a
-faithful answer that left the sentence out. The reworded sentence was re-measured on the cells it
-moves (see below). A
+faithful answer that left the sentence out. The reworded sentence was re-measured on every cell, as
+arm F below. A
 folded chip carries its rule's rating and is not touched. The sentence reaches the module-composed
 answer's lines too, so a line still states its finding in the record's own words. Every test
 that pinned an unrated record verbatim was rewritten to include it, and
@@ -11569,7 +11571,7 @@ that pinned an unrated record verbatim was rewritten to include it, and
 ### The live gate, as measured
 
 The rig was pool slot `standalone-8082` (RefApp 3.7.1, bundled DDInter KB, local Gemma 4 E4B,
-`chartMode=fullChart`), with the 57 `chartsearchai.%` GPs identical before and after every arm, on
+`chartMode=fullChart`), with the `chartsearchai.%` GPs identical before and after every arm, on
 2026-09-26. Each arm was a whole omod, with the deployed api jar's sha256 matched to the build and
 `.moduleLastModified` to the omod's mtime. Every cell ran twice per arm. The arms:
 
@@ -11577,32 +11579,45 @@ The rig was pool slot `standalone-8082` (RefApp 3.7.1, bundled DDInter KB, local
 - B: the referent change at every site (`ca128c87`).
 - C: the owner's A/B diff exactly, i.e. B without the class-only, several-orders and condition-mediated
   sites.
-- D and E: B plus residue (a). E is the head at `4756334c`, and it answered byte-identically to D on
-  every cell D ran.
+- E: B plus residue (a) in its first wording, *"This finding has no severity of its own."*
+  (`4756334c`).
+- F, the head: B plus residue (a) as shipped, *"No severity is rated for this finding."* (`a50125c4`).
+  Later commits change comments, tests and this record only.
 
-| cell | A (`main`) | B | E (head) |
-|---|---|---|---|
-| Sarah Taylor, *Is it safe to add prednisone for her?* | opens *"No — Prednisone should not be added"*; cites 2 of 7 findings; "Major" on two unrated contraindications | still opens *"No — … should not be added"*; drops [353]; "Unknown severity" and "Major" on unrated findings | opens *"Prednisone is a reason to change a medication this patient is already taking …"*; cites all 7; states only "Moderate", on the Moderate finding |
-| Sarah, clarithromycin / warfarin | refusal leads | byte-identical to A | warfarin byte-identical; clarithromycin keeps its refusal lead, findings and ratings, reworded (its unrated allergy record gained the sentence) |
-| Mary Smith, clarithromycin / amoxicillin | — | byte-identical to A | byte-identical to A |
-| the three screens | — | byte-identical to A | Helen byte-identical; Sarah reworded, same citations; Susan leads *"Yes, there are interactions"*, cites one more finding, and **no longer states its findings' Major/Minor ratings** (`unstatedFindingSeverities` goes from `[]` to three) |
-| Barbara Miller, ibuprofen / aspirin | *"No — … should not be given"*, "Major" on the unrated allergy finding | neither refuses | neither refuses; every finding A cites is cited; aspirin opens *"No — Aspirin should be changed"*, the current-medication lead, and says the allergy finding "has no severity of its own" |
+| cell | A (`main`) | B | E | F (head) |
+|---|---|---|---|---|
+| Sarah Taylor, *Is it safe to add prednisone for her?* | opens *"No — Prednisone should not be added"*; cites 2 of 7 findings; "Major" on two unrated contraindications | still opens *"No — … should not be added"*; drops [353]; "Unknown severity" and "Major" on unrated findings | opens *"Prednisone is a reason to change a medication this patient is already taking …"*; cites all 7; no invented rating | **opens *"No — Prednisone should not be added"* again**; cites all 7; no invented rating |
+| Sarah, clarithromycin / warfarin | refusal leads | byte-identical to A | warfarin identical; clarithromycin reworded, same findings and ratings | the same as E |
+| Mary Smith, clarithromycin / amoxicillin | — | byte-identical to A | byte-identical to A | byte-identical to A |
+| the three screens | — | byte-identical to A | Helen identical; Sarah reworded; Susan **stops stating its findings' Major/Minor ratings** | Helen identical; Sarah reworded, same citations; Susan cites one more finding and states every rating |
+| Barbara Miller, ibuprofen | *"No — Ibuprofen should not be given"*, "Major" on the unrated allergy finding, the mechanism text reproduced | does not refuse; drops the mechanism text | as B | **refuses again**; keeps both findings and the mechanism text; no invented rating |
+| Barbara Miller, aspirin | *"No — Aspirin should not be given"*, "Major" on the unrated allergy finding | does not refuse | *"No — Aspirin should be changed"* | *"Aspirin's order is in force, and it should be changed"*; "no severity rated" on the unrated finding |
 
-**Arm C refuses on the issue's cell as B does.** So the owner's reference arm, which did not refuse on
-the `:8081` rig, does not reproduce here, and the three extra sites are not what keeps the refusal. The
-lead moved only with residue (a)'s sentence in the records.
+**What the head delivers.**
+
+- The referent reversal: every drug-in-play finding about a drug she takes states the current-medication
+  column, on the chips and in the records.
+- Residue (a): no answer in arm F states a rating a chip does not carry. The one exception is Mary's
+  amoxicillin cell, which is the same in every arm; its sentence comes from a `drug_reference` record,
+  with no chip or finding behind it.
+- `unfaithfullyRenderedCitations` no longer reports a faithful answer, which E's wording did.
+
+**What it does not deliver: the issue's own cell still opens by refusing.**
+
+- On this rig the refusal is not moved by the referent. B and C refuse, like `main`, although every
+  record they give the model states the current-medication column. So the owner's `:8081` arm, which did
+  not refuse, does not reproduce here, and the three extra sites are not what keeps the refusal.
+- The lead then moved with the wording of one sentence in the records. E did not refuse; F, differing
+  from E in those words alone, refuses on the prednisone cell and on Barbara's ibuprofen cell.
+- A lead that turns on incidental wording is not a fix. The issue's direction ends such a run as a draft
+  with the measurement recorded, and this decision is **Proposed** until the lead is moved by something
+  that holds.
+
+**The Susan-screen rating loss, and E's false prose reports, are closed at the head.** Residue (b),
+Barbara's dropped mechanism text, is not reproduced at the head.
 
 `interactionPairs` is identical to A in every cell and arm. The chips are identical except for
 `aboutACurrentMedication` on chips whose drug is hers, with one exception: Barbara's ibuprofen cell. A's
 answer cited a chart record for her aspirin order, so A's post-answer pass raised a third chip, a
-contraindication about aspirin, and B, C and E, which do not cite it, raise two. That difference is
+contraindication about aspirin, and B, C, E and F, which do not cite it, raise two. That difference is
 answer-driven and not code-driven.
-
-**Residues, measured and not closed:**
-
-- (b) Barbara's ibuprofen answer drops the mechanism text A reproduced, in B, C and E alike. Recorded
-  as the direction asks.
-- The Susan-screen rating loss in the table.
-- Mary's amoxicillin answer says *"unknown severity interaction with Simvastatin"* in every arm. No
-  chip or finding exists there, since the sentence comes from a `drug_reference` record, so residue
-  (a)'s fix cannot reach it.

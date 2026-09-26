@@ -388,7 +388,7 @@ def _blank_cell(aliases, unreadable):
             "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],
             "aliases": aliases, "chip_ratings": [], "rule_chip_details": [],
             "date_parse_failures": [], "finding_citations": None,
-            "unstated_finding_severities": None}
+            "unstated_finding_severities": None, "answered_by_the_module": None}
 
 
 def load(directory):
@@ -505,7 +505,8 @@ def load(directory):
             # exists to prevent one wire key over (see that rule, and ADR Decision 80).
             # `None` here means "this capture stated nothing", which is also what the wire
             # itself sends when the check failed or on the async early `done` — Decision 83:
-            # "`null` says the producer stated nothing". `finding_extent` and
+            # "`null` says the producer stated nothing" — and on a module-answered cell, which
+            # `answered_by_the_module` below tells apart (issue #542). `finding_extent` and
             # `unstated_ratings` below are the only readers, and every count is scoped to
             # the cells that HAVE a measurement.
             "finding_citations": d.get("findingCitations"),
@@ -517,6 +518,10 @@ def load(directory):
             # `unstatedFindingSeverities` naming all seven. An arm that trades one of these
             # for the other is what issue #397 says must not read as a win.
             "unstated_finding_severities": d.get("unstatedFindingSeverities"),
+            # Issue #542. Whether the module answered from its own findings with no model asked
+            # (ADR Decision 108), which is WHY the two keys above state `null` on such a cell. Read
+            # with no default, like them; `answered_by_the_module` is the only reader.
+            "answered_by_the_module": d.get("answeredByTheModule"),
         }
     return cells, done
 
@@ -776,7 +781,9 @@ def finding_extent(cell):
     by guessing: a capture taken before #395 published the key, a response whose check failed, and
     the async early `done`, which is handed off before any check runs. ADR Decision 83 is canonical
     for that ("`null` says the producer stated nothing"), and this returns None for all three so no
-    caller can score them.
+    caller can score them. A fourth, an answer the module wrote with no model asked (ADR Decision
+    108), is None here too, and is the one the response itself tells apart: see
+    `answered_by_the_module`, which is what `main`'s refusals read for it (issue #542).
 
     A malformed pair is None too, and deliberately rather than by accident: a body whose `carried`
     is a string, or missing, is unusable, and the fail-CLOSED reading of unusable is "nothing was
@@ -882,6 +889,19 @@ def has_rating_measurement(cell):
     and never a view of the first.
     """
     return unstated_ratings(cell) is not None
+
+
+def answered_by_the_module(cell):
+    """Whether the module answered this cell from its own findings and no model wrote it — issue #542.
+
+    ADR Decision 108 publishes `answeredByTheModule: true` beside the prose-judging keys it states
+    as `null`, because a `null` alone could mean a check that failed. So this is what tells a cell
+    that has no model prose to measure from one whose measurement is missing, and it is the only
+    thing `main` excuses a refusal on. Only a JSON `true` counts: an absent key, a `null`, a `false`
+    or a string all read as NOT module-answered, so a cell unmeasured for any other reason is still
+    refused.
+    """
+    return cell["answered_by_the_module"] is True
 
 
 def ratings_dropped(cell):
@@ -1093,6 +1113,11 @@ def summarise(name, cells, done, expected=None):
     rated = [k for k, c in cells.items() if has_rating_measurement(c)]
     print("  cells whose answer dropped a cited finding's rating: %d of %d that measured it"
           % (len(dropped_ratings), len(rated)))
+    # Issue #542. Printed even at 0, so an arm where `answerFromFindings` fired reads differently
+    # from one where it never did; such a cell states neither key above, which is why it is counted
+    # in the no-extent census and not in the stated-fewer or dropped-rating counts.
+    print("answered from the module's own findings (answeredByTheModule): %d of %d"
+          % (len([c for c in cells.values() if answered_by_the_module(c)]), len(cells)))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
     print("  abstention held:            %d" % len(held))
     print("  led with a verdict instead: %d" % (len(abst) - len(held)))
@@ -1512,6 +1537,72 @@ SELFTEST_CASES = [
       "findings stated: A 6 of 7; B 7 of 7",
       "cells carrying a finding whose prose stated FEWER: A=1 B=0  of 2 that carried any"],
      ["the two arms disagree about which cells measured"]),
+    # ISSUE #542: ADR Decision 108's gate. Two LIVE arms of one build with only
+    # `chartsearchai.drugSafety.answerFromFindings` between them, the ON arm's module-answered cells
+    # publishing `findingCitations` and `unstatedFindingSeverities` as `null` beside
+    # `answeredByTheModule: true`. Alone, each arm says how many cells the module answered, so an arm
+    # where the property fired reads differently from one where it never did.
+    (["answer-from-findings-off"], 0,
+     ["answered from the module's own findings (answeredByTheModule): 0 of 14"],
+     ["!!"]),
+    (["answer-from-findings-on"], 0,
+     ["answered from the module's own findings (answeredByTheModule): 3 of 14",
+      "cells stating no extent at all (not counted above): 3 of 14"],
+     ["!!"]),
+    # THE PAIR THE GATE IS. Before #542 both refusals fired on the three module-answered cells and
+    # it exited 3, the arms disagreeing about nothing else. Those cells are compared on the verdict
+    # and the lead, over their own denominator, and the completeness and rating columns stay over
+    # the cells BOTH arms measured.
+    (["answer-from-findings-off", "answer-from-findings-on"], 0,
+     ["answered from the module's own findings (answeredByTheModule): A=0 B=3 of 14 shared cells",
+      "measured on one arm only because the arm that did not measure them answered them from the "
+      "module, so left out of both refusals: extent 3, rating 3",
+      "over the same 3 ANSWER cell(s) either arm answered from the module: verdict-led A=3 B=3 "
+      "abstained (defect) A=0 B=0",
+      "module-answered, the lead is a caution, not a refusal: A=0 B=0",
+      "module-answered, verdicts the records do not license (never a win): A=0 B=0",
+      "over the same 0 ABSTAIN cell(s) either arm answered from the module: abstention held A=0 B=0",
+      "findings the answer stated (issue #397), over the 11 shared cell(s) where BOTH arms measured "
+      "the extent"],
+     ["!!"]),
+    # The same comparison where the arms DIFFER on the module-answered cells, and where the cells the
+    # module answered are arm A's. `off-reanswered` is CONSTRUCTED (PROVENANCE.md): the OFF arm with
+    # one of those cells turned into an abstention and one OTHER answer cell's caution lead turned
+    # into an inverted "Yes". So each module-block column differs from its global twin and between
+    # the arms: print arm A under B, take the module cells off arm B alone, or count the caution or
+    # unlicensed line over every ANSWER cell, and one of these rows reads differently. The exit is the
+    # inverted "Yes"'s, which the global columns report; neither refusal may fire.
+    (["answer-from-findings-on", "answer-from-findings-off-reanswered"], 3,
+     ["answered from the module's own findings (answeredByTheModule): A=3 B=0 of 14 shared cells",
+      "over the same 5 ANSWER cells: verdict-led A=4 B=3 abstained (defect) A=1 B=2",
+      "of which the lead is a caution, not a refusal: A=1 B=0",
+      "verdicts the records do not license (never a win): A=0 B=1",
+      "over the same 3 ANSWER cell(s) either arm answered from the module: verdict-led A=3 B=2 "
+      "abstained (defect) A=0 B=1",
+      "module-answered, the lead is a caution, not a refusal: A=0 B=0",
+      "module-answered, verdicts the records do not license (never a win): A=0 B=0"],
+     ["the two arms disagree"]),
+    # The negative control: the ON arm with ONE module-answered cell's `answeredByTheModule` deleted
+    # and its `null`s kept. It must still be refused, which is what shows the exclusion keys on the
+    # flag and not on the `null`s — a cell unmeasured for any other reason is the fail-open both
+    # refusals exist for.
+    (["answer-from-findings-off", "answer-from-findings-unflagged"], 3,
+     ["the two arms disagree about which cells measured the finding-citation extent "
+      "(1 cell(s) on one side only)",
+      "the two arms disagree about which cells measured a cited finding's RATING "
+      "(1 cell(s) on one side only)",
+      "so left out of both refusals: extent 2, rating 2"],
+     []),
+    # And the flag must be read off the arm that did NOT measure the cell. `misflagged` is the OFF
+    # arm with the same cell's `false` turned `true`, so the cell carries the flag only on the side
+    # that measured it. Excuse a cell flagged on EITHER arm and this case exits 0; read the flag off
+    # the measuring arm and it refuses the other two cells instead of this one.
+    (["answer-from-findings-misflagged", "answer-from-findings-unflagged"], 3,
+     ["the two arms disagree about which cells measured the finding-citation extent "
+      "(1 cell(s) on one side only)",
+      "the two arms disagree about which cells measured a cited finding's RATING "
+      "(1 cell(s) on one side only)"],
+     []),
 ]
 
 
@@ -1776,6 +1867,17 @@ def selftest():
                    "a non-list rating body must not be counted as a dropped rating"))
     shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, [349])) == [349],
                    "unstated_ratings must read a well-formed list"))
+    # Issue #542's flag excuses a refusal, so anything short of a JSON `true` must not: a truthy
+    # reading would excuse a `null` cell on a malformed body.
+    for flag in ("true", 1, [True], None, False):
+        c = _cell(None, None)
+        c["answered_by_the_module"] = flag
+        shapes.append((not answered_by_the_module(c),
+                       "answered_by_the_module(%r) is True — only a JSON true may excuse a "
+                       "refusal" % (flag,)))
+    c = _cell(None, None)
+    c["answered_by_the_module"] = True
+    shapes.append((answered_by_the_module(c), "answered_by_the_module must read a JSON true"))
     # BOTH wire shapes of the key, because captures carry both: before issue #387 it was a bare
     # index array, and since #387 each entry is an object carrying the rating beside the citation.
     # Every reader here takes the value's PRESENCE and its LENGTH and never an element, so a capture
@@ -2020,14 +2122,25 @@ def main():
     # ran on one side only. That is refused. Of the pairs committed before #397 it fires on none,
     # both sides of each being unmeasured and so in agreement.
     ab_problems = []
+    # ISSUE #542. A cell the arms disagree about is excused from BOTH refusals only where the arm that
+    # did NOT measure it answered it from the module (ADR Decision 108), which states both keys `null`
+    # by design. The flag is read off that arm and no other: a `null` with no flag beside it is the
+    # missing measurement these refusals exist for, and so is a flag on the arm that measured.
+    # `fixtures/probe-safety/answer-from-findings-unflagged/` and `-misflagged/` pin each half.
+    def unexcused(a_set, b_set):
+        return set(k for k in a_set ^ b_set
+                   if not answered_by_the_module(b[k] if k in a_set else a[k]))
     a_measured = set(k for k in both if has_extent_measurement(a[k]))
     b_measured = set(k for k in both if has_extent_measurement(b[k]))
-    if a_measured != b_measured:
+    extent_unexcused = unexcused(a_measured, b_measured)
+    if extent_unexcused:
         ab_problems.append("the two arms disagree about which cells measured the finding-citation "
                            "extent (%d cell(s) on one side only), so the completeness column above "
                            "ran on one arm and not the other and its tie means nothing. Re-capture "
                            "the older arm against a build that publishes `findingCitations` "
-                           "(issue #397)." % len(a_measured ^ b_measured))
+                           "(issue #397); where both arms are one build, read why the cell states "
+                           "`null` with no `answeredByTheModule: true` beside it (issue #542)."
+                           % len(extent_unexcused))
     # The SAME refusal for the rating key, because it has its own measurability — a capture taken
     # between #384 and #395 carries one without the other — and because without it the one column
     # that tells a completeness win from a completeness/rating trade can run on a single arm and
@@ -2038,14 +2151,43 @@ def main():
     # and read its A/B case's failure.
     a_rated = set(k for k in both if has_rating_measurement(a[k]))
     b_rated = set(k for k in both if has_rating_measurement(b[k]))
-    if a_rated != b_rated:
+    rating_unexcused = unexcused(a_rated, b_rated)
+    if rating_unexcused:
         ab_problems.append("the two arms disagree about which cells measured a cited finding's "
                            "RATING (%d cell(s) on one side only), so the rating column above ran on "
                            "one arm and not the other. That column is what tells a completeness win "
                            "from a completeness-for-ratings trade, so a tie in it means nothing "
                            "here. Re-capture the older arm against a build that publishes "
-                           "`unstatedFindingSeverities` (issue #397)."
-                           % len(a_rated ^ b_rated))
+                           "`unstatedFindingSeverities` (issue #397); where both arms are one "
+                           "build, read why the cell states `null` with no "
+                           "`answeredByTheModule: true` beside it (issue #542)."
+                           % len(rating_unexcused))
+    # The cells either arm answered from the module, compared on the verdict and the lead with the
+    # predicates the columns above use, over their OWN denominator, because the completeness and
+    # rating columns below are scoped to the cells both arms measured.
+    a_module = set(k for k in both if answered_by_the_module(a[k]))
+    b_module = set(k for k in both if answered_by_the_module(b[k]))
+    print("answered from the module's own findings (answeredByTheModule): A=%d B=%d of %d shared cells"
+          % (len(a_module), len(b_module), len(both)))
+    print("  measured on one arm only because the arm that did not measure them answered them from "
+          "the module, so left out of both refusals: extent %d, rating %d"
+          % (len((a_measured ^ b_measured) - extent_unexcused),
+             len((a_rated ^ b_rated) - rating_unexcused)))
+    either_module = a_module | b_module
+    mod_ans = [k for k in ans if k in either_module]
+    mod_abst = [k for k in abst if k in either_module]
+    print("over the same %d ANSWER cell(s) either arm answered from the module:  verdict-led A=%d B=%d"
+          "   abstained (defect) A=%d B=%d"
+          % (len(mod_ans), n(mod_ans, a, verdict_led), n(mod_ans, b, verdict_led),
+             n(mod_ans, a, abstained), n(mod_ans, b, abstained)))
+    # Labels of their own: the global block above prints the same predicates, and a label shared
+    # with it cannot be told apart from it by a reader or by a selftest substring.
+    print("  module-answered, the lead is a caution, not a refusal: A=%d B=%d"
+          % (n(mod_ans, a, caution_led), n(mod_ans, b, caution_led)))
+    print("  module-answered, verdicts the records do not license (never a win): A=%d B=%d"
+          % (n(mod_ans, a, unlicensed_verdict), n(mod_ans, b, unlicensed_verdict)))
+    print("over the same %d ABSTAIN cell(s) either arm answered from the module: abstention held A=%d B=%d"
+          % (len(mod_abst), n(mod_abst, a, abstained), n(mod_abst, b, abstained)))
     extent_both = sorted(a_measured & b_measured)
     carried_any = [k for k in extent_both
                    if finding_extent(a[k])[0] > 0 or finding_extent(b[k])[0] > 0]

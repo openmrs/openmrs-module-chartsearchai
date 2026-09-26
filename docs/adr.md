@@ -11548,6 +11548,57 @@ site is held by `ConditionMediatedFindingTest.aChainAboutADrugInPlayThatIsHerOwn
 and the several-orders site by the rewritten `SubstanceInSeveralActiveOrdersTest` cases. Mutate a site
 and read the failures.
 
-### The live gate
+### Residue (a): an answer stating a rating no finding carries
 
-Not yet run at this revision.
+The first live arm showed it, on `main` as on the branch: *"(Major)"* on an unrated cross-reactivity
+contraindication, and *"(Unknown severity)"* on an unrated duplicate-therapy finding. The prompt asks
+the answer to carry each finding's severity, and the record of an unrated finding stated none. As the
+issue's direction requires, the fix is in what the finding renders and not in `DEFAULT_SYSTEM_PROMPT`.
+`DrugReferenceInjector.findingBody` appends `FINDING_NO_SEVERITY` (*"This finding has no severity of
+its own."*) to any finding whose severity is null, before the strength clause. These are the words the
+condition-mediated record already uses, and that type is skipped so it does not say them twice. A
+folded chip carries its rule's rating and is not touched. The sentence reaches the module-composed
+answer's lines too, so a line still states its finding in the record's own words. Every test
+that pinned an unrated record verbatim was rewritten to include it, and
+`UnratedFindingSeverityClauseTest` pins it.
+
+### The live gate, as measured
+
+The rig was pool slot `standalone-8082` (RefApp 3.7.1, bundled DDInter KB, local Gemma 4 E4B,
+`chartMode=fullChart`), with the 57 `chartsearchai.%` GPs identical before and after every arm, on
+2026-09-26. Each arm was a whole omod, with the deployed api jar's sha256 matched to the build and
+`.moduleLastModified` to the omod's mtime. Every cell ran twice per arm. The arms:
+
+- A: `main` @ `69f7b5ee`.
+- B: the referent change at every site (`ca128c87`).
+- C: the owner's A/B diff exactly, i.e. B without the class-only, several-orders and condition-mediated
+  sites.
+- D and E: B plus residue (a). E is the head at `4756334c`, and it answered byte-identically to D on
+  every cell D ran.
+
+| cell | A (`main`) | B | E (head) |
+|---|---|---|---|
+| Sarah Taylor, *Is it safe to add prednisone for her?* | opens *"No — Prednisone should not be added"*; cites 2 of 7 findings; "Major" on two unrated contraindications | still opens *"No — … should not be added"*; drops [353]; "Unknown severity" and "Major" on unrated findings | opens *"Prednisone is a reason to change a medication this patient is already taking …"*; cites all 7; states only "Moderate", on the Moderate finding |
+| Sarah, clarithromycin / warfarin | refusal leads | byte-identical to A | warfarin byte-identical; clarithromycin keeps its refusal lead, findings and ratings, reworded (its unrated allergy record gained the sentence) |
+| Mary Smith, clarithromycin / amoxicillin | — | byte-identical to A | byte-identical to A |
+| the three screens | — | byte-identical to A | Helen byte-identical; Sarah reworded, same citations; Susan leads *"Yes, there are interactions"*, cites one more finding, and **no longer states its findings' Major/Minor ratings** (`unstatedFindingSeverities` goes from `[]` to three) |
+| Barbara Miller, ibuprofen / aspirin | *"No — … should not be given"*, "Major" on the unrated allergy finding | neither refuses | neither refuses; every finding A cites is cited; aspirin opens *"No — Aspirin should be changed"*, the current-medication lead, and says the allergy finding "has no severity of its own" |
+
+**Arm C refuses on the issue's cell as B does.** So the owner's reference arm, which did not refuse on
+the `:8081` rig, does not reproduce here, and the three extra sites are not what keeps the refusal. The
+lead moved only with residue (a)'s sentence in the records.
+
+`interactionPairs` is identical to A in every cell and arm. The chips are identical except for
+`aboutACurrentMedication` on chips whose drug is hers, with one exception: Barbara's ibuprofen cell. A's
+answer cited a chart record for her aspirin order, so A's post-answer pass raised a third chip, a
+contraindication about aspirin, and B, C and E, which do not cite it, raise two. That difference is
+answer-driven and not code-driven.
+
+**Residues, measured and not closed:**
+
+- (b) Barbara's ibuprofen answer drops the mechanism text A reproduced, in B, C and E alike. Recorded
+  as the direction asks.
+- The Susan-screen rating loss in the table.
+- Mary's amoxicillin answer says *"unknown severity interaction with Simvastatin"* in every arm. No
+  chip or finding exists there, since the sentence comes from a `drug_reference` record, so residue
+  (a)'s fix cannot reach it.

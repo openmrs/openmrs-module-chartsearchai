@@ -396,7 +396,8 @@ public class RecordedAllergenChipNameTest {
 		assertEquals(2, findings.size(), "one citable record per chip, was: " + findings);
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Trastuzumab deruxtecan: Trastuzumab deruxtecan is contraindicated by a recorded "
-				+ "allergy to \"ado-trastuzumab emtansine\"." + DrugReferenceInjector.STRENGTH_WITHHOLD,
+				+ "allergy to \"ado-trastuzumab emtansine\"." + DrugReferenceInjector.FINDING_NO_SEVERITY
+				+ DrugReferenceInjector.STRENGTH_WITHHOLD,
 				findings.get(1).getText(),
 				"the record carries the chip's sentence verbatim, was: " + findings);
 	}

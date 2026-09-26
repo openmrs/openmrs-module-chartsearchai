@@ -97,6 +97,10 @@ public class UncorroboratedFindingProvenanceTest {
 
 	private static final String WITHHOLD = DrugReferenceInjector.STRENGTH_WITHHOLD;
 
+	/** What an unrated finding's record states before its call since issue #402; its literal is pinned
+	 *  in UnratedFindingSeverityClauseTest. */
+	private static final String NO_SEVERITY = DrugReferenceInjector.FINDING_NO_SEVERITY;
+
 	private static List<String> findings(String fixture, String question, String... allergens)
 			throws IOException {
 		DrugReferenceService service =
@@ -162,7 +166,7 @@ public class UncorroboratedFindingProvenanceTest {
 		// nothing between them, while the drug_reference record beside it hedged the identical clause.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Opium: Opium is contraindicated by an active allergy: documented opium allergy."
-				+ CLAUSE + WITHHOLD,
+				+ CLAUSE + NO_SEVERITY + WITHHOLD,
 				onlyFinding(MID_WORD_TOKEN, "Is it safe to give her opium?", "Tiotropium"));
 	}
 
@@ -208,7 +212,7 @@ public class UncorroboratedFindingProvenanceTest {
 		// same rule, and an allergy recorded under the very name the token is. Leg 1 corroborates.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Opium: Opium is contraindicated by an active allergy: documented opium allergy."
-				+ WITHHOLD, onlyFinding(MID_WORD_TOKEN, "Is it safe to give her opium?", "Opium"));
+				+ NO_SEVERITY + WITHHOLD, onlyFinding(MID_WORD_TOKEN, "Is it safe to give her opium?", "Opium"));
 	}
 
 	@Test
@@ -222,7 +226,7 @@ public class UncorroboratedFindingProvenanceTest {
 		// qualified.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Levothyroxine: Levothyroxine is contraindicated by an active allergy: documented "
-				+ "thyroxine allergy — anaphylaxis." + WITHHOLD,
+				+ "thyroxine allergy — anaphylaxis." + NO_SEVERITY + WITHHOLD,
 				onlyFinding(MID_WORD_TOKEN, "Is it safe to give her levothyroxine?", "Levothyroxine"));
 	}
 
@@ -236,7 +240,7 @@ public class UncorroboratedFindingProvenanceTest {
 		// from an allergy recorded as `NSAIDs`. Unscoped, this clause would qualify a correct finding.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Tramadol: Tramadol is contraindicated by an active allergy: NSAID hypersensitivity."
-				+ WITHHOLD,
+				+ NO_SEVERITY + WITHHOLD,
 				onlyFinding(BORROWED_ALIAS, "Is it safe to give her tramadol?", "NSAIDs"));
 	}
 
@@ -256,11 +260,11 @@ public class UncorroboratedFindingProvenanceTest {
 				+ findings);
 		assertTrue(findings.contains(DrugReferenceInjector.FINDING_PREFIX
 				+ "Tramadol: Tramadol is contraindicated by an active allergy: documented tramadol "
-				+ "allergy." + CLAUSE + WITHHOLD),
+				+ "allergy." + CLAUSE + NO_SEVERITY + WITHHOLD),
 				"the self-named rule nothing corroborates must say so, was: " + findings);
 		assertTrue(findings.contains(DrugReferenceInjector.FINDING_PREFIX
 				+ "Tramadol: Tramadol is contraindicated by an active allergy: NSAID hypersensitivity."
-				+ WITHHOLD),
+				+ NO_SEVERITY + WITHHOLD),
 				"and the class-token rule beside it must not, was: " + findings);
 	}
 
@@ -281,14 +285,14 @@ public class UncorroboratedFindingProvenanceTest {
 		// clause.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Levoketoconazole: Levoketoconazole is contraindicated by an active allergy: "
-				+ "documented ketoconazole allergy." + WITHHOLD,
+				+ "documented ketoconazole allergy." + NO_SEVERITY + WITHHOLD,
 				onlyFinding(BORROWED_ALIAS, "Is it safe to give her levoketoconazole?",
 						"Ketoconazole", "Levocetirizine"));
 
 		// The mid-word one alone: it holds the key unopposed, and says so.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Levoketoconazole: Levoketoconazole is contraindicated by an active allergy: "
-				+ "documented levo allergy." + CLAUSE + WITHHOLD,
+				+ "documented levo allergy." + CLAUSE + NO_SEVERITY + WITHHOLD,
 				onlyFinding(BORROWED_ALIAS, "Is it safe to give her levoketoconazole?",
 						"Levocetirizine"));
 	}
@@ -309,7 +313,7 @@ public class UncorroboratedFindingProvenanceTest {
 		// less than the allergen arm's — and it now says how it was matched.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Ibuprofen: Ibuprofen is contraindicated by an active allergy: ibuprofen."
-				+ CLAUSE + WITHHOLD,
+				+ CLAUSE + NO_SEVERITY + WITHHOLD,
 				onlyFinding("chartsearchai-test/drug-reference-self-named-rule-shapes.json",
 						"Can I give him ibuprofen?", "Dexibuprofen"));
 	}

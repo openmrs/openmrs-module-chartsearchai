@@ -2391,6 +2391,32 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * What the record of a finding carrying NO severity rating states about that — issue #402's residue
+	 * (a), ADR Decision 121. The prompt asks the answer to carry each finding's severity, and a record
+	 * stating none left the model to supply one: measured on the live gate, on {@code main} as on the
+	 * branch, an unrated cross-reactivity contraindication was reported as "Major" and an unrated
+	 * duplicate-therapy finding as "Unknown severity" — a rating the knowledge base does use, for other
+	 * rows. The words are the condition-mediated record's own
+	 * ({@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}), so the prompt sees one phrasing of
+	 * one fact. Between the detail and the strength clause, so the call stays sentence-final.
+	 *
+	 * <p>Appended by {@link #findingBody}, so a module-composed answer's line carries it too and states
+	 * the finding in its record's own words. The chip's detail does not.
+	 */
+	static final String FINDING_NO_SEVERITY = " This finding has no severity of its own.";
+
+	/**
+	 * Whether {@code finding}'s record states {@link #FINDING_NO_SEVERITY}: a finding with no rating of
+	 * its own — every contraindication, a class-only relationship, an authored unrated rule, the
+	 * several-orders finding. Not a FOLDED chip, whose severity is its rule's. Not a condition-mediated
+	 * finding, whose detail already ends by saying so.
+	 */
+	private static boolean statesNoSeverity(SafetyWarning finding) {
+		return finding.getSeverity() == null
+				&& !SafetyWarning.TYPE_CONDITION_MEDIATED.equals(finding.getType());
+	}
+
+	/**
 	 * The lead of a module-composed answer whose finding about the PROPOSED drug withholds it — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. The drug
 	 * is spelled between the two halves.
@@ -2800,10 +2826,13 @@ public class DrugReferenceInjector {
 		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
 		// UncorroboratedFindingProvenanceTest. It survives on this comment.
 		String chartOrders = chartOrderClause(finding, orderRecordNumbers);
-		String detail = !clauseFollows && provenance.isEmpty() && chartOrders.isEmpty()
+		// Last before the call: it is about the finding as a whole, not about any name inside it (issue
+		// #402's residue (a)).
+		String noSeverity = statesNoSeverity(finding) ? FINDING_NO_SEVERITY : "";
+		String detail = !clauseFollows && provenance.isEmpty() && chartOrders.isEmpty() && noSeverity.isEmpty()
 				? finding.getDetail()
 				: DrugSafetyValidator.endSentence(finding.getDetail());
-		return detail + chartOrders + provenance;
+		return detail + chartOrders + provenance + noSeverity;
 	}
 
 	/**

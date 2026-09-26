@@ -158,7 +158,11 @@ public class OrdersSharingASubstanceTest {
 		// The ticket's two questions over its six orders and the shipped knowledge base, each putting a
 		// drug in play that is not the one the two combinations share: the same finding a screen states,
 		// in the same words and referent, once for the one set of orders (the issue's decision comment).
-		// Last, after every arm the question raised; the drug-in-play arm's own findings stay proposals.
+		// Last, after every arm the question raised. The drug-in-play arm's own findings state the
+		// current-medication referent for a drug in play her orders resolve to, and the proposal for one
+		// they do not (issue #402, ADR Decision 121) — so the drugs the question LISTS as current that are
+		// hers state it too (#513 item 1). Trimethoprim and sulfamethoxazole stay proposals: her
+		// Cotrimoxazole 960mg order does not resolve to either, a residue the decision records.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 				DrugReferenceTestSupport.shippedEntries());
 		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, 60.0,
@@ -185,10 +189,27 @@ public class OrdersSharingASubstanceTest {
 			assertTrue(finding.isAboutACurrentMedication(), "both orders are her own prescriptions");
 			assertSame(finding, warnings.get(warnings.size() - 1),
 					"after every other finding: " + DrugReferenceTestSupport.details(warnings));
-			for (SafetyWarning warning : warnings.subList(0, warnings.size() - 1)) {
-				assertFalse(warning.isAboutACurrentMedication(), "the drug-in-play arm states the proposal on "
-						+ question + ": " + warning.getDetail());
+			Set<String> current = new LinkedHashSet<String>(Arrays.asList("Lamivudine", "Zidovudine", "Efavirenz"));
+			if ("Rifampicin".equals(drug)) {
+				current.add("Rifampicin (rifampin)");
 			}
+			Set<String> proposed = new LinkedHashSet<String>(Arrays.asList("Sulfamethoxazole (sulfamethazine)",
+					"Trimethoprim"));
+			if ("Metformin".equals(drug)) {
+				proposed.add("Metformin");
+			}
+			Set<String> seen = new LinkedHashSet<String>();
+			for (SafetyWarning warning : warnings.subList(0, warnings.size() - 1)) {
+				seen.add(warning.getDrug());
+				assertTrue(current.contains(warning.getDrug()) || proposed.contains(warning.getDrug()),
+						"a finding about a drug this case does not expect, on " + question + ": " + warning.getDetail());
+				assertEquals(current.contains(warning.getDrug()), warning.isAboutACurrentMedication(),
+						"the drug-in-play arm states the current-medication referent exactly for a drug her orders "
+								+ "resolve to, on " + question + ": " + warning.getDetail());
+			}
+			Set<String> expected = new LinkedHashSet<String>(current);
+			expected.addAll(proposed);
+			assertEquals(expected, seen, "every drug the case expects raised a finding, on " + question);
 		}
 	}
 

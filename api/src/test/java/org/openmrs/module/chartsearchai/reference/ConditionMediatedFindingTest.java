@@ -103,6 +103,49 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 		assertFalse(chip.isAboutACurrentMedication(), "the finding is about the drug the question proposes");
 	}
 
+	/**
+	 * The same chain where the drug in play is one of her own orders states the current-medication
+	 * referent, as every other finding the drug-in-play arm raises about that drug does (issue #402,
+	 * ADR Decision 121): one referent per drug in play, whichever site built the finding.
+	 */
+	@Test
+	public void aChainAboutADrugInPlayThatIsHerOwnOrderIsAboutACurrentMedication() {
+		List<SafetyWarning> chips = conditionMediated("Can I give metformin?",
+				onOrders("Metformin", "Stavudine", "Lamivudine"));
+
+		assertEquals(1, chips.size(), "precondition: the chain the case above states, with metformin now one of"
+				+ " her orders, was: " + DrugReferenceTestSupport.details(chips));
+		assertTrue(chips.get(0).getDetail().contains("Metformin is rated Major in Acidosis, Lactic"),
+				chips.get(0).getDetail());
+		assertTrue(chips.get(0).isAboutACurrentMedication(), "metformin is one of her own active orders");
+	}
+
+	/**
+	 * The record of a condition-mediated finding says it has no severity ONCE: its detail already ends
+	 * on {@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}, so the sentence every other unrated
+	 * finding's record gains (issue #402, {@code DrugReferenceInjector.FINDING_NO_SEVERITY}) is not
+	 * appended to it as well.
+	 */
+	@Test
+	public void theInjectedRecordSaysItHasNoSeverityOnce() {
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shippedService()).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), onOrders("Stavudine", "Lamivudine"), "Can I give metformin?");
+
+		List<String> records = new ArrayList<String>();
+		for (String finding : DrugReferenceTestSupport.findingTexts(chart)) {
+			if (finding.contains(DISCLAIMER)) {
+				records.add(finding);
+			}
+		}
+		assertEquals(1, records.size(), "precondition: the condition-mediated finding reached the prompt: "
+				+ DrugReferenceTestSupport.findingTexts(chart));
+		String record = records.get(0);
+		assertTrue(record.contains("this finding has no severity of its own"),
+				"precondition: the detail's own statement of it: " + record);
+		assertFalse(record.contains(DrugReferenceInjector.FINDING_NO_SEVERITY.trim()),
+				"and not the other unrated findings' sentence beside it: " + record);
+	}
+
 	@Test
 	public void theChainIsFoundFromTheCauseSideToo() {
 		List<SafetyWarning> chips = conditionMediated("Can I give stavudine?", onOrders("Metformin"));

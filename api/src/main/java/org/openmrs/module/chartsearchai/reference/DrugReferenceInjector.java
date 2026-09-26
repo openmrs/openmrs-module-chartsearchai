@@ -643,12 +643,9 @@ public class DrugReferenceInjector {
 		//     and without the note the model can present the duplicate as the interaction it found.
 		//
 		// → ADR Decision 87; InteractionScreenSilenceNoteTest.
-		Set<Object> screenedSubstances = new LinkedHashSet<Object>();
-		if (orderEntries != null) {
-			for (DrugReference entry : orderEntries) {
-				screenedSubstances.add(entry.substanceGroupKey());
-			}
-		}
+		// The validator's own answer to "which substances are hers", so the composed "No" below and the
+		// drug-in-play arm's referent cannot key it differently (issue #402).
+		Set<Object> screenedSubstances = DrugSafetyValidator.substancesOf(orderEntries);
 		// Resolved once and read by both the note's gate and the early return below, so the two cannot
 		// come to disagree about whether this injection had anything to say.
 		boolean nothingResolved = matched.isEmpty() && findings.isEmpty() && namedClass == null;
@@ -2373,14 +2370,18 @@ public class DrugReferenceInjector {
 	 * why this method takes that resolution as a parameter rather than deriving it — it is a fact about
 	 * the chart being built, and only {@link #injectRecords} holds it.
 	 *
-	 * <p>The full-stop guard asks about ALL THREE clauses, and TWO of its three halves cannot fire today. Only a
+	 * <p>The full-stop guard asks about every clause {@link #findingBody} can append, and only the
+	 * strength half is known to fire. Only a
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
 	 * that type, so a provenance clause never arrives without a strength beside it; and only an
 	 * interaction or a condition-mediated finding can carry a BRIDGE, for each of which that method
 	 * answers one unconditionally too. Said
 	 * rather than left to be rediscovered — mutating the guard (in {@link #findingBody} since issue
 	 * #469) to {@code !clauseFollows} alone leaves the whole api suite green, and so does dropping the
-	 * bridge term. All three are kept because
+	 * bridge term. Since issue #402 it also asks about {@link #FINDING_NO_SEVERITY}, which
+	 * {@link #statesNoSeverity} admits only for an unrated finding; the one declared type {@link #strengthClause}
+	 * states nothing for is the overdose finding, which cannot reach this method today. All of them are
+	 * kept because
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */
@@ -2388,6 +2389,38 @@ public class DrugReferenceInjector {
 		String strength = strengthClause(finding);
 		return FINDING_PREFIX + finding.getDrug() + ": "
 				+ findingBody(finding, orderRecordNumbers, !strength.isEmpty()) + strength;
+	}
+
+	/**
+	 * What the record of a finding carrying NO severity rating states about that — issue #402's residue
+	 * (a), ADR Decision 121. The prompt asks the answer to carry each finding's severity, and a record
+	 * stating none left the model to supply one: measured on the live gate, on {@code main} as on the
+	 * branch, an unrated cross-reactivity contraindication was reported as "Major" and an unrated
+	 * duplicate-therapy finding as "Unknown severity" — a rating the knowledge base does use, for other
+	 * rows. Between the detail and the strength clause, so the call stays sentence-final.
+	 *
+	 * <p><b>It must not open the way a strength clause opens</b>, which is "This finding". An answer
+	 * copying the detail and the call but not this sentence would otherwise match one word past the
+	 * detail's end, into the call, and then differ inside a record sentence — so
+	 * {@code ReferenceProseFidelityCheck} would publish a faithful answer as an unfaithful rendering
+	 * ({@code ReferenceProseFidelityTest.anAnswerLeavingOutOnlyTheNoSeveritySentenceIsNotReported}). The
+	 * first wording, "This finding has no severity of its own.", did exactly that.
+	 *
+	 * <p>Appended by {@link #findingBody}, so a module-composed answer's line carries it too and states
+	 * the finding in its record's own words. The chip's detail does not.
+	 */
+	static final String FINDING_NO_SEVERITY = " No severity is rated for this finding.";
+
+	/**
+	 * Whether {@code finding}'s record states {@link #FINDING_NO_SEVERITY}: a finding with no rating of
+	 * its own — every contraindication, a class-only relationship, an authored unrated rule, the
+	 * several-orders finding, the finding that her orders share a substance. Not a FOLDED chip, whose
+	 * severity is its rule's. Not a condition-mediated finding, whose detail already ends by saying it has
+	 * no severity of its own ({@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}).
+	 */
+	private static boolean statesNoSeverity(SafetyWarning finding) {
+		return finding.getSeverity() == null
+				&& !SafetyWarning.TYPE_CONDITION_MEDIATED.equals(finding.getType());
 	}
 
 	/**
@@ -2433,9 +2466,10 @@ public class DrugReferenceInjector {
 	 *     interaction the data rates as a reason to withhold it relates it to one of her orders
 	 *     ({@link #STRENGTH_WITHHOLD} — the proposal clause, which only the drug-in-play arm states
 	 *     before there is an answer, and still the one it states for a drug her chart holds only as
-	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the drug-in-play arm states a
-	 *     proposal clause for a drug she does take (issue #402), and composing would make that defect
-	 *     certain — asked of {@code herSubstances}, the substances this pass resolved her orders to.</li>
+	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the "No" composed here refuses a
+	 *     PROPOSAL, and for a drug she does take the drug-in-play arm states the current-medication
+	 *     clause instead (issue #402, ADR Decision 121) — asked of {@code herSubstances}, the
+	 *     substances this pass resolved her orders to.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication
@@ -2769,7 +2803,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * A finding's record text between its head and its strength clause — the detail, then what the
-	 * names inside it stand for in this chart, then how a rule reached the chart. Its own method since
+	 * names inside it stand for in this chart, then how a rule reached the chart, then, for an unrated
+	 * finding, that no severity is rated for it (issue #402). Its own method since
 	 * issue #469 because it is ALSO the words a module-composed answer states for the finding
 	 * ({@link #composeFromFindings}), and one method is what keeps that answer and the record the
 	 * chip beside it came from saying the same thing. The strength clause is not part of it: that
@@ -2799,10 +2834,13 @@ public class DrugReferenceInjector {
 		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
 		// UncorroboratedFindingProvenanceTest. It survives on this comment.
 		String chartOrders = chartOrderClause(finding, orderRecordNumbers);
-		String detail = !clauseFollows && provenance.isEmpty() && chartOrders.isEmpty()
+		// Last before the call: it is about the finding as a whole, not about any name inside it (issue
+		// #402's residue (a)).
+		String noSeverity = statesNoSeverity(finding) ? FINDING_NO_SEVERITY : "";
+		String detail = !clauseFollows && provenance.isEmpty() && chartOrders.isEmpty() && noSeverity.isEmpty()
 				? finding.getDetail()
 				: DrugSafetyValidator.endSentence(finding.getDetail());
-		return detail + chartOrders + provenance;
+		return detail + chartOrders + provenance + noSeverity;
 	}
 
 	/**

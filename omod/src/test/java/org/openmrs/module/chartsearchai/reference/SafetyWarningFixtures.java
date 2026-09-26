@@ -115,11 +115,12 @@ public final class SafetyWarningFixtures {
 
 	/**
 	 * The finding that the drug in play is already in two or more of her orders — built by
-	 * {@code SafetyWarning.substanceInSeveralActiveOrders}, the drug-in-play arm's, whose referent is
-	 * {@code false} (issue #477).
+	 * {@code SafetyWarning.substanceInSeveralActiveOrders}, the drug-in-play arm's (issue #477), whose
+	 * referent is the one that arm states for the drug in play: {@code true} where her orders resolve to
+	 * its substance, {@code false} where they do not (issue #402).
 	 */
 	public static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail,
-			List<String> orders) {
-		return SafetyWarning.substanceInSeveralActiveOrders(drug, detail, orders);
+			List<String> orders, boolean aboutACurrentMedication) {
+		return SafetyWarning.substanceInSeveralActiveOrders(drug, detail, orders, aboutACurrentMedication);
 	}
 }

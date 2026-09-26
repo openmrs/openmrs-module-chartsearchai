@@ -990,18 +990,29 @@ public class DrugSafetyValidator {
 		boolean questionDrugScreened = false;
 		int questionDrugPairs = 0;
 
+		// The substances her active orders resolve to — the drug-in-play arm's REFERENT, asked per drug
+		// in play below (issue #402, ADR Decision 121). Off orderEntries, the one resolution this pass
+		// already holds, so the arm and every other consumer of her orders cannot disagree about which
+		// drugs are hers. A per-call local, for issue #172's reason.
+		Set<Object> herOrderSubstances = substancesOf(orderEntries);
+
 		for (DrugReference ref : inPlay) {
+			// Whether this drug in play is one of her own active orders, and so what every finding the
+			// arm raises about it is ABOUT: a medication she is already taking where it is, a proposal
+			// where it is not. One answer per drug in play, handed to EVERY site below that builds a
+			// finding, because a site stating the other referent beside them is the one-site shape
+			// issue #402 recorded and reverted — the prompt's ranking sentence would hand the lead to
+			// whichever finding still read as a proposal. Keyed on the SUBSTANCE, the unit the chips
+			// fold on (issues #162, #206), and never on the row. An ended order is not in orderEntries,
+			// so a drug her chart holds only as one keeps the proposal here and EndedOrders states its
+			// own referent on the chip (issue #472).
+			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
-				// FALSE at both, and not because the drug cannot also be a current medication — it often
-				// is. The question or the answer PROPOSED it, so what this finding licenses is a
-				// decision about that proposal (issue #348). Where the chart holds it only as an ended
-				// order, the ledger states that on the chip as a separate referent (issue #472,
-				// EndedOrders); this argument is false either way.
 				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier,
-					false);
-				addAllergyContraindications(contraindications, ref, recordedAllergens, false);
+					herOrder);
+				addAllergyContraindications(contraindications, ref, recordedAllergens, herOrder);
 			}
 			// The rows this pass resolved for ref's substance, and the null/empty check the two-map form
 			// used to get for free from remove(). It cannot fire: the map is seeded by substanceRows(inPlay)
@@ -1022,12 +1033,13 @@ public class DrugSafetyValidator {
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
 				int related = addInteractionWarnings(warnings, rows, subjects, context, severityFloor,
-						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, endedOrders);
+						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, endedOrders,
+						herOrder);
 				// After the pairwise chips for this drug and never counted into `related`: a derived chain
 				// is not a DDInter pair row, and PairChipExtent counts those alone (ADR Decision 111).
 				if (derivedFindings) {
 					addConditionMediatedWarnings(warnings, rows, subjects, context, orderEntries, coMedications,
-						bridgedOrders, endedOrders);
+						bridgedOrders, endedOrders, herOrder);
 				}
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
@@ -2639,6 +2651,24 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>A per-pass value and never a field, for issue #172's reason.
 	 */
+	/**
+	 * The substances {@code orderEntries}, her active orders resolved by
+	 * {@link DrugReferenceService#findForActiveOrders}, are of — keyed on
+	 * {@link DrugReference#substanceGroupKey()}, the unit the chips fold on. A new, mutable set; empty for
+	 * {@code null}. The one answer to "is this substance hers", read by the drug-in-play arm's referent
+	 * (issue #402, ADR Decision 121), by {@link EndedOrders} and by {@code DrugReferenceInjector}'s
+	 * composed-answer gate, so no two of them can key it differently.
+	 */
+	static Set<Object> substancesOf(List<DrugReference> orderEntries) {
+		Set<Object> active = new HashSet<Object>();
+		if (orderEntries != null) {
+			for (DrugReference entry : orderEntries) {
+				active.add(entry.substanceGroupKey());
+			}
+		}
+		return active;
+	}
+
 	private static final class EndedOrders {
 
 		/**
@@ -2706,7 +2736,7 @@ public class DrugSafetyValidator {
 			}
 			List<String> endedTexts = lowered(ended);
 			List<String> notEndedTexts = lowered(notEnded);
-			Set<Object> active = substancesOf(orderEntries);
+			Set<Object> active = DrugSafetyValidator.substancesOf(orderEntries);
 			// A question PROPOSING the drug keeps it a proposal: there the call "withhold it" has its
 			// referent, which is exactly what the ended-order clause exists to supply where it has none.
 			// The admission grammar is issue #469's, over the same marking of the question's own names.
@@ -2775,14 +2805,6 @@ public class DrugSafetyValidator {
 			}
 		}
 
-		/** The substances {@code orderEntries}, her active orders resolved, are of. */
-		static Set<Object> substancesOf(List<DrugReference> orderEntries) {
-			Set<Object> active = new HashSet<Object>();
-			for (DrugReference entry : orderEntries) {
-				active.add(entry.substanceGroupKey());
-			}
-			return active;
-		}
 
 		private static List<String> lowered(List<RecordMapping> records) {
 			List<String> out = new ArrayList<String>(records.size());
@@ -2867,7 +2889,7 @@ public class DrugSafetyValidator {
 				|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
 			return Collections.emptyList();
 		}
-		Set<Object> active = EndedOrders.substancesOf(orderEntries);
+		Set<Object> active = substancesOf(orderEntries);
 		List<RecordMapping> orderRecords = new ArrayList<RecordMapping>();
 		EndedOrders.partitionOrderRecords(mappings, orderRecords, orderRecords);
 		List<String> orderTexts = EndedOrders.lowered(orderRecords);
@@ -4163,11 +4185,15 @@ public class DrugSafetyValidator {
 	 *         two partners on an ordinary per-order chart too, and the ledger collapses them only where
 	 *         they render byte for byte alike. It counts what a reader was shown, which is the residue
 	 *         those chips carry.
+	 * @param herOrder whether this substance is one of her own active orders — {@code validate}'s one
+	 *        answer for the drug in play, stated on every chip this method builds, rule, merged,
+	 *        class-only and several-orders alike (issue #402, ADR Decision 121)
 	 */
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
-			StatedInteractionChips statedChips, BridgedOrders bridgedOrders, EndedOrders endedOrders) {
+			StatedInteractionChips statedChips, BridgedOrders bridgedOrders, EndedOrders endedOrders,
+			boolean herOrder) {
 		if (context == null) {
 			return 0;
 		}
@@ -4273,12 +4299,12 @@ public class DrugSafetyValidator {
 				// to say about is named the way a partner it did have something to say about is. Null
 				// where the ladder reached no co-medication, and then this is the narrow overload's
 				// answer — partnerLabel, which is also the grouping key.
-				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges, false)
+				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges, herOrder)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
-							null, bridges, false);
+							null, bridges, herOrder);
 			} else {
 				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence, bridges, false);
+					fold.sentence, bridges, herOrder);
 			}
 			// The displays of the orders that walk matched, on the chip before anything else reads it —
 			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514).
@@ -4306,7 +4332,7 @@ public class DrugSafetyValidator {
 		// exactly the case where the two diverge, so reading the merged list's size here would move a
 		// published completeness figure without a single pair having moved.
 		int relatedPairs = ruleChips.size();
-		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements);
+		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements, herOrder);
 		Collections.sort(stated, FINDING_STRENGTH_DESCENDING);
 		// The referent is stated here, on the chips this arm hands over, and not before the collapse or
 		// the stated-chip ledger: it cannot change which chips exist (issue #472, see EndedOrders).
@@ -4319,7 +4345,7 @@ public class DrugSafetyValidator {
 		// stamped as about an ended order: its sentence says active orders carry the drug. Its subject
 		// rows are stated as every other chip of this arm's are (issue #515), or no check of the answer
 		// can tell which drug it is about.
-		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications);
+		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications, herOrder);
 		if (alreadyTaken != null) {
 			warnings.add(endedOrders.aboutTheSubject(ref, alreadyTaken));
 		}
@@ -4333,7 +4359,8 @@ public class DrugSafetyValidator {
 			// authored it deliberately", and licensesWithholding grades the two differently. The public
 			// constructor this used to call cannot say which of the two it is, and read as the second it
 			// refused a standard two-NRTI regimen — see SafetyWarning.restsOnSharedClassificationAlone.
-			warnings.add(endedOrders.stamp(ref, SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail)));
+			warnings.add(endedOrders.stamp(ref,
+				SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail, herOrder)));
 		}
 		return relatedPairs;
 	}
@@ -4400,11 +4427,13 @@ public class DrugSafetyValidator {
 	 * — the documented pre-#297 behaviour rather than a new one. Severity cannot move: it is part of
 	 * the key, so only chips already rated alike are ever merged.
 	 *
+	 * @param herOrder the drug in play's referent, which every member already states — a merged chip
+	 *         must not state another (issue #402)
 	 * @return the chips to state, in the order they were collected; a group of one is its own original
 	 *         chip object, so a response with nothing to collapse is unchanged
 	 */
 	private static List<SafetyWarning> collapseSharedMechanisms(DrugReference ref,
-			List<MechanismStatement> statements) {
+			List<MechanismStatement> statements, boolean herOrder) {
 		Map<String, List<MechanismStatement>> groups = new LinkedHashMap<String, List<MechanismStatement>>();
 		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
 		for (MechanismStatement statement : statements) {
@@ -4469,7 +4498,7 @@ public class DrugSafetyValidator {
 			// travels structurally and nothing downstream recovers it by parsing the string this just
 			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
 			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null,
-				bridges, false, partners).withMatchedOrderNames(matchedNames));
+				bridges, herOrder, partners).withMatchedOrderNames(matchedNames));
 		}
 		return out;
 	}
@@ -4502,13 +4531,16 @@ public class DrugSafetyValidator {
 	 * (issue #185). Which orders count is {@link CoMedications#ordersWhoseDisplayNames}, and the
 	 * sentence names each by that same display, so the evidence and the printed name are one string.
 	 *
-	 * <p><b>Its REFERENT is its arm's, a proposal</b>, like every other finding this arm raises about the
-	 * drug in play: stated beside them in the current-medication column (issue #348), one response would
-	 * refuse the drug as a proposal and call it a medication to change, the one-site shape issue #402
-	 * recorded and reverted. Its STRENGTH is the unrated default, so on a proposal it withholds a further
-	 * course of a drug two orders already carry. ADR Decision 112 carries why of both.
+	 * <p><b>Its REFERENT is its arm's</b>, {@code herOrder}, like every other finding this arm raises
+	 * about the drug in play: stated in the other column beside them, one response would refuse the drug
+	 * as a proposal and call it a medication to change, the one-site shape issue #402 recorded and
+	 * reverted. Since issue #402 the arm states the current-medication referent for a drug in play her
+	 * own orders resolve to, so where two of her orders carry the substance this finding states it too.
+	 * Its STRENGTH is the unrated default, so it states the withholding class. ADR Decisions 112 and 121
+	 * carry why of both.
 	 */
-	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications) {
+	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications,
+			boolean herOrder) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =
 				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey());
 		if (carriers.size() < 2) {
@@ -4518,7 +4550,7 @@ public class DrugSafetyValidator {
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
 					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()));
+			new ArrayList<String>(ordersByDisplay.keySet()), herOrder);
 	}
 
 	/**
@@ -7366,10 +7398,14 @@ public class DrugSafetyValidator {
 	 * limit the class-only chips carry (#346). It is never passed through
 	 * {@link #collapseSharedMechanisms}, and where DDInter also rates the pair both chips stand: they are
 	 * two claims from two tables.
+	 *
+	 * @param herOrder whether the subject is one of her own active orders — {@code validate}'s one answer
+	 *        for the drug in play, which every chip of that drug states (issue #402, ADR Decision 121)
 	 */
 	private static void addConditionMediatedWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, List<DrugReference> orderEntries,
-			CoMedications coMedications, BridgedOrders bridgedOrders, EndedOrders endedOrders) {
+			CoMedications coMedications, BridgedOrders bridgedOrders, EndedOrders endedOrders,
+			boolean herOrder) {
 		if (context == null || orderEntries == null || orderEntries.isEmpty()) {
 			return;
 		}
@@ -7413,12 +7449,12 @@ public class DrugSafetyValidator {
 			// ended order is not a proposal, and the finding must not read as one.
 			warnings.add(endedOrders.stamp(subject, conditionMediatedWarning(true, group.getKey(), group.getValue(),
 				coMembers(true, group.getKey(), group.getValue(), partners), rows, subject, subjects, partners,
-				context, orderEntries, coMedications, bridgedOrders)));
+				context, orderEntries, coMedications, bridgedOrders, herOrder)));
 		}
 		for (Map.Entry<String, Map<Object, DrugReference.ConditionMediatedRisk>> group : subjectCauses.entrySet()) {
 			warnings.add(endedOrders.stamp(subject, conditionMediatedWarning(false, group.getKey(), group.getValue(),
 				coMembers(false, group.getKey(), group.getValue(), partners), rows, subject, subjects, partners,
-				context, orderEntries, coMedications, bridgedOrders)));
+				context, orderEntries, coMedications, bridgedOrders, herOrder)));
 		}
 	}
 
@@ -7517,7 +7553,7 @@ public class DrugSafetyValidator {
 			Map<Object, DrugReference.ConditionMediatedRisk> coMembers, List<DrugReference> rows,
 			DrugReference subject, SubstanceSubjects subjects, Map<Object, List<DrugReference>> partners,
 			PatientClinicalContext context, List<DrugReference> orderEntries, CoMedications coMedications,
-			BridgedOrders bridgedOrders) {
+			BridgedOrders bridgedOrders, boolean herOrder) {
 		// Partner name -> the links naming it. Keyed on the NAME the ladder prints, so two constituents
 		// of one prescription the ladder names by its display are that one partner, stated once, and
 		// never as two active orders.
@@ -7617,7 +7653,7 @@ public class DrugSafetyValidator {
 					+ (stated.size() > 1 ? " are each rated " : " is rated ") + ratedSeverity + " in " + condition
 					+ " (DDInter drug-disease). " + CONDITION_MEDIATED_PROVENANCE;
 		}
-		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names)
+		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names, herOrder)
 				.withMatchedOrderNames(matchedNames);
 	}
 
@@ -10156,8 +10192,13 @@ public class DrugSafetyValidator {
 			if (inPlay.contains(ref)) {
 				continue;
 			}
-			// FALSE where a sibling row put this substance in play: something proposed this drug, and a
-			// call about a proposal is what its finding licenses however this arm reached the row.
+			// FALSE where a sibling row put this substance in play — issue #348's rule, from when every
+			// drug in play was a proposal. Since issue #402 the drug-in-play arm states the
+			// CURRENT-medication referent for that same substance, this row being one of her orders, so
+			// where both arms raise a finding of it the two referents disagree and the ledger's rank
+			// decides which survives one key. That is a known residue and not a rationale: ADR Decision
+			// 121 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
+			// sibling-row cases pin it.
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response

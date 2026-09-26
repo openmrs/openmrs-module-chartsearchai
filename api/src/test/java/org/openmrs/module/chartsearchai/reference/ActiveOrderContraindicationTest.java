@@ -274,7 +274,7 @@ public class ActiveOrderContraindicationTest {
 		// pinned per arm.
 		assertTrue(texts.contains(DrugReferenceInjector.FINDING_PREFIX + "Ibuprofen: Ibuprofen is "
 				+ "contraindicated by an active allergy: documented ibuprofen allergy."
-				+ DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
+				+ DrugReferenceInjector.FINDING_NO_SEVERITY + DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
 				"a record must carry the chip's own detail verbatim, was: " + texts);
 	}
 

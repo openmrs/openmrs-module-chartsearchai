@@ -2373,14 +2373,18 @@ public class DrugReferenceInjector {
 	 * why this method takes that resolution as a parameter rather than deriving it — it is a fact about
 	 * the chart being built, and only {@link #injectRecords} holds it.
 	 *
-	 * <p>The full-stop guard asks about ALL THREE clauses, and TWO of its three halves cannot fire today. Only a
+	 * <p>The full-stop guard asks about every clause {@link #findingBody} can append, and only the
+	 * strength half is known to fire. Only a
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
 	 * that type, so a provenance clause never arrives without a strength beside it; and only an
 	 * interaction or a condition-mediated finding can carry a BRIDGE, for each of which that method
 	 * answers one unconditionally too. Said
 	 * rather than left to be rediscovered — mutating the guard (in {@link #findingBody} since issue
 	 * #469) to {@code !clauseFollows} alone leaves the whole api suite green, and so does dropping the
-	 * bridge term. All three are kept because
+	 * bridge term. Since issue #402 it also asks about {@link #FINDING_NO_SEVERITY}, which
+	 * {@link #statesNoSeverity} admits only for an unrated finding; the one declared type {@link #strengthClause}
+	 * states nothing for is the overdose finding, which cannot reach this method today. All of them are
+	 * kept because
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */

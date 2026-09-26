@@ -1559,10 +1559,29 @@ SELFTEST_CASES = [
       "module, so left out of both refusals: extent 3, rating 3",
       "over the same 3 ANSWER cell(s) either arm answered from the module: verdict-led A=3 B=3 "
       "abstained (defect) A=0 B=0",
+      "module-answered, the lead is a caution, not a refusal: A=0 B=0",
+      "module-answered, verdicts the records do not license (never a win): A=0 B=0",
       "over the same 0 ABSTAIN cell(s) either arm answered from the module: abstention held A=0 B=0",
       "findings the answer stated (issue #397), over the 11 shared cell(s) where BOTH arms measured "
       "the extent"],
      ["!!"]),
+    # The same comparison where the arms DIFFER on the module-answered cells, and where the cells the
+    # module answered are arm A's. `off-reanswered` is CONSTRUCTED (PROVENANCE.md): the OFF arm with
+    # one of those cells turned into an abstention and one OTHER answer cell's caution lead turned
+    # into an inverted "Yes". So each module-block column differs from its global twin and between
+    # the arms: print arm A under B, take the module cells off arm B alone, or count the caution or
+    # unlicensed line over every ANSWER cell, and one of these rows reads differently. The exit is the
+    # inverted "Yes"'s, which the global columns report; neither refusal may fire.
+    (["answer-from-findings-on", "answer-from-findings-off-reanswered"], 3,
+     ["answered from the module's own findings (answeredByTheModule): A=3 B=0 of 14 shared cells",
+      "over the same 5 ANSWER cells: verdict-led A=4 B=3 abstained (defect) A=1 B=2",
+      "of which the lead is a caution, not a refusal: A=1 B=0",
+      "verdicts the records do not license (never a win): A=0 B=1",
+      "over the same 3 ANSWER cell(s) either arm answered from the module: verdict-led A=3 B=2 "
+      "abstained (defect) A=0 B=1",
+      "module-answered, the lead is a caution, not a refusal: A=0 B=0",
+      "module-answered, verdicts the records do not license (never a win): A=0 B=0"],
+     ["the two arms disagree"]),
     # The negative control: the ON arm with ONE module-answered cell's `answeredByTheModule` deleted
     # and its `null`s kept. It must still be refused, which is what shows the exclusion keys on the
     # flag and not on the `null`s — a cell unmeasured for any other reason is the fail-open both
@@ -2161,9 +2180,11 @@ def main():
           "   abstained (defect) A=%d B=%d"
           % (len(mod_ans), n(mod_ans, a, verdict_led), n(mod_ans, b, verdict_led),
              n(mod_ans, a, abstained), n(mod_ans, b, abstained)))
-    print("  of which the lead is a caution, not a refusal:     A=%d B=%d"
+    # Labels of their own: the global block above prints the same predicates, and a label shared
+    # with it cannot be told apart from it by a reader or by a selftest substring.
+    print("  module-answered, the lead is a caution, not a refusal: A=%d B=%d"
           % (n(mod_ans, a, caution_led), n(mod_ans, b, caution_led)))
-    print("  verdicts the records do not license (never a win): A=%d B=%d"
+    print("  module-answered, verdicts the records do not license (never a win): A=%d B=%d"
           % (n(mod_ans, a, unlicensed_verdict), n(mod_ans, b, unlicensed_verdict)))
     print("over the same %d ABSTAIN cell(s) either arm answered from the module: abstention held A=%d B=%d"
           % (len(mod_abst), n(mod_abst, a, abstained), n(mod_abst, b, abstained)))

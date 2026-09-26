@@ -560,3 +560,20 @@ keys. The arm exists for its pair with `answer-from-findings-unflagged/`, where 
 flag only on the arm that MEASURED it. That pair must exit 3 on that one cell. An excusal read off
 either arm exits 0 on it; one read off the measuring arm refuses the other two module-answered cells
 instead (`2 cell(s) on one side only`).
+
+### `answer-from-findings-off-reanswered/` — **CONSTRUCTED**, by rewriting two answers
+`answer-from-findings-off/` with the `answer` of two cells replaced, and every other byte of every
+file, `CAPTURE_DONE` included, untouched:
+- `mary__safety-erythromycin.json` — one of the three cells `answer-from-findings-on/` answers from
+  the module — now reads "The records do not address whether this patient can take Erythromycin.",
+  the abstention `joshua__safety-erythromycin.json` states verbatim. It was the "No — Erythromycin
+  should not be given: …" lead.
+- `mary__safety-warfarin.json`, which no arm answers from the module, now reads "Yes — Warfarin can
+  be given: it interacts with active order Simvastatin [1], a Minor finding [77]." It was the caution
+  lead "Warfarin can be given, with one caution: …", whose clause after the colon is kept.
+
+Its findings keys still describe the answers it replaced, so its completeness columns are not a
+reading of these answers. The arm exists for its pair with `answer-from-findings-on/` on side A,
+where the module-answered cells are arm A's and the arms differ on them. The verdict-led and
+abstained columns differ, and the caution and unlicensed lines read differently over those cells
+than over every answer cell. That pair exits 3 on the inverted "Yes", with neither refusal firing.

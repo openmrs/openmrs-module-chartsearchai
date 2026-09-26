@@ -11554,9 +11554,13 @@ The first live arm showed it, on `main` as on the branch: *"(Major)"* on an unra
 contraindication, and *"(Unknown severity)"* on an unrated duplicate-therapy finding. The prompt asks
 the answer to carry each finding's severity, and the record of an unrated finding stated none. As the
 issue's direction requires, the fix is in what the finding renders and not in `DEFAULT_SYSTEM_PROMPT`.
-`DrugReferenceInjector.findingBody` appends `FINDING_NO_SEVERITY` (*"This finding has no severity of
-its own."*) to any finding whose severity is null, before the strength clause. These are the words the
-condition-mediated record already uses, and that type is skipped so it does not say them twice. A
+`DrugReferenceInjector.findingBody` appends `FINDING_NO_SEVERITY` (*"No severity is rated for this
+finding."*) to any finding whose severity is null, before the strength clause. A condition-mediated
+finding is skipped: its detail already says it has no severity of its own. The live arms D and E below
+ran an earlier wording, *"This finding has no severity of its own."*. It was changed after them
+because it opened as the strength clause does, which made `ReferenceProseFidelityCheck` report a
+faithful answer that left the sentence out. The reworded sentence was re-measured on the cells it
+moves (see below). A
 folded chip carries its rule's rating and is not touched. The sentence reaches the module-composed
 answer's lines too, so a line still states its finding in the record's own words. Every test
 that pinned an unrated record verbatim was rewritten to include it, and

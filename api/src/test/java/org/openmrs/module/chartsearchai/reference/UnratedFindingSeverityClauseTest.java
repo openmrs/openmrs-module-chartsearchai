@@ -27,13 +27,12 @@ import org.junit.jupiter.api.Test;
  * stated none. Measured on the live gate, on {@code main} and on the branch alike, the model filled
  * the gap with a rating no chip carries: <em>"(Major)"</em> on an unrated cross-reactivity
  * contraindication, <em>"(Unknown severity)"</em> on an unrated duplicate-therapy finding. The
- * record now states the absence, in the words the condition-mediated record already uses
- * ({@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}), between the detail and the strength
+ * record now states the absence, between the detail and the strength
  * clause so the call stays sentence-final.
  */
 public class UnratedFindingSeverityClauseTest {
 
-	private static final String ALIAS_FIXTURE = "chartsearchai-test/ddi-alias-drug-names.json";
+	private static final String ALIAS_FIXTURE = DrugReferenceTestSupport.DDI_ALIAS_DRUG_NAMES;
 
 	private static final String CLASS_ONLY_FIXTURE = "chartsearchai-test/ddi-class-only-and-rule-one-partner.json";
 
@@ -41,7 +40,7 @@ public class UnratedFindingSeverityClauseTest {
 
 	/** Pinned as a literal: it is what the model reads, and a constant compared to itself stays green
 	 *  through a reword. */
-	private static final String NO_SEVERITY = " This finding has no severity of its own.";
+	private static final String NO_SEVERITY = " No severity is rated for this finding.";
 
 	private static String onlyFinding(String fixture, PatientClinicalContext context, String question)
 			throws IOException {

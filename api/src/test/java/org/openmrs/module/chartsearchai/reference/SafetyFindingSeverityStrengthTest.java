@@ -132,7 +132,7 @@ public class SafetyFindingSeverityStrengthTest {
 		// rather than run on from the detail — the reason renderFinding shares
 		// DrugSafetyValidator.endSentence rather than concatenating.
 		// Since issue #402 an unrated finding also says it has no severity, between the two.
-		assertTrue(finding.contains("increased risk of GI bleeding. This finding has no severity of its own. "
+		assertTrue(finding.contains("increased risk of GI bleeding. No severity is rated for this finding. "
 				+ WITHHOLD),
 				"the clause must open a sentence of its own even where the detail ends without a full "
 						+ "stop: " + finding);

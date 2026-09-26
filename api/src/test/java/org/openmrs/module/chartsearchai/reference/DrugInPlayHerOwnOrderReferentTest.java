@@ -44,7 +44,7 @@ import org.junit.jupiter.api.Test;
 public class DrugInPlayHerOwnOrderReferentTest {
 
 	/** Verbatim DDInter excerpt: Simvastatin × Clarithromycin is Major. */
-	private static final String ALIAS_FIXTURE = "chartsearchai-test/ddi-alias-drug-names.json";
+	private static final String ALIAS_FIXTURE = DrugReferenceTestSupport.DDI_ALIAS_DRUG_NAMES;
 
 	/** Methylphenidate × Modafinil, rated Minor, both filed under N06BA — the fold of a rule and a class
 	 *  sentence onto one chip ({@code FoldedFindingStrengthTest}). */
@@ -244,10 +244,7 @@ public class DrugInPlayHerOwnOrderReferentTest {
 			"Isoniazid / pyrazinamide / rifampin");
 		String question = "Is it safe to give rifampicin?";
 
-		Set<Object> herSubstances = new HashSet<Object>();
-		for (DrugReference entry : service.findForActiveOrders(context)) {
-			herSubstances.add(entry.substanceGroupKey());
-		}
+		Set<Object> herSubstances = DrugSafetyValidator.substancesOf(service.findForActiveOrders(context));
 		Set<Object> asked = new HashSet<Object>();
 		for (DrugReference entry : service.findImpliedByQuery(question)) {
 			asked.add(entry.substanceGroupKey());

@@ -994,7 +994,7 @@ public class DrugSafetyValidator {
 		// in play below (issue #402, ADR Decision 121). Off orderEntries, the one resolution this pass
 		// already holds, so the arm and every other consumer of her orders cannot disagree about which
 		// drugs are hers. A per-call local, for issue #172's reason.
-		Set<Object> herOrderSubstances = EndedOrders.substancesOf(orderEntries);
+		Set<Object> herOrderSubstances = substancesOf(orderEntries);
 
 		for (DrugReference ref : inPlay) {
 			// Whether this drug in play is one of her own active orders, and so what every finding the
@@ -2651,6 +2651,24 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>A per-pass value and never a field, for issue #172's reason.
 	 */
+	/**
+	 * The substances {@code orderEntries}, her active orders resolved by
+	 * {@link DrugReferenceService#findForActiveOrders}, are of — keyed on
+	 * {@link DrugReference#substanceGroupKey()}, the unit the chips fold on. A new, mutable set; empty for
+	 * {@code null}. The one answer to "is this substance hers", read by the drug-in-play arm's referent
+	 * (issue #402, ADR Decision 121), by {@link EndedOrders} and by {@code DrugReferenceInjector}'s
+	 * composed-answer gate, so no two of them can key it differently.
+	 */
+	static Set<Object> substancesOf(List<DrugReference> orderEntries) {
+		Set<Object> active = new HashSet<Object>();
+		if (orderEntries != null) {
+			for (DrugReference entry : orderEntries) {
+				active.add(entry.substanceGroupKey());
+			}
+		}
+		return active;
+	}
+
 	private static final class EndedOrders {
 
 		/**
@@ -2718,7 +2736,7 @@ public class DrugSafetyValidator {
 			}
 			List<String> endedTexts = lowered(ended);
 			List<String> notEndedTexts = lowered(notEnded);
-			Set<Object> active = substancesOf(orderEntries);
+			Set<Object> active = DrugSafetyValidator.substancesOf(orderEntries);
 			// A question PROPOSING the drug keeps it a proposal: there the call "withhold it" has its
 			// referent, which is exactly what the ended-order clause exists to supply where it has none.
 			// The admission grammar is issue #469's, over the same marking of the question's own names.
@@ -2787,14 +2805,6 @@ public class DrugSafetyValidator {
 			}
 		}
 
-		/** The substances {@code orderEntries}, her active orders resolved, are of. */
-		static Set<Object> substancesOf(List<DrugReference> orderEntries) {
-			Set<Object> active = new HashSet<Object>();
-			for (DrugReference entry : orderEntries) {
-				active.add(entry.substanceGroupKey());
-			}
-			return active;
-		}
 
 		private static List<String> lowered(List<RecordMapping> records) {
 			List<String> out = new ArrayList<String>(records.size());
@@ -2879,7 +2889,7 @@ public class DrugSafetyValidator {
 				|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
 			return Collections.emptyList();
 		}
-		Set<Object> active = EndedOrders.substancesOf(orderEntries);
+		Set<Object> active = substancesOf(orderEntries);
 		List<RecordMapping> orderRecords = new ArrayList<RecordMapping>();
 		EndedOrders.partitionOrderRecords(mappings, orderRecords, orderRecords);
 		List<String> orderTexts = EndedOrders.lowered(orderRecords);
@@ -10182,12 +10192,12 @@ public class DrugSafetyValidator {
 			if (inPlay.contains(ref)) {
 				continue;
 			}
-			// FALSE where a sibling row put this substance in play: something proposed this drug, and a
-			// call about a proposal is what its finding licenses however this arm reached the row. Since
-			// issue #402 the drug-in-play arm states the CURRENT-medication referent for that same
-			// substance, this row being one of her orders, so where both arms raise a finding of it the
-			// two referents disagree and the ledger's rank decides which survives one key — the
-			// exception ADR Decision 121 records, kept because CurrentMedicationFindingStrengthTest's
+			// FALSE where a sibling row put this substance in play — issue #348's rule, from when every
+			// drug in play was a proposal. Since issue #402 the drug-in-play arm states the
+			// CURRENT-medication referent for that same substance, this row being one of her orders, so
+			// where both arms raise a finding of it the two referents disagree and the ledger's rank
+			// decides which survives one key. That is a known residue and not a rationale: ADR Decision
+			// 121 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
 			// sibling-row cases pin it.
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			// Either side of a contraindication can be what was asked about, so the drug side is tried

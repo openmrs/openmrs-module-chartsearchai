@@ -124,7 +124,7 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	 * The record of a condition-mediated finding says it has no severity ONCE: its detail already ends
 	 * on {@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}, so the sentence every other unrated
 	 * finding's record gains (issue #402, {@code DrugReferenceInjector.FINDING_NO_SEVERITY}) is not
-	 * appended to it a second time.
+	 * appended to it as well.
 	 */
 	@Test
 	public void theInjectedRecordSaysItHasNoSeverityOnce() {
@@ -140,8 +140,10 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 		assertEquals(1, records.size(), "precondition: the condition-mediated finding reached the prompt: "
 				+ DrugReferenceTestSupport.findingTexts(chart));
 		String record = records.get(0);
-		assertEquals(record.indexOf("no severity of its own"), record.lastIndexOf("no severity of its own"),
-				"said once: " + record);
+		assertTrue(record.contains("this finding has no severity of its own"),
+				"precondition: the detail's own statement of it: " + record);
+		assertFalse(record.contains(DrugReferenceInjector.FINDING_NO_SEVERITY.trim()),
+				"and not the other unrated findings' sentence beside it: " + record);
 	}
 
 	@Test

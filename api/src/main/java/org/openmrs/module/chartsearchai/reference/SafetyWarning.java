@@ -329,8 +329,8 @@ public class SafetyWarning {
 	 * {@code DrugSafetyValidator.addOrdersSharingASubstance}, canonical for why it exists and when.
 	 *
 	 * <p>{@link #substanceInSeveralActiveOrders}' shape, with two differences: both sides are her own
-	 * prescriptions and nothing is proposed, so {@link #isAboutACurrentMedication()} is TRUE; and it
-	 * answers {@link #statesOrdersSharingASubstance()}.
+	 * prescriptions, so {@link #isAboutACurrentMedication()} is TRUE by construction rather than the
+	 * drug-in-play arm's answer for a drug in play; and it answers {@link #statesOrdersSharingASubstance()}.
 	 *
 	 * @param drug the substances the detail names, as it names them
 	 * @param orders the displays of the orders the detail names — {@link #namedPartners()}
@@ -1091,8 +1091,9 @@ public class SafetyWarning {
 	 * This warning, stated as about a drug the chart records only as an ended order (issue #472), its
 	 * order having stopped on {@code stopDate} ({@code null} where no ended record naming it carries a
 	 * date) — or this very warning, unchanged, where it is already about a current medication, which no
-	 * caller hands it today: the two question-driven arms' chips never are, and the order-driven arm's
-	 * subjects are her active substances, which {@code DrugSafetyValidator.EndedOrders} never holds.
+	 * caller hands it today: a question-driven chip is about a current medication only where its
+	 * substance is one of her active orders (issue #402), and the order-driven arm's subjects are her
+	 * active substances — and {@code DrugSafetyValidator.EndedOrders} holds neither.
 	 * Kept so the two referents cannot both be stated whatever a later caller does. Package-private:
 	 * {@code EndedOrders.stamp} is its only caller, and {@code rows} are every row of the substance it
 	 * held as ended — see {@link #endedOrderRows()}.

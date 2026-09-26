@@ -120,6 +120,30 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 		assertTrue(chips.get(0).isAboutACurrentMedication(), "metformin is one of her own active orders");
 	}
 
+	/**
+	 * The record of a condition-mediated finding says it has no severity ONCE: its detail already ends
+	 * on {@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}, so the sentence every other unrated
+	 * finding's record gains (issue #402, {@code DrugReferenceInjector.FINDING_NO_SEVERITY}) is not
+	 * appended to it a second time.
+	 */
+	@Test
+	public void theInjectedRecordSaysItHasNoSeverityOnce() {
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shippedService()).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), onOrders("Stavudine", "Lamivudine"), "Can I give metformin?");
+
+		List<String> records = new ArrayList<String>();
+		for (String finding : DrugReferenceTestSupport.findingTexts(chart)) {
+			if (finding.contains(DISCLAIMER)) {
+				records.add(finding);
+			}
+		}
+		assertEquals(1, records.size(), "precondition: the condition-mediated finding reached the prompt: "
+				+ DrugReferenceTestSupport.findingTexts(chart));
+		String record = records.get(0);
+		assertEquals(record.indexOf("no severity of its own"), record.lastIndexOf("no severity of its own"),
+				"said once: " + record);
+	}
+
 	@Test
 	public void theChainIsFoundFromTheCauseSideToo() {
 		List<SafetyWarning> chips = conditionMediated("Can I give stavudine?", onOrders("Metformin"));

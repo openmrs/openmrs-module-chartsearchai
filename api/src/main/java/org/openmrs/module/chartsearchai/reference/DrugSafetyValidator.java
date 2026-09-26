@@ -10183,7 +10183,12 @@ public class DrugSafetyValidator {
 				continue;
 			}
 			// FALSE where a sibling row put this substance in play: something proposed this drug, and a
-			// call about a proposal is what its finding licenses however this arm reached the row.
+			// call about a proposal is what its finding licenses however this arm reached the row. Since
+			// issue #402 the drug-in-play arm states the CURRENT-medication referent for that same
+			// substance, this row being one of her orders, so where both arms raise a finding of it the
+			// two referents disagree and the ledger's rank decides which survives one key — the
+			// exception ADR Decision 121 records, kept because CurrentMedicationFindingStrengthTest's
+			// sibling-row cases pin it.
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response

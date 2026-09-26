@@ -218,7 +218,8 @@ public class SafetyWarning {
 	 *
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
-	 *        walking the patient's own active orders raised it (issue #348)
+	 *        walking the patient's own active orders raised it (issue #348), and where the drug-in-play
+	 *        arm's drug is one of her own orders (issue #402)
 	 * @param chartRecords see {@link #chartRecords()} — the recorded allergies or conditions this
 	 *        rule's token matched, from the list {@code recordedContraindicationKind}'s own leg names
 	 */
@@ -247,7 +248,8 @@ public class SafetyWarning {
 	 * flag it hardcodes false is published, so what a public factory here would offer is a caller
 	 * asserting a provenance answer the module never made. Its one
 	 * caller is {@code DrugSafetyValidator.addAllergyContraindications}, which is reached from BOTH
-	 * the drug-in-play loop (false — the drug was proposed) and
+	 * the drug-in-play loop (true where the drug in play is one of her own orders, false where it is
+	 * a proposal — issue #402) and
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
 	 *
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}

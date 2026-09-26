@@ -126,6 +126,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
 - [Decision 119: A question that lists her medications is held to her chart](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)
 - [Decision 120: An active-order claim is held to the findings that relate its pair](#decision-120-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
+- [Decision 121: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -5455,7 +5456,7 @@ The second row is the control that makes the first a cede rather than a chart th
 
 ## Decision 72: A finding about a medication the patient is already taking states a call about that medication
 
-**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
+**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its stance that a drug in play is always a proposal is superseded, for the drug-in-play arm, by [Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
 
 ### Context — the defect
 
@@ -10534,7 +10535,10 @@ them.
 ## Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints
 
 **Status: Accepted** (September 2026) — implemented, issue
-[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close.
+[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
+[Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site):
+the finding still states its arm's referent, and that referent is now the current-medication one where
+the drug is hers.
 
 ### Context
 
@@ -11434,3 +11438,116 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   finding or chip also names its partner.
 
 → `InteractionClaimPairFidelityTest`, `ChartSearchAiInteractionClaimPairsTest`.
+
+## Decision 121: A drug in play that is one of her own orders is stated as her medication, at every site
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402). Supersedes, for the
+drug-in-play arm, the stance of [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)
+that a drug in play is a proposal because *"the question or the answer PROPOSED it"* (#348), and the
+referent bullet of [Decision 112](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints).
+Delivers item 1 of [#513](https://github.com/openmrs/openmrs-module-chartsearchai/issues/513) and not
+its items 3 and 4.
+
+### Context
+
+A patient with an active `Prednisone Co 5mg` order was asked *"Is it safe to add prednisone for
+her?"*, and the answer opened *"No — Prednisone should not be added"*. The drug-in-play arm stated the
+proposal referent for every drug the question or the answer put in play. So no finding told the model
+that the drug being refused was one she already takes.
+
+The fix was tried once on one arm and reverted, for three reasons recorded on the issue:
+
+- It made the arm's three interaction sites disagree with its contraindication sites, which still
+  hardcoded `false`.
+- It re-proposed a position those sites reject in writing.
+- The lead did not move, because the strongest finding still carried the proposal vocabulary.
+
+The issue therefore asks for the reversal at every site, measured by an A/B. The owner ran a throwaway
+code-arm A/B on 2026-09-25, recorded on the issue. That arm flipped the two contraindication sites, the
+three `interactionWarning` constructions and `collapseSharedMechanisms`. On the issue's cell the answer
+no longer refused. Every cell whose drug she does not take was byte-identical to `main`. Three tests on
+#513's list-question shape reddened, each pinning the old referent.
+
+### The decision
+
+**`validate` resolves the substances her active orders are (`EndedOrders.substancesOf(orderEntries)`)
+once per pass. It then states, for each drug in play, whether its `substanceGroupKey()` is one of them
+(`herOrder`), and hands that one answer to every site the drug-in-play arm builds a finding at.** Those
+sites are:
+
+- `addContraindications` and `addAllergyContraindications`, in the drug-in-play loop;
+- the three `interactionWarning` constructions in `addInteractionWarnings` (plain, reconciled and
+  folded), and the merged chip `collapseSharedMechanisms` builds;
+- the class-only chip (`SafetyWarning.classOnlyInteraction`);
+- `alreadyInSeveralOrders` (`SafetyWarning.substanceInSeveralActiveOrders`);
+- the derived tier's `addConditionMediatedWarnings` (`SafetyWarning.conditionMediated`), which ships off.
+
+**The unit is the SUBSTANCE, never the row.** It is the unit the chips fold on (#162, #206), and the
+unit Decision 72 corrected the order-driven arm's referent to. It is resolved off `orderEntries`, the
+one resolution the pass already holds (Decision 58), so the referent and every other consumer of her
+orders cannot disagree about which drugs are hers.
+
+**The last three sites go beyond the owner's A/B diff, and that is deliberate.** Each is a finding the
+same arm raises about the same drug, and the rule on this axis is one referent per drug in play.
+Without `alreadyInSeveralOrders`, the rewritten
+`SubstanceInSeveralActiveOrdersTest.everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent` would
+read `[change, caution-current, withhold, change]`. That is the one-site shape Decision 112's review
+round 1 recorded, and the shape #402 reverted. The class-only and condition-mediated chips are the same
+case: they would be in the other column, beside rule chips about the same drug.
+
+**The ended-order referent is untouched.** A substance held only by an ended order is not in
+`orderEntries`, so it answers `false` here and `EndedOrders` states its own referent on the chip, as
+before (Decision 110). The two non-proposal referents stay exclusive by construction. #472's proposal
+gate (`DrugReferenceInjector.questionProposes`) is deliberately **not** applied to this referent. That
+gate keeps a proposed drug a proposal where the chart records it only as ENDED, and Decision 110's
+arm A measured the cost of skipping it there. Here the drug is one she is on, and a proposal of it is
+the reported defect.
+
+### What it does not change, stated so it is not read as covered
+
+- **The order-driven contraindication arm's sibling-row rule stands** (`addActiveOrderContraindications`:
+  false where a sibling row put the substance in play). The owner's direction keeps
+  `CurrentMedicationFindingStrengthTest` green and unedited. So its two sibling-row cases
+  (`.aSiblingRowOfAProposedSubstanceDoesNotMakeItsFindingAboutCurrentTherapy`,
+  `.aSiblingRowReachedByTheFallThroughStillStatesTheProposalCall`) now pin a **rank-decided
+  exception**, not this decision's rule. In that fixture the question's *levo* resolves to the tablets
+  row and her order is the gel, one substance. The drug-in-play arm's chip now states the
+  current-medication referent and the order-driven arm's the proposal. `ContraindicationChips` keeps
+  the stronger rank, which there is the order row's, so the finding states the proposal. Two things
+  follow. Within one ledger key, a drug that is hers can take either referent, and the RANK decides
+  which. Across two keys, one response can carry both.
+- **A prescription the reference data resolves to no substance the question names keeps the proposal.**
+  This was measured through the real `validate` over the shipped knowledge base, on
+  `OrdersSharingASubstanceTest`'s six-order chart. Her `Cotrimoxazole 960mg` order does not resolve
+  to trimethoprim or sulfamethoxazole, so those two listed drugs state the proposal while the other
+  drugs she is on state the current-medication referent. The test pins that split per drug.
+- The question-pair arm (both its drugs are the question's), `DEFAULT_SYSTEM_PROMPT`, and
+  `answersFromFindings`' exclusion of a drug she takes. The last keeps its behaviour, and its stated
+  reason is now that the module's composed "No" refuses a proposal.
+
+### Tests that pinned the old referent, rewritten to this one
+
+These were rewritten, not weakened. Each still asserts the exact clause list or referent, now with the
+current-medication column where the drug is hers.
+
+- The three the owner's direction names:
+  `OrdersSharingASubstanceTest.bothOfTheTicketsDrugQuestionsStateTheTwoCombinationsOnceAfterEveryOtherFinding`
+  (now per drug, with the Cotrimoxazole residue above),
+  `SubstanceInSeveralActiveOrdersTest.everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent` and
+  `.theIssuesOwnQuestionWhichTheGrammarDoesNotReadAsAProposalStatesTheSameReferent`.
+- Two that follow from the several-orders site:
+  `SubstanceInSeveralActiveOrdersTest.aDrugInPlayThatTwoOfHerOrdersContainIsNamedAsAlreadyTakenInBoth`
+  (its one-referent assertion, now `true`) and the precondition clause of
+  `LlmInferenceServiceListedMedicationsContextTest.aDuplicateTherapyFindingAboutTheDrugInPlayBesideACautionLeadOnItIsReported`.
+  That case still reports the finding beside the caution lead.
+
+`DrugInPlayHerOwnOrderReferentTest` holds one case per site through the real `injectRecords`, plus a
+negative control and #477's constituent case over the shipped knowledge base. The condition-mediated
+site is held by `ConditionMediatedFindingTest.aChainAboutADrugInPlayThatIsHerOwnOrderIsAboutACurrentMedication`,
+and the several-orders site by the rewritten `SubstanceInSeveralActiveOrdersTest` cases. Mutate a site
+and read the failures.
+
+### The live gate
+
+Not yet run at this revision.

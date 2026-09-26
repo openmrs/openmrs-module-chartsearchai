@@ -2433,9 +2433,10 @@ public class DrugReferenceInjector {
 	 *     interaction the data rates as a reason to withhold it relates it to one of her orders
 	 *     ({@link #STRENGTH_WITHHOLD} — the proposal clause, which only the drug-in-play arm states
 	 *     before there is an answer, and still the one it states for a drug her chart holds only as
-	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the drug-in-play arm states a
-	 *     proposal clause for a drug she does take (issue #402), and composing would make that defect
-	 *     certain — asked of {@code herSubstances}, the substances this pass resolved her orders to.</li>
+	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the "No" composed here refuses a
+	 *     PROPOSAL, and for a drug she does take the drug-in-play arm states the current-medication
+	 *     clause instead (issue #402, ADR Decision 121) — asked of {@code herSubstances}, the
+	 *     substances this pass resolved her orders to.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication

@@ -266,12 +266,13 @@ public class SafetyWarning {
 	 * {@link #classOnlyInteraction} is one: no rating, no rule to reconcile, no folded relationship and
 	 * no chart record the join fired on, BY CONSTRUCTION. It names active orders, so it carries the
 	 * partners it names ({@link #namedPartners()}) and the prescriptions they came from
-	 * ({@link #chartOrderBridges()}); it is about the drug in play, never a current medication.
+	 * ({@link #chartOrderBridges()}); it is about the drug in play, and its referent is the one the
+	 * drug-in-play arm states for that drug (issue #402).
 	 */
 	static SafetyWarning conditionMediated(String drug, String detail, List<ChartOrderBridge> bridges,
-			List<String> namedPartners) {
+			List<String> namedPartners, boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_CONDITION_MEDIATED, drug, detail, null, false, false, null, null,
-				bridges, false, null, false, namedPartners);
+				bridges, aboutACurrentMedication, null, false, namedPartners);
 	}
 
 	/**
@@ -287,10 +288,14 @@ public class SafetyWarning {
 	 * that way rather than offering a caller a set of flags it can never legitimately combine. In
 	 * particular a caller must not be able to set this flag on a chip that DOES carry a rule: that is
 	 * the folded chip, whose strength {@code FoldedFindingStrengthTest} pins to the stronger claim.
+	 *
+	 * @param aboutACurrentMedication the referent the drug-in-play arm states for the drug in play —
+	 *        {@link #isAboutACurrentMedication()}, true where the drug is one of her own active orders
+	 *        (issue #402)
 	 */
-	static SafetyWarning classOnlyInteraction(String drug, String detail) {
+	static SafetyWarning classOnlyInteraction(String drug, String detail, boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), false, null, true);
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, true);
 	}
 
 	/**
@@ -299,20 +304,21 @@ public class SafetyWarning {
 	 * which is canonical for why the finding exists and why its referent is what it is.
 	 *
 	 * <p>A FACTORY for {@link #classOnlyInteraction}'s reason: every field of this shape but its type
-	 * and the three it takes is false or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart
+	 * and the four it takes is false or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart
 	 * record, no bridge (each order it names is named because its own display names the substance, so
-	 * there is nothing to bridge) — and {@link #isAboutACurrentMedication()} with them: the drug-in-play arm raises it, and that arm states
-	 * the proposal referent at every site (issue #402's one-site fix was reverted for making one site
-	 * disagree with the rest, ADR Decision 112). {@link #restsOnSharedClassificationAlone()} is false:
-	 * this is an identity claim, so {@code DrugSafetyValidator.licensesWithholding} answers by the
-	 * unrated default.
+	 * there is nothing to bridge). {@link #restsOnSharedClassificationAlone()} is false: this is an
+	 * identity claim, so {@code DrugSafetyValidator.licensesWithholding} answers by the unrated default.
 	 *
 	 * @param orders the displays of the active orders the detail names, in the order it names them —
 	 *        {@link #namedPartners()}, which every interaction chip states
+	 * @param aboutACurrentMedication the referent the drug-in-play arm states for the drug in play, at
+	 *        every site it builds a finding at: a finding here stating another would be the one-site
+	 *        shape issue #402 recorded and reverted (ADR Decisions 112, 121)
 	 */
-	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders) {
+	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders,
+			boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), false, null, false, orders);
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders);
 	}
 
 	/**
@@ -990,17 +996,16 @@ public class SafetyWarning {
 	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction.
 	 * {@link #ordersSharingASubstance(String, String, List)} (issue #477) answers true too: every order
 	 * it names is hers. That holds on a question that resolves a drug as well as on a screen, so there it
-	 * is a current-medication finding beside the drug-in-play arm's proposal findings, which the issue's
-	 * decision accepted (ADR Decision 116). The
-	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
-	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
-	 * that is not this question: what a finding licenses there is a decision about a proposal, because
-	 * a proposal is what was put to the module — unless the chart holds the drug only as an ended
-	 * order, which is {@link #isAboutAnEndedOrder()}'s referent and not this one (issue #472). That
-	 * includes {@link #substanceInSeveralActiveOrders} (issue #477), though what it states is that two
-	 * of her orders already carry the drug: the arm's other findings about that drug state the proposal
-	 * call, and one finding stating the other column beside them is the one-site shape issue #402
-	 * recorded and reverted (ADR Decision 112).
+	 * is a current-medication finding beside the drug-in-play arm's proposal findings where the drug in
+	 * play is not hers, which the issue's decision accepted (ADR Decision 116). The DRUG-IN-PLAY arm
+	 * answers true where the drug the question or the answer named is one of her own active orders — its
+	 * substance is one {@code findForActiveOrders} resolved her orders to — and false where it is not
+	 * (issue #402, ADR Decision 121). That one answer per drug in play is stated at EVERY site the arm
+	 * builds a finding at, {@link #substanceInSeveralActiveOrders} (issue #477) included: one finding in
+	 * the other column beside the rest is the one-site shape issue #402 recorded and reverted. A drug her
+	 * chart holds only as an ended order is not in that resolution, so it answers false and carries
+	 * {@link #isAboutAnEndedOrder()}'s referent instead (issue #472). The QUESTION-PAIR arm answers false
+	 * by construction: both its drugs are ones the question named.
 	 *
 	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and the wire
 	 * publishes the second.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in play
@@ -1045,18 +1050,18 @@ public class SafetyWarning {
 	 * key is NOT sorted by and nothing about this ledger's behaviour: every chip it sees comes from
 	 * {@link #interaction}, which hardcodes that flag false, so the term is constant there. Leaving it out costs nothing
 	 * observable, and that is worth saying rather than leaving to be re-derived: the flag is constant
-	 * within an arm, and where the two interaction arms can both run in one pass — the POST-answer
+	 * within an arm for one subject, and where the two interaction arms can both run in one pass — the POST-answer
 	 * pass, where a drug the ANSWER named is in play beside a screening question —
 	 * {@code InteractionPairs.alreadyReported} already stops the screening arm restating a pair the
 	 * drug-in-play arm reported, before this ledger sees it. So no two chips of one pass can differ by
 	 * this flag alone.
 	 *
 	 * <p><b>What the published {@code false} does NOT say is that she is off the drug.</b> It is the
-	 * answer of every arm named above as answering false, whatever her chart holds — for
-	 * a drug the question named that she already takes (issues #402 and #513 track that vocabulary), and
-	 * for {@link #substanceInSeveralActiveOrders}' finding, which says two of her orders carry the drug —
-	 * and of every chip built through a public constructor. This is the one home of that list;
-	 * {@code README.md} carries it for a client, with how to render {@code true}.
+	 * answer of every arm named above as answering false, whatever her chart holds — for a drug in play
+	 * her orders do not resolve to, which includes a prescription recorded under a name the reference
+	 * data does not carry, and for the question-pair arm's findings — and of every chip built through a
+	 * public constructor. This is the one home of that list; {@code README.md} carries it for a client,
+	 * with how to render {@code true}.
 	 */
 	public boolean isAboutACurrentMedication() {
 		return aboutACurrentMedication;

@@ -498,10 +498,12 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 	}
 
 	/**
-	 * The drug-in-play arm's DUPLICATE-THERAPY finding (issue #477) is about the drug in play, withholds on
-	 * a proposal, and is reported beside a caution lead on that drug as the arm's rule chips are. Two of her
-	 * active orders carry rifampicin ({@code ListedMedicationsSecondRifampicinOrderTestData.xml}), so a
-	 * question proposing rifampicin raises it. It is unrated, so its record states no rating.
+	 * The drug-in-play arm's DUPLICATE-THERAPY finding (issue #477) is about the drug in play, states the
+	 * withholding class, and is reported beside a caution lead on that drug as the arm's rule chips are. Two
+	 * of her active orders carry rifampicin ({@code ListedMedicationsSecondRifampicinOrderTestData.xml}), so
+	 * a question proposing rifampicin raises it — and, rifampicin being hers, in the current-medication
+	 * column the arm states for every finding about it (issue #402, ADR Decision 121). It is unrated, so its
+	 * record states no rating.
 	 */
 	@Test
 	public void aDuplicateTherapyFindingAboutTheDrugInPlayBesideACautionLeadOnItIsReported() throws IOException {
@@ -511,7 +513,8 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		ChartAnswer answer = recorder.service.search(patient, "Is it safe to give Rifampicin?");
 
 		assertReportedExactly(answer.getCautionLedOverWithholding(),
-				findingNumber(recorder.prompt, "Rifampicin (rifampin)", "possible duplicate therapy") + ":null");
+				findingNumber(recorder.prompt, "Rifampicin (rifampin)", "possible duplicate therapy",
+					DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION) + ":null");
 	}
 
 	/**

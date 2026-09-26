@@ -113,10 +113,10 @@ public class SubstanceInSeveralActiveOrdersTest {
 				"the orders the finding names, structurally — every interaction chip states them");
 		assertEquals(SafetyWarning.TYPE_INTERACTION, finding.getType());
 		assertEquals(null, finding.getSeverity(), "nothing rates this relationship");
-		assertFalse(finding.isAboutACurrentMedication(),
-				"the drug-in-play arm states ONE referent for the drug in play, the proposal, at every "
-						+ "site: one finding stating the current-medication call beside rule chips stating the "
-						+ "proposal call is issue #402's reverted one-site shape (ADR Decision 112)");
+		assertTrue(finding.isAboutACurrentMedication(),
+				"the drug-in-play arm states ONE referent for the drug in play at every site, and rifampicin is "
+						+ "in her own orders: one finding stating another call beside the rule chips is issue "
+						+ "#402's reverted one-site shape (ADR Decisions 112, 121)");
 	}
 
 	@Test
@@ -283,15 +283,16 @@ public class SubstanceInSeveralActiveOrdersTest {
 	@Test
 	public void everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent() throws IOException {
 		// Through the real injector, the whole finding list in order: the Major, the Minor and this
-		// issue's finding each state the PROPOSAL column — the Major and the new finding withholding, the
-		// Minor a caution. Review round 1 found the new finding alone stating the current-medication
-		// clause, so one response refused rifampicin as a proposal and, two findings later, called it a
-		// medication to change; the lead the prompt ranks first was the refusal (ADR Decision 112).
-		// Unrated, the new finding keeps the default an unrated relationship has (Decision 86 graded down
-		// only shared classification), so it withholds and is never the caution. The fourth is not this
-		// arm's: it is the finding that her two orders share a substance, about her own therapy and so a
-		// reason to change it (ADR Decision 116).
-		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD, CHANGE_CURRENT), clauses(QUESTION));
+		// issue's finding each state ONE column, and since issue #402 it is the CURRENT-MEDICATION one,
+		// because rifampicin is in her own orders (ADR Decision 121) — the Major and the new finding the
+		// change call, the Minor the current-medication caution. Review round 1 of #477 found the new
+		// finding alone in the other column, so one response refused rifampicin as a proposal and, two
+		// findings later, called it a medication to change (ADR Decision 112). Unrated, the new finding
+		// keeps the default an unrated relationship has (Decision 86 graded down only shared
+		// classification), so it states the withholding class and is never the caution. The fourth is
+		// the finding that her two orders share a substance, about her own therapy (ADR Decision 116).
+		assertEquals(Arrays.asList(CHANGE_CURRENT, CAUTION_CURRENT, CHANGE_CURRENT, CHANGE_CURRENT),
+				clauses(QUESTION));
 	}
 
 	@Test
@@ -299,10 +300,10 @@ public class SubstanceInSeveralActiveOrdersTest {
 			throws IOException {
 		// The ticket's question names four drugs before rifampicin, and QueryScopeRouter's closed
 		// proposal grammar does not admit it — so issue #472's gate would treat it as proposing nothing.
-		// The referent here is not that gate's: the arm's findings state the proposal column on any
-		// question, and this finding states what its siblings state. The fourth is her two orders sharing a
-		// substance, as on the question above.
-		assertEquals(Arrays.asList(WITHHOLD, CAUTION, WITHHOLD, CHANGE_CURRENT), clauses(
+		// The referent here is not that gate's: the arm states the current-medication column for a drug in
+		// play her orders resolve to on any question (issue #402), and this finding states what its
+		// siblings state. The fourth is her two orders sharing a substance, as on the question above.
+		assertEquals(Arrays.asList(CHANGE_CURRENT, CAUTION_CURRENT, CHANGE_CURRENT, CHANGE_CURRENT), clauses(
 				"The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and"
 						+ " sulfamethoxazole is it safe to give Rifampicin?"));
 	}

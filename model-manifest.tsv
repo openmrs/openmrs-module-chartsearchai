@@ -6,7 +6,9 @@
 # backend-init.sh (the published backend image's ENTRYPOINT) and .github/workflows/build-standalone.yml
 # (the release pipeline behind the README's download link) — through scripts/model-manifest.sh.
 # Spelling a huggingface.co URL at either site instead reddens ModelDownloadPinningGuardTest, which
-# also requires README's hand-download URLs to be byte-equal to a row here, so they cannot drift.
+# also requires README's hand-download URLs to be byte-equal to a row here, so they cannot drift, and
+# config.xml's chartsearchai.llm.modelFilePath description to spell the llm-gemma-4-e4b url and digest
+# (an admin reading it holds the omod, not this file — #463).
 #
 # Columns, whitespace separated: id, sha256, bytes, url.
 #

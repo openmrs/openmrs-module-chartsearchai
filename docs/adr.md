@@ -11510,7 +11510,8 @@ same misreading:
 
 (C also refuses Agnes × amoxicillin, in B's words.) D leaves Betty refused and adds three more —
 Joshua × amoxicillin and × ibuprofen, Mary × gentamicin. Every refusal in every arm cites the
-`drug_reference` record alone and carries no chip: the #246 defect, on another cell.
+`drug_reference` record and carries no chip — the #246 defect, on another cell; D's Joshua ×
+amoxicillin cites his allergy record beside it.
 
 ### Why none shipped
 

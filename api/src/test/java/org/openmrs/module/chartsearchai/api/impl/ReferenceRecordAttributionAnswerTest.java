@@ -30,7 +30,6 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,8 +72,8 @@ import org.slf4j.LoggerFactory;
  * Decision 121 records ran on the production path.
  *
  * <p>The two answer cases are <b>opt-in</b>, skipped without an endpoint, and repeat with a DECOY
- * completion between samples so each one re-prefills rather than reusing the KV prefix (ADR
- * Decision 45's methodology finding, and {@link EndedOrderAnswerRuleTest}'s convention).
+ * completion over ANOTHER patient's chart between samples, so each one re-prefills rather than reusing
+ * the KV prefix (ADR Decision 45's methodology finding).
  */
 public class ReferenceRecordAttributionAnswerTest {
 
@@ -108,8 +107,9 @@ public class ReferenceRecordAttributionAnswerTest {
 	private static final List<String> AMOXICILLIN_CLAUSES = Arrays.asList(
 			"penicillin-class hypersensitivity", "documented amoxicillin allergy");
 
-	/** The answer's lead verdict token, where it has one: the first word, past any opening quote. */
-	private static final Pattern LEAD_WORD = Pattern.compile("^[\\s\"'“‘(]*([A-Za-z]+)");
+	/** The answer's lead verdict token, where it has one: the first word, past any opening quote or
+	 *  markdown emphasis. */
+	private static final Pattern LEAD_WORD = Pattern.compile("^[\\s\"'“‘(*_]*([A-Za-z]+)");
 
 	@Test
 	public void aDrugWhoseRulesNameNothingHerChartRecordsIsNotAnsweredWithAVerdict() throws Exception {
@@ -118,7 +118,7 @@ public class ReferenceRecordAttributionAnswerTest {
 				RECORDED_ALLERGENS);
 		String record = amoxicillinRecord(chart);
 		for (String clause : AMOXICILLIN_CLAUSES) {
-			assertTrue(sectionOf(record, "Not recorded for this patient: ").contains(clause),
+			assertTrue(section(record, " Not recorded for this patient: ").contains(clause),
 					"precondition: the record must state '" + clause + "' as NOT recorded for this "
 							+ "patient, or this case is not the issue's arrangement. Record was: " + record);
 		}
@@ -152,7 +152,7 @@ public class ReferenceRecordAttributionAnswerTest {
 		PatientChart chart = DrugReferenceTestSupport.curatedReferenceOver(fullChart(true), QUESTION,
 				allergens);
 		String record = amoxicillinRecord(chart);
-		assertTrue(sectionOf(record, "Recorded for this patient: ").contains("documented amoxicillin allergy"),
+		assertTrue(section(record, " Recorded for this patient: ").contains("documented amoxicillin allergy"),
 				"precondition: the record must state the self-named clause as recorded for this patient. "
 						+ "Record was: " + record);
 		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
@@ -178,6 +178,7 @@ public class ReferenceRecordAttributionAnswerTest {
 	public void theVerdictOracleReadsTheLeadTokenAndNothingElse() {
 		assertEquals("NO", verdictLead("No — Amoxicillin should not be given: documented amoxicillin allergy [238]."));
 		assertEquals("NO", verdictLead("\"No, do not give it."));
+		assertEquals("NO", verdictLead("**No** — Amoxicillin should not be given."));
 		assertEquals("YES", verdictLead("Yes, amoxicillin can be given."));
 		assertEquals(null, verdictLead("The records do not address Amoxicillin safety for this patient."));
 		assertEquals(null, verdictLead("Nothing in the records addresses amoxicillin."));
@@ -217,32 +218,31 @@ public class ReferenceRecordAttributionAnswerTest {
 	}
 
 	private static String amoxicillinRecord(PatientChart chart) {
-		for (RecordMapping mapping : chart.getMappings()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
-					&& mapping.getText().contains("Amoxicillin")) {
-				return mapping.getText();
-			}
-		}
-		throw new AssertionError("precondition: the question must inject the curated amoxicillin record. "
-				+ "Chart mappings: " + chart.getMappings().size());
+		String record = DrugReferenceTestSupport.injectedReference(chart).getText();
+		assertTrue(record.contains("Amoxicillin"),
+				"precondition: the question must inject the curated amoxicillin record, was: " + record);
+		return record;
 	}
 
-	/** The clauses of the record's section led by {@code lead}, up to its closing full stop. */
-	private static String sectionOf(String record, String lead) {
-		int at = record.indexOf(" " + lead);
-		if (at < 0) {
-			return "";
-		}
-		int start = at + lead.length() + 1;
-		int end = record.indexOf('.', start);
-		return end < 0 ? record.substring(start) : record.substring(start, end);
+	/** The record's section after {@code lead}, or a failure naming the record where it has none. */
+	private static String section(String record, String lead) {
+		String section = DrugReferenceTestSupport.sectionAfter(record, lead);
+		assertNotNull(section, "precondition: the record must carry a section led by '" + lead.trim()
+				+ "'. Record was: " + record);
+		return section;
 	}
 
 	private static List<String> answers(String endpoint, PatientChart chart, String label) throws Exception {
+		// ANOTHER patient's chart, so the sample after it shares no chart prefix with it and re-prefills:
+		// the records come first in the user message, so a decoy on the same chart would leave the
+		// whole chart's KV reusable.
+		PatientChart decoy = new PatientChartSerializer().serialize(null,
+				TestDatasetHelper.toSerializedRecords(TestDatasetHelper.SECOND_PATIENT_DATASET),
+				Collections.<String> emptySet());
 		List<String> answers = new ArrayList<String>();
 		for (int sample = 1; sample <= SAMPLES; sample++) {
 			LlmEndpointTestSupport.complete(endpoint, LlmProvider.DEFAULT_SYSTEM_PROMPT,
-					LlmProvider.buildUserMessage(chart.getText(), DECOY_QUESTION), MAX_TOKENS);
+					LlmProvider.buildUserMessage(decoy.getText(), DECOY_QUESTION), MAX_TOKENS);
 			String raw = LlmEndpointTestSupport.complete(endpoint, LlmProvider.DEFAULT_SYSTEM_PROMPT,
 					LlmProvider.buildUserMessage(chart.getText(), QUESTION), MAX_TOKENS);
 			String answer = LlmProvider.extractResponse(raw).getAnswer();

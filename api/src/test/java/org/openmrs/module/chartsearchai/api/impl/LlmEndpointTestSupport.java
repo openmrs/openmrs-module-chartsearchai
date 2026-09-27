@@ -27,8 +27,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * The one OpenAI-compatible-endpoint client for the opt-in LLM test suites — resolving the endpoint,
  * probing it, deciding whether the suite was opted into, and posting one completion. Shared by
- * {@link LlmAnswerQualityTest}, {@link PromptInjectionEvalTest}, {@link AbsentDataEvalTest} and
- * {@link EndedOrderAnswerRuleTest} so the request shape cannot drift between them, which is the
+ * {@link LlmAnswerQualityTest}, {@link PromptInjectionEvalTest}, {@link AbsentDataEvalTest},
+ * {@link EndedOrderAnswerRuleTest} and {@link ReferenceRecordAttributionAnswerTest} so the request shape cannot drift between them, which is the
  * rule CLAUDE.md states for {@code TestDatasetHelper} and {@code DrugReferenceTestSupport}.
  *
  * <p>Extracted when {@link AbsentDataEvalTest} became the third suite to need it (issue #203); the

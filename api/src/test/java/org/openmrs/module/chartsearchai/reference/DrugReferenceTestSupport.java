@@ -2137,8 +2137,11 @@ public final class DrugReferenceTestSupport {
 	 * {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads}
 	 * asserts of the three production constants and
 	 * {@code InjectedContraindicationPatientReadingTest.sentenceAfter} re-asserts of its own two.
+	 *
+	 * <p>Public for {@code ReferenceRecordAttributionAnswerTest} in {@code api.impl} (issue #246), which
+	 * would otherwise have written it out a third time.
 	 */
-	static String sectionAfter(String record, String lead) {
+	public static String sectionAfter(String record, String lead) {
 		int start = record.indexOf(lead);
 		if (start < 0) {
 			return null;

@@ -9355,7 +9355,11 @@ project trusts.
 
 **Moving a pin.** The same recipe [Decision 36](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
 records for the bundled knowledge base: change the revision in the `url` column, re-record `sha256`
-and `bytes` from the new revision, and run the suite. Take the digest from the file itself —
+and `bytes` from the new revision, and run the suite. For the row whose file `config.xml`'s `chartsearchai.llm.modelFilePath`
+default names, also move the url and digest spelled inline in that property's description, which is
+there because an admin reading it holds the omod and not this manifest (#463);
+`ModelDownloadPinningGuardTest.theServedModelsSettingDescriptionCarriesTheRecordedUrlAndDigestItself`
+reddens until it matches. Take the digest from the file itself —
 huggingface.co's `paths-info` API reports a git-lfs object's `oid`, which is its sha256, and the
 `x-linked-etag` header on a HEAD of the pinned URL confirms the same value independently. **Do not
 reach for that header on a file that is not an lfs object.** It is present there too and it is a git

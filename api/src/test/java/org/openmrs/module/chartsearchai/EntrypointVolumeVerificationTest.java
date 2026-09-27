@@ -106,8 +106,10 @@ public class EntrypointVolumeVerificationTest {
 	 * <b>The steady-state restart.</b> The recorded artifact is already at the target and no origin
 	 * serves anything, so the only way the library can answer is by hashing what is on the volume —
 	 * and it has to answer, because the "ready" line is the caller's report of a verification that
-	 * returned 0. A start that skipped the fetch for a file it found by NAME cannot print that line,
-	 * wherever in the function the skip is written.
+	 * returned 0. That is ALL it pins: a skip that prints the "ready" line itself, for a file it found
+	 * by NAME, satisfies every assertion here. What refuses that skip is
+	 * {@link #weightsAlreadyOnTheVolumeThatAreNotTheRecordedArtifactAreRefusedAndDeleted}, where the
+	 * same skip leaves unrecorded bytes standing — so trimming that case unpins the property (#463).
 	 */
 	@Test
 	public void weightsAlreadyOnTheVolumeAreVerifiedRatherThanTrustedForTheirName() throws Exception {

@@ -167,7 +167,7 @@ _download_llm_file() {
              echo "$_label could not be fetched at all; restart the backend container to retry." >&2
            fi ;;
       4)   echo "$_label could not be resolved from model-manifest.tsv — no such row, or no manifest in the image — so this is a packaging error and a restart will not help." >&2 ;;
-      6)   echo "$_label was refused and deleted, and the pinned revision could not then be reached to replace it, or what it served could not be hashed or put in place, so the volume no longer holds a copy of it; restart the backend container to retry the download." >&2 ;;
+      6)   echo "$_label was refused and deleted, and the pinned revision could not then be reached to replace it, or what it served could not be measured, or could not be hashed or put in place, so the volume no longer holds a copy of it; restart the backend container to retry the download." >&2 ;;
       *)   echo "$_label could not be hashed (code $_code), so it is still on disk unverified; restart the backend container to retry." >&2 ;;
     esac
   fi

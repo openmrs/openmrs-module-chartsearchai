@@ -89,7 +89,7 @@ public class ModelDownloadIntegrityTest {
 
 	/**
 	 * The copy already at the target was refused and deleted, and its replacement could then not be
-	 * fetched, hashed or placed — so the deployment is left with nothing at that name.
+	 * fetched, measured, hashed or placed — so the deployment is left with nothing at that name.
 	 */
 	private static final int REPLACEMENT_UNFETCHABLE = 6;
 
@@ -339,6 +339,42 @@ public class ModelDownloadIntegrityTest {
 		assertTrue(degraded.output.contains("be hashed or put in place"), "the caller told the operator only that"
 				+ " the pinned revision could not be reached, when it answered and its bytes could not be hashed\n"
 				+ degraded);
+	}
+
+	/**
+	 * The other way a replacement reaches code 5: {@code file_bytes} fails on it before any hashing
+	 * is attempted. The remap to 6 does not tell the two apart, so the caller's code-6 arm must name
+	 * measuring as well as hashing, or it tells the operator a file was hashed that was never
+	 * measured (#463). A {@code stat} that fails on the {@code .partial} alone lets the copy on the
+	 * volume be refused on its length first, which is the only order that reaches this branch.
+	 */
+	@Test
+	public void aReplacementThatCannotBeMeasuredIsReportedAsUnmeasuredRatherThanUnhashed() throws Exception {
+		Path realStat = which("stat");
+		assumeTrue(realStat != null, "stat is needed to refuse the copy on its length");
+		Path tools = pathWith("stat-fails-on-the-replacement", List.of("curl", "rm", "mv"));
+		Files.write(tools.resolve("stat"), ("#!/bin/sh\nfor last; do :; done\ncase \"$last\" in *.partial) exit 1 ;; esac\n"
+				+ "exec '" + realStat + "' \"$@\"\n").getBytes(StandardCharsets.UTF_8));
+		tools.resolve("stat").toFile().setExecutable(true);
+		Path target = work.resolve("model.bin");
+		Files.write(target, Arrays.copyOf(GOOD_BYTES, 12));
+		Path fixture = work.resolve("manifest-unmeasurable-replacement.tsv");
+		Files.write(fixture, ("critical-artifact " + sha256(GOOD_BYTES) + " " + GOOD_BYTES.length + " " + url()
+				+ "\n").getBytes(StandardCharsets.UTF_8));
+
+		Result degraded = library("fetch_or_degrade critical-artifact '" + target + "' 'the critical artifact'\n"
+				+ "echo \"REFUSED=[$MODEL_MANIFEST_REFUSED]\"", fixture, tools);
+
+		assertTrue(degraded.output.contains("Replacing"), "the copy on the volume was not refused, so this case never"
+				+ " reached the replacement it is about\n" + degraded);
+		assertTrue(degraded.output.contains("could not be measured, so it has not been verified"),
+				"the replacement was not stopped at its measurement, so this case is not about it\n" + degraded);
+		assertEquals("critical-artifact:" + REPLACEMENT_UNFETCHABLE, refusalRecord(degraded.output),
+				"the caller did not record the lost copy\n" + degraded);
+		assertFalse(Files.exists(target), "nothing unverified may stand at the target name\n" + degraded);
+		assertTrue(degraded.output.contains("could not be measured, or could not be hashed or put in place"),
+				"the caller told the operator the replacement could not be hashed or placed, when it was never"
+						+ " measured\n" + degraded);
 	}
 
 	@Test

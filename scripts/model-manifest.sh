@@ -62,7 +62,7 @@ MODEL_MANIFEST_REFUSED=''
 #      digest with no url of its own
 #   5  the file could not be measured or hashed at all, and is still on disk
 #   6  a copy already at the target was refused and DELETED, and its replacement could then not be
-#      fetched, hashed or placed, so there is now nothing at that name
+#      fetched, measured, hashed or placed, so there is now nothing at that name
 #
 # 1, 2 and 6 are the codes that promise a deletion, and the callers' wording leans on that. 6 is
 # the one that also says the deployment LOST something it had: a copy was at this target, it was
@@ -222,7 +222,7 @@ fetch_and_verify_url() {
 		# beats refusing here. A served copy that fails too is the refusal.
 		#
 		# The copy that was here is already deleted at this point, so from here on a failure to
-		# fetch, hash or place is code 6 rather than 3: the deployment has lost a file, which is the one
+		# fetch, measure, hash or place is code 6 rather than 3: the deployment has lost a file, which is the one
 		# thing a "restart and retry" message must not leave out.
 		_mm_gone=6
 		echo "Replacing $_mm_label with the artifact $_mm_source records..."
@@ -256,7 +256,8 @@ fetch_and_verify_url() {
 	else
 		_mm_status=$?
 		# 5 says the file is still on disk. After a deletion the file the callers name is the
-		# target, and nothing is at it, so an unhashable replacement is the lost copy of code 6 (#463).
+		# target, and nothing is at it, so a replacement that could not be measured or hashed is the
+		# lost copy of code 6 (#463).
 		if [ "$_mm_status" -eq 5 ] && [ "$_mm_gone" -eq 6 ]; then
 			return 6
 		fi
@@ -358,9 +359,9 @@ fetch_or_degrade() {
 			# lines above read as "chart search stays off on bytes we could not check", which omits
 			# the fact that decides whether a restart can recover anything.
 			echo "       The copy that was on the volume was refused and deleted, and the pinned" >&2
-			echo "       revision could not then be reached to replace it, or what it served could not" >&2
-			echo "       be hashed or put in place, so there is no copy of this file left. A restart" >&2
-			echo "       retries the download." >&2
+			echo "       revision could not then be reached to replace it, or what it served" >&2
+			echo "       could not be measured, or could not be hashed or put in place, so" >&2
+			echo "       there is no copy of this file left. A restart retries the download." >&2
 			;;
 	esac
 	return "$_mm_oe_code"

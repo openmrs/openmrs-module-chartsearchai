@@ -9354,8 +9354,8 @@ project trusts.
 
 **Moving a pin.** The same recipe [Decision 36](#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base)
 records for the bundled knowledge base: change the revision in the `url` column, re-record `sha256`
-and `bytes` from the new revision, and run the suite. For `llm-gemma-4-e4b`, also move the url and
-digest spelled inline in `config.xml`'s `chartsearchai.llm.modelFilePath` description, which is
+and `bytes` from the new revision, and run the suite. For the row whose file `config.xml`'s `chartsearchai.llm.modelFilePath`
+default names, also move the url and digest spelled inline in that property's description, which is
 there because an admin reading it holds the omod and not this manifest (#463);
 `ModelDownloadPinningGuardTest.theServedModelsSettingDescriptionCarriesTheRecordedUrlAndDigestItself`
 reddens until it matches. Take the digest from the file itself —

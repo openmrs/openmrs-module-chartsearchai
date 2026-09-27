@@ -318,7 +318,9 @@ public class ModelDownloadPinningGuardTest {
 	 *
 	 * <p>Read against the manifest rather than spelled here, so moving the pin reddens this until the
 	 * description moves with it — a second copy of the digest is only safe while something compares
-	 * the two.
+	 * the two. The row is the one whose url ends in the file the property's {@code <defaultValue>}
+	 * names, so moving the default to another model reddens this too until the description spells
+	 * that model's pin.
 	 *
 	 * <p><b>The residue:</b> OpenMRS copies a {@code config.xml} description onto a {@code
 	 * global_property} row only when it creates the row or finds its description NULL ({@code
@@ -336,18 +338,27 @@ public class ModelDownloadPinningGuardTest {
 		// What an XML parser hands OpenMRS, which drops comments: a digest inside one reaches no admin.
 		String description = property.group(1).replaceAll("(?s)<!--.*?-->", "");
 
-		String[] served = null;
+		// The row is the one whose file the setting's own default names, not one chosen by id here:
+		// moving the default to another model must move the pin the description spells with it.
+		Matcher defaultValue = Pattern.compile("<property>chartsearchai\\.llm\\.modelFilePath</property>"
+				+ "(?:(?!</globalProperty>).)*?<defaultValue>([^<]*)</defaultValue>", Pattern.DOTALL)
+				.matcher(read("omod/src/main/resources/config.xml"));
+		assertTrue(defaultValue.find(), "config.xml declares no chartsearchai.llm.modelFilePath default to check");
+		String servedFile = defaultValue.group(1).trim().replaceAll("^.*/", "");
+		List<String[]> served = new ArrayList<String[]>();
 		for (String[] row : ModelManifest.rows()) {
-			if (row[0].equals("llm-gemma-4-e4b")) {
-				served = row;
+			if (row[3].replaceAll("^.*/", "").equals(servedFile)) {
+				served.add(row);
 			}
 		}
-		assertTrue(served != null, "the manifest has no llm-gemma-4-e4b row for the description to carry");
+		assertEquals(1, served.size(), "the manifest does not record exactly one row fetching the file the setting's"
+				+ " default names, " + servedFile + ", so no single pin is the one the description must carry");
+		String[] row = served.get(0);
 
-		assertTrue(description.contains(served[3]),
-				"the description does not give the pinned url the manifest records: " + served[3]);
-		assertTrue(description.contains(served[1]),
-				"the description does not give the sha256 the manifest records: " + served[1]);
+		assertTrue(description.contains(row[3]),
+				"the description does not give the pinned url the manifest records: " + row[3]);
+		assertTrue(description.contains(row[1]),
+				"the description does not give the sha256 the manifest records: " + row[1]);
 		assertFalse(description.contains("model-manifest"),
 				"the description sends an admin to model-manifest.tsv, which the omod does not carry");
 	}

@@ -283,8 +283,8 @@ public class ModelDownloadPinningGuardTest {
 
 		List<String> violations = new ArrayList<String>();
 		int found = 0;
-		// config.xml is here because it tells an operator where to get the served model, and a
-		// `resolve/` URL is one edit away from appearing in that description.
+		// config.xml is here because it tells an operator where to get the served model, and that
+		// description spells a `resolve/` URL (#463).
 		for (String file : List.of("backend-init.sh", ".github/workflows/build-standalone.yml", "README.md",
 				"model-manifest.tsv", "omod/src/main/resources/config.xml")) {
 			String text = read(file);
@@ -307,6 +307,60 @@ public class ModelDownloadPinningGuardTest {
 		}
 		assertEquals(List.of(), violations, "downloads nobody can check against a committed digest");
 		assertTrue(found > 0, "no download URL was scanned at all, so this guard proved nothing");
+	}
+
+	/**
+	 * The admin who reads {@code chartsearchai.llm.modelFilePath} in <b>Admin &gt; Settings</b> is on
+	 * the one path nobody verifies for them, and holds only the omod: {@code model-manifest.tsv} is
+	 * repo-level, copied into the backend image and packaged into nothing else (#463). So the
+	 * description has to carry the revision and the digest itself rather than send the admin to a
+	 * file they do not have.
+	 *
+	 * <p>Read against the manifest rather than spelled here, so moving the pin reddens this until the
+	 * description moves with it — a second copy of the digest is only safe while something compares
+	 * the two. The row is the one whose url ends in the file the property's {@code <defaultValue>}
+	 * names, so moving the default to another model reddens this too until the description spells
+	 * that model's pin.
+	 *
+	 * <p><b>The residue:</b> OpenMRS copies a {@code config.xml} description onto a {@code
+	 * global_property} row only when it creates the row or finds its description NULL ({@code
+	 * Context.checkCoreDataset}), so an install that already ran the module keeps the text that named
+	 * the manifest. This reaches an install the module has not yet started on.
+	 */
+	@Test
+	public void theServedModelsSettingDescriptionCarriesTheRecordedUrlAndDigestItself() throws IOException {
+		// Bounded at the property's own block: an unbounded span would run on into the NEXT setting's
+		// description whenever this one lost its own, and check that text instead.
+		Matcher property = Pattern.compile("<property>chartsearchai\\.llm\\.modelFilePath</property>"
+				+ "(?:(?!</globalProperty>).)*?<description>((?:(?!</globalProperty>).)*?)</description>",
+				Pattern.DOTALL).matcher(read("omod/src/main/resources/config.xml"));
+		assertTrue(property.find(), "config.xml declares no chartsearchai.llm.modelFilePath description to check");
+		// What an XML parser hands OpenMRS, which drops comments: a digest inside one reaches no admin.
+		String description = property.group(1).replaceAll("(?s)<!--.*?-->", "");
+
+		// The row is the one whose file the setting's own default names, not one chosen by id here:
+		// moving the default to another model must move the pin the description spells with it.
+		Matcher defaultValue = Pattern.compile("<property>chartsearchai\\.llm\\.modelFilePath</property>"
+				+ "(?:(?!</globalProperty>).)*?<defaultValue>([^<]*)</defaultValue>", Pattern.DOTALL)
+				.matcher(read("omod/src/main/resources/config.xml"));
+		assertTrue(defaultValue.find(), "config.xml declares no chartsearchai.llm.modelFilePath default to check");
+		String servedFile = defaultValue.group(1).trim().replaceAll("^.*/", "");
+		List<String[]> served = new ArrayList<String[]>();
+		for (String[] row : ModelManifest.rows()) {
+			if (row[3].replaceAll("^.*/", "").equals(servedFile)) {
+				served.add(row);
+			}
+		}
+		assertEquals(1, served.size(), "the manifest does not record exactly one row fetching the file the setting's"
+				+ " default names, " + servedFile + ", so no single pin is the one the description must carry");
+		String[] row = served.get(0);
+
+		assertTrue(description.contains(row[3]),
+				"the description does not give the pinned url the manifest records: " + row[3]);
+		assertTrue(description.contains(row[1]),
+				"the description does not give the sha256 the manifest records: " + row[1]);
+		assertFalse(description.contains("model-manifest"),
+				"the description sends an admin to model-manifest.tsv, which the omod does not carry");
 	}
 
 	// ---- each site asks the library, and asks it in the right place ----------------------------

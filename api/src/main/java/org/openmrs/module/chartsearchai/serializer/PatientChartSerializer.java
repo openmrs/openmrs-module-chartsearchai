@@ -36,7 +36,7 @@ import org.springframework.stereotype.Component;
  * run and dropped on the rest (#66) — is still available through
  * {@link #serialize(Patient, List, Set, boolean, boolean)}, but no production path asks for it:
  * a same-date follow-on line looks exactly like a record that has no date, and the model reads
- * it that way (ADR Decision 121). The {@link RecordMapping} text always retains the inline date
+ * it that way (ADR Decision 122). The {@link RecordMapping} text always retains the inline date
  * either way, so the grounding verifier can still resolve a cited date.
  *
  * <p>It also states, on a drug-order record whose order the chart builder could resolve, whether
@@ -232,7 +232,7 @@ public class PatientChartSerializer {
 	 * same-date run only, which saves prompt tokens on charts clustering many records per date (#66)
 	 * and costs the answer to a temporal question: a follow-on line reads exactly like an undated one
 	 * (measured on the query-scoped slice, #74, and on the whole chart, issue #528 and ADR
-	 * Decision 121). No production caller passes {@code true}; it is kept so the cost can be
+	 * Decision 122). No production caller passes {@code true}; it is kept so the cost can be
 	 * re-measured against a form that makes a follow-on distinguishable. The grounding
 	 * {@link RecordMapping} text is identical either way (it always carries the date).
 	 */

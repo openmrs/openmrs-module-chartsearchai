@@ -68,8 +68,9 @@ public class LlmProvider {
 			// blanket on a measurement, not by oversight. Two narrowings (one naming the "Recorded for
 			// this patient" section as the exception, one naming the sections that mention this patient)
 			// each fixed the issue's cell and refused two others the shipped sentence abstains on;
-			// deleting "not this patient's data" outright refused four. ADR Decision 121 carries the
-			// arms, the cells and the answers. Do not re-word this sentence without that probe.
+			// deleting "not this patient's data" outright left the issue's cell refused and refused three
+			// others. ADR Decision 121 carries the arms, the cells and the answers. Do not re-word this
+			// sentence without that probe.
 			+ "Records beginning with \"Drug reference\" are clinical reference data, not this "
 			+ "patient's data; cite them the same way, but never present reference dosing as a value "
 			+ "already recorded for the patient. "

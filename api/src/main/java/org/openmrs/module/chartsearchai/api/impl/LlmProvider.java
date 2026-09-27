@@ -64,13 +64,13 @@ public class LlmProvider {
 			+ "an older reading as the current one. "
 			+ "Never infer, assume, or add information not explicitly stated in the records. "
 			// ISSUE #246: this sentence is BLANKET while the record it describes now names, clause by
-			// clause, which of the drug's contraindications this patient's chart records — and it stays
-			// blanket on a measurement, not by oversight. Two narrowings (one naming the "Recorded for
-			// this patient" section as the exception, one naming the sections that mention this patient)
-			// each fixed the issue's cell and refused two others the shipped sentence abstains on;
-			// deleting "not this patient's data" outright left the issue's cell refused and refused three
-			// others. ADR Decision 121 carries the arms, the cells and the answers. Do not re-word this
-			// sentence without that probe.
+			// clause, which of the drug's contraindications this patient's chart records. Two narrowings
+			// (one naming the "Recorded for this patient" section as the exception, one naming the
+			// sections that mention this patient) each fixed the issue's cell and refused two others the
+			// shipped sentence abstains on — but a synonym swapped into an UNRELATED sentence refused one,
+			// so that result is inconclusive, not a verdict on the narrowings. Deleting "not this
+			// patient's data" fixed nothing and refused the most. ADR Decision 121 carries the arms, the
+			// null arms and the answers; re-word this sentence only with null arms measured beside it.
 			+ "Records beginning with \"Drug reference\" are clinical reference data, not this "
 			+ "patient's data; cite them the same way, but never present reference dosing as a value "
 			+ "already recorded for the patient. "

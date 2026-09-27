@@ -126,7 +126,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
 - [Decision 119: A question that lists her medications is held to her chart](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)
 - [Decision 120: An active-order claim is held to the findings that relate its pair](#decision-120-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
-- [Decision 121: The "Drug reference" record-type sentence stays blanket, because every narrowing measured moved the misreading to other cells](#decision-121-the-drug-reference-record-type-sentence-stays-blanket-because-every-narrowing-measured-moved-the-misreading-to-other-cells)
+- [Decision 121: The "Drug reference" record-type sentence is unchanged, and the three rewordings measured for it are inconclusive rather than refuted](#decision-121-the-drug-reference-record-type-sentence-is-unchanged-and-the-three-rewordings-measured-for-it-are-inconclusive-rather-than-refuted)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -11435,10 +11435,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 
 → `InteractionClaimPairFidelityTest`, `ChartSearchAiInteractionClaimPairsTest`.
 
-## Decision 121: The "Drug reference" record-type sentence stays blanket, because every narrowing measured moved the misreading to other cells
+## Decision 121: The "Drug reference" record-type sentence is unchanged, and the three rewordings measured for it are inconclusive rather than refuted
 
-**Status: REJECTED** (September 2026) — the defect is real and still open; each of the three prompt arms
-measured for it held fewer ABSTAIN cells than the shipped sentence, and none shipped. Issue
+**Status: REJECTED** (September 2026) — the defect is real and still open, and none of the three prompt
+arms measured for it shipped. The measurement does not show the shipped sentence is the better one: a
+rewording of an unrelated sentence, meaning kept, moved the same misreading onto a cell the shipped
+prompt abstains on (*The null floor, measured after*). Issue
 [#246](https://github.com/openmrs/openmrs-module-chartsearchai/issues/246).
 
 ### The defect
@@ -11455,7 +11457,8 @@ amoxicillin?"*, the shipped prompt answers
 > documented amoxicillin allergy [238].
 
 with no chip and no finding, citing only record [238], which reads *"Not recorded for this patient:
-penicillin-class hypersensitivity; documented amoxicillin allergy."* — 6 of 6 samples.
+penicillin-class hypersensitivity; documented amoxicillin allergy."* — on each of the 6 samples taken,
+which under this engine's greedy decode is one output repeated (*Repeats measure nothing here*).
 
 **The phrasing decides whether it reproduces at all.** The issue comment's own question, *"Is
 amoxicillin safe for this patient?"*, answered *"The records do not address the safety of Amoxicillin
@@ -11477,9 +11480,12 @@ has 6 samples of each. One piece of state was added for the converse cell and is
 (`38beca4a…`) was given a coded Amoxicillin allergy, so her amoxicillin cell is an ANSWER cell
 carrying a finding; it was voided after the runs.
 
-**Noise floor: zero.** Each arm's two runs — A's included, runs 1 and 6 — returned byte-identical
-answers on all 16 cells, so every flip below reproduced on its arm's second run — for B and C with
-the order reversed; D's two runs were consecutive.
+**Repeats measure nothing here.** Each arm's two runs — A's included, runs 1 and 6 — returned
+byte-identical answers on all 16 cells (the captured `answer` fields compared cell by cell), because
+`LocalLlmEngine.buildRequestBody` sends `temperature` 0 and the decode is greedy. So the 6 samples of a
+deciding cell are one output six times, one per cell per arm, and a run-to-run floor of zero says
+nothing about how many cells a prompt edit flips for reasons unrelated to what it says. That floor is
+the one a wording needs, and it was measured afterwards as null rewordings.
 
 ### The arms, and what each did
 
@@ -11491,12 +11497,12 @@ the order reversed; D's two runs were consecutive.
   about this patient's chart. Cite them…"*
 - **D** — the contradiction deleted and nothing added: *"…are clinical reference data; cite them…"*
 
-| arm | ABSTAIN held (of 14) | Betty × amoxicillin, "No" | Mary × amoxicillin (converse), "No" | ANSWER cells verdict-led (of 2) |
+| arm | ABSTAIN held (of 14) | Betty × amoxicillin | Mary × amoxicillin (converse) | ANSWER cells verdict-led (of 2) |
 |---|---|---|---|---|
-| A (shipped) | 13 | 6 of 6 | 6 of 6 | 2 |
-| B | 12 | 0 of 6 | 6 of 6 | 2 |
-| C | 12 | 0 of 6 | 6 of 6 | 2 |
-| D | 10 | 6 of 6 | 6 of 6 | 2 |
+| A (shipped) | 13 | refused | refused | 2 |
+| B | 12 | abstained | refused | 2 |
+| C | 12 | abstained | refused | 2 |
+| D | 10 | refused | refused | 2 |
 
 B and C each fix the ticket's cell and each refuse two cells the shipped prompt abstains on, by the
 same misreading:
@@ -11513,40 +11519,86 @@ Joshua × amoxicillin and × ibuprofen, Mary × gentamicin. Every refusal in eve
 `drug_reference` record and carries no chip — the #246 defect, on another cell; D's Joshua ×
 amoxicillin cites his allergy record beside it.
 
+### The null floor, measured after
+
+A second session on the same instance, binary and seed (PR #547's first review round) ran A again and
+three null arms, each differing from A by one asserted replacement in a sentence the defect does not
+touch, its meaning kept:
+
+- **N1** — *"Answer ONLY the specific query."* → *"Answer ONLY the query that was asked."*
+- **N2** — the plain-text sentence with its clauses reordered: *"…in the answer: no markdown, no
+  headers, and no bullet markers like * or -."*
+- **N3** — *"Your answer must not vary based on the punctuation or phrasing of the query — focus only
+  on its semantic meaning."* → *"…must not change with the punctuation or wording of the query —
+  attend only to what it means."*
+
+Mary's added allergy had been voided by then, so all four of her cells are ABSTAIN cells and her chart
+is not the first session's. A reproduced the first session's A answer on the 12 cells outside her
+chart and on one of her four. Scored by `score_probe_safety.py`, of the 15 ABSTAIN cells A refused
+Betty × amoxicillin alone; N1 and N3 each also refused Mary × amoxicillin —
+
+> No — Amoxicillin should not be given: the patient has a documented amoxicillin allergy [76].
+
+citing only the `drug_reference` record, with no chip: B's Agnes misreading, on a prompt whose only
+change is a synonym. N2 refused nothing more, and Betty stayed refused on all three. The answer text
+itself changed on 14, 8 and 9 of the 16 cells.
+
+### What the measurement supports
+
+- **Which ABSTAIN cell the misreading lands on moves with any edit to the prompt**, including one that
+  says nothing new: two of the three null arms moved it onto one more cell. B and C each moved it onto
+  two. At one output per cell per arm, one cell does not separate a narrowing from a rewording. The
+  reading most against the narrowings is over the 10 ABSTAIN cells whose chart was the same in both
+  sessions (Agnes's three, Betty's other three, Joshua's four): B refused 1 of them, C and D 2 each,
+  every null arm none. That too is one output per cell.
+- **What does separate is Betty's cell**: B and C abstained on it, while all three null arms and D
+  left it refused. That is one cell as well.
+
+So the measurement is inconclusive at this n. It does not show the blanket sentence is net-protective,
+and it does not show B or C is worse; it shows D, which deletes the phrase, fixed nothing and refused
+the most.
+
 ### Why none shipped
 
-The gate was the plan's, set before any arm ran: fix the defect cell, hold ABSTAIN within the A/A
-noise, and add no unlicensed verdict. With a floor of zero, B and C lose one cell net and D three.
-The ABSTAIN column is the decisive one for this sentence because it is not gated on a finding
-existing — unlike the `Safety finding` sentence (#110, #112), it fires on every cell carrying a
-reference record, which is the population #107's arm D broke abstention on by reciting reference
-interactions (`eval/drift-metric/README.md`).
-
-**So the blanket sentence is net-protective, and deleting it is the worst of the four.** Read with
-D, the finding is that the phrase *"not this patient's data"* suppresses the misreading on most cells
-and fails on Betty's; the two narrowings keep a form of it and move the failure rather than removing
-it. The contradiction the issue names is real; narrowing or removing it did not remove the misreading.
+The plan's gate, set before any arm ran, was: fix the defect cell, hold ABSTAIN within the A/A noise,
+and add no unlicensed verdict. Under a greedy decode the A/A noise is zero, so the gate fails any edit
+that costs one ABSTAIN cell, which N1 and N3 show an edit saying nothing new can do. It could not
+have passed a rewording of this sentence, and its verdict on B and C is not evidence against what they
+say. A gate that can pass one compares a candidate's extra refusals with those of null arms like
+N1–N3, over more cells than 16 — more patients, or more drugs whose record carries a
+`Contraindicated with:` list — and this decision did not run it. The ABSTAIN column is still the one
+that matters for this sentence, because it is not gated on a finding existing — unlike the `Safety
+finding` sentence (#110, #112), it fires on every cell carrying a reference record, which is the
+population #107's arm D broke abstention on by reciting reference interactions
+(`eval/drift-metric/README.md`).
 
 ### What is left, stated rather than solved
 
 - **Every refusal gives the record's curated NOTES as its reason, and some state one as a fact about
   her** — *"the patient has a documented amoxicillin allergy"*. The seed's self-named allergy rules
   carry notes worded like chart entries (*"documented amoxicillin allergy"*), and the record prints
-  them under `Contraindicated with:` whatever the reading sections beside them say. Whether a note worded as a rule (or a list that does not repeat the clauses the reading already
-  placed) removes the misreading is untested; it is a change to the DATA or to `DrugReferenceInjector.render`,
-  not to the prompt, and it needs the same probe.
+  them under `Contraindicated with:` whatever the reading sections beside them say. Whether a note
+  worded as a rule (or a list that does not repeat the clauses the reading already placed) removes the
+  misreading is untested; it is a change to the DATA or to `DrugReferenceInjector.render`, not to the
+  prompt, and it needs the null arms beside it too.
 - **The fixture does not reproduce it.** `ReferenceRecordAttributionAnswerTest` — the test patient's
   whole chart (`TestDatasetHelper.FULL_PATIENT_DATASET`) through the real serializer and the real
   injector over the same seed — abstained 3 of 3 on the shipped prompt under both phrasings, with
   Betty's three allergies added, and with the request built by `LocalLlmEngine.buildRequestBody`
   rather than the suite transport's. It is kept as the two-branch spec a future wording must pass (no
   verdict where the record states no clause as recorded; "No" where it states one), not as a
-  reproduction.
+  reproduction. It does tell some prompts apart: run against a llama-server of the same model with the
+  compiled sentence mutated to each arm, A, B and C passed and D failed the first case, answering *"No
+  — Amoxicillin should not be given: the patient has a documented amoxicillin allergy and
+  penicillin-class hypersensitivity"* — the issue's own measured wording. A known-bad sentence saying
+  the records ARE this patient's data failed the same case.
 - **Reachable only on a curated dataset.** The shipped `ddinter` default publishes no contraindication
   rule, so no `Contraindicated with:` list renders on a default install (the issue comment's own
   re-measurement).
 
-**Do not re-propose B, C or D, or a wording that names a section label or deletes the phrase, without
-this probe and a new reason.** A fourth prompt arm is not the next experiment; the NOTE wording is.
+**D has a result against it that does not rest on the live counts**: it fails the fixture's first
+case, and on the standalone it also left Betty refused. **B, C and other section-label wordings are open**, and a
+re-proposal needs the null arms beside it rather than a zero A/A floor. The note wording is the other
+experiment, and does not touch the prompt.
 
 → `ReferenceRecordAttributionAnswerTest` (opt-in).

@@ -49,7 +49,10 @@ import org.slf4j.LoggerFactory;
  * same question; neither her three allergies nor the production request body moved it. What they pin
  * is the pair of branches any re-wording of the rule must keep: no verdict where the record states no
  * clause as recorded, and "No" where it states one. ADR Decision 121 measured three re-wordings on the
- * standalone, where the refusal does reproduce, and rejected all three.
+ * standalone, where the refusal does reproduce, shipped none, and found the result inconclusive. The
+ * first case does tell some prompts apart: with the compiled sentence mutated to each of that
+ * decision's arms, the one deleting "not this patient's data" failed it with the issue's own measured
+ * refusal, and the shipped sentence and the two narrowings passed.
  *
  * <p><strong>The oracle is the VERDICT the prompt itself defines, not a phrasing.</strong> The prompt
  * answers a safety question with no finding naming the drug in one sentence stating that the records
@@ -58,9 +61,12 @@ import org.slf4j.LoggerFactory;
  * is read here as the lead token those two branches choose between, which is a statement about which
  * branch the model took rather than about its words: a "No" on the first chart is the issue's refusal,
  * a "Yes" there a clearance the module cannot give, and anything but a "No" on the second is the
- * converse failure a prompt that stopped reading the recorded half would produce. What that leaves
- * unread is a refusal that does not open on the verdict word, and an attribution inside an otherwise
- * abstaining sentence; ADR Decision 121 quotes the live answers whole for that reason.
+ * converse failure a prompt that stopped reading the recorded half would produce. On the first chart
+ * the answer is also held to name no clause of the drug's list, since that branch is one sentence
+ * saying the records do not address the drug; that catches a refusal that does not open on the verdict
+ * word (<em>"Amoxicillin should not be given: documented amoxicillin allergy"</em>). What it leaves
+ * unread there is an attribution that paraphrases a clause rather than naming it (<em>"she is allergic
+ * to penicillin"</em>); ADR Decision 121 quotes the live answers whole for that reason.
  *
  * <p><strong>Real, and not.</strong> Real: the test patient's whole chart
  * ({@link TestDatasetHelper#FULL_PATIENT_DATASET}, whose recorded allergies are Beef and
@@ -95,13 +101,20 @@ public class ReferenceRecordAttributionAnswerTest {
 	private static final String DECOY_QUESTION = "what is the patient's most recent weight?";
 
 	/** The test patient's recorded allergens, as {@code PatientClinicalContextBuilder} would read them
-	 *  off the two allergy records {@link TestDatasetHelper#FULL_PATIENT_DATASET} carries. */
+	 *  off the two allergy records {@link TestDatasetHelper#FULL_PATIENT_DATASET} carries. Typed by hand,
+	 *  because that builder reads OpenMRS {@code Allergy} objects and this chart is text, so each case
+	 *  first holds the set to the chart it injects over ({@link #assertAllergyRecordsNameExactly}): a
+	 *  dataset that gains, loses or renames an allergy fails there, in the ordinary build, rather than
+	 *  injecting over a context its own chart contradicts. */
 	private static final Set<String> RECORDED_ALLERGENS = new LinkedHashSet<String>(
 			Arrays.asList("Beef", "Fomepizole"));
 
-	/** The converse chart's one added record: an allergy the curated amoxicillin entry self-names. */
-	private static final String AMOXICILLIN_ALLERGY_RECORD =
-			"Patient allergy: (2026-03-19) Allergy: Amoxicillin (drug allergen). Severity: Severe";
+	/** The converse chart's one added allergen: one the curated amoxicillin entry self-names. */
+	private static final String AMOXICILLIN_ALLERGEN = "Amoxicillin";
+
+	/** The converse chart's one added record, naming {@link #AMOXICILLIN_ALLERGEN}. */
+	private static final String AMOXICILLIN_ALLERGY_RECORD = "Patient allergy: (2026-03-19) Allergy: "
+			+ AMOXICILLIN_ALLERGEN + " (drug allergen). Severity: Severe";
 
 	/** The two clauses the bundled curated amoxicillin entry publishes. */
 	private static final List<String> AMOXICILLIN_CLAUSES = Arrays.asList(
@@ -113,9 +126,9 @@ public class ReferenceRecordAttributionAnswerTest {
 
 	@Test
 	public void aDrugWhoseRulesNameNothingHerChartRecordsIsNotAnsweredWithAVerdict() throws Exception {
-		String endpoint = optedInEndpoint();
-		PatientChart chart = DrugReferenceTestSupport.curatedReferenceOver(fullChart(false), QUESTION,
-				RECORDED_ALLERGENS);
+		PatientChart base = fullChart(false);
+		assertAllergyRecordsNameExactly(base, RECORDED_ALLERGENS);
+		PatientChart chart = DrugReferenceTestSupport.curatedReferenceOver(base, QUESTION, RECORDED_ALLERGENS);
 		String record = amoxicillinRecord(chart);
 		for (String clause : AMOXICILLIN_CLAUSES) {
 			assertTrue(section(record, " Not recorded for this patient: ").contains(clause),
@@ -127,6 +140,7 @@ public class ReferenceRecordAttributionAnswerTest {
 		assertEquals(0, DrugReferenceTestSupport.injectedFindings(chart).size(),
 				"precondition: nothing on this chart relates to amoxicillin, so no finding is injected");
 
+		String endpoint = optedInEndpoint();
 		List<String> answers = answers(endpoint, chart, "no-recorded-clause");
 		for (int sample = 1; sample <= answers.size(); sample++) {
 			String answer = answers.get(sample - 1);
@@ -141,16 +155,22 @@ public class ReferenceRecordAttributionAnswerTest {
 							+ "the prompt's own branch is one sentence saying the records do not address it, "
 							+ "never \"Yes\" or \"No\" — a clearance reads the NOT-recorded half as a "
 							+ "certificate, which the module cannot give. Was: " + answer);
+			assertEquals(null, clauseNamed(answer),
+					"sample " + sample + ": the answer names a clause of amoxicillin's contraindication list "
+							+ "on a chart that records none of them. The prompt's branch for a drug no finding "
+							+ "names is one sentence saying the records do not address it, so a clause in the "
+							+ "answer is the drug's rule list read into it — a refusal that does not open on "
+							+ "\"No\" included. Was: " + answer);
 		}
 	}
 
 	@Test
 	public void aDrugWhoseRuleHerChartRecordsIsStillRefused() throws Exception {
-		String endpoint = optedInEndpoint();
 		Set<String> allergens = new LinkedHashSet<String>(RECORDED_ALLERGENS);
-		allergens.add("Amoxicillin");
-		PatientChart chart = DrugReferenceTestSupport.curatedReferenceOver(fullChart(true), QUESTION,
-				allergens);
+		allergens.add(AMOXICILLIN_ALLERGEN);
+		PatientChart base = fullChart(true);
+		assertAllergyRecordsNameExactly(base, allergens);
+		PatientChart chart = DrugReferenceTestSupport.curatedReferenceOver(base, QUESTION, allergens);
 		String record = amoxicillinRecord(chart);
 		assertTrue(section(record, " Recorded for this patient: ").contains("documented amoxicillin allergy"),
 				"precondition: the record must state the self-named clause as recorded for this patient. "
@@ -158,6 +178,7 @@ public class ReferenceRecordAttributionAnswerTest {
 		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
 				"precondition: the recorded amoxicillin allergy must raise a finding");
 
+		String endpoint = optedInEndpoint();
 		List<String> answers = answers(endpoint, chart, "recorded-clause");
 		for (int sample = 1; sample <= answers.size(); sample++) {
 			String answer = answers.get(sample - 1);
@@ -171,11 +192,11 @@ public class ReferenceRecordAttributionAnswerTest {
 	}
 
 	/**
-	 * The oracle rejects what it is supposed to reject, and runs without an endpoint, so the two answer
-	 * cases being skipped in CI does not leave it unchecked.
+	 * The two oracles reject what they are supposed to reject, and run without an endpoint, so the two
+	 * answer cases being skipped in CI does not leave them unchecked.
 	 */
 	@Test
-	public void theVerdictOracleReadsTheLeadTokenAndNothingElse() {
+	public void theOraclesReadTheLeadTokenAndANamedClause() {
 		assertEquals("NO", verdictLead("No — Amoxicillin should not be given: documented amoxicillin allergy [238]."));
 		assertEquals("NO", verdictLead("\"No, do not give it."));
 		assertEquals("NO", verdictLead("**No** — Amoxicillin should not be given."));
@@ -184,6 +205,24 @@ public class ReferenceRecordAttributionAnswerTest {
 		assertEquals(null, verdictLead("Nothing in the records addresses amoxicillin."));
 		assertEquals(null, verdictLead("None of the records address amoxicillin."));
 		assertEquals(null, verdictLead(""));
+
+		assertEquals("documented amoxicillin allergy",
+				clauseNamed("Amoxicillin should not be given: documented amoxicillin allergy [238]."));
+		assertEquals("penicillin-class hypersensitivity",
+				clauseNamed("No — it is contraindicated with Penicillin-class hypersensitivity [238]."));
+		assertEquals(null, clauseNamed("The records do not address Amoxicillin safety for this patient."));
+		assertEquals(null, clauseNamed(null));
+	}
+
+	/** The first of {@link #AMOXICILLIN_CLAUSES} the answer names, case-insensitively, else {@code null}. */
+	static String clauseNamed(String answer) {
+		String lower = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
+		for (String clause : AMOXICILLIN_CLAUSES) {
+			if (lower.contains(clause)) {
+				return clause;
+			}
+		}
+		return null;
 	}
 
 	/** {@code "YES"} or {@code "NO"} where the answer opens with that verdict word, else {@code null}. */
@@ -215,6 +254,32 @@ public class ReferenceRecordAttributionAnswerTest {
 		return new PatientChartSerializer().serialize(null,
 				TestDatasetHelper.toSerializedRecords(dataset.toArray(new String[0])),
 				Collections.<String> emptySet());
+	}
+
+	/**
+	 * Holds the hand-typed allergen set a case injects over to the chart it injects over: one allergy
+	 * record per allergen, each naming it as {@code "Allergy: <allergen> ("}, and no other allergy record.
+	 */
+	private static void assertAllergyRecordsNameExactly(PatientChart chart, Set<String> allergens) {
+		List<String> allergyTexts = new ArrayList<String>();
+		for (PatientChartSerializer.RecordMapping mapping : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY.equals(mapping.getResourceType())) {
+				allergyTexts.add(mapping.getText());
+			}
+		}
+		assertEquals(allergens.size(), allergyTexts.size(),
+				"precondition: the chart must carry one allergy record per allergen the context is given "
+						+ allergens + ". Allergy records were: " + allergyTexts);
+		for (String allergen : allergens) {
+			int naming = 0;
+			for (String text : allergyTexts) {
+				if (text != null && text.contains("Allergy: " + allergen + " (")) {
+					naming++;
+				}
+			}
+			assertEquals(1, naming, "precondition: exactly one allergy record must name '" + allergen
+					+ "', or the context and the chart disagree. Allergy records were: " + allergyTexts);
+		}
 	}
 
 	private static String amoxicillinRecord(PatientChart chart) {

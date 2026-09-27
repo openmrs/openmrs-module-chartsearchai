@@ -735,16 +735,27 @@ public class QueryStoreChartBuilderTest {
 	public void build_datesEverySameDateFollowOn_inPreFilterModeToo() {
 		builder.usePreFilter = true;
 		queryStore.stubChart = aChartWhoseNewestWeightAndLastVisitAreSameDateFollowOns();
+		// A focus hit on the last visit, so the focus-hint path is the one serializing.
 		queryStore.stubHits = new ArrayList<>();
+		queryStore.stubHits.add(chartDoc("visit", "v-new", "Visit: Home Visit at Site 42", LocalDate.of(2026, 6, 14)));
 
-		assertEveryLineCarriesItsRecordsOwnDate(builder.build(patient(1), "when was her last visit?"), 9);
+		PatientChart chart = builder.build(patient(1), "when was her last visit?");
+
+		assertEquals(java.util.Arrays.asList(6), chart.getFocusIndices(), "the focus hint must be engaged");
+		assertEveryLineCarriesItsRecordsOwnDate(chart, 9);
+		assertTrue(chart.getText().contains("[6] (2026-06-14) Visit: Home Visit at Site 42\n"),
+				"the last visit must carry its date on its own line:\n" + chart.getText());
 	}
 
 	@Test
 	public void buildFocused_datesEverySameDateFollowOn() {
 		queryStore.stubHits = aChartWhoseNewestWeightAndLastVisitAreSameDateFollowOns();
 
-		assertEveryLineCarriesItsRecordsOwnDate(builder.buildFocused(patient(1), "when was her last visit?"), 9);
+		PatientChart chart = builder.buildFocused(patient(1), "when was her last visit?");
+
+		assertEveryLineCarriesItsRecordsOwnDate(chart, 9);
+		assertTrue(chart.getText().contains("[6] (2026-06-14) Visit: Home Visit at Site 42\n"),
+				"the last visit must carry its date on its own line:\n" + chart.getText());
 	}
 
 	/**

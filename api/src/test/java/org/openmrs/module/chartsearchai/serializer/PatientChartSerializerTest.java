@@ -57,7 +57,7 @@ public class PatientChartSerializerTest {
 		// The mapping text always carries the date (for grounding), and so does the chart line unless a
 		// caller opts into date-run compression.
 		assertTrue(chart.getText().contains("[1] " + datePrefix + "Temperature: 36.7"),
-				"first-of-run dated record shows its date inline; chart was:\n" + chart.getText());
+				"a dated record shows its date inline; chart was:\n" + chart.getText());
 	}
 
 	@Test

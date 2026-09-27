@@ -11459,7 +11459,7 @@ its eval charts.
 ### The decision
 
 **`PatientChartSerializer`'s default overloads render every dated record's date.** The locus is the
-default, so all three build paths change with it, and a future caller cannot inherit compression by
+default, so `build` and `buildFocused` change with it (`buildScoped` already passed `false`), and a future caller cannot inherit compression by
 omission. `serialize(…, compressDateRuns)` keeps `true` as an explicit opt-in that no production path
 passes. It stays so that a form making a follow-on *distinguishable* from an undated record can be
 measured against it. Nobody has built or measured such a form. The one related form #66 did measure,
@@ -11471,8 +11471,8 @@ visit/encounter/patient). Settings: Gemma 4 E4B Q4_K_M, local engine, `chartMode
 `embedding.preFilter=false`. Arm A was an omod built from `main` @ `f972be96`, and arm C one built
 from this change. Each arm ran twice, and each arm's two runs were byte-identical in every answer.
 
-- **The issue's questions, on its patient `763e6e5f…`** (present on this database). Arm A reproduced
-  both failures: *"The last visit was an OPD Visit at Site 42 [43]."*, which is the older visit, and
+- **The issue's questions, on its patient `763e6e5f…`** (present on this database). Arm A failed both,
+  the visit a different way from the issue's capture: *"The last visit was an OPD Visit at Site 42 [43]."*, which is the older visit, and
   *"The last weight measurement was 64 kg [39]."*. Arm C answered *"The weight was last measured on
   2026-06-15 [22]."*, and named 2026-06-15 as the last visit.
 - **`eval/drift-metric/temporal_probe_rc2.py`**, driven unchanged except for its `PATIENTS` list.
@@ -11489,12 +11489,19 @@ from this change. Each arm ran twice, and each arm's two runs were byte-identica
 
 **The drift metric was not run.** None of its four standalone persona patients are on this database.
 Its eight questions are presence and enumeration questions, not temporal ones, so it would measure
-harm elsewhere rather than this defect. #66's E4B figures (meanF1 0.418 → 0.428, abstention 0.91 →
-1.00, drift 110 → 95, 32 cells) are the only drift measurement of inline dates. They were taken with
-no A/A floor and against a system prompt that has since changed.
+harm elsewhere rather than this defect. #66's pull-request table is the drift measurement of inline dates (32 cells): E2B
+inline 0.432 / 1.00 / 57 (meanF1 / abstention / drift) against date-run alone 0.428 / 1.00 / 95; E4B
+inline 0.418 / 0.91 / 110 against date-run with the `.0` trim 0.438 / 1.00 / 57. The trim stays, and
+inline dates with the trim were never measured. Its commit message (`61d1785c`) gives 0.428 / 1.00 / 95
+as E4B's date-run row, which the table gives to E2B. Both were taken with no A/A floor and against a
+system prompt that has since changed.
 
 **Deploy note.** The chart bytes change, so every persisted full-chart KV file misses once and is
-re-persisted on the first query per patient. Re-run the `/prewarm` sweep where a pinned corpus is kept.
+re-persisted on the first query per patient — unpinned, because the query path persists with
+`pin=false` and purges the patient's old pinned entry. So where a pinned corpus is kept, re-run the
+`/prewarm` sweep before traffic, or pinned patients leave it one query at a time. A persisted KV
+file's size tracks its chart's tokens, so the corpus's disk use grows by about the prompt's share
+above.
 
 → `QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_soTheNewestWeightAndLastVisitAreNotReadAsUndated`,
 `QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_inPreFilterModeToo`,

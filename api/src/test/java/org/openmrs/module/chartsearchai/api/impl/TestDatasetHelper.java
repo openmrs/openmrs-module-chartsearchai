@@ -18,6 +18,7 @@ import java.util.Map;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.openmrs.module.querystore.model.QueryDocument;
 
 /**
  * Shared helpers for tests that use the {@code FULL_PATIENT_DATASET} test
@@ -778,6 +779,10 @@ final class TestDatasetHelper {
 	private static final java.util.regex.Pattern DATE_PREFIX_PATTERN =
 			java.util.regex.Pattern.compile("^\\(\\d{4}-\\d{2}-\\d{2}\\)\\s*");
 
+	/** A dataset entry's date: the {@code (yyyy-MM-dd)} directly after its resource-type prefix. */
+	private static final java.util.regex.Pattern DATASET_DATE_PATTERN =
+			java.util.regex.Pattern.compile("^[A-Za-z ]+: \\((\\d{4}-\\d{2}-\\d{2})\\)");
+
 	private TestDatasetHelper() {
 	}
 
@@ -893,6 +898,29 @@ final class TestDatasetHelper {
 	static int indexForUuid(String uuid) {
 		int dash = uuid.lastIndexOf('-');
 		return Integer.parseInt(uuid.substring(dash + 1));
+	}
+
+	/**
+	 * Converts a raw dataset array into the {@link QueryDocument}s querystore would hand the chart
+	 * builder, so a test can drive a real dataset through {@code QueryStoreChartBuilder.build()}
+	 * rather than through the serializer alone. Unlike {@link #toSerializedRecords(String[])}, which
+	 * drops the date, each document keeps the dataset's own {@code (yyyy-MM-dd)}, so the chart's
+	 * same-date runs are the dataset's. An entry with no date yields an undated document.
+	 */
+	static List<QueryDocument> toQueryDocuments(String[] dataset) {
+		List<QueryDocument> docs = new ArrayList<>();
+		for (int i = 0; i < dataset.length; i++) {
+			QueryDocument doc = new QueryDocument();
+			doc.setResourceType(inferResourceType(dataset[i]));
+			doc.setResourceUuid(uuidForIndex(i));
+			doc.setText(stripDatasetPrefixAndDate(dataset[i]));
+			java.util.regex.Matcher date = DATASET_DATE_PATTERN.matcher(dataset[i]);
+			if (date.find()) {
+				doc.setDate(java.time.LocalDate.parse(date.group(1)));
+			}
+			docs.add(doc);
+		}
+		return docs;
 	}
 
 	/**

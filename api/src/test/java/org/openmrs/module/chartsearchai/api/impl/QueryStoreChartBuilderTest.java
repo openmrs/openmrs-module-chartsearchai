@@ -760,6 +760,46 @@ public class QueryStoreChartBuilderTest {
 	}
 
 	/**
+	 * The same property on a real chart rather than the nine-record fixture above: the full patient
+	 * dataset through {@code build()}, whose long same-date runs (the 2025-10-30 visit alone is eleven
+	 * consecutive records) are the shape #66's token argument was about. A compression gated on chart
+	 * size would leave the fixture above dated and this chart not. The dataset carries no patient
+	 * record, so the computed demographics header precedes {@code [1]}; only the numbered lines are
+	 * compared.
+	 */
+	@Test
+	public void build_datesEverySameDateFollowOn_onTheFullPatientDataset() {
+		builder.usePreFilter = false;
+		queryStore.stubChart = TestDatasetHelper.toQueryDocuments(TestDatasetHelper.FULL_PATIENT_DATASET);
+
+		PatientChart chart = builder.build(patient(1), "when was his weight last measured?");
+
+		List<String> numbered = new ArrayList<>();
+		for (String line : chart.getText().split("\n")) {
+			if (line.startsWith("[")) {
+				numbered.add(line);
+			}
+		}
+		assertEquals(TestDatasetHelper.FULL_PATIENT_DATASET.length, chart.getMappings().size());
+		assertEquals(chart.getMappings().size(), numbered.size(), "chart:\n" + chart.getText());
+		int sameDateFollowOns = 0;
+		for (int i = 0; i < numbered.size(); i++) {
+			PatientChartSerializer.RecordMapping mapping = chart.getMappings().get(i);
+			assertEquals("[" + (i + 1) + "] " + mapping.getText(), numbered.get(i),
+					"record [" + (i + 1) + "] must read to the model with the date the grounding view gives it");
+			if (i > 0 && mapping.getDate() != null && mapping.getText().startsWith("(")
+					&& mapping.getDate().equals(chart.getMappings().get(i - 1).getDate())) {
+				sameDateFollowOns++;
+			}
+		}
+		assertTrue(sameDateFollowOns > 20,
+				"the dataset must hand the builder long dated same-date runs, or this test pins nothing: "
+						+ sameDateFollowOns);
+		assertTrue(chart.getText().contains("] (2025-10-30) Test — Weight (kg): 94 kg\n"),
+				"the last record of the 2025-10-30 run must carry its own date:\n" + chart.getText());
+	}
+
+	/**
 	 * Subclass that bypasses {@code Context.getService} so this test runs without
 	 * a live OpenMRS context. The {@code resolve*} overrides are the seam — every
 	 * other code path goes through the real builder.

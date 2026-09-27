@@ -11486,12 +11486,40 @@ from this change. Each arm ran twice, and each arm's two runs were byte-identica
   rose from 11 501–16 097 tokens to 15 329–21 171, which is **+26% to +33%**. A chart that fit
   `chartsearchai.llm.contextSize` with compression can now overflow it. `LocalLlmEngine` already fails that loudly, naming the property.
 
-**The drift metric was not run.** None of its four standalone persona patients are on this database.
-Its eight questions are presence and enumeration questions, not temporal ones, so it would measure
-harm elsewhere rather than this defect. #66's pull-request table is the drift measurement of inline dates (32 cells): E2B
+**The drift metric's gold could not score this database, so its presence axis was A/B'd instead.**
+None of its four standalone persona patients are here. On 2026-09-27, same standalone and settings,
+the README's pure-prompt A/B (`eval/drift-metric/README.md`, *Pure-prompt A/B for the #107 verdict
+guard*) ran in its place: `capture_probe_yesno.sh` with `CAPTURE_TIER_B=0` over eight patients (the
+six above plus two sparse ones, `38beca4a…` and `d6566336…`) times its eight Tier-A presence topics,
+64 cells per arm, every patient warmed first, and `compare_arms.py` with A as baseline. Each arm was
+captured twice. Arm C's two captures were identical in all 64 answers; arm A's differed in the wording
+of one (`38beca4a` heart, a NO both times). So the A/A floor was zero class flips in each arm.
+
+- **Verdict leads** (`compare_arms.py`'s directness, of the 64 cells): arm A 64/64, arm C 63/64.
+  YES/NO/NONE: A 35/29/0, C 35/28/1.
+- **Seven cells changed class.** Each was read against the patient's conditions, encounter diagnoses
+  and program enrollments in the database.
+  - Arm C drops two false presences arm A gave. `3012b45e` programs: A answered *"Yes — the patient
+    is classified as being in the low-income population"*, which is a condition, and the patient has
+    no enrollment. `763e6e5f` eye: A cited a tetryzoline (ophthalmic) drug allergy as an eye issue.
+  - **Arm C adds two false presences arm A did not give.** `49485340` heart: *"Yes — a family history
+    of hypertension is recorded"*, and no heart condition or diagnosis of his own is recorded. `dc8560c9` kidney:
+    *"Yes, kidney function tests are recorded"*, from labs alone, with no kidney condition or
+    diagnosis recorded. Arm A answered both with the "No … diagnosis is recorded" form.
+  - `3012b45e` kidney loses its verdict in arm C. It lists the same three labs without arm A's
+    *"No kidney issues diagnosis is recorded"*.
+  - Two borderline mental cells moved in opposite directions. `38beca4a` went NO → YES, on a recorded
+    stuttering and a nicotine-related disorder. `763e6e5f` went YES → NO, where a memory-loss
+    condition is the only candidate.
+- **Read together:** in this capture, arm C traded two false presences for two others and lost one
+  verdict lead. Each flip reproduced in both of its arm's captures. They do not cluster in one
+  direction, so this capture does not show inline dates raising or lowering the false-presence rate.
+  It does show that they change which cells get one.
+
+#66's pull-request table is the drift measurement of inline dates (32 cells): E2B
 inline 0.432 / 1.00 / 57 (meanF1 / abstention / drift) against date-run alone 0.428 / 1.00 / 95; E4B
 inline 0.418 / 0.91 / 110 against date-run with the `.0` trim 0.438 / 1.00 / 57. The trim stays, and
-inline dates with the trim were never measured. Its commit message (`61d1785c`) gives 0.428 / 1.00 / 95
+inline dates with the trim were never measured on that metric. Its commit message (`61d1785c`) gives 0.428 / 1.00 / 95
 as E4B's date-run row, which the table gives to E2B. Both were taken with no A/A floor and against a
 system prompt that has since changed.
 
@@ -11504,6 +11532,8 @@ with the prompt.
 
 → `QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_soTheNewestWeightAndLastVisitAreNotReadAsUndated`,
 `QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_inPreFilterModeToo`,
-`QueryStoreChartBuilderTest.buildFocused_datesEverySameDateFollowOn`;
+`QueryStoreChartBuilderTest.buildFocused_datesEverySameDateFollowOn`,
+`QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_onTheFullPatientDataset` (the real
+dataset's long same-date runs, where a compression gated on chart size would show);
 `PatientChartSerializerTest.serialize_dropsRepeatedDateOnConsecutiveSameDateRecords_whenACallerOptsIntoCompression`
 pins the opt-in.

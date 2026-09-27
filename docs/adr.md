@@ -126,6 +126,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
 - [Decision 119: A question that lists her medications is held to her chart](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)
 - [Decision 120: An active-order claim is held to the findings that relate its pair](#decision-120-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
+- [Decision 121: The "Drug reference" record-type sentence stays blanket, because every narrowing measured moved the misreading to other cells](#decision-121-the-drug-reference-record-type-sentence-stays-blanket-because-every-narrowing-measured-moved-the-misreading-to-other-cells)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -11433,3 +11434,118 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
   finding or chip also names its partner.
 
 → `InteractionClaimPairFidelityTest`, `ChartSearchAiInteractionClaimPairsTest`.
+
+## Decision 121: The "Drug reference" record-type sentence stays blanket, because every narrowing measured moved the misreading to other cells
+
+**Status: REJECTED** (September 2026) — the defect is real and still open; each of the three prompt arms
+measured for it held fewer ABSTAIN cells than the shipped sentence, and none shipped. Issue
+[#246](https://github.com/openmrs/openmrs-module-chartsearchai/issues/246).
+
+### The defect
+
+`DEFAULT_SYSTEM_PROMPT` says *"Records beginning with "Drug reference" are clinical reference data,
+not this patient's data"*, while since #244, #269 and #308 the injected `drug_reference` record
+names each contraindication clause on the side of this patient's chart it is on. The issue's reading
+was that the blanket sentence contradicts the record and is why an answer takes the drug's own
+`Contraindicated with:` list as her chart. On the curated dataset (`sourceFormat=json`), Betty
+(`a7090f70…`, allergies Aspirin, Ketoconazole, Lidocaine), asked *"Can this patient take
+amoxicillin?"*, the shipped prompt answers
+
+> No — Amoxicillin should not be given: it is contraindicated with penicillin-class hypersensitivity;
+> documented amoxicillin allergy [238].
+
+with no chip and no finding, citing only record [238], which reads *"Not recorded for this patient:
+penicillin-class hypersensitivity; documented amoxicillin allergy."* — 6 of 6 samples.
+
+**The phrasing decides whether it reproduces at all.** The issue comment's own question, *"Is
+amoxicillin safe for this patient?"*, answered *"The records do not address the safety of Amoxicillin
+for this patient."* 3 of 3 on the same instance, head and prompt. The probe's default phrasing is the
+one that refuses; every figure below is over it.
+
+### Method
+
+RefApp 3.7.1 standalone on `:8081`, `chartMode=fullChart`, local Gemma 4 E4B (Q4_K_M, Metal),
+chartsearchai `main` @ `f972be96` (production code unchanged), `sourceFormat=json` (the bundled
+four-entry curated seed), `answerFromFindings=false` read off the instance before capture. Arms were
+swapped through `chartsearchai.llm.systemPrompt` on one binary; arm A's GP text was extracted from the
+built `LlmProvider` class and read back byte-identical, and each candidate differs from it in that one
+sentence. Capture is `capture_probe_safety.sh` with `PROBE_DRUGS="amoxicillin ibuprofen paracetamol
+gentamicin"` over its four default patients — 16 cells, of which `score_probe_safety.py` labels 14
+ABSTAIN and 2 ANSWER — scored by `score_probe_safety.py` itself. Arms ran in the order A, B, C, C, B,
+A, D, D, and after each capture two further decoyed samples of the two deciding cells, so each arm
+has 6 samples of each. One piece of state was added for the converse cell and is not stock: Mary
+(`38beca4a…`) was given a coded Amoxicillin allergy, so her amoxicillin cell is an ANSWER cell
+carrying a finding; it was voided after the runs.
+
+**Noise floor: zero.** Each arm's two runs — A's included, runs 1 and 6 — returned byte-identical
+answers on all 16 cells, so every flip below reproduced on its arm's second run — for B and C with
+the order reversed; D's two runs were consecutive.
+
+### The arms, and what each did
+
+- **B** — *"…are clinical reference data about a drug, not this patient's data, except a section
+  labelled "Recorded for this patient"; what one lists under "Contraindicated with" is that drug's own
+  rules. Cite them…"*
+- **C** — *"…are clinical reference data about a drug: what one lists under "Contraindicated with" is
+  that drug's own rules and not this patient's data, and only its sections naming this patient speak
+  about this patient's chart. Cite them…"*
+- **D** — the contradiction deleted and nothing added: *"…are clinical reference data; cite them…"*
+
+| arm | ABSTAIN held (of 14) | Betty × amoxicillin, "No" | Mary × amoxicillin (converse), "No" | ANSWER cells verdict-led (of 2) |
+|---|---|---|---|---|
+| A (shipped) | 13 | 6 of 6 | 6 of 6 | 2 |
+| B | 12 | 0 of 6 | 6 of 6 | 2 |
+| C | 12 | 0 of 6 | 6 of 6 | 2 |
+| D | 10 | 6 of 6 | 6 of 6 | 2 |
+
+B and C each fix the ticket's cell and each refuse two cells the shipped prompt abstains on, by the
+same misreading:
+
+> B, Agnes × amoxicillin: No — Amoxicillin should not be given: the patient has a documented
+> amoxicillin allergy [113].
+> B, Mary × paracetamol: No — paracetamol should not be given: the patient has a documented
+> paracetamol allergy [77].
+> C, Joshua × paracetamol: No — Paracetamol should not be given: it is contraindicated with documented
+> paracetamol allergy or severe hepatic impairment [40].
+
+(C also refuses Agnes × amoxicillin, in B's words.) D leaves Betty refused and adds three more —
+Joshua × amoxicillin and × ibuprofen, Mary × gentamicin. Every refusal in every arm cites the
+`drug_reference` record alone and carries no chip: the #246 defect, on another cell.
+
+### Why none shipped
+
+The gate was the plan's, set before any arm ran: fix the defect cell, hold ABSTAIN within the A/A
+noise, and add no unlicensed verdict. With a floor of zero, B and C lose one cell net and D three.
+The ABSTAIN column is the decisive one for this sentence because it is not gated on a finding
+existing — unlike the `Safety finding` sentence (#110, #112), it fires on every cell carrying a
+reference record, which is the population #107's arm D broke abstention on by reciting reference
+interactions (`eval/drift-metric/README.md`).
+
+**So the blanket sentence is net-protective, and deleting it is the worst of the four.** Read with
+D, the finding is that the phrase *"not this patient's data"* suppresses the misreading on most cells
+and fails on Betty's; the two narrowings keep a form of it and move the failure rather than removing
+it. The contradiction the issue names is real; narrowing or removing it did not remove the misreading.
+
+### What is left, stated rather than solved
+
+- **Every refusal gives the record's curated NOTES as its reason, and some state one as a fact about
+  her** — *"the patient has a documented amoxicillin allergy"*. The seed's self-named allergy rules
+  carry notes worded like chart entries (*"documented amoxicillin allergy"*), and the record prints
+  them under `Contraindicated with:` whatever the reading sections beside them say. Whether a note worded as a rule (or a list that does not repeat the clauses the reading already
+  placed) removes the misreading is untested; it is a change to the DATA or to `DrugReferenceInjector.render`,
+  not to the prompt, and it needs the same probe.
+- **The fixture does not reproduce it.** `ReferenceRecordAttributionAnswerTest` — the test patient's
+  whole chart (`TestDatasetHelper.FULL_PATIENT_DATASET`) through the real serializer and the real
+  injector over the same seed — abstained 3 of 3 on the shipped prompt under both phrasings, with
+  Betty's three allergies added, and with the request built by `LocalLlmEngine.buildRequestBody`
+  rather than the suite transport's. It is kept as the two-branch spec a future wording must pass (no
+  verdict where the record states no clause as recorded; "No" where it states one), not as a
+  reproduction.
+- **Reachable only on a curated dataset.** The shipped `ddinter` default publishes no contraindication
+  rule, so no `Contraindicated with:` list renders on a default install (the issue comment's own
+  re-measurement).
+
+**Do not re-propose B, C or D, or a wording that names a section label or deletes the phrase, without
+this probe and a new reason.** A fourth prompt arm is not the next experiment; the NOTE wording is.
+
+→ `ReferenceRecordAttributionAnswerTest` (opt-in).

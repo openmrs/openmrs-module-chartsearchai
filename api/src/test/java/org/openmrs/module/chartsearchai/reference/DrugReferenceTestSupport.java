@@ -1332,6 +1332,21 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The chart the REAL injector produces when {@code base} is put through {@code injectRecords} over
+	 * the bundled CURATED dataset ({@link #curatedService()}), with the real validator behind it, for a
+	 * patient whose recorded allergies are {@code allergies} (issue #246).
+	 *
+	 * <p>Public, and not throwing on an empty finding list, because one arrangement it serves is a chart
+	 * that records no clause of the drug's contraindication list: the injected {@code drug_reference}
+	 * record states that reading and there is no finding at all. The caller asserts which sections the
+	 * record carries, and whether a finding was injected, rather than this method assuming either.
+	 */
+	public static PatientChart curatedReferenceOver(PatientChart base, String question, Set<String> allergies) {
+		return injectorWithSafety(curatedService()).injectRecords(base,
+				ctx(60, null, null, null, allergies, null), question);
+	}
+
+	/**
 	 * A service over the 16-drug DDInter EXCERPT, parsed by the real {@link DdiDrugReferenceSource}.
 	 * Cross-reactivity groups are pinned EMPTY by the {@code setEntries} seam underneath — use
 	 * {@link #ddinterServiceWithGroups} when a case depends on a curated group.

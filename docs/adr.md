@@ -11481,11 +11481,10 @@ from this change. Each arm ran twice, and each arm's two runs were byte-identica
   Nine cells went FAIL → PASS. One went PASS → FAIL: `dc8560c9` weight. Arm A gave *99 kg*, which is
   right. Arm C gave *"51 kg on 2023-03-02"*, a correctly dated but older reading. Arm C's two other
   failures (`3012b45e` weight and last visit) fail in arm A too.
-- **Cost**, as the audit rows' `input_tokens` for the weight question per patient. On the issue's
-  patient it rose from 3728 to 4160 (+11.6%). On the five larger charts it rose from 11 501–16 097
-  tokens to 15 329–21 171, which is **+26% to +33%**; compression had saved 20.8–25.0% of the
-  dated chart there (10.4% on the issue's patient). A chart that fit `chartsearchai.llm.contextSize` with compression
-  can now overflow it. `LocalLlmEngine` already fails that loudly, naming the property.
+- **Cost**, as the audit rows' `input_tokens` (the whole prompt) for the weight question per
+  patient. On the issue's patient it rose from 3728 to 4160 (+11.6%). On the five larger charts it
+  rose from 11 501–16 097 tokens to 15 329–21 171, which is **+26% to +33%**. A chart that fit
+  `chartsearchai.llm.contextSize` with compression can now overflow it. `LocalLlmEngine` already fails that loudly, naming the property.
 
 **The drift metric was not run.** None of its four standalone persona patients are on this database.
 Its eight questions are presence and enumeration questions, not temporal ones, so it would measure
@@ -11496,10 +11495,11 @@ inline dates with the trim were never measured. Its commit message (`61d1785c`) 
 as E4B's date-run row, which the table gives to E2B. Both were taken with no A/A floor and against a
 system prompt that has since changed.
 
-**Deploy note.** The chart bytes change, so every persisted full-chart KV entry misses once. Re-priming
-a pinned corpus after that needs `action=restart` and loses pins on a chart-open warmup, as
-[Decision 47](#decision-47-an-answer-naming-a-drug-from-an-ended-order-says-so) records for #315's
-prompt change. A persisted KV file's size tracks its chart's tokens, so the corpus's disk use grows
+**Deploy note.** The chart bytes change, so every persisted full-chart KV entry misses once, and a
+pinned corpus has to be re-primed with `action=restart`. Until it is, a query re-persists a pinned
+patient's entry through `LocalLlmEngine.persistKvEntry`'s four-argument form, which pins nothing and
+purges the old pinned entry. [Decision 47](#decision-47-an-answer-naming-a-drug-from-an-ended-order-says-so)
+records the same for #315's prompt change, through chart-open warmup. A persisted KV file's size tracks its chart's tokens, so the corpus's disk use grows
 with the prompt.
 
 → `QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_soTheNewestWeightAndLastVisitAreNotReadAsUndated`,

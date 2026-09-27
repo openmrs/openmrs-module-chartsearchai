@@ -230,9 +230,8 @@ public class PatientChartSerializer {
 	 * switchable. {@code compressDateRuns=false} — what every shorter overload passes — renders every
 	 * dated record's {@code "(date)"} label. {@code true} renders it on the first record of each
 	 * same-date run only, which saves prompt tokens on charts clustering many records per date (#66)
-	 * and costs the answer to a temporal question: a follow-on line reads exactly like an undated one,
-	 * and a small model quoted an older, explicitly-dated reading over the newest, run-compressed one —
-	 * measured on the query-scoped slice (#74) and again on the whole chart (issue #528, ADR
+	 * and costs the answer to a temporal question: a follow-on line reads exactly like an undated one
+	 * (measured on the query-scoped slice, #74, and on the whole chart, issue #528 and ADR
 	 * Decision 121). No production caller passes {@code true}; it is kept so the cost can be
 	 * re-measured against a form that makes a follow-on distinguishable. The grounding
 	 * {@link RecordMapping} text is identical either way (it always carries the date).

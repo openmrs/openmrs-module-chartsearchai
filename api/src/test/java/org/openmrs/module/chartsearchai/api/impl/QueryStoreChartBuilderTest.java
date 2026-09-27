@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -741,7 +742,7 @@ public class QueryStoreChartBuilderTest {
 
 		PatientChart chart = builder.build(patient(1), "when was her last visit?");
 
-		assertEquals(java.util.Arrays.asList(6), chart.getFocusIndices(), "the focus hint must be engaged");
+		assertEquals(Collections.singletonList(6), chart.getFocusIndices(), "the focus hint must be engaged");
 		assertEveryLineCarriesItsRecordsOwnDate(chart, 9);
 		assertTrue(chart.getText().contains("[6] (2026-06-14) Visit: Home Visit at Site 42\n"),
 				"the last visit must carry its date on its own line:\n" + chart.getText());

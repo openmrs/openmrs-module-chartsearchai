@@ -2624,8 +2624,9 @@ public class ArchitectureGuardTest {
 	 * allow-listed whole-sentence factory once per marker — the construction is then legitimate,
 	 * because it is that factory's own — and
 	 * {@link #theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter} is the rule that
-	 * reaches it. The other goes through {@code newFragment} as it should but charges a
-	 * {@code FragmentBudget} it made itself, which is bounded per sentence rather than per answer;
+	 * reaches it, within the residue its own javadoc states. The other goes through
+	 * {@code newFragment} as it should but charges a {@code FragmentBudget} it made itself, which
+	 * is bounded per sentence rather than per answer;
 	 * {@link #aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints} is the rule that reaches that
 	 * one. Neither is a widening of this one, because neither is a question about where a
 	 * {@code Sentence} is built.
@@ -2689,10 +2690,14 @@ public class ArchitectureGuardTest {
 	 * <p><b>What this rule does not reach.</b> It counts call SITES in the source text and cannot
 	 * see how often the site it admits RUNS, so rewriting the admitted caller's own loop to iterate
 	 * markers instead of sentences leaves it green; whether THAT is silent is a question for the
-	 * behavioural cases and not for this one, and it has not been measured. A call spelled some
-	 * other way — through a method reference, or a second factory delegating to this one — is out
-	 * of reach for the same reason its neighbour's residue names: this reads source text and
-	 * understands no Java.
+	 * behavioural cases and not for this one, and it has not been measured. A call through a
+	 * method reference is out of reach for the same reason its neighbour's residue names: this
+	 * reads source text and understands no Java. A site is the text {@code newSentence(} on any
+	 * code line but a declaration line that itself spells {@code Sentence newSentence(} — the skip
+	 * that keeps the factory's own signature from counting as a call of it — so a call written on
+	 * such a line, a one-line overload of the factory, is not counted; a call OF that overload is,
+	 * because it spells the same name. A delegate under any other name is counted at its own call,
+	 * wherever that sits, and reported at the delegate rather than at a splitter that uses it.
 	 */
 	@Test
 	public void theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter() throws IOException {
@@ -2706,9 +2711,10 @@ public class ArchitectureGuardTest {
 		for (int i = 0; i < stripped.size(); i++) {
 			String code = stripped.get(i);
 			String method = enclosingMethodOf(stripped, i);
-			if (method.equals(code)) {
+			if (method.equals(code) && code.contains("Sentence newSentence(")) {
 				// The factory's own declaration line. enclosingMethodOf answers with the line
-				// itself for a declaration, which is how a declaration is told from a call of it.
+				// itself for a declaration, which is how a declaration is told from a call of it;
+				// the name keeps a one-line delegate's or splitter's call from being skipped with it.
 				continue;
 			}
 			for (int at = code.indexOf("newSentence("); at >= 0;

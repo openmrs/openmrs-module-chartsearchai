@@ -16,12 +16,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * A drug in play that is one of the patient's OWN active orders states the current-medication call,
@@ -31,9 +33,9 @@ import org.junit.jupiter.api.Test;
  * an active {@code Prednisone Co 5mg} order, the answer opened <em>"No — Prednisone should not be
  * added"</em>. The drug-in-play arm stated the proposal referent for every drug the question or the
  * answer put in play, so nothing in the finding told the model the drug was already hers. The arm now
- * states the current-medication referent where the drug's substance is one her active orders resolve
- * to, and it does so at every site the arm builds a finding at: one referent per drug in play, so the
- * prompt's ranking sentence cannot hand the lead to a finding stating the other one.
+ * states the current-medication referent where the drug's substance is one her active orders establish
+ * she takes, and it does so at every site the arm builds a finding at: one referent per drug in play, so
+ * the prompt's ranking sentence cannot hand the lead to a finding stating the other one.
  *
  * <p><b>One case per site.</b> Each site takes the referent as its own argument, so a case per site is
  * what a mutation of one of them back to {@code false} can redden — the reason CLAUDE.md gives for the
@@ -57,6 +59,13 @@ import org.junit.jupiter.api.Test;
  * each order's OWN ATC codes; a case with a systemic order of the same drug beside the gel, in both
  * orders, holds the gate's "every order", and one whose order mixes a locally applied code with systemic
  * ones its "every code". Mutate the gate and read the failures.
+ *
+ * <p><b>Established, and not merely resolved</b> (review round 3 of PR #544). Her orders' resolution holds
+ * substances she need not take, and the cases over the shipped knowledge base that reach one — through a
+ * brand two substances' rows share, a code the data files under two substances, and a bridged concept
+ * filed on several — each sit beside a case where that same leg does establish the substance, so both
+ * values of each leg are built. The gate asks the establishing orders alone, a drug the question lists as
+ * current is not asked it, and the referent never widens the resolution: a case each.
  */
 public class DrugInPlayHerOwnOrderReferentTest {
 
@@ -83,6 +92,21 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	/** A dose its paediatric band trips on the PER-DOSE ceiling alone at 20 kg: 400 mg against 10 mg/kg,
 	 *  while 1200 mg/day does not exceed that band's 1200 ({@code WeightAwareOverdoseTest}'s arrangement). */
 	private static final String PER_DOSE_EXCESS = "Ibuprofen 400 mg every 8 hours.";
+
+	/** The uuid the shipped bridge records for CIEL 75876, {@code Esomeprazole magnesium}: filed on
+	 *  Omeprazole AND Esomeprazole, two substances, under a name that names Esomeprazole alone
+	 *  ({@code BridgedConceptOrderResolutionTest} carries the same concept). */
+	private static final String ESOMEPRAZOLE_MAGNESIUM_CONCEPT = "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+	/** The uuid the shipped bridge records for {@code Trastuzumab-dkst}, a trastuzumab biosimilar: filed on
+	 *  Trastuzumab, Trastuzumab deruxtecan and Trastuzumab emtansine, under a name that names Trastuzumab
+	 *  alone. */
+	private static final String TRASTUZUMAB_DKST_CONCEPT = "7d2c2d7a-a8ab-4add-997c-b27c2e759bb8";
+
+	/** A drug the question proposes that the shipped knowledge base files a PPI brand, a PPI code and the
+	 *  CIEL 75876 bridge under beside esomeprazole — the three ways review round 3 of PR #544 found her
+	 *  orders resolving to more substances than she takes. */
+	private static final String OMEPRAZOLE_QUESTION = "Can I give her omeprazole?";
 
 	/** Pinned as literals rather than read off {@code DrugReferenceInjector}'s constants: the clause is
 	 *  what the model reads, and a test comparing a constant to itself stays green through a reword. */
@@ -118,14 +142,24 @@ public class DrugInPlayHerOwnOrderReferentTest {
 			DrugReferenceTestSupport.set(display), DrugReferenceTestSupport.set(codes));
 	}
 
-	/** A chart of {@code orders}, their codes unioned into the flattened set the way the builder unions
-	 *  them, resolved as {@code DrugReferenceTestSupport.contextNaming} resolves its orders. */
+	/** One active order written against {@code conceptUuid}, as {@code PatientClinicalContextBuilder} records
+	 *  it, recording {@code names} (its display first) and no ATC code. */
+	private static PatientClinicalContext.ActiveDrugOrder writtenAgainst(String conceptUuid, String display,
+			String... names) {
+		Set<String> recorded = DrugReferenceTestSupport.set(display);
+		recorded.addAll(Arrays.asList(names));
+		return PatientClinicalContext.ActiveDrugOrder.named("order-" + display, display, recorded, null, null,
+			conceptUuid);
+	}
+
+	/** A chart of {@code orders}, their names and codes unioned into the flattened sets the way the builder
+	 *  unions them, resolved as {@code DrugReferenceTestSupport.contextNaming} resolves its orders. */
 	private static PatientClinicalContext chartOf(DrugReferenceService service,
 			PatientClinicalContext.ActiveDrugOrder... orders) {
 		Set<String> names = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
-			names.add(order.getDisplay());
+			names.addAll(order.getNames());
 			codes.addAll(order.getAtcCodes());
 		}
 		return service.withReferenceNames(DrugReferenceTestSupport.ctx(40, null, names, codes, null, null,
@@ -136,14 +170,57 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	 *  without which a case is about the data rather than the arm. */
 	private static void assertTheQuestionsDrugIsHers(DrugReferenceService service, PatientClinicalContext context,
 			String question) {
+		assertHerOrdersResolveTheQuestionsDrug(service, context, question);
+	}
+
+	/** Whether {@code findForActiveOrders} resolves her orders to every substance the question puts in play —
+	 *  what a case about a drug she is on needs, and what a case about her orders resolving to MORE than she
+	 *  takes needs as its premise, so that its drug is one the resolution does reach. */
+	private static void assertHerOrdersResolveTheQuestionsDrug(DrugReferenceService service,
+			PatientClinicalContext context, String question) {
 		Set<Object> hers = DrugSafetyValidator.substancesOf(service.findForActiveOrders(context));
+		Set<Object> asked = substancesAskedAbout(service, question);
+		assertFalse(asked.isEmpty(), "precondition: the question puts a drug in play");
+		assertTrue(hers.containsAll(asked), "precondition: her orders resolve to the substance the question "
+				+ "names: asked " + asked + ", hers " + hers);
+	}
+
+	/** The substances the ranked accessor reads {@code name} to put in play, as an order's name leg reads it. */
+	private static Set<Object> substancesImpliedBy(DrugReferenceService service, String name) {
+		Set<Object> implied = new HashSet<Object>();
+		for (DrugReference entry : service.findImpliedByDrugName(name)) {
+			implied.add(entry.substanceGroupKey());
+		}
+		return implied;
+	}
+
+	/** The substances the question puts in play. */
+	private static Set<Object> substancesAskedAbout(DrugReferenceService service, String question) {
 		Set<Object> asked = new HashSet<Object>();
 		for (DrugReference entry : service.findImpliedByQuery(question)) {
 			asked.add(entry.substanceGroupKey());
 		}
-		assertFalse(asked.isEmpty(), "precondition: the question puts a drug in play");
-		assertTrue(hers.containsAll(asked), "precondition: her orders resolve to the substance the question "
-				+ "names: asked " + asked + ", hers " + hers);
+		return asked;
+	}
+
+	private static void assertStatesTheProposalCall(String finding, String where) {
+		assertTrue(finding.endsWith(WITHHOLD) || finding.endsWith(CAUTION),
+				"the drug in play is not one her orders establish she takes, so its finding states the call about "
+						+ "a proposal (" + where + "): " + finding);
+		assertFalse(finding.contains(CHANGE_CURRENT) || finding.contains(CAUTION_CURRENT),
+				"and not the call about a medication she is already taking, which tells the answer never to "
+						+ "open by refusing it (" + where + "): " + finding);
+	}
+
+	/** Whether the question's pre-answer chips are all proposals, and there are some. */
+	private static void assertNoChipIsAboutACurrentMedication(DrugReferenceService service,
+			PatientClinicalContext context, String question) {
+		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(service).validate("", question, context);
+		assertFalse(chips.isEmpty(), "precondition: the question raises chips");
+		for (SafetyWarning chip : chips) {
+			assertFalse(chip.isAboutACurrentMedication(),
+					"no chip calls the drug in play her medication: " + chip.getDetail());
+		}
 	}
 
 	/** The one dose warning the real validator raises for {@code answer} over the curated seed, asked
@@ -644,5 +721,347 @@ public class DrugInPlayHerOwnOrderReferentTest {
 
 		assertFalse(daily.isAboutACurrentMedication(), "she is on no ibuprofen: " + daily.getDetail());
 		assertFalse(perDose.isAboutACurrentMedication(), "she is on no ibuprofen: " + perDose.getDetail());
+	}
+
+	/**
+	 * Her orders resolving to a substance is not her taking it, where the resolution is one of several
+	 * readings of one name: review round 3 of PR #544. The shipped knowledge base files the brand
+	 * {@code Nexium} under Omeprazole AND Esomeprazole, so her one {@code Nexium 40mg} order resolves to both
+	 * (the shape {@code AmbiguousBrandNamedOrderTest} records), and <em>"Can I give her omeprazole?"</em>
+	 * stated the Major clopidogrel finding as a reason to change her medication — the refusal of a drug she
+	 * does not take, instructed away. The name names neither substance, so it establishes neither. Asked
+	 * twice: over the brand alone, and over the order an {@code en} session records, whose concept name
+	 * {@code Esomeprazole magnesium} names Esomeprazole and not Omeprazole.
+	 */
+	@Test
+	public void aDrugHerOrdersNameResolvesWithoutNamingItStatesTheProposalCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		Set<Object> asked = substancesAskedAbout(service, OMEPRAZOLE_QUESTION);
+		Set<Object> readings = substancesImpliedBy(service, "Nexium 40mg");
+		assertEquals(2, readings.size(), "precondition: the brand resolves two substances: " + readings);
+		assertTrue(readings.containsAll(asked), "precondition: omeprazole is one of them: " + readings);
+		List<PatientClinicalContext.ActiveDrugOrder> arrangements = Arrays.asList(coded("Nexium 40mg"),
+			writtenAgainst(null, "Nexium 40mg", "Esomeprazole magnesium"));
+		for (PatientClinicalContext.ActiveDrugOrder nexium : arrangements) {
+			PatientClinicalContext context = chartOf(service, nexium, coded("Clopidogrel 75mg"));
+			String where = "her order records " + nexium.getNames();
+			assertHerOrdersResolveTheQuestionsDrug(service, context, OMEPRAZOLE_QUESTION);
+
+			boolean sawTheMajor = false;
+			for (String finding : findings(service, context, OMEPRAZOLE_QUESTION)) {
+				if (finding.contains("Clopidogrel") && finding.contains("Major")) {
+					sawTheMajor = true;
+					assertTrue(finding.endsWith(WITHHOLD), where + ": " + finding);
+				}
+				assertStatesTheProposalCall(finding, where);
+			}
+			assertTrue(sawTheMajor, "precondition: the Major omeprazole-clopidogrel rule is among the findings ("
+					+ where + ")");
+			assertNoChipIsAboutACurrentMedication(service, context, OMEPRAZOLE_QUESTION);
+		}
+	}
+
+	/** The other value of that name leg, on the {@code en} order above: its concept name names Esomeprazole,
+	 *  so a question about esomeprazole is about her medication. */
+	@Test
+	public void aDrugANameOfHerOrderNamesStatesTheCurrentMedicationCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		String question = "Can I give her esomeprazole?";
+		assertEquals(2, substancesImpliedBy(service, "Esomeprazole magnesium").size(),
+				"precondition: the concept name resolves two substances, so naming is what tells them apart");
+		PatientClinicalContext context = chartOf(service,
+			writtenAgainst(null, "Nexium 40mg", "Esomeprazole magnesium"), coded("Clopidogrel 75mg"));
+		assertTheQuestionsDrugIsHers(service, context, question);
+
+		boolean sawTheMajor = false;
+		for (String finding : findings(service, context, question)) {
+			sawTheMajor |= finding.contains("Clopidogrel") && finding.contains("Major");
+			assertStatesTheCurrentMedicationCall(finding);
+		}
+		assertTrue(sawTheMajor, "precondition: the Major esomeprazole-clopidogrel rule is among the findings");
+		assertEveryChipIsAboutACurrentMedication(service, context, question);
+	}
+
+	/**
+	 * The CODE leg's counterpart: the shipped knowledge base files {@code A02BC05}, esomeprazole's code, on
+	 * its Omeprazole row too (issue #185's premise), so an {@code Esomeprazole 40mg} order the dictionary
+	 * mapped to it resolves to omeprazole as well. A code the loaded data files under two substances names
+	 * neither, and this order's name reaches esomeprazole alone.
+	 */
+	@Test
+	public void aDrugHerOrdersCodeIsFiledUnderBesideAnotherSubstanceStatesTheProposalCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = chartOf(service, coded("Esomeprazole 40mg", "A02BC05"),
+			coded("Clopidogrel 75mg"));
+		Set<Object> asked = substancesAskedAbout(service, OMEPRAZOLE_QUESTION);
+		assertTrue(Collections.disjoint(substancesImpliedBy(service, "Esomeprazole 40mg"), asked),
+				"precondition: the order's name does not reach omeprazole, so only its code can");
+		Set<Object> filedUnder = new HashSet<Object>();
+		for (DrugReference entry : service.findForActiveOrders(context)) {
+			if (entry.normalizedAtcCodes().contains("A02BC05")) {
+				filedUnder.add(entry.substanceGroupKey());
+			}
+		}
+		assertTrue(filedUnder.size() > 1 && filedUnder.containsAll(asked),
+				"precondition: her orders' resolution files the code under omeprazole and another substance: "
+						+ filedUnder);
+		assertHerOrdersResolveTheQuestionsDrug(service, context, OMEPRAZOLE_QUESTION);
+
+		String finding = onlyFinding(service, context, OMEPRAZOLE_QUESTION);
+		assertTrue(finding.contains("Clopidogrel") && finding.contains("Major"),
+				"precondition: the Major omeprazole-clopidogrel rule is the finding: " + finding);
+		assertTrue(finding.endsWith(WITHHOLD), finding);
+		assertStatesTheProposalCall(finding, "an esomeprazole order coded A02BC05");
+		assertNoChipIsAboutACurrentMedication(service, context, OMEPRAZOLE_QUESTION);
+	}
+
+	/** The other value of the code leg: an order the data knows only by a code it files under ONE substance
+	 *  is that substance's, so a question about it is about her medication. */
+	@Test
+	public void aDrugHerOrdersCodeIsFiledUnderAloneStatesTheCurrentMedicationCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		String question = "Can I give her clopidogrel?";
+		PatientClinicalContext context = chartOf(service, coded("Tab 75mg", "B01AC04"),
+			coded("Esomeprazole 40mg"));
+		assertTrue(substancesImpliedBy(service, "Tab 75mg").isEmpty(),
+				"precondition: the order's name reaches nothing, so only its code can");
+		Set<Object> filedUnder = new HashSet<Object>();
+		for (DrugReference entry : service.findForActiveOrders(context)) {
+			if (entry.normalizedAtcCodes().contains("B01AC04")) {
+				filedUnder.add(entry.substanceGroupKey());
+			}
+		}
+		assertEquals(substancesAskedAbout(service, question), filedUnder,
+				"precondition: her orders' resolution files the code under clopidogrel alone");
+		assertTheQuestionsDrugIsHers(service, context, question);
+
+		String finding = onlyFinding(service, context, question);
+		assertTrue(finding.contains("Esomeprazole") && finding.contains("Major"),
+				"precondition: the Major clopidogrel-esomeprazole rule is the finding: " + finding);
+		assertTrue(finding.endsWith(CHANGE_CURRENT), finding);
+		assertStatesTheCurrentMedicationCall(finding);
+		assertEveryChipIsAboutACurrentMedication(service, context, question);
+	}
+
+	/**
+	 * The BRIDGE leg's counterpart: an {@code Inexium 40mg} order written against CIEL 75876, which the shipped
+	 * bridge files on Omeprazole and Esomeprazole under the name {@code Esomeprazole magnesium}. That name
+	 * names Esomeprazole alone, which is the refusal issue #353 already makes before a finding prints
+	 * {@code Omeprazole from Inexium 40mg}; a question about omeprazole is still a proposal.
+	 */
+	@Test
+	public void aDrugHerOrdersConceptIsFiledOnWithoutItsBridgeNamingItStatesTheProposalCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = chartOf(service,
+			writtenAgainst(ESOMEPRAZOLE_MAGNESIUM_CONCEPT, "Inexium 40mg"), coded("Clopidogrel 75mg"));
+		assertTrue(substancesImpliedBy(service, "Inexium 40mg").isEmpty(),
+				"precondition: the order's name reaches nothing and it carries no code, so only its concept can");
+		assertHerOrdersResolveTheQuestionsDrug(service, context, OMEPRAZOLE_QUESTION);
+
+		String finding = onlyFinding(service, context, OMEPRAZOLE_QUESTION);
+		assertTrue(finding.contains("Clopidogrel") && finding.contains("Major"),
+				"precondition: the Major omeprazole-clopidogrel rule is the finding: " + finding);
+		assertTrue(finding.endsWith(WITHHOLD), finding);
+		assertStatesTheProposalCall(finding, "an order written against CIEL 75876");
+		assertNoChipIsAboutACurrentMedication(service, context, OMEPRAZOLE_QUESTION);
+	}
+
+	/** The other value of the bridge leg, on the same chart: the bridge's name names Esomeprazole. */
+	@Test
+	public void aDrugHerOrdersBridgeNamesStatesTheCurrentMedicationCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		String question = "Can I give her esomeprazole?";
+		PatientClinicalContext context = chartOf(service,
+			writtenAgainst(ESOMEPRAZOLE_MAGNESIUM_CONCEPT, "Inexium 40mg"), coded("Clopidogrel 75mg"));
+		assertTheQuestionsDrugIsHers(service, context, question);
+
+		String finding = onlyFinding(service, context, question);
+		assertTrue(finding.contains("Clopidogrel") && finding.contains("Major"),
+				"precondition: the Major esomeprazole-clopidogrel rule is the finding: " + finding);
+		assertTrue(finding.endsWith(CHANGE_CURRENT), finding);
+		assertStatesTheCurrentMedicationCall(finding);
+		assertEveryChipIsAboutACurrentMedication(service, context, question);
+	}
+
+	/**
+	 * A biosimilar's concept filed on three substances: review round 3's starker case. Her {@code Ogivri 150mg}
+	 * order is written against the {@code Trastuzumab-dkst} concept, which the shipped bridge files on
+	 * Trastuzumab, Trastuzumab deruxtecan and Trastuzumab emtansine, and whose name names Trastuzumab alone.
+	 * <em>"Can I give her trastuzumab deruxtecan?"</em> puts trastuzumab in play beside it: every finding about
+	 * the conjugate she is not on states the proposal, and every finding about the trastuzumab she is on
+	 * states her medication.
+	 */
+	@Test
+	public void aBiosimilarsConceptMakesHersOnlyTheSubstanceItsBridgeNames() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		String question = "Can I give her trastuzumab deruxtecan?";
+		PatientClinicalContext context = chartOf(service, writtenAgainst(TRASTUZUMAB_DKST_CONCEPT, "Ogivri 150mg"),
+			coded("Clozapine 100mg"));
+		assertHerOrdersResolveTheQuestionsDrug(service, context, question);
+		Set<Object> byItsName = substancesImpliedBy(service, "Ogivri 150mg");
+		Set<String> conjugate = new HashSet<String>();
+		Set<String> parent = new HashSet<String>();
+		for (DrugReference entry : service.findImpliedByQuery(question)) {
+			(byItsName.contains(entry.substanceGroupKey()) ? parent : conjugate).add(entry.getName());
+		}
+		assertEquals(new HashSet<String>(Arrays.asList("Trastuzumab deruxtecan")), conjugate,
+				"precondition: the order's name reaches trastuzumab and not the conjugate, so only the concept "
+						+ "reaches the conjugate");
+		assertEquals(new HashSet<String>(Arrays.asList("Trastuzumab")), parent,
+				"precondition: the question puts trastuzumab in play too");
+
+		boolean sawTheConjugate = false;
+		boolean sawTheParent = false;
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(DrugReferenceTestSupport
+				.injectorWithSafety(service).injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question))) {
+			if (finding.getText().startsWith("Safety finding — Trastuzumab deruxtecan:")) {
+				sawTheConjugate = true;
+				assertStatesTheProposalCall(finding.getText(), "the conjugate");
+			} else {
+				sawTheParent |= finding.getText().startsWith("Safety finding — Trastuzumab:");
+				assertStatesTheCurrentMedicationCall(finding.getText(), "trastuzumab");
+			}
+		}
+		assertTrue(sawTheConjugate && sawTheParent,
+				"precondition: findings about both drugs in play reached the prompt");
+		for (SafetyWarning chip : DrugReferenceTestSupport.validator(service).validate("", question, context)) {
+			assertEquals(conjugate.contains(chip.getDrug()) ? Boolean.FALSE : Boolean.TRUE,
+				Boolean.valueOf(chip.isAboutACurrentMedication()),
+				"only the chips about trastuzumab are about her medication: " + chip.getDetail());
+		}
+	}
+
+	/**
+	 * The referent narrows {@code findForActiveOrders}' answer and never widens it: a drug that resolution
+	 * leaves out is not hers, whatever an order's own names establish. The resolution reads a context's
+	 * FLATTENED names, which the builder unions from its orders; a caller-built context can leave an order's
+	 * name out of them, and there every other consumer of her orders — the screen, the class arm, the
+	 * ended-order holder — reads her as not on that drug, so a referent saying she is would be the two
+	 * disagreeing resolutions issue #151 forbids.
+	 */
+	@Test
+	public void aDrugTheResolutionOfHerOrdersLeavesOutIsNotHersWhateverAnOrderRecords() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(ALIAS_FIXTURE);
+		String question = "Is it safe to give simvastatin?";
+		PatientClinicalContext context = service.withReferenceNames(DrugReferenceTestSupport.ctx(40, null,
+			DrugReferenceTestSupport.set("Clarithromycin"), null, null, null,
+			Arrays.asList(coded("Simvastatin"), coded("Clarithromycin"))));
+		assertFalse(substancesOf(service, context).containsAll(substancesAskedAbout(service, question)),
+				"precondition: the resolution of her orders leaves simvastatin out");
+
+		String finding = onlyFinding(service, context, question);
+		assertTrue(finding.toLowerCase().contains("major"),
+				"precondition: the Major simvastatin-clarithromycin rule is the finding: " + finding);
+		assertTrue(finding.endsWith(WITHHOLD), finding);
+		assertStatesTheProposalCall(finding, "a drug the resolution of her orders leaves out");
+	}
+
+	/**
+	 * The presentation gate asks the orders that ESTABLISH she takes the drug, and no other: an order her
+	 * resolution reaches the drug through without establishing it is not her presentation of it. Beside her
+	 * {@code Hydrocortisone cream 1%}, filed {@code D07AA02}, she holds an order known only by
+	 * {@code H02AB09}, which the shipped knowledge base files under hydrocortisone and under its butyrate
+	 * ester alike, so the module cannot say that order is hydrocortisone; its systemic code does not stop an
+	 * oral question from being a proposal. That is the conservative direction, and the one the referent
+	 * takes of the order itself: the same arrangement asked with the tablet NAMED is her medication, the
+	 * case {@code aLocallyAppliedOrderBesideASystemicOrderOfTheSameDrugStatesTheCurrentMedicationCall} holds
+	 * for diclofenac.
+	 */
+	@Test
+	public void anOrderThatDoesNotEstablishTheDrugIsNotAskedWhichPresentationSheTakes() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		String question = "Can I start her on oral hydrocortisone?";
+		PatientClinicalContext context = chartOf(service, coded("Hydrocortisone cream 1%", "D07AA02"),
+			coded("Tab 20mg", "H02AB09"), coded("Warfarin 5mg", "B01AA03"));
+		assertTheQuestionsDrugIsHers(service, context, question);
+		assertTrue(substancesImpliedBy(service, "Tab 20mg").isEmpty(),
+				"precondition: the tablet's name reaches nothing, so only its code can");
+		Set<Object> filedUnder = new HashSet<Object>();
+		for (DrugReference entry : service.findForActiveOrders(context)) {
+			if (entry.normalizedAtcCodes().contains("H02AB09")) {
+				filedUnder.add(entry.substanceGroupKey());
+			}
+		}
+		assertTrue(filedUnder.size() > 1 && filedUnder.containsAll(substancesAskedAbout(service, question)),
+				"precondition: her orders' resolution files the systemic code under hydrocortisone and another "
+						+ "substance: " + filedUnder);
+		assertFalse(DrugReference.isLocallyAppliedAtcCode("H02AB09"),
+				"precondition: the tablet's code is a systemic one, so it would keep the drug hers if it counted");
+
+		String finding = onlyFinding(service, context, question);
+		assertTrue(finding.contains("Warfarin"), "precondition: the hydrocortisone-warfarin rule is the finding: "
+				+ finding);
+		assertStatesTheProposalCall(finding, "a cream beside an order the module cannot say is hydrocortisone");
+		assertNoChipIsAboutACurrentMedication(service, context, question);
+	}
+
+	/**
+	 * A drug the question LISTS as current is not held to the presentation gate: issue #513 item 1, which the
+	 * gate reopened for a drug she holds only as a gel (review round 3 of PR #544). The question says she is
+	 * on diclofenac and proposes amoxicillin, so no presentation of diclofenac is being proposed; stated as a
+	 * proposal, the Major warfarin-diclofenac pair was a reason to withhold diclofenac on one chip and a
+	 * reason to change her medication on the other, and the prompt's ranking sentence hands the lead to the
+	 * withholding one.
+	 */
+	@Test
+	public void aDrugTheQuestionListsAsCurrentIsNotHeldToThePresentationGate() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		String question = "The patient is currently on diclofenac and warfarin, is it safe to give amoxicillin?";
+		PatientClinicalContext context = chartOf(service, coded("Voltaren gel", "M02AA15"),
+			coded("Warfarin 5mg", "B01AA03"));
+		Set<String> listed = new HashSet<String>();
+		for (DrugReference entry : DrugReferenceInjector.listedBeforeTheProposal(question,
+			service.findImpliedByQuery(question))) {
+			listed.add(entry.getName());
+		}
+		assertTrue(listed.contains("Diclofenac") && listed.contains("Warfarin"),
+				"precondition: the question lists diclofenac and warfarin as current: " + listed);
+		Set<Object> diclofenac = substancesAskedAbout(service, "Can I start her on oral diclofenac?");
+		assertTrue(substancesOf(service, context).containsAll(diclofenac),
+				"precondition: her gel resolves to diclofenac");
+		assertTrue(aDrugSheHoldsOnlyAsAGelIsAProposalOnAnOralQuestion(service, context),
+				"precondition: the same chart states the proposal for an oral course, so the gate fires there");
+
+		boolean sawThePair = false;
+		for (String finding : findings(service, context, question)) {
+			if (finding.startsWith("Safety finding — Amoxicillin:")) {
+				assertStatesTheProposalCall(finding, "the proposed amoxicillin");
+				continue;
+			}
+			sawThePair |= finding.contains("Major");
+			assertStatesTheCurrentMedicationCall(finding, "a listed drug");
+		}
+		assertTrue(sawThePair, "precondition: the Major warfarin-diclofenac pair is among the findings");
+		for (SafetyWarning chip : DrugReferenceTestSupport.validator(service).validate("", question, context)) {
+			assertEquals(Boolean.valueOf(!"Amoxicillin".equals(chip.getDrug())),
+				Boolean.valueOf(chip.isAboutACurrentMedication()),
+				"the listed drugs' chips are about her medication and the proposed drug's is not: " + chip.getDetail());
+		}
+	}
+
+	private static Set<Object> substancesOf(DrugReferenceService service, PatientClinicalContext context) {
+		return DrugSafetyValidator.substancesOf(service.findForActiveOrders(context));
+	}
+
+	/** Whether the gel chart raises findings on an oral-diclofenac question and states the proposal call on
+	 *  every one of them — the gate firing. */
+	private static boolean aDrugSheHoldsOnlyAsAGelIsAProposalOnAnOralQuestion(DrugReferenceService service,
+			PatientClinicalContext context) {
+		List<String> findings = findings(service, context, "Can I start her on oral diclofenac?");
+		for (String finding : findings) {
+			if (!finding.endsWith(WITHHOLD) && !finding.endsWith(CAUTION)) {
+				return false;
+			}
+		}
+		return !findings.isEmpty();
 	}
 }

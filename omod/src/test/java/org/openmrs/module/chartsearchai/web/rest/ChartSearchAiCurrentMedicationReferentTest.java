@@ -144,7 +144,7 @@ public class ChartSearchAiCurrentMedicationReferentTest {
 			SafetyWarningFixtures.ruleInteraction("Salicylic acid", INTERACTION_DETAIL, "Major", "Methotrexate",
 				Collections.<SafetyWarning.ChartOrderBridge> emptyList(), false),
 			SafetyWarningFixtures.ordersSharingASubstance(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS),
-			SafetyWarningFixtures.substanceInSeveralActiveOrders(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS),
+			SafetyWarningFixtures.substanceInSeveralActiveOrders(SHARED_SUBSTANCES, SHARED_DETAIL, TB_ORDERS, false),
 			SafetyWarningFixtures.ruleInteraction("Carbamazepine", CAUTION_DETAIL, "Moderate", "Fluoxetine",
 				FLUOXETINE_FROM_PROZAC, true),
 			SafetyWarningFixtures.ruleInteraction("Carbamazepine", CAUTION_DETAIL, "Moderate", "Fluoxetine",

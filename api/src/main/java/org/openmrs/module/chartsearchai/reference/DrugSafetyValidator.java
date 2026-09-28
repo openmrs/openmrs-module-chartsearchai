@@ -990,18 +990,34 @@ public class DrugSafetyValidator {
 		boolean questionDrugScreened = false;
 		int questionDrugPairs = 0;
 
+		// The substances in play the drug-in-play arm states the CURRENT-medication referent for, asked
+		// per drug in play below (issue #402, ADR Decision 123): those her active orders establish she
+		// takes, less any a question may be proposing in a presentation she does not take
+		// (currentMedicationsInPlay). Asked only of a substance orderEntries holds, the one resolution this
+		// pass already holds, so the referent can narrow what the other consumers of her orders read and
+		// never widen it. A per-call local, for issue #172's reason.
+		Set<Object> herOrderSubstances = currentMedicationsInPlay(inPlay, questionDrugs, question, orderEntries,
+				context, bridgedOrders, coMedications);
+
 		for (DrugReference ref : inPlay) {
+			// Whether this drug in play is a medication she is already taking, and so what every finding
+			// the arm raises about it is ABOUT: her medication where it is, a proposal where it is not.
+			// One answer per drug in play, handed to EVERY site below that builds a finding, the dose
+			// check's included, because a site stating the other referent beside them is the one-site
+			// shape issue #402 recorded and reverted — the prompt's ranking sentence would hand the lead
+			// to whichever finding still read as a proposal. Keyed on the SUBSTANCE, the unit the chips
+			// fold on (issues #162, #206), and never on the row. A drug her orders resolve to without
+			// establishing she takes it, and one a question may be proposing in a presentation she does not
+			// take, keep the proposal (currentMedicationsInPlay).
+			// An ended order is not in orderEntries, so a drug her chart holds only as one keeps the proposal
+			// here and EndedOrders states its own referent on the chip (issue #472).
+			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
-				// FALSE at both, and not because the drug cannot also be a current medication — it often
-				// is. The question or the answer PROPOSED it, so what this finding licenses is a
-				// decision about that proposal (issue #348). Where the chart holds it only as an ended
-				// order, the ledger states that on the chip as a separate referent (issue #472,
-				// EndedOrders); this argument is false either way.
 				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier,
-					false);
-				addAllergyContraindications(contraindications, ref, recordedAllergens, false);
+					herOrder);
+				addAllergyContraindications(contraindications, ref, recordedAllergens, herOrder);
 			}
 			// The rows this pass resolved for ref's substance, and the null/empty check the two-map form
 			// used to get for free from remove(). It cannot fire: the map is seeded by substanceRows(inPlay)
@@ -1022,12 +1038,13 @@ public class DrugSafetyValidator {
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
 				int related = addInteractionWarnings(warnings, rows, subjects, context, severityFloor,
-						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, endedOrders);
+						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, endedOrders,
+						herOrder);
 				// After the pairwise chips for this drug and never counted into `related`: a derived chain
 				// is not a DDInter pair row, and PairChipExtent counts those alone (ADR Decision 111).
 				if (derivedFindings) {
 					addConditionMediatedWarnings(warnings, rows, subjects, context, orderEntries, coMedications,
-						bridgedOrders, endedOrders);
+						bridgedOrders, endedOrders, herOrder);
 				}
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
@@ -1035,7 +1052,7 @@ public class DrugSafetyValidator {
 				}
 			}
 			if (dosePending.remove(substance)) {
-				addOverdose(warnings, rows, subjects, context, lower, all);
+				addOverdose(warnings, rows, subjects, context, lower, all, herOrder);
 			}
 		}
 		// The patient's own prescriptions against their own allergy and condition records — the one
@@ -2603,6 +2620,277 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The substances {@code orderEntries}, her active orders resolved by
+	 * {@link DrugReferenceService#findForActiveOrders}, are of — keyed on
+	 * {@link DrugReference#substanceGroupKey()}, the unit the chips fold on. A new, mutable set; empty for
+	 * {@code null}. The one answer to "is this substance hers", so no two of its readers can key it
+	 * differently. The drug-in-play arm's REFERENT is a narrower question and narrows this answer:
+	 * {@link #currentMedicationsInPlay}.
+	 */
+	static Set<Object> substancesOf(List<DrugReference> orderEntries) {
+		Set<Object> active = new HashSet<Object>();
+		if (orderEntries != null) {
+			for (DrugReference entry : orderEntries) {
+				active.add(entry.substanceGroupKey());
+			}
+		}
+		return active;
+	}
+
+	/**
+	 * The substances of {@code inPlay} the drug-in-play arm states the CURRENT-medication referent for —
+	 * issue #402, ADR Decision 123: those her active orders ESTABLISH she takes ({@link #ordersEstablishing},
+	 * {@link #establishes}), less any a question may be proposing in a presentation she does not take
+	 * ({@link #mayBeProposingAPresentationSheDoesNotTake}), which a drug the question LISTS as one she is on
+	 * is not asked. Every other drug in play keeps the proposal referent. A per-pass value and never a field,
+	 * for issue #172's reason.
+	 *
+	 * <p><b>Established, and not merely resolved</b> (review round 3 of PR #544). {@code orderEntries} is
+	 * {@link DrugReferenceService#findForActiveOrders}' answer, additive by design because it is a CANDIDATE
+	 * set: a screen that leaves out one of her drugs leaves out its warnings. Along three legs it holds
+	 * substances she need not take at all — a brand two substances' rows share ({@code Nexium} → Omeprazole
+	 * and Esomeprazole), a code the loaded data files under two substances ({@code A02BC05}), and a bridged
+	 * concept filed on several ({@code Esomeprazole magnesium}; {@code Trastuzumab-dkst}, on three).
+	 * {@link EndedOrders} and the injector's composed-answer gate read that answer too, and there the
+	 * over-reach errs toward the proposal: no ended-order referent is stated, and the model rather than the
+	 * module answers. This referent states a CLAIM about her record, and there it fails open: said of a drug the question proposes and she does not take, the current-medication clause
+	 * tells the answer never to open by refusing it, so the refusal a Major finding licenses was
+	 * instructed away. So a substance is hers here only where one of her orders' own
+	 * readings names it rather than being one of several, leg by leg. Asked only of a substance
+	 * {@code orderEntries} holds, so this narrows that answer and cannot widen it.
+	 *
+	 * <p><b>What that costs</b>, in the conservative direction: the reading she does take keeps the proposal
+	 * too wherever nothing of hers names it — esomeprazole for an order recorded as {@code Nexium 40mg} and
+	 * nothing else, a question naming the drug by the very brand her order carries, and a combination
+	 * prescription none of whose names names a constituent and none of whose codes the data files under that
+	 * constituent alone. Each keeps the referent every drug in play had before issue #402.
+	 *
+	 * <p><b>A drug the question lists as current</b> is established like any other and is not asked the
+	 * presentation gate (review round 3 of PR #544, issue #513 item 1): the question proposes another drug,
+	 * so no presentation of this one is being proposed. Which drugs a question lists is
+	 * {@code DrugReferenceInjector.listedBeforeTheProposal}, the reading {@link #listedWithNoActiveOrder}
+	 * takes, asked only for a drug the gate would keep a proposal.
+	 */
+	private static Set<Object> currentMedicationsInPlay(Set<DrugReference> inPlay,
+			Set<DrugReference> questionDrugs, String question, List<DrugReference> orderEntries,
+			PatientClinicalContext context, BridgedOrders bridgedOrders, CoMedications coMedications) {
+		Set<Object> resolved = substancesOf(orderEntries);
+		Set<Object> asked = new HashSet<Object>();
+		Set<Object> current = new HashSet<Object>();
+		Set<Object> listed = null;
+		for (DrugReference ref : inPlay) {
+			Object substance = ref.substanceGroupKey();
+			// A substance her orders do not resolve is not hers, and asking the costlier questions below of
+			// it would resolve her recorded names for a drug none of them reaches.
+			if (context == null || !asked.add(substance) || !resolved.contains(substance)) {
+				continue;
+			}
+			List<DrugReference> rows = new ArrayList<DrugReference>();
+			for (DrugReference entry : orderEntries) {
+				if (substance.equals(entry.substanceGroupKey())) {
+					rows.add(entry);
+				}
+			}
+			List<PatientClinicalContext.ActiveDrugOrder> carriers = ordersEstablishing(substance, rows, context,
+				orderEntries, bridgedOrders, coMedications);
+			// The flattened sets, for a context that carries no order to attribute them to (issue #118's
+			// fallback): the same two legs over the names and codes that context does carry.
+			if (carriers.isEmpty() && !establishes(context.getActiveDrugNames(), context.getActiveDrugAtcCodes(),
+				substance, orderEntries, coMedications)) {
+				continue;
+			}
+			if (mayBeProposingAPresentationSheDoesNotTake(rows, carriers)) {
+				if (listed == null) {
+					listed = new HashSet<Object>();
+					for (DrugReference entry : DrugReferenceInjector.listedBeforeTheProposal(question,
+						new ArrayList<DrugReference>(questionDrugs))) {
+						listed.add(entry.substanceGroupKey());
+					}
+				}
+				if (!listed.contains(substance)) {
+					continue;
+				}
+			}
+			current.add(substance);
+		}
+		return current;
+	}
+
+	/**
+	 * Her active orders that establish she takes {@code substance}, in chart order: an order whose own names
+	 * and codes {@link #establishes establish} it, or whose concept the dataset's bridge files it under by a
+	 * name that NAMES it ({@link BridgedOrders#recordedNameNames}, the reading issue #353's
+	 * {@link #restsOnAnAmbiguousBridge} refuses a finding's chart-order clause without). So an order written
+	 * against CIEL 75876, {@code Esomeprazole magnesium}, establishes Esomeprazole and not the Omeprazole the
+	 * same concept is filed on, and one written against {@code Trastuzumab-dkst} establishes Trastuzumab and
+	 * neither conjugate. These are the orders {@link #mayBeProposingAPresentationSheDoesNotTake} asks.
+	 *
+	 * @param rows the rows of {@code substance} {@code orderEntries} holds, which the bridge is asked about
+	 */
+	private static List<PatientClinicalContext.ActiveDrugOrder> ordersEstablishing(Object substance,
+			List<DrugReference> rows, PatientClinicalContext context, List<DrugReference> orderEntries,
+			BridgedOrders bridgedOrders, CoMedications coMedications) {
+		List<PatientClinicalContext.ActiveDrugOrder> carriers = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (establishes(order.getNames(), order.getAtcCodes(), substance, orderEntries, coMedications)
+					|| bridgedOrders.recordedNameNames(rows, order)) {
+				carriers.add(order);
+			}
+		}
+		return carriers;
+	}
+
+	/**
+	 * Whether {@code names} and {@code codes} — one order's own, or the flattened sets of a context carrying
+	 * no order — establish that she takes {@code substance}, through the two legs of
+	 * {@link DrugReferenceService#findForActiveOrders} that read what the chart recorded, each asked what it
+	 * ESTABLISHES rather than everything it reaches:
+	 * <ul>
+	 * <li>a NAME, where {@link CoMedications#substancesTheNameEstablishes} holds the substance: every
+	 *     substance {@link DrugReferenceService#findImpliedByDrugName} reads the name to put in play where
+	 *     that is one, and where it is several only the ones the name names —
+	 *     {@link #substancesTheOrderNameDoesNotName}'s rule (issue #392), which tells a brand two substances'
+	 *     rows share from a combination that spells its constituents;</li>
+	 * <li>a CODE, where {@link #soleSubstanceFiledUnder} is the substance, so a code the loaded data files
+	 *     under two substances establishes neither.</li>
+	 * </ul>
+	 * The third leg, the bridged concept, belongs to an order and is asked in {@link #ordersEstablishing}.
+	 */
+	private static boolean establishes(Collection<String> names, Collection<String> codes, Object substance,
+			List<DrugReference> orderEntries, CoMedications coMedications) {
+		for (String code : codes) {
+			if (substance.equals(soleSubstanceFiledUnder(code, orderEntries))) {
+				return true;
+			}
+		}
+		for (String name : names) {
+			if (coMedications.substancesTheNameEstablishes(name).contains(substance)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The one substance {@code orderEntries} files {@code code} under, or null where it files it under none
+	 * or under more than one — the shipped knowledge base files esomeprazole's {@code A02BC05} on its
+	 * Omeprazole row too, which is issue #185's premise. Asked of her orders' resolution and not of the whole
+	 * dataset: its code leg ({@code DrugReferenceService.findByActiveOrders}) takes every row the loaded data
+	 * publishes one of the chart's flattened codes under, so for such a code the two answer alike without a
+	 * second walk (issue #151). A code an order carries that the flattened set does not, which only a
+	 * hand-built context can hold, is answered over the rows the other legs brought in.
+	 */
+	private static Object soleSubstanceFiledUnder(String code, List<DrugReference> orderEntries) {
+		Object sole = null;
+		for (DrugReference entry : orderEntries) {
+			if (entry.normalizedAtcCodes().contains(code)) {
+				Object substance = entry.substanceGroupKey();
+				if (sole != null && !sole.equals(substance)) {
+					return null;
+				}
+				sole = substance;
+			}
+		}
+		return sole;
+	}
+
+	/**
+	 * Whether a question about the substance {@code rows} are the rows of may be proposing a presentation of
+	 * it she does not take, as far as her orders' codes and the reference data can tell. True where at least
+	 * one of her active orders establishes she takes it ({@code carriers}), every such order carries ATC
+	 * codes of its own, each of them one {@link DrugReference#isLocallyAppliedAtcCode} answers true for —
+	 * a gel the dictionary filed {@code M02AA15}, eye drops filed {@code S01BA04} — AND one of those rows
+	 * carries a code it answers false for ({@link #classifiedOutsideTheLocallyAppliedGroups}), a
+	 * presentation outside those groups that her orders' codes do not describe.
+	 *
+	 * <p><b>The orders asked are the ones that ESTABLISH she takes it</b> ({@link #ordersEstablishing},
+	 * review round 3 of PR #544). An order her resolution reaches the substance through without naming it —
+	 * a brand another substance's rows share — is not her presentation of it, so its codes are not read.
+	 *
+	 * <p><b>Why the drug-in-play arm then keeps the proposal referent.</b> A question about the drug may be
+	 * proposing a presentation she does not take — an oral course of the diclofenac she applies as a gel —
+	 * and a finding about that course is not a reason to change her gel. The current-medication column
+	 * would state it as one, and the prompt tells the answer never to open by refusing a drug there, so
+	 * the refusal the proposal call leads with would be withdrawn. Found by review round 1 of PR #544;
+	 * {@code DrugInPlayHerOwnOrderReferentTest.aDrugSheHoldsOnlyAsALocallyAppliedPresentationStillStatesTheProposalCall}
+	 * pins it.
+	 *
+	 * <p><b>The ORDER's own codes, and only where the ROWS carry a code outside those groups.</b> An
+	 * order's codes are the ones the dictionary maps the prescribed drug's CONCEPT to
+	 * ({@code PatientClinicalContextBuilder} reads them there), so they describe the presentation she was
+	 * given only where they are narrower than the substance's own classification: every code of every
+	 * such order locally applied while the rows of the substance carry one that is not. That is the
+	 * evidence {@link DrugReference#isLocallyAppliedAtcCode}'s javadoc asks for before a caller vetoes, and
+	 * it is used to keep a referent rather than to drop a code. Where the data files the substance under
+	 * no code outside those groups, her order's codes are the substance's own whatever its formulation,
+	 * and there is no presentation outside them to propose — salicylic acid ({@code D01AE12},
+	 * {@code S01BC08}), and a systemic drug ATC files under a locally applied group alone, such as
+	 * sulfasalazine ({@code A07EC01}) or acetazolamide ({@code S01EC01}). Such a drug takes the
+	 * current-medication referent. Review round 2 of PR #544 measured the gate without this conjunct
+	 * stating the proposal for all three;
+	 * {@code DrugInPlayHerOwnOrderReferentTest.aDrugTheDataFilesOnlyUnderLocallyAppliedGroupsStatesTheCurrentMedicationCall}
+	 * and {@code .aSystemicDrugTheDataFilesOnlyUnderALocallyAppliedGroupStatesTheCurrentMedicationCall}
+	 * pin it.
+	 *
+	 * <p><b>The rows are the ones her orders resolved</b>, the same rows the order half is asked over, and
+	 * they do not depend on the answer, so a drug the answer names cannot move this. A row of the substance
+	 * her orders did not resolve is not read; where a dataset files one substance's rows under different
+	 * codes, a presentation only such a row publishes is not seen, and the drug takes the
+	 * current-medication referent. ADR Decision 123 records that the shipped knowledge base has no such
+	 * substance.
+	 *
+	 * <p><b>Residues.</b> An order carrying no ATC code of its own says nothing about its presentation,
+	 * so it does not make the substance locally applied: an unmapped {@code Voltaren gel} still takes the
+	 * current-medication referent on an oral question, and most Drug-class concepts of the 3.7.1 reference
+	 * dictionary carry no code ({@code PatientClinicalContext.ActiveDrugOrder}'s three-argument
+	 * constructor records the count). Where a dictionary maps a substance's generic concept to a locally
+	 * applied code alone, an order of another presentation of it carries that code too, and is read as
+	 * locally applied. Its recorded route and dose form are not read here: CLAUDE.md keeps that reading to
+	 * {@link #codesForThisSubstancesPresentations}. And a question about the very presentation she holds
+	 * keeps the proposal too, as every drug in play did before issue #402: nothing here reads which
+	 * presentation the question names.
+	 */
+	private static boolean mayBeProposingAPresentationSheDoesNotTake(List<DrugReference> rows,
+			List<PatientClinicalContext.ActiveDrugOrder> carriers) {
+		if (carriers.isEmpty() || !classifiedOutsideTheLocallyAppliedGroups(rows)) {
+			return false;
+		}
+		for (PatientClinicalContext.ActiveDrugOrder order : carriers) {
+			if (!carriesOnlyLocallyAppliedCodes(order)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Whether any of {@code rows} carries an ATC code {@link DrugReference#isLocallyAppliedAtcCode} answers
+	 *  false for — one classifying the substance itself rather than a locally applied presentation of it. */
+	private static boolean classifiedOutsideTheLocallyAppliedGroups(List<DrugReference> rows) {
+		for (DrugReference row : rows) {
+			for (String code : row.normalizedAtcCodes()) {
+				if (!DrugReference.isLocallyAppliedAtcCode(code)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Whether {@code order} carries ATC codes of its own and every one of them classifies a locally
+	 *  applied presentation — false for an order carrying none, which says nothing about its presentation. */
+	private static boolean carriesOnlyLocallyAppliedCodes(PatientClinicalContext.ActiveDrugOrder order) {
+		if (order.getAtcCodes().isEmpty()) {
+			return false;
+		}
+		for (String code : order.getAtcCodes()) {
+			if (!DrugReference.isLocallyAppliedAtcCode(code)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * Which substances IN PLAY this patient's chart holds only as an order no longer in force — the
 	 * third referent a drug-in-play finding can have, beside a proposal and a current medication
 	 * (issue #472). Decided once per {@code validate} pass and applied where the drug-in-play arm's
@@ -2706,7 +2994,7 @@ public class DrugSafetyValidator {
 			}
 			List<String> endedTexts = lowered(ended);
 			List<String> notEndedTexts = lowered(notEnded);
-			Set<Object> active = substancesOf(orderEntries);
+			Set<Object> active = DrugSafetyValidator.substancesOf(orderEntries);
 			// A question PROPOSING the drug keeps it a proposal: there the call "withhold it" has its
 			// referent, which is exactly what the ended-order clause exists to supply where it has none.
 			// The admission grammar is issue #469's, over the same marking of the question's own names.
@@ -2773,15 +3061,6 @@ public class DrugSafetyValidator {
 					notEnded.add(mapping);
 				}
 			}
-		}
-
-		/** The substances {@code orderEntries}, her active orders resolved, are of. */
-		static Set<Object> substancesOf(List<DrugReference> orderEntries) {
-			Set<Object> active = new HashSet<Object>();
-			for (DrugReference entry : orderEntries) {
-				active.add(entry.substanceGroupKey());
-			}
-			return active;
 		}
 
 		private static List<String> lowered(List<RecordMapping> records) {
@@ -2867,7 +3146,7 @@ public class DrugSafetyValidator {
 				|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
 			return Collections.emptyList();
 		}
-		Set<Object> active = EndedOrders.substancesOf(orderEntries);
+		Set<Object> active = substancesOf(orderEntries);
 		List<RecordMapping> orderRecords = new ArrayList<RecordMapping>();
 		EndedOrders.partitionOrderRecords(mappings, orderRecords, orderRecords);
 		List<String> orderTexts = EndedOrders.lowered(orderRecords);
@@ -4163,11 +4442,16 @@ public class DrugSafetyValidator {
 	 *         two partners on an ordinary per-order chart too, and the ledger collapses them only where
 	 *         they render byte for byte alike. It counts what a reader was shown, which is the residue
 	 *         those chips carry.
+	 * @param herOrder whether the drug in play is a medication she is already taking —
+	 *        {@code validate}'s one answer for it ({@link #currentMedicationsInPlay}), stated on every chip
+	 *        this method builds, rule, merged, class-only and several-orders alike (issue #402, ADR
+	 *        Decision 123)
 	 */
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
-			StatedInteractionChips statedChips, BridgedOrders bridgedOrders, EndedOrders endedOrders) {
+			StatedInteractionChips statedChips, BridgedOrders bridgedOrders, EndedOrders endedOrders,
+			boolean herOrder) {
 		if (context == null) {
 			return 0;
 		}
@@ -4273,12 +4557,12 @@ public class DrugSafetyValidator {
 				// to say about is named the way a partner it did have something to say about is. Null
 				// where the ladder reached no co-medication, and then this is the narrow overload's
 				// answer — partnerLabel, which is also the grouping key.
-				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges, false)
+				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges, herOrder)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
-							null, bridges, false);
+							null, bridges, herOrder);
 			} else {
 				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence, bridges, false);
+					fold.sentence, bridges, herOrder);
 			}
 			// The displays of the orders that walk matched, on the chip before anything else reads it —
 			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514).
@@ -4306,7 +4590,7 @@ public class DrugSafetyValidator {
 		// exactly the case where the two diverge, so reading the merged list's size here would move a
 		// published completeness figure without a single pair having moved.
 		int relatedPairs = ruleChips.size();
-		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements);
+		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements, herOrder);
 		Collections.sort(stated, FINDING_STRENGTH_DESCENDING);
 		// The referent is stated here, on the chips this arm hands over, and not before the collapse or
 		// the stated-chip ledger: it cannot change which chips exist (issue #472, see EndedOrders).
@@ -4319,7 +4603,7 @@ public class DrugSafetyValidator {
 		// stamped as about an ended order: its sentence says active orders carry the drug. Its subject
 		// rows are stated as every other chip of this arm's are (issue #515), or no check of the answer
 		// can tell which drug it is about.
-		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications);
+		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications, herOrder);
 		if (alreadyTaken != null) {
 			warnings.add(endedOrders.aboutTheSubject(ref, alreadyTaken));
 		}
@@ -4333,7 +4617,8 @@ public class DrugSafetyValidator {
 			// authored it deliberately", and licensesWithholding grades the two differently. The public
 			// constructor this used to call cannot say which of the two it is, and read as the second it
 			// refused a standard two-NRTI regimen — see SafetyWarning.restsOnSharedClassificationAlone.
-			warnings.add(endedOrders.stamp(ref, SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail)));
+			warnings.add(endedOrders.stamp(ref,
+				SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail, herOrder)));
 		}
 		return relatedPairs;
 	}
@@ -4400,11 +4685,13 @@ public class DrugSafetyValidator {
 	 * — the documented pre-#297 behaviour rather than a new one. Severity cannot move: it is part of
 	 * the key, so only chips already rated alike are ever merged.
 	 *
+	 * @param herOrder the drug in play's referent, which every member already states — a merged chip
+	 *         must not state another (issue #402)
 	 * @return the chips to state, in the order they were collected; a group of one is its own original
 	 *         chip object, so a response with nothing to collapse is unchanged
 	 */
 	private static List<SafetyWarning> collapseSharedMechanisms(DrugReference ref,
-			List<MechanismStatement> statements) {
+			List<MechanismStatement> statements, boolean herOrder) {
 		Map<String, List<MechanismStatement>> groups = new LinkedHashMap<String, List<MechanismStatement>>();
 		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
 		for (MechanismStatement statement : statements) {
@@ -4469,7 +4756,7 @@ public class DrugSafetyValidator {
 			// travels structurally and nothing downstream recovers it by parsing the string this just
 			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
 			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null,
-				bridges, false, partners).withMatchedOrderNames(matchedNames));
+				bridges, herOrder, partners).withMatchedOrderNames(matchedNames));
 		}
 		return out;
 	}
@@ -4502,13 +4789,18 @@ public class DrugSafetyValidator {
 	 * (issue #185). Which orders count is {@link CoMedications#ordersWhoseDisplayNames}, and the
 	 * sentence names each by that same display, so the evidence and the printed name are one string.
 	 *
-	 * <p><b>Its REFERENT is its arm's, a proposal</b>, like every other finding this arm raises about the
-	 * drug in play: stated beside them in the current-medication column (issue #348), one response would
-	 * refuse the drug as a proposal and call it a medication to change, the one-site shape issue #402
-	 * recorded and reverted. Its STRENGTH is the unrated default, so on a proposal it withholds a further
-	 * course of a drug two orders already carry. ADR Decision 112 carries why of both.
+	 * <p><b>Its REFERENT is its arm's</b>, {@code herOrder}, like every other finding this arm raises
+	 * about the drug in play: stated in the other column beside them, one response would refuse the drug
+	 * as a proposal and call it a medication to change, the one-site shape issue #402 recorded and
+	 * reverted. Since issue #402 the arm states the current-medication referent for a drug in play her
+	 * own orders establish she takes, unless a question may be proposing it in a presentation she does not
+	 * take ({@link #currentMedicationsInPlay}). A recorded name that NAMES the substance establishes it,
+	 * so where two of her orders' displays name it — the displays being among the names the builder
+	 * records — this finding states that referent too, the gate aside. Its STRENGTH is the unrated
+	 * default, so it states the withholding class. ADR Decisions 112 and 123 carry why of both.
 	 */
-	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications) {
+	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications,
+			boolean herOrder) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =
 				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey());
 		if (carriers.size() < 2) {
@@ -4518,7 +4810,7 @@ public class DrugSafetyValidator {
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
 					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()));
+			new ArrayList<String>(ordersByDisplay.keySet()), herOrder);
 	}
 
 	/**
@@ -7366,10 +7658,15 @@ public class DrugSafetyValidator {
 	 * limit the class-only chips carry (#346). It is never passed through
 	 * {@link #collapseSharedMechanisms}, and where DDInter also rates the pair both chips stand: they are
 	 * two claims from two tables.
+	 *
+	 * @param herOrder whether the subject is a medication she is already taking — {@code validate}'s one
+	 *        answer for the drug in play ({@link #currentMedicationsInPlay}), which every chip of that drug
+	 *        states (issue #402, ADR Decision 123)
 	 */
 	private static void addConditionMediatedWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, List<DrugReference> orderEntries,
-			CoMedications coMedications, BridgedOrders bridgedOrders, EndedOrders endedOrders) {
+			CoMedications coMedications, BridgedOrders bridgedOrders, EndedOrders endedOrders,
+			boolean herOrder) {
 		if (context == null || orderEntries == null || orderEntries.isEmpty()) {
 			return;
 		}
@@ -7413,12 +7710,12 @@ public class DrugSafetyValidator {
 			// ended order is not a proposal, and the finding must not read as one.
 			warnings.add(endedOrders.stamp(subject, conditionMediatedWarning(true, group.getKey(), group.getValue(),
 				coMembers(true, group.getKey(), group.getValue(), partners), rows, subject, subjects, partners,
-				context, orderEntries, coMedications, bridgedOrders)));
+				context, orderEntries, coMedications, bridgedOrders, herOrder)));
 		}
 		for (Map.Entry<String, Map<Object, DrugReference.ConditionMediatedRisk>> group : subjectCauses.entrySet()) {
 			warnings.add(endedOrders.stamp(subject, conditionMediatedWarning(false, group.getKey(), group.getValue(),
 				coMembers(false, group.getKey(), group.getValue(), partners), rows, subject, subjects, partners,
-				context, orderEntries, coMedications, bridgedOrders)));
+				context, orderEntries, coMedications, bridgedOrders, herOrder)));
 		}
 	}
 
@@ -7517,7 +7814,7 @@ public class DrugSafetyValidator {
 			Map<Object, DrugReference.ConditionMediatedRisk> coMembers, List<DrugReference> rows,
 			DrugReference subject, SubstanceSubjects subjects, Map<Object, List<DrugReference>> partners,
 			PatientClinicalContext context, List<DrugReference> orderEntries, CoMedications coMedications,
-			BridgedOrders bridgedOrders) {
+			BridgedOrders bridgedOrders, boolean herOrder) {
 		// Partner name -> the links naming it. Keyed on the NAME the ladder prints, so two constituents
 		// of one prescription the ladder names by its display are that one partner, stated once, and
 		// never as two active orders.
@@ -7617,7 +7914,7 @@ public class DrugSafetyValidator {
 					+ (stated.size() > 1 ? " are each rated " : " is rated ") + ratedSeverity + " in " + condition
 					+ " (DDInter drug-disease). " + CONDITION_MEDIATED_PROVENANCE;
 		}
-		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names)
+		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names, herOrder)
 				.withMatchedOrderNames(matchedNames);
 	}
 
@@ -10156,8 +10453,13 @@ public class DrugSafetyValidator {
 			if (inPlay.contains(ref)) {
 				continue;
 			}
-			// FALSE where a sibling row put this substance in play: something proposed this drug, and a
-			// call about a proposal is what its finding licenses however this arm reached the row.
+			// FALSE where a sibling row put this substance in play — issue #348's rule, from when every
+			// drug in play was a proposal. Since issue #402 the drug-in-play arm can state the
+			// CURRENT-medication referent for that same substance, this row being one of her orders, so
+			// where both arms raise a finding of it the two referents can disagree and the ledger's rank
+			// decides which survives one key. That is a known residue and not a rationale: ADR Decision
+			// 123 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
+			// sibling-row cases pin it.
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response
@@ -11331,6 +11633,37 @@ public class DrugSafetyValidator {
 			}
 			return named;
 		}
+
+		/** {@link #substancesTheNameEstablishes}' memo, keyed on a recorded name — the chart's own text, so a
+		 *  pass-scoped local and never a bean field (issue #172's unbounded-key reason). */
+		private final Map<String, Set<Object>> substancesByRecordedName = new HashMap<String, Set<Object>>();
+
+		/**
+		 * The substances one recorded drug NAME of hers establishes she takes, as
+		 * {@link DrugReference#substanceGroupKey()} values — the drug-in-play referent's name leg (issue
+		 * #402, review round 3 of PR #544; see {@link DrugSafetyValidator#establishes}). Every substance
+		 * {@link DrugReferenceService#findImpliedByDrugName} reads the name to put in play, less the ones
+		 * {@link DrugSafetyValidator#substancesTheOrderNameDoesNotName} finds it does not name, which it finds
+		 * only where the name puts two or more in play. So {@code Tirosint 50mcg/ml}, which puts levothyroxine
+		 * alone in play, establishes it; {@code Nexium 40mg}, which puts Omeprazole and Esomeprazole in play and
+		 * names neither, establishes neither; and {@code Isoniazid / pyrazinamide / rifampin} establishes all
+		 * three substances it names.
+		 *
+		 * <p>Unlike {@link #substancesItsDisplayNames}, which asks of an order's DISPLAY before a finding prints
+		 * that order as carrying the drug, this asks of every name the chart recorded and requires no naming
+		 * where there is nothing to tell apart: it states whether she is on the drug, and prints no order.
+		 */
+		Set<Object> substancesTheNameEstablishes(String name) {
+			Set<Object> established = substancesByRecordedName.get(name);
+			if (established == null) {
+				Map<Object, List<DrugReference>> rowsBySubstance =
+						substanceRows(drugReferenceService.findImpliedByDrugName(name, impliedByName));
+				established = new LinkedHashSet<Object>(rowsBySubstance.keySet());
+				established.removeAll(substancesTheOrderNameDoesNotName(Collections.singleton(name), rowsBySubstance));
+				substancesByRecordedName.put(name, established);
+			}
+			return established;
+		}
 	}
 
 	/**
@@ -11739,7 +12072,7 @@ public class DrugSafetyValidator {
 					substanceRowsNamedBy(order, cache, impliedByName);
 			// Which of those substances this order's own name cannot tell apart — resolved once for the
 			// order, because it is a property of the NAME rather than of any one substance it reached.
-			Set<Object> indistinguishable = substancesTheOrderNameDoesNotName(order, rowsBySubstance);
+			Set<Object> indistinguishable = substancesTheOrderNameDoesNotName(order.getNames(), rowsBySubstance);
 			for (Map.Entry<Object, List<DrugReference>> named : rowsBySubstance.entrySet()) {
 				if (alreadyACoMedication(byIdentity, named.getKey())) {
 					continue;
@@ -11771,9 +12104,9 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return the substances {@code rowsBySubstance} holds that {@code order}'s own recorded names do
-	 *         NOT name — empty where the name names every one of them, and empty for an order whose
-	 *         names imply a single substance, which has nothing to be told apart from.
+	 * @return the substances {@code rowsBySubstance} holds that none of {@code names} — an order's own
+	 *         recorded names, or one of them — NAMES: empty where the names name every one of them, and
+	 *         empty where they imply a single substance, which has nothing to be told apart from.
 	 *
 	 *         <p><b>The question is naming and not counting</b>, and the distinction is the one
 	 *         {@link DrugReferenceService#substancesNamedByBridge} draws for the dictionary bridge
@@ -11791,26 +12124,29 @@ public class DrugSafetyValidator {
 	 *         <p><b>One row per substance</b> — {@link #onePerSubstance}, which carries why, and the
 	 *         same fold {@code substancesNamedByBridge} makes over its bridged answer.
 	 *
-	 *         <p><b>Read by the restating-existing-therapy skip alone</b>
-	 *         ({@link OrderPartner#readingsOfOneOrder}) and deliberately not by
-	 *         {@link #alreadyACoMedication}: folding these substances into ONE co-medication would drop
-	 *         the partner the second one supplies, and with it every class its codes reach that the
-	 *         survivor's do not — which for a combination BRAND, filed under each ingredient it really
-	 *         contains, is a duplicate-therapy chip about a drug the patient is genuinely on.
+	 *         <p><b>Two readers, and deliberately not {@link #alreadyACoMedication}.</b> The
+	 *         restating-existing-therapy skip ({@link OrderPartner#readingsOfOneOrder}) asks it of an
+	 *         order's names together; since review round 3 of PR #544 the drug-in-play referent asks it of
+	 *         each recorded name alone ({@link CoMedications#substancesTheNameEstablishes}), the unit
+	 *         {@link DrugReferenceService#findForActiveOrders} resolves its name leg in. Folding these
+	 *         substances into ONE co-medication would drop the partner the second one supplies, and with it
+	 *         every class its codes reach that the survivor's do not — which for a combination BRAND, filed
+	 *         under each ingredient it really contains, is a duplicate-therapy chip about a drug the patient
+	 *         is genuinely on.
 	 *
-	 *         <p>Resolved only for an order implying more than one substance, which on an ordinary
-	 *         chart is no order at all: {@code findNamedSubstances}' third clause costs a dataset sweep
-	 *         per unresolvable constituent, and the early return keeps the common case from paying for
-	 *         a question it cannot have.
+	 *         <p>Resolved only for names implying more than one substance, which on an ordinary chart is
+	 *         no order at all: {@code findNamedSubstances}' third clause costs a dataset sweep per
+	 *         unresolvable constituent, and the early return keeps the common case from paying for a
+	 *         question it cannot have.
 	 */
-	private Set<Object> substancesTheOrderNameDoesNotName(PatientClinicalContext.ActiveDrugOrder order,
+	private Set<Object> substancesTheOrderNameDoesNotName(Collection<String> names,
 			Map<Object, List<DrugReference>> rowsBySubstance) {
 		if (rowsBySubstance.size() < 2) {
 			return Collections.emptySet();
 		}
 		List<DrugReference> candidates = onePerSubstance(rowsBySubstance);
 		Set<Object> unnamed = new LinkedHashSet<Object>(rowsBySubstance.keySet());
-		for (String name : order.getNames()) {
+		for (String name : names) {
 			for (DrugReference named : drugReferenceService.findNamedSubstances(name, candidates)) {
 				unnamed.remove(named.substanceGroupKey());
 			}
@@ -12512,10 +12848,15 @@ public class DrugSafetyValidator {
 	 * sibling from becoming a lost warning. What this cannot do is warn where the data does not: the
 	 * widening is over the rows of ONE substance, and {@link #substanceOwnsDose} still lets any OTHER
 	 * substance's nearer alias take the dose away.
+	 *
+	 * @param herOrder the drug in play's referent, {@code validate}'s one answer for it, which every chip
+	 *        the arm raises about it states (issue #402, ADR Decision 123). An overdose finding cannot reach
+	 *        the injected records ({@code SafetyFindingSeverityStrengthTest} pins that premise), so this
+	 *        moves the chip's published {@code aboutACurrentMedication} and nothing the model reads.
 	 */
 	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, String lowerAnswer,
-			List<DrugReference> allEntries) {
+			List<DrugReference> allEntries, boolean herOrder) {
 		// The same choice of representative row the other arms make, recorded names and all (issues #194,
 		// #206): a dose warning, an interaction chip and a contraindication chip about ONE substance in
 		// ONE response must not call it three things, which is exactly the divergence anchoring only some
@@ -12541,11 +12882,11 @@ public class DrugSafetyValidator {
 		// the dose a clinician stated is a fact about the drug, not about the row that happens to publish
 		// the band it is about to be compared against.
 		List<AttributedDose> doses = attributedDoses(lowerAnswer, rows, allEntries);
-		if (addOverdose(warnings, subject, subject, doses, context)) {
+		if (addOverdose(warnings, subject, subject, doses, context, herOrder)) {
 			return;
 		}
 		for (DrugReference row : rows) {
-			if (row != subject && addOverdose(warnings, subject, row, doses, context)) {
+			if (row != subject && addOverdose(warnings, subject, row, doses, context, herOrder)) {
 				return;
 			}
 		}
@@ -12629,10 +12970,12 @@ public class DrugSafetyValidator {
 	 * @param doses the substance's stated doses, read once by the caller and shared by every row and by
 	 *        both arms below — so a dose counts for the daily and the per-dose check, and for the
 	 *        subject row and its siblings, under exactly the same conditions
+	 * @param herOrder the referent every chip about the drug in play states — see the substance-level
+	 *        overload
 	 * @return whether a warning was raised, so the caller can stop at the first row that trips
 	 */
 	private boolean addOverdose(List<SafetyWarning> warnings, DrugReference subject, DrugReference ref,
-			List<AttributedDose> doses, PatientClinicalContext context) {
+			List<AttributedDose> doses, PatientClinicalContext context, boolean herOrder) {
 		DrugReference.AgeBand band = actionableBand(ref, context);
 		if (band == null) {
 			return false;
@@ -12647,11 +12990,11 @@ public class DrugSafetyValidator {
 		if (dailyArm) {
 			Double dailyMg = parseDailyDoseMg(doses);
 			if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, label,
+				warnings.add(SafetyWarning.overdose(label,
 						"The stated " + label + " dose ~" + DrugReference.formatNumber(dailyMg)
 								+ " mg/day exceeds the "
 								+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
-								+ band.getMinYears() + "-" + band.getMaxYears() + ceilingSource));
+								+ band.getMinYears() + "-" + band.getMaxYears() + ceilingSource, herOrder));
 				// One warning per drug: the published daily ceiling is the stronger statement,
 				// so the per-dose arm below is not stacked on top of it.
 				return true;
@@ -12663,13 +13006,13 @@ public class DrugSafetyValidator {
 		Double perDoseMg = parseMaxPerDoseMg(doses);
 		double perDoseLimitMg = band.getMgPerKgMax() * weightKg;
 		if (perDoseMg != null && perDoseMg > perDoseLimitMg) {
-			warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, label,
+			warnings.add(SafetyWarning.overdose(label,
 					"The stated " + label + " dose ~" + DrugReference.formatNumber(perDoseMg)
 							+ " mg exceeds the "
 							+ DrugReference.formatNumber(band.getMgPerKgMax()) + " mg/kg per-dose maximum (~"
 							+ DrugReference.formatNumber(perDoseLimitMg) + " mg) for the patient's weight "
 							+ DrugReference.formatNumber(weightKg) + " kg (ages " + band.getMinYears() + "-"
-							+ band.getMaxYears() + ")" + ceilingSource));
+							+ band.getMaxYears() + ")" + ceilingSource, herOrder));
 			return true;
 		}
 		return false;

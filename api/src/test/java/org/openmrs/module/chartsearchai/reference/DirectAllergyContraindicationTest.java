@@ -133,7 +133,7 @@ public class DirectAllergyContraindicationTest {
 		// unchanged.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Ledipasvir: The patient has a recorded allergy to Ledipasvir."
-				+ DrugReferenceInjector.STRENGTH_WITHHOLD,
+				+ DrugReferenceInjector.FINDING_NO_SEVERITY + DrugReferenceInjector.STRENGTH_WITHHOLD,
 				findings.get(0).getText(), "the record carries the chip's own detail verbatim");
 	}
 

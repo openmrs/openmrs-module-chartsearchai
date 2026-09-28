@@ -157,7 +157,7 @@ public class SelfNamedAllergyRuleFoldTest {
 		// property here, one fact as one record carrying the surviving chip's detail, is unchanged.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX + "Ibuprofen: Ibuprofen is contraindicated "
 				+ "by an active allergy: documented ibuprofen allergy."
-				+ DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(0).getText(),
+				+ DrugReferenceInjector.FINDING_NO_SEVERITY + DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(0).getText(),
 				"carrying the surviving chip's own detail verbatim");
 	}
 

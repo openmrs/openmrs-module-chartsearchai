@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #402 — not shipped data",
+  "description": "One substance filed as two rows whose aliases are DISJOINT, so a question naming one row's brand resolves that row ALONE while an order recorded under the other row's brand resolves the other ALONE: the shape where a drug-in-play referent keyed on the SUBSTANCE and one keyed on the ROW come apart. Both Levothyroxine rows declare substanceName 'levothyroxine' and the curated schema derives the rest of the key from the display stem, so they are one substance. Every row lists its own display name among its aliases, so DrugReferenceValidity.sanitizeAliases is a no-op and the premise holds of a real load. The interaction with warfarin sits on the QUESTION's row only, so the finding the drug-in-play arm raises is that row's. Warfarin is here only to be the interacting active order.",
+  "entries": [
+    {
+      "id": "levothyroxine-tablets",
+      "name": "Levothyroxine (tablets)",
+      "substanceName": "levothyroxine",
+      "aliases": [
+        "levothyroxine (tablets)",
+        "eltroxin"
+      ],
+      "atcCodes": [
+        "H03AA01"
+      ],
+      "interactions": [
+        {
+          "token": "warfarin",
+          "severity": "Moderate",
+          "note": "Moderate. Thyroid hormones may potentiate the anticoagulant effect of warfarin; check the INR."
+        }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "levothyroxine-oral-solution",
+      "name": "Levothyroxine (oral solution)",
+      "substanceName": "levothyroxine",
+      "aliases": [
+        "levothyroxine (oral solution)",
+        "tirosint"
+      ],
+      "atcCodes": [
+        "H03AA01"
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "warfarin",
+      "name": "Warfarin",
+      "aliases": [
+        "warfarin"
+      ],
+      "atcCodes": [
+        "B01AA03"
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

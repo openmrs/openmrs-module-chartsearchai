@@ -25,6 +25,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
+import org.openmrs.module.chartsearchai.reference.ConflictingOrderStatement;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
@@ -308,6 +309,13 @@ public class LlmInferenceService implements ChartSearchService {
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
 					chart.getListedDrugsWithNoActiveOrder());
+			// And, on a question asking only for her allergies, which of her own orders conflict with them
+			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
+			// chips it states, which is why the chips it hands back are the ones the answer carries.
+			ConflictingOrderStatement.Stated conflicting =
+					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
+			completedAnswer = conflicting.getAnswer();
+			safetyWarnings = conflicting.getWarnings();
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -844,6 +852,13 @@ public class LlmInferenceService implements ChartSearchService {
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
 					chart.getListedDrugsWithNoActiveOrder());
+			// And, on a question asking only for her allergies, which of her own orders conflict with them
+			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
+			// chips it states, which is why the chips it hands back are the ones the answer carries.
+			ConflictingOrderStatement.Stated conflicting =
+					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
+			completedAnswer = conflicting.getAnswer();
+			safetyWarnings = conflicting.getWarnings();
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,

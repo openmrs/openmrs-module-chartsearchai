@@ -24,7 +24,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
 /**
  * TWO INDEPENDENT PROPERTIES of the user message, and the nested instruction file points here for
  * the second one — and, at the end of the class, the bytes of issue #548's clause, which ADR Decision
- * 124 points here for.
+ * 125 points here for.
  *
  * <p>The warmup contract: the user-message prefix sent during {@code warmup}
  * MUST be a byte-prefix of the user-message sent during a real query on the same

@@ -262,7 +262,12 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				SafetyWarningFixtures.curatedRuleContraindication("Ibuprofen",
 						"Ibuprofen is contraindicated by an active condition: active peptic ulcer disease", true),
 				SafetyWarningFixtures.curatedRuleContraindication("Ibuprofen",
-						"Ibuprofen is contraindicated by an active condition: active peptic ulcer disease", false));
+						"Ibuprofen is contraindicated by an active condition: active peptic ulcer disease", false),
+				// Chip 14: the allergen arm's current-medication chip once an answer to an allergy question
+				// states it (ADR Decision 124) — the only chip here answering true, so a put hardcoded to
+				// `false` disagrees with it. Mutate the put and read this class's failure.
+				SafetyWarningFixtures.statedInTheAnswer(SafetyWarningFixtures.recordedAllergenContraindication(
+						"Ibuprofen", "The patient has a recorded allergy to Ibuprofen.", true)));
 	}
 
 	private ChartSearchAiRestController controller;

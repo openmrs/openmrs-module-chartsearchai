@@ -1075,7 +1075,7 @@ public class LlmProvider {
 	 * question and any finding-prose clause, that each drug of {@code drugsAlreadyOrdered} is already in
 	 * the patient's active orders — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/548">#548</a>, ADR Decision
-	 * 124.
+	 * 125.
 	 *
 	 * @param drugsAlreadyOrdered the drugs the question proposes that her orders already carry, as
 	 *        {@code PatientChart.getDrugsAlreadyOrdered()} states them; null or empty for none
@@ -1192,7 +1192,7 @@ public class LlmProvider {
 			// whose rewording was measured not to move the lead. AFTER the finding-prose clause, so #397's
 			// measured layout — the question, a space, its clause — is unchanged where both fire. The bytes
 			// are pinned by LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes; ADR
-			// Decision 124 carries the gate and the measurement.
+			// Decision 125 carries the gate and the measurement.
 			if (drugsAlreadyOrdered != null) {
 				for (PatientChartSerializer.AlreadyOrderedDrug drug : drugsAlreadyOrdered) {
 					boolean one = drug.getOrderCount() == 1;

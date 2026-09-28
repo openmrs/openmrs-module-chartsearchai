@@ -197,9 +197,11 @@ public final class QueryScopeRouter {
 	 * interaction ({@link #INTERACTION_CUES}) or asking after their safety or a change to them
 	 * ({@link #MEDICATION_SAFETY_CUES}). The disjunction is what {@link #isInteractionScreening}
 	 * conjoins with the MEDICATIONS intent, and it is a separate method so each family can be
-	 * mutated on its own: neuter either alternative and read which cases redden.
+	 * mutated on its own: neuter either alternative and read which cases redden. Public for
+	 * {@code ConflictingOrderStatement}, which asks it on its own: an allergy question asking whether
+	 * something is safe is a drug-safety question, whatever intent it matched.
 	 */
-	private static boolean asksForADrugSafetyReading(String question) {
+	public static boolean asksForADrugSafetyReading(String question) {
 		return INTERACTION_CUES.matcher(question).find()
 				|| MEDICATION_SAFETY_CUES.matcher(question).find();
 	}
@@ -328,7 +330,7 @@ public final class QueryScopeRouter {
 	 * the question proposes is already in her orders only where this admits the question, so a phrasing
 	 * it misses withholds that fact — which is how <em>"Is it safe to add prednisone for her?"</em> went
 	 * untold until its shape was admitted. A miss there costs the statement, never a refusal. ADR Decision
-	 * 124.
+	 * 125.
 	 */
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);

@@ -2574,7 +2574,7 @@ public class DrugReferenceInjector {
 	 * proposal by it (issue #469), and {@code DrugSafetyValidator}'s ended-order holder keeps a proposed
 	 * drug a proposal by it (issue #472), so a question the module answers from its findings is one
 	 * whose drug is never re-referred; and {@code DrugSafetyValidator.validate} reads it to say that a
-	 * drug proposed is already in her orders (issue #548, ADR Decision 124).
+	 * drug proposed is already in her orders (issue #548, ADR Decision 125).
 	 */
 	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
 		return !questionDrugs.isEmpty()

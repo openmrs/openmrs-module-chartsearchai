@@ -1698,6 +1698,10 @@ public class ChartSearchAiRestController {
 			// client cannot tell them apart. false is no statement that she is off the drug:
 			// SafetyWarning.isAboutACurrentMedication() says why.
 			map.put("aboutACurrentMedication", warning.isAboutACurrentMedication());
+			// ADR Decision 124: whether the answer already states this finding, naming her order, so a
+			// client need not render it a second time beside an allergy list. SafetyWarning.isStatedInTheAnswer()
+			// says what false does not say.
+			map.put("statedInTheAnswer", warning.isStatedInTheAnswer());
 			out.add(map);
 		}
 		return out;

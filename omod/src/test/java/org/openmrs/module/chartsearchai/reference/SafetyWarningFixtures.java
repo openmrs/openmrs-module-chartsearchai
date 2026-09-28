@@ -124,4 +124,13 @@ public final class SafetyWarningFixtures {
 			List<String> orders, boolean aboutACurrentMedication) {
 		return SafetyWarning.substanceInSeveralActiveOrders(drug, detail, orders, aboutACurrentMedication, null);
 	}
+
+	/**
+	 * {@code chip} as {@code ConflictingOrderStatement} hands it back once the answer states it — through
+	 * {@code SafetyWarning.asStatedInTheAnswer}, that class's own step, so the chip is one the module really
+	 * publishes {@code statedInTheAnswer: true} for.
+	 */
+	public static SafetyWarning statedInTheAnswer(SafetyWarning chip) {
+		return chip.asStatedInTheAnswer();
+	}
 }

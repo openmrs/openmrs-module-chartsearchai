@@ -70,6 +70,10 @@ jobs:
         run: python3 eval/drift-metric/compare_arms.py --selftest
       - name: kv_prefill_gate.py (refuses to measure without a real KV cache dir)
         run: python3 eval/latency/kv_prefill_gate.py --selftest
+      # Added by #240. The grounding-scope gate switched its arms by writing a GP before its first
+      # request, so a cohort absent from the instance changed its configuration and measured nothing.
+      - name: grounding_scope_ab.py (refuses an unresolved cohort before touching any GP)
+        run: python3 eval/grounding-scope/grounding_scope_ab.py --selftest
 
   # backend-init.sh is the demo backend's ENTRYPOINT, and until this job existed nothing in CI
   # parsed it. Since #444 it sources scripts/model-manifest.sh, which is covered here for the same

@@ -895,7 +895,11 @@ public class ArchitectureGuardTest {
 						.find();) {
 			counted++;
 		}
-		if (calls == 0 || counted != calls) {
+		if (calls == 0) {
+			violations.add("waitForServerReady() no longer calls requireListenerMayBeServed — readiness"
+					+ " then adopts the first healthy listener without the gate");
+		}
+		else if (counted != calls) {
 			violations.add("waitForServerReady() calls requireListenerMayBeServed in a statement that"
 					+ " does not begin with the call or does not end on the launch stamp as its last"
 					+ " argument (" + counted + " of " + calls + " calls) — the"

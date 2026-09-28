@@ -372,6 +372,27 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 	}
 
 	/**
+	 * The same, in the drug-then-patient order issue #548 admitted to the proposal grammar (ADR Decision
+	 * 125): <em>"Is it safe to add clarithromycin for her?"</em> proposes the drug too, so the ended-order
+	 * holder keeps it a proposal. Before that widening it fitted no shape and took the ended-order call.
+	 */
+	@Test
+	public void aProposalNamingThePatientAfterTheDrugKeepsTheProposalCallToo() throws IOException {
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(ddi()).injectRecords(
+			DrugReferenceTestSupport.chartOf(orderRecord(1, "Clarithromycin 500mg", Boolean.FALSE)),
+			onlyOn("Simvastatin"), "Is it safe to add clarithromycin for her?");
+
+		assertTrue(DrugReferenceTestSupport.findingTexts(chart).get(0).endsWith(WITHHOLD),
+				"the question proposes adding it, so the finding states the proposal call: " + chart.getText());
+		String answer = chart.getModuleAnswer();
+		assertTrue(answer != null && answer.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING),
+				"the question proposes the drug, so the module answers it and leads with the withholding "
+						+ "call: " + answer);
+	}
+
+	/**
 	 * A CLASS-only finding — a shared ATC subgroup and no rule — about a drug the chart holds only as
 	 * an ended order states the ended-order caution: the class arm's chip is built apart from the rule
 	 * chips, so it is its own site. Over the shipped-KB slice {@code ClassOnlyFindingStrengthTest}

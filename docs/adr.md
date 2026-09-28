@@ -12141,19 +12141,34 @@ raises its finding for ONE order where the question proposes the drug and the dr
 is *"Prednisone is already in active order Prednisone Co 5mg — possible duplicate therapy"*. The gate is
 three conjuncts, asked per drug in play:
 
-- the drug-in-play arm's referent (`herOrder`, `currentMedicationsInPlay`), so no finding says a drug
-  is in her orders while `aboutACurrentMedication` says it is a proposal. The converse is not held: see
-  the display residue under Consequences. A drug her orders resolve to without establishing it
+- the drug-in-play arm's referent (`herOrder`, `currentMedicationsInPlay`), and the orders the finding
+  names are drawn from that referent's own witnesses (`ordersEstablishing`), as the issue's direction
+  asks, so no finding says a drug is in her orders while `aboutACurrentMedication` says it is a proposal,
+  and a brand-named order (`Advil 400mg` for ibuprofen, the issue's Barbara Miller cell) is told too. The
+  converse has a residue, under Consequences. A drug her orders resolve to without establishing it
   (`Nexium 40mg` for omeprazole), and one a question may be proposing in a presentation she does not take
   (a `Diclofenac gel 1%` order), are refused here;
 - the question proposes a drug (`DrugReferenceInjector.questionProposes`). A screen, a question that
   lists the drug as current and a question about her dose keep today's behaviour;
 - the QUESTION put the drug in play. A drug of hers that only the answer names was proposed by nobody.
 
-Everything else is Decision 112's: which orders count is decided on the display
-(`CoMedications.ordersWhoseDisplayNames`), the strength is the unrated default, the referent is the
-arm's, and the finding trails the rule chips. Two or more orders on a proposal raise the same finding as
-before, now marked too.
+An order is counted where its DISPLAY, the name the sentence prints, establishes the drug on its own
+(`CoMedications.substancesTheNameEstablishes`, for an order `displayNamesADrug` admits). So the evidence
+and the printed name stay one string, as Decision 112 has them, and an order that another of its recorded
+names establishes the drug for, under a display naming something else, is not counted (#293's shape). Where
+Decision 112's display rule already finds two orders, its finding is raised as before, now marked too. The
+referent is the arm's, and the finding trails the rule chips.
+
+**One order is a caution.** Only the proposal would duplicate it, so nothing about the order she is on
+needs changing. `SafetyWarning.restsOnTheProposalAlone` answers true for it, and
+`DrugSafetyValidator.licensesWithholding` then answers a caution, so the record states the existing
+current-medication caution clause (*"a caution about a medication this patient is already taking, not a
+reason to change it"*, Decision 72) and its existing prompt branch. Two or more orders of hers duplicate
+one another and keep Decision 112's unrated default. Review round 1 of PR #554 found the one-order finding
+in that default's class: its record told the model the proposal was a reason to change her current
+medication, the ranking sentence then handed it the lead over her cautions, and the change-class branch
+says such a finding *"is not about a drug anything proposed"*, which the clause after the question
+contradicts. The caution branch makes neither claim.
 
 **The same fact is stated after the question.** The finding marks itself
 (`SafetyWarning.statesAProposedDrugIsAlreadyOrdered`). `DrugReferenceInjector` stamps the chart with each
@@ -12182,7 +12197,10 @@ X?"*, which it already admitted. Every reader of that grammar moves with it:
 - The ended-order holder (Decision 110), which now keeps such a phrasing a proposal.
 - `listedBeforeTheProposal` (#515), which can now find the proposal clause in such a phrasing.
 
-No case here pins the last two.
+Each has a case in the drug-then-patient order, and each reddens when the widening is reverted:
+`LlmInferenceServiceAnswerFromFindingsContextTest.aSuitabilityQuestionIsAnsweredFromTheFindingsToo`,
+`EndedOrderFindingReferentTest.aProposalNamingThePatientAfterTheDrugKeepsTheProposalCallToo`, and
+`DrugInPlayHerOwnOrderReferentTest.aListingBeforeAProposalNamingThePatientAfterTheDrugIsStillAListing`.
 
 ### What it changes in the specification
 
@@ -12192,6 +12210,7 @@ a proposal question. Where the question proposes the drug it no longer holds.
 - `SubstanceInSeveralActiveOrdersTest.oneOrderContainingItIsStillRestatingExistingTherapy` now asks a
   question that does not propose the drug. Its old input is
   `.aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt`.
+- `DrugInPlayHerOwnOrderReferentTest`'s helper that sets this finding aside asserts its caution clause.
 - Four cases of that class pin which order a display rule refuses. They now assert the one finding naming
   only the order the rule admits.
 - Cases about the class arm's restating-existing-therapy skip read their chips beside this finding
@@ -12201,20 +12220,19 @@ a proposal question. Where the question proposes the drug it no longer holds.
 
 ### Consequences
 
-- For a drug of hers that has no other finding, this finding is now the only one: a withholding-class
-  record in the current-medication column. Where her other findings about the drug are all cautions,
-  it is the strongest, so the prompt's ranking sentence now leads with the change-class call. Its
-  strength is Decision 112's unrated default, kept because the issue reuses that finding; the live gate
-  should carry such a cell. Where the drug had exactly one other finding, #397's gate
+- For a drug of hers that has no other finding, this finding is now the only one: a caution in the
+  current-medication column. With one order it cannot outrank her other findings; two or more orders keep
+  the withholding class, as Decision 112 has it. Where the drug had exactly one other finding, #397's gate
   (`severalFindingsAboutOneDrug`) now fires.
-- An order that establishes the drug only by code or by bridged concept, with a display that does not
-  name it, gets the referent but no finding and no clause (Decision 112's display rule).
+- Where every order establishing the drug does so through something other than its display — a code,
+  a bridged concept, a recorded name the display is not — or is an order the module read no name for, the
+  drug gets the referent but no finding and no clause: no order's printed name says it carries the drug.
 - The finding exists only where the interaction arm runs, as Decision 112's does.
 - The finding's sentence contains `ACTIVE_ORDER_NOUN`, and so does the clause. An answer that restates
   either is counted as an active-order claim by `ActiveOrderCitationFidelityCheck`.
 - **The safety probe's scorer does not know this lead or this chip yet**
   (`eval/drift-metric/score_probe_safety.py`). Its default question is a proposal, so on an `own_drug`
-  cell whose order's display names the drug the chip is now raised. `adverse_finding` counts it, so
+  cell whose order's display establishes the drug the chip is now raised. `adverse_finding` counts it, so
   `unsupported_no` — the guard for a model refusing her own drug, the defect this decision is about —
   stops firing there. The lead the clause asks for, *"X is already in the patient's active orders"*,
   scores as neither verdict- nor caution-led. A probe A/B over those cells therefore reads a

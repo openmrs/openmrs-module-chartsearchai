@@ -316,9 +316,11 @@ public class SafetyWarning {
 	 *
 	 * <p>A FACTORY for {@link #classOnlyInteraction}'s reason: every field of this shape but its type
 	 * and the five it takes is false or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart
-	 * record, no bridge (each order it names is named because its own display names the substance, so
-	 * there is nothing to bridge). {@link #restsOnSharedClassificationAlone()} is false: this is an
-	 * identity claim, so {@code DrugSafetyValidator.licensesWithholding} answers by the unrated default.
+	 * record, no bridge (the sentence names each order itself: by the display that names the substance,
+	 * or, on a proposal, by a display that establishes it). {@link
+	 * #restsOnSharedClassificationAlone()} is false: this is an identity claim, so {@code
+	 * DrugSafetyValidator.licensesWithholding} answers by the unrated default — except where
+	 * {@link #restsOnTheProposalAlone()}.
 	 *
 	 * @param orders the displays of the active orders the detail names, in the order it names them —
 	 *        {@link #namedPartners()}, which every interaction chip states
@@ -1336,6 +1338,21 @@ public class SafetyWarning {
 	 */
 	PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered() {
 		return alreadyOrdered;
+	}
+
+	/**
+	 * Whether this finding says a drug the question proposes is already in ONE of her active orders, so
+	 * that the only duplication it reports is the proposal's (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/548">#548</a>, review round 1
+	 * of PR #554). {@code DrugSafetyValidator.licensesWithholding} answers a caution for it: nothing about
+	 * the order she is on needs changing, and stated in the unrated default's withholding class, the record
+	 * would tell the model it is a reason to change her medication, and the prompt's ranking sentence would
+	 * hand it the lead over her other findings' cautions. Several orders of hers duplicate one another, so
+	 * that finding keeps the default. Set by the arm, through {@link #alreadyOrdered()}'s count, and never
+	 * read off the detail. Package-private, so it reaches no wire.
+	 */
+	boolean restsOnTheProposalAlone() {
+		return alreadyOrdered != null && alreadyOrdered.getOrderCount() == 1;
 	}
 
 	/**

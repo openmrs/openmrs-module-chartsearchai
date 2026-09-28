@@ -38,6 +38,14 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * drug ({@code DrugReferenceInjector.questionProposes}) — {@link #aQuestionThatDoesNotProposeHerDrugGetsNeither};
  * and the drug being one the QUESTION put in play — {@link #aDrugOfHersOnlyTheAnswerNamesGetsNeither}.
  * Over the knowledge base the module ships, through the real {@code validate} and {@code injectRecords}.
+ *
+ * <p><b>Which orders it names, and how strongly</b> (review round 1 of PR #554): the referent's own
+ * witnesses whose display establishes the drug, so a brand-named order is told too —
+ * {@link #anOrderWhoseDisplayIsABrandIsToldTooSoTheFindingAndTheFlagAgree}; the display conjuncts'
+ * refusals are {@code SubstanceInSeveralActiveOrdersTest}'s cases. One order is a caution in the
+ * current-medication column — {@link #theOneOrderFindingIsACautionAboutHerMedicationAndNotAReasonToChangeIt}
+ * — and two keep the call to change her medication —
+ * {@link #twoOfHerOrdersCarryingTheProposedDrugStillStateTheCallToChangeHerMedication}.
  */
 public class ProposedDrugAlreadyInHerOrdersTest {
 
@@ -87,6 +95,86 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 					Arrays.asList(PREDNISONE_ORDER), 1)), chart.getDrugsAlreadyOrdered(),
 				"the chart states the fact the user-message clause is written from: " + question);
 		}
+	}
+
+	@Test
+	public void anOrderWhoseDisplayIsABrandIsToldTooSoTheFindingAndTheFlagAgree() {
+		// The owner's direction, section 2: the finding is gated on the predicate that sets
+		// aboutACurrentMedication, "so the chip and the flag cannot disagree". Each order here establishes the
+		// drug without its display NAMING it the way issue #477's display rule reads one, and Barbara Miller's
+		// Advil cell is the issue's own. Each cell: {question, her order, the finding's subject label}.
+		String[][] cells = {
+			{ "Is ibuprofen safe for her?", "Advil 400mg", "Ibuprofen" },
+			{ "Can I give her warfarin?", "Coumadin 5mg", "Warfarin" },
+			{ "Can I give her acetaminophen?", "Tylenol 500mg", "Acetaminophen" },
+			{ "Is it safe to add Prednisone for her?", "Deltasone 5mg", "Prednisone" } };
+		for (String[] cell : cells) {
+			String question = cell[0];
+			String order = cell[1];
+			String drug = cell[2];
+			String other = "Warfarin".equals(drug) ? "Aspirin 81mg" : WARFARIN_ORDER;
+			PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(SHIPPED, 60, null, order, other);
+			List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(SHIPPED).validate("", question, context);
+
+			List<SafetyWarning> found = alreadyIn(warnings);
+			assertEquals(1, found.size(), question + " — was: " + DrugReferenceTestSupport.details(warnings));
+			assertEquals(drug + " is already in active order " + order + " — possible duplicate therapy",
+				found.get(0).getDetail(), question);
+			assertEquals(Arrays.asList(order), found.get(0).namedPartners(), question);
+			for (SafetyWarning warning : warnings) {
+				if (warning.getDrug().startsWith(drug)) {
+					assertTrue(warning.isAboutACurrentMedication(),
+						"every chip about the proposed drug states her medication, the flag the finding is gated on: "
+								+ question + " — " + warning.getDetail());
+				}
+			}
+			assertEquals(Collections.singletonList(new AlreadyOrderedDrug(drug, Arrays.asList(order), 1)),
+				inject(context, question).getDrugsAlreadyOrdered(), question);
+		}
+	}
+
+	@Test
+	public void theOneOrderFindingIsACautionAboutHerMedicationAndNotAReasonToChangeIt() {
+		// One order cannot duplicate itself: only the proposal would. So the finding states the caution clause
+		// in the current-medication column, never the call to change her prednisone (review round 1 of PR
+		// #554) — and the prompt's ranking sentence cannot hand it the lead over a caution.
+		String question = "Is it safe to add prednisone for her?";
+		List<SafetyWarning> found = alreadyIn(DrugReferenceTestSupport.validator(SHIPPED).validate("", question,
+			prednisoneChart()));
+		assertEquals(1, found.size());
+		assertFalse(DrugSafetyValidator.licensesWithholding(found.get(0)),
+			"the one strength definition, which the chip ordering reads too");
+
+		List<String> records = new ArrayList<String>();
+		for (String text : DrugReferenceTestSupport.findingTexts(inject(prednisoneChart(), question))) {
+			if (text.contains(PREDNISONE_ALREADY_IN)) {
+				records.add(text);
+			}
+		}
+		assertEquals(1, records.size(), "the finding reaches the prompt once");
+		assertTrue(records.get(0).endsWith(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION),
+			"a caution about her medication, not a reason to change it: " + records.get(0));
+	}
+
+	@Test
+	public void twoOfHerOrdersCarryingTheProposedDrugStillStateTheCallToChangeHerMedication() {
+		// Issue #477's finding: two of her orders DO duplicate each other, whatever the question proposes, so
+		// its strength stays Decision 112's.
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(SHIPPED, 60, null,
+			PREDNISONE_ORDER, "Prednisone 20mg", WARFARIN_ORDER);
+		String question = "Is it safe to add prednisone for her?";
+		List<SafetyWarning> found = alreadyIn(DrugReferenceTestSupport.validator(SHIPPED).validate("", question,
+			context));
+		assertEquals(1, found.size());
+		assertTrue(DrugSafetyValidator.licensesWithholding(found.get(0)));
+		List<String> records = new ArrayList<String>();
+		for (String text : DrugReferenceTestSupport.findingTexts(inject(context, question))) {
+			if (text.contains("is already in active orders " + PREDNISONE_ORDER)) {
+				records.add(text);
+			}
+		}
+		assertEquals(1, records.size(), "the finding reaches the prompt once");
+		assertTrue(records.get(0).endsWith(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION), records.get(0));
 	}
 
 	@Test

@@ -997,8 +997,8 @@ public class DrugSafetyValidator {
 		// (currentMedicationsInPlay). Asked only of a substance orderEntries holds, the one resolution this
 		// pass already holds, so the referent can narrow what the other consumers of her orders read and
 		// never widen it. A per-call local, for issue #172's reason.
-		Set<Object> herOrderSubstances = currentMedicationsInPlay(inPlay, questionDrugs, question, orderEntries,
-				context, bridgedOrders, coMedications);
+		Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> herOrderSubstances = currentMedicationsInPlay(
+				inPlay, questionDrugs, question, orderEntries, context, bridgedOrders, coMedications);
 		// Whether the question PROPOSES the drug it resolved (issue #548): read off the question alone, so
 		// both passes of a request agree, and ahead of the loop because it is about the whole question.
 		boolean proposes = DrugReferenceInjector.questionProposes(question,
@@ -1016,11 +1016,15 @@ public class DrugSafetyValidator {
 			// take, keep the proposal (currentMedicationsInPlay).
 			// An ended order is not in orderEntries, so a drug her chart holds only as one keeps the proposal
 			// here and EndedOrders states its own referent on the chip (issue #472).
-			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
-			// And whether it is her own drug that the question proposes, so that giving it would duplicate
-			// the order she is on (issue #548): the referent above, for a drug the QUESTION put in play — a
-			// drug of hers only the answer names was proposed by nobody. See alreadyInSeveralOrders.
-			boolean proposedHerOwn = herOrder && proposes && questionSubstances.contains(ref.substanceGroupKey());
+			boolean herOrder = herOrderSubstances.containsKey(ref.substanceGroupKey());
+			// And, where it is her own drug that the question proposes, the orders of hers that establish it,
+			// which giving it would duplicate (issue #548): the referent above and its own witnesses, so the
+			// finding and the flag cannot disagree, for a drug the QUESTION put in play — a drug of hers only
+			// the answer names was proposed by nobody. Null otherwise. See alreadyInSeveralOrders.
+			List<PatientClinicalContext.ActiveDrugOrder> proposedHerOwn =
+					herOrder && proposes && questionSubstances.contains(ref.substanceGroupKey())
+							? herOrderSubstances.get(ref.substanceGroupKey())
+							: null;
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
@@ -1412,6 +1416,13 @@ public class DrugSafetyValidator {
 		// SafetyWarning.restsOnSharedClassificationAlone for the answer it refused on the standalone,
 		// and ratingLicensesWithholding's javadoc for the split this takes the second half of.
 		if (finding.restsOnSharedClassificationAlone()) {
+			return false;
+		}
+		// And a proposal of a drug ONE of her orders already carries (issue #548): the only duplication is
+		// the proposal's, so it is no reason to change the order she is on. Unrated, the rating leg below
+		// would read it as a reason to withhold, and in the current-medication column the call to change
+		// her medication. See SafetyWarning.restsOnTheProposalAlone.
+		if (finding.restsOnTheProposalAlone()) {
 			return false;
 		}
 		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();
@@ -2647,7 +2658,9 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The substances of {@code inPlay} the drug-in-play arm states the CURRENT-medication referent for —
+	 * The substances of {@code inPlay} the drug-in-play arm states the CURRENT-medication referent for, each
+	 * mapped to the active orders of hers that establish it ({@link #ordersEstablishing}; empty where only a
+	 * context carrying no per-order structure establishes it) —
 	 * issue #402, ADR Decision 123: those her active orders ESTABLISH she takes ({@link #ordersEstablishing},
 	 * {@link #establishes}), less any a question may be proposing in a presentation she does not take
 	 * ({@link #mayBeProposingAPresentationSheDoesNotTake}), which a drug the question LISTS as one she is on
@@ -2680,12 +2693,14 @@ public class DrugSafetyValidator {
 	 * {@code DrugReferenceInjector.listedBeforeTheProposal}, the reading {@link #listedWithNoActiveOrder}
 	 * takes, asked only for a drug the gate would keep a proposal.
 	 */
-	private static Set<Object> currentMedicationsInPlay(Set<DrugReference> inPlay,
-			Set<DrugReference> questionDrugs, String question, List<DrugReference> orderEntries,
-			PatientClinicalContext context, BridgedOrders bridgedOrders, CoMedications coMedications) {
+	private static Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> currentMedicationsInPlay(
+			Set<DrugReference> inPlay, Set<DrugReference> questionDrugs, String question,
+			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridgedOrders,
+			CoMedications coMedications) {
 		Set<Object> resolved = substancesOf(orderEntries);
 		Set<Object> asked = new HashSet<Object>();
-		Set<Object> current = new HashSet<Object>();
+		Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> current =
+				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
 		Set<Object> listed = null;
 		for (DrugReference ref : inPlay) {
 			Object substance = ref.substanceGroupKey();
@@ -2720,7 +2735,7 @@ public class DrugSafetyValidator {
 					continue;
 				}
 			}
-			current.add(substance);
+			current.put(substance, carriers);
 		}
 		return current;
 	}
@@ -4472,14 +4487,15 @@ public class DrugSafetyValidator {
 	 *        {@code validate}'s one answer for it ({@link #currentMedicationsInPlay}), stated on every chip
 	 *        this method builds, rule, merged, class-only and several-orders alike (issue #402, ADR
 	 *        Decision 123)
-	 * @param proposedHerOwn whether the question proposes this drug and it is hers — {@code validate}'s
-	 *        answer, read by {@link #alreadyInSeveralOrders} alone (issue #548)
+	 * @param proposedHerOwn where the question proposes this drug and it is hers, the orders of hers that
+	 *        establish it — {@code validate}'s answer, read by {@link #alreadyInSeveralOrders} alone (issue
+	 *        #548); null otherwise
 	 */
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
 			StatedInteractionChips statedChips, BridgedOrders bridgedOrders, EndedOrders endedOrders,
-			boolean herOrder, boolean proposedHerOwn) {
+			boolean herOrder, List<PatientClinicalContext.ActiveDrugOrder> proposedHerOwn) {
 		if (context == null) {
 			return 0;
 		}
@@ -4818,6 +4834,7 @@ public class DrugSafetyValidator {
 	 * itself, and a drug does not duplicate itself (issue #185). Which orders count is
 	 * {@link CoMedications#ordersWhoseDisplayNames}, and the
 	 * sentence names each by that same display, so the evidence and the printed name are one string.
+	 * The proposal branch below counts other orders, and says which.
 	 *
 	 * <p><b>Its REFERENT is its arm's</b>, {@code herOrder}, like every other finding this arm raises
 	 * about the drug in play: stated in the other column beside them, one response would refuse the drug
@@ -4827,34 +4844,69 @@ public class DrugSafetyValidator {
 	 * take ({@link #currentMedicationsInPlay}). A recorded name that NAMES the substance establishes it,
 	 * so where two of her orders' displays name it — the displays being among the names the builder
 	 * records — this finding states that referent too, the gate aside. Its STRENGTH is the unrated
-	 * default, so it states the withholding class. ADR Decisions 112 and 123 carry why of both.
+	 * default, so it states the withholding class, except where it names one order (below). ADR
+	 * Decisions 112 and 123 carry why of both.
 	 *
-	 * <p><b>One order is enough where the question PROPOSES the drug and it is hers</b>
-	 * ({@code proposedHerOwn}, issue #548): giving it would duplicate that order, which is what the
-	 * question needs to be told. <em>"Is it safe to add prednisone for her?"</em> over a
-	 * {@code Prednisone Co 5mg} order opened by refusing it, every finding stating it as her medication,
-	 * and the owner measured the refusal following the question's verb. So the finding names the one
-	 * order, and marks itself ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}) so the injector
-	 * can state the same fact after the question. The referent is the gate: a drug her orders resolve to
-	 * without establishing it, or one the question may be proposing in a presentation she does not take,
-	 * keeps the #185 answer, as does every question that does not propose it. ADR Decision 125.
+	 * <p><b>Where the question PROPOSES the drug and it is hers</b> ({@code proposedHerOwn}, issue #548),
+	 * one order is enough: giving it would duplicate that order, which is what the question needs to be
+	 * told. <em>"Is it safe to add prednisone for her?"</em> over a {@code Prednisone Co 5mg} order opened
+	 * by refusing it, every finding stating it as her medication, and the owner measured the refusal
+	 * following the question's verb. The finding marks itself
+	 * ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}) so the injector can state the same fact
+	 * after the question.
+	 * <ul>
+	 * <li><b>The gate is the referent</b>, and the orders this branch counts are drawn from its own
+	 *     witnesses, the orders that ESTABLISH she takes the drug ({@link #currentMedicationsInPlay},
+	 *     {@link #ordersEstablishing}), so this branch states the finding only where the
+	 *     {@code aboutACurrentMedication} flag is stated, which the issue's direction asks. A drug her orders resolve to without establishing
+	 *     it, one the question may be proposing in a presentation she does not take, and every question
+	 *     that does not propose it, keep the #185 answer. Where #477's display rule already finds two
+	 *     orders, its finding is raised as before, and marked.</li>
+	 * <li><b>Each order counted is one whose DISPLAY establishes the drug on its own</b>
+	 *     ({@link CoMedications#substancesTheNameEstablishes} of the display, for an order
+	 *     {@link #displayNamesADrug} admits), so the evidence and the printed name are still one string, as
+	 *     Decision 112 has them: a brand-named order ({@code Advil 400mg} for ibuprofen) is counted, and an
+	 *     order another of its recorded names establishes the drug for, under a display naming something
+	 *     else, is not (issue #293's shape).</li>
+	 * <li><b>The residue</b>, where the flag is stated and this finding is not: every witness establishes
+	 *     the drug through something other than its display — a code, a bridged concept, a recorded name
+	 *     the display is not — or is an order the module could read no name for, or the context carries no
+	 *     per-order structure. There is then no order whose printed name says it carries the drug.</li>
+	 * <li><b>One order is a caution</b> ({@link SafetyWarning#restsOnTheProposalAlone()}): only the
+	 *     proposal would duplicate it, so nothing about her current medication needs changing. Two or
+	 *     more orders of hers duplicate one another, and keep the unrated default.</li>
+	 * </ul>
+	 * ADR Decision 125.
 	 *
-	 * @param proposedHerOwn whether the question proposes this drug in play and it is hers
+	 * @param proposedHerOwn where the question proposes this drug in play and it is hers, the orders of hers
+	 *        that establish it; null otherwise
 	 */
 	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications,
-			boolean herOrder, boolean proposedHerOwn) {
-		int fewest = proposedHerOwn ? 1 : 2;
+			boolean herOrder, List<PatientClinicalContext.ActiveDrugOrder> proposedHerOwn) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =
-				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey(), fewest);
-		if (carriers.size() < fewest) {
-			return null;
+				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey());
+		if (carriers.size() < 2) {
+			if (proposedHerOwn == null) {
+				return null;
+			}
+			carriers = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+			for (PatientClinicalContext.ActiveDrugOrder order : proposedHerOwn) {
+				if (displayNamesADrug(order)
+						&& coMedications.substancesTheNameEstablishes(order.getDisplay())
+								.contains(ref.substanceGroupKey())) {
+					carriers.add(order);
+				}
+			}
+			if (carriers.isEmpty()) {
+				return null;
+			}
 		}
 		Map<String, Integer> ordersByDisplay = ordersByDisplay(carriers);
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
 					+ " — possible duplicate therapy",
 			new ArrayList<String>(ordersByDisplay.keySet()), herOrder,
-			proposedHerOwn ? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(),
+			proposedHerOwn != null ? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(),
 				orderLabels(ordersByDisplay), carriers.size()) : null);
 	}
 
@@ -4952,7 +5004,7 @@ public class DrugSafetyValidator {
 				new HashSet<List<PatientClinicalContext.ActiveDrugOrder>>();
 		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
 			Object substance = rows.get(0).substanceGroupKey();
-			List<PatientClinicalContext.ActiveDrugOrder> carriers = coMedications.ordersWhoseDisplayNames(substance, 2);
+			List<PatientClinicalContext.ActiveDrugOrder> carriers = coMedications.ordersWhoseDisplayNames(substance);
 			if (carriers.size() < 2) {
 				continue;
 			}
@@ -11678,12 +11730,11 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#displayNamesADrug} admits (issue #290), and deliberately narrower
 		 * than the co-medication walk and {@link DrugSafetyValidator#resolvesFrom}, which also accept a
 		 * shared ATC code or a bridged concept. ADR Decision 112 carries why, and what it gives up.
-		 * Empty for a chart of fewer than {@code fewest} orders, which cannot raise the caller's finding,
-		 * without resolving anything: two for the findings that orders DUPLICATE one another, one for a
-		 * proposal of a drug an order of hers already carries (issue #548).
+		 * Empty for a chart of fewer than two orders, which cannot raise the finding, without resolving
+		 * anything.
 		 */
-		List<PatientClinicalContext.ActiveDrugOrder> ordersWhoseDisplayNames(Object substance, int fewest) {
-			if (context == null || context.getActiveDrugOrders().size() < fewest) {
+		List<PatientClinicalContext.ActiveDrugOrder> ordersWhoseDisplayNames(Object substance) {
+			if (context == null || context.getActiveDrugOrders().size() < 2) {
 				return Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList();
 			}
 			List<PatientClinicalContext.ActiveDrugOrder> carriers =
@@ -11736,7 +11787,9 @@ public class DrugSafetyValidator {
 		 *
 		 * <p>Unlike {@link #substancesItsDisplayNames}, which asks of an order's DISPLAY before a finding prints
 		 * that order as carrying the drug, this asks of every name the chart recorded and requires no naming
-		 * where there is nothing to tell apart: it states whether she is on the drug, and prints no order.
+		 * where there is nothing to tell apart: it states whether she is on the drug. It prints an order in
+		 * one place, the finding a proposal of her own drug raises (issue #548), and there it is asked of the
+		 * DISPLAY that is printed ({@link DrugSafetyValidator#alreadyInSeveralOrders}).
 		 */
 		Set<Object> substancesTheNameEstablishes(String name) {
 			Set<Object> established = substancesByRecordedName.get(name);

@@ -28,7 +28,7 @@ public class ChartSearchAiConstants {
 	/**
 	 * When {@code true}, the chart serializer run-length de-dups the obs-group membership label: a member
 	 * renders {@code " (part of: <group>)"} only when its group differs from the immediately-preceding
-	 * record's group (mirrors the date-run compression). Applies to ALL obs groups (lab panels,
+	 * record's group (as the opt-in date-run compression does). Applies to ALL obs groups (lab panels,
 	 * vital-signs sets, exam findings, ...), not only lab panels. VERIFIED 2026-06-18: real saving is only
 	 * ~2% of prompt tokens (a chars/4 estimate had overstated it ~3x), and it is SAFE ONLY ON E4B+ — on
 	 * the small E2B model it causes a clustering failure (a false "no results" for a thinned-label group).

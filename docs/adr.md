@@ -127,6 +127,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 119: A question that lists her medications is held to her chart](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)
 - [Decision 120: An active-order claim is held to the findings that relate its pair](#decision-120-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
 - [Decision 121: The "Drug reference" record-type sentence is unchanged, and the three rewordings measured for it are inconclusive rather than refuted](#decision-121-the-drug-reference-record-type-sentence-is-unchanged-and-the-three-rewordings-measured-for-it-are-inconclusive-rather-than-refuted)
+- [Decision 122: Every record of the whole chart carries its own date](#decision-122-every-record-of-the-whole-chart-carries-its-own-date)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -370,7 +371,7 @@ A generic `ClinicalTextSerializer<T>` interface with one implementation per Open
 | `MedicationDispenseTextSerializer` | `"Dispensed: Metformin 500mg. Status: Completed. Quantity: 30 Tablet(s). Dose: 1 Tablet(s) Oral twice daily"` |
 
 Key design choices:
-- The **record date** (when it was observed/created) is not produced by the serializer itself. Instead, `PatientChartSerializer` prepends it as a citation label when constructing the LLM prompt (e.g., `[1] (2025-10-30) Systolic Blood Pressure: 120 mmHg`). To save prompt tokens the date is **run-length compressed** — rendered on the first record of each consecutive same-date run and omitted on the rest — so the **LLM still sees every record's date** (each record either carries its own date or inherits the one shown just above it in the same run); it is just added at the prompt assembly level rather than the serializer level. The `RecordMapping` used for citation grounding retains each record's date regardless of this display compression. The date is also included in the API response's `references` array for the UI to display. Records are sorted most-recent-first, giving the LLM a positional recency signal in addition to the explicit date.
+- The **record date** (when it was observed/created) is not produced by the serializer itself. Instead, `PatientChartSerializer` prepends it as a citation label when constructing the LLM prompt (e.g., `[1] (2025-10-30) Systolic Blood Pressure: 120 mmHg`). Every dated record carries its own date on its own line. It is added at the prompt assembly level rather than the serializer level. From #66 until [Decision 122](#decision-122-every-record-of-the-whole-chart-carries-its-own-date) the whole chart run-length compressed it, rendering it on the first record of each consecutive same-date run only, on the premise that a follow-on inherits the date shown above it; the model does not read it that way. The `RecordMapping` used for citation grounding retains each record's date either way. The date is also included in the API response's `references` array for the UI to display. Records are sorted most-recent-first, giving the LLM a positional recency signal in addition to the explicit date.
 
   The date is excluded from the serializer because **the same serialized text is used for both embedding and LLM input**. `EmbeddingIndexer` passes `record.getText()` directly to the embedding model. If the serializer included the date, then `"(2024-06-15) Systolic Blood Pressure: 120 mmHg"` and `"(2025-10-30) Systolic Blood Pressure: 120 mmHg"` would produce different embedding vectors despite being clinically identical observations. The date text would pollute the semantic similarity — a query like "blood pressure" would get slightly different similarity scores for the same reading depending on when it was recorded. By keeping dates out of the serialized text, embeddings reflect pure clinical content, and the date is added only at prompt assembly time when it is needed for the LLM.
 
@@ -2089,7 +2090,7 @@ The fullChart architecture amortizes one large prefill (whole chart, ~13–15k t
 
 ### Decision
 
-Add a second chart-assembly mode. `QueryScopeRouter` matches the question against conservative word-boundary cue sets — MEDICATIONS, ALLERGIES, PROGRAMS, CONDITIONS, VISITS, ORDERS get their record types included *complete* (an enumeration answer cannot omit what isn't retrieved); a question matching several cue sets ("any drug allergies?") carries the *union* of the matched intents' types, because first-match routing silently dropped the runner-up's completeness on exactly the type being enumerated; everything cue-free is TOPICAL. Every slice also carries the querystore similarity top-K (semantic catch-all; lab abbreviations expanded first, e.g. BMP → basic metabolic panel), the demographics record, obs-group *family completion* (a panel parent or member in the slice pulls the whole panel — member texts carry no panel name, so similarity alone misses the values), and — only for temporal questions ("most recent…", "lately…") — a recency anchor of the chart's newest records. Slices render in chart order (most recent first) with a date on every record: run-length date compression is a full-chart token optimization, and at slice scale it hid exactly the dates temporal questions need. Records whose querystore date is administrative render undated in both modes — `patient` and `allergy` (dateCreated), the two types measured answering "when was the last visit?" with record-keeping time. Known remainder: querystore also stamps dateCreated on `condition`/`diagnosis` (unconditionally) and on `program`/`medication_dispense` (when their clinical date is null); those still render it, so a "when was X diagnosed?" answer can quote record-keeping time. They stay dated for now because blanket-undating an unmeasured type can cost more than it fixes (an undated condition list loses chronology; condition's clinical onset_date sits in doc metadata, unrendered) — extending the set, or rendering onset instead, is follow-up work behind the two gates below. In scoped mode, warmup, the prewarm bootstrap sweep, per-patient KV persistence, and the progressive-reasoning preview all disengage (the same `shouldRunWarmup` decision point Decision 12's machinery already consulted).
+Add a second chart-assembly mode. `QueryScopeRouter` matches the question against conservative word-boundary cue sets — MEDICATIONS, ALLERGIES, PROGRAMS, CONDITIONS, VISITS, ORDERS get their record types included *complete* (an enumeration answer cannot omit what isn't retrieved); a question matching several cue sets ("any drug allergies?") carries the *union* of the matched intents' types, because first-match routing silently dropped the runner-up's completeness on exactly the type being enumerated; everything cue-free is TOPICAL. Every slice also carries the querystore similarity top-K (semantic catch-all; lab abbreviations expanded first, e.g. BMP → basic metabolic panel), the demographics record, obs-group *family completion* (a panel parent or member in the slice pulls the whole panel — member texts carry no panel name, so similarity alone misses the values), and — only for temporal questions ("most recent…", "lately…") — a recency anchor of the chart's newest records. Slices render in chart order (most recent first) with a date on every record: run-length date compression is a full-chart token optimization, and at slice scale it hid exactly the dates temporal questions need. (It hid them on the full chart too, which since [Decision 122](#decision-122-every-record-of-the-whole-chart-carries-its-own-date) dates every record as well.) Records whose querystore date is administrative render undated in both modes — `patient` and `allergy` (dateCreated), the two types measured answering "when was the last visit?" with record-keeping time. Known remainder: querystore also stamps dateCreated on `condition`/`diagnosis` (unconditionally) and on `program`/`medication_dispense` (when their clinical date is null); those still render it, so a "when was X diagnosed?" answer can quote record-keeping time. They stay dated for now because blanket-undating an unmeasured type can cost more than it fixes (an undated condition list loses chronology; condition's clinical onset_date sits in doc metadata, unrendered) — extending the set, or rendering onset instead, is follow-up work behind the two gates below. In scoped mode, warmup, the prewarm bootstrap sweep, per-patient KV persistence, and the progressive-reasoning preview all disengage (the same `shouldRunWarmup` decision point Decision 12's machinery already consulted).
 
 ### Evidence (rc.2 standalone, E4B, July 2026 gates)
 
@@ -11608,3 +11609,106 @@ re-proposal needs the null arms beside it rather than a zero A/A floor. The note
 experiment, and does not touch the prompt.
 
 → `ReferenceRecordAttributionAnswerTest` (opt-in).
+
+## Decision 122: Every record of the whole chart carries its own date
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#528](https://github.com/openmrs/openmrs-module-chartsearchai/issues/528). Reverses #66's date-run
+compression for every chart that reaches the model.
+
+### Context
+
+#66 rendered a record's `(date)` only on the first record of each consecutive same-date run, and
+recorded the follow-on lines as harmless because they are *"byte-shaped exactly like a legacy undated
+line"*. That shape is the defect. Nothing in `DEFAULT_SYSTEM_PROMPT` says a dateless line inherits a
+date, and the model reads it as having none. The query-scoped slice had already opted out for that
+reason ([Decision 28](#decision-28-query-scoped-slice-charts-chartmodequeryscoped)). The whole chart
+(`build`, in both preFilter settings) and the preview's focused chart (`buildFocused`) had not.
+
+The issue measured it on one patient's captured prompt, replayed on the module's own llama-server with
+Gemma 4 E4B. The last visit came back as *"No specific date for the last visit is recorded"*, and the
+newest weight came back as the older reading. Dating every record answered both, for **+432 prompt
+tokens on that 44-record chart (3738 → 4170)**. #66 had put the saving at ~30–37% of prompt tokens on
+its eval charts.
+
+### The decision
+
+**`PatientChartSerializer`'s default overloads render every dated record's date.** The locus is the
+default, so `build` and `buildFocused` change with it (`buildScoped` already passed `false`), and a future caller cannot inherit compression by
+omission. `serialize(…, compressDateRuns)` keeps `true` as an explicit opt-in that no production path
+passes. It stays so that a form making a follow-on *distinguishable* from an undated record can be
+measured against it. Nobody has built or measured such a form. The one related form #66 did measure,
+a `=== <date> ===` section header, collapsed E2B's meanF1 (0.309) and stays rejected. No global
+property was added, because it would re-enable a rendering measured to give wrong answers.
+
+**Measured 2026-09-27**, on a local standalone (the demo database's 64 patients, querystore drift 0 on
+visit/encounter/patient). Settings: Gemma 4 E4B Q4_K_M, local engine, `chartMode=fullChart`,
+`embedding.preFilter=false`. Arm A was an omod built from `main` @ `f972be96`, and arm C one built
+from this change. Each arm ran twice, and each arm's two runs were byte-identical in every answer.
+
+- **The issue's questions, on its patient `763e6e5f…`** (present on this database). Arm A failed both,
+  the visit a different way from the issue's capture: *"The last visit was an OPD Visit at Site 42 [43]."*, which is the older visit, and
+  *"The last weight measurement was 64 kg [39]."*. Arm C answered *"The weight was last measured on
+  2026-06-15 [22]."*, and named 2026-06-15 as the last visit.
+- **`eval/drift-metric/temporal_probe_rc2.py`**, driven unchanged except for its `PATIENTS` list.
+  The five rc.2 patients it pins are not on this database, so it ran over six that are: the issue's
+  patient and five with 181–261 obs. The run had 18 cells. **Arm A passed 7/18 and arm C 15/18.**
+  Nine cells went FAIL → PASS. One went PASS → FAIL: `dc8560c9` weight. Arm A gave *99 kg*, which is
+  right. Arm C gave *"51 kg on 2023-03-02"*, a correctly dated but older reading. Arm C's two other
+  failures (`3012b45e` weight and last visit) fail in arm A too.
+- **Cost**, as the audit rows' `input_tokens` (the whole prompt) for the weight question per
+  patient. On the issue's patient it rose from 3728 to 4160 (+11.6%). On the five larger charts it
+  rose from 11 501–16 097 tokens to 15 329–21 171, which is **+26% to +33%**. A chart that fit
+  `chartsearchai.llm.contextSize` with compression can now overflow it. `LocalLlmEngine` already fails that loudly, naming the property.
+
+**The drift metric's gold could not score this database, so its presence axis was A/B'd instead.**
+None of its four standalone persona patients are here. On 2026-09-27, same standalone and settings,
+the README's pure-prompt A/B (`eval/drift-metric/README.md`, *Pure-prompt A/B for the #107 verdict
+guard*) ran in its place: `capture_probe_yesno.sh` with `CAPTURE_TIER_B=0` over eight patients (the
+six above plus two sparse ones, `38beca4a…` and `d6566336…`) times its eight Tier-A presence topics,
+64 cells per arm, every patient warmed first, and `compare_arms.py` with A as baseline. Each arm was
+captured twice. Arm C's two captures were identical in all 64 answers; arm A's differed in the wording
+of one (`38beca4a` heart, a NO both times). So the A/A floor was zero class flips in each arm.
+
+- **Verdict leads** (`compare_arms.py`'s directness, of the 64 cells): arm A 64/64, arm C 63/64.
+  YES/NO/NONE: A 35/29/0, C 35/28/1.
+- **Seven cells changed class.** Each was read against the patient's conditions, encounter diagnoses
+  and program enrollments in the database.
+  - Arm C drops two false presences arm A gave. `3012b45e` programs: A answered *"Yes — the patient
+    is classified as being in the low-income population"*, which is a condition, and the patient has
+    no enrollment. `763e6e5f` eye: A cited a tetryzoline (ophthalmic) drug allergy as an eye issue.
+  - **Arm C adds two false presences arm A did not give.** `49485340` heart: *"Yes — a family history
+    of hypertension is recorded"*, and no heart condition or diagnosis of his own is recorded. `dc8560c9` kidney:
+    *"Yes, kidney function tests are recorded"*, from labs alone, with no kidney condition or
+    diagnosis recorded. Arm A answered both with the "No … diagnosis is recorded" form.
+  - `3012b45e` kidney loses its verdict in arm C. It lists the same three labs without arm A's
+    *"No kidney issues diagnosis is recorded"*.
+  - Two borderline mental cells moved in opposite directions. `38beca4a` went NO → YES, on a recorded
+    stuttering and a nicotine-related disorder. `763e6e5f` went YES → NO, where a memory-loss
+    condition is the only candidate.
+- **Read together:** in this capture, arm C traded two false presences for two others and lost one
+  verdict lead. Each flip reproduced in both of its arm's captures. They do not cluster in one
+  direction, so this capture does not show inline dates raising or lowering the false-presence rate.
+  It does show that they change which cells get one.
+
+#66's pull-request table is the drift measurement of inline dates (32 cells): E2B
+inline 0.432 / 1.00 / 57 (meanF1 / abstention / drift) against date-run alone 0.428 / 1.00 / 95; E4B
+inline 0.418 / 0.91 / 110 against date-run with the `.0` trim 0.438 / 1.00 / 57. The trim stays, and
+inline dates with the trim were never measured on that metric. Its commit message (`61d1785c`) gives 0.428 / 1.00 / 95
+as E4B's date-run row, which the table gives to E2B. Both were taken with no A/A floor and against a
+system prompt that has since changed.
+
+**Deploy note.** The chart bytes change, so every persisted full-chart KV entry misses once, and a
+pinned corpus has to be re-primed with `action=restart`. Until it is, a query re-persists a pinned
+patient's entry through `LocalLlmEngine.persistKvEntry`'s four-argument form, which pins nothing and
+purges the old pinned entry. [Decision 47](#decision-47-an-answer-naming-a-drug-from-an-ended-order-says-so)
+records the same for #315's prompt change, through chart-open warmup. A persisted KV file's size tracks its chart's tokens, so the corpus's disk use grows
+with the prompt.
+
+→ `QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_soTheNewestWeightAndLastVisitAreNotReadAsUndated`,
+`QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_inPreFilterModeToo`,
+`QueryStoreChartBuilderTest.buildFocused_datesEverySameDateFollowOn`,
+`QueryStoreChartBuilderTest.build_datesEverySameDateFollowOn_onTheFullPatientDataset` (the real
+dataset's long same-date runs, where a compression gated on chart size would show);
+`PatientChartSerializerTest.serialize_dropsRepeatedDateOnConsecutiveSameDateRecords_whenACallerOptsIntoCompression`
+pins the opt-in.

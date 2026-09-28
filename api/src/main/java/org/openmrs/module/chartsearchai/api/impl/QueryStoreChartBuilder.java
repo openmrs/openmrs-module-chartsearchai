@@ -368,8 +368,8 @@ class QueryStoreChartBuilder {
 
 		List<SerializedRecord> records = toSerializedRecords(patient, sliceDocs);
 		long serializeStart = System.currentTimeMillis();
-		// compressDateRuns=false: the slice is small enough to date every record, and temporal
-		// questions need the date on the record itself (see the serializer overload's javadoc).
+		// Every record dated, as on the whole chart: temporal questions need the date on the record
+		// itself (see the serializer overload's javadoc).
 		PatientChart chart = chartSerializer.serialize(patient, records,
 				Collections.<String>emptySet(), false, false);
 		long serializeMs = System.currentTimeMillis() - serializeStart;

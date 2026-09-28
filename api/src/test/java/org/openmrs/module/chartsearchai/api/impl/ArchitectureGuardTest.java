@@ -845,23 +845,25 @@ public class ArchitectureGuardTest {
 	 * of its own.</li>
 	 * <li>The stamp is {@code final}, so a reassignment later in the body does not compile, and
 	 * deleting the {@code final} to allow one fails here.</li>
-	 * <li>Every {@code requireListenerMayBeServed} call must end its statement on the bare local as
-	 * its LAST argument, read to the statement's {@code ;} rather than the first {@code )}, since
-	 * the call's other arguments contain calls of their own. So {@code System.nanoTime()} there
-	 * fails, and so do a conditional ending {@code : launchedAtNanos}, arithmetic on it, or a
-	 * call wrapping it.</li>
+	 * <li>Every {@code requireListenerMayBeServed} call must BEGIN its statement and end it on the
+	 * bare local as its LAST argument, read to the statement's {@code ;} rather than the first
+	 * {@code )}, since the call's other arguments contain calls of their own. Beginning it is what
+	 * makes that last {@code )} the gate's own: a review round measured an outer call taking the
+	 * stamp while the gate, passed to it in a lambda, was handed another. So
+	 * {@code System.nanoTime()} there fails, and so do a conditional ending
+	 * {@code : launchedAtNanos}, arithmetic on it, or a call wrapping it.</li>
 	 * </ul>
 	 *
 	 * <p><b>The residue, named rather than claimed away.</b> Text cannot see reachability or
 	 * identity, and a review round demonstrated the second: a call made inside an anonymous class
 	 * whose own field is named {@code launchedAtNanos} satisfies every part above while handing the
-	 * gate that field. The gate's own body is not read either: one counting from a field that only
-	 * {@code startServer} sets, rather than from its parameter, was measured green here and in
-	 * {@code LocalLlmServerAuthTest}. What {@code startServer} runs AROUND the call is not read:
-	 * work inserted between {@code pb.start()} and it makes the stamp LATE, which lengthens the
-	 * window and can cost a wait rather than opening the gate. Nor is a caller outside this class,
-	 * the gate being package-private. Read this as "the line readiness hands the gate names the
-	 * stamp its first statement took", and no more.
+	 * gate that field. The gate's own body is not read either: one counting from the earlier of its
+	 * parameter and a field only {@code startServer} sets, the field unset in every test, was
+	 * measured green here and in {@code LocalLlmServerAuthTest}. What {@code startServer} runs
+	 * AROUND the call is not read: work inserted between {@code pb.start()} and it makes the stamp
+	 * LATE, which lengthens the window and can cost a wait rather than opening the gate. Nor is a
+	 * caller outside this class, the gate being package-private. Read this as "readiness's gate
+	 * call ends on the name its first statement stamped", and no more.
 	 */
 	@Test
 	public void theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes() throws IOException {
@@ -886,7 +888,8 @@ public class ArchitectureGuardTest {
 		}
 		int counted = 0;
 		for (Matcher m = Pattern.compile(
-				"\\brequireListenerMayBeServed\\s*\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;").matcher(body); m
+				"(?:^|[;{}])\\s*requireListenerMayBeServed\\s*\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;")
+						.matcher(body); m
 						.find();) {
 			counted++;
 		}

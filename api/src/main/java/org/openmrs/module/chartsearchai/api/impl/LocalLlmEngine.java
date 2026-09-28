@@ -1280,11 +1280,12 @@ public class LocalLlmEngine implements LlmEngine {
 	private void waitForServerReady() {
 		// The moment CHILD_BIND_SETTLE_MS is counted from, stamped HERE rather than passed in from
 		// startServer: all that separates this line from pb.start() is the construction of one
-		// daemon thread, and a stamp this method takes for itself cannot be wired to the wrong
-		// moment — which a parameter can, silently and fail-open, since every test of the gate
-		// supplies that value directly. Erring a millisecond late only lengthens the window. Final,
-		// and the first statement here, because that is what
-		// ArchitectureGuardTest.theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes reads.
+		// daemon thread, while a value handed in from startServer can be taken ahead of the port
+		// probe, silently and fail-open. No behavioural case sees which moment the gate is handed —
+		// every test of it supplies that value directly — so
+		// ArchitectureGuardTest.theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes reads
+		// this stamp, its finality and the call below. Erring a millisecond late only lengthens the
+		// window.
 		final long launchedAtNanos = System.nanoTime();
 		long deadline = System.currentTimeMillis() + (SERVER_STARTUP_TIMEOUT_SECONDS * 1000L);
 

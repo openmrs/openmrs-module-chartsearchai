@@ -835,6 +835,14 @@ public class ArchitectureGuardTest {
 	 * <li>The stamp must be the FIRST statement of the no-argument {@code waitForServerReady}, so
 	 * nothing in readiness runs ahead of it and it cannot move into the poll loop. A stamp handed in
 	 * as a parameter changes the signature and leaves nothing to slice, which fails here.</li>
+	 * <li>The compiled class declares ONE method of each name, and {@code startServer} calls
+	 * {@code waitForServerReady()}. A review round measured why, with this rule green on both: a
+	 * parameterised overload beside an untouched, uncalled no-argument method made this read a
+	 * decoy, and a five-argument gate overload ignoring its last argument let the call end on the
+	 * stamp while the gate was handed another. Asked of the class rather than of spellings.</li>
+	 * <li>The gate is named nowhere in the file but its declaration and this body, method
+	 * references included, so a readiness path under another name cannot reach it with a stamp
+	 * of its own.</li>
 	 * <li>The stamp is {@code final}, so a reassignment later in the body does not compile, and
 	 * deleting the {@code final} to allow one fails here.</li>
 	 * <li>Every {@code requireListenerMayBeServed} call must end its statement on the bare local as
@@ -844,11 +852,11 @@ public class ArchitectureGuardTest {
 	 * call wrapping it.</li>
 	 * </ul>
 	 *
-	 * <p><b>The residue.</b> Text cannot see reachability, and nothing here reads
-	 * {@code startServer}: work inserted there between {@code pb.start()} and the
-	 * {@code waitForServerReady()} call makes the stamp LATE, which lengthens the window and costs
-	 * a wait rather than opening the gate. Read this as "the window is counted from the first thing
-	 * readiness does", and no more.
+	 * <p><b>The residue.</b> Text cannot see reachability, and what {@code startServer} runs AROUND
+	 * the call is not read: work inserted between {@code pb.start()} and it makes the stamp LATE,
+	 * which lengthens the window and can cost a wait rather than opening the gate. Nor is a caller
+	 * outside this class, the gate being package-private. Read this as "the window is counted from
+	 * the first thing readiness does", and no more.
 	 */
 	@Test
 	public void theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes() throws IOException {
@@ -878,6 +886,36 @@ public class ArchitectureGuardTest {
 			violations.add("waitForServerReady() calls requireListenerMayBeServed without the launch"
 					+ " stamp as its last argument (" + counted + " of " + calls + " calls) — the"
 					+ " settle window is then counted from some other moment");
+		}
+		for (String name : java.util.Arrays.asList("waitForServerReady", "requireListenerMayBeServed")) {
+			long declared = java.util.Arrays.stream(LocalLlmEngine.class.getDeclaredMethods())
+					.filter(method -> method.getName().equals(name)).count();
+			if (declared != 1) {
+				violations.add("LocalLlmEngine declares " + declared + " methods named " + name
+						+ " — an overload is a second readiness path or a second gate, and the one"
+						+ " this test reads is then not the one that runs");
+			}
+		}
+		Pattern gateName = Pattern.compile("\\brequireListenerMayBeServed\\b");
+		int named = 0;
+		for (Matcher m = gateName.matcher(withoutCommentsOrLiterals(source)); m.find();) {
+			named++;
+		}
+		int namedInReadiness = 0;
+		for (Matcher m = gateName.matcher(body); m.find();) {
+			namedInReadiness++;
+		}
+		if (named != namedInReadiness + 1) {
+			violations.add("LocalLlmEngine names requireListenerMayBeServed "
+					+ (named - 1 - namedInReadiness)
+					+ " time(s) outside its declaration and waitForServerReady() — a gate reached from"
+					+ " elsewhere is handed a stamp this test does not read");
+		}
+		String launch = methodBodyWithoutLiterals(source, "private void startServer(String modelPath)");
+		if (launch == null
+				|| !Pattern.compile("\\bwaitForServerReady\\s*\\(\\s*\\)\\s*;").matcher(launch).find()) {
+			violations.add("startServer(String) no longer calls waitForServerReady() — the readiness"
+					+ " this test reads is then not the one the launch runs");
 		}
 		assertNoViolations(violations);
 	}
@@ -953,10 +991,7 @@ public class ArchitectureGuardTest {
 		// raw source let one unbalanced '{' in a comment run the slice to the end of the class —
 		// measured, and every needle was then satisfied by the DECLARATIONS below, which is the
 		// vacuity this method exists to remove.
-		String stripped = String.join("\n",
-						codeLines(java.util.Arrays.asList(source.split("\n", -1))))
-				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
-				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
+		String stripped = withoutCommentsOrLiterals(source);
 		int at = stripped.indexOf(signature);
 		if (at < 0) {
 			return null;
@@ -970,6 +1005,16 @@ public class ArchitectureGuardTest {
 		// balance, which is the runaway above, and a body running to the end of the file is a
 		// failure to slice rather than a body.
 		return close >= stripped.length() ? null : stripped.substring(open, close);
+	}
+
+	/**
+	 * {@code source} with comments dropped and string and character literals blanked — the text
+	 * {@link #methodBodyWithoutLiterals} slices, for a caller that must read the whole file.
+	 */
+	private static String withoutCommentsOrLiterals(String source) {
+		return String.join("\n", codeLines(java.util.Arrays.asList(source.split("\n", -1))))
+				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
+				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
 	}
 
 	/**

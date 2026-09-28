@@ -2566,16 +2566,16 @@ public class ArchitectureGuardTest {
 	 * markers instead of sentences leaves it green; whether THAT is silent is a question for the
 	 * behavioural cases and not for this one, and it has not been measured. A call through a
 	 * method reference is out of reach for the same reason its neighbour's residue names: this
-	 * reads source text and understands no Java. So is any call written on a line
+	 * reads source text and understands no Java. So is any call on a line
 	 * {@code enclosingMethodOf} reports as its own enclosing declaration, which the loop skips as
-	 * the device that tells {@code newSentence}'s declaration from a call of it: a top-level member
-	 * declared and bodied on one line, whether a delegating factory or a per-marker splitter
-	 * calling this one directly. A delegating factory whose call sits on any other line is caught,
-	 * by that call site and not by the splitter that uses it. Measured on {@code 4cddee15}: the one-line
+	 * the device that tells {@code newSentence}'s declaration from a call of it — as that helper
+	 * is written, any line indented exactly one tab that does not open with a closing brace.
+	 * Measured on {@code 4cddee15}: the one-line
 	 * {@code private static Sentence viaDelegate(String text) { return newSentence(text); }} and a
-	 * one-line per-marker splitter each leave this rule green, and that delegate written across
-	 * three lines fails it. Issue #455 reports the one-line delegate as caught, which did not
-	 * reproduce.
+	 * one-line per-marker splitter each leave this rule green, while that delegate with its call
+	 * on an indented line of its body fails it, reported at the delegate's own declaration and not
+	 * at a splitter that uses it. Issue #455 reports the one-line delegate as caught, which did
+	 * not reproduce.
 	 */
 	@Test
 	public void theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter() throws IOException {

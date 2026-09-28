@@ -780,7 +780,9 @@ public class ActiveOrderCitationFidelityTest {
 		for (String[] displays : new String[][] {
 				{ "Isoniazid / pyrazinamide / rifampin",
 						"Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg" },
-				{ "Rifampicin 150mg", "Rifampicin 150mg" } }) {
+				{ "Rifampicin 150mg", "Rifampicin 150mg" },
+				// One order, the shape a question proposing a drug she already takes raises (issue #548).
+				{ "Rifampicin 150mg" } }) {
 			String sentence = alreadyInSeveralOrders(DrugReferenceTestSupport.chipsOverOrders(
 				"chartsearchai-test/ddi-substance-in-several-orders.json", "Is it safe to give rifampicin?",
 				displays));

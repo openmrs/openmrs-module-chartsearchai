@@ -333,9 +333,11 @@ public class SafetyWarning {
 	 * on a screen of her medications and on a question that resolves a drug (issue #477). The one construction site is
 	 * {@code DrugSafetyValidator.addOrdersSharingASubstance}, canonical for why it exists and when.
 	 *
-	 * <p>{@link #substanceInSeveralActiveOrders}' shape, with two differences: both sides are her own
+	 * <p>{@link #substanceInSeveralActiveOrders}' shape, with these differences: both sides are her own
 	 * prescriptions, so {@link #isAboutACurrentMedication()} is TRUE by construction rather than the
-	 * drug-in-play arm's answer for a drug in play; and it answers {@link #statesOrdersSharingASubstance()}.
+	 * drug-in-play arm's answer for a drug in play; it answers {@link #statesOrdersSharingASubstance()};
+	 * and it never answers {@link #statesAProposedDrugIsAlreadyOrdered()}, since no question proposes what
+	 * it is about.
 	 *
 	 * @param drug the substances the detail names, as it names them
 	 * @param orders the displays of the orders the detail names — {@link #namedPartners()}

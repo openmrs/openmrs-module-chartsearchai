@@ -13,7 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -661,6 +663,140 @@ public class QueryStoreChartBuilderTest {
 		assertEquals("preFilter", QueryStoreChartBuilder.MODE_PRE_FILTER);
 		assertEquals("fullChart", QueryStoreChartBuilder.MODE_FULL_CHART);
 		assertEquals("unknown", QueryStoreChartBuilder.MODE_UNKNOWN);
+	}
+
+	// ---- issue #528: every record of a whole chart carries its own date ----
+	// The chart below is the shape of the ticket's capture: two same-date runs, newest first, with the
+	// record each temporal question is about (the newest weight, the last visit) sitting further down a
+	// run than its first record. With date-run compression those lines rendered no date at all, so they
+	// read exactly like the allergy records that have none, and the model answered "when was her last
+	// visit?" with "no date is recorded" and "when was her weight last measured?" with the older weight.
+
+	/** The ticket's two runs: 2026-06-14 (a Home Visit and a 74 kg weight, neither first in its run)
+	 *  and 2025-12-06 (the older 64 kg weight), below an undated allergy and the patient record. */
+	private static List<QueryDocument> aChartWhoseNewestWeightAndLastVisitAreSameDateFollowOns() {
+		List<QueryDocument> docs = new ArrayList<>();
+		docs.add(chartDoc("patient", "p-1", "Patient: Jane Doe. Sex: F", LocalDate.of(2026, 1, 2)));
+		docs.add(chartDoc("allergy", "al-1", "Allergy: Penicillin. Severity: Severe", LocalDate.of(2026, 1, 2)));
+		docs.add(chartDoc("condition", "c-1", "Condition: Memory Loss. Status: ACTIVE", LocalDate.of(2026, 6, 14)));
+		docs.add(chartDoc("diagnosis", "d-1", "Diagnosis: Memory Loss. Certainty: PROVISIONAL", LocalDate.of(2026, 6, 14)));
+		docs.add(chartDoc("obs", "w-new", "Weight (kg): 74 kg", LocalDate.of(2026, 6, 14)));
+		docs.add(chartDoc("visit", "v-new", "Visit: Home Visit at Site 42", LocalDate.of(2026, 6, 14)));
+		docs.add(chartDoc("condition", "c-2", "Condition: Complication of anesthesia. Status: ACTIVE", LocalDate.of(2025, 12, 6)));
+		docs.add(chartDoc("obs", "w-old", "Weight (kg): 64 kg", LocalDate.of(2025, 12, 6)));
+		docs.add(chartDoc("visit", "v-old", "Visit: OPD Visit at Site 42", LocalDate.of(2025, 12, 6)));
+		return docs;
+	}
+
+	private static QueryDocument chartDoc(String type, String uuid, String text, LocalDate date) {
+		QueryDocument doc = new QueryDocument();
+		doc.setResourceType(type);
+		doc.setResourceUuid(uuid);
+		doc.setText(text);
+		doc.setDate(date);
+		return doc;
+	}
+
+	/**
+	 * What the model reads for each record must be what the grounding verifier holds for it: the
+	 * {@code RecordMapping} text always carries the record's date, so a chart line that equals
+	 * {@code "[i] " + mapping text} is a line that shows the model that same date. Holds line for line
+	 * only with the obs-group label left un-deduped (the builder's default here) and with a patient
+	 * record present (so no un-numbered demographics header precedes {@code [1]}).
+	 */
+	private static void assertEveryLineCarriesItsRecordsOwnDate(PatientChart chart, int expectedRecords) {
+		String[] lines = chart.getText().split("\n");
+		assertEquals(expectedRecords, chart.getMappings().size(), "chart:\n" + chart.getText());
+		assertEquals(expectedRecords, lines.length, "chart:\n" + chart.getText());
+		for (int i = 0; i < lines.length; i++) {
+			assertEquals("[" + (i + 1) + "] " + chart.getMappings().get(i).getText(), lines[i],
+					"record [" + (i + 1) + "] must read to the model with the date the grounding view gives it;"
+							+ " chart:\n" + chart.getText());
+		}
+	}
+
+	@Test
+	public void build_datesEverySameDateFollowOn_soTheNewestWeightAndLastVisitAreNotReadAsUndated() {
+		builder.usePreFilter = false;
+		queryStore.stubChart = aChartWhoseNewestWeightAndLastVisitAreSameDateFollowOns();
+
+		PatientChart chart = builder.build(patient(1), "when was her weight last measured?");
+
+		assertEveryLineCarriesItsRecordsOwnDate(chart, 9);
+		String text = chart.getText();
+		assertTrue(text.contains("[5] (2026-06-14) Weight (kg): 74 kg\n"),
+				"the newest weight must carry its date on its own line:\n" + text);
+		assertTrue(text.contains("[6] (2026-06-14) Visit: Home Visit at Site 42\n"),
+				"the last visit must carry its date on its own line:\n" + text);
+		assertTrue(text.contains("[2] Allergy: Penicillin"),
+				"an allergy still renders undated (its querystore date is administrative):\n" + text);
+	}
+
+	@Test
+	public void build_datesEverySameDateFollowOn_inPreFilterModeToo() {
+		builder.usePreFilter = true;
+		queryStore.stubChart = aChartWhoseNewestWeightAndLastVisitAreSameDateFollowOns();
+		// A focus hit on the last visit, so the focus-hint path is the one serializing.
+		queryStore.stubHits = new ArrayList<>();
+		queryStore.stubHits.add(chartDoc("visit", "v-new", "Visit: Home Visit at Site 42", LocalDate.of(2026, 6, 14)));
+
+		PatientChart chart = builder.build(patient(1), "when was her last visit?");
+
+		assertEquals(Collections.singletonList(6), chart.getFocusIndices(), "the focus hint must be engaged");
+		assertEveryLineCarriesItsRecordsOwnDate(chart, 9);
+		assertTrue(chart.getText().contains("[6] (2026-06-14) Visit: Home Visit at Site 42\n"),
+				"the last visit must carry its date on its own line:\n" + chart.getText());
+	}
+
+	@Test
+	public void buildFocused_datesEverySameDateFollowOn() {
+		queryStore.stubHits = aChartWhoseNewestWeightAndLastVisitAreSameDateFollowOns();
+
+		PatientChart chart = builder.buildFocused(patient(1), "when was her last visit?");
+
+		assertEveryLineCarriesItsRecordsOwnDate(chart, 9);
+		assertTrue(chart.getText().contains("[6] (2026-06-14) Visit: Home Visit at Site 42\n"),
+				"the last visit must carry its date on its own line:\n" + chart.getText());
+	}
+
+	/**
+	 * The same property on a real chart rather than the nine-record fixture above: the full patient
+	 * dataset through {@code build()}, whose long same-date runs (the 2025-10-30 visit alone is eleven
+	 * consecutive records) are the shape #66's token argument was about. A compression gated on chart
+	 * size would leave the fixture above dated and this chart not. The dataset carries no patient
+	 * record, so the computed demographics header precedes {@code [1]}; only the numbered lines are
+	 * compared.
+	 */
+	@Test
+	public void build_datesEverySameDateFollowOn_onTheFullPatientDataset() {
+		builder.usePreFilter = false;
+		queryStore.stubChart = TestDatasetHelper.toQueryDocuments(TestDatasetHelper.FULL_PATIENT_DATASET);
+
+		PatientChart chart = builder.build(patient(1), "when was his weight last measured?");
+
+		List<String> numbered = new ArrayList<>();
+		for (String line : chart.getText().split("\n")) {
+			if (line.startsWith("[")) {
+				numbered.add(line);
+			}
+		}
+		assertEquals(TestDatasetHelper.FULL_PATIENT_DATASET.length, chart.getMappings().size());
+		assertEquals(chart.getMappings().size(), numbered.size(), "chart:\n" + chart.getText());
+		int sameDateFollowOns = 0;
+		for (int i = 0; i < numbered.size(); i++) {
+			PatientChartSerializer.RecordMapping mapping = chart.getMappings().get(i);
+			assertEquals("[" + (i + 1) + "] " + mapping.getText(), numbered.get(i),
+					"record [" + (i + 1) + "] must read to the model with the date the grounding view gives it");
+			if (i > 0 && mapping.getDate() != null && mapping.getText().startsWith("(")
+					&& mapping.getDate().equals(chart.getMappings().get(i - 1).getDate())) {
+				sameDateFollowOns++;
+			}
+		}
+		assertTrue(sameDateFollowOns > 20,
+				"the dataset must hand the builder long dated same-date runs, or this test pins nothing: "
+						+ sameDateFollowOns);
+		assertTrue(chart.getText().contains("] (2025-10-30) Test — Weight (kg): 94 kg\n"),
+				"the last record of the 2025-10-30 run must carry its own date:\n" + chart.getText());
 	}
 
 	/**

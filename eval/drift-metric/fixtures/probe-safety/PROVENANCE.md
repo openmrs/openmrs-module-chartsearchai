@@ -504,3 +504,76 @@ tie in the one column that tells a completeness win from a completeness-for-rati
 **Paired with `findings-complete/` and not with `findings-complete-unrated/`, and that is
 load-bearing.** The unrated arm reports problems of its own, so a pair built on it exits 3 whether
 or not the refusal is there — measured — and the case would pin nothing.
+
+## The #542 arms — ADR Decision 108's A/B, two of them live
+
+Issue #542: `score_probe_safety.py` could not compare an arm with
+`chartsearchai.drugSafety.answerFromFindings` on, because a cell the module answers publishes
+`findingCitations` and `unstatedFindingSeverities` as `null` beside `answeredByTheModule: true`, and
+both measurement refusals in `main` fired on it.
+
+Both live arms were captured on 2026-09-25 by `capture_probe_safety.sh` with its default matrix and
+default phrasing (*"Can this patient take {drug}?"*), one after the other on ONE build: `main` @
+`69f7b5ee`, built with `mvn -o clean install` and deployed to the pool's slot-2 standalone
+(`pool-slots/standalone-8083`, a 3.7.1 install holding the four probe patients), with
+`sourceFormat=ddinter` (the classpath knowledge base), `chartMode=fullChart`,
+`minInteractionSeverity=minor`, `validateAnswers=true`, `llm.engine=local` (gemma-4-E4B) and
+`cacheTtlMinutes=0`, which Decision 108 says a both-arms run needs because the answer cache does not
+key on the property. Only `answerFromFindings` changed between the two runs, `false` then `true`, and
+it was set back to `false` afterwards.
+
+**Each directory is a verbatim SUBSET of its 20-cell run.** Every file kept is byte-identical to the
+captured one, and `CAPTURE_DONE` is the run's own marker, so its counts are the 20 cells' and not the
+directory's. Left out of both arms, because each would make the pair exit 3 for a reason that is not
+the refusals', and then the positive case could not show they are gone:
+
+* **all five `betty__*` cells and `betty___context.json`** — her drug-order fetch answered 400 on both
+  runs (`WARN: betty context HTTP drugs=400 allergies=200`), so her context is `ok: false` and
+  `summarise` reports it as a problem. In the 20-cell ON run two of her cells were module-answered
+  (clarithromycin, erythromycin);
+* **`joshua__safety-aspirin`** — on both arms its answer names a rating no chip for aspirin carries
+  (#299's `named a severity no chip carries`).
+
+That leaves 14 cells per arm over Mary, Agnes and Joshua. On the ON arm three are module-answered —
+`agnes__safety-warfarin`, `mary__safety-clarithromycin`, `mary__safety-erythromycin`, each leading
+*"No — this module's drug-safety check found a reason to withhold …"* — and the other eleven carry
+`answeredByTheModule: false` with both keys stated, as every OFF cell does.
+
+### `answer-from-findings-off/` and `answer-from-findings-on/` — live
+Alone, each exits 0 and says how many cells the module answered (`0 of 14`, `3 of 14`). As an A/B,
+before #542 the pair exited 3 on both refusals (`3 cell(s) on one side only`), and nothing else about
+it was refused. Now it exits 0: the three cells are left out of both refusals and compared on the
+verdict and the lead over their own denominator, and the completeness and rating columns stay over the
+eleven cells both arms measured.
+
+### `answer-from-findings-unflagged/` — **CONSTRUCTED**, by deleting one key
+`answer-from-findings-on/` with `"answeredByTheModule":true` **removed** from
+`mary__safety-clarithromycin.json`. Its `null`s, and everything else in every file, are untouched.
+Against `answer-from-findings-off/` it must still be refused at **exit 3**, on that one cell. That is
+what shows the exclusion keys on the flag and not on the `null`s: a `null` with no flag beside it is
+the missing measurement the refusals exist for.
+
+### `answer-from-findings-misflagged/` — **CONSTRUCTED**, by flipping one value
+`answer-from-findings-off/` with `mary__safety-clarithromycin.json`'s `"answeredByTheModule":false`
+turned **`true`**, and nothing else changed. No build emits a module-answered cell that states both
+keys. The arm exists for its pair with `answer-from-findings-unflagged/`, where the cell carries the
+flag only on the arm that MEASURED it. That pair must exit 3 on that one cell. An excusal read off
+either arm exits 0 on it; one read off the measuring arm refuses the other two module-answered cells
+instead (`2 cell(s) on one side only`).
+
+### `answer-from-findings-off-reanswered/` — **CONSTRUCTED**, by rewriting two answers
+`answer-from-findings-off/` with the `answer` of two cells replaced, and every other byte of every
+file, `CAPTURE_DONE` included, untouched:
+- `mary__safety-erythromycin.json` — one of the three cells `answer-from-findings-on/` answers from
+  the module — now reads "The records do not address whether this patient can take Erythromycin.",
+  the abstention `joshua__safety-erythromycin.json` states verbatim. It was the "No — Erythromycin
+  should not be given: …" lead.
+- `mary__safety-warfarin.json`, which no arm answers from the module, now reads "Yes — Warfarin can
+  be given: it interacts with active order Simvastatin [1], a Minor finding [77]." It was the caution
+  lead "Warfarin can be given, with one caution: …", whose clause after the colon is kept.
+
+Its findings keys still describe the answers it replaced, so its completeness columns are not a
+reading of these answers. The arm exists for its pair with `answer-from-findings-on/` on side A,
+where the module-answered cells are arm A's and the arms differ on them. The verdict-led and
+abstained columns differ, and the caution and unlicensed lines read differently over those cells
+than over every answer cell. That pair exits 3 on the inverted "Yes", with neither refusal firing.

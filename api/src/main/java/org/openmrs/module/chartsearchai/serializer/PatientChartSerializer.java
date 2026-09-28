@@ -31,17 +31,13 @@ import org.springframework.stereotype.Component;
  * <p>This class adds record timestamps as parenthetical citation labels
  * (e.g. {@code "(2024-01-15)"}) to the record text supplied by the caller
  * (querystore's serialized documents) — metadata for the LLM to reason about
- * chronology. The timestamp is not repeated on every line; see the compression below.
- * To save prompt tokens on charts that cluster many records per encounter date,
- * the date is <strong>run-length compressed</strong> by default: it is rendered on the first
- * record of each consecutive same-date run and dropped on the rest (and re-shown
- * after any undated record, which resets the run). Callers serializing small
- * query-scoped slices switch this off via the {@code compressDateRuns} overload —
- * see {@link #serialize(Patient, List, Set, boolean, boolean)}. The chart stays a flat numbered
- * list — a same-date follow-on line looks exactly like a legacy undated line — so
- * no information is lost and the model's per-record view is unchanged in shape. The
- * {@link RecordMapping} text, by contrast, always retains the inline date so the
- * grounding verifier can still resolve a cited date.
+ * chronology. Every dated record carries its own date on its own line, by default (issue #528).
+ * Run-length compression — the date rendered on the first record of each consecutive same-date
+ * run and dropped on the rest (#66) — is still available through
+ * {@link #serialize(Patient, List, Set, boolean, boolean)}, but no production path asks for it:
+ * a same-date follow-on line looks exactly like a record that has no date, and the model reads
+ * it that way (ADR Decision 122). The {@link RecordMapping} text always retains the inline date
+ * either way, so the grounding verifier can still resolve a cited date.
  *
  * <p>It also states, on a drug-order record whose order the chart builder could resolve, whether
  * that order is in force ({@link #ACTIVE_ORDER_LABEL} / {@link #INACTIVE_ORDER_LABEL}, issue #317).
@@ -213,10 +209,11 @@ public class PatientChartSerializer {
 
 	/**
 	 * As {@link #serialize(Patient, List, Set)} but, when {@code dedupGroupLabels} is true, applies
-	 * run-length de-dup to the obs-group membership label exactly as the date prefix is run-length
-	 * de-duped: a group member renders {@code " (part of: <group>)"} only when its group differs from the
-	 * immediately-preceding record's group, so the label is dropped on consecutive same-group members (a
-	 * non-member, or a different group, resets the run). The grounding {@link RecordMapping} text always
+	 * run-length de-dup to the obs-group membership label, the shape the opt-in date-run compression
+	 * of {@link #serialize(Patient, List, Set, boolean, boolean)} has: a group member renders
+	 * {@code " (part of: <group>)"} only when its group differs from the immediately-preceding record's
+	 * group, so the label is dropped on consecutive same-group members (a non-member, or a different
+	 * group, resets the run). The grounding {@link RecordMapping} text always
 	 * carries the full label, so citation verification is unchanged. Default (false) keeps the legacy
 	 * every-member labelling that the small-model clustering signal relies on. Gated in production by
 	 * {@code chartsearchai.serializer.dedupGroupLabels}.
@@ -225,19 +222,19 @@ public class PatientChartSerializer {
 	 */
 	public PatientChart serialize(Patient patient, List<SerializedRecord> records, Set<String> focusUuids,
 			boolean dedupGroupLabels) {
-		return serialize(patient, records, focusUuids, dedupGroupLabels, true);
+		return serialize(patient, records, focusUuids, dedupGroupLabels, false);
 	}
 
 	/**
 	 * As {@link #serialize(Patient, List, Set, boolean)} but with the date-run compression
-	 * switchable. Compression exists to save prompt tokens on whole-chart serializations
-	 * (hundreds of records clustering many per date); the query-scoped slice chart is a few dozen
-	 * records, where the saving is negligible and the cost is real — a temporal question ("most
-	 * recent weight?") needs the date visible on the record itself, not inferred from a run
-	 * header several lines up (measured: a small model quoted an older, explicitly-dated reading
-	 * over the newest, run-compressed one). {@code compressDateRuns=false} renders every dated
-	 * record's {@code "(date)"} label. The grounding {@link RecordMapping} text is identical
-	 * either way (it always carries the date).
+	 * switchable. {@code compressDateRuns=false} — what every shorter overload passes — renders every
+	 * dated record's {@code "(date)"} label. {@code true} renders it on the first record of each
+	 * same-date run only, which saves prompt tokens on charts clustering many records per date (#66)
+	 * and costs the answer to a temporal question: a follow-on line reads exactly like an undated one
+	 * (measured on the query-scoped slice, #74, and on the whole chart, issue #528 and ADR
+	 * Decision 122). No production caller passes {@code true}; it is kept so the cost can be
+	 * re-measured against a form that makes a follow-on distinguishable. The grounding
+	 * {@link RecordMapping} text is identical either way (it always carries the date).
 	 */
 	public PatientChart serialize(Patient patient, List<SerializedRecord> records, Set<String> focusUuids,
 			boolean dedupGroupLabels, boolean compressDateRuns) {
@@ -256,15 +253,11 @@ public class PatientChartSerializer {
 			appendDemographics(sb, patient);
 		}
 
-		// Date-run compression: render a record's "(date)" only when it differs from the immediately
-		// preceding record's date, dropping the repeat on consecutive same-date records. Clinical charts
-		// cluster many records per encounter date and the date is ~7 tokens, so this is the dominant
-		// cold-prefill token saving (~30% fewer prompt tokens) with no information loss — the date still
-		// appears on the first record of each run, and the chart stays a FLAT numbered list (no section
-		// structure, which nudges small models toward over-enumeration). Every line is byte-shaped like a
-		// legacy line: a dated record looks exactly as before; a same-date follow-on looks exactly like a
-		// legacy undated record. So the format demonstration in DEFAULT_SYSTEM_PROMPT still mirrors it and
-		// needs no change.
+		// Date-run compression, when a caller opts in: render a record's "(date)" only when it differs
+		// from the immediately preceding record's date. It saves ~7 tokens per same-date follow-on, and it
+		// LOSES information for the model: a follow-on looks exactly like an undated record, nothing in
+		// DEFAULT_SYSTEM_PROMPT says a dateless line inherits a date, and the model reads it as having
+		// none (issue #528). So every production path renders every date; see the overload's javadoc.
 		String previousDateLabel = null;
 		String previousGroupUuid = null;
 		for (int i = 0; i < records.size(); i++) {
@@ -311,8 +304,8 @@ public class PatientChartSerializer {
 					record.getDate(), renderedText, null, 0, record.getOrderActive(),
 					record.getOrderStopDate()));
 
-			// Chart line: show the date only on the first record of a same-date run (an undated record
-			// resets the run, so the next dated record shows its date again); otherwise drop it. With
+			// Chart line: show the date on every dated record, or, with compressDateRuns, only on the
+			// first record of a same-date run (an undated record resets the run). With
 			// dedupGroupLabels, run-length de-dup the group label the same way: render it only when this
 			// record's group differs from the previous line's group (a non-member or a different group
 			// resets the run), so every member's panel stays visible on its own line or the line directly
@@ -345,8 +338,8 @@ public class PatientChartSerializer {
 	/**
 	 * The {@code "(date) "} citation-label prefix for a record (or {@code ""} when undated). Single-sourced
 	 * so the chart line and the grounding verifier's {@link RecordMapping} text can never diverge on date
-	 * format: the chart line uses it only on the first record of a same-date run (see serialize), while the
-	 * mapping text uses it on every dated record — but both render the date the same way.
+	 * format: the mapping text uses it on every dated record, and so does the chart line unless a caller
+	 * opts into date-run compression (see serialize) — but both render the date the same way.
 	 */
 	private static String dateLabelPrefix(String dateLabel) {
 		return dateLabel == null ? "" : "(" + dateLabel + ") ";
@@ -1072,12 +1065,10 @@ public class PatientChartSerializer {
 		 * verifier compares cited records against — the date parenthetical (if any),
 		 * the synonym-stripped body, and (for an obs-group member) the trailing
 		 * {@code "(part of: <group>)"} label. The date is ALWAYS included when the
-		 * record has one, even when the chart line itself dropped it as a same-date
-		 * run repeat (see the class doc's run-length compression): the model may cite
-		 * a date it read from the run's first line, so the verifier's view must retain
-		 * it. For the first record of a run (or an undated record) this equals the
-		 * chart line content after {@code "[N] "}; for a compressed follow-on it is a
-		 * superset (the chart line omits the date this still carries). May be
+		 * record has one, as it is on the chart line unless a caller opted into date-run
+		 * compression (see the class doc). With the obs-group label left un-deduped this
+		 * equals the chart line content after {@code "[N] "}; for a compressed follow-on,
+		 * or a deduped group member, it is a superset of that line. May be
 		 * {@code null} when the mapping was built without text.
 		 */
 		public String getText() {

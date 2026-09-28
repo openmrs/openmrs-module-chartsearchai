@@ -476,8 +476,9 @@ public class ChartSearchAiUtils {
 	 * assembly adds. Scope the reading of that to the injector's records, which is where every
 	 * reference-group record comes from today: there the mapping text and the chart line are
 	 * byte-identical by construction, so the total is a floor on the bytes spent. It is not a general
-	 * property of a {@code RecordMapping} — {@code PatientChartSerializer} carries an inline date and
-	 * group label on the mapping that the chart line run-length-dedups away — so were a reference-group
+	 * property of a {@code RecordMapping} — {@code PatientChartSerializer} carries a group label (and,
+	 * for a caller opting into date-run compression, an inline date) on the mapping that the chart line
+	 * can run-length-dedup away — so were a reference-group
 	 * type ever to arrive through querystore, its characters could exceed what the prompt spent on it.
 	 *
 	 * @param mappings the assembled chart's mappings, may be null

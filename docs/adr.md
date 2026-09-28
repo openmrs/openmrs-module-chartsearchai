@@ -9523,9 +9523,17 @@ So the leg is now asked LAST and not before `CHILD_BIND_SETTLE_MS` has passed si
 (≈ `pb.start()`, one thread construction earlier): 0.5 s, about two and a half times row 7's bind
 plus row 9's exit. It is counted from the launch rather than from the reply, which is what keeps it
 off the ordinary start path — `/health` answers `ok` only once the model is loaded, seconds later,
-by which point the window has passed and nothing is spent. Measured by
-`LocalLlmServerAuthTest.aHealthyReplyLongAfterTheBindWindowIsAdoptedWithoutWaitingFurther`, which
-is where that figure comes from: 2 ms for the gate's two warm loopback probes and no wait. The
+by which point the window has passed and nothing is spent. That "nothing" is a property of the
+production WIRING, and two different things carry it. The live figure is PR #461's: an ordinary
+cold start whose engine lines put the server start at 2047 ms, twice, so the first healthy reply
+lands about 2 s after the launch and the remainder is already at or below zero. The wiring is
+pinned by `ArchitectureGuardTest.theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes`
+(#462), within the residue its javadoc names: the stamp is the first statement of
+`waitForServerReady` and the name the gate call ends on, since no behavioural case can see the
+value that call hands the gate. `LocalLlmServerAuthTest.aHealthyReplyLongAfterTheBindWindowIsAdoptedWithoutWaitingFurther`
+measures neither: it hands the gate a launch stamp ten windows old, so its 2 ms for two warm
+loopback probes and no wait is the gate's ARITHMETIC. Measured for #462, a fresh `System.nanoTime()`
+at the call site left it green. The
 alternative considered — sleeping past the bind latency before the FIRST poll — was not taken: it
 delays every poll on the grid including the report an ordinary failure reaches first, and it still
 accepts the first healthy reply, so nothing observes the child a second time.

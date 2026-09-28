@@ -821,6 +821,124 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Issue #462: the moment {@code requireListenerMayBeServed}'s fourth leg counts
+	 * {@code LocalLlmEngine.CHILD_BIND_SETTLE_MS} from is the one production passes it, and no
+	 * behavioural case can see that value — every test of the gate hands {@code launchedAtNanos} in
+	 * itself, so it measures the gate's arithmetic and not the wiring. Measured: a fresh
+	 * {@code System.nanoTime()} at the call site left {@link #theLaunchPathStillCallsEachProtection}
+	 * and {@code LocalLlmServerAuthTest} green. Stamped earlier instead — in {@code startServer},
+	 * ahead of the port probe — a slow prologue spends the window before the child exists, and the
+	 * gate adopts the first healthy reply again, which is the defect the leg was added to close.
+	 *
+	 * <p>Read through {@link #methodBodyWithoutLiterals}. What each part does:
+	 * <ul>
+	 * <li>The stamp must be the FIRST statement of the no-argument {@code waitForServerReady}, so
+	 * nothing in readiness runs ahead of it and it cannot move into the poll loop. A stamp handed in
+	 * as a parameter changes the signature and leaves nothing to slice, which fails here.</li>
+	 * <li>The compiled class declares ONE method of each name, and {@code startServer} calls
+	 * {@code waitForServerReady()}. A review round measured why, with this rule green on both: a
+	 * parameterised overload beside an untouched, uncalled no-argument method made this read a
+	 * decoy, and a five-argument gate overload ignoring its last argument let the call end on the
+	 * stamp while the gate was handed another. Asked of the class rather than of spellings.</li>
+	 * <li>The gate is named nowhere in the file but its declaration and this body, method
+	 * references included, so a readiness path under another name cannot reach it with a stamp
+	 * of its own.</li>
+	 * <li>The stamp is {@code final}, so a reassignment later in the body does not compile, and
+	 * deleting the {@code final} to allow one fails here.</li>
+	 * <li>Every {@code requireListenerMayBeServed} call must BEGIN its statement and end it on the
+	 * bare local as its LAST argument, read to the statement's {@code ;} rather than the first
+	 * {@code )}, since the call's other arguments contain calls of their own. Beginning it is what
+	 * makes that last {@code )} the gate's own: a review round measured an outer call taking the
+	 * stamp while the gate, passed to it in a lambda, was handed another. So
+	 * {@code System.nanoTime()} there fails, and so do a conditional ending
+	 * {@code : launchedAtNanos}, arithmetic on it, or a call wrapping it.</li>
+	 * </ul>
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> Text cannot see reachability or
+	 * identity, and a review round demonstrated the second: a call made inside an anonymous class
+	 * whose own field is named {@code launchedAtNanos} satisfies every part above while handing the
+	 * gate that field. The gate's own body is not read either: one counting from the earlier of its
+	 * parameter and a field that starts at {@code Long.MAX_VALUE} and only {@code startServer}
+	 * lowers was measured green here and in {@code LocalLlmServerAuthTest}. Nor is a second launch
+	 * the stamp predates: a child relaunched inside readiness's own loop was measured green here
+	 * too, its window already spent by the first. What {@code startServer} runs
+	 * AROUND the call is not read: work inserted between {@code pb.start()} and it makes the stamp
+	 * LATE, which lengthens the window and can cost a wait rather than opening the gate. Nor is a
+	 * caller outside this class, the gate being package-private. Read this as "readiness's gate
+	 * call ends on the name its first statement stamped", and no more.
+	 */
+	@Test
+	public void theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes() throws IOException {
+		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
+		String body = methodBodyWithoutLiterals(source, "private void waitForServerReady()");
+		assertTrue(body != null && !body.isEmpty(),
+				"could not slice the body of waitForServerReady() out of LocalLlmEngine.java — if the"
+						+ " launch stamp is now passed in, that is the refactor this guards against;"
+						+ " a guard that reads nothing reports no violations, so this is a failure and"
+						+ " not a pass");
+
+		List<String> violations = new ArrayList<>();
+		if (!Pattern.compile("^\\{\\s*final\\s+long\\s+launchedAtNanos\\s*=\\s*System\\s*\\.\\s*nanoTime"
+				+ "\\s*\\(\\s*\\)\\s*;").matcher(body).find()) {
+			violations.add("waitForServerReady() no longer opens with `final long launchedAtNanos ="
+					+ " System.nanoTime();` — the settle window must be counted from the launch; this"
+					+ " test's javadoc says what each wrong moment costs");
+		}
+		int calls = 0;
+		for (Matcher m = Pattern.compile("\\brequireListenerMayBeServed\\s*\\(").matcher(body); m.find();) {
+			calls++;
+		}
+		int counted = 0;
+		for (Matcher m = Pattern.compile(
+				"[;{}]\\s*requireListenerMayBeServed\\s*\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;")
+						.matcher(body); m
+						.find();) {
+			counted++;
+		}
+		if (calls == 0) {
+			violations.add("waitForServerReady() no longer calls requireListenerMayBeServed — readiness"
+					+ " then adopts the first healthy listener without the gate");
+		}
+		else if (counted != calls) {
+			violations.add("waitForServerReady() calls requireListenerMayBeServed in a statement that"
+					+ " does not begin with the call or does not end on the launch stamp as its last"
+					+ " argument (" + counted + " of " + calls + " calls) — the"
+					+ " settle window is then counted from some other moment");
+		}
+		for (String name : java.util.Arrays.asList("waitForServerReady", "requireListenerMayBeServed")) {
+			long declared = java.util.Arrays.stream(LocalLlmEngine.class.getDeclaredMethods())
+					.filter(method -> method.getName().equals(name)).count();
+			if (declared != 1) {
+				violations.add("LocalLlmEngine declares " + declared + " methods named " + name
+						+ " — an overload is a second readiness path or a second gate, and the one"
+						+ " this test reads is then not the one that runs");
+			}
+		}
+		Pattern gateName = Pattern.compile("\\brequireListenerMayBeServed\\b");
+		int named = 0;
+		for (Matcher m = gateName.matcher(withoutCommentsOrLiterals(source)); m.find();) {
+			named++;
+		}
+		int namedInReadiness = 0;
+		for (Matcher m = gateName.matcher(body); m.find();) {
+			namedInReadiness++;
+		}
+		if (named != namedInReadiness + 1) {
+			violations.add("LocalLlmEngine names requireListenerMayBeServed "
+					+ (named - 1 - namedInReadiness)
+					+ " time(s) outside its declaration and waitForServerReady() — a gate reached from"
+					+ " elsewhere is handed a stamp this test does not read");
+		}
+		String launch = methodBodyWithoutLiterals(source, "private void startServer(String modelPath)");
+		if (launch == null
+				|| !Pattern.compile("\\bwaitForServerReady\\s*\\(\\s*\\)\\s*;").matcher(launch).find()) {
+			violations.add("startServer(String) no longer calls waitForServerReady() — the readiness"
+					+ " this test reads is then not the one the launch runs");
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
 	 * Issue #512: the local engine's two {@code ReferenceRecords} arities must hand that value to
 	 * the body builder, which is the only place the DRY sampler is decided. Nothing behavioural can
 	 * see this link: {@code ReferenceRecordsReachTheEngineTest} records the value at a stub engine and
@@ -891,10 +1009,7 @@ public class ArchitectureGuardTest {
 		// raw source let one unbalanced '{' in a comment run the slice to the end of the class —
 		// measured, and every needle was then satisfied by the DECLARATIONS below, which is the
 		// vacuity this method exists to remove.
-		String stripped = String.join("\n",
-						codeLines(java.util.Arrays.asList(source.split("\n", -1))))
-				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
-				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
+		String stripped = withoutCommentsOrLiterals(source);
 		int at = stripped.indexOf(signature);
 		if (at < 0) {
 			return null;
@@ -908,6 +1023,16 @@ public class ArchitectureGuardTest {
 		// balance, which is the runaway above, and a body running to the end of the file is a
 		// failure to slice rather than a body.
 		return close >= stripped.length() ? null : stripped.substring(open, close);
+	}
+
+	/**
+	 * {@code source} with comments dropped and string and character literals blanked — the text
+	 * {@link #methodBodyWithoutLiterals} slices, for a caller that must read the whole file.
+	 */
+	private static String withoutCommentsOrLiterals(String source) {
+		return String.join("\n", codeLines(java.util.Arrays.asList(source.split("\n", -1))))
+				.replaceAll("\"(?:\\\\.|[^\"\\\\])*\"", "\"\"")
+				.replaceAll("'(?:\\\\.|[^'\\\\])*'", "''");
 	}
 
 	/**

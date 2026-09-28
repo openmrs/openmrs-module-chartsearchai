@@ -1018,8 +1018,9 @@ public class SafetyWarning {
 	 * play is not hers, which the issue's decision accepted (ADR Decision 116). The DRUG-IN-PLAY arm
 	 * answers true where the drug the question or the answer named is one of her own active orders — its
 	 * substance is one {@code findForActiveOrders} resolved her orders to — and false where it is not
-	 * (issue #402, ADR Decision 123), and false too where her chart holds it only as locally applied
-	 * presentations, the question then possibly proposing another
+	 * (issue #402, ADR Decision 123), and false too where every order of hers carrying it is coded only
+	 * as a locally applied presentation of a drug the data also files outside those groups, the question
+	 * then possibly proposing that other presentation
 	 * ({@code DrugSafetyValidator.currentMedicationsInPlay}). That one answer per drug in play is stated
 	 * at EVERY site the arm builds a finding at, {@link #substanceInSeveralActiveOrders} (issue #477) and
 	 * the dose check's {@link #overdose} included: one finding in the other column beside the rest is the
@@ -1080,8 +1081,9 @@ public class SafetyWarning {
 	 * <p><b>What the published {@code false} does NOT say is that she is off the drug.</b> It is the
 	 * answer of every arm named above as answering false, whatever her chart holds — for a drug in play
 	 * her orders do not resolve to, which includes a prescription recorded under a name the reference
-	 * data does not carry, for one her chart holds only as locally applied presentations, and for the
-	 * question-pair arm's findings — and of every chip built through a public constructor. This is the
+	 * data does not carry, for one every order of which is coded only as a locally applied presentation
+	 * of a drug the data also files outside those groups, and for the question-pair arm's findings — and
+	 * of every chip built through a public constructor. This is the
 	 * one home of that list; {@code README.md} carries it for a client,
 	 * with how to render {@code true}.
 	 */

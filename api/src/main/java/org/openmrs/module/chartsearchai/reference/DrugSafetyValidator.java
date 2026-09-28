@@ -992,9 +992,9 @@ public class DrugSafetyValidator {
 
 		// The substances in play the drug-in-play arm states the CURRENT-medication referent for, asked
 		// per drug in play below (issue #402, ADR Decision 123): those her active orders resolve to, less
-		// any her chart holds only as locally applied presentations (currentMedicationsInPlay). Off
-		// orderEntries, the one resolution this pass already holds, so the arm and every other consumer of
-		// her orders cannot disagree about which drugs are hers. A per-call local, for issue #172's reason.
+		// any a question may be proposing in a presentation she does not take (currentMedicationsInPlay).
+		// Off orderEntries, the one resolution this pass already holds, so the arm and every other consumer
+		// of her orders cannot disagree about which drugs are hers. A per-call local, for issue #172's reason.
 		Set<Object> herOrderSubstances = currentMedicationsInPlay(inPlay, orderEntries, context, bridgedOrders);
 
 		for (DrugReference ref : inPlay) {
@@ -1004,10 +1004,10 @@ public class DrugSafetyValidator {
 			// check's included, because a site stating the other referent beside them is the one-site
 			// shape issue #402 recorded and reverted — the prompt's ranking sentence would hand the lead
 			// to whichever finding still read as a proposal. Keyed on the SUBSTANCE, the unit the chips
-			// fold on (issues #162, #206), and never on the row. A drug she holds only as locally applied
-			// presentations keeps the proposal (heldOnlyAsLocallyAppliedPresentations). An ended order is
-			// not in orderEntries, so a drug her chart holds only as one keeps the proposal here and
-			// EndedOrders states its own referent on the chip (issue #472).
+			// fold on (issues #162, #206), and never on the row. A drug a question may be proposing in a
+			// presentation she does not take keeps the proposal (mayBeProposingAPresentationSheDoesNotTake).
+			// An ended order is not in orderEntries, so a drug her chart holds only as one keeps the proposal
+			// here and EndedOrders states its own referent on the chip (issue #472).
 			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
@@ -2636,10 +2636,10 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The substances of {@code inPlay} the drug-in-play arm states the CURRENT-medication referent for —
-	 * issue #402, ADR Decision 123: those {@link #substancesOf} her resolved orders holds, less any her
-	 * chart holds only as locally applied presentations ({@link #heldOnlyAsLocallyAppliedPresentations}).
-	 * Every other drug in play keeps the proposal referent. A per-pass value and never a field, for issue
-	 * #172's reason.
+	 * issue #402, ADR Decision 123: those {@link #substancesOf} her resolved orders holds, less any a
+	 * question may be proposing in a presentation she does not take
+	 * ({@link #mayBeProposingAPresentationSheDoesNotTake}). Every other drug in play keeps the proposal
+	 * referent. A per-pass value and never a field, for issue #172's reason.
 	 */
 	private static Set<Object> currentMedicationsInPlay(Set<DrugReference> inPlay,
 			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridgedOrders) {
@@ -2649,7 +2649,7 @@ public class DrugSafetyValidator {
 		for (DrugReference ref : inPlay) {
 			Object substance = ref.substanceGroupKey();
 			if (asked.add(substance) && hers.contains(substance)
-					&& !heldOnlyAsLocallyAppliedPresentations(substance, orderEntries, context, bridgedOrders)) {
+					&& !mayBeProposingAPresentationSheDoesNotTake(substance, orderEntries, context, bridgedOrders)) {
 				current.add(substance);
 			}
 		}
@@ -2657,10 +2657,13 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Whether her chart holds {@code substance} ONLY as locally applied presentations: at least one of her
-	 * active orders {@link #resolvesFromAny} a row {@code orderEntries} holds of it, and every such order
-	 * carries ATC codes of its own, each of them one {@link DrugReference#isLocallyAppliedAtcCode} answers
-	 * true for — a gel the dictionary filed {@code M02AA15}, eye drops filed {@code S01BA04}.
+	 * Whether a question about {@code substance} may be proposing a presentation of it she does not take,
+	 * as far as her orders' codes and the reference data can tell. True where at least one of her active
+	 * orders {@link #resolvesFromAny} a row {@code orderEntries} holds of it, every such order carries ATC
+	 * codes of its own, each of them one {@link DrugReference#isLocallyAppliedAtcCode} answers true for —
+	 * a gel the dictionary filed {@code M02AA15}, eye drops filed {@code S01BA04} — AND one of those rows
+	 * carries a code it answers false for ({@link #classifiedOutsideTheLocallyAppliedGroups}), a
+	 * presentation outside those groups that her orders' codes do not describe.
 	 *
 	 * <p><b>Why the drug-in-play arm then keeps the proposal referent.</b> A question about the drug may be
 	 * proposing a presentation she does not take — an oral course of the diclofenac she applies as a gel —
@@ -2670,22 +2673,42 @@ public class DrugSafetyValidator {
 	 * {@code DrugInPlayHerOwnOrderReferentTest.aDrugSheHoldsOnlyAsALocallyAppliedPresentationStillStatesTheProposalCall}
 	 * pins it.
 	 *
-	 * <p><b>The ORDER's own codes, because they are evidence about the presentation she was given</b> —
-	 * what the dictionary classified the prescribed concept as. That makes this the kind of caller
-	 * {@link DrugReference#isLocallyAppliedAtcCode}'s javadoc says holds such evidence, and it uses it to
-	 * keep a referent rather than to drop a code. Never the reference ROWS' codes: those classify the
-	 * substance across every presentation the dataset files it under, so they say nothing about hers.
+	 * <p><b>The ORDER's own codes, and only where the ROWS carry a code outside those groups.</b> An
+	 * order's codes are the ones the dictionary maps the prescribed drug's CONCEPT to
+	 * ({@code PatientClinicalContextBuilder} reads them there), so they describe the presentation she was
+	 * given only where they are narrower than the substance's own classification: every code of every
+	 * such order locally applied while the rows of the substance carry one that is not. That is the
+	 * evidence {@link DrugReference#isLocallyAppliedAtcCode}'s javadoc asks for before a caller vetoes, and
+	 * it is used to keep a referent rather than to drop a code. Where the data files the substance under
+	 * no code outside those groups, her order's codes are the substance's own whatever its formulation,
+	 * and there is no presentation outside them to propose — salicylic acid ({@code D01AE12},
+	 * {@code S01BC08}), and a systemic drug ATC files under a locally applied group alone, such as
+	 * sulfasalazine ({@code A07EC01}) or acetazolamide ({@code S01EC01}). Such a drug takes the
+	 * current-medication referent. Review round 2 of PR #544 measured the gate without this conjunct
+	 * stating the proposal for all three;
+	 * {@code DrugInPlayHerOwnOrderReferentTest.aDrugTheDataFilesOnlyUnderLocallyAppliedGroupsStatesTheCurrentMedicationCall}
+	 * and {@code .aSystemicDrugTheDataFilesOnlyUnderALocallyAppliedGroupStatesTheCurrentMedicationCall}
+	 * pin it.
 	 *
-	 * <p><b>Two residues.</b> An order carrying no ATC code of its own says nothing about its presentation,
+	 * <p><b>The rows are the ones her orders resolved</b>, the same rows the order half is asked over, and
+	 * they do not depend on the answer, so a drug the answer names cannot move this. A row of the substance
+	 * her orders did not resolve is not read; where a dataset files one substance's rows under different
+	 * codes, a presentation only such a row publishes is not seen, and the drug takes the
+	 * current-medication referent. ADR Decision 123 records that the shipped knowledge base has no such
+	 * substance.
+	 *
+	 * <p><b>Residues.</b> An order carrying no ATC code of its own says nothing about its presentation,
 	 * so it does not make the substance locally applied: an unmapped {@code Voltaren gel} still takes the
 	 * current-medication referent on an oral question, and most Drug-class concepts of the 3.7.1 reference
 	 * dictionary carry no code ({@code PatientClinicalContext.ActiveDrugOrder}'s three-argument
-	 * constructor records the count). Its recorded route and dose form are not read here: CLAUDE.md keeps that reading to
+	 * constructor records the count). Where a dictionary maps a substance's generic concept to a locally
+	 * applied code alone, an order of another presentation of it carries that code too, and is read as
+	 * locally applied. Its recorded route and dose form are not read here: CLAUDE.md keeps that reading to
 	 * {@link #codesForThisSubstancesPresentations}. And a question about the very presentation she holds
 	 * keeps the proposal too, as every drug in play did before issue #402: nothing here reads which
 	 * presentation the question names.
 	 */
-	private static boolean heldOnlyAsLocallyAppliedPresentations(Object substance,
+	private static boolean mayBeProposingAPresentationSheDoesNotTake(Object substance,
 			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridgedOrders) {
 		if (context == null || orderEntries == null) {
 			return false;
@@ -2695,6 +2718,9 @@ public class DrugSafetyValidator {
 			if (substance.equals(entry.substanceGroupKey())) {
 				rows.add(entry);
 			}
+		}
+		if (!classifiedOutsideTheLocallyAppliedGroups(rows)) {
+			return false;
 		}
 		boolean held = false;
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
@@ -2707,6 +2733,19 @@ public class DrugSafetyValidator {
 			held = true;
 		}
 		return held;
+	}
+
+	/** Whether any of {@code rows} carries an ATC code {@link DrugReference#isLocallyAppliedAtcCode} answers
+	 *  false for — one classifying the substance itself rather than a locally applied presentation of it. */
+	private static boolean classifiedOutsideTheLocallyAppliedGroups(List<DrugReference> rows) {
+		for (DrugReference row : rows) {
+			for (String code : row.normalizedAtcCodes()) {
+				if (!DrugReference.isLocallyAppliedAtcCode(code)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/** Whether {@code order} carries ATC codes of its own and every one of them classifies a locally
@@ -4626,7 +4665,7 @@ public class DrugSafetyValidator {
 	 * about the drug in play: stated in the other column beside them, one response would refuse the drug
 	 * as a proposal and call it a medication to change, the one-site shape issue #402 recorded and
 	 * reverted. Since issue #402 the arm states the current-medication referent for a drug in play her
-	 * own orders resolve to, unless she holds it only as locally applied presentations
+	 * own orders resolve to, unless a question may be proposing it in a presentation she does not take
 	 * ({@link #currentMedicationsInPlay}), so where two of her orders carry the substance this finding
 	 * states it too. Its STRENGTH is the unrated default, so it states the withholding class. ADR
 	 * Decisions 112 and 123 carry why of both.

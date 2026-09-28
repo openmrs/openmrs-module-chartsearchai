@@ -44,15 +44,19 @@ import org.junit.jupiter.api.Test;
  * <p>Each case drives the real {@code injectRecords} with the real validator behind it and reads the
  * clause the injected finding ends with, which is what the model reads. The dose check is the one site
  * read off the CHIP instead: an overdose finding never reaches the prompt's records, so its referent is
- * what the wire publishes and nothing else.
+ * what the wire publishes and nothing else. A drug only the ANSWER names is read off the chips too,
+ * because only the post-answer pass puts it in play.
  *
  * <p><b>Hers is the SUBSTANCE, and not the row the question named</b>: a case over a fixture whose
- * question row her order does not resolve holds that. <b>And a drug her chart holds only as locally
- * applied presentations keeps the proposal call</b>, because the question may be proposing another
- * presentation of it: review round 1 of PR #544 measured a Major bleeding finding about
- * <em>"Can I start her on oral diclofenac?"</em> over a {@code Voltaren gel} order losing its refusal.
- * The presentation is read off each order's OWN ATC codes, and a case with a systemic order of the
- * same drug beside the gel holds the gate's "every order". Mutate the gate and read the failures.
+ * question row her order does not resolve holds that. <b>And a drug every order of which is coded only
+ * as a locally applied presentation keeps the proposal call where the data also files it outside those
+ * groups</b>, because the question may be proposing that other presentation: review round 1 of PR #544
+ * measured a Major bleeding finding about <em>"Can I start her on oral diclofenac?"</em> over a
+ * {@code Voltaren gel} order losing its refusal. Review round 2 measured the gate firing where the data
+ * files the drug under no other group, and two cases hold that it does not. The presentation is read off
+ * each order's OWN ATC codes; a case with a systemic order of the same drug beside the gel, in both
+ * orders, holds the gate's "every order", and one whose order mixes a locally applied code with systemic
+ * ones its "every code". Mutate the gate and read the failures.
  */
 public class DrugInPlayHerOwnOrderReferentTest {
 
@@ -167,12 +171,59 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	}
 
 	private static void assertStatesTheCurrentMedicationCall(String finding) {
+		assertStatesTheCurrentMedicationCall(finding, "the arrangement");
+	}
+
+	/** As above, {@code where} naming which of a case's arrangements the finding came from. */
+	private static void assertStatesTheCurrentMedicationCall(String finding, String where) {
 		assertTrue(finding.endsWith(CHANGE_CURRENT) || finding.endsWith(CAUTION_CURRENT),
 				"the drug in play is one of her own active orders, so its finding states the call about "
-						+ "that medication: " + finding);
+						+ "that medication (" + where + "): " + finding);
 		assertFalse(finding.contains(WITHHOLD) || finding.contains(CAUTION),
 				"and not the proposal call, which is what made the answer refuse to give a drug she is "
-						+ "already on: " + finding);
+						+ "already on (" + where + "): " + finding);
+	}
+
+	/** The ATC codes the data files the question's drug under, over every row of its substance the
+	 *  question or her orders resolved — what a case's premise about which groups those are is asked of. */
+	private static Set<String> codesOfTheQuestionsDrug(DrugReferenceService service, PatientClinicalContext context,
+			String question) {
+		Set<Object> asked = new HashSet<Object>();
+		List<DrugReference> rows = new ArrayList<DrugReference>(service.findImpliedByQuery(question));
+		for (DrugReference row : rows) {
+			asked.add(row.substanceGroupKey());
+		}
+		rows.addAll(service.findForActiveOrders(context));
+		Set<String> codes = new LinkedHashSet<String>();
+		for (DrugReference row : rows) {
+			if (asked.contains(row.substanceGroupKey())) {
+				codes.addAll(row.normalizedAtcCodes());
+			}
+		}
+		return codes;
+	}
+
+	/** The premise of a case about a drug the data files under no other group: it files the question's
+	 *  drug under ATC codes, and {@link DrugReference#isLocallyAppliedAtcCode} answers true for each. */
+	private static void assertEveryCodeOfTheQuestionsDrugIsLocallyApplied(DrugReferenceService service,
+			PatientClinicalContext context, String question) {
+		Set<String> codes = codesOfTheQuestionsDrug(service, context, question);
+		assertFalse(codes.isEmpty(), "precondition: the data files the question's drug under ATC codes");
+		for (String code : codes) {
+			assertTrue(DrugReference.isLocallyAppliedAtcCode(code),
+					"precondition: the data files the question's drug under locally applied groups alone: " + codes);
+		}
+	}
+
+	/** Whether the question's pre-answer chips are all about one of her medications, and there are some. */
+	private static void assertEveryChipIsAboutACurrentMedication(DrugReferenceService service,
+			PatientClinicalContext context, String question) {
+		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(service).validate("", question, context);
+		assertFalse(chips.isEmpty(), "precondition: the question raises chips");
+		for (SafetyWarning chip : chips) {
+			assertTrue(chip.isAboutACurrentMedication(), "every chip about her own drug says so: "
+					+ chip.getDetail());
+		}
 	}
 
 	/** The interaction chip built through the plain {@code partnerLabel} overload: a flattened
@@ -381,12 +432,12 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	}
 
 	/**
-	 * A drug her chart holds ONLY as a locally applied presentation keeps the PROPOSAL call. Her one
-	 * diclofenac order is a gel the dictionary classified {@code M02AA15} ("Topical products for joint and
+	 * A drug her chart holds ONLY as a locally applied presentation keeps the PROPOSAL call where the data
+	 * also files it outside those groups. Her one diclofenac order is a gel the dictionary classified {@code M02AA15} ("Topical products for joint and
 	 * muscular pain"), and the question proposes an oral course: the Major bleeding finding about that
 	 * course is not a reason to change her gel, and stated as one the prompt forbids the answer to open
 	 * by refusing it. Over the shipped knowledge base, which files every diclofenac row under the
-	 * systemic {@code M01AB05} as well.
+	 * systemic {@code M01AB05} as well: the presentation outside those groups the question proposes.
 	 */
 	@Test
 	public void aDrugSheHoldsOnlyAsALocallyAppliedPresentationStillStatesTheProposalCall() {
@@ -396,6 +447,12 @@ public class DrugInPlayHerOwnOrderReferentTest {
 			coded("Warfarin 5mg", "B01AA03"));
 		String question = "Can I start her on oral diclofenac?";
 		assertTheQuestionsDrugIsHers(service, context, question);
+		boolean filedOutsideThoseGroups = false;
+		for (String code : codesOfTheQuestionsDrug(service, context, question)) {
+			filedOutsideThoseGroups |= !DrugReference.isLocallyAppliedAtcCode(code);
+		}
+		assertTrue(filedOutsideThoseGroups, "precondition: the data files diclofenac under a code outside the "
+				+ "locally applied groups, or there is no other presentation for the question to propose");
 
 		String finding = onlyFinding(service, context, question);
 		assertTrue(finding.contains("Warfarin") && finding.contains("Major"),
@@ -412,24 +469,154 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	/**
 	 * The gate asks EVERY order of the substance: beside the gel she also takes diclofenac tablets, which
 	 * the dictionary classified {@code M01AB05}, so the drug is hers in the presentation an oral question
-	 * names and every finding about it states the current-medication call. Ordered gel first, so a gate
-	 * reading only the first order of the substance fails here.
+	 * names and every finding about it states the current-medication call. Asked with the gel listed first
+	 * and with it listed last, so a gate reading only the first order of the substance fails on one
+	 * arrangement and a gate reading only the last fails on the other (review round 2 of PR #544).
 	 */
 	@Test
 	public void aLocallyAppliedOrderBesideASystemicOrderOfTheSameDrugStatesTheCurrentMedicationCall() {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 			DrugReferenceTestSupport.shippedEntries());
-		PatientClinicalContext context = chartOf(service, coded("Voltaren gel", "M02AA15"),
-			coded("Diclofenac 50mg tablets", "M01AB05"), coded("Warfarin 5mg", "B01AA03"));
 		String question = "Can I start her on oral diclofenac?";
+		List<List<PatientClinicalContext.ActiveDrugOrder>> arrangements = Arrays.asList(
+			Arrays.asList(coded("Voltaren gel", "M02AA15"), coded("Diclofenac 50mg tablets", "M01AB05"),
+				coded("Warfarin 5mg", "B01AA03")),
+			Arrays.asList(coded("Diclofenac 50mg tablets", "M01AB05"), coded("Voltaren gel", "M02AA15"),
+				coded("Warfarin 5mg", "B01AA03")));
+		for (List<PatientClinicalContext.ActiveDrugOrder> orders : arrangements) {
+			PatientClinicalContext context = chartOf(service,
+				orders.toArray(new PatientClinicalContext.ActiveDrugOrder[0]));
+			assertTheQuestionsDrugIsHers(service, context, question);
+
+			boolean sawTheMajor = false;
+			for (String finding : findings(service, context, question)) {
+				sawTheMajor |= finding.contains("Warfarin") && finding.contains("Major");
+				assertStatesTheCurrentMedicationCall(finding, orders.get(0).getDisplay() + " listed first");
+			}
+			assertTrue(sawTheMajor, "precondition: the Major diclofenac-warfarin rule is among the findings, "
+					+ orders.get(0).getDisplay() + " first");
+		}
+	}
+
+	/**
+	 * A drug the reference data files under NO code outside the locally applied groups takes the
+	 * current-medication call, although every code of her order is one of those groups': no presentation
+	 * outside them exists to be proposed, so her order's codes are the substance's own and say nothing
+	 * about which presentation she was given. Review round 2 of PR #544's case, over the shipped knowledge
+	 * base: the pool rig's Helen Roberts holds a {@code Salicylic acid} order mapped to {@code D01AE12} and
+	 * {@code S01BC08}, and <em>"Can I give her salicylic acid?"</em> stated the Major methotrexate finding as a
+	 * reason to withhold it while her own screen called the same chip her medication.
+	 */
+	@Test
+	public void aDrugTheDataFilesOnlyUnderLocallyAppliedGroupsStatesTheCurrentMedicationCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = chartOf(service, coded("Salicylic acid", "D01AE12", "S01BC08"),
+			coded("Methotrexate 2.5mg", "L01BA01", "L04AX03"));
+		String question = "Can I give her salicylic acid?";
 		assertTheQuestionsDrugIsHers(service, context, question);
+		assertEveryCodeOfTheQuestionsDrugIsLocallyApplied(service, context, question);
+
+		String finding = onlyFinding(service, context, question);
+		assertTrue(finding.contains("Methotrexate") && finding.contains("Major"),
+				"precondition: the Major salicylic acid-methotrexate rule is the finding: " + finding);
+		assertTrue(finding.endsWith(CHANGE_CURRENT), finding);
+		assertStatesTheCurrentMedicationCall(finding);
+		assertEveryChipIsAboutACurrentMedication(service, context, question);
+	}
+
+	/**
+	 * The same for a SYSTEMIC drug that ATC itself files under a locally applied group alone: her
+	 * sulfasalazine tablets carry {@code A07EC01}, "Intestinal antiinflammatory agents", which is all the
+	 * data files sulfasalazine under, so she is on the drug the question names. Asked in the issue's own
+	 * wording.
+	 */
+	@Test
+	public void aSystemicDrugTheDataFilesOnlyUnderALocallyAppliedGroupStatesTheCurrentMedicationCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = chartOf(service, coded("Sulfasalazine 500mg tablets", "A07EC01"),
+			coded("Warfarin 5mg", "B01AA03"));
+		String question = "Is it safe to add sulfasalazine for her?";
+		assertTheQuestionsDrugIsHers(service, context, question);
+		assertEveryCodeOfTheQuestionsDrugIsLocallyApplied(service, context, question);
+
+		String finding = onlyFinding(service, context, question);
+		assertTrue(finding.contains("Warfarin") && finding.contains("Major"),
+				"precondition: the Major sulfasalazine-warfarin rule is the finding: " + finding);
+		assertTrue(finding.endsWith(CHANGE_CURRENT), finding);
+		assertStatesTheCurrentMedicationCall(finding);
+		assertEveryChipIsAboutACurrentMedication(service, context, question);
+	}
+
+	/**
+	 * The gate asks whether EVERY code of the order is locally applied, not whether one is: her aspirin
+	 * order carries the three codes the 3.7.1 demo dictionary maps an aspirin concept to, one of them the
+	 * stomatological {@code A01AD05}, and she is on the systemic drug the other two classify.
+	 */
+	@Test
+	public void anOrderCarryingALocallyAppliedCodeBesideSystemicOnesStatesTheCurrentMedicationCall() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.shippedEntries());
+		String[] aspirinCodes = DrugReferenceTestSupport.ASPIRIN_ORDER_CODES.toArray(new String[0]);
+		PatientClinicalContext context = chartOf(service, coded("Aspirin 81mg", aspirinCodes),
+			coded("Warfarin 5mg", "B01AA03"));
+		String question = "Is aspirin safe for her?";
+		assertTheQuestionsDrugIsHers(service, context, question);
+		boolean anyLocallyApplied = false;
+		boolean everyLocallyApplied = true;
+		for (String code : aspirinCodes) {
+			anyLocallyApplied |= DrugReference.isLocallyAppliedAtcCode(code);
+			everyLocallyApplied &= DrugReference.isLocallyAppliedAtcCode(code);
+		}
+		assertTrue(anyLocallyApplied && !everyLocallyApplied,
+				"precondition: the order mixes a locally applied code with systemic ones, or this case cannot "
+						+ "tell every code from any: " + Arrays.asList(aspirinCodes));
 
 		boolean sawTheMajor = false;
 		for (String finding : findings(service, context, question)) {
 			sawTheMajor |= finding.contains("Warfarin") && finding.contains("Major");
 			assertStatesTheCurrentMedicationCall(finding);
 		}
-		assertTrue(sawTheMajor, "precondition: the Major diclofenac-warfarin rule is among the findings");
+		assertTrue(sawTheMajor, "precondition: the Major aspirin-warfarin rule is among the findings");
+		assertEveryChipIsAboutACurrentMedication(service, context, question);
+	}
+
+	/**
+	 * The ANSWER half of the referent, on the pass the wire publishes: a drug of hers that only the answer
+	 * names states the current-medication referent on its chips, beside the question's own drug, which she
+	 * does not take and which stays a proposal. The question alone raises no chip about her two drugs, so
+	 * every chip about them here was raised because the answer named them.
+	 */
+	@Test
+	public void aDrugOfHersOnlyTheAnswerNamesIsAboutACurrentMedicationOnTheChipsPass() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(ALIAS_FIXTURE);
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 40, null, "Simvastatin",
+			"Clarithromycin");
+		String question = "Is it safe to give her warfarin?";
+		String answer = "Warfarin can be given. She also takes simvastatin and clarithromycin.";
+		Set<String> hers = new HashSet<String>(Arrays.asList("simvastatin", "clarithromycin"));
+		for (SafetyWarning chip : DrugReferenceTestSupport.validator(service).validate("", question, context)) {
+			assertFalse(hers.contains(chip.getDrug().toLowerCase()),
+					"precondition: the question alone raises no chip about her drugs: " + chip.getDetail());
+		}
+
+		Set<String> subjects = new HashSet<String>();
+		for (SafetyWarning chip : DrugReferenceTestSupport.validator(service).validate(answer, question, context)) {
+			String drug = chip.getDrug().toLowerCase();
+			subjects.add(drug);
+			if (hers.contains(drug)) {
+				assertTrue(chip.isAboutACurrentMedication(),
+						"only the answer named this drug, and it is one of her orders: " + chip.getDetail());
+			}
+			else {
+				assertEquals("warfarin", drug, "the arrangement's third subject is the question's: " + chip.getDetail());
+				assertFalse(chip.isAboutACurrentMedication(),
+						"the question proposed warfarin and she does not take it: " + chip.getDetail());
+			}
+		}
+		assertTrue(subjects.containsAll(hers) && subjects.contains("warfarin"),
+				"precondition: the answer pass raised chips about both of her drugs and the question's: " + subjects);
 	}
 
 	/**

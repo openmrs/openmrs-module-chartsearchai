@@ -1360,10 +1360,12 @@ public class DrugReference {
 	 *         first has none of, and the dropping is decided by {@link #ATC_GROUPS_BY_SITE} against
 	 *         that evidence with this predicate only refusing the {@link #SYSTEMIC_USE_EXCEPTIONS}
 	 *         nested inside a matched site. A caller with no such evidence gets the preference and
-	 *         never the veto. {@code DrugSafetyValidator.heldOnlyAsLocallyAppliedPresentations} (issue
-	 *         #402) holds such evidence too — an active ORDER's own codes, the dictionary's
-	 *         classification of what she was prescribed — and uses it to keep a finding's proposal
-	 *         referent rather than to drop a code.
+	 *         never the veto. {@code DrugSafetyValidator.mayBeProposingAPresentationSheDoesNotTake}
+	 *         (issue #402) reads an active ORDER's own codes, the dictionary's classification of the
+	 *         concept she was prescribed, as such evidence only where the substance's rows her orders
+	 *         resolved also carry a code this answers false for: where they carry none, the order's
+	 *         codes are the substance's own whatever its formulation. It uses that evidence to keep a
+	 *         finding's proposal referent rather than to drop a code.
 	 */
 	static boolean isLocallyAppliedAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);

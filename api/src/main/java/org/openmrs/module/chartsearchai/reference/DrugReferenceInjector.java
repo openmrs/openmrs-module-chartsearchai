@@ -2471,8 +2471,8 @@ public class DrugReferenceInjector {
 	 *     PROPOSAL, and for a drug she does take the drug-in-play arm states the current-medication
 	 *     clause instead (issue #402, ADR Decision 123) — asked of {@code herSubstances}, the
 	 *     substances this pass resolved her orders to. That is wider than the arm's referent, which keeps
-	 *     the proposal clause for a drug she holds only as locally applied presentations; the model
-	 *     answers such a question, as it did before issue #402.</li>
+	 *     the proposal clause for a drug a question may be proposing in a presentation she does not take;
+	 *     the model answers such a question, as it did before issue #402.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication

@@ -858,8 +858,10 @@ public class ArchitectureGuardTest {
 	 * identity, and a review round demonstrated the second: a call made inside an anonymous class
 	 * whose own field is named {@code launchedAtNanos} satisfies every part above while handing the
 	 * gate that field. The gate's own body is not read either: one counting from the earlier of its
-	 * parameter and a field only {@code startServer} sets, the field unset in every test, was
-	 * measured green here and in {@code LocalLlmServerAuthTest}. What {@code startServer} runs
+	 * parameter and a field that starts at {@code Long.MAX_VALUE} and only {@code startServer}
+	 * lowers was measured green here and in {@code LocalLlmServerAuthTest}. Nor is a second launch
+	 * the stamp predates: a child relaunched inside readiness's own loop was measured green here
+	 * too, its window already spent by the first. What {@code startServer} runs
 	 * AROUND the call is not read: work inserted between {@code pb.start()} and it makes the stamp
 	 * LATE, which lengthens the window and can cost a wait rather than opening the gate. Nor is a
 	 * caller outside this class, the gate being package-private. Read this as "readiness's gate
@@ -888,14 +890,15 @@ public class ArchitectureGuardTest {
 		}
 		int counted = 0;
 		for (Matcher m = Pattern.compile(
-				"(?:^|[;{}])\\s*requireListenerMayBeServed\\s*\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;")
+				"[;{}]\\s*requireListenerMayBeServed\\s*\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;")
 						.matcher(body); m
 						.find();) {
 			counted++;
 		}
 		if (calls == 0 || counted != calls) {
-			violations.add("waitForServerReady() calls requireListenerMayBeServed without the launch"
-					+ " stamp as its last argument (" + counted + " of " + calls + " calls) — the"
+			violations.add("waitForServerReady() calls requireListenerMayBeServed in a statement that"
+					+ " does not begin with the call or does not end on the launch stamp as its last"
+					+ " argument (" + counted + " of " + calls + " calls) — the"
 					+ " settle window is then counted from some other moment");
 		}
 		for (String name : java.util.Arrays.asList("waitForServerReady", "requireListenerMayBeServed")) {

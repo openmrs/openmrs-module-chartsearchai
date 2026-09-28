@@ -140,7 +140,7 @@ public class SelfNamedAllergyRuleRankTest {
 		// this case is about, is unchanged.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Opium: The patient has a recorded allergy to Opium."
-				+ DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(0).getText(),
+				+ DrugReferenceInjector.FINDING_NO_SEVERITY + DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(0).getText(),
 				"carrying the SURVIVING chip's detail verbatim, was: " + findings);
 	}
 

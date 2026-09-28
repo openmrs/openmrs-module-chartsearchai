@@ -241,7 +241,7 @@ public class InjectedContraindicationCorroborationTest {
 		assertEquals(1, findings.size(), "one fact is one citable record, was: " + findings);
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
 				+ "Opium: Opium is contraindicated by an active allergy: documented opium allergy."
-				+ DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH
+				+ DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH + DrugReferenceInjector.FINDING_NO_SEVERITY
 				+ DrugReferenceInjector.STRENGTH_WITHHOLD, findings.get(0).getText(),
 				"the finding must qualify the same match this record's third section qualifies, and "
 						+ "must still state the same call, was: " + findings);

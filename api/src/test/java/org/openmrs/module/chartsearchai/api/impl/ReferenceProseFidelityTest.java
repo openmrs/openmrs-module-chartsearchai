@@ -1035,6 +1035,36 @@ public class ReferenceProseFidelityTest {
 	}
 
 	/**
+	 * An answer that copies an UNRATED finding's detail and its call, leaving out only the sentence the
+	 * record states between them that the finding has no severity (issue #402's residue (a)), reproduces
+	 * the record faithfully and is not reported. That sentence must not open the way the strength clause
+	 * does: where both began "This finding", the answer's copy ran one word past the detail's end into
+	 * the call and then differed inside a record sentence, so a faithful answer was published as an
+	 * unfaithful rendering.
+	 */
+	@Test
+	public void anAnswerLeavingOutOnlyTheNoSeveritySentenceIsNotReported() throws Exception {
+		PatientChart chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_FIXTURE,
+				ISSUE_338_QUESTION, Arrays.asList(ISSUE_338_ALLERGY));
+		RecordMapping record = crossReactivityFinding(chart);
+		TestableService local = newService(chart);
+		String sentence = findingSentence(record);
+		// The record's words, as the model reads them; pinned in UnratedFindingSeverityClauseTest.
+		String noSeverity = " No severity is rated for this finding.";
+		assertTrue(sentence.endsWith(noSeverity),
+				"the premise: the unrated finding's record states the no-severity sentence before its call. "
+						+ "Was: " + record.getText());
+		String detail = sentence.substring(0, sentence.length() - noSeverity.length());
+
+		local.setLlmProvider(answering(LEAD + detail + DrugReferenceInjector.STRENGTH_WITHHOLD + " ["
+				+ record.getIndex() + "]"));
+		ChartAnswer answer = local.search(patient(), ISSUE_338_QUESTION);
+
+		assertEquals(Collections.emptyList(), answer.getUnfaithfullyRenderedCitations(),
+				"every word the answer states is the record's own, in the record's order");
+	}
+
+	/**
 	 * And where the rest of the reproduction is faithful, the shortened name is what the report turns
 	 * on. The pair differs in nothing else: the same record sentence, reproduced to its own end both
 	 * times.

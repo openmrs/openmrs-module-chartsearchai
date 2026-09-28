@@ -100,8 +100,8 @@ best-effort restore in `run`'s finally to put it back. `--selftest` pins that or
 Usage:  python3 eval/grounding-scope/grounding_scope_ab.py [--selftest]
 Env:    BASE (default http://localhost:8081/openmrs/ws/rest/v1), OMRS_USER, OMRS_PASS,
         CONDITION_PATIENT, MEDICATION_PATIENTS (comma-separated) — see the CASES comment for
-        why the defaults do not resolve on the RefApp 3.7.1 dev standalone. An unset one takes
-        its default; one set to no patient is refused (`parse_cohort`).
+        why the condition default does not resolve on the RefApp 3.7.1 dev standalone. An unset
+        one takes its default; one set to no patient is refused (`parse_cohort`).
 """
 import base64
 import json
@@ -357,22 +357,23 @@ def selftest():
         missing, again before any `/systemsetting` request;
       * every patient resolves. `run` must complete, write the clause-scope GP both ways, and
         restore it. This is the control: without it, a `run` that always refused would pass the
-        runs above;
+        runs above. The stub's baseline for that GP is neither arm's value, so a restore that
+        writes a fixed arm value instead of the one it read fails here;
       * `parse_cohort` over overrides that are set but name no patient must report a problem, and
         `run` given one must refuse before sending any request at all. The unset and the padded
         cases are its controls.
 
-    `req` and COHORT_PROBLEMS are restored in a finally, because `codes_only_order_grounding.py` imports this module
-    and reuses its `req`.
+    `req` and COHORT_PROBLEMS are restored in a finally. `req` is the one read outside this file:
+    `codes_only_order_grounding.py` imports this module and reuses it.
     """
     import contextlib
     import io
 
     patients = sorted({patient for patient, _ in CASES})
 
-    def stub_server(missing, status=404):
+    def stub_server(missing, status=404, clause_baseline="false"):
         calls = []
-        gps = {GP: ["gp-clause", "false"], GROUNDING_GP: ["gp-grounding", "true"],
+        gps = {GP: ["gp-clause", clause_baseline], GROUNDING_GP: ["gp-grounding", "true"],
                ENTAILMENT_GP: ["gp-entailment", "true"]}
 
         def fake_req(path, data=None, method="GET"):
@@ -437,12 +438,13 @@ def selftest():
         touched = [c for c in calls if c[1].startswith("/systemsetting")]
         assert not touched, "the 401 surfaced after a GP request: %s" % touched
 
-        globals()["req"], calls, gps = stub_server(set())
+        baseline = "baseline-sentinel"
+        globals()["req"], calls, gps = stub_server(set(), clause_baseline=baseline)
         with contextlib.redirect_stdout(io.StringIO()):
             run()
         writes = [c[2]["value"] for c in calls if c[1] == "/systemsetting/gp-clause"]
         assert {"false", "true"} <= set(writes), "both arms must be written: %s" % writes
-        assert writes[-1] == "false" and gps[GP][1] == "false", \
+        assert writes[-1] == baseline and gps[GP][1] == baseline, \
             "the baseline must be restored last: %s" % writes
         searches = [c for c in calls if c[1] == "/chartsearchai/search"]
         assert len(searches) == 2 * len(CASES), "one search per case per arm: %d" % len(searches)

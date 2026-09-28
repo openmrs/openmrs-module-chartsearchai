@@ -309,7 +309,7 @@ public class SafetyWarning {
 	 * why its referent is what it is.
 	 *
 	 * <p>A FACTORY for {@link #classOnlyInteraction}'s reason: every field of this shape but its type
-	 * and the four it takes is false or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart
+	 * and the five it takes is false or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart
 	 * record, no bridge (each order it names is named because its own display names the substance, so
 	 * there is nothing to bridge). {@link #restsOnSharedClassificationAlone()} is false: this is an
 	 * identity claim, so {@code DrugSafetyValidator.licensesWithholding} answers by the unrated default.
@@ -532,9 +532,9 @@ public class SafetyWarning {
 	 * "did the answer state all of them?" of.
 	 *
 	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
-	 * one or for the two findings that a substance is in several of her orders (issue #477) — one name,
-	 * though, where a question proposes a drug one order carries (issue #548) — where a
-	 * display several orders carry appears once — and so does every CONDITION-MEDIATED chip, one name
+	 * one or for the two findings that a substance is in several of her orders (issue #477), where a
+	 * display several orders carry appears once (and one name where a question proposes a drug one order
+	 * carries, issue #548) — and so does every CONDITION-MEDIATED chip, one name
 	 * per active order it links; so a reader never has to tell a chip that carries no list from a chip
 	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
 	 * and the reason nothing downstream recovers that by matching a phrase in prose.

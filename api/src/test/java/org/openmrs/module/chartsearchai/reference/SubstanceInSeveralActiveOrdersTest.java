@@ -25,7 +25,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * Whether a drug in play that the patient already receives through MORE THAN ONE active order is
- * said to be — issue #477.
+ * said to be — issue #477 — and, where the question proposes it, through one (issue #548, whose other
+ * cases are {@code ProposedDrugAlreadyInHerOrdersTest}).
  *
  * <p><b>The defect.</b> The class arm's restating-existing-therapy skip
  * ({@code DrugSafetyValidator.classRelationships}) is right for one co-medication and blind to a

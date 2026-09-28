@@ -275,7 +275,7 @@ public class ReferenceRecordRowAttributionTest {
 				"Dexamethasone (ophthalmic) is already in active order Dexamethasone (ophthalmic) — possible"
 						+ " duplicate therapy"),
 				DrugReferenceTestSupport.details(chips),
-				"the chips are #206's and this change may not move them, was: " + chips);
+				"the chips are #206's and this change may not move them — the second is #548's, was: " + chips);
 	}
 
 	@Test

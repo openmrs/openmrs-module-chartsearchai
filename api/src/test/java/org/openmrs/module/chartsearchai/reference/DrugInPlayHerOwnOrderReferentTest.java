@@ -133,7 +133,7 @@ public class DrugInPlayHerOwnOrderReferentTest {
 		// its sentence because this reads the injected records, which carry no flag.
 		List<String> findings = new ArrayList<String>();
 		for (String finding : findings(service, context, question)) {
-			if (finding.contains(" is already in active order")) {
+			if (finding.contains(" is already in active order ")) {
 				assertTrue(finding.endsWith(CHANGE_CURRENT), "one referent per drug in play: " + finding);
 			} else {
 				findings.add(finding);

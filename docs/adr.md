@@ -12130,7 +12130,10 @@ a proposal question. Where the question proposes the drug it no longer holds.
 ### Consequences
 
 - For a drug of hers that has no other finding, this finding is now the only one: a withholding-class
-  record in the current-medication column. Where the drug had exactly one other finding, #397's gate
+  record in the current-medication column. Where her other findings about the drug are all cautions,
+  it is the strongest, so the prompt's ranking sentence now leads with the change-class call. Its
+  strength is Decision 112's unrated default, kept because the issue reuses that finding; the live gate
+  should carry such a cell. Where the drug had exactly one other finding, #397's gate
   (`severalFindingsAboutOneDrug`) now fires.
 - An order that establishes the drug only by code or by bridged concept, with a display that does not
   name it, gets the referent but no finding and no clause (Decision 112's display rule).

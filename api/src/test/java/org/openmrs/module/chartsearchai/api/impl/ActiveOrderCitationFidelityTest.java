@@ -795,7 +795,8 @@ public class ActiveOrderCitationFidelityTest {
 		}
 	}
 
-	/** The one detail among {@code warnings} that is issue #477's finding. */
+	/** The one detail among {@code warnings} that is issue #477's finding — raised on one order too where
+	 *  the question proposes the drug (issue #548). */
 	private static String alreadyInSeveralOrders(List<SafetyWarning> warnings) {
 		String found = null;
 		for (SafetyWarning warning : warnings) {

@@ -1002,7 +1002,7 @@ public class SafetyWarning {
 	 * play is not hers, which the issue's decision accepted (ADR Decision 116). The DRUG-IN-PLAY arm
 	 * answers true where the drug the question or the answer named is one of her own active orders — its
 	 * substance is one {@code findForActiveOrders} resolved her orders to — and false where it is not
-	 * (issue #402, ADR Decision 121). That one answer per drug in play is stated at EVERY site the arm
+	 * (issue #402, ADR Decision 123). That one answer per drug in play is stated at EVERY site the arm
 	 * builds a finding at, {@link #substanceInSeveralActiveOrders} (issue #477) included: one finding in
 	 * the other column beside the rest is the one-site shape issue #402 recorded and reverted. A drug her
 	 * chart holds only as an ended order is not in that resolution, so it answers false and carries

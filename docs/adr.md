@@ -126,7 +126,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 118: A chip says whether the module raised it from one of the patient's own active orders](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders)
 - [Decision 119: A question that lists her medications is held to her chart](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)
 - [Decision 120: An active-order claim is held to the findings that relate its pair](#decision-120-an-active-order-claim-is-held-to-the-findings-that-relate-its-pair)
-- [Decision 121: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+- [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -5456,7 +5456,7 @@ The second row is the control that makes the first a cede rather than a chart th
 
 ## Decision 72: A finding about a medication the patient is already taking states a call about that medication
 
-**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its stance that a drug in play is always a proposal is superseded, for the drug-in-play arm, by [Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site) (Proposed). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
+**Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348). Its stance that a drug in play is always a proposal is superseded, for the drug-in-play arm, by [Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site). Its two-referent table is extended by a third column in [Decision 110](#decision-110-a-finding-about-a-drug-the-chart-records-only-as-an-ended-order-says-so-rather-than-reading-as-a-proposal). Its referent is published on each chip, as `aboutACurrentMedication`, by [Decision 118](#decision-118-a-chip-says-whether-the-module-raised-it-from-one-of-the-patients-own-active-orders) — so the trade-offs below that say the wire does not move describe this decision as it shipped.
 
 ### Context — the defect
 
@@ -10536,8 +10536,8 @@ them.
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
-[Decision 121](#decision-121-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
-(Proposed): the finding still states its arm's referent, and that referent is now the current-medication one where
+[Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site):
+the finding still states its arm's referent, and that referent is now the current-medication one where
 the drug is hers.
 
 ### Context
@@ -11439,11 +11439,12 @@ yields, and publishes `interactionClaimPairs`: `judged`, `misattributedCitations
 
 → `InteractionClaimPairFidelityTest`, `ChartSearchAiInteractionClaimPairsTest`.
 
-## Decision 121: A drug in play that is one of her own orders is stated as her medication, at every site
+## Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site
 
-**Status: Proposed** (September 2026) — implemented on a draft for issue
-[#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402), which it does not close:
-the issue's own cell still opens by refusing (the live gate below). Supersedes, for the
+**Status: Accepted** (September 2026) — implemented, issue
+[#402](https://github.com/openmrs/openmrs-module-chartsearchai/issues/402). The issue's own cell still
+opens by refusing (the live gate below); on 2026-09-28 the owner split that criterion off to
+[#548](https://github.com/openmrs/openmrs-module-chartsearchai/issues/548). Supersedes, for the
 drug-in-play arm, the stance of [Decision 72](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)
 that a drug in play is a proposal because *"the question or the answer PROPOSED it"* (#348), and the
 referent bullet of [Decision 112](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints).
@@ -11609,9 +11610,10 @@ The rig was pool slot `standalone-8082` (RefApp 3.7.1, bundled DDInter KB, local
   not refuse, does not reproduce here, and the three extra sites are not what keeps the refusal.
 - The lead then moved with the wording of one sentence in the records. E did not refuse; F, differing
   from E in those words alone, refuses on the prednisone cell and on Barbara's ibuprofen cell.
-- A lead that turns on incidental wording is not a fix. The issue's direction ends such a run as a draft
-  with the measurement recorded, and this decision is **Proposed** until the lead is moved by something
-  that holds.
+- A lead that turns on incidental wording is not a fix. The issue's direction ended such a run as a
+  draft with the measurement recorded. On 2026-09-28 the owner split the lead criterion off to
+  [#548](https://github.com/openmrs/openmrs-module-chartsearchai/issues/548), which carries this
+  table, and accepted this decision for what it delivers.
 
 **The Susan-screen rating loss, and E's false prose reports, are closed at the head.** Residue (b),
 Barbara's dropped mechanism text, is not reproduced at the head.

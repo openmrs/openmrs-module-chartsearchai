@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * An injected finding that carries no severity rating says so, and one that carries a rating does not
- * (issue #402's residue (a), ADR Decision 121).
+ * (issue #402's residue (a), ADR Decision 123).
  *
  * <p><b>The defect.</b> The prompt asks the answer to carry each finding's severity, and a record of
  * an unrated finding — every contraindication, a class-only relationship, the several-orders finding —

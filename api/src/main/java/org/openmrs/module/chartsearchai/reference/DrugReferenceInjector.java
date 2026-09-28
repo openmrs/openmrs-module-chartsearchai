@@ -2393,7 +2393,7 @@ public class DrugReferenceInjector {
 
 	/**
 	 * What the record of a finding carrying NO severity rating states about that — issue #402's residue
-	 * (a), ADR Decision 121. The prompt asks the answer to carry each finding's severity, and a record
+	 * (a), ADR Decision 123. The prompt asks the answer to carry each finding's severity, and a record
 	 * stating none left the model to supply one: measured on the live gate, on {@code main} as on the
 	 * branch, an unrated cross-reactivity contraindication was reported as "Major" and an unrated
 	 * duplicate-therapy finding as "Unknown severity" — a rating the knowledge base does use, for other
@@ -2468,7 +2468,7 @@ public class DrugReferenceInjector {
 	 *     before there is an answer, and still the one it states for a drug her chart holds only as
 	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the "No" composed here refuses a
 	 *     PROPOSAL, and for a drug she does take the drug-in-play arm states the current-medication
-	 *     clause instead (issue #402, ADR Decision 121) — asked of {@code herSubstances}, the
+	 *     clause instead (issue #402, ADR Decision 123) — asked of {@code herSubstances}, the
 	 *     substances this pass resolved her orders to.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,

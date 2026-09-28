@@ -502,7 +502,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 	 * withholding class, and is reported beside a caution lead on that drug as the arm's rule chips are. Two
 	 * of her active orders carry rifampicin ({@code ListedMedicationsSecondRifampicinOrderTestData.xml}), so
 	 * a question proposing rifampicin raises it — and, rifampicin being hers, in the current-medication
-	 * column the arm states for every finding about it (issue #402, ADR Decision 121). It is unrated, so its
+	 * column the arm states for every finding about it (issue #402, ADR Decision 123). It is unrated, so its
 	 * record states no rating.
 	 */
 	@Test

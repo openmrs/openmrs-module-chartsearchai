@@ -284,7 +284,7 @@ public class SubstanceInSeveralActiveOrdersTest {
 	public void everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent() throws IOException {
 		// Through the real injector, the whole finding list in order: the Major, the Minor and this
 		// issue's finding each state ONE column, and since issue #402 it is the CURRENT-MEDICATION one,
-		// because rifampicin is in her own orders (ADR Decision 121) — the Major and the new finding the
+		// because rifampicin is in her own orders (ADR Decision 123) — the Major and the new finding the
 		// change call, the Minor the current-medication caution. Review round 1 of #477 found the new
 		// finding alone in the other column, so one response refused rifampicin as a proposal and, two
 		// findings later, called it a medication to change (ADR Decision 112). Unrated, the new finding

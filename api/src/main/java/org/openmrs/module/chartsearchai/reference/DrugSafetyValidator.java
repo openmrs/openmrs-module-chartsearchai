@@ -991,7 +991,7 @@ public class DrugSafetyValidator {
 		int questionDrugPairs = 0;
 
 		// The substances her active orders resolve to — the drug-in-play arm's REFERENT, asked per drug
-		// in play below (issue #402, ADR Decision 121). Off orderEntries, the one resolution this pass
+		// in play below (issue #402, ADR Decision 123). Off orderEntries, the one resolution this pass
 		// already holds, so the arm and every other consumer of her orders cannot disagree about which
 		// drugs are hers. A per-call local, for issue #172's reason.
 		Set<Object> herOrderSubstances = substancesOf(orderEntries);
@@ -2656,7 +2656,7 @@ public class DrugSafetyValidator {
 	 * {@link DrugReferenceService#findForActiveOrders}, are of — keyed on
 	 * {@link DrugReference#substanceGroupKey()}, the unit the chips fold on. A new, mutable set; empty for
 	 * {@code null}. The one answer to "is this substance hers", read by the drug-in-play arm's referent
-	 * (issue #402, ADR Decision 121), by {@link EndedOrders} and by {@code DrugReferenceInjector}'s
+	 * (issue #402, ADR Decision 123), by {@link EndedOrders} and by {@code DrugReferenceInjector}'s
 	 * composed-answer gate, so no two of them can key it differently.
 	 */
 	static Set<Object> substancesOf(List<DrugReference> orderEntries) {
@@ -4187,7 +4187,7 @@ public class DrugSafetyValidator {
 	 *         those chips carry.
 	 * @param herOrder whether this substance is one of her own active orders — {@code validate}'s one
 	 *        answer for the drug in play, stated on every chip this method builds, rule, merged,
-	 *        class-only and several-orders alike (issue #402, ADR Decision 121)
+	 *        class-only and several-orders alike (issue #402, ADR Decision 123)
 	 */
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
@@ -7400,7 +7400,7 @@ public class DrugSafetyValidator {
 	 * two claims from two tables.
 	 *
 	 * @param herOrder whether the subject is one of her own active orders — {@code validate}'s one answer
-	 *        for the drug in play, which every chip of that drug states (issue #402, ADR Decision 121)
+	 *        for the drug in play, which every chip of that drug states (issue #402, ADR Decision 123)
 	 */
 	private static void addConditionMediatedWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, List<DrugReference> orderEntries,

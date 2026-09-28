@@ -160,7 +160,7 @@ public class OrdersSharingASubstanceTest {
 		// in the same words and referent, once for the one set of orders (the issue's decision comment).
 		// Last, after every arm the question raised. The drug-in-play arm's own findings state the
 		// current-medication referent for a drug in play her orders resolve to, and the proposal for one
-		// they do not (issue #402, ADR Decision 121) — so the drugs the question LISTS as current that are
+		// they do not (issue #402, ADR Decision 123) — so the drugs the question LISTS as current that are
 		// hers state it too (#513 item 1). Trimethoprim and sulfamethoxazole stay proposals: her
 		// Cotrimoxazole 960mg order does not resolve to either, a residue the decision records.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(

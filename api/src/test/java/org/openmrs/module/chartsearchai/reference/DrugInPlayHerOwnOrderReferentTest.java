@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * A drug in play that is one of the patient's OWN active orders states the current-medication call,
- * not the proposal call — issue #402, ADR Decision 121.
+ * not the proposal call — issue #402, ADR Decision 123.
  *
  * <p><b>The defect.</b> Asked <em>"Is it safe to add prednisone for her?"</em> about a patient holding
  * an active {@code Prednisone Co 5mg} order, the answer opened <em>"No — Prednisone should not be

@@ -106,7 +106,7 @@ public class ConditionMediatedFindingTest extends BaseModuleContextSensitiveTest
 	/**
 	 * The same chain where the drug in play is one of her own orders states the current-medication
 	 * referent, as every other finding the drug-in-play arm raises about that drug does (issue #402,
-	 * ADR Decision 121): one referent per drug in play, whichever site built the finding.
+	 * ADR Decision 123): one referent per drug in play, whichever site built the finding.
 	 */
 	@Test
 	public void aChainAboutADrugInPlayThatIsHerOwnOrderIsAboutACurrentMedication() {

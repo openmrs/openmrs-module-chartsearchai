@@ -39,6 +39,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * Issue #398. {@code SafetyFindingCitationExtentCheck} made the shortfall MEASURABLE
@@ -587,14 +588,16 @@ public class FindingEnumerationRepairTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned(question);
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			LlmResponse response = canned(question);
 			if (tokenConsumer != null) {
 				tokenConsumer.accept(response.getAnswer());

@@ -30,6 +30,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -868,6 +869,10 @@ public class DrugReferenceInjector {
 		// And, for the same reason, the drugs the question lists that her chart holds no active order for
 		// (issue #515), which LlmInferenceService states after the answer.
 		injected.markListedDrugsWithNoActiveOrder(listed.stated());
+		// And the drugs the question proposes that her orders already carry (issue #548), off the findings
+		// that say so and nothing else, so LlmProvider's clause after the question is stated exactly where
+		// such a finding is in the prompt.
+		injected.markDrugsAlreadyOrdered(drugsAlreadyOrdered(findings));
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
 		// derives its KV-cache decision from PatientChart.isQueryScoped() precisely so a mode-flip /
 		// GP-read race cannot mis-scope the persist; a fresh PatientChart defaults the flag to false,
@@ -2530,6 +2535,24 @@ public class DrugReferenceInjector {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * The drug and orders of every finding saying a drug the question proposes is already in her active
+	 * orders ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}), in finding order — what
+	 * {@link PatientChart#getDrugsAlreadyOrdered()} states (issue #548). The orders are the finding's own
+	 * {@link SafetyWarning#namedPartners()}, the displays its sentence names.
+	 */
+	private static List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered(
+			List<SafetyWarning> findings) {
+		List<PatientChartSerializer.AlreadyOrderedDrug> drugs =
+				new ArrayList<PatientChartSerializer.AlreadyOrderedDrug>();
+		for (SafetyWarning finding : findings) {
+			if (finding.statesAProposedDrugIsAlreadyOrdered()) {
+				drugs.add(new PatientChartSerializer.AlreadyOrderedDrug(finding.getDrug(), finding.namedPartners()));
+			}
+		}
+		return drugs;
 	}
 
 	/**

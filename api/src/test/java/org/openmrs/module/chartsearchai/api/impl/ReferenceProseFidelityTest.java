@@ -40,6 +40,7 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * Issue #337: the model reproduces a deterministic safety finding's mechanism and then writes its
@@ -1375,14 +1376,16 @@ public class ReferenceProseFidelityTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}
 	}

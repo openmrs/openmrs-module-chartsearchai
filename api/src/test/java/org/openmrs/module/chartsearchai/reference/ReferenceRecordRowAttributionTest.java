@@ -266,11 +266,14 @@ public class ReferenceRecordRowAttributionTest {
 		// names it rather than by the knowledge base's own match token. That is the only thing about
 		// this chip that has moved, and it is the change that issue asks for rather than a #206
 		// regression — the subject row, the rule chosen, the rating and the mechanism prose are all
-		// still the ones #206 settled.
+		// still the ones #206 settled. The second chip is issue #548's: the question proposes a drug her
+		// own order carries.
 		assertEquals(Arrays.asList("Dexamethasone (ophthalmic) interacts with active order Phenytoin — "
 				+ "Moderate. Phenytoin and other hydantoins may induce the CYP450 3A4 hepatic metabolism "
 				+ "of corticosteroids and increase their clearance and decrease their half-lives, "
-				+ "possibly reducing their therapeutic efficacy."),
+				+ "possibly reducing their therapeutic efficacy.",
+				"Dexamethasone (ophthalmic) is already in active order Dexamethasone (ophthalmic) — possible"
+						+ " duplicate therapy"),
 				DrugReferenceTestSupport.details(chips),
 				"the chips are #206's and this change may not move them, was: " + chips);
 	}

@@ -35,6 +35,7 @@ import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * Issue #229 — the injected reference slice's size travelling from the chart the LLM actually saw to
@@ -212,14 +213,16 @@ public class LlmInferenceServiceReferenceSliceTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return new LlmResponse("No interaction is expected.", Collections.<Integer> emptyList());
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return new LlmResponse("No interaction is expected.", Collections.<Integer> emptyList());
 		}
 	}

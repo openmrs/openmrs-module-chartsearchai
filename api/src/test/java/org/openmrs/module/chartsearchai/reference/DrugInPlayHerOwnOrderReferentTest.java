@@ -128,7 +128,16 @@ public class DrugInPlayHerOwnOrderReferentTest {
 
 	private static String onlyFinding(DrugReferenceService service, PatientClinicalContext context,
 			String question) {
-		List<String> findings = findings(service, context, question);
+		// Beside issue #548's finding that the drug proposed is already in her order, which states the one
+		// referent every finding about the drug states — asserted here, since it is set aside.
+		List<String> findings = new ArrayList<String>();
+		for (String finding : findings(service, context, question)) {
+			if (finding.contains(" is already in active order")) {
+				assertTrue(finding.endsWith(CHANGE_CURRENT), "one referent per drug in play: " + finding);
+			} else {
+				findings.add(finding);
+			}
+		}
 		assertEquals(1, findings.size(),
 				"the arrangement under test is ONE finding, or the assertions are about the wrong one: "
 						+ findings);

@@ -1680,7 +1680,9 @@ public final class DrugReferenceTestSupport {
 	 *         arm decided about. The finding that two of her orders share a substance
 	 *         ({@link #ordersSharingASubstance}, issue #477) is left out: it is raised beside the class arm
 	 *         on a question that resolves a drug (ADR Decision 116) and decides nothing about a
-	 *         co-medication.
+	 *         co-medication. Nor, for the same reason, is the finding that a drug the question proposes is
+	 *         already in her orders ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}, issue
+	 *         #548), which {@code ProposedDrugAlreadyInHerOrdersTest} pins.
 	 *
 	 *         <p>Here rather than in each file for the reason {@link #row} records: it was copied
 	 *         verbatim between two of them, javadoc included, and a shared filter cannot drift into two
@@ -1690,7 +1692,8 @@ public final class DrugReferenceTestSupport {
 		List<String> out = new ArrayList<String>();
 		for (SafetyWarning warning : warnings) {
 			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())
-					&& !warning.statesOrdersSharingASubstance()) {
+					&& !warning.statesOrdersSharingASubstance()
+					&& !warning.statesAProposedDrugIsAlreadyOrdered()) {
 				out.add(warning.getDetail());
 			}
 		}
@@ -1721,6 +1724,22 @@ public final class DrugReferenceTestSupport {
 	static List<SafetyWarning> besideOrdersSharingASubstance(List<SafetyWarning> warnings) {
 		List<SafetyWarning> out = new ArrayList<SafetyWarning>(warnings);
 		out.removeAll(ordersSharingASubstance(warnings));
+		return out;
+	}
+
+	/**
+	 * {@code warnings} without the findings that a drug the question proposes is already in her active
+	 * orders ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}, issue #548) — for a case about
+	 * another arm whose question proposes a drug one of her orders carries. Recognised by the flag its
+	 * factory sets and never by its sentence; {@code ProposedDrugAlreadyInHerOrdersTest} pins the finding.
+	 */
+	static List<SafetyWarning> besideTheProposedDrugAlreadyOrdered(List<SafetyWarning> warnings) {
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (!warning.statesAProposedDrugIsAlreadyOrdered()) {
+				out.add(warning);
+			}
+		}
 		return out;
 	}
 

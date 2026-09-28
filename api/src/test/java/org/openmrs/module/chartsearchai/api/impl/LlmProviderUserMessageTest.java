@@ -16,8 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * TWO INDEPENDENT PROPERTIES of the user message, and the nested instruction file points here for
@@ -411,5 +413,63 @@ public class LlmProviderUserMessageTest {
 		String msg = LlmProvider.buildUserMessage(CHART, null, "Q?");
 		assertTrue(!msg.contains("Records most relevant"),
 				"null focus list must not render a hint line. Got: '" + msg + "'");
+	}
+
+	/** The drug a question proposes and her one order carrying it, as the injector stamps it (#548). */
+	private static final List<AlreadyOrderedDrug> PREDNISONE_ORDERED = Collections.singletonList(
+			new AlreadyOrderedDrug("Prednisone", Arrays.asList("Prednisone Co 5mg")));
+
+	@Test
+	public void theAlreadyOrderedClauseIsExactlyTheseBytes() {
+		// ISSUE #548. After the question, in ADR Decision 84's position, and held as bytes for the reason
+		// the two clauses above are: a rewording of an imperative in this position is a new arm.
+		String question = "Is it safe to add prednisone for her?";
+		String without = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.UNPROMPTED);
+		String with = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.UNPROMPTED, PREDNISONE_ORDERED);
+
+		assertTrue(with.startsWith(without), "the clause is APPENDED.\n  without: " + without + "\n  with:    "
+				+ with);
+		assertEquals(" Prednisone is already in the patient's active orders (Prednisone Co 5mg): open by saying "
+				+ "so; adding it would duplicate that order; then say what the findings mean for the patient's "
+				+ "current Prednisone.", with.substring(without.length()));
+	}
+
+	@Test
+	public void theAlreadyOrderedClauseFollowsTheFindingEnumerationClause() {
+		// Where both fire, #397's measured layout — the question, a SPACE, its clause — is left as it
+		// was measured, and this clause comes after it.
+		String question = "Is it safe to add prednisone for her?";
+		String enumerated = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.ENUMERATED);
+		String both = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.ENUMERATED, PREDNISONE_ORDERED);
+
+		assertTrue(both.startsWith(enumerated), "was: " + both);
+		assertTrue(both.substring(enumerated.length()).startsWith(" Prednisone is already in"), "was: " + both);
+	}
+
+	@Test
+	public void theAlreadyOrderedClauseNamesEveryOrderAndSpeaksOfThemInThePlural() {
+		String question = "Is it safe to add prednisone for her?";
+		String without = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.UNPROMPTED);
+		String with = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.UNPROMPTED, Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
+						Arrays.asList("Prednisone Co 5mg", "Prednisone 20mg"))));
+
+		assertEquals(" Prednisone is already in the patient's active orders (Prednisone Co 5mg and Prednisone "
+				+ "20mg): open by saying so; adding it would duplicate those orders; then say what the findings "
+				+ "mean for the patient's current Prednisone.", with.substring(without.length()));
+	}
+
+	@Test
+	public void theAlreadyOrderedClauseNeverReachesTheWarmupPrefix() {
+		// The KV seed and the warmup are built with an empty question, and must stay a byte-prefix of
+		// every query for the patient.
+		assertEquals(LlmProvider.buildUserMessage(CHART, ""),
+				LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "",
+						LlmProvider.FindingProse.UNPROMPTED, PREDNISONE_ORDERED));
 	}
 }

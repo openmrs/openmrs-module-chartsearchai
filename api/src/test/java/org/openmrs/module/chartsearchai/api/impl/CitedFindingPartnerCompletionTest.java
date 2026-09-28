@@ -39,6 +39,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * The orders the module appends to an answer, and the {@code findingPartners} count beside them, are
@@ -519,14 +520,16 @@ public class CitedFindingPartnerCompletionTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}
 	}

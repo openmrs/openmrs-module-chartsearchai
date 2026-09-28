@@ -139,6 +139,9 @@ public class SafetyWarning {
 	/** @see #subjectRows() */
 	private final List<DrugReference> subjectRows;
 
+	/** @see #statesAProposedDrugIsAlreadyOrdered() */
+	private final boolean proposedDrugAlreadyOrdered;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -300,8 +303,9 @@ public class SafetyWarning {
 
 	/**
 	 * The warning that the drug in play is already in two or more of the patient's own active orders
-	 * (issue #477). The one construction site is {@code DrugSafetyValidator.alreadyInSeveralOrders},
-	 * which is canonical for why the finding exists and why its referent is what it is.
+	 * (issue #477), or in one where the question proposes it (issue #548). The one construction site is
+	 * {@code DrugSafetyValidator.alreadyInSeveralOrders}, which is canonical for why the finding exists and
+	 * why its referent is what it is.
 	 *
 	 * <p>A FACTORY for {@link #classOnlyInteraction}'s reason: every field of this shape but its type
 	 * and the four it takes is false or empty BY CONSTRUCTION — no rule, no rating, no fold, no chart
@@ -314,11 +318,14 @@ public class SafetyWarning {
 	 * @param aboutACurrentMedication the referent the drug-in-play arm states for the drug in play, at
 	 *        every site it builds a finding at: a finding here stating another would be the one-site
 	 *        shape issue #402 recorded and reverted (ADR Decisions 112, 123)
+	 * @param proposedDrugAlreadyOrdered whether the question proposes the drug and it is hers —
+	 *        {@link #statesAProposedDrugIsAlreadyOrdered()} (issue #548)
 	 */
 	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders,
-			boolean aboutACurrentMedication) {
+			boolean aboutACurrentMedication, boolean proposedDrugAlreadyOrdered) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders);
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders, false,
+				null, null, false, null, null, proposedDrugAlreadyOrdered);
 	}
 
 	/**
@@ -336,7 +343,7 @@ public class SafetyWarning {
 	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true,
-				null, null);
+				null, null, false);
 	}
 
 	/**
@@ -390,7 +397,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null, null);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null, null, false);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -400,7 +407,9 @@ public class SafetyWarning {
 			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
-			Collection<String> matchedOrderNames, List<DrugReference> subjectRows) {
+			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
+			boolean proposedDrugAlreadyOrdered) {
+		this.proposedDrugAlreadyOrdered = proposedDrugAlreadyOrdered;
 		this.ordersSharingASubstance = ordersSharingASubstance;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.matchedOrderNames = matchedOrderNames == null || matchedOrderNames.isEmpty()
@@ -1131,7 +1140,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
-				matchedOrderNames, subjectRows);
+				matchedOrderNames, subjectRows, proposedDrugAlreadyOrdered);
 	}
 
 	/**
@@ -1145,7 +1154,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, names, subjectRows);
+				endedOrderRows, ordersSharingASubstance, names, subjectRows, proposedDrugAlreadyOrdered);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1191,7 +1200,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, proposedDrugAlreadyOrdered);
 	}
 
 	/**
@@ -1220,6 +1229,19 @@ public class SafetyWarning {
 	 */
 	boolean statesOrdersSharingASubstance() {
 		return ordersSharingASubstance;
+	}
+
+	/**
+	 * Whether this is the finding that a drug the QUESTION PROPOSES is already in the patient's own active
+	 * orders — {@link #substanceInSeveralActiveOrders}' finding, raised where the question proposes the
+	 * drug and her orders establish it, on one order as on several (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/548">#548</a>). Set by the arm
+	 * and never read off the detail. {@code DrugReferenceInjector} reads it to stamp the chart the
+	 * user-message clause is written from, so the clause is stated exactly where this finding is.
+	 * Package-private and not a getter, so it reaches no wire.
+	 */
+	boolean statesAProposedDrugIsAlreadyOrdered() {
+		return proposedDrugAlreadyOrdered;
 	}
 
 	/**

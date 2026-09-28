@@ -703,8 +703,11 @@ public class BridgedConceptOrderResolutionTest {
 			PatientClinicalContext chart = chart(inexiumOrder(null), clopidogrelOrder());
 			String order = displayNames(rows).toString();
 
-			List<SafetyWarning> partnerSide = DrugReferenceTestSupport.validator(service).validate("",
-				"Can I give this patient clopidogrel?", service.withReferenceNames(chart));
+			// Beside issue #548's finding that the clopidogrel proposed is already in her order: this case is
+			// about the pair.
+			List<SafetyWarning> partnerSide = DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(
+					DrugReferenceTestSupport.validator(service).validate("", "Can I give this patient clopidogrel?",
+						service.withReferenceNames(chart)));
 
 			assertEquals(1, partnerSide.size(), "precondition: the pair must chip from this side too,"
 					+ " rows " + order + ", was: " + DrugReferenceTestSupport.details(partnerSide));
@@ -760,8 +763,10 @@ public class BridgedConceptOrderResolutionTest {
 		PatientClinicalContext chart = chart(inexiumOrder(null), clopidogrelOrder());
 		String order = displayNames(rows).toString();
 
-		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(service).validate("",
-			"Can I give this patient clopidogrel?", service.withReferenceNames(chart));
+		// Beside issue #548's finding, for the reason the case above gives.
+		List<SafetyWarning> chips = DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(
+				DrugReferenceTestSupport.validator(service).validate("", "Can I give this patient clopidogrel?",
+					service.withReferenceNames(chart)));
 
 		assertEquals(1, chips.size(), "precondition: the pair must chip, rows " + order + ", was: "
 				+ DrugReferenceTestSupport.details(chips));

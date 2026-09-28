@@ -129,6 +129,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 121: The "Drug reference" record-type sentence is unchanged, and the three rewordings measured for it are inconclusive rather than refuted](#decision-121-the-drug-reference-record-type-sentence-is-unchanged-and-the-three-rewordings-measured-for-it-are-inconclusive-rather-than-refuted)
 - [Decision 122: Every record of the whole chart carries its own date](#decision-122-every-record-of-the-whole-chart-carries-its-own-date)
 - [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+- [Decision 124: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-124-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10548,7 +10549,10 @@ them.
 ## Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints
 
 **Status: Accepted** (September 2026) — implemented, issue
-[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
+[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its
+*"One order states nothing"* holds, since
+[Decision 124](#decision-124-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question),
+only for a question that does not propose the drug. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
 [Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site):
 the finding still states its arm's referent, and that referent is now the current-medication one where
 the drug is hers.
@@ -12032,3 +12036,109 @@ answer-driven and not code-driven.
 **Review rounds 1 to 3 postdate every arm.** Round 1's two behaviour changes, the locally applied gate
 and the dose check's referent, round 2's narrowing of that gate, and round 3's narrowing of what counts
 as hers with the gate's two changes came after arm F and ran in none of the arms above.
+
+## Decision 124: A question proposing a drug one of her own orders carries is told so, as a finding and after the question
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#548](https://github.com/openmrs/openmrs-module-chartsearchai/issues/548), the lead criterion
+[Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+split off. Extends
+[Decision 112](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
+to one order on a proposal, and puts a clause in
+[Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)'s
+position.
+
+### Context
+
+On a chart holding `Prednisone Co 5mg`, *"Is it safe to add prednisone for her?"* opened *"No —
+Prednisone should not be added"*, although every chip about prednisone carried
+`aboutACurrentMedication: true`. The owner's measurements on the issue (`:8081`, `main` @ `0145d74a`,
+Gemma 4 E4B, two runs per question, 2026-09-28):
+
+- the same chart and findings, asked *"Is prednisone safe for her?"* and *"Can I give her prednisone?"*,
+  did not refuse. So the refusal follows the question's verb *add*, not the findings;
+- an arm rewording `DEFAULT_SYSTEM_PROMPT`'s current-medication branch still refused in both runs.
+
+Nothing the model read said that the drug proposed is one of her orders, so nothing told it that adding
+it duplicates that order.
+
+### The decision
+
+**The module states the fact itself, as a finding.** `DrugSafetyValidator.alreadyInSeveralOrders` now
+raises its finding for ONE order where the question proposes the drug and the drug is hers. Its sentence
+is *"Prednisone is already in active order Prednisone Co 5mg — possible duplicate therapy"*. The gate is
+three conjuncts, asked per drug in play:
+
+- the drug-in-play arm's referent (`herOrder`, `currentMedicationsInPlay`), so the finding and
+  `aboutACurrentMedication` cannot disagree. A drug her orders resolve to without establishing it
+  (`Nexium 40mg` for omeprazole), and one a question may be proposing in a presentation she does not take
+  (a `Diclofenac gel 1%` order), are refused here;
+- the question proposes a drug (`DrugReferenceInjector.questionProposes`). A screen, a question that
+  lists the drug as current and a question about her dose keep today's behaviour;
+- the QUESTION put the drug in play. A drug of hers that only the answer names was proposed by nobody.
+
+Everything else is Decision 112's: which orders count is decided on the display
+(`CoMedications.ordersWhoseDisplayNames`), the strength is the unrated default, the referent is the
+arm's, and the finding trails the rule chips. Two or more orders on a proposal raise the same finding as
+before, now marked too.
+
+**The same fact is stated after the question.** The finding marks itself
+(`SafetyWarning.statesAProposedDrugIsAlreadyOrdered`). `DrugReferenceInjector` stamps the chart with each
+such finding's drug and orders (`PatientChart.getDrugsAlreadyOrdered`). `LlmInferenceService` hands that
+stamp, read off the post-inject chart, to `LlmProvider`, and `buildUserMessage` appends:
+
+> Prednisone is already in the patient's active orders (Prednisone Co 5mg): open by saying so; adding it
+> would duplicate that order; then say what the findings mean for the patient's current Prednisone.
+
+- It is the issue's suggested wording, with *her* rendered *the patient's*.
+- It comes after the finding-prose clause, so #397's measured layout is unchanged where both fire.
+- The finding-enumeration repair and the progressive preview are not handed it. The first asks its own
+  question, and the second's chart never passes the injector.
+- `DEFAULT_SYSTEM_PROMPT` is not reworded, because the issue measured that arm and it failed.
+
+**The proposal grammar admits the drug-then-patient order.** `QueryScopeRouter`'s shape *"is it safe to
+add X"* allowed *"for her"* only before *to*, so the issue's own question fitted no shape. The
+plan-refutation gate measured that against the compiled class. The shape now takes a trailing *"for
+her"*, the allowance two other shapes already make, and a reordering of *"Is it safe for her to add
+X?"*, which it already admitted. Every reader of that grammar moves with it:
+
+- The module's composed "No" (Decision 108), which ships off. It now also answers *"Is it safe to add X
+  for her?"* for a drug she does not take. This is unmeasured against Decision 108's *What gates turning
+  it on*.
+- The ended-order holder (Decision 110), which now keeps such a phrasing a proposal.
+- `listedBeforeTheProposal` (#515), which can now find the proposal clause in such a phrasing.
+
+No case here pins the last two.
+
+### What it changes in the specification
+
+Decision 112's *"One order states nothing"* held for every question, and several cases pinned it through
+a proposal question. Where the question proposes the drug it no longer holds.
+
+- `SubstanceInSeveralActiveOrdersTest.oneOrderContainingItIsStillRestatingExistingTherapy` now asks a
+  question that does not propose the drug. Its old input is
+  `.aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt`.
+- Four cases of that class pin which order a display rule refuses. They now assert the one finding naming
+  only the order the rule admits.
+- Cases about the class arm's restating-existing-therapy skip read their chips beside this finding
+  (`DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered`, and `classChipDetails`). This finding
+  decides nothing about a co-medication, which is the reason those helpers already set #477's other
+  finding aside.
+
+### Consequences
+
+- For a drug of hers that has no other finding, this finding is now the only one: a withholding-class
+  record in the current-medication column. Where the drug had exactly one other finding, #397's gate
+  (`severalFindingsAboutOneDrug`) now fires.
+- An order that establishes the drug only by code or by bridged concept, with a display that does not
+  name it, gets the referent but no finding and no clause (Decision 112's display rule).
+- The finding exists only where the interaction arm runs, as Decision 112's does.
+- The finding's sentence contains `ACTIVE_ORDER_NOUN`. An answer that restates it is counted as an
+  active-order claim by `ActiveOrderCitationFidelityCheck`.
+- **Not measured on a model in this revision.** The issue's live gate is the measurement: its cells, plus
+  a proposal of a drug of hers that has no other finding.
+
+→ `ProposedDrugAlreadyInHerOrdersTest` (its class javadoc names the case each gate is mutated against);
+`SubstanceInSeveralActiveOrdersTest.aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt`;
+`LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes`;
+`AlreadyOrderedDrugClauseContextTest`.

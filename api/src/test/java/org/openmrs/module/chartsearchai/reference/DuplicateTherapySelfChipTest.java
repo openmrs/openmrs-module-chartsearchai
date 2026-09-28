@@ -368,8 +368,11 @@ public class DuplicateTherapySelfChipTest {
 				.contains("Hydrocortisone butyrate"),
 				"and the ranked one must not");
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", "Is it safe to give hydrocortisone butyrate?", hydrocortisoneOrder());
+		// Beside issue #548's finding, which states the hydrocortisone her order carries, for the reason
+		// chips() gives.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(
+				DrugReferenceTestSupport.validator(service)
+						.validate("", "Is it safe to give hydrocortisone butyrate?", hydrocortisoneOrder()));
 
 		assertEquals(1, warnings.size(), "was: " + warnings);
 		assertEquals("Hydrocortisone butyrate is in the same ATC class (H02AB) as active order"
@@ -388,7 +391,9 @@ public class DuplicateTherapySelfChipTest {
 						.ddiFixtureService(DrugReferenceTestSupport.DDI_CONTRA_ROUTE_VARIANTS))
 				.validate("", "Is it safe to give hydrocortisone?", hydrocortisoneOrder());
 
-		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport.details(warnings),
+		// Beside issue #548's finding, for the reason chips() gives.
+		assertEquals(Collections.<String> emptyList(),
+				DrugReferenceTestSupport.details(DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(warnings)),
 				"the order's own substance does not duplicate the order");
 	}
 
@@ -422,7 +427,10 @@ public class DuplicateTherapySelfChipTest {
 
 	private static List<SafetyWarning> chips(String question, PatientClinicalContext context)
 			throws IOException {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
-				.validate("", question, context);
+		// Beside issue #548's finding, raised where a case proposes a drug one of her orders carries: what
+		// these cases assert is the class arm's skip, which that finding does not decide.
+		return DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+						.validate("", question, context));
 	}
 }

@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -1176,7 +1177,7 @@ public class LlmProviderTest {
 		List<Integer> focus = Arrays.asList(1, 2);
 
 		provider.searchStreaming(records, focus, "Is the patient diabetic?",
-				tok -> { }, reason -> { }, "patient-uuid-42", false, LlmEngine.ReferenceRecords.ABSENT);
+				tok -> { }, reason -> { }, "patient-uuid-42", false, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
 
 		assertEquals("patient-uuid-42", engine.capturedScope,
 				"the patient UUID must reach the engine as the KV cache scope so the query path can "
@@ -1200,7 +1201,7 @@ public class LlmProviderTest {
 		LlmProvider provider = providerWith(engine);
 
 		provider.searchStreaming("1. x", Arrays.<Integer>asList(), "q",
-				tok -> { }, reason -> { }, null, false, LlmEngine.ReferenceRecords.ABSENT);
+				tok -> { }, reason -> { }, null, false, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
 
 		assertNull(engine.capturedScope, "a null scope must pass through unchanged");
 		assertNull(engine.capturedSeed,
@@ -1254,7 +1255,7 @@ public class LlmProviderTest {
 		List<Integer> focus = Arrays.asList(1);
 		String question = "should i give Warfarin?";
 
-		provider.search(records, focus, question, true, LlmEngine.ReferenceRecords.ABSENT);
+		provider.search(records, focus, question, true, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,
@@ -1280,7 +1281,8 @@ public class LlmProviderTest {
 		String records = "1. [2024-01-01] BP 120/80";
 		List<Integer> focus = Arrays.<Integer>asList();
 
-		provider.search(records, focus, "Is she hypertensive?", false, LlmEngine.ReferenceRecords.ABSENT);
+		provider.search(records, focus, "Is she hypertensive?", false, LlmEngine.ReferenceRecords.ABSENT,
+				Collections.emptyList());
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is she hypertensive?", false),
 				engine.capturedUserMessage,
@@ -1309,7 +1311,7 @@ public class LlmProviderTest {
 		String question = "should i give Warfarin?";
 
 		provider.searchStreaming(records, focus, question, tok -> { }, reason -> { },
-				"patient-uuid-42", true, LlmEngine.ReferenceRecords.ABSENT);
+				"patient-uuid-42", true, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,

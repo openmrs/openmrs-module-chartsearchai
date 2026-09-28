@@ -998,6 +998,10 @@ public class DrugSafetyValidator {
 		// never widen it. A per-call local, for issue #172's reason.
 		Set<Object> herOrderSubstances = currentMedicationsInPlay(inPlay, questionDrugs, question, orderEntries,
 				context, bridgedOrders, coMedications);
+		// Whether the question PROPOSES the drug it resolved (issue #548): read off the question alone, so
+		// both passes of a request agree, and asked once because it is about the whole question.
+		boolean proposes = DrugReferenceInjector.questionProposes(question,
+			new ArrayList<DrugReference>(questionDrugs));
 
 		for (DrugReference ref : inPlay) {
 			// Whether this drug in play is a medication she is already taking, and so what every finding
@@ -1012,6 +1016,10 @@ public class DrugSafetyValidator {
 			// An ended order is not in orderEntries, so a drug her chart holds only as one keeps the proposal
 			// here and EndedOrders states its own referent on the chip (issue #472).
 			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
+			// And whether it is her own drug that the question proposes, so that giving it would duplicate
+			// the order she is on (issue #548): the referent above, for a drug the QUESTION put in play — a
+			// drug of hers only the answer names was proposed by nobody. See alreadyInSeveralOrders.
+			boolean proposedHerOwn = herOrder && proposes && questionSubstances.contains(ref.substanceGroupKey());
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
@@ -1039,7 +1047,7 @@ public class DrugSafetyValidator {
 				// method that sees both (issue #88).
 				int related = addInteractionWarnings(warnings, rows, subjects, context, severityFloor,
 						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders, endedOrders,
-						herOrder);
+						herOrder, proposedHerOwn);
 				// After the pairwise chips for this drug and never counted into `related`: a derived chain
 				// is not a DDInter pair row, and PairChipExtent counts those alone (ADR Decision 111).
 				if (derivedFindings) {
@@ -4446,12 +4454,14 @@ public class DrugSafetyValidator {
 	 *        {@code validate}'s one answer for it ({@link #currentMedicationsInPlay}), stated on every chip
 	 *        this method builds, rule, merged, class-only and several-orders alike (issue #402, ADR
 	 *        Decision 123)
+	 * @param proposedHerOwn whether the question proposes this drug and it is hers — {@code validate}'s
+	 *        answer, read by {@link #alreadyInSeveralOrders} alone (issue #548)
 	 */
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
 			StatedInteractionChips statedChips, BridgedOrders bridgedOrders, EndedOrders endedOrders,
-			boolean herOrder) {
+			boolean herOrder, boolean proposedHerOwn) {
 		if (context == null) {
 			return 0;
 		}
@@ -4603,7 +4613,7 @@ public class DrugSafetyValidator {
 		// stamped as about an ended order: its sentence says active orders carry the drug. Its subject
 		// rows are stated as every other chip of this arm's are (issue #515), or no check of the answer
 		// can tell which drug it is about.
-		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications, herOrder);
+		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications, herOrder, proposedHerOwn);
 		if (alreadyTaken != null) {
 			warnings.add(endedOrders.aboutTheSubject(ref, alreadyTaken));
 		}
@@ -4776,7 +4786,8 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The finding that the substance in play is ALREADY in two or more of the patient's own active
-	 * orders — issue #477 — or null where fewer than two carry it.
+	 * orders — issue #477 — or in one, where the question proposes it and it is hers (issue #548); null
+	 * where fewer carry it.
 	 *
 	 * <p><b>Why the class arm cannot say this.</b> Its restating-existing-therapy skip
 	 * ({@link #classRelationships}) is asked per CO-MEDICATION, and every order of one substance is one
@@ -4785,8 +4796,9 @@ public class DrugSafetyValidator {
 	 * silent about each other while the rule arm related rifampicin to their other constituents. The
 	 * skip is right for the one order and stays; this states what it cannot.
 	 *
-	 * <p><b>One order says nothing</b>: that is the drug itself, and a drug does not duplicate itself
-	 * (issue #185). Which orders count is {@link CoMedications#ordersWhoseDisplayNames}, and the
+	 * <p><b>One order says nothing</b> on a question that does not propose the drug: that is the drug
+	 * itself, and a drug does not duplicate itself (issue #185). Which orders count is
+	 * {@link CoMedications#ordersWhoseDisplayNames}, and the
 	 * sentence names each by that same display, so the evidence and the printed name are one string.
 	 *
 	 * <p><b>Its REFERENT is its arm's</b>, {@code herOrder}, like every other finding this arm raises
@@ -4798,19 +4810,32 @@ public class DrugSafetyValidator {
 	 * so where two of her orders' displays name it — the displays being among the names the builder
 	 * records — this finding states that referent too, the gate aside. Its STRENGTH is the unrated
 	 * default, so it states the withholding class. ADR Decisions 112 and 123 carry why of both.
+	 *
+	 * <p><b>One order is enough where the question PROPOSES the drug and it is hers</b>
+	 * ({@code proposedHerOwn}, issue #548): giving it would duplicate that order, which is what the
+	 * question needs to be told. <em>"Is it safe to add prednisone for her?"</em> over a
+	 * {@code Prednisone Co 5mg} order opened by refusing it, every finding stating it as her medication,
+	 * and the owner measured the refusal following the question's verb. So the finding names the one
+	 * order, and marks itself ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}) so the injector
+	 * can state the same fact after the question. The referent is the gate: a drug her orders resolve to
+	 * without establishing it, or one the question may be proposing in a presentation she does not take,
+	 * keeps the #185 answer, as does every question that does not propose it. ADR Decision 124.
+	 *
+	 * @param proposedHerOwn whether the question proposes this drug in play and it is hers
 	 */
 	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications,
-			boolean herOrder) {
+			boolean herOrder, boolean proposedHerOwn) {
+		int fewest = proposedHerOwn ? 1 : 2;
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =
-				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey());
-		if (carriers.size() < 2) {
+				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey(), fewest);
+		if (carriers.size() < fewest) {
 			return null;
 		}
 		Map<String, Integer> ordersByDisplay = ordersByDisplay(carriers);
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
 					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()), herOrder);
+			new ArrayList<String>(ordersByDisplay.keySet()), herOrder, proposedHerOwn);
 	}
 
 	/**
@@ -4829,9 +4854,10 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * "active orders A and B", a display several orders carry followed by their count. The count says
-	 * "orders" and never {@link #ACTIVE_ORDER_NOUN}: {@code ActiveOrderCitationFidelityCheck} counts one
-	 * claim per occurrence of that noun, so a second one would split the sentence into two claims.
+	 * "active orders A and B", a display several orders carry followed by their count — or "active order
+	 * A" for the one order a proposal names (issue #548). The count says "orders" and never
+	 * {@link #ACTIVE_ORDER_NOUN}: {@code ActiveOrderCitationFidelityCheck} counts one claim per occurrence
+	 * of that noun, so a second one would split the sentence into two claims.
 	 */
 	private static String ordersNamed(Map<String, Integer> ordersByDisplay) {
 		List<String> labels = new ArrayList<String>(ordersByDisplay.size());
@@ -4839,7 +4865,8 @@ public class DrugSafetyValidator {
 			labels.add(display.getValue() == 1 ? display.getKey()
 					: display.getKey() + " (" + display.getValue() + " orders)");
 		}
-		return ACTIVE_ORDER_NOUN + "s " + joinPartners(labels);
+		boolean oneOrder = ordersByDisplay.size() == 1 && ordersByDisplay.values().iterator().next() == 1;
+		return ACTIVE_ORDER_NOUN + (oneOrder ? " " : "s ") + joinPartners(labels);
 	}
 
 	/**
@@ -4898,7 +4925,7 @@ public class DrugSafetyValidator {
 				new HashSet<List<PatientClinicalContext.ActiveDrugOrder>>();
 		for (List<DrugReference> rows : substanceRows(orderEntries).values()) {
 			Object substance = rows.get(0).substanceGroupKey();
-			List<PatientClinicalContext.ActiveDrugOrder> carriers = coMedications.ordersWhoseDisplayNames(substance);
+			List<PatientClinicalContext.ActiveDrugOrder> carriers = coMedications.ordersWhoseDisplayNames(substance, 2);
 			if (carriers.size() < 2) {
 				continue;
 			}
@@ -11594,11 +11621,12 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#displayNamesADrug} admits (issue #290), and deliberately narrower
 		 * than the co-medication walk and {@link DrugSafetyValidator#resolvesFrom}, which also accept a
 		 * shared ATC code or a bridged concept. ADR Decision 112 carries why, and what it gives up.
-		 * Empty for a chart of fewer than two orders, which cannot raise the finding, without resolving
-		 * anything.
+		 * Empty for a chart of fewer than {@code fewest} orders, which cannot raise the caller's finding,
+		 * without resolving anything: two for the findings that orders DUPLICATE one another, one for a
+		 * proposal of a drug an order of hers already carries (issue #548).
 		 */
-		List<PatientClinicalContext.ActiveDrugOrder> ordersWhoseDisplayNames(Object substance) {
-			if (context == null || context.getActiveDrugOrders().size() < 2) {
+		List<PatientClinicalContext.ActiveDrugOrder> ordersWhoseDisplayNames(Object substance, int fewest) {
+			if (context == null || context.getActiveDrugOrders().size() < fewest) {
 				return Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList();
 			}
 			List<PatientClinicalContext.ActiveDrugOrder> carriers =

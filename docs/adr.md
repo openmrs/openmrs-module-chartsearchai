@@ -9525,9 +9525,9 @@ off the ordinary start path — `/health` answers `ok` only once the model is lo
 by which point the window has passed and nothing is spent. That "nothing" is a property of the
 production WIRING, and two different things carry it. The live figure is PR #461's: an ordinary
 cold start whose engine lines put the server start at 2047 ms, twice, so the first healthy reply
-lands about 2 s after the launch and the remainder is already at or below zero. What keeps it true
-is that the stamp is the first statement of `waitForServerReady` and the value the gate is handed —
-`ArchitectureGuardTest.theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes` (#462), since
+lands about 2 s after the launch and the remainder is already at or below zero. What pins that
+wiring, within the residue its javadoc names, is that the stamp is the first statement of
+`waitForServerReady` and the value the gate is handed — `ArchitectureGuardTest.theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes` (#462), since
 no behavioural case can see that value. `LocalLlmServerAuthTest.aHealthyReplyLongAfterTheBindWindowIsAdoptedWithoutWaitingFurther`
 measures neither: it hands the gate a launch stamp ten windows old, so its 2 ms for two warm
 loopback probes and no wait is the gate's ARITHMETIC. Measured for #462, a fresh `System.nanoTime()`

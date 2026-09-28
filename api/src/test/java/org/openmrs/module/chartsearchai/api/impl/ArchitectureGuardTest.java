@@ -852,11 +852,16 @@ public class ArchitectureGuardTest {
 	 * call wrapping it.</li>
 	 * </ul>
 	 *
-	 * <p><b>The residue.</b> Text cannot see reachability, and what {@code startServer} runs AROUND
-	 * the call is not read: work inserted between {@code pb.start()} and it makes the stamp LATE,
-	 * which lengthens the window and can cost a wait rather than opening the gate. Nor is a caller
-	 * outside this class, the gate being package-private. Read this as "the window is counted from
-	 * the first thing readiness does", and no more.
+	 * <p><b>The residue, named rather than claimed away.</b> Text cannot see reachability or
+	 * identity, and a review round demonstrated the second: a call made inside an anonymous class
+	 * whose own field is named {@code launchedAtNanos} satisfies every part above while handing the
+	 * gate that field. The gate's own body is not read either: one counting from a field that only
+	 * {@code startServer} sets, rather than from its parameter, was measured green here and in
+	 * {@code LocalLlmServerAuthTest}. What {@code startServer} runs AROUND the call is not read:
+	 * work inserted between {@code pb.start()} and it makes the stamp LATE, which lengthens the
+	 * window and can cost a wait rather than opening the gate. Nor is a caller outside this class,
+	 * the gate being package-private. Read this as "the line readiness hands the gate names the
+	 * stamp its first statement took", and no more.
 	 */
 	@Test
 	public void theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes() throws IOException {
@@ -875,10 +880,13 @@ public class ArchitectureGuardTest {
 					+ " System.nanoTime();` — the settle window must be counted from the launch; this"
 					+ " test's javadoc says what each wrong moment costs");
 		}
-		int calls = body.split("requireListenerMayBeServed\\(", -1).length - 1;
+		int calls = 0;
+		for (Matcher m = Pattern.compile("\\brequireListenerMayBeServed\\s*\\(").matcher(body); m.find();) {
+			calls++;
+		}
 		int counted = 0;
 		for (Matcher m = Pattern.compile(
-				"requireListenerMayBeServed\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;").matcher(body); m
+				"\\brequireListenerMayBeServed\\s*\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;").matcher(body); m
 						.find();) {
 			counted++;
 		}

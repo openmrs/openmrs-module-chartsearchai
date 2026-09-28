@@ -315,7 +315,7 @@ def selftest():
     """Offline guard for the ORDER `run` does things in (#240). No server, no model.
 
     It drives the real `run` over the real CASES, with `req` swapped for an in-memory stub that
-    records every request. Two runs:
+    records every request. Three runs:
 
       * every one of the cohort's patients 404s. `run` must REFUSE, name each of them, and have
         sent NO `/systemsetting` request of any kind — not a write, and not the read either,
@@ -324,7 +324,7 @@ def selftest():
         missing, again before any `/systemsetting` request;
       * every patient resolves. `run` must complete, write the clause-scope GP both ways, and
         restore it. This is the control: without it, a `run` that always refused would pass the
-        first half.
+        first two.
 
     `req` is restored in a finally, because `codes_only_order_grounding.py` imports this module
     and reuses its `req`.
@@ -402,5 +402,8 @@ def selftest():
 if __name__ == "__main__":
     if sys.argv[1:] == ["--selftest"]:
         selftest()
+    elif sys.argv[1:]:
+        # A mistyped `--selftest` must not fall through to the live run, which writes GPs.
+        sys.exit("usage: %s [--selftest]" % sys.argv[0])
     else:
         run()

@@ -166,13 +166,20 @@ def req(path, data=None, method="GET"):
 
 
 def unresolved_patients():
-    """Every distinct CASES patient the instance at BASE does not serve, with the HTTP status."""
+    """Every distinct CASES patient the instance at BASE answers 404 for.
+
+    Only a 404 means the patient is absent. Any other HTTP error — a 401 from wrong credentials, a
+    5xx — propagates, because telling the operator to pick a different cohort would send them after
+    the wrong fault. Either way it is raised before `run` touches a GP.
+    """
     unresolved = []
     for patient in sorted({patient for patient, _ in CASES}):
         try:
             req("/patient/" + patient)
         except urllib.error.HTTPError as e:
-            unresolved.append("%s (HTTP %d)" % (patient, e.code))
+            if e.code != 404:
+                raise
+            unresolved.append(patient)
     return unresolved
 
 
@@ -238,7 +245,7 @@ def run():
     unresolved = unresolved_patients()
     if unresolved:
         raise SystemExit(
-            "ERROR: %d cohort patient(s) do not resolve on %s:\n  %s\n"
+            "ERROR: %d cohort patient(s) are not found (HTTP 404) on %s:\n  %s\n"
             "Refusing to run: no GP was read or written. Pass patients that exist on this instance\n"
             "as CONDITION_PATIENT / MEDICATION_PATIENTS; the CASES comment says what they must carry."
             % (len(unresolved), BASE, "\n  ".join(unresolved)))
@@ -310,9 +317,11 @@ def selftest():
     It drives the real `run` over the real CASES, with `req` swapped for an in-memory stub that
     records every request. Two runs:
 
-      * two of the cohort's patients 404. `run` must REFUSE, name both of them, and have sent
-        NO `/systemsetting` request of any kind — not a write, and not the read either, because
-        the refusal has to come before the harness touches the GPs at all;
+      * every one of the cohort's patients 404s. `run` must REFUSE, name each of them, and have
+        sent NO `/systemsetting` request of any kind — not a write, and not the read either,
+        because the refusal has to come before the harness touches the GPs at all;
+      * one patient answers 401. `run` must raise that error rather than call the patient
+        missing, again before any `/systemsetting` request;
       * every patient resolves. `run` must complete, write the clause-scope GP both ways, and
         restore it. This is the control: without it, a `run` that always refused would pass the
         first half.
@@ -324,9 +333,8 @@ def selftest():
     import io
 
     patients = sorted({patient for patient, _ in CASES})
-    assert len(patients) >= 2, "the refusal half needs two distinct patients to name"
 
-    def stub_server(missing):
+    def stub_server(missing, status=404):
         calls = []
         gps = {GP: ["gp-clause", "false"], GROUNDING_GP: ["gp-grounding", "true"],
                ENTAILMENT_GP: ["gp-entailment", "true"]}
@@ -335,8 +343,7 @@ def selftest():
             calls.append((method, path, data))
             if path.startswith("/patient/"):
                 if path[len("/patient/"):] in missing:
-                    raise urllib.error.HTTPError(
-                        BASE + path, 404, "Object with given uuid doesn't exist", None, None)
+                    raise urllib.error.HTTPError(BASE + path, status, "stub refusal", None, None)
                 return {"uuid": path[len("/patient/"):]}
             if path.startswith("/systemsetting?q="):
                 row = gps.get(path[len("/systemsetting?q="):].split("&")[0])
@@ -353,18 +360,30 @@ def selftest():
 
     real_req = globals()["req"]
     try:
-        missing = set(patients[:2])
-        globals()["req"], calls, _ = stub_server(missing)
+        globals()["req"], calls, _ = stub_server(set(patients))
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 run()
         except SystemExit as e:
-            for uuid in missing:
+            for uuid in patients:
                 assert uuid in str(e), "the refusal must name every missing patient: %s" % e
         else:
             raise AssertionError("an unresolved cohort must refuse, not run")
         touched = [c for c in calls if c[1].startswith("/systemsetting")]
         assert not touched, "the refusal came after a GP request: %s" % touched
+
+        globals()["req"], calls, _ = stub_server({patients[-1]}, status=401)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                run()
+        except urllib.error.HTTPError as e:
+            assert e.code == 401, "the credential error must surface as itself: %s" % e
+        except SystemExit as e:
+            raise AssertionError("a 401 was reported as a missing patient: %s" % e)
+        else:
+            raise AssertionError("a 401 must not be read as a cohort that resolves")
+        touched = [c for c in calls if c[1].startswith("/systemsetting")]
+        assert not touched, "the 401 surfaced after a GP request: %s" % touched
 
         globals()["req"], calls, gps = stub_server(set())
         with contextlib.redirect_stdout(io.StringIO()):

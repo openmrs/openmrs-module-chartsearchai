@@ -821,6 +821,68 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * Issue #462: the moment {@code requireListenerMayBeServed}'s fourth leg counts
+	 * {@code LocalLlmEngine.CHILD_BIND_SETTLE_MS} from is the one production passes it, and no
+	 * behavioural case can see that value — every test of the gate hands {@code launchedAtNanos} in
+	 * itself, so it measures the gate's arithmetic and not the wiring. Measured: a fresh
+	 * {@code System.nanoTime()} at the call site left {@link #theLaunchPathStillCallsEachProtection}
+	 * and {@code LocalLlmServerAuthTest} green. Stamped earlier instead — in {@code startServer},
+	 * ahead of the port probe — a slow prologue spends the window before the child exists, and the
+	 * gate adopts the first healthy reply again, which is the defect the leg was added to close.
+	 *
+	 * <p>Read through {@link #methodBodyWithoutLiterals}. What each part does:
+	 * <ul>
+	 * <li>The stamp must be the FIRST statement of the no-argument {@code waitForServerReady}, so
+	 * nothing in readiness runs ahead of it and it cannot move into the poll loop. A stamp handed in
+	 * as a parameter changes the signature and leaves nothing to slice, which fails here.</li>
+	 * <li>The stamp is {@code final}, so a reassignment later in the body does not compile, and
+	 * deleting the {@code final} to allow one fails here.</li>
+	 * <li>Every {@code requireListenerMayBeServed} call must end its statement on the bare local as
+	 * its LAST argument, read to the statement's {@code ;} rather than the first {@code )}, since
+	 * the call's other arguments contain calls of their own. So {@code System.nanoTime()} there
+	 * fails, and so do a conditional ending {@code : launchedAtNanos}, arithmetic on it, or a
+	 * call wrapping it.</li>
+	 * </ul>
+	 *
+	 * <p><b>The residue.</b> Text cannot see reachability, and nothing here reads
+	 * {@code startServer}: work inserted there between {@code pb.start()} and the
+	 * {@code waitForServerReady()} call makes the stamp LATE, which lengthens the window and costs
+	 * a wait rather than opening the gate. Read this as "the window is counted from the first thing
+	 * readiness does", and no more.
+	 */
+	@Test
+	public void theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes() throws IOException {
+		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
+		String body = methodBodyWithoutLiterals(source, "private void waitForServerReady()");
+		assertTrue(body != null && !body.isEmpty(),
+				"could not slice the body of waitForServerReady() out of LocalLlmEngine.java — if the"
+						+ " launch stamp is now passed in, that is the refactor this guards against;"
+						+ " a guard that reads nothing reports no violations, so this is a failure and"
+						+ " not a pass");
+
+		List<String> violations = new ArrayList<>();
+		if (!Pattern.compile("^\\{\\s*final\\s+long\\s+launchedAtNanos\\s*=\\s*System\\s*\\.\\s*nanoTime"
+				+ "\\s*\\(\\s*\\)\\s*;").matcher(body).find()) {
+			violations.add("waitForServerReady() no longer opens with `final long launchedAtNanos ="
+					+ " System.nanoTime();` — the settle window must be counted from the launch; this"
+					+ " test's javadoc says what each wrong moment costs");
+		}
+		int calls = body.split("requireListenerMayBeServed\\(", -1).length - 1;
+		int counted = 0;
+		for (Matcher m = Pattern.compile(
+				"requireListenerMayBeServed\\([^;]*,\\s*launchedAtNanos\\s*\\)\\s*;").matcher(body); m
+						.find();) {
+			counted++;
+		}
+		if (calls == 0 || counted != calls) {
+			violations.add("waitForServerReady() calls requireListenerMayBeServed without the launch"
+					+ " stamp as its last argument (" + counted + " of " + calls + " calls) — the"
+					+ " settle window is then counted from some other moment");
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
 	 * Issue #512: the local engine's two {@code ReferenceRecords} arities must hand that value to
 	 * the body builder, which is the only place the DRY sampler is decided. Nothing behavioural can
 	 * see this link: {@code ReferenceRecordsReachTheEngineTest} records the value at a stub engine and

@@ -30,10 +30,13 @@ which is the root file's "Documenting a decision" rule.
   **Only those two tie readiness to the child, and only the LAST of the four legs does** —
   liveness asked no sooner than `CHILD_BIND_SETTLE_MS` past the launch, a child alive by then
   holding the port. Never move it earlier.
+  **The window is counted from the first statement of `waitForServerReady`**, never from a stamp
+  passed in or taken elsewhere (#462): no behavioural case can see that value.
   The key probes establish less than they look like they do, and `LlamaServerEndpoint`'s class
   javadoc says exactly what. Do not write either up as more than that — here, in a decision, or in
   a comment.
-  → ADR Decision 107; `LocalLlmServerAuthTest`.
+  → ADR Decision 107; `LocalLlmServerAuthTest`;
+  `ArchitectureGuardTest.theBindSettleWindowIsCountedFromTheFirstThingReadinessDoes`.
 - **Nothing this module sends to its own subprocess may be proxy-routable**, unconditionally: the
   port probe takes `Proxy.NO_PROXY` and `LocalLlmEngine.getHttpClient` takes
   `HttpClient.Builder.NO_PROXY`. `RemoteLlmEngine` must stay proxy-aware, its endpoint being meant

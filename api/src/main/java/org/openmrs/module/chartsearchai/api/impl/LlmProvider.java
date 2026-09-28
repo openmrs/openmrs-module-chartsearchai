@@ -24,6 +24,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1194,27 +1195,15 @@ public class LlmProvider {
 			// Decision 124 carries the gate and the measurement.
 			if (drugsAlreadyOrdered != null) {
 				for (PatientChartSerializer.AlreadyOrderedDrug drug : drugsAlreadyOrdered) {
-					boolean one = drug.getOrders().size() == 1;
+					boolean one = drug.getOrderCount() == 1;
 					sb.append(' ').append(drug.getDrug()).append(" is already in the patient's active orders (")
-							.append(joinedOrders(drug.getOrders()))
+							.append(DrugSafetyValidator.joinPartners(drug.getOrders()))
 							.append("): open by saying so; adding it would duplicate ")
 							.append(one ? "that order" : "those orders")
 							.append("; then say what the findings mean for the patient's current ")
 							.append(drug.getDrug()).append('.');
 				}
 			}
-		}
-		return sb.toString();
-	}
-
-	/** {@code a}, {@code a and b}, {@code a, b and c}. */
-	private static String joinedOrders(List<String> orders) {
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < orders.size(); i++) {
-			if (i > 0) {
-				sb.append(i == orders.size() - 1 ? " and " : ", ");
-			}
-			sb.append(orders.get(i));
 		}
 		return sb.toString();
 	}

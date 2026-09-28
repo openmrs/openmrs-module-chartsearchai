@@ -21,7 +21,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * Whether a question PROPOSING a drug one of the patient's own active orders already carries is told so —
@@ -82,10 +81,10 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 				"one referent per drug in play, and this drug is hers (ADR Decision 123): " + question);
 
 			PatientChart chart = inject(context, question);
-			assertTrue(findingTexts(chart).stream().anyMatch(t -> t.contains(PREDNISONE_ALREADY_IN)),
+			assertTrue(DrugReferenceTestSupport.findingTexts(chart).stream().anyMatch(t -> t.contains(PREDNISONE_ALREADY_IN)),
 				"the finding reaches the prompt: " + chart.getText());
 			assertEquals(Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
-					Arrays.asList(PREDNISONE_ORDER))), chart.getDrugsAlreadyOrdered(),
+					Arrays.asList(PREDNISONE_ORDER), 1)), chart.getDrugsAlreadyOrdered(),
 				"the chart states the fact the user-message clause is written from: " + question);
 		}
 	}
@@ -103,7 +102,25 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 		assertEquals("Prednisone is already in active orders " + PREDNISONE_ORDER
 				+ " and Prednisone 20mg — possible duplicate therapy", found.get(0).getDetail());
 		assertEquals(Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
-				Arrays.asList(PREDNISONE_ORDER, "Prednisone 20mg"))), inject(context, question).getDrugsAlreadyOrdered());
+				Arrays.asList(PREDNISONE_ORDER, "Prednisone 20mg"), 2)), inject(context, question).getDrugsAlreadyOrdered());
+	}
+
+	@Test
+	public void twoOrdersUnderOneDisplayAreStatedToTheClauseAsTheFindingCountsThem() {
+		// One display, two prescriptions: the finding prints the display once with its count, and the
+		// stamp the clause is written from must count the orders the same way rather than read one name
+		// as one order.
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(SHIPPED, 60, null,
+			PREDNISONE_ORDER, PREDNISONE_ORDER, WARFARIN_ORDER);
+		String question = "Is it safe to add prednisone for her?";
+
+		List<SafetyWarning> found = alreadyIn(DrugReferenceTestSupport.validator(SHIPPED).validate("", question,
+			context));
+		assertEquals(1, found.size());
+		assertEquals("Prednisone is already in active orders " + PREDNISONE_ORDER
+				+ " (2 orders) — possible duplicate therapy", found.get(0).getDetail());
+		assertEquals(Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
+				Arrays.asList(PREDNISONE_ORDER + " (2 orders)"), 2)), inject(context, question).getDrugsAlreadyOrdered());
 	}
 
 	@Test
@@ -189,14 +206,6 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 	private static PatientChart inject(PatientClinicalContext context, String question) {
 		return DrugReferenceTestSupport.injectorWithSafety(SHIPPED).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(), context, question);
-	}
-
-	private static List<String> findingTexts(PatientChart chart) {
-		List<String> texts = new ArrayList<String>();
-		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
-			texts.add(finding.getText());
-		}
-		return texts;
 	}
 
 	private static void assertNoneAlreadyIn(List<SafetyWarning> warnings) {

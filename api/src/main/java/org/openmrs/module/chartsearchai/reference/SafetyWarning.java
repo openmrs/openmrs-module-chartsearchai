@@ -17,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 
 /**
@@ -139,8 +140,8 @@ public class SafetyWarning {
 	/** @see #subjectRows() */
 	private final List<DrugReference> subjectRows;
 
-	/** @see #statesAProposedDrugIsAlreadyOrdered() */
-	private final boolean proposedDrugAlreadyOrdered;
+	/** @see #alreadyOrdered() */
+	private final PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered;
 
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
@@ -318,14 +319,14 @@ public class SafetyWarning {
 	 * @param aboutACurrentMedication the referent the drug-in-play arm states for the drug in play, at
 	 *        every site it builds a finding at: a finding here stating another would be the one-site
 	 *        shape issue #402 recorded and reverted (ADR Decisions 112, 123)
-	 * @param proposedDrugAlreadyOrdered whether the question proposes the drug and it is hers —
-	 *        {@link #statesAProposedDrugIsAlreadyOrdered()} (issue #548)
+	 * @param alreadyOrdered where the question proposes the drug and it is hers, the drug and the orders
+	 *        as the detail names them — {@link #alreadyOrdered()} (issue #548); otherwise null
 	 */
 	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders,
-			boolean aboutACurrentMedication, boolean proposedDrugAlreadyOrdered) {
+			boolean aboutACurrentMedication, PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders, false,
-				null, null, false, null, null, proposedDrugAlreadyOrdered);
+				null, null, false, null, null, alreadyOrdered);
 	}
 
 	/**
@@ -345,7 +346,7 @@ public class SafetyWarning {
 	static SafetyWarning ordersSharingASubstance(String drug, String detail, List<String> orders) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true,
-				null, null, false);
+				null, null, null);
 	}
 
 	/**
@@ -399,7 +400,7 @@ public class SafetyWarning {
 			List<String> namedPartners) {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
-				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null, null, false);
+				restsOnSharedClassificationAlone, namedPartners, false, null, null, false, null, null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -410,8 +411,8 @@ public class SafetyWarning {
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
 			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
-			boolean proposedDrugAlreadyOrdered) {
-		this.proposedDrugAlreadyOrdered = proposedDrugAlreadyOrdered;
+			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
+		this.alreadyOrdered = alreadyOrdered;
 		this.ordersSharingASubstance = ordersSharingASubstance;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.matchedOrderNames = matchedOrderNames == null || matchedOrderNames.isEmpty()
@@ -531,7 +532,8 @@ public class SafetyWarning {
 	 * "did the answer state all of them?" of.
 	 *
 	 * <p><b>Every INTERACTION chip states it</b> — one name for an ordinary chip, several for a merged
-	 * one or for the two findings that a substance is in several of her orders (issue #477), where a
+	 * one or for the two findings that a substance is in several of her orders (issue #477) — one name,
+	 * though, where a question proposes a drug one order carries (issue #548) — where a
 	 * display several orders carry appears once — and so does every CONDITION-MEDIATED chip, one name
 	 * per active order it links; so a reader never has to tell a chip that carries no list from a chip
 	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
@@ -1142,7 +1144,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
-				matchedOrderNames, subjectRows, proposedDrugAlreadyOrdered);
+				matchedOrderNames, subjectRows, alreadyOrdered);
 	}
 
 	/**
@@ -1156,7 +1158,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, names, subjectRows, proposedDrugAlreadyOrdered);
+				endedOrderRows, ordersSharingASubstance, names, subjectRows, alreadyOrdered);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1202,7 +1204,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, proposedDrugAlreadyOrdered);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, alreadyOrdered);
 	}
 
 	/**
@@ -1243,7 +1245,18 @@ public class SafetyWarning {
 	 * Package-private and not a getter, so it reaches no wire.
 	 */
 	boolean statesAProposedDrugIsAlreadyOrdered() {
-		return proposedDrugAlreadyOrdered;
+		return alreadyOrdered != null;
+	}
+
+	/**
+	 * The drug and the orders this finding names, as its detail names them — each order label once, with
+	 * the count of orders carrying it where that is more than one, and the number of orders in all — where
+	 * {@link #statesAProposedDrugIsAlreadyOrdered()}, otherwise null (issue #548). Written where the
+	 * sentence is, so what {@code DrugReferenceInjector} stamps on the chart cannot count the orders
+	 * another way than the finding does. Package-private, so it reaches no wire.
+	 */
+	PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered() {
+		return alreadyOrdered;
 	}
 
 	/**

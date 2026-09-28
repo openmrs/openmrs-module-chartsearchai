@@ -2540,8 +2540,8 @@ public class DrugReferenceInjector {
 	/**
 	 * The drug and orders of every finding saying a drug the question proposes is already in her active
 	 * orders ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}), in finding order — what
-	 * {@link PatientChart#getDrugsAlreadyOrdered()} states (issue #548). The orders are the finding's own
-	 * {@link SafetyWarning#namedPartners()}, the displays its sentence names.
+	 * {@link PatientChart#getDrugsAlreadyOrdered()} states (issue #548). Each is the finding's own
+	 * {@link SafetyWarning#alreadyOrdered()}, written where its sentence is.
 	 */
 	private static List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered(
 			List<SafetyWarning> findings) {
@@ -2549,7 +2549,7 @@ public class DrugReferenceInjector {
 				new ArrayList<PatientChartSerializer.AlreadyOrderedDrug>();
 		for (SafetyWarning finding : findings) {
 			if (finding.statesAProposedDrugIsAlreadyOrdered()) {
-				drugs.add(new PatientChartSerializer.AlreadyOrderedDrug(finding.getDrug(), finding.namedPartners()));
+				drugs.add(finding.alreadyOrdered());
 			}
 		}
 		return drugs;
@@ -2570,10 +2570,11 @@ public class DrugReferenceInjector {
 	/**
 	 * Whether {@code question} asks whether to GIVE the drug it names — {@code
 	 * QueryScopeRouter.asksWhetherToGiveADrug} over the question's words with its own names marked. One
-	 * spelling for its two callers, which must not disagree: {@link #answersFromFindings} admits a
+	 * spelling for its three callers, which must not disagree: {@link #answersFromFindings} admits a
 	 * proposal by it (issue #469), and {@code DrugSafetyValidator}'s ended-order holder keeps a proposed
 	 * drug a proposal by it (issue #472), so a question the module answers from its findings is one
-	 * whose drug is never re-referred.
+	 * whose drug is never re-referred; and {@code DrugSafetyValidator.validate} reads it to say that a
+	 * drug proposed is already in her orders (issue #548, ADR Decision 124).
 	 */
 	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
 		return !questionDrugs.isEmpty()

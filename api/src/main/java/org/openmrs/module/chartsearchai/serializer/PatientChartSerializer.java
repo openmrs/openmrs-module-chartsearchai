@@ -680,13 +680,18 @@ public class PatientChartSerializer {
 
 		private final List<String> orders;
 
+		private final int orderCount;
+
 		/**
 		 * @param drug the drug as the finding names it
-		 * @param orders the displays of the active orders the finding names, in the order it names them
+		 * @param orders the orders as the finding names them, in its order: each display once, followed by
+		 *        the count of orders carrying it where that is more than one
+		 * @param orderCount how many active orders those labels stand for
 		 */
-		public AlreadyOrderedDrug(String drug, List<String> orders) {
+		public AlreadyOrderedDrug(String drug, List<String> orders, int orderCount) {
 			this.drug = drug;
 			this.orders = Collections.unmodifiableList(new ArrayList<String>(orders));
+			this.orderCount = orderCount;
 		}
 
 		public String getDrug() {
@@ -697,24 +702,28 @@ public class PatientChartSerializer {
 			return orders;
 		}
 
+		/** How many active orders {@link #getOrders()} stands for — more than its size where two orders
+		 *  share one display. */
+		public int getOrderCount() {
+			return orderCount;
+		}
+
 		@Override
 		public boolean equals(Object other) {
 			if (!(other instanceof AlreadyOrderedDrug)) {
 				return false;
 			}
 			AlreadyOrderedDrug that = (AlreadyOrderedDrug) other;
-			return drug.equals(that.drug) && orders.equals(that.orders);
+			return drug.equals(that.drug) && orders.equals(that.orders) && orderCount == that.orderCount;
 		}
 
 		@Override
 		public int hashCode() {
-			return 31 * drug.hashCode() + orders.hashCode();
+			return 31 * (31 * drug.hashCode() + orders.hashCode()) + orderCount;
 		}
 
-		@Override
-		public String toString() {
-			return drug + " " + orders;
-		}
+		// No toString: it would render the names of this patient's medications, and a diagnostic log line
+		// may carry none (issue #439).
 	}
 
 	/**

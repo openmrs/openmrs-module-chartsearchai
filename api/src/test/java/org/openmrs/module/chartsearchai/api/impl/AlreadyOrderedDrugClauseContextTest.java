@@ -113,6 +113,12 @@ public class AlreadyOrderedDrugClauseContextTest {
 		assertEquals(2, engine.messages.size(), "the premise: the answer and the #398 repair: " + engine.messages);
 		assertTrue(engine.messages.get(0).endsWith(CLAUSE));
 		assertFalse(engine.messages.get(1).contains(CLAUSE_MARK), "the repair: " + engine.messages.get(1));
+
+		engine.messages.clear();
+		service.searchStreaming(new Patient(), question, token -> { });
+		assertEquals(2, engine.messages.size(), "and on the streaming path: " + engine.messages);
+		assertTrue(engine.messages.get(0).endsWith(CLAUSE));
+		assertFalse(engine.messages.get(1).contains(CLAUSE_MARK), "its repair: " + engine.messages.get(1));
 	}
 
 	@Test

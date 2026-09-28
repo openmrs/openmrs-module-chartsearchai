@@ -33,6 +33,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -999,7 +1000,7 @@ public class DrugSafetyValidator {
 		Set<Object> herOrderSubstances = currentMedicationsInPlay(inPlay, questionDrugs, question, orderEntries,
 				context, bridgedOrders, coMedications);
 		// Whether the question PROPOSES the drug it resolved (issue #548): read off the question alone, so
-		// both passes of a request agree, and asked once because it is about the whole question.
+		// both passes of a request agree, and ahead of the loop because it is about the whole question.
 		boolean proposes = DrugReferenceInjector.questionProposes(question,
 			new ArrayList<DrugReference>(questionDrugs));
 
@@ -4772,8 +4773,8 @@ public class DrugSafetyValidator {
 	}
 
 	/** {@code a}, {@code a and b}, {@code a, b and c} — the list form a collapsed chip names its
-	 *  partners in. */
-	private static String joinPartners(List<String> partners) {
+	 *  partners in, and {@code LlmProvider}'s issue #548 clause the orders a finding names. */
+	public static String joinPartners(List<String> partners) {
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < partners.size(); i++) {
 			if (i > 0) {
@@ -4835,7 +4836,9 @@ public class DrugSafetyValidator {
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
 					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()), herOrder, proposedHerOwn);
+			new ArrayList<String>(ordersByDisplay.keySet()), herOrder,
+			proposedHerOwn ? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(),
+				orderLabels(ordersByDisplay), carriers.size()) : null);
 	}
 
 	/**
@@ -4860,13 +4863,20 @@ public class DrugSafetyValidator {
 	 * of that noun, so a second one would split the sentence into two claims.
 	 */
 	private static String ordersNamed(Map<String, Integer> ordersByDisplay) {
+		List<String> labels = orderLabels(ordersByDisplay);
+		boolean oneOrder = ordersByDisplay.size() == 1 && ordersByDisplay.values().iterator().next() == 1;
+		return ACTIVE_ORDER_NOUN + (oneOrder ? " " : "s ") + joinPartners(labels);
+	}
+
+	/** Each display of {@code ordersByDisplay} once, followed by the count of orders carrying it where that
+	 *  is more than one — the labels {@link #ordersNamed} joins, and the ones issue #548's clause names. */
+	private static List<String> orderLabels(Map<String, Integer> ordersByDisplay) {
 		List<String> labels = new ArrayList<String>(ordersByDisplay.size());
 		for (Map.Entry<String, Integer> display : ordersByDisplay.entrySet()) {
 			labels.add(display.getValue() == 1 ? display.getKey()
 					: display.getKey() + " (" + display.getValue() + " orders)");
 		}
-		boolean oneOrder = ordersByDisplay.size() == 1 && ordersByDisplay.values().iterator().next() == 1;
-		return ACTIVE_ORDER_NOUN + (oneOrder ? " " : "s ") + joinPartners(labels);
+		return labels;
 	}
 
 	/**

@@ -12069,8 +12069,9 @@ raises its finding for ONE order where the question proposes the drug and the dr
 is *"Prednisone is already in active order Prednisone Co 5mg — possible duplicate therapy"*. The gate is
 three conjuncts, asked per drug in play:
 
-- the drug-in-play arm's referent (`herOrder`, `currentMedicationsInPlay`), so the finding and
-  `aboutACurrentMedication` cannot disagree. A drug her orders resolve to without establishing it
+- the drug-in-play arm's referent (`herOrder`, `currentMedicationsInPlay`), so no finding says a drug
+  is in her orders while `aboutACurrentMedication` says it is a proposal. The converse is not held: see
+  the display residue under Consequences. A drug her orders resolve to without establishing it
   (`Nexium 40mg` for omeprazole), and one a question may be proposing in a presentation she does not take
   (a `Diclofenac gel 1%` order), are refused here;
 - the question proposes a drug (`DrugReferenceInjector.questionProposes`). A screen, a question that
@@ -12134,8 +12135,16 @@ a proposal question. Where the question proposes the drug it no longer holds.
 - An order that establishes the drug only by code or by bridged concept, with a display that does not
   name it, gets the referent but no finding and no clause (Decision 112's display rule).
 - The finding exists only where the interaction arm runs, as Decision 112's does.
-- The finding's sentence contains `ACTIVE_ORDER_NOUN`. An answer that restates it is counted as an
-  active-order claim by `ActiveOrderCitationFidelityCheck`.
+- The finding's sentence contains `ACTIVE_ORDER_NOUN`, and so does the clause. An answer that restates
+  either is counted as an active-order claim by `ActiveOrderCitationFidelityCheck`.
+- **The safety probe's scorer does not know this lead or this chip yet**
+  (`eval/drift-metric/score_probe_safety.py`). Its default question is a proposal, so on an `own_drug`
+  cell whose order's display names the drug the chip is now raised. `adverse_finding` counts it, so
+  `unsupported_no` — the guard for a model refusing her own drug, the defect this decision is about —
+  stops firing there. The lead the clause asks for, *"X is already in the patient's active orders"*,
+  scores as neither verdict- nor caution-led. A probe A/B over those cells therefore reads a
+  verdict-led drop by design and is blind to a surviving refusal. The chip carries no wire field telling
+  it from #477's, so teaching the scorer needs one; not done here.
 - **Not measured on a model in this revision.** The issue's live gate is the measurement: its cells, plus
   a proposal of a drug of hers that has no other finding.
 

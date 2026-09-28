@@ -122,6 +122,6 @@ public final class SafetyWarningFixtures {
 	 */
 	public static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail,
 			List<String> orders, boolean aboutACurrentMedication) {
-		return SafetyWarning.substanceInSeveralActiveOrders(drug, detail, orders, aboutACurrentMedication, false);
+		return SafetyWarning.substanceInSeveralActiveOrders(drug, detail, orders, aboutACurrentMedication, null);
 	}
 }

@@ -417,7 +417,7 @@ public class LlmProviderUserMessageTest {
 
 	/** The drug a question proposes and her one order carrying it, as the injector stamps it (#548). */
 	private static final List<AlreadyOrderedDrug> PREDNISONE_ORDERED = Collections.singletonList(
-			new AlreadyOrderedDrug("Prednisone", Arrays.asList("Prednisone Co 5mg")));
+			new AlreadyOrderedDrug("Prednisone", Arrays.asList("Prednisone Co 5mg"), 1));
 
 	@Test
 	public void theAlreadyOrderedClauseIsExactlyTheseBytes() {
@@ -457,7 +457,7 @@ public class LlmProviderUserMessageTest {
 				LlmProvider.FindingProse.UNPROMPTED);
 		String with = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
 				LlmProvider.FindingProse.UNPROMPTED, Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
-						Arrays.asList("Prednisone Co 5mg", "Prednisone 20mg"))));
+						Arrays.asList("Prednisone Co 5mg", "Prednisone 20mg"), 2)));
 
 		assertEquals(" Prednisone is already in the patient's active orders (Prednisone Co 5mg and Prednisone "
 				+ "20mg): open by saying so; adding it would duplicate those orders; then say what the findings "
@@ -471,5 +471,20 @@ public class LlmProviderUserMessageTest {
 		assertEquals(LlmProvider.buildUserMessage(CHART, ""),
 				LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "",
 						LlmProvider.FindingProse.UNPROMPTED, PREDNISONE_ORDERED));
+	}
+
+	@Test
+	public void twoOrdersUnderOneDisplayAreStillSpokenOfInThePlural() {
+		// The count is the orders', not the labels': one display two prescriptions carry is one label.
+		String question = "Is it safe to add prednisone for her?";
+		String without = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.UNPROMPTED);
+		String with = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), question,
+				LlmProvider.FindingProse.UNPROMPTED, Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
+						Arrays.asList("Prednisone 5mg (2 orders)"), 2)));
+
+		assertEquals(" Prednisone is already in the patient's active orders (Prednisone 5mg (2 orders)): open by "
+				+ "saying so; adding it would duplicate those orders; then say what the findings mean for the "
+				+ "patient's current Prednisone.", with.substring(without.length()));
 	}
 }

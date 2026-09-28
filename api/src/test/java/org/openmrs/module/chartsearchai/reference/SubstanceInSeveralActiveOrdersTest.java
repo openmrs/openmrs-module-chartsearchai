@@ -149,7 +149,11 @@ public class SubstanceInSeveralActiveOrdersTest {
 		// (the case below), and this question asks about the drug she is on.
 		PatientClinicalContext context = contextOf(DrugReferenceTestSupport.activeOrder("order-rhz", RHZ));
 
-		assertNoneAlreadyIn(chips(FIXTURE, "What is her rifampicin dose?", context));
+		List<SafetyWarning> warnings = chips(FIXTURE, "What is her rifampicin dose?", context);
+		assertTrue(warnings.stream().anyMatch(w -> w.getDrug().startsWith("Rifampicin")),
+				"precondition: the question puts rifampicin in play and the arm raises its chips: "
+						+ DrugReferenceTestSupport.details(warnings));
+		assertNoneAlreadyIn(warnings);
 	}
 
 	@Test

@@ -323,6 +323,12 @@ public final class QueryScopeRouter {
 	 * did not cost before; only an ADMISSION can go wrong. That is why this may be a closed list where
 	 * {@link #isInteractionScreening} had to be widened after a list MISSED screens (ADR Decision 89):
 	 * there a miss hid a hazard, here a miss hides nothing.
+	 *
+	 * <p><b>Except to one reader</b> (issue #548): {@code DrugSafetyValidator.validate} states that a drug
+	 * the question proposes is already in her orders only where this admits the question, so a phrasing
+	 * it misses withholds that fact — which is how <em>"Is it safe to add prednisone for her?"</em> went
+	 * untold until its shape was admitted. A miss there costs the statement, never a refusal. ADR Decision
+	 * 124.
 	 */
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);

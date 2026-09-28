@@ -394,7 +394,7 @@ public class DuplicateTherapySelfChipTest {
 		// Beside issue #548's finding, for the reason chips() gives.
 		assertEquals(Collections.<String> emptyList(),
 				DrugReferenceTestSupport.details(DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(warnings)),
-				"the order's own substance does not duplicate the order");
+				"the class arm does not report the order's own substance as duplicating the order");
 	}
 
 	/** An active order for omeprazole as a mapped dictionary presents it: the display name, and

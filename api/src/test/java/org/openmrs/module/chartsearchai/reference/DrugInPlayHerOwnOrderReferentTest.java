@@ -129,7 +129,8 @@ public class DrugInPlayHerOwnOrderReferentTest {
 	private static String onlyFinding(DrugReferenceService service, PatientClinicalContext context,
 			String question) {
 		// Beside issue #548's finding that the drug proposed is already in her order, which states the one
-		// referent every finding about the drug states — asserted here, since it is set aside.
+		// referent every finding about the drug states — asserted here, since it is set aside. Recognised by
+		// its sentence because this reads the injected records, which carry no flag.
 		List<String> findings = new ArrayList<String>();
 		for (String finding : findings(service, context, question)) {
 			if (finding.contains(" is already in active order")) {

@@ -1120,6 +1120,12 @@ public class LlmInferenceService implements ChartSearchService {
 	 * {@code FindingEnumerationClauseContextTest.theCallSitesHandTheProviderFalseForThePopulationsTheGateWithholdsFrom}
 	 * existed. Widen either call site and read that case's failure.
 	 */
+	static boolean severalFindingsAboutOneDrug(PatientChart chart) {
+		List<RecordMapping> mappings = chart.getMappings();
+		return ChartSearchAiUtils.safetyFindingMappings(mappings).size() > 1
+				&& ChartSearchAiUtils.findingSubjects(mappings).size() == 1;
+	}
+
 	/**
 	 * What the finding-enumeration repair hands the provider for issue #548's clause: nothing. The repair
 	 * asks a question of its own about the findings the answer left out, and the clause is about the
@@ -1127,12 +1133,6 @@ public class LlmInferenceService implements ChartSearchService {
 	 */
 	private static List<PatientChartSerializer.AlreadyOrderedDrug> noDrugsAlreadyOrdered() {
 		return Collections.<PatientChartSerializer.AlreadyOrderedDrug> emptyList();
-	}
-
-	static boolean severalFindingsAboutOneDrug(PatientChart chart) {
-		List<RecordMapping> mappings = chart.getMappings();
-		return ChartSearchAiUtils.safetyFindingMappings(mappings).size() > 1
-				&& ChartSearchAiUtils.findingSubjects(mappings).size() == 1;
 	}
 
 	static boolean isWarmupEnabled() {

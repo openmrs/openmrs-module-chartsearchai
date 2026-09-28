@@ -100,7 +100,8 @@ best-effort restore in `run`'s finally to put it back. `--selftest` pins that or
 Usage:  python3 eval/grounding-scope/grounding_scope_ab.py [--selftest]
 Env:    BASE (default http://localhost:8081/openmrs/ws/rest/v1), OMRS_USER, OMRS_PASS,
         CONDITION_PATIENT, MEDICATION_PATIENTS (comma-separated) — see the CASES comment for
-        why the defaults do not resolve on the RefApp 3.7.1 dev standalone.
+        why the defaults do not resolve on the RefApp 3.7.1 dev standalone. An unset one takes
+        its default; one set to no patient is refused (`parse_cohort`).
 """
 import base64
 import json
@@ -136,9 +137,34 @@ DEFAULT_CONDITION_PATIENT = "165497e8-13e0-4fa4-8190-8e6fa067c4b7"
 # colon-less list of two active orders, which is a compound claim unit in sentence scope.
 DEFAULT_MEDICATION_PATIENTS = ["83f95445-d471-4e9c-b10e-a89b6632dbe8",
                                "e30bc8f0-08bb-406c-986a-2b153a495603"]
-CONDITION_PATIENT = os.environ.get("CONDITION_PATIENT", DEFAULT_CONDITION_PATIENT)
-MEDICATION_PATIENTS = ([p.strip() for p in os.environ["MEDICATION_PATIENTS"].split(",") if p.strip()]
-                       if os.environ.get("MEDICATION_PATIENTS") else DEFAULT_MEDICATION_PATIENTS)
+
+
+def parse_cohort(environ):
+    """The cohort `environ` names, as (condition patient, medication patients, problems).
+
+    One rule for both overrides: a variable that is UNSET takes its default, and one that is set
+    is stripped and must name at least one patient. A set-but-empty value (`CONDITION_PATIENT=`,
+    `MEDICATION_PATIENTS=','`) is a PROBLEM, never a fallback: falling back would measure a cohort
+    the operator did not ask for, and passing it through would either drop cases from the TALLY
+    or request `/patient/`, which is a 400 rather than the refusal. `run` refuses on any problem
+    before it sends a request. They are returned rather than raised because
+    `codes_only_order_grounding.py` imports this module and uses no cohort.
+    """
+    problems = []
+    condition = environ.get("CONDITION_PATIENT", DEFAULT_CONDITION_PATIENT).strip()
+    if not condition:
+        problems.append("CONDITION_PATIENT is set but names no patient")
+        condition = DEFAULT_CONDITION_PATIENT
+    medications = DEFAULT_MEDICATION_PATIENTS
+    if "MEDICATION_PATIENTS" in environ:
+        medications = [p.strip() for p in environ["MEDICATION_PATIENTS"].split(",") if p.strip()]
+        if not medications:
+            problems.append("MEDICATION_PATIENTS is set but names no patient")
+            medications = DEFAULT_MEDICATION_PATIENTS
+    return condition, medications, problems
+
+
+CONDITION_PATIENT, MEDICATION_PATIENTS, COHORT_PROBLEMS = parse_cohort(os.environ)
 
 # (patient, question).
 CASES = [(CONDITION_PATIENT, q) for q in (
@@ -242,6 +268,9 @@ def run():
     # FIRST, before any GP is read or written (#240). The arms are switched by writing a GP
     # before the first search, and the restore in the finally below is best-effort. So a cohort
     # that does not resolve here would change the instance's configuration and measure nothing.
+    if COHORT_PROBLEMS:
+        raise SystemExit("ERROR: %s.\nRefusing to run: no request was sent. Unset the variable to"
+                         " use its default." % "; ".join(COHORT_PROBLEMS))
     unresolved = unresolved_patients()
     if unresolved:
         raise SystemExit(
@@ -315,18 +344,25 @@ def selftest():
     """Offline guard for the ORDER `run` does things in (#240). No server, no model.
 
     It drives the real `run` over the real CASES, with `req` swapped for an in-memory stub that
-    records every request. Three runs:
+    records every request. Its runs:
 
       * every one of the cohort's patients 404s. `run` must REFUSE, name each of them, and have
         sent NO `/systemsetting` request of any kind — not a write, and not the read either,
         because the refusal has to come before the harness touches the GPs at all;
+      * only CONDITION_PATIENT 404s and the medication patients resolve, which is the dev
+        standalone's own shape (#240). `run` must refuse the same way, naming that patient and no
+        other. Without this run, a `run` that refused only a WHOLLY absent cohort, or dropped the
+        missing patient and ran the rest, would pass the one above;
       * one patient answers 401. `run` must raise that error rather than call the patient
         missing, again before any `/systemsetting` request;
       * every patient resolves. `run` must complete, write the clause-scope GP both ways, and
         restore it. This is the control: without it, a `run` that always refused would pass the
-        first two.
+        runs above;
+      * `parse_cohort` over overrides that are set but name no patient must report a problem, and
+        `run` given one must refuse before sending any request at all. The unset and the padded
+        cases are its controls.
 
-    `req` is restored in a finally, because `codes_only_order_grounding.py` imports this module
+    `req` and COHORT_PROBLEMS are restored in a finally, because `codes_only_order_grounding.py` imports this module
     and reuses its `req`.
     """
     import contextlib
@@ -359,6 +395,7 @@ def selftest():
         return fake_req, calls, gps
 
     real_req = globals()["req"]
+    real_problems = globals()["COHORT_PROBLEMS"]
     try:
         globals()["req"], calls, _ = stub_server(set(patients))
         try:
@@ -371,6 +408,21 @@ def selftest():
             raise AssertionError("an unresolved cohort must refuse, not run")
         touched = [c for c in calls if c[1].startswith("/systemsetting")]
         assert not touched, "the refusal came after a GP request: %s" % touched
+
+        resolving = [p for p in patients if p != CONDITION_PATIENT]
+        assert resolving, "the partial run needs a cohort patient that resolves: %s" % patients
+        globals()["req"], calls, _ = stub_server({CONDITION_PATIENT})
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                run()
+        except SystemExit as e:
+            assert CONDITION_PATIENT in str(e), "the refusal must name the missing patient: %s" % e
+            for uuid in resolving:
+                assert uuid not in str(e), "the refusal named a patient that resolves: %s" % e
+        else:
+            raise AssertionError("a cohort with one patient missing must refuse, not run the rest")
+        touched = [c for c in calls if c[1].startswith("/systemsetting")]
+        assert not touched, "the partial refusal came after a GP request: %s" % touched
 
         globals()["req"], calls, _ = stub_server({patients[-1]}, status=401)
         try:
@@ -394,8 +446,27 @@ def selftest():
             "the baseline must be restored last: %s" % writes
         searches = [c for c in calls if c[1] == "/chartsearchai/search"]
         assert len(searches) == 2 * len(CASES), "one search per case per arm: %d" % len(searches)
+
+        for environ in ({"CONDITION_PATIENT": ""}, {"CONDITION_PATIENT": "  "},
+                        {"MEDICATION_PATIENTS": ""}, {"MEDICATION_PATIENTS": " , "}):
+            assert parse_cohort(environ)[2], "an override naming no patient must be refused: %r" % environ
+        assert parse_cohort({}) == (DEFAULT_CONDITION_PATIENT, DEFAULT_MEDICATION_PATIENTS, []), \
+            "an unset override must take its default: %r" % (parse_cohort({}),)
+        padded = parse_cohort({"CONDITION_PATIENT": " c ", "MEDICATION_PATIENTS": " a , ,b "})
+        assert padded == ("c", ["a", "b"], []), "an override is stripped: %r" % (padded,)
+        globals()["req"], calls, _ = stub_server(set())
+        globals()["COHORT_PROBLEMS"] = parse_cohort({"MEDICATION_PATIENTS": ","})[2]
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                run()
+        except SystemExit as e:
+            assert "MEDICATION_PATIENTS" in str(e), "the refusal must name the override: %s" % e
+        else:
+            raise AssertionError("an override naming no patient must refuse, not run")
+        assert not calls, "the override refusal came after a request: %s" % calls
     finally:
         globals()["req"] = real_req
+        globals()["COHORT_PROBLEMS"] = real_problems
     print("selftest OK")
 
 

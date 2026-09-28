@@ -220,7 +220,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		answerFromFindings(true);
 		for (String question : new String[] { "Is ibuprofen safe for her?", "Is ibuprofen appropriate for her?",
 				"Can this patient take ibuprofen?", "Is it safe to give her ibuprofen?",
-				"Would ibuprofen be appropriate for her?", "Can I give ibuprofen to her?" }) {
+				"Would ibuprofen be appropriate for her?", "Can I give ibuprofen to her?",
+				// The patient after the drug in the "is it safe to" shape (issue #548).
+				"Is it safe to give ibuprofen for her?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question);

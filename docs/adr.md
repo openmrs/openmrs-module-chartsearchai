@@ -12103,8 +12103,9 @@ her"*, the allowance two other shapes already make, and a reordering of *"Is it 
 X?"*, which it already admitted. Every reader of that grammar moves with it:
 
 - The module's composed "No" (Decision 108), which ships off. It now also answers *"Is it safe to add X
-  for her?"* for a drug she does not take. This is unmeasured against Decision 108's *What gates turning
-  it on*.
+  for her?"* for a drug she does not take
+  (`LlmInferenceServiceAnswerFromFindingsContextTest.aSuitabilityQuestionIsAnsweredFromTheFindingsToo`).
+  This is unmeasured against Decision 108's *What gates turning it on*.
 - The ended-order holder (Decision 110), which now keeps such a phrasing a proposal.
 - `listedBeforeTheProposal` (#515), which can now find the proposal clause in such a phrasing.
 

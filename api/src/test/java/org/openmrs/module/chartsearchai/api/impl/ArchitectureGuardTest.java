@@ -2499,7 +2499,7 @@ public class ArchitectureGuardTest {
 	 * allow-listed whole-sentence factory once per marker — the construction is then legitimate,
 	 * because it is that factory's own — and
 	 * {@link #theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter} is the rule that
-	 * reaches it. The other goes through {@code newFragment} as it should but charges a
+	 * reaches it, within the residue its own javadoc states. The other goes through {@code newFragment} as it should but charges a
 	 * {@code FragmentBudget} it made itself, which is bounded per sentence rather than per answer;
 	 * {@link #aSplitAllowanceIsCreatedOnlyAtTheTwoAnswerEntryPoints} is the rule that reaches that
 	 * one. Neither is a widening of this one, because neither is a question about where a

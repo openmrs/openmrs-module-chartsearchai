@@ -2564,10 +2564,16 @@ public class ArchitectureGuardTest {
 	 * <p><b>What this rule does not reach.</b> It counts call SITES in the source text and cannot
 	 * see how often the site it admits RUNS, so rewriting the admitted caller's own loop to iterate
 	 * markers instead of sentences leaves it green; whether THAT is silent is a question for the
-	 * behavioural cases and not for this one, and it has not been measured. A call spelled some
-	 * other way — through a method reference, or a second factory delegating to this one — is out
-	 * of reach for the same reason its neighbour's residue names: this reads source text and
-	 * understands no Java.
+	 * behavioural cases and not for this one, and it has not been measured. A call through a
+	 * method reference is out of reach for the same reason its neighbour's residue names: this
+	 * reads source text and understands no Java. A second factory delegating to this one is
+	 * caught — by its own call site, which this rule counts, and not by the splitter that uses
+	 * it — except where that call is written on a line {@code enclosingMethodOf} reports as its
+	 * own enclosing declaration, the device that tells {@code newSentence}'s declaration from a
+	 * call of it. A one-line delegate,
+	 * {@code private static Sentence viaDelegate(String text) { return newSentence(text); }}, is
+	 * such a line and leaves this rule green; the same delegate written across three lines fails
+	 * it (both measured, issue #455).
 	 */
 	@Test
 	public void theWholeSentenceFactoryHasOneCallSiteAndItIsTheSentenceSplitter() throws IOException {

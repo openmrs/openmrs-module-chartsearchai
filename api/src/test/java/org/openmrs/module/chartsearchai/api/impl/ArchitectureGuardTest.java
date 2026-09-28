@@ -2569,9 +2569,9 @@ public class ArchitectureGuardTest {
 	 * reads source text and understands no Java. So is any call written on a line
 	 * {@code enclosingMethodOf} reports as its own enclosing declaration, which the loop skips as
 	 * the device that tells {@code newSentence}'s declaration from a call of it: a top-level member
-	 * declared and bodied on one line, whether a delegating factory or a per-marker splitter calling this
-	 * one directly. A delegating factory whose call sits on any other line is caught, by that call
-	 * site and not by the splitter that uses it. Measured on {@code 4cddee15}: the one-line
+	 * declared and bodied on one line, whether a delegating factory or a per-marker splitter
+	 * calling this one directly. A delegating factory whose call sits on any other line is caught,
+	 * by that call site and not by the splitter that uses it. Measured on {@code 4cddee15}: the one-line
 	 * {@code private static Sentence viaDelegate(String text) { return newSentence(text); }} and a
 	 * one-line per-marker splitter each leave this rule green, and that delegate written across
 	 * three lines fails it. Issue #455 reports the one-line delegate as caught, which did not

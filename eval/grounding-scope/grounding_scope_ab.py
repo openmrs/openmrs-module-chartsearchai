@@ -92,12 +92,21 @@ the model's own chart citations.
 The GP is saved before and restored after. Answers are grounding-independent,
 so a differing answer between modes signals LLM nondeterminism (reported).
 
-Usage:  python3 eval/grounding-scope/grounding_scope_ab.py
-Env:    BASE (default http://localhost:8081/openmrs/ws/rest/v1), OMRS_USER, OMRS_PASS.
+Before any GP is read, every cohort patient is looked up on the instance, and the run REFUSES
+when one does not resolve (#240). The arms are switched by writing a GP, so without that check an
+absent cohort changed the instance's configuration and measured nothing, with only the
+best-effort restore in `run`'s finally to put it back. `--selftest` pins that ordering offline.
+
+Usage:  python3 eval/grounding-scope/grounding_scope_ab.py [--selftest]
+Env:    BASE (default http://localhost:8081/openmrs/ws/rest/v1), OMRS_USER, OMRS_PASS,
+        CONDITION_PATIENT, MEDICATION_PATIENTS (comma-separated) — see the CASES comment for
+        why the defaults do not resolve on the RefApp 3.7.1 dev standalone.
 """
 import base64
 import json
 import os
+import sys
+import urllib.error
 import urllib.request
 
 BASE = os.environ.get("BASE", "http://localhost:8081/openmrs/ws/rest/v1")
@@ -108,21 +117,39 @@ GP = "chartsearchai.grounding.clauseScoped"
 GROUNDING_GP = "chartsearchai.grounding.enabled"
 ENTAILMENT_GP = "chartsearchai.grounding.entailment.enabled"
 
-# (patient, question). 165497e8 = Sarah Taylor: malnutrition recorded as BOTH an
-# active condition AND a provisional primary diagnosis (the compound-sentence
-# shape clause-scoping targets), microstomia, etc.
-CASES = [
-    ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "any ear problems?"),
-    ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "any feeding problems?"),
-    ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "any nutritional problems?"),
-    ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "what are the patient's diagnoses?"),
-    ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "any mouth or swallowing problems?"),
-    ("165497e8-13e0-4fa4-8190-8e6fa067c4b7", "what active conditions does the patient have?"),
-    # Issue #302's own population and question: two patients whose medication answer is a
-    # colon-less list of two active orders, which is a compound claim unit in sentence scope.
-    ("83f95445-d471-4e9c-b10e-a89b6632dbe8", "What medications is this patient currently taking?"),
-    ("e30bc8f0-08bb-406c-986a-2b153a495603", "What medications is this patient currently taking?"),
-]
+# A uuid names a patient on ONE install, so the cohort is overridable (#240) — and `run` refuses,
+# before it touches any GP, when a patient here does not resolve on the instance at BASE.
+#
+# 165497e8 = Sarah Taylor on the install this harness was written against: malnutrition recorded
+# as BOTH an active condition AND a provisional primary diagnosis (the compound-sentence shape
+# clause-scoping targets), microstomia, etc. It does not exist on the RefApp 3.7.1 dev standalone,
+# and that install has NO drop-in substitute. Its own Sarah Taylor (dc8560c9-…) is a different
+# chart, with no malnutrition condition or diagnosis. A search of the coded names in
+# `conditions` and `encounter_diagnosis` for "malnutrition" found two patients carrying it as both
+# an active condition and a provisional rank-1 diagnosis, and neither has a coded condition or
+# diagnosis naming ears, mouth, swallowing or feeding (SQL, 2026-09-28; non-coded rows unsearched).
+# So neither the uuid nor the name was swapped: either would make the gate measure a
+# different chart under GATE criteria keyed to this one's citation indexes. Pick a patient with
+# the shape above and pass it as CONDITION_PATIENT.
+DEFAULT_CONDITION_PATIENT = "165497e8-13e0-4fa4-8190-8e6fa067c4b7"
+# Issue #302's own population and question: two patients whose medication answer is a
+# colon-less list of two active orders, which is a compound claim unit in sentence scope.
+DEFAULT_MEDICATION_PATIENTS = ["83f95445-d471-4e9c-b10e-a89b6632dbe8",
+                               "e30bc8f0-08bb-406c-986a-2b153a495603"]
+CONDITION_PATIENT = os.environ.get("CONDITION_PATIENT", DEFAULT_CONDITION_PATIENT)
+MEDICATION_PATIENTS = ([p.strip() for p in os.environ["MEDICATION_PATIENTS"].split(",") if p.strip()]
+                       if os.environ.get("MEDICATION_PATIENTS") else DEFAULT_MEDICATION_PATIENTS)
+
+# (patient, question).
+CASES = [(CONDITION_PATIENT, q) for q in (
+    "any ear problems?",
+    "any feeding problems?",
+    "any nutritional problems?",
+    "what are the patient's diagnoses?",
+    "any mouth or swallowing problems?",
+    "what active conditions does the patient have?",
+)] + [(patient, "What medications is this patient currently taking?")
+      for patient in MEDICATION_PATIENTS]
 
 
 def req(path, data=None, method="GET"):
@@ -136,6 +163,17 @@ def req(path, data=None, method="GET"):
     with urllib.request.urlopen(r, timeout=300) as resp:
         b = resp.read()
         return json.loads(b) if b else {}
+
+
+def unresolved_patients():
+    """Every distinct CASES patient the instance at BASE does not serve, with the HTTP status."""
+    unresolved = []
+    for patient in sorted({patient for patient, _ in CASES}):
+        try:
+            req("/patient/" + patient)
+        except urllib.error.HTTPError as e:
+            unresolved.append("%s (HTTP %d)" % (patient, e.code))
+    return unresolved
 
 
 def get_gp(name):
@@ -194,6 +232,16 @@ def search(patient, question):
 
 
 def run():
+    # FIRST, before any GP is read or written (#240). The arms are switched by writing a GP
+    # before the first search, and the restore in the finally below is best-effort. So a cohort
+    # that does not resolve here would change the instance's configuration and measure nothing.
+    unresolved = unresolved_patients()
+    if unresolved:
+        raise SystemExit(
+            "ERROR: %d cohort patient(s) do not resolve on %s:\n  %s\n"
+            "Refusing to run: no GP was read or written. Pass patients that exist on this instance\n"
+            "as CONDITION_PATIENT / MEDICATION_PATIENTS; the CASES comment says what they must carry."
+            % (len(unresolved), BASE, "\n  ".join(unresolved)))
     orig_uuid, orig = get_gp(GP)
     grounding = (get_gp(GROUNDING_GP)[1] or "").strip().lower()
     entailment = (get_gp(ENTAILMENT_GP)[1] or "").strip().lower()
@@ -250,7 +298,90 @@ def run():
     print("GATE for a candidate scoping: must ground [89] on 'any ear problems?' — as a win of EITHER")
     print("kind, since #302 makes that compound sentence's sentence-scope cell null rather than false —")
     print("AND produce ZERO regressions of either kind across all cases.")
+    if CONDITION_PATIENT != DEFAULT_CONDITION_PATIENT:
+        print("!! CONDITION_PATIENT is overridden: [89] is a citation index on %s's chart, so the"
+              % DEFAULT_CONDITION_PATIENT[:8])
+        print("   first GATE criterion does not apply to %s. Read its cells instead." % CONDITION_PATIENT)
+
+
+def selftest():
+    """Offline guard for the ORDER `run` does things in (#240). No server, no model.
+
+    It drives the real `run` over the real CASES, with `req` swapped for an in-memory stub that
+    records every request. Two runs:
+
+      * two of the cohort's patients 404. `run` must REFUSE, name both of them, and have sent
+        NO `/systemsetting` request of any kind — not a write, and not the read either, because
+        the refusal has to come before the harness touches the GPs at all;
+      * every patient resolves. `run` must complete, write the clause-scope GP both ways, and
+        restore it. This is the control: without it, a `run` that always refused would pass the
+        first half.
+
+    `req` is restored in a finally, because `codes_only_order_grounding.py` imports this module
+    and reuses its `req`.
+    """
+    import contextlib
+    import io
+
+    patients = sorted({patient for patient, _ in CASES})
+    assert len(patients) >= 2, "the refusal half needs two distinct patients to name"
+
+    def stub_server(missing):
+        calls = []
+        gps = {GP: ["gp-clause", "false"], GROUNDING_GP: ["gp-grounding", "true"],
+               ENTAILMENT_GP: ["gp-entailment", "true"]}
+
+        def fake_req(path, data=None, method="GET"):
+            calls.append((method, path, data))
+            if path.startswith("/patient/"):
+                if path[len("/patient/"):] in missing:
+                    raise urllib.error.HTTPError(
+                        BASE + path, 404, "Object with given uuid doesn't exist", None, None)
+                return {"uuid": path[len("/patient/"):]}
+            if path.startswith("/systemsetting?q="):
+                row = gps.get(path[len("/systemsetting?q="):].split("&")[0])
+                return {"results": [{"uuid": row[0], "value": row[1]}] if row else []}
+            if path.startswith("/systemsetting/"):
+                for row in gps.values():
+                    if row[0] == path[len("/systemsetting/"):]:
+                        row[1] = data["value"]
+                return {}
+            if path == "/chartsearchai/search":
+                return {"answer": "stub answer", "references": [{"index": 1, "grounded": True}]}
+            raise AssertionError("the stub does not serve %s %s" % (method, path))
+        return fake_req, calls, gps
+
+    real_req = globals()["req"]
+    try:
+        missing = set(patients[:2])
+        globals()["req"], calls, _ = stub_server(missing)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                run()
+        except SystemExit as e:
+            for uuid in missing:
+                assert uuid in str(e), "the refusal must name every missing patient: %s" % e
+        else:
+            raise AssertionError("an unresolved cohort must refuse, not run")
+        touched = [c for c in calls if c[1].startswith("/systemsetting")]
+        assert not touched, "the refusal came after a GP request: %s" % touched
+
+        globals()["req"], calls, gps = stub_server(set())
+        with contextlib.redirect_stdout(io.StringIO()):
+            run()
+        writes = [c[2]["value"] for c in calls if c[1] == "/systemsetting/gp-clause"]
+        assert {"false", "true"} <= set(writes), "both arms must be written: %s" % writes
+        assert writes[-1] == "false" and gps[GP][1] == "false", \
+            "the baseline must be restored last: %s" % writes
+        searches = [c for c in calls if c[1] == "/chartsearchai/search"]
+        assert len(searches) == 2 * len(CASES), "one search per case per arm: %d" % len(searches)
+    finally:
+        globals()["req"] = real_req
+    print("selftest OK")
 
 
 if __name__ == "__main__":
-    run()
+    if sys.argv[1:] == ["--selftest"]:
+        selftest()
+    else:
+        run()

@@ -219,7 +219,7 @@ public class SafetyWarning {
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
 	 *        walking the patient's own active orders raised it (issue #348), and where the drug-in-play
-	 *        arm's drug is one of her own orders (issue #402)
+	 *        arm states that referent for its drug (issue #402)
 	 * @param chartRecords see {@link #chartRecords()} — the recorded allergies or conditions this
 	 *        rule's token matched, from the list {@code recordedContraindicationKind}'s own leg names
 	 */
@@ -248,8 +248,7 @@ public class SafetyWarning {
 	 * flag it hardcodes false is published, so what a public factory here would offer is a caller
 	 * asserting a provenance answer the module never made. Its one
 	 * caller is {@code DrugSafetyValidator.addAllergyContraindications}, which is reached from BOTH
-	 * the drug-in-play loop (true where the drug in play is one of her own orders, false where it is
-	 * a proposal — issue #402) and
+	 * the drug-in-play loop (the referent that arm states for its drug — issue #402) and
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
 	 *
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}
@@ -292,8 +291,7 @@ public class SafetyWarning {
 	 * the folded chip, whose strength {@code FoldedFindingStrengthTest} pins to the stronger claim.
 	 *
 	 * @param aboutACurrentMedication the referent the drug-in-play arm states for the drug in play —
-	 *        {@link #isAboutACurrentMedication()}, true where the drug is one of her own active orders
-	 *        (issue #402)
+	 *        {@link #isAboutACurrentMedication()} (issue #402)
 	 */
 	static SafetyWarning classOnlyInteraction(String drug, String detail, boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
@@ -315,7 +313,7 @@ public class SafetyWarning {
 	 *        {@link #namedPartners()}, which every interaction chip states
 	 * @param aboutACurrentMedication the referent the drug-in-play arm states for the drug in play, at
 	 *        every site it builds a finding at: a finding here stating another would be the one-site
-	 *        shape issue #402 recorded and reverted (ADR Decisions 112, 121)
+	 *        shape issue #402 recorded and reverted (ADR Decisions 112, 123)
 	 */
 	static SafetyWarning substanceInSeveralActiveOrders(String drug, String detail, List<String> orders,
 			boolean aboutACurrentMedication) {
@@ -339,6 +337,22 @@ public class SafetyWarning {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), true, null, false, orders, false, null, null, true,
 				null, null);
+	}
+
+	/**
+	 * An OVERDOSE chip's warning — the dose check's daily-ceiling or per-dose sentence. The one
+	 * construction site is {@code DrugSafetyValidator.addOverdose}, which runs in the drug-in-play loop
+	 * and so states that arm's referent for the drug in play (issue #402, ADR Decision 123). A factory
+	 * rather than the public three-argument constructor it used until then, for
+	 * {@link #classOnlyInteraction}'s reason: every other field of this shape is false or empty BY
+	 * CONSTRUCTION, and the one fact it carries is the arm's to decide.
+	 *
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — the drug-in-play arm's
+	 *        referent for the drug in play
+	 */
+	static SafetyWarning overdose(String drug, String detail, boolean aboutACurrentMedication) {
+		return new SafetyWarning(TYPE_OVERDOSE, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -452,8 +466,9 @@ public class SafetyWarning {
 	 * either assertion from where it was made. The one caller is
 	 * {@code DrugSafetyValidator.interactionWarning} — which is <b>not</b> the only place an interaction
 	 * chip is built, and saying so would be false: the class-only chip inside
-	 * {@code addInteractionWarnings} itself and {@code addQuestionPairInteractions} both build one from a
-	 * public constructor. Neither can fold, so neither has either of these facts to carry, and both
+	 * {@code addInteractionWarnings} itself is built by {@link #classOnlyInteraction}, and
+	 * {@code addQuestionPairInteractions} builds one from a public constructor. Neither can fold, so
+	 * neither has either of these facts to carry, and both
 	 * answer false/null by construction rather than by remembering to — the same argument
 	 * {@link #contraindication} makes for the allergen arm's three sentences. This factory replaced a
 	 * five-argument package-private CONSTRUCTOR that carried {@code unratedRelationship} alone; that
@@ -470,8 +485,9 @@ public class SafetyWarning {
 	 * @param chartOrderBridges see {@link #chartOrderBridges()}, which is canonical for what empty
 	 *        covers — empty is not a degraded state, and no rule about which chips are empty belongs
 	 *        here or anywhere else; every draft of one has been measured false
-	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true only from the
-	 *        screening arm, whose two drugs are both the patient's own active orders (issue #348)
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true from the screening
+	 *        arm, whose two drugs are both the patient's own active orders (issue #348), and from the
+	 *        drug-in-play arm where it states that referent for its drug (issue #402)
 	 */
 	// The paragraphs above are worded for the PAIR issue #297 added, and facts have been put beside
 	// them since — issue #349's bridge, issue #348's referent. Read the @param list rather than any
@@ -1002,9 +1018,12 @@ public class SafetyWarning {
 	 * play is not hers, which the issue's decision accepted (ADR Decision 116). The DRUG-IN-PLAY arm
 	 * answers true where the drug the question or the answer named is one of her own active orders — its
 	 * substance is one {@code findForActiveOrders} resolved her orders to — and false where it is not
-	 * (issue #402, ADR Decision 123). That one answer per drug in play is stated at EVERY site the arm
-	 * builds a finding at, {@link #substanceInSeveralActiveOrders} (issue #477) included: one finding in
-	 * the other column beside the rest is the one-site shape issue #402 recorded and reverted. A drug her
+	 * (issue #402, ADR Decision 123), and false too where her chart holds it only as locally applied
+	 * presentations, the question then possibly proposing another
+	 * ({@code DrugSafetyValidator.currentMedicationsInPlay}). That one answer per drug in play is stated
+	 * at EVERY site the arm builds a finding at, {@link #substanceInSeveralActiveOrders} (issue #477) and
+	 * the dose check's {@link #overdose} included: one finding in the other column beside the rest is the
+	 * one-site shape issue #402 recorded and reverted. A drug her
 	 * chart holds only as an ended order is not in that resolution, so it answers false and carries
 	 * {@link #isAboutAnEndedOrder()}'s referent instead (issue #472). The QUESTION-PAIR arm answers false
 	 * by construction: both its drugs are ones the question named.
@@ -1061,8 +1080,9 @@ public class SafetyWarning {
 	 * <p><b>What the published {@code false} does NOT say is that she is off the drug.</b> It is the
 	 * answer of every arm named above as answering false, whatever her chart holds — for a drug in play
 	 * her orders do not resolve to, which includes a prescription recorded under a name the reference
-	 * data does not carry, and for the question-pair arm's findings — and of every chip built through a
-	 * public constructor. This is the one home of that list; {@code README.md} carries it for a client,
+	 * data does not carry, for one her chart holds only as locally applied presentations, and for the
+	 * question-pair arm's findings — and of every chip built through a public constructor. This is the
+	 * one home of that list; {@code README.md} carries it for a client,
 	 * with how to render {@code true}.
 	 */
 	public boolean isAboutACurrentMedication() {

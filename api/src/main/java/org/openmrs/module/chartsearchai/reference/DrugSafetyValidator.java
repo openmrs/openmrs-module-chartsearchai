@@ -990,22 +990,24 @@ public class DrugSafetyValidator {
 		boolean questionDrugScreened = false;
 		int questionDrugPairs = 0;
 
-		// The substances her active orders resolve to — the drug-in-play arm's REFERENT, asked per drug
-		// in play below (issue #402, ADR Decision 123). Off orderEntries, the one resolution this pass
-		// already holds, so the arm and every other consumer of her orders cannot disagree about which
-		// drugs are hers. A per-call local, for issue #172's reason.
-		Set<Object> herOrderSubstances = substancesOf(orderEntries);
+		// The substances in play the drug-in-play arm states the CURRENT-medication referent for, asked
+		// per drug in play below (issue #402, ADR Decision 123): those her active orders resolve to, less
+		// any her chart holds only as locally applied presentations (currentMedicationsInPlay). Off
+		// orderEntries, the one resolution this pass already holds, so the arm and every other consumer of
+		// her orders cannot disagree about which drugs are hers. A per-call local, for issue #172's reason.
+		Set<Object> herOrderSubstances = currentMedicationsInPlay(inPlay, orderEntries, context, bridgedOrders);
 
 		for (DrugReference ref : inPlay) {
-			// Whether this drug in play is one of her own active orders, and so what every finding the
-			// arm raises about it is ABOUT: a medication she is already taking where it is, a proposal
-			// where it is not. One answer per drug in play, handed to EVERY site below that builds a
-			// finding, because a site stating the other referent beside them is the one-site shape
-			// issue #402 recorded and reverted — the prompt's ranking sentence would hand the lead to
-			// whichever finding still read as a proposal. Keyed on the SUBSTANCE, the unit the chips
-			// fold on (issues #162, #206), and never on the row. An ended order is not in orderEntries,
-			// so a drug her chart holds only as one keeps the proposal here and EndedOrders states its
-			// own referent on the chip (issue #472).
+			// Whether this drug in play is a medication she is already taking, and so what every finding
+			// the arm raises about it is ABOUT: her medication where it is, a proposal where it is not.
+			// One answer per drug in play, handed to EVERY site below that builds a finding, the dose
+			// check's included, because a site stating the other referent beside them is the one-site
+			// shape issue #402 recorded and reverted — the prompt's ranking sentence would hand the lead
+			// to whichever finding still read as a proposal. Keyed on the SUBSTANCE, the unit the chips
+			// fold on (issues #162, #206), and never on the row. A drug she holds only as locally applied
+			// presentations keeps the proposal (heldOnlyAsLocallyAppliedPresentations). An ended order is
+			// not in orderEntries, so a drug her chart holds only as one keeps the proposal here and
+			// EndedOrders states its own referent on the chip (issue #472).
 			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
@@ -1047,7 +1049,7 @@ public class DrugSafetyValidator {
 				}
 			}
 			if (dosePending.remove(substance)) {
-				addOverdose(warnings, rows, subjects, context, lower, all);
+				addOverdose(warnings, rows, subjects, context, lower, all, herOrder);
 			}
 		}
 		// The patient's own prescriptions against their own allergy and condition records — the one
@@ -2615,6 +2617,113 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The substances {@code orderEntries}, her active orders resolved by
+	 * {@link DrugReferenceService#findForActiveOrders}, are of — keyed on
+	 * {@link DrugReference#substanceGroupKey()}, the unit the chips fold on. A new, mutable set; empty for
+	 * {@code null}. The one answer to "is this substance hers", so no two of its readers can key it
+	 * differently. The drug-in-play arm's REFERENT is a narrower question and narrows this answer:
+	 * {@link #currentMedicationsInPlay}.
+	 */
+	static Set<Object> substancesOf(List<DrugReference> orderEntries) {
+		Set<Object> active = new HashSet<Object>();
+		if (orderEntries != null) {
+			for (DrugReference entry : orderEntries) {
+				active.add(entry.substanceGroupKey());
+			}
+		}
+		return active;
+	}
+
+	/**
+	 * The substances of {@code inPlay} the drug-in-play arm states the CURRENT-medication referent for —
+	 * issue #402, ADR Decision 123: those {@link #substancesOf} her resolved orders holds, less any her
+	 * chart holds only as locally applied presentations ({@link #heldOnlyAsLocallyAppliedPresentations}).
+	 * Every other drug in play keeps the proposal referent. A per-pass value and never a field, for issue
+	 * #172's reason.
+	 */
+	private static Set<Object> currentMedicationsInPlay(Set<DrugReference> inPlay,
+			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridgedOrders) {
+		Set<Object> hers = substancesOf(orderEntries);
+		Set<Object> asked = new HashSet<Object>();
+		Set<Object> current = new HashSet<Object>();
+		for (DrugReference ref : inPlay) {
+			Object substance = ref.substanceGroupKey();
+			if (asked.add(substance) && hers.contains(substance)
+					&& !heldOnlyAsLocallyAppliedPresentations(substance, orderEntries, context, bridgedOrders)) {
+				current.add(substance);
+			}
+		}
+		return current;
+	}
+
+	/**
+	 * Whether her chart holds {@code substance} ONLY as locally applied presentations: at least one of her
+	 * active orders {@link #resolvesFromAny} a row {@code orderEntries} holds of it, and every such order
+	 * carries ATC codes of its own, each of them one {@link DrugReference#isLocallyAppliedAtcCode} answers
+	 * true for — a gel the dictionary filed {@code M02AA15}, eye drops filed {@code S01BA04}.
+	 *
+	 * <p><b>Why the drug-in-play arm then keeps the proposal referent.</b> A question about the drug may be
+	 * proposing a presentation she does not take — an oral course of the diclofenac she applies as a gel —
+	 * and a finding about that course is not a reason to change her gel. The current-medication column
+	 * would state it as one, and the prompt tells the answer never to open by refusing a drug there, so
+	 * the refusal the proposal call leads with would be withdrawn. Found by review round 1 of PR #544;
+	 * {@code DrugInPlayHerOwnOrderReferentTest.aDrugSheHoldsOnlyAsALocallyAppliedPresentationStillStatesTheProposalCall}
+	 * pins it.
+	 *
+	 * <p><b>The ORDER's own codes, because they are evidence about the presentation she was given</b> —
+	 * what the dictionary classified the prescribed concept as. That makes this the kind of caller
+	 * {@link DrugReference#isLocallyAppliedAtcCode}'s javadoc says holds such evidence, and it uses it to
+	 * keep a referent rather than to drop a code. Never the reference ROWS' codes: those classify the
+	 * substance across every presentation the dataset files it under, so they say nothing about hers.
+	 *
+	 * <p><b>Two residues.</b> An order carrying no ATC code of its own says nothing about its presentation,
+	 * so it does not make the substance locally applied: an unmapped {@code Voltaren gel} still takes the
+	 * current-medication referent on an oral question, and most Drug-class concepts of the 3.7.1 reference
+	 * dictionary carry no code ({@code PatientClinicalContext.ActiveDrugOrder}'s three-argument
+	 * constructor records the count). Its recorded route and dose form are not read here: CLAUDE.md keeps that reading to
+	 * {@link #codesForThisSubstancesPresentations}. And a question about the very presentation she holds
+	 * keeps the proposal too, as every drug in play did before issue #402: nothing here reads which
+	 * presentation the question names.
+	 */
+	private static boolean heldOnlyAsLocallyAppliedPresentations(Object substance,
+			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridgedOrders) {
+		if (context == null || orderEntries == null) {
+			return false;
+		}
+		List<DrugReference> rows = new ArrayList<DrugReference>();
+		for (DrugReference entry : orderEntries) {
+			if (substance.equals(entry.substanceGroupKey())) {
+				rows.add(entry);
+			}
+		}
+		boolean held = false;
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!resolvesFromAny(rows, order, bridgedOrders)) {
+				continue;
+			}
+			if (!carriesOnlyLocallyAppliedCodes(order)) {
+				return false;
+			}
+			held = true;
+		}
+		return held;
+	}
+
+	/** Whether {@code order} carries ATC codes of its own and every one of them classifies a locally
+	 *  applied presentation — false for an order carrying none, which says nothing about its presentation. */
+	private static boolean carriesOnlyLocallyAppliedCodes(PatientClinicalContext.ActiveDrugOrder order) {
+		if (order.getAtcCodes().isEmpty()) {
+			return false;
+		}
+		for (String code : order.getAtcCodes()) {
+			if (!DrugReference.isLocallyAppliedAtcCode(code)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * Which substances IN PLAY this patient's chart holds only as an order no longer in force — the
 	 * third referent a drug-in-play finding can have, beside a proposal and a current medication
 	 * (issue #472). Decided once per {@code validate} pass and applied where the drug-in-play arm's
@@ -2651,24 +2760,6 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>A per-pass value and never a field, for issue #172's reason.
 	 */
-	/**
-	 * The substances {@code orderEntries}, her active orders resolved by
-	 * {@link DrugReferenceService#findForActiveOrders}, are of — keyed on
-	 * {@link DrugReference#substanceGroupKey()}, the unit the chips fold on. A new, mutable set; empty for
-	 * {@code null}. The one answer to "is this substance hers", read by the drug-in-play arm's referent
-	 * (issue #402, ADR Decision 123), by {@link EndedOrders} and by {@code DrugReferenceInjector}'s
-	 * composed-answer gate, so no two of them can key it differently.
-	 */
-	static Set<Object> substancesOf(List<DrugReference> orderEntries) {
-		Set<Object> active = new HashSet<Object>();
-		if (orderEntries != null) {
-			for (DrugReference entry : orderEntries) {
-				active.add(entry.substanceGroupKey());
-			}
-		}
-		return active;
-	}
-
 	private static final class EndedOrders {
 
 		/**
@@ -2804,7 +2895,6 @@ public class DrugSafetyValidator {
 				}
 			}
 		}
-
 
 		private static List<String> lowered(List<RecordMapping> records) {
 			List<String> out = new ArrayList<String>(records.size());
@@ -4185,9 +4275,10 @@ public class DrugSafetyValidator {
 	 *         two partners on an ordinary per-order chart too, and the ledger collapses them only where
 	 *         they render byte for byte alike. It counts what a reader was shown, which is the residue
 	 *         those chips carry.
-	 * @param herOrder whether this substance is one of her own active orders — {@code validate}'s one
-	 *        answer for the drug in play, stated on every chip this method builds, rule, merged,
-	 *        class-only and several-orders alike (issue #402, ADR Decision 123)
+	 * @param herOrder whether the drug in play is a medication she is already taking —
+	 *        {@code validate}'s one answer for it ({@link #currentMedicationsInPlay}), stated on every chip
+	 *        this method builds, rule, merged, class-only and several-orders alike (issue #402, ADR
+	 *        Decision 123)
 	 */
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
@@ -4535,9 +4626,10 @@ public class DrugSafetyValidator {
 	 * about the drug in play: stated in the other column beside them, one response would refuse the drug
 	 * as a proposal and call it a medication to change, the one-site shape issue #402 recorded and
 	 * reverted. Since issue #402 the arm states the current-medication referent for a drug in play her
-	 * own orders resolve to, so where two of her orders carry the substance this finding states it too.
-	 * Its STRENGTH is the unrated default, so it states the withholding class. ADR Decisions 112 and 121
-	 * carry why of both.
+	 * own orders resolve to, unless she holds it only as locally applied presentations
+	 * ({@link #currentMedicationsInPlay}), so where two of her orders carry the substance this finding
+	 * states it too. Its STRENGTH is the unrated default, so it states the withholding class. ADR
+	 * Decisions 112 and 123 carry why of both.
 	 */
 	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications,
 			boolean herOrder) {
@@ -7399,8 +7491,9 @@ public class DrugSafetyValidator {
 	 * {@link #collapseSharedMechanisms}, and where DDInter also rates the pair both chips stand: they are
 	 * two claims from two tables.
 	 *
-	 * @param herOrder whether the subject is one of her own active orders — {@code validate}'s one answer
-	 *        for the drug in play, which every chip of that drug states (issue #402, ADR Decision 123)
+	 * @param herOrder whether the subject is a medication she is already taking — {@code validate}'s one
+	 *        answer for the drug in play ({@link #currentMedicationsInPlay}), which every chip of that drug
+	 *        states (issue #402, ADR Decision 123)
 	 */
 	private static void addConditionMediatedWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, List<DrugReference> orderEntries,
@@ -10193,11 +10286,11 @@ public class DrugSafetyValidator {
 				continue;
 			}
 			// FALSE where a sibling row put this substance in play — issue #348's rule, from when every
-			// drug in play was a proposal. Since issue #402 the drug-in-play arm states the
+			// drug in play was a proposal. Since issue #402 the drug-in-play arm can state the
 			// CURRENT-medication referent for that same substance, this row being one of her orders, so
-			// where both arms raise a finding of it the two referents disagree and the ledger's rank
+			// where both arms raise a finding of it the two referents can disagree and the ledger's rank
 			// decides which survives one key. That is a known residue and not a rationale: ADR Decision
-			// 121 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
+			// 123 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
 			// sibling-row cases pin it.
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
@@ -12553,10 +12646,15 @@ public class DrugSafetyValidator {
 	 * sibling from becoming a lost warning. What this cannot do is warn where the data does not: the
 	 * widening is over the rows of ONE substance, and {@link #substanceOwnsDose} still lets any OTHER
 	 * substance's nearer alias take the dose away.
+	 *
+	 * @param herOrder the drug in play's referent, {@code validate}'s one answer for it, which every chip
+	 *        the arm raises about it states (issue #402, ADR Decision 123). An overdose finding cannot reach
+	 *        the injected records ({@code SafetyFindingSeverityStrengthTest} pins that premise), so this
+	 *        moves the chip's published {@code aboutACurrentMedication} and nothing the model reads.
 	 */
 	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, String lowerAnswer,
-			List<DrugReference> allEntries) {
+			List<DrugReference> allEntries, boolean herOrder) {
 		// The same choice of representative row the other arms make, recorded names and all (issues #194,
 		// #206): a dose warning, an interaction chip and a contraindication chip about ONE substance in
 		// ONE response must not call it three things, which is exactly the divergence anchoring only some
@@ -12582,11 +12680,11 @@ public class DrugSafetyValidator {
 		// the dose a clinician stated is a fact about the drug, not about the row that happens to publish
 		// the band it is about to be compared against.
 		List<AttributedDose> doses = attributedDoses(lowerAnswer, rows, allEntries);
-		if (addOverdose(warnings, subject, subject, doses, context)) {
+		if (addOverdose(warnings, subject, subject, doses, context, herOrder)) {
 			return;
 		}
 		for (DrugReference row : rows) {
-			if (row != subject && addOverdose(warnings, subject, row, doses, context)) {
+			if (row != subject && addOverdose(warnings, subject, row, doses, context, herOrder)) {
 				return;
 			}
 		}
@@ -12670,10 +12768,12 @@ public class DrugSafetyValidator {
 	 * @param doses the substance's stated doses, read once by the caller and shared by every row and by
 	 *        both arms below — so a dose counts for the daily and the per-dose check, and for the
 	 *        subject row and its siblings, under exactly the same conditions
+	 * @param herOrder the referent every chip about the drug in play states — see the substance-level
+	 *        overload
 	 * @return whether a warning was raised, so the caller can stop at the first row that trips
 	 */
 	private boolean addOverdose(List<SafetyWarning> warnings, DrugReference subject, DrugReference ref,
-			List<AttributedDose> doses, PatientClinicalContext context) {
+			List<AttributedDose> doses, PatientClinicalContext context, boolean herOrder) {
 		DrugReference.AgeBand band = actionableBand(ref, context);
 		if (band == null) {
 			return false;
@@ -12688,11 +12788,11 @@ public class DrugSafetyValidator {
 		if (dailyArm) {
 			Double dailyMg = parseDailyDoseMg(doses);
 			if (dailyMg != null && dailyMg > band.getMaxDailyDoseMg()) {
-				warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, label,
+				warnings.add(SafetyWarning.overdose(label,
 						"The stated " + label + " dose ~" + DrugReference.formatNumber(dailyMg)
 								+ " mg/day exceeds the "
 								+ DrugReference.formatNumber(band.getMaxDailyDoseMg()) + " mg/day maximum for ages "
-								+ band.getMinYears() + "-" + band.getMaxYears() + ceilingSource));
+								+ band.getMinYears() + "-" + band.getMaxYears() + ceilingSource, herOrder));
 				// One warning per drug: the published daily ceiling is the stronger statement,
 				// so the per-dose arm below is not stacked on top of it.
 				return true;
@@ -12704,13 +12804,13 @@ public class DrugSafetyValidator {
 		Double perDoseMg = parseMaxPerDoseMg(doses);
 		double perDoseLimitMg = band.getMgPerKgMax() * weightKg;
 		if (perDoseMg != null && perDoseMg > perDoseLimitMg) {
-			warnings.add(new SafetyWarning(SafetyWarning.TYPE_OVERDOSE, label,
+			warnings.add(SafetyWarning.overdose(label,
 					"The stated " + label + " dose ~" + DrugReference.formatNumber(perDoseMg)
 							+ " mg exceeds the "
 							+ DrugReference.formatNumber(band.getMgPerKgMax()) + " mg/kg per-dose maximum (~"
 							+ DrugReference.formatNumber(perDoseLimitMg) + " mg) for the patient's weight "
 							+ DrugReference.formatNumber(weightKg) + " kg (ages " + band.getMinYears() + "-"
-							+ band.getMaxYears() + ")" + ceilingSource));
+							+ band.getMaxYears() + ")" + ceilingSource, herOrder));
 			return true;
 		}
 		return false;

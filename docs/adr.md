@@ -11754,28 +11754,50 @@ no longer refused. Every cell whose drug she does not take was byte-identical to
 **`validate` resolves the substances her active orders are (`DrugSafetyValidator.substancesOf(orderEntries)`,
 shared since review with `EndedOrders` and `DrugReferenceInjector`'s composed-answer gate)
 once per pass. It then states, for each drug in play, whether its `substanceGroupKey()` is one of them
-(`herOrder`), and hands that one answer to every site the drug-in-play arm builds a finding at.** Those
-sites are:
+and not one she holds only as locally applied presentations (`herOrder`, through
+`currentMedicationsInPlay`), and hands that one answer to every site the drug-in-play arm builds a
+finding at.** Those sites are:
 
 - `addContraindications` and `addAllergyContraindications`, in the drug-in-play loop;
 - the three `interactionWarning` constructions in `addInteractionWarnings` (plain, reconciled and
   folded), and the merged chip `collapseSharedMechanisms` builds;
 - the class-only chip (`SafetyWarning.classOnlyInteraction`);
 - `alreadyInSeveralOrders` (`SafetyWarning.substanceInSeveralActiveOrders`);
-- the derived tier's `addConditionMediatedWarnings` (`SafetyWarning.conditionMediated`), which ships off.
+- the derived tier's `addConditionMediatedWarnings` (`SafetyWarning.conditionMediated`), which ships off;
+- the dose check's two sentences (`addOverdose`, through `SafetyWarning.overdose`), since review round 1.
+  An overdose finding cannot reach the injected records, so this moves the chip's published
+  `aboutACurrentMedication` and nothing the model reads.
 
 **The unit is the SUBSTANCE, never the row.** It is the unit the chips fold on (#162, #206), and the
 unit Decision 72 corrected the order-driven arm's referent to. It is resolved off `orderEntries`, the
 one resolution the pass already holds (Decision 58), so the referent and every other consumer of her
-orders cannot disagree about which drugs are hers.
+orders cannot disagree about which drugs are hers. Nothing pinned that unit until review round 1, which
+measured the api suite green at `d14d61eb` with the referent keyed on the row instead.
+`DrugInPlayHerOwnOrderReferentTest.theReferentIsTheSubstancesAndNotTheRowTheQuestionNamed` now holds it
+over a fixture whose question row her order does not resolve.
 
-**The last three sites go beyond the owner's A/B diff, and that is deliberate.** Each is a finding the
+**A drug she holds only as locally applied presentations keeps the proposal referent** (review round 1).
+Where every active order of hers that resolves to the substance carries ATC codes of its own, each
+classifying a locally applied presentation (`DrugReference.isLocallyAppliedAtcCode`),
+`currentMedicationsInPlay` leaves the substance out (`heldOnlyAsLocallyAppliedPresentations`). The
+review's case: a `Voltaren gel` order filed `M02AA15`, and *"Can I start her on oral diclofenac?"*. The
+Major bleeding finding about the oral course is not a reason to change her gel, and stated as one, the
+prompt tells the answer never to open by refusing it. The presentation is read off each ORDER's own
+codes, the dictionary's classification of what she was prescribed, and never the reference rows',
+which classify the substance across every presentation the dataset files it under. That makes this a
+caller of `isLocallyAppliedAtcCode` holding evidence about the presentation she was given, the kind that
+predicate's javadoc describes; it keeps a referent and drops no code.
+
+**The class-only chip, `alreadyInSeveralOrders` and the condition-mediated chip go beyond the owner's A/B
+diff, and that is deliberate.** Each is a finding the
 same arm raises about the same drug, and the rule on this axis is one referent per drug in play.
 Without `alreadyInSeveralOrders`, the rewritten
 `SubstanceInSeveralActiveOrdersTest.everyFindingAboutTheDrugInPlayReachesTheModelInOneReferent` would
 read `[change, caution-current, withhold, change]`. That is the one-site shape Decision 112's review
 round 1 recorded, and the shape #402 reverted. The class-only and condition-mediated chips are the same
-case: they would be in the other column, beside rule chips about the same drug.
+case: they would be in the other column, beside rule chips about the same drug. So was the dose check's
+chip until review round 1, which found it stating the proposal beside a current-medication
+contraindication chip about the same ibuprofen order.
 
 **The ended-order referent is untouched.** A substance held only by an ended order is not in
 `orderEntries`, so it answers `false` here and `EndedOrders` states its own referent on the chip, as
@@ -11802,10 +11824,23 @@ the reported defect.
   This was measured through the real `validate` over the shipped knowledge base, on
   `OrdersSharingASubstanceTest`'s six-order chart. Her `Cotrimoxazole 960mg` order does not resolve
   to trimethoprim or sulfamethoxazole, so those two listed drugs state the proposal while the other
-  drugs she is on state the current-medication referent. The test pins that split per drug.
+  drugs she is on state the current-medication referent. The test pins that split per drug. That
+  resolution is #353's (the order resolves to no reference entry), and #476 is why the second drug
+  prints as *Sulfamethoxazole (sulfamethazine)*.
+- **An order carrying no ATC code of its own says nothing about its presentation**, so it does not make
+  a substance locally applied. An unmapped `Voltaren gel` still takes the current-medication referent on
+  an oral question, which is the review's own first reproduction, and most Drug-class concepts of the
+  3.7.1 reference dictionary carry no ATC code (`PatientClinicalContext.ActiveDrugOrder`'s
+  three-argument constructor records the count). The order's recorded route and dose form are not read for this:
+  CLAUDE.md keeps that reading to `codesForThisSubstancesPresentations`.
+- **A question about the very presentation she holds only locally keeps the proposal**, as every drug in
+  play did before this decision (*"Is her gel safe with her warfarin?"*). Nothing reads which
+  presentation a question names.
 - The question-pair arm (both its drugs are the question's), `DEFAULT_SYSTEM_PROMPT`, and
   `answersFromFindings`' exclusion of a drug she takes. The last keeps its behaviour, and its stated
-  reason is now that the module's composed "No" refuses a proposal.
+  reason is now that the module's composed "No" refuses a proposal. It is wider than the referent: a
+  drug she holds only as locally applied presentations is excluded from it too, while the arm states the
+  proposal for it, so the model answers that question as it did before.
 
 ### Tests that pinned the old referent, rewritten to this one
 
@@ -11824,7 +11859,9 @@ current-medication column where the drug is hers.
   That case still reports the finding beside the caution lead.
 
 `DrugInPlayHerOwnOrderReferentTest` holds one case per site through the real `injectRecords`, plus a
-negative control and #477's constituent case over the shipped knowledge base. The condition-mediated
+negative control and #477's constituent case over the shipped knowledge base. Since review round 1 it
+also holds the substance unit, the locally applied gate with a control beside it, and the dose check's
+two sentences, read off the chip with their negative control. The condition-mediated
 site is held by `ConditionMediatedFindingTest.aChainAboutADrugInPlayThatIsHerOwnOrderIsAboutACurrentMedication`,
 and the several-orders site by the rewritten `SubstanceInSeveralActiveOrdersTest` cases. Mutate a site
 and read the failures.
@@ -11861,7 +11898,8 @@ The rig was pool slot `standalone-8082` (RefApp 3.7.1, bundled DDInter KB, local
 - E: B plus residue (a) in its first wording, *"This finding has no severity of its own."*
   (`4756334c`).
 - F, the head: B plus residue (a) as shipped, *"No severity is rated for this finding."* (`a50125c4`).
-  Later commits change comments, tests and this record only.
+  Later commits change comments, tests and this record only, except review round 1's, which the
+  paragraph *Review round 1 postdates every arm* names.
 
 | cell | A (`main`) | B | E | F (head) |
 |---|---|---|---|---|
@@ -11875,7 +11913,8 @@ The rig was pool slot `standalone-8082` (RefApp 3.7.1, bundled DDInter KB, local
 **What the head delivers.**
 
 - The referent reversal: every drug-in-play finding about a drug she takes states the current-medication
-  column, on the chips and in the records.
+  column, on the chips and in the records. Review round 1 then made one exception, a drug she holds only
+  as locally applied presentations.
 - Residue (a): no answer in arm F states a rating a chip does not carry. The one exception is Mary's
   amoxicillin cell, which is the same in every arm; its sentence comes from a `drug_reference` record,
   with no chip or finding behind it.
@@ -11901,3 +11940,6 @@ Barbara's dropped mechanism text, is not reproduced at the head.
 answer cited a chart record for her aspirin order, so A's post-answer pass raised a third chip, a
 contraindication about aspirin, and B, C, E and F, which do not cite it, raise two. That difference is
 answer-driven and not code-driven.
+
+**Review round 1 postdates every arm.** Its two behaviour changes, the locally applied gate and the dose
+check's referent, came after arm F and ran in none of the arms above.

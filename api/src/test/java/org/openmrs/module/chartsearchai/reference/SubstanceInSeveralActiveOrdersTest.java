@@ -116,7 +116,7 @@ public class SubstanceInSeveralActiveOrdersTest {
 		assertTrue(finding.isAboutACurrentMedication(),
 				"the drug-in-play arm states ONE referent for the drug in play at every site, and rifampicin is "
 						+ "in her own orders: one finding stating another call beside the rule chips is issue "
-						+ "#402's reverted one-site shape (ADR Decisions 112, 121)");
+						+ "#402's reverted one-site shape (ADR Decisions 112, 123)");
 	}
 
 	@Test

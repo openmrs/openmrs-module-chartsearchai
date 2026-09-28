@@ -644,7 +644,8 @@ public class DrugReferenceInjector {
 		//
 		// → ADR Decision 87; InteractionScreenSilenceNoteTest.
 		// The validator's own answer to "which substances are hers", so the composed "No" below and the
-		// drug-in-play arm's referent cannot key it differently (issue #402).
+		// drug-in-play arm's referent cannot key it differently (issue #402). The referent narrows it by
+		// presentation and this does not — see answersFromFindings.
 		Set<Object> screenedSubstances = DrugSafetyValidator.substancesOf(orderEntries);
 		// Resolved once and read by both the note's gate and the early return below, so the two cannot
 		// come to disagree about whether this injection had anything to say.
@@ -2469,7 +2470,9 @@ public class DrugReferenceInjector {
 	 *     an ended order, since this question proposes it — issue #472). Not already taking it, because the "No" composed here refuses a
 	 *     PROPOSAL, and for a drug she does take the drug-in-play arm states the current-medication
 	 *     clause instead (issue #402, ADR Decision 123) — asked of {@code herSubstances}, the
-	 *     substances this pass resolved her orders to.</li>
+	 *     substances this pass resolved her orders to. That is wider than the arm's referent, which keeps
+	 *     the proposal clause for a drug she holds only as locally applied presentations; the model
+	 *     answers such a question, as it did before issue #402.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication

@@ -1349,9 +1349,9 @@ public class DrugReference {
 	 *         blank are not locally applied, like every other ATC comparison here treats them: nothing
 	 *         is known about them at all.
 	 *         <p>Package-private on purpose: it is a rule about ATC's own group names, not a fact about
-	 *         a substance, so nothing outside this package should be asking it. TWO callers since issue
-	 *         #234, and they ask it for different claims — which is the thing to keep straight before
-	 *         adding a third. {@code DrugSafetyValidator.sharedClass} PREFERS among candidate subgroups
+	 *         a substance, so nothing outside this package should be asking it. Its callers ask it for
+	 *         different claims, which is the thing to keep straight before adding another.
+	 *         {@code DrugSafetyValidator.sharedClass} PREFERS among candidate subgroups
 	 *         and can still return a locally applied one when that is all a pair shares;
 	 *         {@link #codesAtSites} can DROP a code outright, so that a {@code D01B} systemic
 	 *         antifungal is not read as a skin presentation however plainly it sits under {@code D}.
@@ -1360,7 +1360,10 @@ public class DrugReference {
 	 *         first has none of, and the dropping is decided by {@link #ATC_GROUPS_BY_SITE} against
 	 *         that evidence with this predicate only refusing the {@link #SYSTEMIC_USE_EXCEPTIONS}
 	 *         nested inside a matched site. A caller with no such evidence gets the preference and
-	 *         never the veto.
+	 *         never the veto. {@code DrugSafetyValidator.heldOnlyAsLocallyAppliedPresentations} (issue
+	 *         #402) holds such evidence too — an active ORDER's own codes, the dictionary's
+	 *         classification of what she was prescribed — and uses it to keep a finding's proposal
+	 *         referent rather than to drop a code.
 	 */
 	static boolean isLocallyAppliedAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);

@@ -1080,7 +1080,7 @@ public class DrugSafetyValidator {
 			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
 					recordedAllergens, SubjectMatter.of(scope, question, answer,
 							attribution.citedChartRecords, attribution.referenceMaterial),
-					allergicSubstanceSupplier);
+					allergicSubstanceSupplier, bridgedOrders);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
@@ -3434,11 +3434,24 @@ public class DrugSafetyValidator {
 		/** @see EndedOrders */
 		private final EndedOrders endedOrders;
 
+		/**
+		 * The displays of her own active orders each substance the active-order arm screens was resolved from,
+		 * keyed on {@code substanceGroupKey} — recorded by {@link #addActiveOrderContraindications} before it
+		 * raises that substance's chips, and stamped onto each of them in {@link #add}, so a chip the ledger
+		 * replaces by a stronger one of the same substance carries them too.
+		 */
+		private final Map<Object, List<String>> currentOrderDisplays = new HashMap<Object, List<String>>();
+
 		ContraindicationChips(List<SafetyWarning> warnings, SubstanceSubjects subjects,
 				EndedOrders endedOrders) {
 			this.warnings = warnings;
 			this.subjects = subjects;
 			this.endedOrders = endedOrders;
+		}
+
+		/** Records {@code displays} as the orders {@code substance}'s current-medication chips are about. */
+		void recordCurrentOrders(Object substance, List<String> displays) {
+			currentOrderDisplays.put(substance, displays);
 		}
 
 		/**
@@ -3481,6 +3494,10 @@ public class DrugSafetyValidator {
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
 				boolean namesTheFinding) {
+			List<String> displays = currentOrderDisplays.get(subject.substanceGroupKey());
+			if (displays != null && chip.isAboutACurrentMedication()) {
+				chip = chip.withCurrentOrderDisplays(displays);
+			}
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
 			// merge different sets of rows. Its javadoc is where the two key spaces are justified. It is
@@ -9334,6 +9351,32 @@ public class DrugSafetyValidator {
 		return false;
 	}
 
+	/**
+	 * @return the displays of this patient's own active orders {@code ref}'s substance was resolved from,
+	 *         each once and in her chart's order: every order ANY row of that substance among
+	 *         {@code orderEntries} {@link #resolvesFromAny resolves from} — the order-driven arms' own test,
+	 *         asked over {@code findForActiveOrders}' answer the caller already holds (issue #151) — and whose
+	 *         display {@link #displayNamesADrug names a drug}, since a display that is not a name has nothing
+	 *         to print. For {@link SafetyWarning#currentOrderDisplays()} alone.
+	 */
+	private static List<String> currentOrderDisplays(DrugReference ref, List<DrugReference> orderEntries,
+			PatientClinicalContext context, BridgedOrders bridged) {
+		Object substance = ref.substanceGroupKey();
+		List<DrugReference> rows = new ArrayList<DrugReference>();
+		for (DrugReference entry : orderEntries) {
+			if (substance.equals(entry.substanceGroupKey())) {
+				rows.add(entry);
+			}
+		}
+		Set<String> displays = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (displayNamesADrug(order) && resolvesFromAny(rows, order, bridged)) {
+				displays.add(order.getDisplay().trim());
+			}
+		}
+		return new ArrayList<String>(displays);
+	}
+
 	/** @return true when ANY row of the subject's substance matches one name — the group form of
 	 *          {@link DrugReference#matchesDrugName}, for the flattened fallback below and, since issue
 	 *          #347, for the bridge's silence test {@link #displaysANameOfAny}. The arm's own name leg
@@ -10422,7 +10465,7 @@ public class DrugSafetyValidator {
 	private void addActiveOrderContraindications(ContraindicationChips chips, Set<DrugReference> inPlay,
 			PatientClinicalContext context, List<DrugReference> orderEntries,
 			List<RecordedAllergen> recordedAllergens, SubjectMatter askedAbout,
-			Supplier<Set<Object>> allergicSubstances) {
+			Supplier<Set<Object>> allergicSubstances, BridgedOrders bridged) {
 		if (!hasContraindicationRecords(context)) {
 			return;
 		}
@@ -10461,6 +10504,10 @@ public class DrugSafetyValidator {
 			// 123 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
 			// sibling-row cases pin it.
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
+			if (currentMedication) {
+				chips.recordCurrentOrders(ref.substanceGroupKey(),
+						currentOrderDisplays(ref, orderEntries, context, bridged));
+			}
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response
 			// ABOUT one of her prescriptions may report anything her chart says contraindicates it.

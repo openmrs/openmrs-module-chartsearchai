@@ -12032,3 +12032,74 @@ answer-driven and not code-driven.
 **Review rounds 1 to 3 postdate every arm.** Round 1's two behaviour changes, the locally applied gate
 and the dose check's referent, round 2's narrowing of that gate, and round 3's narrowing of what counts
 as hers with the gate's two changes came after arm F and ran in none of the arms above.
+
+## Decision 124: An allergy question states her conflicting orders in the answer
+
+**Status: Accepted** (September 2026) — implemented. `ConflictingOrderStatement`, the
+`SafetyWarning.isStatedInTheAnswer()` accessor and its `statedInTheAnswer` wire key.
+
+### Context
+
+*"any allergies?"*, asked on a 3.7.1 standalone of a patient prescribed Tiotropium and Lidocaine and
+recorded as allergic to both (and to Tetryzoline, which nothing prescribes), came back with a complete
+allergy list and, beside it, two red contraindication chips each repeating an allergy the list had just
+named, tagged "About a current medication", and a "What the safety checks covered" note. The one fact
+those chips carried that the list did not — that two of the allergens are drugs she is prescribed — was
+stated only as a drug-safety alert beside an answer to a question that asked for none. The owner's
+ruling: that fact belongs in the answer, and the chips and the coverage note do not belong beside an
+allergy list.
+
+The chips are there by design and stay computed. An allergy question widens the active-order
+contraindication arm to her allergy records (`DrugSafetyValidator.SubjectMatter`, whose test
+`anAllergyQuestionPutsHerRecordedAllergiesInSubjectMatter` names this question). And the coverage note
+was accurate on that answer: driving `DrugSafetyValidator.validate` over the curated dataset with an
+ibuprofen order, an ibuprofen allergy and peptic ulcer disease recorded, *"any allergies?"* with an answer
+citing the allergy record raised the allergy chip AND *"Ibuprofen is contraindicated by an active
+condition: active peptic ulcer disease"*, because a cited record naming the order puts every rule of it
+in scope. So "hide the note" alone would have hidden a true limit, and "stop screening conditions on an
+allergy question" would have removed real findings.
+
+### Decision
+
+On a question asking about her allergies and neither about her medications
+(`QueryScopeRouter.asksAboutMedications`) nor for a drug-safety reading
+(`QueryScopeRouter.asksForADrugSafetyReading`), where EVERY chip on the answer is a contraindication about
+a medication she already takes whose orders the arm could name, the module appends one statement per
+order after the answer — *"Currently prescribed: ASPIRIN."* then each chip's own `detail` verbatim — and
+marks every chip `statedInTheAnswer`. The chips are still published, every other key unchanged; a client
+drops a `true` chip from the box, and with no chip left in it the coverage note's gate closes on its own.
+
+- **The order is her chart's display, resolved where the chip is raised.**
+  `addActiveOrderContraindications` records, per substance, the displays of the active orders any of its
+  rows `resolvesFromAny` — the order-driven arms' own test over `findForActiveOrders`' answer the pass
+  already holds (#151) — keeping only a display `displayNamesADrug`. `ContraindicationChips.add` stamps
+  them onto each current-medication chip, so a chip the ledger replaces keeps them. Unpublished
+  (`SafetyWarning.currentOrderDisplays()`): the statement is its reader, and publishing the order on the
+  chip is #552's question.
+- **The detail is quoted, never paraphrased**, so the statement claims exactly what the finding does, at
+  no strength of its own, and cannot say *"she is taking Ibuprofen"* of an *Advil* order — README's rule
+  for rendering `aboutACurrentMedication`.
+- **All or nothing.** A chip of any other kind — a drug the question put in play, an interaction, a
+  finding whose order the arm could name no display for — means the response carries a drug-safety
+  reading, and a statement covering some of its findings would read as covering all of them.
+
+### Rejected
+
+- **Hide the chips on the client alone.** The client cannot tell an allergy-list question from a
+  drug-safety one, and hiding a chip without the answer stating it loses the finding.
+- **Drop the chips from the wire.** Every other consumer, and the audit of what the module found, would
+  lose them; a flag loses nothing.
+
+### Residues
+
+- The gate is the question's words, through the router's intent and cue vocabularies; a phrasing they do
+  not recognise leaves the chips as chips, which is today's behaviour.
+- The early `done` carries no chips and so no statement; the final answer carries both.
+- `answerFromTheModule` does not apply it: that path answers a question about giving a drug.
+- The statement does not read the model's prose, so an answer already saying she takes the drug is
+  followed by the module's statement of it as well.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest` — each gate leg, the all-or-nothing rule and the
+order stamp reddens its own case under mutation — and, for the key, by
+`ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`,
+whose chip 14 is the only `true`.

@@ -139,6 +139,12 @@ public class SafetyWarning {
 	/** @see #subjectRows() */
 	private final List<DrugReference> subjectRows;
 
+	/** @see #currentOrderDisplays() */
+	private final List<String> currentOrderDisplays;
+
+	/** @see #isStatedInTheAnswer() */
+	private final boolean statedInTheAnswer;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -401,6 +407,26 @@ public class SafetyWarning {
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
 			Collection<String> matchedOrderNames, List<DrugReference> subjectRows) {
+		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
+				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, false);
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone,
+			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
+			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
+			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
+			Collection<String> currentOrderDisplays, boolean statedInTheAnswer) {
+		// Copied and wrapped for the reason chartOrderBridges is; never null.
+		this.currentOrderDisplays = currentOrderDisplays == null || currentOrderDisplays.isEmpty()
+				? Collections.<String> emptyList()
+				: Collections.unmodifiableList(new ArrayList<String>(new LinkedHashSet<String>(currentOrderDisplays)));
+		this.statedInTheAnswer = statedInTheAnswer;
 		this.ordersSharingASubstance = ordersSharingASubstance;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.matchedOrderNames = matchedOrderNames == null || matchedOrderNames.isEmpty()
@@ -1131,7 +1157,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
-				matchedOrderNames, subjectRows);
+				matchedOrderNames, subjectRows, currentOrderDisplays, statedInTheAnswer);
 	}
 
 	/**
@@ -1145,7 +1171,7 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, names, subjectRows);
+				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentOrderDisplays, statedInTheAnswer);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1178,6 +1204,56 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * This warning, carrying {@code displays} as the displays of this patient's own active orders a
+	 * CONTRAINDICATION about a medication she already takes is about — see {@link #currentOrderDisplays()}.
+	 * Package-private: written only by {@code DrugSafetyValidator.ContraindicationChips}, off the orders
+	 * {@code addActiveOrderContraindications} resolved the chip's substance from. Changes nothing this
+	 * warning prints or publishes.
+	 */
+	SafetyWarning withCurrentOrderDisplays(Collection<String> displays) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, displays, statedInTheAnswer);
+	}
+
+	/**
+	 * The displays of this patient's own active orders this finding is about, each once, as her chart spells
+	 * them (<em>"Advil 400mg"</em>, where {@link #getDrug()} is the substance <em>"Ibuprofen"</em> the module
+	 * resolved it to). Set only on a contraindication raised by {@code addActiveOrderContraindications}
+	 * about a medication she already takes, from the orders any row of its substance
+	 * {@code resolvesFromAny}, and only an order whose display {@code displayNamesADrug}. Empty everywhere
+	 * else, and empty there too where no such order has a printable display — so empty is never a claim
+	 * that no order is behind the finding. Not published: {@link ConflictingOrderStatement} is its reader.
+	 */
+	List<String> currentOrderDisplays() {
+		return currentOrderDisplays;
+	}
+
+	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
+	 *  Package-private: {@link ConflictingOrderStatement} is its only caller. */
+	SafetyWarning asStatedInTheAnswer() {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
+				true);
+	}
+
+	/**
+	 * Whether the module has stated this finding in the ANSWER itself, naming the order it is about and
+	 * then this chip's own {@link #getDetail()} verbatim — {@link ConflictingOrderStatement}, on a question
+	 * asking only for the patient's allergies. Published VERBATIM as each chip's {@code statedInTheAnswer}
+	 * wire key, so this accessor's name IS the key. The chip is published either way: {@code true} tells a
+	 * client the clinician has already read this finding in the answer, so rendering it again beside a list
+	 * the clinician asked for repeats it. {@code false} says nothing about the answer's prose, which may
+	 * mention the drug in words of its own.
+	 */
+	public boolean isStatedInTheAnswer() {
+		return statedInTheAnswer;
+	}
+
+	/**
 	 * This warning, stated as about the substance {@code rows} are every reference row of — the finding's
 	 * SUBJECT, decided where the arm named it (issue #515). Package-private: {@code EndedOrders.aboutTheSubject}
 	 * is its caller for a drug in play — through {@code EndedOrders.stamp}, the step every other question-driven
@@ -1191,7 +1267,8 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentOrderDisplays,
+				statedInTheAnswer);
 	}
 
 	/**

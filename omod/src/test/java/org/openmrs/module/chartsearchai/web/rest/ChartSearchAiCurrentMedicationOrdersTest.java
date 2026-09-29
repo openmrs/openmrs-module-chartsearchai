@@ -61,7 +61,7 @@ public class ChartSearchAiCurrentMedicationOrdersTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	/** The orders stamped on the chip; emptied by the cases asking what a chip with no stamped order publishes. */
+	/** The orders stamped on the chip; replaced by the cases that need another arrangement of them. */
 	private PatientClinicalContext.ActiveDrugOrder[] orders;
 
 	@BeforeEach

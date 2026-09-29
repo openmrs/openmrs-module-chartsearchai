@@ -32,7 +32,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Every case drives the real validator over the bundled curated dataset, whose Ibuprofen entry carries
  * the brands {@code advil}, {@code brufen} and {@code nurofen} as aliases and {@code M01AE01} as its code, and
- * a chart carrying one {@code ActiveDrugOrder} per prescription — the shape production always builds.
+ * whose Amoxicillin entry carries {@code amoxil}, over a chart carrying one {@code ActiveDrugOrder} per
+ * prescription — the shape production always builds.
  */
 public class CurrentMedicationOrdersTest {
 

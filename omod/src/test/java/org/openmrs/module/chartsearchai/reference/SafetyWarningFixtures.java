@@ -22,10 +22,11 @@ import java.util.List;
  *
  * <p><b>Why it exists, and why it is not a widening of production API.</b> The chip-serialization
  * guards live in {@code web.rest}, and the facts these shapes carry are set only through
- * {@code SafetyWarning}'s package-private factories and methods. This class is declared in
- * {@code SafetyWarning}'s OWN package under {@code omod/src/test}, so it reaches them with no
- * production change beyond that one visibility — a split package across two artifacts being legal on a plain classpath,
- * which is what surefire gives these tests.
+ * {@code SafetyWarning}'s package-private factories and methods, and the order stamp through
+ * {@code DrugSafetyValidator.currentMedicationOrdersOn}. This class is declared in their OWN package under
+ * {@code omod/src/test}, so it reaches them with no production change beyond that one package-private
+ * visibility — a split package across two artifacts being legal on a plain classpath, which is what
+ * surefire gives these tests.
  *
  * <p><b>The point is that the chip is one PRODUCTION built.</b> Two alternatives were available — a
  * new public factory taking the flag, and an anonymous subclass overriding the accessor — and both are

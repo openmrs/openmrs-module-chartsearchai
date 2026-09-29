@@ -422,6 +422,27 @@ public class CitedFindingPartnerCompletionTest {
 		assertCoverage(3, 1, answer);
 	}
 
+	@Test
+	public void anOrderTheAnswerNamedOnlyByAnotherNameOfItsRowIsStillListed() {
+		// The residue the #555 credit leaves in the reporting direction, pinned for an interaction rule
+		// finding: the prose states a partner by the NAME of a row it was resolved to, never by the row's
+		// other names, because the knowledge base files everyday words among those (Lactic acid's
+		// "lactate", ConditionMediatedFindingPartnerCompletionContextTest). "rifampin" is the rxnorm name of
+		// her Rifampicin's row; this reddens if the credit is widened back to every name of the row.
+		OverShippedData arrangement = alprazolam();
+		RecordMapping nevirapine = arrangement.findingNaming(Collections.singletonList("Nevirapine"));
+		RecordMapping rifampicin = arrangement.findingNaming(Collections.singletonList(RIFAMPICIN_LABEL));
+		String modelAnswer = "Alprazolam can be given, with two cautions: it interacts with active order "
+				+ "Nevirapine [" + nevirapine.getIndex() + "], and it interacts with active order rifampin ["
+				+ rifampicin.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), ALPRAZOLAM_QUESTION);
+
+		assertEquals(modelAnswer + " Also covered by those findings and not named above: active order "
+				+ RIFAMPICIN_LABEL + ".", answer.getAnswer());
+		assertCoverage(2, 1, answer);
+	}
+
 	private static final String ALPRAZOLAM_QUESTION = "Can I give her alprazolam?";
 
 	/** The knowledge base's label for her rifampicin order, which issue #555's finding names it by. */

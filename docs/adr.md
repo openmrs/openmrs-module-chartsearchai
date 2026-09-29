@@ -7795,8 +7795,9 @@ the issue measured the false *"not named above: active order Rifampicin (rifampi
 on its patient. So:
 
 - A partner is stated where the answer contains its printed name as before, or where
-  `DrugSafetyValidator.namesThePartner` — the drug-name PROSE rule, `DrugReference.matchesText`, over
-  the rows the chip resolved that partner to — says the prose names it. Both methods read one decision,
+  `DrugSafetyValidator.namesThePartner` says the prose writes the NAME of a row the chip resolved that
+  partner to — a span `DrugReference.namedOccurrences`, the prose rule's own, reports, covering that
+  row's `getName()`. Both methods read one decision,
   `FindingPartnerCoverageCheck.statedPartners`. The rows travel structurally, `SafetyWarning.rowsOfPartner`
   onto `RecordMapping.getFindingPartnerRows()` as ids, written in the injector's finding mapping beside
   `getFindingPartners()`; never re-resolved from the printed label, which is #151's shape.
@@ -7804,6 +7805,16 @@ on its patient. So:
   stem is a fourth answer to "does this prose name this drug" beside `matchesText` (reference
   `CLAUDE.md`, *Matching a drug name*), and PR #478's round two already replaced a substring test of
   such a label with the prose rule (`DrugSafetyValidator.namesTheEndedOrderDrug`).
+- **The row's name, never every name of it** (PR #556, review round 3). The first version credited
+  any of the row's names, as `matchesText` reads them, and the knowledge base files everyday words
+  among those: *Lactic acid* (DDInter1015) carries *lactate* as its rxnorm name, which is also the lab
+  monitored for lactic acidosis, the condition a condition-mediated finding naming her Lactic acid
+  order is about. *"… linked to lactic acidosis [4]. Monitor her lactate."* then read as naming that
+  order: nothing appended, and `findingPartners` stated as complete, silently —
+  `ConditionMediatedFindingPartnerCompletionContextTest.theConditionsMonitoringLabIsNotHerOrderEvenWhereTheKnowledgeBaseFilesItAsThatDrugsSynonym`.
+  The label's head is the row's name, so #555's *Rifampicin* is still credited; its parenthetical is
+  another name, so *"rifampin"* alone reads as unstated, toward reporting —
+  `CitedFindingPartnerCompletionTest.anOrderTheAnswerNamedOnlyByAnotherNameOfItsRowIsStillListed`.
 - Rows are written where a chip holds its partners' entries — both active-order arms' rule chips, a
   merged chip the union of its members', and the condition-mediated finding (Decision 111), whose
   orders are printed by the same labels (*Lactic acid (lactate)*;
@@ -7811,9 +7822,9 @@ on its patient. So:
   her orders of ONE substance, whose name is what an answer writing about that drug writes, so they
   carry none and each of their orders is stated only by its display: the residue there stays toward
   reporting, `CitedFindingPartnerCompletionTest.ordersOfOneSubstanceAreNotStatedByThatSubstancesName`.
-  The prose rule's own residue comes with it: an alias one substance shares with another names both,
-  and a condition-mediated partner whose one printed name stands for several substances is stated by
-  the prose naming any of them.
+  The residue toward silence: a row whose name is itself an everyday word (*Iron*, *Oxygen*, whose
+  labels are that word alone, so containment credited them before #555 too), and a condition-mediated
+  partner whose one printed name stands for several substances, stated by the name of any of them.
 
 **Spec changed deliberately, by the product owner (issue #516, decision 4).**
 `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` required

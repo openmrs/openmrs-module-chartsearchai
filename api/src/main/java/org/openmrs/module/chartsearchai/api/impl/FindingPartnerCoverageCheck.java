@@ -64,14 +64,16 @@ import org.slf4j.LoggerFactory;
  * {@code findingCitations}'s. Since issue #516 both operands are compared in {@code comparable} form,
  * which folds case and takes out the whitespace around a slash — the difference that issue measured
  * putting a false "not named above" into an answer. Since issue #555 a partner is also stated where the
- * prose names it by the drug-name PROSE rule over the rows its chip resolved it to — the difference
+ * prose writes the NAME of a row its chip resolved it to, by the drug-name PROSE rule — the difference
  * between the knowledge base's label a finding prints (<em>Rifampicin (rifampin)</em>) and the name an
  * answer writes (<em>Rifampicin</em>), measured putting the same false sentence into 6 of 22 answers on
- * that issue's patient. Which findings' partners carry rows is {@link #statedPartners}'; every other
- * spelling difference reads as unstated. Containment has a residue in the other direction
- * too: an order whose name sits inside a longer one the answer wrote ({@code Lamivudine} inside
- * {@code Lamivudine / zidovudine}) reads as stated, and so, through the prose rule, does a partner named
- * by an alias the reference data files under two substances. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
+ * that issue's patient. The row's name and never its other names, which include everyday words
+ * ({@code DrugSafetyValidator.namesThePartner} says which). Which findings' partners carry rows is
+ * {@link #statedPartners}'; every other spelling difference reads as unstated. Containment has a residue
+ * in the other direction too: an order whose name sits inside a longer one the answer wrote
+ * ({@code Lamivudine} inside {@code Lamivudine / zidovudine}) reads as stated, and so, through the #555
+ * credit, does a partner whose row's name is itself an everyday word, and a condition-mediated partner
+ * resolved to several substances, by the name of any of them. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
  * partner was named at all. An ordinary finding names one order and is measured like the rest, while
  * the merged finding and, since issue #477, the finding that a drug is already in several of her
  * orders and the finding that several of her orders share a substance are where a list can be
@@ -147,7 +149,7 @@ public final class FindingPartnerCoverageCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *        {@code LlmInferenceService.extractCitedReferences}
 	 * @param mappings the chart's records, the carrier of the findings and of the orders each names
-	 * @param validator asked whether the prose names a partner by the rows it was resolved to —
+	 * @param validator asked whether the prose names a partner by the name of a row it was resolved to —
 	 *        {@link #statedPartners}; null asks containment alone
 	 */
 	static String withUnstatedPartnersNamed(String answer, List<RecordReference> cited,
@@ -181,7 +183,7 @@ public final class FindingPartnerCoverageCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *        {@code LlmInferenceService.extractCitedReferences}
 	 * @param mappings the chart's records, the carrier of the findings and of the orders each names
-	 * @param validator asked whether the prose names a partner by the rows it was resolved to —
+	 * @param validator asked whether the prose names a partner by the name of a row it was resolved to —
 	 *        {@link #statedPartners}; null asks containment alone
 	 * @return how many partners the findings the answer cited NAME and how many of those the answer
 	 *         STATED; {@code null} where the answer cited no finding or no cited finding names an
@@ -258,10 +260,12 @@ public final class FindingPartnerCoverageCheck {
 	 * The partners of {@code findings} that {@code answer} states, each as its {@link #comparable} key —
 	 * the ONE decision {@link #unstatedPartners} and {@link #measure} both read, so an order is stated to
 	 * both or to neither. A partner is stated where the answer contains its printed name in that form, or
-	 * (issue #555) where {@code validator} says the prose names the substance of the rows the finding
+	 * (issue #555) where {@code validator} says the prose writes the NAME of one of the rows the finding
 	 * records it was resolved to — {@code RecordMapping.getFindingPartnerRows()}, asked through
 	 * {@code DrugSafetyValidator.namesThePartner}, the prose rule and never a comparison of this class's
-	 * own. That is what reads <em>"Rifampicin"</em> as naming the partner a finding prints by the knowledge
+	 * own, and the row's name and never its other names (<em>"lactate"</em> is one of <em>Lactic
+	 * acid</em>'s, and the lab monitored for the condition a finding naming that order is about). That is
+	 * what reads <em>"Rifampicin"</em> as naming the partner a finding prints by the knowledge
 	 * base's label <em>"Rifampicin (rifampin)"</em>.
 	 *
 	 * <p><b>Which partners carry rows</b> is {@code SafetyWarning.rowsOfPartner}'s: an interaction rule

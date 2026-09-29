@@ -800,8 +800,9 @@ public class PatientChartSerializer {
 		 * reason; ids rather than rows for {@link #findingSubjectRows}' reason.
 		 *
 		 * <p>Read by {@code FindingPartnerCoverageCheck}, through {@code DrugSafetyValidator.namesThePartner}:
-		 * an answer naming a partner the way the prose rule reads a drug name is naming it, where the
-		 * finding prints it by a label the answer does not copy ({@code Rifampicin (rifampin)}).
+		 * an answer writing the name of one of those rows, as the prose rule reads a drug name, is naming
+		 * the partner, where the finding prints it by a label the answer does not copy
+		 * ({@code Rifampicin (rifampin)}).
 		 */
 		private final List<List<String>> findingPartnerRows;
 

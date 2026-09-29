@@ -2115,26 +2115,42 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Whether {@code prose} names the substance of the reference rows {@code partnerRowIds} identify —
-	 * {@code RecordMapping.getFindingPartnerRows()} for ONE partner of a finding, the rows the chip that
-	 * named it resolved it to (issue #555). The PROSE rule ({@link DrugReference#matchesText}, through
-	 * {@link #namesAnyOf}) over every one of those rows, so an answer writing <em>"Rifampicin"</em> names the
-	 * partner a finding prints <em>"Rifampicin (rifampin)"</em>, and the question is asked the way
-	 * {@link #namesTheEndedOrderDrug} asks it of an ended order's rows. {@code false} where no row carries
-	 * one of the ids or no dataset is wired.
+	 * Whether {@code prose} names one of the reference rows {@code partnerRowIds} identify BY THAT ROW'S
+	 * NAME — {@code RecordMapping.getFindingPartnerRows()} for ONE partner of a finding, the rows the chip
+	 * that named it resolved it to (issue #555). So an answer writing <em>"Rifampicin"</em> names the partner
+	 * a finding prints <em>"Rifampicin (rifampin)"</em>. {@code false} where no row carries one of the ids or
+	 * no dataset is wired.
 	 *
-	 * <p>The residue is {@code matchesText}'s: an alias this substance shares with another names it here
-	 * too.
+	 * <p><b>The row's {@link DrugReference#getName()}, never its other names</b> (PR #556, review round 3).
+	 * The knowledge base files everyday words among a row's names: <em>Lactic acid</em>'s rxnorm name is
+	 * <em>lactate</em>, also the lab a clinician monitors for lactic acidosis, the condition a
+	 * condition-mediated finding naming her Lactic acid order is about. Crediting every name read <em>"Monitor
+	 * her lactate"</em> as naming that order. Where the prose names a row is
+	 * {@link DrugReference#namedOccurrences}, the prose rule's own spans. A span counts only where the text it
+	 * covers is the row's name, both in {@link DrugReference#foldedLower} form, so nothing here decides
+	 * whether the prose names a drug. It only decides by WHICH name.
+	 *
+	 * <p>Its residues. Toward reporting: a partner the prose names only by another name of its row — the
+	 * label's own parenthetical (<em>rifampin</em>) included — reads as unstated. Toward silence: a row's
+	 * name that is itself an everyday word (<em>Iron</em>, <em>Oxygen</em>) is credited from the prose
+	 * naming that word, and an order the module resolved to several substances is credited by the name of any
+	 * of them.
 	 */
 	public boolean namesThePartner(String prose, List<String> partnerRowIds) {
 		if (prose == null || partnerRowIds == null || partnerRowIds.isEmpty() || drugReferenceService == null) {
 			return false;
 		}
 		Set<String> ids = new HashSet<String>(partnerRowIds);
-		List<String> lower = Collections.singletonList(prose.toLowerCase(Locale.ROOT));
+		String folded = DrugReference.foldedLower(prose);
 		for (DrugReference row : drugReferenceService.getAll()) {
-			if (ids.contains(row.getId()) && namesAnyOf(lower, row)) {
-				return true;
+			if (!ids.contains(row.getId()) || row.getName() == null) {
+				continue;
+			}
+			String name = DrugReference.foldedLower(row.getName().trim());
+			for (DrugReference.NamedOccurrence occurrence : row.namedOccurrences(folded, 0)) {
+				if (folded.substring(occurrence.getStart(), occurrence.getEnd()).equals(name)) {
+					return true;
+				}
 			}
 		}
 		return false;

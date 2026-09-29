@@ -99,6 +99,25 @@ public class ConditionMediatedFindingPartnerCompletionContextTest extends BaseMo
 		CitedFindingPartnerCompletionTest.assertCoverage(2, 1, answer);
 	}
 
+	@Test
+	public void theConditionsMonitoringLabIsNotHerOrderEvenWhereTheKnowledgeBaseFilesItAsThatDrugsSynonym() {
+		// The knowledge base files "lactate" as a name of Lactic acid — its rxnorm_name, and the label's own
+		// parenthetical — and lactate is also the lab a clinician monitors for lactic acidosis, the condition
+		// this finding is about. An answer telling her to monitor her lactate has not named her Lactic acid
+		// order, so the module still names it (PR #556, review round 3).
+		OverShippedData arrangement = metforminOverStavudineAndLacticAcid();
+		RecordMapping finding = arrangement.findingNaming(Arrays.asList("Stavudine", LACTIC_ACID_LABEL));
+		String modelAnswer = "Metformin should be used with caution: her Stavudine order is linked to lactic "
+				+ "acidosis [" + finding.getIndex() + "]. Monitor her lactate.";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(CitedFindingPartnerCompletionTest.patient(),
+			arrangement.question);
+
+		assertEquals(modelAnswer + " Also covered by those findings and not named above: active order "
+				+ LACTIC_ACID_LABEL + ".", answer.getAnswer());
+		CitedFindingPartnerCompletionTest.assertCoverage(2, 1, answer);
+	}
+
 	private static OverShippedData metforminOverStavudineAndLacticAcid() {
 		return new OverShippedData("Can I give metformin?",
 				new String[][] { { "Stavudine", null }, { "Lactic acid", null } });

@@ -71,6 +71,13 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiveTest {
 
+	/** What tells the merged finding's record and chip from the other one. */
+	private static final String CORTICOSTEROID_MECHANISM = DrugReferenceTestSupport.SHARED_MECHANISM_TEXT;
+
+	/** What tells issue #477's finding — a drug already carried by several of her orders — from the
+	 *  interaction findings beside it. */
+	private static final String ALREADY_IN_ORDERS = "is already in active orders";
+
 	/**
 	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
 	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
@@ -81,13 +88,6 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 	}
-
-	/** What tells the merged finding's record and chip from the other one. */
-	private static final String CORTICOSTEROID_MECHANISM = DrugReferenceTestSupport.SHARED_MECHANISM_TEXT;
-
-	/** What tells issue #477's finding — a drug already carried by several of her orders — from the
-	 *  interaction findings beside it. */
-	private static final String ALREADY_IN_ORDERS = "is already in active orders";
 
 	@Test
 	public void theOrdersOfTheCitedFindingTheAnswerLeftUnnamedAreNamedByTheModuleItself()

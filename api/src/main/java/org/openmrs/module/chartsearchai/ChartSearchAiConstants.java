@@ -577,7 +577,7 @@ public class ChartSearchAiConstants {
 	 * Decision 108. Which questions that is, is decided once per injection by
 	 * {@code DrugReferenceInjector}, which composes nothing while it is off — it reads it before any
 	 * of the composition runs; the answer is carried on the chart as {@code PatientChart.getModuleAnswer()}.
-	 * Ships ON since issue #562: the gate Decision 108 names — the probe-safety corpus and the issue's
+	 * Ships ON since issue #562: the gate Decision 108 names — the probe-safety corpus and #469's
 	 * thirty-nine cells, both arms on one build — has been run, three of those cells on a second build
 	 * whose rig carried their patients. ADR Decision 131 records what it measured. An install whose
 	 * property row already stores {@code false} keeps it.

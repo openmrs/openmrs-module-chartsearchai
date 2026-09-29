@@ -72,6 +72,11 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class FindingEnumerationClauseContextTest extends BaseModuleContextSensitiveTest {
 
+	/** One question that puts one drug in play against four of the patient's active orders, so the
+	 *  real screen raises several findings about one subject — the arrangement every case here needs
+	 *  and the one each asserts as its own premise off the injected chart. */
+	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
+
 	/**
 	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
 	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
@@ -82,11 +87,6 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 	}
-
-	/** One question that puts one drug in play against four of the patient's active orders, so the
-	 *  real screen raises several findings about one subject — the arrangement every case here needs
-	 *  and the one each asserts as its own premise off the injected chart. */
-	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
 
 	private static Set<String> setOf(String... values) {
 		// LinkedHashSet and not a HashSet: the premise assertions below count the findings one
@@ -663,7 +663,7 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 		}
 
 		// The preview is a fullChart-mode feature and disengages in queryScoped, which is the
-		// shipped default and what the unstubbed resolver would return with no Context — so without
+		// shipped default and what the unstubbed resolver would return with no chartMode set — so without
 		// this the preview case would skip the pass it is about and pass on one recorded call.
 		@Override
 		protected boolean resolveQueryScopedMode() {

@@ -76,18 +76,6 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class SafetyFindingCitationExtentTest extends BaseModuleContextSensitiveTest {
 
-	/**
-	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
-	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
-	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
-	 */
-	@BeforeEach
-	public void theModelWritesTheAnswer() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
-	}
-
-
 	/** The sibling's question and partner list, reused deliberately: this check does not care what a
 	 *  finding's rating is, only whether the answer cited it, so the arrangement it needs is
 	 *  "several findings" and not "several ratings". */
@@ -117,6 +105,11 @@ public class SafetyFindingCitationExtentTest extends BaseModuleContextSensitiveT
 
 	@BeforeEach
 	public void setUp() {
+		// The answers these cases judge are the MODEL's: since issue #562 the module answers a withheld
+		// proposal, or a screen that related a pair, itself wherever the drug-reference layer is on (ADR
+		// Decision 131). Set first, because the property is read when a chart is injected.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 		chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), QUESTION,
 				setOf(PARTNERS), setOf(PARTNER_ATC));
 		findings = new ArrayList<Integer>();

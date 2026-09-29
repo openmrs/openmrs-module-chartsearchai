@@ -67,17 +67,6 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class UnfoundedFindingSeverityTest extends BaseModuleContextSensitiveTest {
 
-	/**
-	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
-	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
-	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
-	 */
-	@BeforeEach
-	public void theModelWritesTheAnswer() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
-	}
-
 	/** The ticket's two questions. */
 	private static final String CAN_I_GIVE = "Can I give her prednisone?";
 
@@ -91,6 +80,17 @@ public class UnfoundedFindingSeverityTest extends BaseModuleContextSensitiveTest
 	/** One service over the shipped knowledge base for the whole class: loading it is the expensive
 	 *  part, and every arrangement below reads it without writing to it. */
 	private static final DrugReferenceService SHIPPED = DrugReferenceTestSupport.shippedServiceWithGroups();
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	@Test
 	public void theTicketsOwnAnswerIsReported() {

@@ -53,6 +53,16 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class AlreadyOrderedDrugClauseContextTest extends BaseModuleContextSensitiveTest {
 
+	private static final String PREDNISONE_ORDER = "Prednisone Co 5mg";
+
+	private static final String CLAUSE = " Prednisone is already in the patient's active orders (Prednisone Co 5mg):"
+			+ " open by saying so; adding it would duplicate that order; then say what the other findings about"
+			+ " Prednisone mean for the patient's current Prednisone, as calls about that medication and not about"
+			+ " adding it.";
+
+	/** Cut from {@link #CLAUSE}, so a case asserting its absence tracks the clause production writes. */
+	private static final String CLAUSE_MARK = "is already in the patient's active orders";
+
 	/**
 	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
 	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
@@ -63,16 +73,6 @@ public class AlreadyOrderedDrugClauseContextTest extends BaseModuleContextSensit
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 	}
-
-	private static final String PREDNISONE_ORDER = "Prednisone Co 5mg";
-
-	private static final String CLAUSE = " Prednisone is already in the patient's active orders (Prednisone Co 5mg):"
-			+ " open by saying so; adding it would duplicate that order; then say what the other findings about"
-			+ " Prednisone mean for the patient's current Prednisone, as calls about that medication and not about"
-			+ " adding it.";
-
-	/** Cut from {@link #CLAUSE}, so a case asserting its absence tracks the clause production writes. */
-	private static final String CLAUSE_MARK = "is already in the patient's active orders";
 
 	private static PatientChart baseChart() {
 		return baseChart(PREDNISONE_ORDER);

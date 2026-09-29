@@ -99,8 +99,7 @@ public class GlobalPropertyDefaultsTest {
 	public void theAnswerFromFindingsSwitchShipsTheDefaultItsConstantAsserts() throws Exception {
 		assertEquals(String.valueOf(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS),
 				declaredDefaults().get(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS),
-				"a drug-safety question the module resolved is answered from its findings unless an install "
-						+ "turns it off");
+				"the constant every contextless test falls back to has to say what config.xml ships");
 	}
 
 	/** @return every {@code <property>} in {@code config.xml} that declares a {@code <defaultValue>}. */

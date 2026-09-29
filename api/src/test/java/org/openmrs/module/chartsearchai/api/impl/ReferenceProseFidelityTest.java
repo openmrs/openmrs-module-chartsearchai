@@ -84,17 +84,6 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class ReferenceProseFidelityTest extends BaseModuleContextSensitiveTest {
 
-	/**
-	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
-	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
-	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
-	 */
-	@BeforeEach
-	public void theModelWritesTheAnswer() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
-	}
-
 	/** A Major interaction whose mechanism is five sentences long — the shape the defect needs.
 	 *  {@code safetyFindingIn} takes the FIRST injected finding and asserts nothing about how many
 	 *  there are, so a case here is about whichever finding this arrangement raises first. */
@@ -183,6 +172,11 @@ public class ReferenceProseFidelityTest extends BaseModuleContextSensitiveTest {
 
 	@BeforeEach
 	public void setUp() {
+		// The answers these cases judge are the MODEL's: since issue #562 the module answers a withheld
+		// proposal, or a screen that related a pair, itself wherever the drug-reference layer is on (ADR
+		// Decision 131). Set first, because the property is read when a chart is injected.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 		chart = DrugReferenceTestSupport.injectedSafetyFindingChart(QUESTION, ACTIVE_DRUG, ACTIVE_ATC);
 		finding = DrugReferenceTestSupport.safetyFindingIn(chart);
 		reference = DrugReferenceTestSupport.injectedReference(chart);

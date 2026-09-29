@@ -54,6 +54,8 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class ReferenceRecordsReachTheEngineTest extends BaseModuleContextSensitiveTest {
 
+	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
+
 	/**
 	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
 	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
@@ -64,8 +66,6 @@ public class ReferenceRecordsReachTheEngineTest extends BaseModuleContextSensiti
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 	}
-
-	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
 
 	private static PatientChart chartWithoutReferenceRecords() {
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>();

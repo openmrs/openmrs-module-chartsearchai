@@ -173,7 +173,7 @@ cited fell from 7 to 2. One arm fixed #539's case only by deleting the mechanism
 ([Decision 108](adr.md#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)),
 the cases the module composed itself stated every finding with its rating, and every Major hazard
 word for word. That fixed #539's case, one of #541's cases, and #399's case (recorded as "10-of-20"). The cases the model still answered were byte-identical to the baseline. That
-property still defaults to `false`.
+property defaulted to `false` then; it ships `true` since #562 ([Decision 131](adr.md#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)).
 
 ---
 

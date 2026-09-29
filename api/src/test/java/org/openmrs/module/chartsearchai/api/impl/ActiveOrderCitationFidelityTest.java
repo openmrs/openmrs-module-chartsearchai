@@ -76,17 +76,6 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class ActiveOrderCitationFidelityTest extends BaseModuleContextSensitiveTest {
 
-	/**
-	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
-	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
-	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
-	 */
-	@BeforeEach
-	public void theModelWritesTheAnswer() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
-	}
-
 	/** The ticket's own question, on the ticket's own drug. */
 	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
 
@@ -129,6 +118,11 @@ public class ActiveOrderCitationFidelityTest extends BaseModuleContextSensitiveT
 
 	@BeforeEach
 	public void setUp() {
+		// The answers these cases judge are the MODEL's: since issue #562 the module answers a withheld
+		// proposal, or a screen that related a pair, itself wherever the drug-reference layer is on (ADR
+		// Decision 131). Set first, because the property is read when a chart is injected.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 		chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), QUESTION,
 				setOf(PARTNERS), setOf(PARTNER_ATC));
 		assertTrue(findingsStatingThePhrase().size() >= 3,

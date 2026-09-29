@@ -134,6 +134,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 128: A rating the answer attaches to a finding that carries none is reported](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)
 - [Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
 - [Decision 130: Whether a question reaches the drug-interaction checks is decided by code, not by a model](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)
+- [Decision 131: answerFromFindings ships on, because Decision 108's gate was run](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10797,7 +10798,8 @@ Two other routes were rejected:
 
 - A class relationship folded onto a lower-rated row also withholds without licensing, and the same key
   orders it behind a licensing row. No test builds that arrangement.
-- No model is involved, so this was not measured on one. Decision 108's gate is still not run.
+- No model is involved, so this was not measured on one. Decision 108's gate was not run then; it has
+  since been run ([Decision 131](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)).
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest.theLineUnderTheNoIsTheInteractionThatLicensedIt`,
 `.aMajorInteractionLeadsAnUnratedRuleUnderTheNo`,
@@ -12665,7 +12667,8 @@ plan-refutation gate measured that against the compiled class. The shape now tak
 her"*, the allowance two other shapes already make, and a reordering of *"Is it safe for her to add
 X?"*, which it already admitted. Every reader of that grammar moves with it:
 
-- The module's composed "No" (Decision 108), which ships off. It now also answers *"Is it safe to add X
+- The module's composed "No" (Decision 108), which shipped off then and ships on since
+  [Decision 131](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run). It now also answers *"Is it safe to add X
   for her?"* for a drug she does not take
   (`LlmInferenceServiceAnswerFromFindingsContextTest.aSuitabilityQuestionIsAnsweredFromTheFindingsToo`).
   This is unmeasured against Decision 108's *What gates turning it on*.
@@ -12886,7 +12889,8 @@ which shipped `chartsearchai.drugSafety.answerFromFindings` off only because its
 
 Both arms ran on one build, with only this property between them. The prompt GP was null and the
 answer-cache TTL was 0. The rig was pool slot 8084: a RefApp 3.7.1 standalone running Gemma 4 E4B locally,
-in `fullChart` mode, with stock GPs. The pass rules were written before each capture.
+with `chartsearchai.drugReference.enabled=true` over the bundled DDInter knowledge base and
+`chartsearchai.chartMode=fullChart`. The shipped defaults of those two are `false` and `queryScoped`. The pass rules were written before each capture.
 
 Two runs:
 - **2026-09-29, `main` @ bdcd8305** (api jar `ed598339…`). The issue body reports this one.
@@ -12947,9 +12951,11 @@ Decision 108 names two things to read beyond the scorer:
 - whether a withholding lead reaches a question whose answer is yes;
 - which questions the shapes refuse that #469's cells expected answered.
 
-- **No withholding lead reaches a question whose answer is yes.** Every ON answer that opens "No"
-  is a proposal of a drug she is not taking, with a Major interaction. The corpus has 3 such cells
-  (P1a, P379 and P337) and #469 has 2 (D1 and M2), plus Priya's 2 on :8081.
+- **No module-composed answer opens "No" on a question whose answer is yes.** Every one that
+  opens "No" is a proposal of a drug she is not taking, with a Major interaction:
+  - the probe-safety corpus's 3 (Agnes warfarin, Mary clarithromycin, Mary erythromycin);
+  - #469's 2 on slot 8084 (D1 and M2), and Priya's 2 on :8081;
+  - the 17-cell DDI corpus's 3 (P1a, P379 and P337).
 - **Four screens lose a refusal lead** they had with the property off:
   - Barbara: "No — the patient should not take Acetylsalicylic acid (aspirin) …"
   - Michael: "No — Zolvimix should be changed"
@@ -12962,6 +12968,10 @@ Decision 108 names two things to read beyond the scorer:
   - the "is she taking anything she is allergic to" questions;
   - phrasings outside both grammars;
   - screens that related no pair of her orders.
+  
+  The gate's one question in the shape Decision 129 widened the grammar to, P402's *"Is it safe to
+  add prednisone for her?"*, names a drug she already takes, so it kept the call. The case Decision
+  129 describes, that shape proposing a drug she does not take, is still unmeasured against this gate.
 
 ### Decision
 

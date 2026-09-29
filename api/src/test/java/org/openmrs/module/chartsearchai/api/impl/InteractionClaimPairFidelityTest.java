@@ -70,17 +70,6 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class InteractionClaimPairFidelityTest extends BaseModuleContextSensitiveTest {
 
-	/**
-	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
-	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
-	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
-	 */
-	@BeforeEach
-	public void theModelWritesTheAnswer() {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
-	}
-
 	/** The ticket's question shape: her medications listed, then a new drug asked about — which puts
 	 *  findings about several SUBJECTS in the prompt (#513). */
 	private static final String LISTING_QUESTION = "The patient is currently on Warfarin, Simvastatin "
@@ -103,6 +92,17 @@ public class InteractionClaimPairFidelityTest extends BaseModuleContextSensitive
 	private static final String TICKET_QUESTION = "The patient is currently on Lamivudine / zidovudine, Nevirapine, "
 			+ "Stavudine, Isoniazid / pyrazinamide / rifampin and Trimethoprim and sulfamethoxazole, is it safe to give "
 			+ "metformin?";
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	@Test
 	public void aFindingAboutAnotherDrugCitedForTheClaimIsReportedAsMisattributed() {

@@ -248,8 +248,7 @@ public final class FindingPartnerCoverageCheck {
 	 * Only that whitespace: {@code DrugReference.collapseWhitespace} is not widened for it.
 	 *
 	 * <p>Package-private since issue #514: {@code InteractionClaimPairFidelityCheck} asks whether a
-	 * claim names a finding's drug, and takes this form rather than one of its own so the two checks
-	 * cannot read one name as stated to one and not to the other.
+	 * claim names a finding's drug, and takes this form rather than one of its own.
 	 */
 	static String comparable(String text) {
 		return SPACING_AROUND_A_SLASH.matcher(text.toLowerCase(Locale.ROOT)).replaceAll("/");

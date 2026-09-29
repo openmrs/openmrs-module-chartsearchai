@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -131,5 +133,19 @@ public final class SafetyWarningFixtures {
 	 */
 	public static SafetyWarning statedInTheAnswer(SafetyWarning chip) {
 		return chip.asStatedInTheAnswer();
+	}
+
+	/**
+	 * {@code chip} stamped with {@code orders} as the active orders it is about — through
+	 * {@code SafetyWarning.withCurrentMedicationOrders}, the one stamp {@code DrugSafetyValidator} writes
+	 * (issue #552), so the chip publishes a {@code currentMedicationOrders} production could. Every order's
+	 * display is handed to the sentence projection too, as it is for an order whose display names a drug.
+	 */
+	public static SafetyWarning aboutCurrentOrders(SafetyWarning chip, SafetyWarning.CurrentMedicationOrder... orders) {
+		List<String> displays = new ArrayList<String>();
+		for (SafetyWarning.CurrentMedicationOrder order : orders) {
+			displays.add(order.getOrderDisplay());
+		}
+		return chip.withCurrentMedicationOrders(Arrays.asList(orders), displays);
 	}
 }

@@ -12103,3 +12103,58 @@ Pinned by `AllergyQuestionConflictingOrderContextTest` — each gate leg, the al
 order stamp reddens its own case under mutation — and, for the key, by
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`,
 whose chip 14 is the only `true`.
+
+## Decision 125: A contraindication chip about her own prescription names every order it is about
+
+### Context
+
+A contraindication chip raised from one of the patient's own active orders said THAT it was about one
+of them (`aboutACurrentMedication`, #527) and not WHICH. Where the order's name is the chip's `drug`
+the clinician can still find it; where it is not, an *Advil 400mg* order behind an `Ibuprofen` chip,
+nothing on the wire linked the two, and README told a client to resolve `drug` against her orders
+itself — a second resolution that can disagree with the module's (#151). `chartOrderBridges` does not
+cover it: only the interaction and condition-mediated arms build it, and it is empty wherever the
+order's own names reach the substance, which is the common case. Decision 124 had already resolved the
+orders once, in `addActiveOrderContraindications`, for its own statement, and kept them unpublished.
+
+### Decision
+
+A new chip key, `currentMedicationOrders` (`SafetyWarning.currentMedicationOrders()`), always present,
+listing `{ orderDisplay, orderUuid }` for EVERY active order any row of the chip's substance
+`resolvesFromAny`, in her chart's order (#552). `chartOrderBridges` keeps its meaning.
+
+- **One resolution, stamped where the chip is raised.** `addActiveOrderContraindications` records the
+  ORDERS per substance and `ContraindicationChips.add` stamps both the published list and Decision 124's
+  printable projection off them, so the two cannot disagree about which orders a chip is about. The
+  serializer copies the list and re-derives nothing.
+- **Every order, not every printable display.** The owner's ruling was every order the chip covers, with
+  its uuid, so the `displayNamesADrug` filter Decision 124 applies stays on the SENTENCE projection
+  (`SafetyWarning.currentOrderDisplays()`) and off the wire: a codes-only order is listed under its
+  stand-in display, because labelling an order that has no other name is what the display is for
+  (`ActiveDrugOrder.hasKnownName()`), while a sentence must not print it as a name. De-duplication moved
+  from the display to the order, so two prescriptions under one display are two entries on the wire and
+  one name in the sentence.
+- **`/chartalerts` carries it** through the shared serializer, and README's "resolve it from the `drug`
+  field" sentence is replaced by a pointer to it.
+
+### Rejected
+
+- **Widen `chartOrderBridges`.** Its readers, the prompt clause included, depend on it meaning "where the
+  names differ"; the ticket's own first open question, settled by the owner.
+- **Keep the display filter on the wire.** It publishes
+  `aboutACurrentMedication: true` beside `[]` for a codes-only order whose uuid the module holds, which is
+  #552's own defect for that population.
+
+### Residues
+
+- A drug-in-play contraindication its arm marks `aboutACurrentMedication` (#402, Decision 123) carries
+  `[]`: that arm's orders are not stamped. `[]` is never a claim that no order is behind a chip.
+- A context carrying no per-order list (#118's flattened fallback) has no order to name.
+- The key-writing rule has no instruction bullet: the drug-safety instruction file had no size budget
+  left, so it lives in the accessor's javadoc and here.
+
+Pinned by `CurrentMedicationOrdersTest` (every order, shared displays, a codes-only order, a proposal's
+`[]`, and the statement's text unchanged), `AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
+(the real `OrderService` order under a brand display), and on the wire by
+`ChartSearchAiCurrentMedicationOrdersTest`, `ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid`
+and `ChartSearchAiSafetyWarningSeverityWireTest`'s chip 15.

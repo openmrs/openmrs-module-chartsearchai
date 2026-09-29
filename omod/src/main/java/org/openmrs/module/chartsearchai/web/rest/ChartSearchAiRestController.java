@@ -1677,7 +1677,7 @@ public class ChartSearchAiRestController {
 				new ArrayList<SafetyWarning.ChartOrderBridge>(warning.chartOrderBridges()));
 			// The active orders this chip is about (ADR Decision 99), copied out of the unmodifiable
 			// list for the same XML-marshalling reason as the line above. Empty for the chip types that
-			// name no active order — see SafetyWarning.namedPartners(), canonical for what empty means.
+			// list no order here — see SafetyWarning.namedPartners(), canonical for what empty means.
 			map.put("namedPartners", new ArrayList<String>(warning.namedPartners()));
 			// Issue #374. Needs no copy: the value is an immutable autoboxed Boolean, so there is
 			// nothing for a caller to mutate, and XStream has a converter for it (verified by
@@ -1698,6 +1698,12 @@ public class ChartSearchAiRestController {
 			// client cannot tell them apart. false is no statement that she is off the drug:
 			// SafetyWarning.isAboutACurrentMedication() says why.
 			map.put("aboutACurrentMedication", warning.isAboutACurrentMedication());
+			// Issue #552: which of her active orders a current-medication contraindication is about, by display
+			// and uuid — stamped where the chip was raised and never re-resolved here (#151). Copied out of the
+			// unmodifiable list for the XML-marshalling reason chartOrderBridges is. Empty is no statement that
+			// no order is behind the chip: SafetyWarning.currentMedicationOrders() says why.
+			map.put("currentMedicationOrders",
+				new ArrayList<SafetyWarning.CurrentMedicationOrder>(warning.currentMedicationOrders()));
 			// ADR Decision 124: whether the answer already states this finding, naming her order, so a
 			// client need not render it a second time beside an allergy list. SafetyWarning.isStatedInTheAnswer()
 			// says what false does not say.

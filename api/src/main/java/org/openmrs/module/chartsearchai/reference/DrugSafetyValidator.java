@@ -3435,12 +3435,13 @@ public class DrugSafetyValidator {
 		private final EndedOrders endedOrders;
 
 		/**
-		 * The displays of her own active orders each substance the active-order arm screens was resolved from,
-		 * keyed on {@code substanceGroupKey} — recorded by {@link #addActiveOrderContraindications} before it
-		 * raises that substance's chips, and stamped onto each of them in {@link #add}, so a chip the ledger
+		 * Her own active orders each substance the active-order arm screens was resolved from, keyed on
+		 * {@code substanceGroupKey} — recorded by {@link #addActiveOrderContraindications} before it raises
+		 * that substance's chips, and stamped onto each of them in {@link #add}, so a chip the ledger
 		 * replaces by a stronger one of the same substance carries them too.
 		 */
-		private final Map<Object, List<String>> currentOrderDisplays = new HashMap<Object, List<String>>();
+		private final Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> currentOrders =
+				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
 
 		ContraindicationChips(List<SafetyWarning> warnings, SubstanceSubjects subjects,
 				EndedOrders endedOrders) {
@@ -3449,9 +3450,9 @@ public class DrugSafetyValidator {
 			this.endedOrders = endedOrders;
 		}
 
-		/** Records {@code displays} as the orders {@code substance}'s current-medication chips are about. */
-		void recordCurrentOrders(Object substance, List<String> displays) {
-			currentOrderDisplays.put(substance, displays);
+		/** Records {@code orders} as the orders {@code substance}'s current-medication chips are about. */
+		void recordCurrentOrders(Object substance, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			currentOrders.put(substance, orders);
 		}
 
 		/**
@@ -3494,9 +3495,9 @@ public class DrugSafetyValidator {
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
 				boolean namesTheFinding) {
-			List<String> displays = currentOrderDisplays.get(subject.substanceGroupKey());
-			if (displays != null && chip.isAboutACurrentMedication()) {
-				chip = chip.withCurrentOrderDisplays(displays);
+			List<PatientClinicalContext.ActiveDrugOrder> orders = currentOrders.get(subject.substanceGroupKey());
+			if (orders != null && chip.isAboutACurrentMedication()) {
+				chip = currentMedicationOrdersOn(chip, orders);
 			}
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
@@ -9352,15 +9353,14 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return the displays of this patient's own active orders {@code ref}'s substance was resolved from,
-	 *         each once and in her chart's order: every order ANY row of that substance among
-	 *         {@code orderEntries} {@link #resolvesFromAny resolves from} — the order-driven arms' own test,
-	 *         asked over {@code findForActiveOrders}' answer the caller already holds (issue #151) — and whose
-	 *         display {@link #displayNamesADrug names a drug}, since a display that is not a name has nothing
-	 *         to print. For {@link SafetyWarning#currentOrderDisplays()} alone.
+	 * @return this patient's own active orders {@code ref}'s substance was resolved from, in her chart's
+	 *         order: every order ANY row of that substance among {@code orderEntries}
+	 *         {@link #resolvesFromAny resolves from} — the order-driven arms' own test, asked over
+	 *         {@code findForActiveOrders}' answer the caller already holds (issue #151). For
+	 *         {@link #currentMedicationOrdersOn} alone.
 	 */
-	private static List<String> currentOrderDisplays(DrugReference ref, List<DrugReference> orderEntries,
-			PatientClinicalContext context, BridgedOrders bridged) {
+	private static List<PatientClinicalContext.ActiveDrugOrder> currentOrders(DrugReference ref,
+			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridged) {
 		Object substance = ref.substanceGroupKey();
 		List<DrugReference> rows = new ArrayList<DrugReference>();
 		for (DrugReference entry : orderEntries) {
@@ -9368,13 +9368,35 @@ public class DrugSafetyValidator {
 				rows.add(entry);
 			}
 		}
-		Set<String> displays = new LinkedHashSet<String>();
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (displayNamesADrug(order) && resolvesFromAny(rows, order, bridged)) {
+			if (order != null && resolvesFromAny(rows, order, bridged)) {
+				orders.add(order);
+			}
+		}
+		return orders;
+	}
+
+	/**
+	 * @return {@code chip} stamped with {@code orders}: every one of them, by display and uuid, as
+	 *         {@link SafetyWarning#currentMedicationOrders()} (issue #552); and, as
+	 *         {@link SafetyWarning#currentOrderDisplays()}, the displays of those whose display
+	 *         {@link #displayNamesADrug names a drug}, each once — a display that is not a name has nothing
+	 *         for a sentence to print, while the wire lists the order regardless, since labelling an order
+	 *         with no other name is what its display is for.
+	 */
+	private static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		List<SafetyWarning.CurrentMedicationOrder> published = new ArrayList<SafetyWarning.CurrentMedicationOrder>();
+		Set<String> displays = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			published.add(new SafetyWarning.CurrentMedicationOrder(
+					order.getDisplay() == null ? null : order.getDisplay().trim(), order.getUuid()));
+			if (displayNamesADrug(order)) {
 				displays.add(order.getDisplay().trim());
 			}
 		}
-		return new ArrayList<String>(displays);
+		return chip.withCurrentMedicationOrders(published, displays);
 	}
 
 	/** @return true when ANY row of the subject's substance matches one name — the group form of
@@ -10506,7 +10528,7 @@ public class DrugSafetyValidator {
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			if (currentMedication) {
 				chips.recordCurrentOrders(ref.substanceGroupKey(),
-						currentOrderDisplays(ref, orderEntries, context, bridged));
+						currentOrders(ref, orderEntries, context, bridged));
 			}
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response

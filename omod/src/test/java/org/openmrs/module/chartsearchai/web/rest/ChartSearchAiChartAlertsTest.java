@@ -74,10 +74,17 @@ public class ChartSearchAiChartAlertsTest {
 	 * a Lidocaine rule noted as the bundled seed notes its own self-named allergy rules, and the allergen
 	 * arm's cross-reactivity-group sentence.
 	 */
+	/** The active order the Lidocaine alert is about, stamped as {@code DrugSafetyValidator} stamps it
+	 *  (issue #552) — a display that is not the chip's {@code drug}, as a brand order's is not. */
+	private static final String LIDOCAINE_ORDER = "Xylocaine 2% injection";
+
+	private static final String LIDOCAINE_ORDER_UUID = "uuid-xylocaine";
+
 	private static List<SafetyWarning> fixtureAlerts() {
 		return Arrays.asList(
-				SafetyWarningFixtures.curatedRuleContraindication("Lidocaine",
-						"Lidocaine is contraindicated by an active allergy: documented lidocaine allergy", true),
+				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.curatedRuleContraindication(
+						"Lidocaine", "Lidocaine is contraindicated by an active allergy: documented lidocaine allergy",
+						true), new SafetyWarning.CurrentMedicationOrder(LIDOCAINE_ORDER, LIDOCAINE_ORDER_UUID)),
 				SafetyWarningFixtures.recordedAllergenContraindication("Bupivacaine",
 						"Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as the "
 								+ "patient's allergy to Lidocaine — possible cross-reactivity", true));
@@ -184,6 +191,21 @@ public class ChartSearchAiChartAlertsTest {
 					"a standing alert is one of her active orders checked against her own records, and this "
 							+ "surface must say so: " + alert);
 		}
+	}
+
+	/**
+	 * A standing alert names the order it is about (issue #552), so a banner naming the order reads it here
+	 * rather than resolving {@code drug} against her orders itself — what README told a client to do before.
+	 */
+	@Test
+	@SuppressWarnings("unchecked")
+	public void aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid() {
+		Map<String, Object> alert = alertsOf(okBody(RestControllerContext.PATIENT_UUID)).get(0);
+
+		List<SafetyWarning.CurrentMedicationOrder> named =
+				(List<SafetyWarning.CurrentMedicationOrder>) alert.get("currentMedicationOrders");
+		assertEquals(Arrays.asList(new SafetyWarning.CurrentMedicationOrder(LIDOCAINE_ORDER, LIDOCAINE_ORDER_UUID)),
+				named, "was: " + alert);
 	}
 
 	@Test

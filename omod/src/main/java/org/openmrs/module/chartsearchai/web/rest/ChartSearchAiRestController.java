@@ -1609,8 +1609,8 @@ public class ChartSearchAiRestController {
 	 * <p>Two consequences of publishing the object, both measured and neither hidden. The JSON field
 	 * names come from {@code ChartOrderBridge}'s getters, so a public getter added there becomes a
 	 * wire field — {@code ChartSearchAiChartOrderBridgeTest.theTwoHalvesAreSeparateFieldsAndNotASentenceToParse}
-	 * pins the JSON field set. And this is the only value on the payload that is not a JDK type, so
-	 * XStream names its element after the CLASS
+	 * pins the JSON field set. And it is not a JDK type — nor, since issue #552, is
+	 * {@link SafetyWarning.CurrentMedicationOrder} — so XStream names its element after the CLASS
 	 * ({@code org.openmrs.module.chartsearchai.reference.SafetyWarning_-ChartOrderBridge}) where every
 	 * other element takes one of XStream's own built-in names; README scopes the documented field
 	 * names to JSON for that reason. A closed list of those names stood here and is not kept — it read

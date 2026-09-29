@@ -61,6 +61,14 @@ import org.springframework.http.ResponseEntity;
  */
 public class ChartSearchAiChartAlertsTest {
 
+	/** The active orders the two alerts are about, stamped as {@code DrugSafetyValidator} stamps them
+	 *  (issue #552) — displays that are not the chips' {@code drug}, as a brand order's is not. */
+	private static final String LIDOCAINE_ORDER = "Xylocaine 2% injection";
+
+	private static final String LIDOCAINE_ORDER_UUID = "uuid-xylocaine";
+
+	private static final String BUPIVACAINE_ORDER = "Marcaine 0.5% injection";
+
 	/**
 	 * The standing findings a client receives. Drawn from issue #280's own reproduction — patient
 	 * {@code a7090f70}, an active Lidocaine order and a recorded Lidocaine allergy — plus the
@@ -68,26 +76,21 @@ public class ChartSearchAiChartAlertsTest {
 	 * a single row. Contraindications carry no rating, which is what makes
 	 * {@link #everyFindingIsShapedExactlyAsASearchChipIs} able to assert that the key is present and
 	 * null rather than absent. Built by the two contraindication factories the standing pass reaches,
-	 * with the referent it hands them — every standing alert is raised from one of her active orders
-	 * (issue #527) — so {@link #everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes} reads a value
+	 * with the referent and the order stamp it hands them — every standing alert is raised from one of
+	 * her active orders (issue #527) — so {@link #everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes} reads a value
 	 * production would publish. Each sentence is one its factory's arm writes: the curated-rule arm's, for
 	 * a Lidocaine rule noted as the bundled seed notes its own self-named allergy rules, and the allergen
 	 * arm's cross-reactivity-group sentence.
 	 */
-	/** The active order the Lidocaine alert is about, stamped as {@code DrugSafetyValidator} stamps it
-	 *  (issue #552) — a display that is not the chip's {@code drug}, as a brand order's is not. */
-	private static final String LIDOCAINE_ORDER = "Xylocaine 2% injection";
-
-	private static final String LIDOCAINE_ORDER_UUID = "uuid-xylocaine";
-
 	private static List<SafetyWarning> fixtureAlerts() {
 		return Arrays.asList(
 				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.curatedRuleContraindication(
 						"Lidocaine", "Lidocaine is contraindicated by an active allergy: documented lidocaine allergy",
-						true), new SafetyWarning.CurrentMedicationOrder(LIDOCAINE_ORDER, LIDOCAINE_ORDER_UUID)),
-				SafetyWarningFixtures.recordedAllergenContraindication("Bupivacaine",
-						"Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as the "
-								+ "patient's allergy to Lidocaine — possible cross-reactivity", true));
+						true), SafetyWarningFixtures.activeOrder(LIDOCAINE_ORDER_UUID, LIDOCAINE_ORDER)),
+				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.recordedAllergenContraindication(
+						"Bupivacaine", "Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as "
+								+ "the patient's allergy to Lidocaine — possible cross-reactivity", true),
+						SafetyWarningFixtures.activeOrder("uuid-marcaine", BUPIVACAINE_ORDER)));
 	}
 
 	private ChartSearchAiRestController controller;

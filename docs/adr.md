@@ -12075,7 +12075,7 @@ drops a `true` chip from the box, and with no chip left in it the coverage note'
   already holds (#151) — keeping only a display `displayNamesADrug`. `ContraindicationChips.add` stamps
   them onto each current-medication chip, so a chip the ledger replaces keeps them. Unpublished
   (`SafetyWarning.currentOrderDisplays()`): the statement is its reader, and publishing the order on the
-  chip is #552's question.
+  chip is #552's question — Decision 125 publishes it.
 - **The detail is quoted, never paraphrased**, so the statement claims exactly what the finding does, at
   no strength of its own, and cannot say *"she is taking Ibuprofen"* of an *Advil* order — README's rule
   for rendering `aboutACurrentMedication`.

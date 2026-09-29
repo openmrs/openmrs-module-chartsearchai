@@ -562,8 +562,8 @@ public class SafetyWarning {
 	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
 	 * and the reason nothing downstream recovers that by matching a phrase in prose.
 	 *
-	 * <p><b>Empty is the chip types that list no order here</b>: a contraindication (which names the orders
-	 * it is about in {@link #currentMedicationOrders()} instead), an overdose,
+	 * <p><b>Empty is the chip types that list no order here</b>: a contraindication (which, where it lists them,
+	 * lists the orders it is about in {@link #currentMedicationOrders()} instead), an overdose,
 	 * and the class-only interaction chip, whose partner is a class rather than an order. So empty is
 	 * "outside this population", never "covers no order" — and it must not be summed across a response
 	 * expecting a partner total, which is {@code interactionPairs}' question over a different

@@ -10,6 +10,11 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import java.io.StringWriter;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import javax.xml.transform.stream.StreamResult;
@@ -57,6 +62,39 @@ final class XmlPayloads {
 					+ " — an XStreamMarshaller is the converter openmrs-core selects for "
 					+ "Accept: application/xml, and it cannot marshal Collections' immutable wrappers "
 					+ "(issue #347). Publish a copy, not the accessor's list. Cause: " + e, e);
+		}
+	}
+
+	/**
+	 * Fails unless every instance field of {@code type} has a public getter of its own name. XStream marshals
+	 * a class's FIELDS and Jackson reads its GETTERS, so a field without one reaches an XML client and no
+	 * JSON client (issue #347). Static and synthetic members are excluded — {@code static} because XStream
+	 * does not marshal one, and synthetic because a compiler writes {@code this$0} and jacoco writes
+	 * {@code $jacocoData} into classes that never declared them.
+	 */
+	static void assertEveryFieldHasAPublicGetterOfItsName(Class<?> type) {
+		List<String> problems = new ArrayList<String>();
+		for (Field f : type.getDeclaredFields()) {
+			if (Modifier.isStatic(f.getModifiers()) || f.isSynthetic()) {
+				continue;
+			}
+			String getter = "get" + Character.toUpperCase(f.getName().charAt(0)) + f.getName().substring(1);
+			Method m;
+			try {
+				m = type.getDeclaredMethod(getter);
+			}
+			catch (NoSuchMethodException absent) {
+				problems.add("field '" + f.getName() + "' has no " + getter + "()");
+				continue;
+			}
+			if (!Modifier.isPublic(m.getModifiers())) {
+				problems.add("field '" + f.getName() + "' has " + getter + "() but it is not public");
+			}
+		}
+		if (!problems.isEmpty()) {
+			throw new AssertionError("XStream marshals " + type.getSimpleName() + "'s FIELDS and Jackson reads "
+					+ "its GETTERS, so every field needs a public getter of its own name or an XML client "
+					+ "receives something a JSON client never sees (issue #347): " + problems);
 		}
 	}
 }

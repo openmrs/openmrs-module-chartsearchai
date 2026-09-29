@@ -14,10 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -30,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.reference.PatientClinicalContext;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.reference.SafetyWarningFixtures;
 import org.springframework.http.HttpStatus;
@@ -47,7 +44,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Advil order, so README told a client to resolve {@code drug} against her orders itself. That the real
  * validator stamps every order the chip covers is {@code CurrentMedicationOrdersTest} and
  * {@code AllergyQuestionConflictingOrderContextTest} in the api module; this class is the half they cannot
- * see — that the controller publishes it, as two fields, on every surface, and to an XML client too.
+ * see — that the controller publishes it, as two fields, on the blocking {@code /search} response and the
+ * SSE {@code done} event, and to an XML client too; {@code /chartalerts} is
+ * {@code ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid}.
  */
 public class ChartSearchAiCurrentMedicationOrdersTest {
 
@@ -61,14 +60,14 @@ public class ChartSearchAiCurrentMedicationOrdersTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	/** The orders the chip is about; emptied by the case asking what a chip with none publishes. */
-	private SafetyWarning.CurrentMedicationOrder[] orders;
+	/** The orders stamped on the chip; emptied by the cases asking what a chip with no stamped order publishes. */
+	private PatientClinicalContext.ActiveDrugOrder[] orders;
 
 	@BeforeEach
 	public void setUp() {
-		orders = new SafetyWarning.CurrentMedicationOrder[] {
-				new SafetyWarning.CurrentMedicationOrder("Advil 400mg", "uuid-advil"),
-				new SafetyWarning.CurrentMedicationOrder("Advil 400mg", "uuid-advil-second") };
+		orders = new PatientClinicalContext.ActiveDrugOrder[] {
+				SafetyWarningFixtures.activeOrder("uuid-advil", "Advil 400mg"),
+				SafetyWarningFixtures.activeOrder("uuid-advil-second", "Advil 400mg") };
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new CurrentOrderChipStubService());
@@ -136,8 +135,8 @@ public class ChartSearchAiCurrentMedicationOrdersTest {
 	}
 
 	@Test
-	public void aChipAboutNoOrderStatesAnEmptyListRatherThanOmittingTheKey() {
-		orders = new SafetyWarning.CurrentMedicationOrder[0];
+	public void aChipWithNoStampedOrderStatesAnEmptyListRatherThanOmittingTheKey() {
+		orders = new PatientClinicalContext.ActiveDrugOrder[0];
 
 		JsonNode named = ordersOfOnlyChip(MAPPER.valueToTree(searchPayload()).get("safetyWarnings"));
 		assertTrue(named.isArray() && named.size() == 0, "was: " + named);
@@ -149,33 +148,15 @@ public class ChartSearchAiCurrentMedicationOrdersTest {
 		// publish it as handed and every chip-carrying XML response is a 500, the empty case included.
 		XmlPayloads.assertMarshals(searchPayload(), "a chip naming its orders");
 
-		orders = new SafetyWarning.CurrentMedicationOrder[0];
-		XmlPayloads.assertMarshals(searchPayload(), "a chip naming no order");
+		orders = new PatientClinicalContext.ActiveDrugOrder[0];
+		XmlPayloads.assertMarshals(searchPayload(), "a chip with no stamped order");
 	}
 
 	/** Jackson reads the entry class's GETTERS and XStream its FIELDS, so every field needs a public getter of
 	 *  its own name — {@code ChartSearchAiChartOrderBridgeTest}'s guard, for this class. */
 	@Test
-	public void everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives() throws Exception {
-		List<String> problems = new ArrayList<String>();
-		for (Field f : SafetyWarning.CurrentMedicationOrder.class.getDeclaredFields()) {
-			if (Modifier.isStatic(f.getModifiers()) || f.isSynthetic()) {
-				continue;
-			}
-			String getter = "get" + Character.toUpperCase(f.getName().charAt(0)) + f.getName().substring(1);
-			Method m;
-			try {
-				m = SafetyWarning.CurrentMedicationOrder.class.getDeclaredMethod(getter);
-			}
-			catch (NoSuchMethodException absent) {
-				problems.add("field '" + f.getName() + "' has no " + getter + "()");
-				continue;
-			}
-			if (!Modifier.isPublic(m.getModifiers())) {
-				problems.add("field '" + f.getName() + "' has " + getter + "() but it is not public");
-			}
-		}
-		assertEquals(Collections.<String> emptyList(), problems);
+	public void everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives() {
+		XmlPayloads.assertEveryFieldHasAPublicGetterOfItsName(SafetyWarning.CurrentMedicationOrder.class);
 	}
 
 	@Test

@@ -14,10 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -214,34 +210,11 @@ public class ChartSearchAiChartOrderBridgeTest {
 	 * is a divergence in the other direction and one this class's JSON case already sees, since it
 	 * asserts the field COUNT.
 	 *
-	 * <p>Static and synthetic members are excluded — {@code static} because XStream does not marshal
-	 * one, and synthetic because a compiler writes {@code this$0} and jacoco writes
-	 * {@code $jacocoData} into classes that never declared them.
+	 * <p>Which members it excludes is {@link XmlPayloads#assertEveryFieldHasAPublicGetterOfItsName}'s.
 	 */
 	@Test
-	public void everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives() throws Exception {
-		List<String> problems = new ArrayList<String>();
-		for (Field f : SafetyWarning.ChartOrderBridge.class.getDeclaredFields()) {
-			if (Modifier.isStatic(f.getModifiers()) || f.isSynthetic()) {
-				continue;
-			}
-			String getter = "get" + Character.toUpperCase(f.getName().charAt(0)) + f.getName().substring(1);
-			Method m = null;
-			try {
-				m = SafetyWarning.ChartOrderBridge.class.getDeclaredMethod(getter);
-			}
-			catch (NoSuchMethodException absent) {
-				problems.add("field '" + f.getName() + "' has no " + getter + "()");
-				continue;
-			}
-			if (!Modifier.isPublic(m.getModifiers())) {
-				problems.add("field '" + f.getName() + "' has " + getter + "() but it is not public");
-			}
-		}
-		assertEquals(Collections.<String> emptyList(), problems,
-				"XStream marshals this class's FIELDS and Jackson reads its GETTERS, so every field "
-						+ "needs a public getter of its own name or an XML client receives something a "
-						+ "JSON client never sees (issue #347)");
+	public void everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives() {
+		XmlPayloads.assertEveryFieldHasAPublicGetterOfItsName(SafetyWarning.ChartOrderBridge.class);
 	}
 
 	@Test

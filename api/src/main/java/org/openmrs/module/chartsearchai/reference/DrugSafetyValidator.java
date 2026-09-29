@@ -9383,9 +9383,10 @@ public class DrugSafetyValidator {
 	 *         {@link SafetyWarning#currentOrderDisplays()}, the displays of those whose display
 	 *         {@link #displayNamesADrug names a drug}, each once — a display that is not a name has nothing
 	 *         for a sentence to print, while the wire lists the order regardless, since labelling an order
-	 *         with no other name is what its display is for.
+	 *         with no other name is what its display is for. Package-private so the omod wire fixtures stamp a
+	 *         chip through this one method rather than a copy of it.
 	 */
-	private static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
+	static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		List<SafetyWarning.CurrentMedicationOrder> published = new ArrayList<SafetyWarning.CurrentMedicationOrder>();
 		Set<String> displays = new LinkedHashSet<String>();

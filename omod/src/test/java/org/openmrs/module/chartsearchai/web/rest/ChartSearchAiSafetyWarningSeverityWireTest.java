@@ -277,8 +277,8 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				// reason, for this key. The second order has no readable uuid, which the key still lists.
 				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.recordedAllergenContraindication(
 						"Ibuprofen", "The patient has a recorded allergy to Ibuprofen.", true),
-						new SafetyWarning.CurrentMedicationOrder("Advil 400mg", "uuid-advil"),
-						new SafetyWarning.CurrentMedicationOrder("Nurofen 200mg", null)));
+						SafetyWarningFixtures.activeOrder("uuid-advil", "Advil 400mg"),
+						SafetyWarningFixtures.activeOrder(null, "Nurofen 200mg")));
 	}
 
 	private ChartSearchAiRestController controller;

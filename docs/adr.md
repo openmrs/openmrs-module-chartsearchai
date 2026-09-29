@@ -12158,7 +12158,11 @@ month would be a safety loss — and fix the wording.
   A contraindication chip about a substance she holds only as such orders ends its `detail` with *"Her order
   for X has not started: it is scheduled to start <date>."* (`SafetyWarning.statingItsOrderHasNotStarted`,
   stamped by `ContraindicationChips.add`), from either arm that states the current-medication referent — the
-  ruling asks the chip to say it, and review round 1 of PR #559 found it did not.
+  ruling asks the chip to say it, and review round 1 of PR #559 found it did not. A module-composed answer
+  leaves Decision 113's referent sentence off such a chip's line (`SafetyWarning.orderScheduledStart()`, set
+  by the same step): that sentence said she is already taking the drug, one sentence after the detail says
+  her order has not started, and the detail's own sentence already says the order is hers. Found by review
+  round 2 of PR #559; `LlmInferenceServiceScheduledOrderContextTest`.
 - **Whether a side has started is one decision**, `DrugSafetyValidator.scheduledStartOf`: the earliest start
   among the orders the arm's own `resolvesFromAny` matched, or none where any of them has started.
 

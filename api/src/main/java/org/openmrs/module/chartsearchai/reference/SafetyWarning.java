@@ -149,6 +149,9 @@ public class SafetyWarning {
 	/** @see #partnerScheduledStart() */
 	private final String partnerScheduledStart;
 
+	/** @see #orderScheduledStart() */
+	private final String orderScheduledStart;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -414,7 +417,7 @@ public class SafetyWarning {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, false, null);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, false, null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -425,8 +428,10 @@ public class SafetyWarning {
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
 			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
-			Collection<String> currentOrderDisplays, boolean statedInTheAnswer, String partnerScheduledStart) {
+			Collection<String> currentOrderDisplays, boolean statedInTheAnswer, String partnerScheduledStart,
+			String orderScheduledStart) {
 		this.partnerScheduledStart = partnerScheduledStart;
+		this.orderScheduledStart = orderScheduledStart;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.currentOrderDisplays = currentOrderDisplays == null || currentOrderDisplays.isEmpty()
 				? Collections.<String> emptyList()
@@ -1164,7 +1169,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
 				matchedOrderNames, subjectRows, currentOrderDisplays, statedInTheAnswer,
-				partnerScheduledStart);
+				partnerScheduledStart, orderScheduledStart);
 	}
 
 	/**
@@ -1179,7 +1184,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentOrderDisplays, statedInTheAnswer,
-				partnerScheduledStart);
+				partnerScheduledStart, orderScheduledStart);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1223,7 +1228,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, displays, statedInTheAnswer,
-				partnerScheduledStart);
+				partnerScheduledStart, orderScheduledStart);
 	}
 
 	/**
@@ -1253,7 +1258,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
-				statedInTheAnswer, start == null ? null : DateFormatUtil.formatDate(start));
+				statedInTheAnswer, start == null ? null : DateFormatUtil.formatDate(start), orderScheduledStart);
 	}
 
 	/**
@@ -1269,11 +1274,25 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * When the order this CONTRAINDICATION is about is scheduled to start, spelled as
+	 * {@link #partnerScheduledStart()} is — set by {@link #statingItsOrderHasNotStarted} alone, in the
+	 * step that writes the detail's "has not started" sentence, and {@code null} on every chip that step
+	 * did not build (issue #553, review round 2 of PR #559). Package-private and not a getter, so it
+	 * reaches no wire: {@code DrugReferenceInjector.composeFromFindings} reads it to leave out the
+	 * referent that says she is already taking the drug, a sentence the detail's own "has not started"
+	 * contradicts.
+	 */
+	String orderScheduledStart() {
+		return orderScheduledStart;
+	}
+
+	/**
 	 * This contraindication about a medication she already takes, its detail ending with the sentence that
 	 * the order it is about has not started and is scheduled to start on {@code start} (issue #553, review
 	 * round 1 of PR #559) — in the words {@code PatientChartSerializer.scheduledToStart} gives the order's
 	 * own chart record. Package-private: written only by {@code DrugSafetyValidator.ContraindicationChips},
-	 * for a substance she holds only as orders that have not started. Changes the detail and nothing else.
+	 * for a substance she holds only as orders that have not started. Changes the detail and {@link
+	 * #orderScheduledStart()}, and nothing else.
 	 */
 	SafetyWarning statingItsOrderHasNotStarted(Date start) {
 		String stated = DrugSafetyValidator.endSentence(detail.trim()) + " Her order for " + drug
@@ -1282,7 +1301,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
-				statedInTheAnswer, partnerScheduledStart);
+				statedInTheAnswer, partnerScheduledStart, DateFormatUtil.formatDate(start));
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
@@ -1292,7 +1311,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
-				true, partnerScheduledStart);
+				true, partnerScheduledStart, orderScheduledStart);
 	}
 
 	/**
@@ -1323,7 +1342,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentOrderDisplays,
-				statedInTheAnswer, partnerScheduledStart);
+				statedInTheAnswer, partnerScheduledStart, orderScheduledStart);
 	}
 
 	/**

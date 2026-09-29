@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -39,8 +40,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 /**
  * Issue #553 through the whole answer: the words the MODULE itself writes about an order scheduled to
  * start in the future — the stand-in record for an order the chart carries no record of, the sentence
- * naming a cited finding's partner the answer left unnamed, and the allergy answer's statement of her
- * conflicting orders. The patient's orders are read from the database ({@code ScheduledDrugOrderTestData.xml}:
+ * naming a cited finding's partner the answer left unnamed, the allergy answer's statement of her
+ * conflicting orders, and the line a module-composed answer states a contraindication about her order
+ * in. The patient's orders are read from the database ({@code ScheduledDrugOrderTestData.xml}:
  * a started Nevirapine and a scheduled Rifampicin), through the real injector and validator over the
  * verbatim DDInter slice that relates them; only the model and the chart retrieval are stood in for.
  */
@@ -133,6 +135,30 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		assertTrue(answer.getAnswer().startsWith(modelAnswer + " "), answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(" Currently prescribed: Rifampicin (" + STARTS + "). The patient has a "
 				+ "recorded allergy to Rifampicin (rifampin)."), "the order is stated with its start date: " + answer.getAnswer());
+	}
+
+	@Test
+	public void theModulesOwnAnswerNeverSaysSheIsAlreadyTakingHerScheduledOrder() throws IOException {
+		// Review round 2 of PR #559: a module-composed answer (ADR Decision 113) follows a contraindication
+		// about her own medication with the referent "This finding is about a medication this patient is
+		// already taking." — said of the Rifampicin she has not started, one sentence after its chip says
+		// so. The started order's line beside it is the other value, and keeps the referent.
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
+		Context.getAdministrationService()
+				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
+
+		ChartAnswer answer = serviceAnswering("The model was called.").service.search(patient,
+				"Are there any drug interactions among her current medications?");
+
+		List<String> lines = Arrays.asList(answer.getAnswer().split("\n"));
+		assertTrue(lines.stream().anyMatch(l -> l.matches(Pattern.quote("The patient has a recorded allergy to "
+				+ "Rifampicin (rifampin). Her order for Rifampicin (rifampin) has not started: it is " + STARTS
+				+ ". No severity is rated for this finding.") + " \\[\\d+\\]")),
+				"the scheduled order's line says it has not started and no more: " + answer.getAnswer());
+		assertTrue(lines.stream().anyMatch(l -> l.matches(Pattern.quote("The patient has a recorded allergy to "
+				+ "Acetylsalicylic acid (aspirin). No severity is rated for this finding. This finding is about a "
+				+ "medication this patient is already taking.") + " \\[\\d+\\]")),
+				"the started order's line keeps its referent: " + answer.getAnswer());
 	}
 
 	/** The prompt the module builds for the amlodipine question, read once through the real pipeline. */

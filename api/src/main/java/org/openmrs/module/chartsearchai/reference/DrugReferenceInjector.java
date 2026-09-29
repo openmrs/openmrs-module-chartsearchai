@@ -2732,7 +2732,10 @@ public class DrugReferenceInjector {
 	 * <p><b>A contraindication about a medication she already takes carries its referent</b>, {@link
 	 * #COMPOSED_CURRENT_MEDICATION_REFERENT}, after its body: the strength clause stays out, and it
 	 * was the only words of such a record saying she takes the drug (ADR Decision 113). Not an
-	 * interaction's line, whose detail already names the partner as her active order.
+	 * interaction's line, whose detail already names the partner as her active order. Nor a line whose
+	 * chip says her order for the drug has not started ({@code SafetyWarning.orderScheduledStart()},
+	 * issue #553): that sentence already says the order is hers, and the referent would say she is taking
+	 * a drug she has not started.
 	 *
 	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
 	 * medications — a screen — opens with that finding: a lead saying which of two medications to
@@ -2764,7 +2767,8 @@ public class DrugReferenceInjector {
 		for (Integer i : order) {
 			SafetyWarning finding = findings.get(i);
 			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
-					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
+					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+					&& finding.orderScheduledStart() == null;
 			lines.add(findingBody(finding, orderRecordNumbers, true)
 					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 					+ " [" + numbers.get(i) + "]");

@@ -223,8 +223,9 @@ WEIGHTS_STATE_DIR="$LLM_DIR/.weights-status"
 rm -rf "$WEIGHTS_STATE_DIR"
 mkdir -p "$WEIGHTS_STATE_DIR"
 
-# record_weights_state <id> <entry> — renames the artifact's file to <entry>, which the publisher
-# sees as one name or the other and never as half of either; creates it where there is none yet.
+# record_weights_state <id> <entry> — renames the artifact's file to <entry>, which is never seen as
+# half of either name; creates it where there is none yet. A scan that races the rename can list
+# the old name or neither, and publish_weights_status's exit rule is what covers that.
 record_weights_state() {
   for _rws_file in "$WEIGHTS_STATE_DIR"/*":$1" "$WEIGHTS_STATE_DIR"/*":$1:"*; do
     [ -e "$_rws_file" ] || continue
@@ -919,10 +920,16 @@ publish_weights_status() {
   _ws_landed=no
   _ws_landed_value=''
   _ws_idle_misses=0
+  _ws_idle_before=''
   while :; do
     _ws_value='' _ws_running=no _ws_artifacts=0
     for _ws_file in "$WEIGHTS_STATE_DIR"/*; do
-      [ -e "$_ws_file" ] || continue
+      # Only the pattern itself, left unexpanded by an empty directory, is skipped. A name the glob
+      # listed and a rename then took away still stands for that artifact's previous entry, which
+      # is better than reading it as absent — absent is what a verified artifact reads as.
+      if [ "$_ws_file" = "$WEIGHTS_STATE_DIR/*" ] && [ ! -e "$_ws_file" ]; then
+        continue
+      fi
       _ws_artifacts=$((_ws_artifacts + 1))
       _ws_entry=${_ws_file##*/}
       case $_ws_entry in
@@ -951,12 +958,22 @@ publish_weights_status() {
         [ "$_ws_running" = yes ] || _ws_idle_misses=$((_ws_idle_misses + 1))
       fi
     fi
+    # Ends on the SECOND idle scan in a row reading the same value, once that value has landed —
+    # never on the first: a scan that overlapped a rename can miss an artifact entirely (measured
+    # under dash, rarely), and if that was the last fetch finishing, a first-scan exit would leave it
+    # published as verified for good. Once every fetch has finished nothing renames any more, so the
+    # second scan is exact.
     if [ "$_ws_running" = no ]; then
-      [ "$_ws_landed" = yes ] && return 0
+      if [ "$_ws_landed" = yes ] && [ "$_ws_idle_before" = "idle:$_ws_value" ]; then
+        return 0
+      fi
       if [ "$_ws_idle_misses" -ge 900 ]; then
         echo "[weights-status] the database refused chartsearchai.models.weightsStatus 900 times with no fetch running; giving up on: ${_ws_value:-every weights artifact verified}" >&2
         return 1
       fi
+      _ws_idle_before="idle:$_ws_value"
+    else
+      _ws_idle_before=''
     fi
     sleep 2
   done

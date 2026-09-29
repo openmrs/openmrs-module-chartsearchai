@@ -9328,7 +9328,12 @@ nothing a deployment can see. The alternative was considered and not taken: move
 both fetches below the seed and update the row with one atomic statement per entry. It delays an
 ~8GB download by the length of the seed on every seed start. A subshell killed by a signal before
 it records an outcome leaves `fetching:` standing; the publisher does not look for that
-shape. → `EntrypointRetrievalWiringTest.aWeightsFetchStillRunningReadsAsFetchingUntilItsOutcomeReplacesIt`,
+shape. Nor does any test pin the publisher's exit rule, that it ends only on the second idle scan
+in a row reading what landed: a scan racing a rename can miss an artifact altogether, and a
+first-scan exit then published a refused artifact as verified — 15 of 3000 trials under `dash`
+against a renamer toggling between two refused names, 0 of 3000 with the rule (measured
+2026-09-29 by extracting both versions of the function from the file). That is a timing window the
+suite cannot hold open. → `EntrypointRetrievalWiringTest.aWeightsFetchStillRunningReadsAsFetchingUntilItsOutcomeReplacesIt`,
 `.aWeightsFetchThatCannotResolveIsRecordedWithItsArtifactAndCode`,
 `.theWeightsOutcomeIsRecordedOnceTheDatabaseTakesItRatherThanWhenItWasFirstSent`,
 `.aStartThatCouldNotRecordItsWeightsFetchesPublishesNoVerdictOnThem`;

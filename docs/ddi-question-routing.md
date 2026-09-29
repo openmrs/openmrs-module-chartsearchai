@@ -20,7 +20,9 @@ Companion documents:
 - [ddi-interaction-question-examples.md](ddi-interaction-question-examples.md) has worked,
   live-verified example questions for each check.
 - [ADR Decision 23](adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation)
-  covers the design.
+  covers the design, and
+  [ADR Decision 130](adr.md#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)
+  covers why the routing is done by code rather than by a model.
 
 ---
 
@@ -90,22 +92,26 @@ All cues are case-insensitive and word-boundary anchored, so "interactive" does 
 
 ### Why keywords and not a classifier
 
-The cue lists are deliberately conservative. This gate controls a clinician-facing safety output,
-and firing on an unrelated question is treated as worse than missing a phrasing. Looser synonyms
-such as "conflict", "interfere", an unqualified "review" and a bare "check" are excluded because
-they have everyday non-drug meanings in a chart question.
+The reasoning is recorded in
+[ADR Decision 130](adr.md#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model).
+In brief:
 
-Enumeration questions ("what is she on?") are also kept out on purpose: a list request must not
-pick up interaction chips (issue #143).
+- The safety layer is deterministic by design, so it does not take on the model's run-to-run
+  variability ([ADR Decision 23](adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation)).
+- The same gate must give the same answer in the pre-answer and post-answer passes (step 3).
+- Firing on an unrelated question is ranked as worse than missing a phrasing (issue #143). So
+  looser synonyms with everyday non-drug meanings ("conflict", "interfere", an unqualified
+  "review", a bare "check") are left out, and so are list requests such as "what is she on?".
+- There is one definition of "medication question", shared with the contraindication checks
+  ([ADR Decision 89](adr.md#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)).
 
-The safety-or-change family was added after a live measurement. "Should I stop any of the
-medications he is on?" screened nothing, while "Are any of his current medications interacting?"
-reported a Major pair on the same patient. See
-[ADR Decision 89](adr.md#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact).
+**The trade-off:** phrasing is the weak point. A screening request worded with none of the cues
+above does not screen. It is still answered as an ordinary chart question, but with no interaction
+findings behind it. Decision 89 widened the cue list after exactly such a miss, and
+`DrugSafetyScreeningPhrasingCorpusTest.knownToBeMissed` tracks the misses still open.
 
-**The trade-off:** because detection is keyword-based, phrasing is its weak point. A screening
-request worded with none of the cues above does not screen. The question still reaches the model
-as an ordinary chart question, but with no interaction findings behind it.
+A model or embedding classifier for this gate has **not been evaluated**, so it is untested rather
+than refuted. Decision 130 states what an evaluation would have to show.
 
 ---
 

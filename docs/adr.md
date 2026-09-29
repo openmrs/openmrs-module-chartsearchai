@@ -133,6 +133,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 126: An order that has not started is screened, and stated as scheduled with its date](#decision-126-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date)
 - [Decision 128: A rating the answer attaches to a finding that carries none is reported](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)
 - [Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
+- [Decision 130: Whether a question reaches the drug-interaction checks is decided by code, not by a model](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -12780,3 +12781,93 @@ Helen's orders, which returned HTTP 400 from `:8081`'s order resource, were not 
 `ProposedDrugAlreadyInHerOrdersTest.aCombinationOrderIsSaidToCarryTheProposedDrugAndNotToBeDuplicatedByIt`;
 `LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes`;
 `AlreadyOrderedDrugClauseContextTest`.
+
+## Decision 130: Whether a question reaches the drug-interaction checks is decided by code, not by a model
+
+**Status: Accepted** (September 2026). This records a design that was already in place: it was
+never written down as a decision of its own, and nobody weighed a model classifier against it.
+[docs/ddi-question-routing.md](ddi-question-routing.md) describes the mechanism; this entry says why
+it has that shape.
+
+### Context
+
+Every question is checked for two things before the model is called:
+
+- which drugs it names — `DrugReferenceService.findImpliedByQuery`, name matching against the
+  loaded knowledge base; and
+- if it names none, whether it asks to be screened — `QueryScopeRouter.isInteractionScreening`,
+  cue-word regular expressions together with the router's `Intent.MEDICATIONS` classification.
+
+Those two answers decide which interaction check `DrugSafetyValidator.validate` runs. No model
+classifies the question at any point. The obvious question is whether a model, or an embedding
+similarity, should make that call instead, since the gate is really asking a question about natural
+language.
+
+### Decision
+
+The gate stays deterministic. The reasons below are all recorded elsewhere, and this entry links to
+them rather than restating them:
+
+1. **The safety layer is deterministic by design.**
+   [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation) (*Why
+   deterministic + data-driven*) runs the validator with no second LLM call "so the safety net does
+   not inherit the LLM's variability". The gate decides whether that safety net runs at all. A model
+   making that call would bring the variability back in at the first step.
+2. **One gate has to answer identically in two passes.** `DrugReferenceInjector.preAnswerFindings`
+   runs the validator with an empty answer, and the chips pass runs it again after the model has
+   answered. The comment at the screening call site in `DrugSafetyValidator.validate` requires both
+   passes to decide from the question alone. If they differed, the prose could state an interaction
+   with no chip beside it, or a chip could appear with no prose behind it. A regular expression over
+   the same string gives the same answer both times by construction. A sampled classifier makes no
+   such promise unless its one answer is cached and handed to both passes, and that is a mechanism
+   of its own that would need its own guard.
+3. **It errs towards not firing, and that choice can be pinned.** The `INTERACTION_CUES` javadoc
+   ranks firing on an unrelated question as worse than missing a phrasing. Issue #143 shows why: a
+   screen raised on a question nobody asked it for is an alert, and this module has no alerting
+   machinery. A closed word list can be held to that ranking case by case:
+   `DrugSafetyScreeningPhrasingCorpusTest.asksForNoReading` lists questions that must screen
+   nothing, and a widening is correct only while every one of them stays green. A classifier could
+   be held to the same corpus, but only as a sampled measurement of its failure rate, not as a
+   property that holds for every question.
+4. **"Medication question" has one definition.**
+   [Decision 89](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)
+   rejected even a second keyword list for this gate, because two definitions drift. The same
+   vocabulary also widens which contraindication chips a question raises
+   (`DrugSafetyValidator.SubjectMatter`). A classifier for the gate would be a further definition,
+   and it could disagree with the one the contraindication arm reads.
+5. **Knowledge is data, not code.** Decision 23 keeps clinical knowledge in the dataset and the
+   mechanisms domain-agnostic. Name matching finds the drugs from the dataset the operator loaded, so
+   a substance added to that file is recognised in a question with no rebuild and no retraining.
+
+### What this costs
+
+**Phrasing is the weak point.** A vocabulary is never finished, and the gate misses a screening
+request worded in none of its cues. Decision 89 exists because *"Should I stop any of the
+medications he is on?"* screened nothing, while *"Are any of his current medications interacting?"*
+reported a Major pair on the same chart. That miss was closed by widening the cue list.
+`DrugSafetyScreeningPhrasingCorpusTest.knownToBeMissed` records the misses still open, such as
+*"Is his current regimen safe?"*, as inverted assertions: each goes red once a widening catches it.
+A missed question is not dropped. It is still answered as an ordinary chart question, but with no
+interaction findings behind it and no `interactionPairs` statement.
+
+### Not evaluated
+
+**A model or embedding classifier for the gate has not been tried, so it is untested rather than
+refuted.** Four things are known about it without running it:
+
+- It adds a model inference in front of retrieval on every question, drug-related or not. Its cost
+  on the CPU deployments this module targets has not been measured.
+- It needs a fixed decision threshold, and that threshold becomes the policy for when the module
+  screens.
+- To keep reason 2, the one answer has to be computed once and handed to both passes.
+- It is a third definition of "medication question" unless it also replaces `Intent.MEDICATIONS`.
+
+**What would reopen this:** an A/B against the keyword gate over
+`DrugSafetyScreeningPhrasingCorpusTest`'s three lists, extended with fresh clinician phrasings. It
+must show fewer misses among `asksForAReading` and `knownToBeMissed`, no firing on
+`asksForNoReading`, both measured over repeated runs, and a stated latency cost. Per
+[Decision 89](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact),
+a candidate that buys positives by firing on `asksForNoReading` is wrong however many positives it
+buys.
+
+→ `DrugSafetyScreeningPhrasingCorpusTest`, `QueryScopeRouterTest`.

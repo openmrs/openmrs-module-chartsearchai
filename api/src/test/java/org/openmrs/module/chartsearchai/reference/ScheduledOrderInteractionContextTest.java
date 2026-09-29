@@ -258,7 +258,7 @@ public class ScheduledOrderInteractionContextTest extends BaseModuleContextSensi
 	public void aScreenedPairOfTwoScheduledOrdersNamesBothAsScheduledAndStaysAboutHerMedication() {
 		// No started side to state it from, so the subject is a scheduled order and the detail says so.
 		// The referent stays the order-driven arm's: the proposal clause on a screening question is issue
-		// #348's defect (ADR Decision 125).
+		// #348's defect (ADR Decision 126).
 		executeDataSet("ScheduledAmlodipineOrderTestData.xml");
 		List<SafetyWarning> chips = chips("Are there any drug interactions among her current medications?");
 
@@ -309,7 +309,7 @@ public class ScheduledOrderInteractionContextTest extends BaseModuleContextSensi
 	@Test
 	public void aContraindicationAboutHerScheduledOrderSaysItHasNotStartedWithItsDate() {
 		// Review round 1 of PR #559: the active-order contraindication arm keeps the current-medication
-		// referent (ADR Decision 125), so the chip itself must say the order has not started — and so must
+		// referent (ADR Decision 126), so the chip itself must say the order has not started — and so must
 		// the drug-in-play arm's, on a question listing the drug as one she is on.
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
 		for (String question : new String[] { "Are there any drug interactions among her current medications?",

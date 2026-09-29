@@ -1233,7 +1233,7 @@ public class PatientClinicalContext {
 		 *         <p>Such an order is still SCREENED — it stays on every list an arm reads, so no finding
 		 *         about it is lost — but a finding names it as a scheduled order rather than an active one,
 		 *         and a finding about it as a drug in play does not state it as a medication she is already
-		 *         taking. {@code docs/adr.md} Decision 125 names what the order-driven arms still state and
+		 *         taking. {@code docs/adr.md} Decision 126 names what the order-driven arms still state and
 		 *         the residue the wording does not reach.
 		 */
 		public Date getScheduledStart() {

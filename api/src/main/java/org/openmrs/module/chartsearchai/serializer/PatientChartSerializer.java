@@ -833,6 +833,21 @@ public class PatientChartSerializer {
 		private final List<String> findingBridgeNames;
 
 		/**
+		 * The ids of the reference rows each of an injected {@code safety_finding}'s
+		 * {@link #findingPartners} was resolved to where its chip was decided — {@code SafetyWarning.rowsOfPartner}
+		 * of each, INDEX-ALIGNED with {@link #findingPartners}, an empty entry for a partner no row was
+		 * resolved for (issue #555). Empty on every other record. Written in exactly ONE place,
+		 * {@code DrugReferenceInjector}'s finding mapping, beside {@link #findingPartners} and for its
+		 * reason; ids rather than rows for {@link #findingSubjectRows}' reason.
+		 *
+		 * <p>Read by {@code FindingPartnerCoverageCheck}, through {@code DrugSafetyValidator.namesThePartner}:
+		 * an answer writing the name of one of those rows, as the prose rule reads a drug name, is naming
+		 * the partner, where the finding prints it by a label the answer does not copy
+		 * ({@code Rifampicin (rifampin)}).
+		 */
+		private final List<List<String>> findingPartnerRows;
+
+		/**
 		 * The numbers of the chart records this record was DERIVED from, empty where it was not
 		 * derived from any — the provenance of a record this module injected, and the form a consumer
 		 * reads rather than parsing it out of {@link #getText()} (issue #305).
@@ -989,13 +1004,14 @@ public class PatientChartSerializer {
 		 * each said "the full one is below" and were each overtaken by the next issue, this one
 		 * included, which is why every rung names the widest by the parameter only it takes rather than
 		 * by a count that the next insertion falsifies. Since issue #516 it defaults
-		 * {@link #findingPartners} to empty as well, and since issue #514 {@link #findingBridgeNames}.
+		 * {@link #findingPartners} to empty as well, since issue #514 {@link #findingBridgeNames}, and since
+		 * issue #555 {@link #findingPartnerRows}.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, null, null, null, null, null, null);
+					orderStopDate, findingSeverity, null, null, null, null, null, null, null);
 		}
 
 		/**
@@ -1020,11 +1036,12 @@ public class PatientChartSerializer {
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, Map<String, String> findingPartnerScheduledStarts,
+				List<String> findingPartners, List<String> findingBridgeNames,
+				List<List<String>> findingPartnerRows, Map<String, String> findingPartnerScheduledStarts,
 				List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
 					orderStopDate, findingSeverity, findingWithholds, findingSubjectRows, findingPartners,
-					findingBridgeNames, findingPartnerScheduledStarts, derivedFrom, null, null);
+					findingBridgeNames, findingPartnerRows, findingPartnerScheduledStarts, derivedFrom, null, null);
 		}
 
 		/**
@@ -1053,13 +1070,15 @@ public class PatientChartSerializer {
 		 * <p><b>Issue #516 answered it the same way again</b>, inserting {@link #findingPartners} after
 		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
 		 * was — and issue #515 once more, with {@link #findingWithholds} and {@link #findingSubjectRows}
-		 * before it, and issue #514 with {@link #findingBridgeNames} after it, in both — and issue #553
-		 * with {@link #findingPartnerScheduledStarts} after that, in both.
+		 * before it, issue #514 with {@link #findingBridgeNames} after it, issue #555 with
+		 * {@link #findingPartnerRows} after that, and issue #553 with {@link #findingPartnerScheduledStarts}
+		 * after that, in both.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, Map<String, String> findingPartnerScheduledStarts,
+				List<String> findingPartners, List<String> findingBridgeNames,
+				List<List<String>> findingPartnerRows, Map<String, String> findingPartnerScheduledStarts,
 				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
 			// Copied and wrapped, and never null, for the reason derivedFrom below is.
 			this.findingPartnerScheduledStarts = findingPartnerScheduledStarts == null
@@ -1088,6 +1107,16 @@ public class PatientChartSerializer {
 			this.findingBridgeNames = findingBridgeNames == null || findingBridgeNames.isEmpty()
 					? Collections.<String> emptyList()
 					: Collections.unmodifiableList(new ArrayList<String>(findingBridgeNames));
+			// Index-aligned with findingPartners, so padded or cut to its size here rather than trusted to
+			// be: each entry copied and wrapped, and never null, for the same reason.
+			List<List<String>> partnerRows = new ArrayList<List<String>>(this.findingPartners.size());
+			for (int i = 0; i < this.findingPartners.size(); i++) {
+				List<String> rows = findingPartnerRows == null || i >= findingPartnerRows.size() ? null
+						: findingPartnerRows.get(i);
+				partnerRows.add(rows == null || rows.isEmpty() ? Collections.<String> emptyList()
+						: Collections.unmodifiableList(new ArrayList<String>(rows)));
+			}
+			this.findingPartnerRows = Collections.unmodifiableList(partnerRows);
 			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
 			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
 			// reader branches on absence — empty is the honest answer wherever nothing was resolved.
@@ -1306,6 +1335,15 @@ public class PatientChartSerializer {
 		 */
 		public List<String> getFindingBridgeNames() {
 			return findingBridgeNames;
+		}
+
+		/**
+		 * @return the row ids each of {@link #getFindingPartners()} was resolved to — see
+		 *         {@link #findingPartnerRows} — never null, the same size as {@link #getFindingPartners()},
+		 *         and an empty entry for a partner no row was resolved for
+		 */
+		public List<List<String>> getFindingPartnerRows() {
+			return findingPartnerRows;
 		}
 	}
 }

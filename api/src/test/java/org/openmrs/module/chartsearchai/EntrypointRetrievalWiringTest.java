@@ -12,11 +12,16 @@ package org.openmrs.module.chartsearchai;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -24,16 +29,25 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import com.sun.net.httpserver.HttpServer;
 
 /**
  * What {@code backend-init.sh}'s {@code configure_retrieval_gps} leaves in the database when the
@@ -63,11 +77,13 @@ import org.junit.jupiter.api.io.TempDir;
  * and a stand-in for the {@code mariadb} client, which is the database boundary the way
  * {@code ModelDownloadIntegrityTest}'s loopback server is the network one.
  *
- * <p><b>Most cases here drive the wiring function; one drives the whole file.</b>
+ * <p><b>Most cases here drive the wiring function; some drive the whole file.</b>
  * {@link #theEntrypointsOwnStatementsLeaveTheStartRunningWhenTheEmbedderIsRefused} runs every
  * top-level statement of {@code backend-init.sh}, with the edges that reach outside a test
  * redirected, because what a refusal does to the START is not a property of the function the rest of
- * these cases call. Where a fetch SITS relative to the wiring call is still
+ * these cases call. The weights-status cases (#467) run the whole file for the same kind of reason:
+ * what records the weights' outcome is split between the fetches, forked above the demo seed, and
+ * the one writer started below it, and only the file composes the two. Where a fetch SITS relative to the wiring call is still
  * {@code ModelDownloadPinningGuardTest}'s question, and what the library itself returns is
  * {@code ModelDownloadIntegrityTest}'s.
  *
@@ -124,6 +140,18 @@ public class EntrypointRetrievalWiringTest {
 
 	/** Where the refusal's own diagnosis is recorded, readable over REST. */
 	private static final String EMBEDDER_STATUS_GP = "chartsearchai.models.embedderStatus";
+
+	/**
+	 * Where the WEIGHTS fetches' outcome is recorded, readable over REST — a property of its own, so
+	 * it cannot be mistaken for the embedder's (#467).
+	 */
+	private static final String WEIGHTS_STATUS_GP = "chartsearchai.models.weightsStatus";
+
+	/** The served model, which {@code config.xml} points {@code chartsearchai.llm.modelFilePath} at. */
+	private static final String E4B = "llm-gemma-4-e4b";
+
+	/** The standby model provisioned beside it. */
+	private static final String E2B = "llm-gemma-4-e2b";
 
 	/**
 	 * What the entrypoint prints when {@code command -v mariadb} finds nothing. It is what tells
@@ -183,7 +211,7 @@ public class EntrypointRetrievalWiringTest {
 
 	@BeforeEach
 	public void setUp() throws Exception {
-		assumeTrue(Files.isExecutable(Paths.get("/bin/sh")), "POSIX /bin/sh is required to drive the entrypoint");
+		assumeTrue(Files.isExecutable(Paths.get(EntrypointSource.shell())), "a POSIX shell is required to drive the entrypoint");
 		assertEquals(GATED_ARTIFACTS, gatedArtifacts(), "backend-init.sh's require_verified line names other"
 				+ " artifacts than the fixture manifest below carries, so these cases would drive a gate nothing"
 				+ " can satisfy");
@@ -320,6 +348,224 @@ public class EntrypointRetrievalWiringTest {
 				+ " amendment measures\n" + run);
 		assertEquals(0, run.exit, "the start did not survive its own statements on a refused embedder\n" + run);
 		assertTheStandInUnderstoodEveryStatement(run);
+	}
+
+	// ---- the weights' outcome is readable where the embedder's is, under a name of its own ------
+
+	/**
+	 * <b>The window the weights are backgrounded for.</b> #466 ran for a day with no model file and no
+	 * channel saying so, because the weights' diagnosis was an {@code echo} from a background
+	 * subshell. This drives the whole entrypoint with both weights downloads HELD by the origin:
+	 * the start hands off to Tomcat with them still running — which is when REST is readable at all
+	 * — and what the property then says is that they are being fetched, not that they were refused.
+	 * An earlier start's refusal is in the store, and has to be replaced rather than read beside it.
+	 *
+	 * <p>Then the origin serves the recorded bytes for the served model and a same-length
+	 * substitute for the standby, so the one entry left is the standby's refusal at the library's
+	 * digest code: a verified artifact says nothing, and the value holds one entry per artifact.
+	 */
+	@Test
+	public void aWeightsFetchStillRunningReadsAsFetchingUntilItsOutcomeReplacesIt() throws Exception {
+		given(SEEDED_DATASET_GP, demoSeedTag());
+		given(WEIGHTS_STATUS_GP, "refused:" + E4B + ":1");
+		Files.write(onnx, RECORDED_BYTES);
+		Files.write(vocab, RECORDED_BYTES);
+		CountDownLatch release = new CountDownLatch(1);
+		ExecutorService handlers = Executors.newCachedThreadPool();
+		HttpServer origin = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		origin.createContext("/", exchange -> {
+			// Held for less than the library's curl stall abort (--speed-time 60), so a slow run fails
+			// on this case's own wait rather than as a transfer the library timed out.
+			try {
+				release.await(50, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			byte[] body = exchange.getRequestURI().getPath().endsWith(E2B) ? UNRECORDED_BYTES : RECORDED_BYTES;
+			exchange.sendResponseHeaders(200, body.length);
+			try (OutputStream out = exchange.getResponseBody()) {
+				out.write(body);
+			}
+		});
+		// One thread per request, so both downloads are held at once rather than the second queued
+		// behind the first on the default executor's single thread.
+		origin.setExecutor(handlers);
+		origin.start();
+		try (Started start = startTheWholeEntrypoint(
+				manifestServingTheWeightsFrom("http://127.0.0.1:" + origin.getAddress().getPort() + "/", E4B, E2B),
+				Map.of())) {
+			start.awaitTheHandOff();
+			String during = awaitTheWeightsStatus(value -> entries(value).equals(
+					Set.of("fetching:" + E4B, "fetching:" + E2B)), start);
+			assertFalse(gp(EMBEDDER_STATUS_GP).contains("llm-gemma"), "the weights were recorded in the embedder's"
+					+ " property: " + gp(EMBEDDER_STATUS_GP));
+
+			release.countDown();
+			Run run = start.finish();
+
+			assertEquals(0, run.exit, "the start did not survive its own statements\n" + run);
+			assertEquals("refused:" + E2B + ":1", gp(WEIGHTS_STATUS_GP), "while fetching it read " + during
+					+ "; once the served model verified and the standby was refused at the digest, the property"
+					+ " should carry the standby's refusal alone\n" + run);
+			assertEquals("verified in this start", gp(EMBEDDER_STATUS_GP), "the embedder's own status moved\n" + run);
+			assertTheStandInUnderstoodEveryStatement(run);
+		}
+		finally {
+			release.countDown();
+			origin.stop(0);
+			handlers.shutdownNow();
+		}
+	}
+
+	/**
+	 * <b>The refusal that returns at once</b>: an image whose manifest resolves neither weights row
+	 * refuses both at code 4 — a packaging error no restart repairs, which is exactly what a
+	 * deployment nobody can open a shell on has to be able to read. Each artifact is recorded with
+	 * that code and never with the path it would have been written to, in the weights' property and
+	 * not the embedder's.
+	 */
+	@Test
+	public void aWeightsFetchThatCannotResolveIsRecordedWithItsArtifactAndCode() throws Exception {
+		given(SEEDED_DATASET_GP, demoSeedTag());
+
+		Run run = runTheWholeEntrypointWithItsEmbedderRefused();
+
+		assertEquals(Set.of("refused:" + E4B + ":4", "refused:" + E2B + ":4"), entries(gp(WEIGHTS_STATUS_GP)),
+				"the weights' refusals are not readable over REST as their artifacts and the library's code\n" + run);
+		assertFalse(gp(EMBEDDER_STATUS_GP).contains("llm-gemma"), "the weights' refusals were recorded in the"
+				+ " embedder's property, so the two cannot be told apart: " + gp(EMBEDDER_STATUS_GP) + "\n" + run);
+		assertTheStandInUnderstoodEveryStatement(run);
+	}
+
+	/**
+	 * <b>A write that does not land is not a write that happened.</b> A refusal that returns at once
+	 * can be recorded before the database will take it — a virgin one has no {@code global_property}
+	 * table until OpenMRS, started after this script, creates it. The stand-in refuses the property
+	 * until the case lifts the refusal, and the outcome has to arrive after all rather than being
+	 * counted as recorded the first time it was sent.
+	 */
+	@Test
+	public void theWeightsOutcomeIsRecordedOnceTheDatabaseTakesItRatherThanWhenItWasFirstSent() throws Exception {
+		given(SEEDED_DATASET_GP, demoSeedTag());
+		Path refusing = Files.write(work.resolve("the-database-refuses-the-weights-status"), new byte[0]);
+		Map<String, String> environment = new LinkedHashMap<String, String>();
+		environment.put("MARIADB_STAND_IN_REFUSE", WEIGHTS_STATUS_GP);
+		environment.put("MARIADB_STAND_IN_REFUSE_WHILE", refusing.toString());
+
+		try (Started start = startTheWholeEntrypointWithItsEmbedderRefused(environment)) {
+			start.awaitTheHandOff();
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+			while (writesOf(WEIGHTS_STATUS_GP) == 0 && System.nanoTime() < deadline) {
+				Thread.sleep(100);
+			}
+			assertTrue(writesOf(WEIGHTS_STATUS_GP) > 0, "nothing tried to record the weights' outcome\n"
+					+ start.output);
+			assertEquals("", gp(WEIGHTS_STATUS_GP), "the stand-in took a write it was told to refuse, so this case is"
+					+ " not the state it is about\n" + start.output);
+			Files.delete(refusing);
+			Run run = start.finish();
+
+			assertEquals(0, run.exit, "the start did not survive its own statements\n" + run);
+			assertEquals(Set.of("refused:" + E4B + ":4", "refused:" + E2B + ":4"), entries(gp(WEIGHTS_STATUS_GP)),
+					"a write the database refused was counted as recorded, and nothing sent it again once the"
+							+ " database would take it\n" + run);
+			assertTheStandInUnderstoodEveryStatement(run);
+		}
+	}
+
+	/**
+	 * <b>A recording that failed is not a start whose weights verified.</b> A verified artifact
+	 * records an empty entry, so a state directory the start could not write reads, to anything that
+	 * composes only what it lists, exactly like one where every artifact verified — and an empty value published
+	 * from it tells a deployment the weights are fine when nothing was measured. Driven with the
+	 * weights directory present and not writable: the publisher has to say so and leave the
+	 * property alone.
+	 */
+	@Test
+	public void aStartThatCouldNotRecordItsWeightsFetchesPublishesNoVerdictOnThem() throws Exception {
+		given(SEEDED_DATASET_GP, demoSeedTag());
+		given(WEIGHTS_STATUS_GP, "fetching:" + E4B);
+		Path weights = Files.createDirectories(work.resolve("openmrs/data/chartsearchai"));
+		assertTrue(weights.toFile().setWritable(false, false), "could not make the weights directory read-only");
+		try {
+			assumeFalse(Files.isWritable(weights), "this user can write a read-only directory (root), so the start"
+					+ " would record its state after all");
+
+			Run run = runTheWholeEntrypointWithItsEmbedderRefused();
+
+			assertTrue(run.output.contains("no weights fetch recorded its state"), "the publisher did not say it had"
+					+ " nothing to publish\n" + run);
+			assertEquals("fetching:" + E4B, gp(WEIGHTS_STATUS_GP), "a start that recorded nothing about its weights"
+					+ " published a verdict on them anyway\n" + run);
+			assertEquals(0, run.exit, "the start did not survive a weights directory it cannot write\n" + run);
+			assertTheStandInUnderstoodEveryStatement(run);
+		}
+		finally {
+			weights.toFile().setWritable(true, false);
+		}
+	}
+
+	/**
+	 * <b>An artifact whose state is lost is not an artifact that verified.</b> A verified artifact
+	 * records an entry the value leaves out, so an artifact whose file is missing from the state
+	 * directory — a record that failed, or a file a scan missed mid-rename — reads, to anything that
+	 * composes only what it lists, exactly as if it had verified. Driven with the served model's
+	 * download held and the standby refused at once for want of a manifest row: once the standby's
+	 * refusal is recorded its file is deleted, and nothing records it again. The publisher knows which
+	 * artifacts this start fetched, so the standby has to read as unrecorded, both while the served
+	 * model is still fetching and after it verified — never as nothing.
+	 */
+	@Test
+	public void anArtifactWhoseRecordedStateIsLostIsPublishedAsUnrecordedRatherThanAsVerified() throws Exception {
+		given(SEEDED_DATASET_GP, demoSeedTag());
+		Files.write(onnx, RECORDED_BYTES);
+		Files.write(vocab, RECORDED_BYTES);
+		Path standbysState = work.resolve("openmrs/data/chartsearchai/.weights-status/refused:" + E2B + ":4");
+		CountDownLatch release = new CountDownLatch(1);
+		ExecutorService handlers = Executors.newCachedThreadPool();
+		HttpServer origin = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		origin.createContext("/", exchange -> {
+			try {
+				release.await(50, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			exchange.sendResponseHeaders(200, RECORDED_BYTES.length);
+			try (OutputStream out = exchange.getResponseBody()) {
+				out.write(RECORDED_BYTES);
+			}
+		});
+		origin.setExecutor(handlers);
+		origin.start();
+		try (Started start = startTheWholeEntrypoint(
+				manifestServingTheWeightsFrom("http://127.0.0.1:" + origin.getAddress().getPort() + "/", E4B),
+				Map.of())) {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+			while (!Files.exists(standbysState) && System.nanoTime() < deadline) {
+				Thread.sleep(50);
+			}
+			assertTrue(Files.exists(standbysState), "the standby's refusal was never recorded, so this case is not"
+					+ " the state it is about\n" + start.output);
+			Files.delete(standbysState);
+			String during = awaitTheWeightsStatus(value -> entries(value).equals(
+					Set.of("fetching:" + E4B, "unrecorded:" + E2B)), start);
+
+			release.countDown();
+			Run run = start.finish();
+
+			assertEquals(0, run.exit, "the start did not survive its own statements\n" + run);
+			assertEquals("unrecorded:" + E2B, gp(WEIGHTS_STATUS_GP), "while the served model was fetching it read "
+					+ during + "; once it verified, the standby, whose state was lost, should read as unrecorded"
+					+ " rather than as verified\n" + run);
+			assertTheStandInUnderstoodEveryStatement(run);
+		}
+		finally {
+			release.countDown();
+			origin.stop(0);
+			handlers.shutdownNow();
+		}
 	}
 
 	// ---- and reaches the withdrawal whatever else the start cannot do --------------------------
@@ -797,6 +1043,49 @@ public class EntrypointRetrievalWiringTest {
 	}
 
 	/**
+	 * The fixture manifest with rows for {@code artifacts} added, each served from {@code origin}
+	 * under its own id — the embedder rows are the ones the start verifies off bytes already on the
+	 * volume. A weights artifact left out has no row, so its fetch is refused at once at code 4.
+	 */
+	private Path manifestServingTheWeightsFrom(String origin, String... artifacts) throws Exception {
+		StringBuilder rows = new StringBuilder(new String(Files.readAllBytes(manifest), StandardCharsets.UTF_8));
+		for (String artifact : artifacts) {
+			rows.append(artifact).append('\t').append(ModelManifest.sha256(RECORDED_BYTES)).append('\t')
+					.append(RECORDED_BYTES.length).append('\t').append(origin).append(artifact).append('\n');
+		}
+		Path withWeights = work.resolve("manifest-serving-the-weights.tsv");
+		Files.write(withWeights, rows.toString().getBytes(StandardCharsets.UTF_8));
+		return withWeights;
+	}
+
+	/** The weights' status once it satisfies {@code settled}, or a failure showing what it last was. */
+	private String awaitTheWeightsStatus(Predicate<String> settled, Started start) throws Exception {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+		String read = gp(WEIGHTS_STATUS_GP);
+		while (!settled.test(read) && System.nanoTime() < deadline) {
+			Thread.sleep(100);
+			read = gp(WEIGHTS_STATUS_GP);
+		}
+		assertTrue(settled.test(read), "the weights' status never read as expected; last read '" + read + "'\n"
+				+ start.output);
+		return read;
+	}
+
+	/** A status value's entries, which are space-separated and carry no order. */
+	private static Set<String> entries(String value) {
+		Set<String> entries = new HashSet<String>(Arrays.asList(value.trim().split("\\s+")));
+		entries.remove("");
+		return entries;
+	}
+
+	/** How many statements writing {@code property} reached the stand-in, taken or refused. */
+	private long writesOf(String property) throws IOException {
+		return issuedStatements().stream()
+				.filter(statement -> statement.startsWith("INSERT INTO global_property") && statement.contains("'" + property + "'"))
+				.count();
+	}
+
+	/**
 	 * The entrypoint's own embedder fetch statements, read out of {@code backend-init.sh} as whole
 	 * logical commands so a continuation line is part of the statement it continues. Taken rather
 	 * than retold for the reason the wiring functions are: what a case here drives is then the text
@@ -841,19 +1130,40 @@ public class EntrypointRetrievalWiringTest {
 	 * the seed's own sentinel is seeded besides.
 	 */
 	private Run runTheWholeEntrypointWithItsEmbedderRefused() throws Exception {
+		try (Started start = startTheWholeEntrypointWithItsEmbedderRefused(Map.of())) {
+			return start.finish();
+		}
+	}
+
+	/**
+	 * {@link #runTheWholeEntrypointWithItsEmbedderRefused}, returned while it runs, with
+	 * {@code environment} added — so a case can act on the stand-in while the start's background
+	 * work is still going.
+	 */
+	private Started startTheWholeEntrypointWithItsEmbedderRefused(Map<String, String> environment)
+			throws Exception {
 		Files.write(onnx, UNRECORDED_BYTES);
 		Files.write(vocab, UNRECORDED_BYTES);
-		ProcessBuilder builder = new ProcessBuilder("/bin/sh", theWholeEntrypointRewrittenToRunHere().toString());
+		return startTheWholeEntrypoint(unresolvableManifest(), environment);
+	}
+
+	/**
+	 * Starts the whole of {@code backend-init.sh} over {@code manifestFile}, with the {@code mariadb}
+	 * stand-in on PATH, and returns at once. Its output is collected on a thread of its own, so a
+	 * case can read the hand-off while what the start backgrounded — the weights fetches and what
+	 * publishes their outcome — is still running; the rewritten hand-off waits for those, so
+	 * {@link Started#finish} is the end of all of it.
+	 */
+	private Started startTheWholeEntrypoint(Path manifestFile, Map<String, String> environment) throws Exception {
+		ProcessBuilder builder = new ProcessBuilder(EntrypointSource.shell(), theWholeEntrypointRewrittenToRunHere().toString());
 		builder.environment().put("PATH", stubs + ":" + builder.environment().get("PATH"));
-		builder.environment().put("MODEL_MANIFEST_FILE", unresolvableManifest().toString());
+		builder.environment().put("MODEL_MANIFEST_FILE", manifestFile.toString());
 		builder.environment().put("MARIADB_STAND_IN_STORE", store.toString());
 		builder.environment().put("MARIADB_STAND_IN_LOG", statements.toString());
 		builder.environment().put("CHARTSEARCHAI_DEMO_DUMP_URL", work.resolve("never-served").toUri().toString());
+		builder.environment().putAll(environment);
 		builder.redirectErrorStream(true);
-		Process process = builder.start();
-		String output = new String(readAll(process.getInputStream()), StandardCharsets.UTF_8);
-		assertTrue(process.waitFor(120, TimeUnit.SECONDS), "the entrypoint did not finish");
-		return new Run(process.exitValue(), output);
+		return new Started(builder.start());
 	}
 
 	/**
@@ -866,7 +1176,8 @@ public class EntrypointRetrievalWiringTest {
 	 * follow — inert on an ordinary machine, and what keeps a build running as root from failing
 	 * this case for a reason that is not about a refusal;</li>
 	 * <li>the hand-off to Tomcat, replaced by an echo of {@link #REACHED_STARTUP} so that reaching
-	 * the entrypoint's own last statement is something a case can read;</li>
+	 * the entrypoint's own last statement is something a case can read, and then a {@code wait}
+	 * for what the start backgrounded, which the container's own start never does;</li>
 	 * <li>the sourced library, at the path {@code Dockerfile.backend} installs it to;</li>
 	 * <li>{@code /openmrs/data}, the volume this start provisions into, rewritten under the case's
 	 * temporary directory — which is where the fixture targets already sit, so the entrypoint's own
@@ -897,7 +1208,10 @@ public class EntrypointRetrievalWiringTest {
 		// cannot hand this start another instance's database credentials.
 		text = replacingOnce(text, "find /openmrs /usr/local/tomcat", "find @@ROOT@@");
 		text = replacingEvery(text, "/openmrs/data", "@@VOLUME@@");
-		text = replacingOnce(text, "@@HAND_OFF@@", "echo '" + REACHED_STARTUP + "'");
+		// The echo, then a wait for what the start backgrounded: the JDK closes a child's output
+		// pipe once the child itself exits, so without it the weights fetches' and their
+		// publisher's lines are lost and nothing can tell a case they have finished.
+		text = replacingOnce(text, "@@HAND_OFF@@", "echo '" + REACHED_STARTUP + "'; wait");
 		text = replacingOnce(text, "@@NO_REEXEC@@",
 				"echo '[test] the re-exec as another OS user is not followed here'");
 		text = replacingOnce(text, "@@LIBRARY@@",
@@ -1018,7 +1332,7 @@ public class EntrypointRetrievalWiringTest {
 		Path driver = work.resolve("drive-" + System.nanoTime() + ".sh");
 		Files.write(driver, (String.join("\n", script) + "\n").getBytes(StandardCharsets.UTF_8));
 
-		ProcessBuilder builder = new ProcessBuilder("/bin/sh", driver.toString());
+		ProcessBuilder builder = new ProcessBuilder(EntrypointSource.shell(), driver.toString());
 		builder.environment().put("MODEL_MANIFEST_FILE", manifest.toString());
 		builder.environment().put("MARIADB_STAND_IN_STORE", store.toString());
 		builder.environment().put("MARIADB_STAND_IN_LOG", statements.toString());
@@ -1198,7 +1512,12 @@ public class EntrypointRetrievalWiringTest {
 				"case \"$_sql\" in",
 				"\t'INSERT INTO global_property'* | 'UPDATE global_property'*)",
 				"\t\tif [ -n \"$MARIADB_STAND_IN_REFUSE\" ] \\",
-				"\t\t\t&& [ \"$_property\" = \"$MARIADB_STAND_IN_REFUSE\" ]; then",
+				"\t\t\t&& [ \"$_property\" = \"$MARIADB_STAND_IN_REFUSE\" ] \\",
+				// Liftable mid-run: where MARIADB_STAND_IN_REFUSE_WHILE names a file, the refusal
+				// holds only while that file exists, so a case can show a write refused and then
+				// taken — a database that comes to accept it, as a virgin one does once OpenMRS
+				// creates its schema.
+				"\t\t\t&& { [ -z \"$MARIADB_STAND_IN_REFUSE_WHILE\" ] || [ -e \"$MARIADB_STAND_IN_REFUSE_WHILE\" ]; }; then",
 				"\t\t\techo \"mariadb stand-in: refusing to write $_property\" >&2",
 				"\t\t\texit 1",
 				"\t\tfi ;;",
@@ -1244,6 +1563,69 @@ public class EntrypointRetrievalWiringTest {
 				"esac",
 				"exit 0",
 				"");
+	}
+
+	/**
+	 * A start still running: its shell, and its output as collected so far. The output ends when the
+	 * shell exits — the JDK closes the pipe then — which the rewritten hand-off's {@code wait} delays
+	 * until what the start backgrounded has finished. Closing it kills whatever is still running, so
+	 * a case that fails part-way leaves no publisher looping behind it.
+	 */
+	private static final class Started implements AutoCloseable {
+
+		private final Process process;
+
+		private final StringBuffer output = new StringBuffer();
+
+		private final Thread reader;
+
+		private Started(Process process) {
+			this.process = process;
+			this.reader = new Thread(() -> {
+				// Appended as it arrives rather than at the end, so a case can read the hand-off while
+				// what the start backgrounded is still running. Decoded by a Reader, which carries a
+				// character split across two reads.
+				try (Reader in = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+					char[] chunk = new char[8192];
+					int read;
+					while ((read = in.read(chunk)) != -1) {
+						output.append(chunk, 0, read);
+					}
+				}
+				catch (IOException e) {
+					output.append("\n[test] reading the start's output failed: ").append(e);
+				}
+			});
+			reader.setDaemon(true);
+			reader.start();
+		}
+
+		/**
+		 * The start reached its own last statement, the hand-off to Tomcat; what it backgrounded may
+		 * still be running.
+		 */
+		private void awaitTheHandOff() throws InterruptedException {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(120);
+			while (!output.toString().contains(REACHED_STARTUP) && process.isAlive() && System.nanoTime() < deadline) {
+				Thread.sleep(50);
+			}
+			assertTrue(output.toString().contains(REACHED_STARTUP), "the start never reached the hand-off to"
+					+ " /openmrs/startup.sh\n" + output);
+		}
+
+		/** Everything the start and what it backgrounded printed, once all of it has finished. */
+		private Run finish() throws InterruptedException {
+			assertTrue(process.waitFor(120, TimeUnit.SECONDS), "the entrypoint, or what it backgrounded, did not"
+					+ " finish\n" + output);
+			reader.join(TimeUnit.SECONDS.toMillis(10));
+			return new Run(process.exitValue(), output.toString());
+		}
+
+		@Override
+		public void close() {
+			process.descendants().forEach(ProcessHandle::destroyForcibly);
+			process.destroyForcibly();
+		}
 	}
 
 	/** What the wiring said and how it exited, carried together so a failure message shows both. */

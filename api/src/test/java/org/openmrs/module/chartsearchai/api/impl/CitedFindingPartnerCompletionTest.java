@@ -17,9 +17,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
@@ -31,9 +34,11 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
+import org.openmrs.module.chartsearchai.reference.PatientClinicalContext;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -333,6 +338,202 @@ public class CitedFindingPartnerCompletionTest {
 						+ "100's amendment records, was: " + answer.getFindingPartnerCoverage());
 	}
 
+	@Test
+	public void anOrderTheAnswerNamedWithoutItsLabelsParentheticalIsNotListedAgain() {
+		// Issue #555: the finding names her rifampicin order by the knowledge base's label, "Rifampicin
+		// (rifampin)", and an answer naming it "Rifampicin" read as leaving it out — the module appended
+		// it under "not named above" and findingPartners counted it unstated.
+		OverShippedData arrangement = alprazolam();
+		String modelAnswer = alprazolamAnswer(arrangement);
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), ALPRAZOLAM_QUESTION);
+
+		assertEquals(modelAnswer, answer.getAnswer(),
+				"an order the answer named without its label's parenthetical is not named again as \"not named "
+						+ "above\"");
+		assertCoverage(2, 2, answer);
+	}
+
+	@Test
+	public void searchStreaming_anOrderTheAnswerNamedWithoutItsLabelsParentheticalIsNotListedAgain() {
+		// /search/stream measures and completes the answer at its own call site, so it is asked the same.
+		OverShippedData arrangement = alprazolam();
+		String modelAnswer = alprazolamAnswer(arrangement);
+
+		ChartAnswer answer = arrangement.service(modelAnswer).searchStreaming(patient(), ALPRAZOLAM_QUESTION,
+				token -> { });
+
+		assertEquals(modelAnswer, answer.getAnswer(), "was: " + answer.getAnswer());
+		assertCoverage(2, 2, answer);
+	}
+
+	@Test
+	public void onAScreenOfHerMedicationsAnOrderNamedWithoutItsLabelsParentheticalIsNotListedAgain() {
+		// Issue #555's third question: a screen of her own medications, where the pair finding is the
+		// screening arm's, and findingPartners read {named: 1, stated: 0} beside an answer naming Rifampicin.
+		OverShippedData arrangement = new OverShippedData(
+				"Does she have any drug interactions among her current medications?",
+				new String[][] { { "Nevirapine", "J05AG01" }, { "Rifampicin", "J04AB02" } });
+		RecordMapping pair = arrangement.findingNaming(Collections.singletonList(RIFAMPICIN_LABEL));
+		String modelAnswer = "Yes — her Nevirapine interacts with her Rifampicin [" + pair.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), arrangement.question);
+
+		assertEquals(modelAnswer, answer.getAnswer(), "was: " + answer.getAnswer());
+		assertCoverage(1, 1, answer);
+	}
+
+	@Test
+	public void anOrderOfAMergedFindingTheAnswerNamedWithoutItsLabelsParentheticalIsNotListedAgain() {
+		// Issue #555 through the MERGED finding (ADR Decision 99): ivosidenib's one Major mechanism covers
+		// both her phenytoin and her rifampicin orders, so one finding names both, rifampicin by the label.
+		// Naming it "rifampicin" needs the rows of every chip the collapse merged, not only the first's.
+		OverShippedData arrangement = new OverShippedData("Can I give her ivosidenib?",
+				new String[][] { { "Phenytoin", "N03AB02" }, { "Rifampicin", "J04AB02" } });
+		RecordMapping merged = arrangement.findingNaming(Arrays.asList("Phenytoin", RIFAMPICIN_LABEL));
+		String modelAnswer = "Ivosidenib should not be given: it interacts with her phenytoin and rifampicin ["
+				+ merged.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), arrangement.question);
+
+		assertEquals(modelAnswer, answer.getAnswer(), "was: " + answer.getAnswer());
+		assertCoverage(2, 2, answer);
+	}
+
+	@Test
+	public void ordersOfOneSubstanceAreNotStatedByThatSubstancesName() {
+		// The residue issue #555 leaves in the reporting direction, pinned: the finding that several of
+		// her orders carry one substance (issue #477) names orders an answer writing that substance's name
+		// has not told apart, so its orders are stated by their displays alone. This held before #555
+		// too; it reddens if that finding's orders are ever given rows the prose rule reads.
+		OverShippedData arrangement = new OverShippedData("Can I give her warfarin?",
+				new String[][] { { "Metronidazole 500mg tablet", "J01XD01" }, { "Metronidazole 0.75% gel", "D06BX01" } });
+		RecordMapping interaction = arrangement.findingNaming(Collections.singletonList("Metronidazole"));
+		RecordMapping sharing = arrangement.findingNaming(
+				Arrays.asList("Metronidazole 500mg tablet", "Metronidazole 0.75% gel"));
+		String modelAnswer = "Warfarin should not be given: it interacts with active order Metronidazole ["
+				+ interaction.getIndex() + "], and metronidazole is in two of her active orders ["
+				+ sharing.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), arrangement.question);
+
+		assertEquals(modelAnswer + " Also covered by those findings and not named above: active order "
+				+ "Metronidazole 500mg tablet and active order Metronidazole 0.75% gel.", answer.getAnswer());
+		assertCoverage(3, 1, answer);
+	}
+
+	@Test
+	public void anOrderTheAnswerNamedOnlyByAnotherNameOfItsRowIsStillListed() {
+		// The residue the #555 credit leaves in the reporting direction, pinned for an interaction rule
+		// finding: the prose states a partner by the NAME of a row it was resolved to, never by the row's
+		// other names, because the knowledge base files everyday words among those (Lactic acid's
+		// "lactate", ConditionMediatedFindingPartnerCompletionContextTest). "rifampin" is the rxnorm name of
+		// her Rifampicin's row; this reddens if the credit is widened back to every name of the row.
+		OverShippedData arrangement = alprazolam();
+		RecordMapping nevirapine = arrangement.findingNaming(Collections.singletonList("Nevirapine"));
+		RecordMapping rifampicin = arrangement.findingNaming(Collections.singletonList(RIFAMPICIN_LABEL));
+		String modelAnswer = "Alprazolam can be given, with two cautions: it interacts with active order "
+				+ "Nevirapine [" + nevirapine.getIndex() + "], and it interacts with active order rifampin ["
+				+ rifampicin.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), ALPRAZOLAM_QUESTION);
+
+		assertEquals(modelAnswer + " Also covered by those findings and not named above: active order "
+				+ RIFAMPICIN_LABEL + ".", answer.getAnswer());
+		assertCoverage(2, 1, answer);
+	}
+
+	private static final String ALPRAZOLAM_QUESTION = "Can I give her alprazolam?";
+
+	/** The knowledge base's label for her rifampicin order, which issue #555's finding names it by. */
+	private static final String RIFAMPICIN_LABEL = "Rifampicin (rifampin)";
+
+	/** Issue #555's patient: her Nevirapine and Rifampicin orders, and a question proposing alprazolam. */
+	private static OverShippedData alprazolam() {
+		return new OverShippedData(ALPRAZOLAM_QUESTION,
+				new String[][] { { "Nevirapine", "J05AG01" }, { "Rifampicin", "J04AB02" } });
+	}
+
+	/** The answer issue #555 measured, citing both findings and naming each order without the label's
+	 *  parenthetical. */
+	private static String alprazolamAnswer(OverShippedData arrangement) {
+		RecordMapping nevirapine = arrangement.findingNaming(Collections.singletonList("Nevirapine"));
+		RecordMapping rifampicin = arrangement.findingNaming(Collections.singletonList(RIFAMPICIN_LABEL));
+		String modelAnswer = "Alprazolam can be given, with two cautions: it interacts with active order "
+				+ "Nevirapine, which is a Moderate caution [" + nevirapine.getIndex() + "], and it interacts "
+				+ "with active order Rifampicin, which is a Minor caution [" + rifampicin.getIndex() + "].";
+		assertFalse(modelAnswer.toLowerCase(Locale.ROOT).contains(RIFAMPICIN_LABEL.toLowerCase(Locale.ROOT)),
+				"the premise: the answer does not write the label");
+		return modelAnswer;
+	}
+
+	static void assertCoverage(int named, int stated, ChartAnswer answer) {
+		FindingPartnerCoverage coverage = answer.getFindingPartnerCoverage();
+		assertNotNull(coverage, "the answer cited findings, so it is measured");
+		assertEquals(named, coverage.getNamed(), "was: " + coverage);
+		assertEquals(stated, coverage.getStated(), "was: " + coverage);
+	}
+
+	/**
+	 * A patient over the knowledge base the module SHIPS: her orders, one per display with its ATC code
+	 * (null for an order the chart records no code for, which the module resolves by its name alone),
+	 * the findings the real injector wrote for {@code question} and the chips the real validator raises —
+	 * one dataset for the chart, the chips and the validator the answer is judged by. Package-private for
+	 * {@code ConditionMediatedFindingPartnerCompletionContextTest}, whose finding is gated on a global
+	 * property only a context-sensitive case can set.
+	 */
+	static final class OverShippedData {
+
+		private final DrugReferenceService dataset = DrugReferenceTestSupport.shippedServiceWithGroups();
+
+		final String question;
+
+		private final Set<String> drugs = new LinkedHashSet<String>();
+
+		private final Set<String> atc = new LinkedHashSet<String>();
+
+		private final List<PatientClinicalContext.ActiveDrugOrder> orders =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+
+		private final PatientChart chart;
+
+		OverShippedData(String question, String[][] displaysAndCodes) {
+			this.question = question;
+			List<SerializedRecord> records = new ArrayList<SerializedRecord>();
+			for (String[] order : displaysAndCodes) {
+				drugs.add(order[0]);
+				Set<String> codes = order[1] == null ? Collections.<String> emptySet()
+						: Collections.singleton(order[1]);
+				atc.addAll(codes);
+				String uuid = "order-" + (order[1] == null ? order[0] : order[1]);
+				orders.add(new PatientClinicalContext.ActiveDrugOrder(uuid, order[0],
+						Collections.singleton(order[0]), codes));
+				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, uuid,
+						order[0] + ", 1 daily", null));
+			}
+			chart = DrugReferenceTestSupport.injectedFindingsOverDataset(dataset,
+					new PatientChartSerializer().serialize(null, records, Collections.<String> emptySet()), question,
+					drugs, atc, orders);
+		}
+
+		/** The one injected finding naming exactly {@code partners}, failing on the chart where none does. */
+		RecordMapping findingNaming(List<String> partners) {
+			for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+				if (finding.getFindingPartners().equals(partners)) {
+					return finding;
+				}
+			}
+			throw new AssertionError("the premise: a finding names " + partners + ", was: " + chart.getText());
+		}
+
+		LlmInferenceService service(String modelAnswer) {
+			return CitedFindingPartnerCompletionTest.service(chart,
+					DrugReferenceTestSupport.validatorRaising(dataset,
+							DrugReferenceTestSupport.chipsOverAnswerFromDataset(dataset, modelAnswer, question, drugs, atc, orders)),
+					modelAnswer, Collections.<Integer> emptyList());
+		}
+	}
+
 	/**
 	 * The shared-mechanism arrangement: the chart with the findings the real injector wrote, the chips
 	 * the real validator raised over the same patient and question, and which of each is the merged
@@ -415,7 +616,7 @@ public class CitedFindingPartnerCompletionTest {
 		}
 	}
 
-	private static Patient patient() {
+	static Patient patient() {
 		Patient p = new Patient();
 		p.setPatientId(1);
 		p.setUuid("uuid-1");
@@ -444,6 +645,13 @@ public class CitedFindingPartnerCompletionTest {
 	 *  {@code structuredCitations} as its structured citations array. */
 	private static LlmInferenceService service(PatientChart chart, List<SafetyWarning> chips,
 			String modelAnswer, List<Integer> structuredCitations) {
+		return service(chart, DrugReferenceTestSupport.validatorRaising(null, chips), modelAnswer,
+				structuredCitations);
+	}
+
+	/** {@link #service(PatientChart, List, String, List)} with {@code validator} as the post-answer pass. */
+	private static LlmInferenceService service(PatientChart chart, DrugSafetyValidator validator,
+			String modelAnswer, List<Integer> structuredCitations) {
 		TestableService created = new TestableService();
 		created.setChartBuildingStrategy(new StubStrategy(chart));
 		created.setDrugReferenceInjector(new DrugReferenceInjector() {
@@ -454,17 +662,7 @@ public class CitedFindingPartnerCompletionTest {
 				return built;
 			}
 		});
-		created.setDrugSafetyValidator(new DrugSafetyValidator() {
-
-			// The overload production calls: mappings-carrying (issue #105) and sink-carrying (issue
-			// #336). Stubbing a shorter one would leave this stub inert.
-			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
-					List<PatientChartSerializer.RecordMapping> mappings,
-					PairChipExtent.Sink pairExtentSink) {
-				return chips;
-			}
-		});
+		created.setDrugSafetyValidator(validator);
 		created.setLlmProvider(new StubProvider(modelAnswer, structuredCitations));
 		return created;
 	}

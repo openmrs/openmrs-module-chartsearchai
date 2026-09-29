@@ -12118,7 +12118,7 @@ do not collide.
 
 Sarah Taylor's chart carries `Prednisone Co 5mg` and recorded allergies to dexamethasone and hydrocortisone.
 Her dexamethasone cross-reactivity finding has no rating: the chip's `severity` is `null` and the record
-ends in [Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)'s
+states [Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)'s
 *"No severity is rated for this finding."* Answers still called it Major — on `main` @ `0145d74a`,
 *"Is prednisone safe for her?"* drew *"a Major reason to change…"* and *"a Major finding"* (2 of 2 runs), and
 on PR #554, *"Can I give her prednisone?"* drew *"a Major finding"* about that record (3 of 4 runs; the
@@ -12144,12 +12144,13 @@ The issue's owner decided the three open questions on the issue, and this implem
 - **The unit is the sentence** citing an unrated finding, split by `ChartSearchAiUtils.SENTENCE_BOUNDARY`.
   The sibling's whole-answer unit cannot serve the inverse question, because "Major" elsewhere is exactly
   the false report. A rating word in that sentence is reported only where no other finding the sentence
-  cites states that rating in its own record, which keeps the #554 fourth run's case silent — and the
-  unrated finding's own record is asked too, so a word an operator's note put there is not reported. The record
-  and not `getFindingSeverity()`: a condition-mediated finding has no rating field and its detail states
-  each drug-disease rating, and a rated finding's record states its rating wherever that field is set.
-  Reading the record can only exempt, which is the direction the check must fail in. (The first version
-  read the field, and a Phase 2 review of this change found the condition-mediated case it missed.)
+  cites carries that rating, which keeps the #554 fourth run's case silent — the unrated finding itself
+  included, so a word an operator's note put in its record is not reported. A finding with a rating field
+  carries that rating and no other, so its mechanism's *"moderate inhibitors of CYP450 3A4"* on a rule rated
+  Major exempts nothing. A finding with none carries what its record states: a condition-mediated finding's
+  detail states each drug-disease rating. Reading a record can only exempt, the direction the check must
+  fail in. (The first version read only the field and missed the condition-mediated case; the second read
+  every record and let a rated finding's mechanism exempt. Phase 2 reviews of this change found each.)
   Which findings a sentence cites is `SafetyFindingCitationExtentCheck.citedFindingIndexes`, asked of the
   sentence — [Decision 97](#decision-97-the-accusation-that-a-finding-lost-its-rating-counts-cited-the-way-the-published-count-does)'s
   one reading, so the #305 filter and the resolution's admission come with it.
@@ -12182,7 +12183,7 @@ names each partner with its own rating.
 - *"Unknown severity"* on an unrated finding, which Decision 123 measured, is not reported:
   `statableRating` declines `unknown`, and reading it would report correct prose ("its severity is
   unknown").
-- A sentence citing the unrated finding beside a finding whose record states the rating is silent even where the
+- A sentence citing the unrated finding beside a finding carrying the rating is silent even where the
   rating was attached to the unrated one — the enumeration sentence
   [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response) refuted
   sentence scoping with. The exemption buys the #554 fourth run's silence, and this is what it costs.

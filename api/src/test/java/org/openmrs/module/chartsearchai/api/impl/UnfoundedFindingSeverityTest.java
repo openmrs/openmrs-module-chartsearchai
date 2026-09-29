@@ -50,12 +50,13 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * finding"</em>. {@code unstatedFindingSeverities} asks the opposite question and says nothing about a
  * record with no rating, by construction.
  *
- * <p>Every case runs the real {@link LlmInferenceService#search}/{@code searchStreaming} orchestration
+ * <p>The cases run the real {@link LlmInferenceService#search}/{@code searchStreaming} orchestration
  * over a chart the real {@link PatientChartSerializer} rendered and the real
- * {@code DrugSafetyValidator} &rarr; {@code injectRecords} chain injected findings into, over the
- * knowledge base the module SHIPS — that arrangement, and not a fixture, is what raises her unrated
- * cross-reactivity findings. Only the model is stubbed: the answer is the one variable this check is
- * about.
+ * {@code DrugSafetyValidator} &rarr; {@code injectRecords} chain injected findings into — over the
+ * knowledge base the module SHIPS, which is what raises her unrated cross-reactivity findings, except
+ * where a case names a hand-authored dataset or a hand-built chart. The model is stubbed, the answer
+ * being the one variable this check is about, and so are the seams {@code serviceOver} names: the chart
+ * is served already injected, and the post-answer chips are not raised.
  *
  * <p>The findings a case cites are located by what their records SAY — the drug they name, and the
  * rating the injector wrote — never by the stamp the check reads, so a stamp written on the wrong record
@@ -117,18 +118,19 @@ public class UnfoundedFindingSeverityTest {
 	@Test
 	public void aRatingStatedOnlyInAnotherSentenceIsNotReported() {
 		// The inverse of the sibling's whole-answer unit: "Major" elsewhere is exactly what must NOT be
-		// read as attached to the unrated finding.
+		// read as attached to the unrated finding. The other sentence's rating is one no cited finding
+		// carries, so the co-cited exemption cannot stand in for the unit here.
 		PatientChart chart = sarahTaylor(CAN_I_GIVE, true);
 		int dexamethasone = unratedFindingNaming(chart, "Dexamethasone");
 		int moderate = ratedFinding(chart, "Moderate");
 		LlmInferenceService service = serviceOver(chart,
-				"Prednisone interacts with active order Clarithromycin, a Moderate finding [" + moderate
+				"Prednisone interacts with active order Clarithromycin, a Major concern [" + moderate
 						+ "]. Her dexamethasone allergy is a possible cross-reactivity [" + dexamethasone
 						+ "].");
 		ChartAnswer answer = service.search(patient(), CAN_I_GIVE);
 		assertEquals(Collections.<UnfoundedFindingSeverity> emptyList(),
 				answer.getUnfoundedFindingSeverities(),
-				"a rating in a sentence that cites only a rated finding is that finding's, and the check "
+				"a rating in a sentence citing no unrated finding is attached to none, and the check "
 						+ "ran, so it states a measurement of none rather than null");
 	}
 
@@ -162,6 +164,25 @@ public class UnfoundedFindingSeverityTest {
 		ChartAnswer answer = service.search(patient(), CAN_I_GIVE);
 		assertEquals(Collections.singletonList(new UnfoundedFindingSeverity(dexamethasone, "Major")),
 				answer.getUnfoundedFindingSeverities());
+	}
+
+	@Test
+	public void aRatingWordInARatedFindingsMechanismDoesNotCountAsTheRatingItCarries() {
+		// A rated finding carries its rating and no other: on the shipped knowledge base Clarithromycin's
+		// Major rule with Lumateperone says "strong or moderate inhibitors of CYP450 3A4", and that word is
+		// not a Moderate rating the unrated erythromycin cross-reactivity beside it could borrow.
+		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOverWithRecordedAllergies(SHIPPED,
+				chartOf("Lumateperone 42mg capsule"), CLARITHROMYCIN_QUESTION, setOf("Lumateperone 42mg"),
+				setOf("N05AD10"), setOf("erythromycin"));
+		int major = ratedFinding(chart, "Major");
+		int erythromycin = unratedFindingNaming(chart, "Erythromycin");
+		assertTrue(DrugReferenceTestSupport.findingAt(chart, major).getText().contains("moderate inhibitors"),
+				"precondition: the Major finding's mechanism says moderate: " + chart.getText());
+		LlmInferenceService service = serviceOver(chart,
+				"Clarithromycin interacts with active order Lumateperone, and her erythromycin allergy is a "
+						+ "Moderate cross-reactivity [" + major + "] [" + erythromycin + "].");
+		assertEquals(Collections.singletonList(new UnfoundedFindingSeverity(erythromycin, "Moderate")),
+				service.search(patient(), CLARITHROMYCIN_QUESTION).getUnfoundedFindingSeverities());
 	}
 
 	@Test
@@ -228,11 +249,11 @@ public class UnfoundedFindingSeverityTest {
 
 	@Test
 	public void theControlCellStatingOnlyRatingsItsFindingsCarryStatesNone() {
-		// Decision 78's cell, with every finding's own rating stated. Said plainly so this does not read
-		// as a stronger control than it is: this arrangement injects no unrated finding at all, so the
-		// check returns at its stamp gate before it reads a sentence. What this case holds is that gate —
-		// a stamp written TRUE on every finding reddens it. The sentence unit and the co-cited exemption
-		// are held by the Sarah Taylor cases above.
+		// Decision 78's cell, with every finding's own rating stated — the ticket's control, run as the
+		// ticket asks. Said plainly so it does not read as a stronger control than it is: it pins no gate.
+		// This arrangement injects no unrated finding, and even with the stamp written TRUE on every
+		// finding each one's Major is carried by another cited in the same sentence, so it stays green.
+		// The stamp, the unit and the exemption are held by the other cases here.
 		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOverWithRecordedAllergies(SHIPPED,
 				chartOf("Methylprednisolone 4mg tablet", "Budesonide 3mg capsule", "Simvastatin 20mg tablet"),
 				CLARITHROMYCIN_QUESTION,
@@ -263,7 +284,7 @@ public class UnfoundedFindingSeverityTest {
 						+ "cross-reactivity [" + hydrocortisone + "].",
 				Collections.singletonList(Integer.valueOf(dexamethasone)));
 		ChartAnswer answer = service.search(patient(), CAN_I_GIVE);
-		assertTrue(referenceIndexes(answer).contains(Integer.valueOf(dexamethasone)),
+		assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(Integer.valueOf(dexamethasone)),
 				"precondition: the resolution admits the array-only citation, so the check is handed it");
 		assertEquals(Collections.<UnfoundedFindingSeverity> emptyList(),
 				answer.getUnfoundedFindingSeverities());
@@ -377,15 +398,6 @@ public class UnfoundedFindingSeverityTest {
 			}
 		}
 		throw new IllegalStateException("no finding rated " + rating + ": " + chart.getText());
-	}
-
-	private static Set<Integer> referenceIndexes(ChartAnswer answer) {
-		Set<Integer> out = new LinkedHashSet<Integer>();
-		for (org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference reference
-				: answer.getReferences()) {
-			out.add(Integer.valueOf(reference.getIndex()));
-		}
-		return out;
 	}
 
 	/** The patient's own drug orders as chart records, rendered by the REAL serializer. */

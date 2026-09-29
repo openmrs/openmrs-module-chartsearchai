@@ -448,13 +448,9 @@ public final class DrugReferenceTestSupport {
 	 */
 	public static PatientChart injectedCuratedAllergyFindingChart(String fixtureResource, String question,
 			List<String> allergies) throws IOException {
-		PatientChart chart = injectorWithSafety(serviceWith(fixtureEntries(fixtureResource))).injectRecords(
-				oneRecordChart(), ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null), question);
-		if (injectedFindings(chart).isEmpty()) {
-			throw new IllegalStateException("no safety finding was injected for allergies " + allergies
-					+ " and question: " + question);
-		}
-		return chart;
+		return injectedOrThrow(curatedFixtureService(fixtureResource), oneRecordChart(),
+				ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null), question,
+				"allergies " + allergies);
 	}
 
 	/**
@@ -605,14 +601,10 @@ public final class DrugReferenceTestSupport {
 	 */
 	public static PatientChart injectedFindingsOverOrdersWithRecordedAllergies(DrugReferenceService service,
 			PatientChart base, String question, Set<String> allergies, String... orderDisplays) {
-		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
-		Set<String> names = new LinkedHashSet<String>();
-		for (String display : orderDisplays) {
-			orders.add(activeOrder("order-" + display, display, display));
-			names.add(display);
-		}
-		return injectedOrThrow(service, base, ctx(60, null, names, null, allergies, null, orders), question,
-				"orders " + names + " and allergies " + allergies);
+		PatientClinicalContext naming = rawContextNaming(60, null, orderDisplays);
+		return injectedOrThrow(service, base, ctx(60, null, naming.getActiveDrugNames(), null, allergies, null,
+				naming.getActiveDrugOrders()), question, "orders " + naming.getActiveDrugNames() + " and allergies "
+				+ allergies);
 	}
 
 	/**

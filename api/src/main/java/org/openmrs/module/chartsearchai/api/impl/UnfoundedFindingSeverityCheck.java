@@ -50,8 +50,9 @@ import org.slf4j.LoggerFactory;
  * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, as the issue's owner decided. The sibling's whole-answer
  * unit cannot work here, because "Major" elsewhere in the answer is exactly the false report. A rating
  * word in that sentence is reported only where no finding the sentence cites, the unrated one included,
- * states that rating in its own record ({@code aCitedFindingStates} says why the record and not the rating
- * field), which keeps silent a rating quoted from another finding's detail beside it — PR #554's fourth run.
+ * carries that rating ({@code aCitedFindingCarries} says what carrying is for a finding with a rating
+ * field and for one without), which keeps silent a rating quoted from another finding's detail beside it
+ * — PR #554's fourth run.
  *
  * <p><b>Which findings a sentence cites is {@link SafetyFindingCitationExtentCheck#citedFindingIndexes}</b>,
  * asked of the sentence: the ONE reading of that question (issue #409), with the #305 filter and the
@@ -68,8 +69,8 @@ import org.slf4j.LoggerFactory;
  *   <li>"Unknown severity" attached to an unrated finding — ADR Decision 123 measured that shape too.
  *       {@code statableRating} declines {@code unknown}, and reading it would report correct prose such
  *       as "its severity is unknown";</li>
- *   <li>a rating attached to the unrated finding in a sentence that also cites a finding whose record
- *       states that rating — the enumeration sentence ADR Decision 76 refuted sentence scoping with. The
+ *   <li>a rating attached to the unrated finding in a sentence that also cites a finding carrying that
+ *       rating — the enumeration sentence ADR Decision 76 refuted sentence scoping with. The
  *       exemption is what buys the #554 fourth run's silence, and this is its cost;</li>
  *   <li>a marker placed after its sentence's terminator ("…a Major finding. [354]"), which the
  *       splitter puts in the next sentence: the finding's own sentence is then silent, and the next
@@ -122,13 +123,12 @@ final class UnfoundedFindingSeverityCheck {
 			// The GATE as well as the lookup: on the shipped default no finding is injected, and a chart
 			// carrying none that is unrated returns here before the answer is read.
 			Set<Integer> unrated = new HashSet<Integer>();
-			// Every finding's record text, for the exemption below: the stamp is non-null on a finding and
-			// on nothing else.
-			Map<Integer, String> findingTexts = new HashMap<Integer, String>();
+			// Every finding, for the exemption below: the stamp is non-null on a finding and on nothing else.
+			Map<Integer, RecordMapping> findings = new HashMap<Integer, RecordMapping>();
 			for (RecordMapping mapping : mappings) {
 				Boolean findingUnrated = mapping.getFindingUnrated();
 				if (findingUnrated != null) {
-					findingTexts.put(Integer.valueOf(mapping.getIndex()), mapping.getText());
+					findings.put(Integer.valueOf(mapping.getIndex()), mapping);
 					if (findingUnrated.booleanValue()) {
 						unrated.add(Integer.valueOf(mapping.getIndex()));
 					}
@@ -156,7 +156,7 @@ final class UnfoundedFindingSeverityCheck {
 					}
 					for (String rating : vocabulary) {
 						if (ChartSearchAiUtils.statesWord(sentence, rating)
-								&& !aCitedFindingStates(rating, citedHere, findingTexts)) {
+								&& !aCitedFindingCarries(rating, citedHere, findings)) {
 							seen.add(new UnfoundedFindingSeverity(citation.intValue(), rating));
 						}
 					}
@@ -180,20 +180,26 @@ final class UnfoundedFindingSeverityCheck {
 	}
 
 	/**
-	 * Whether a finding cited in the sentence states {@code rating} in its own record — the exemption
-	 * the issue's owner decided, "no other finding cited in the same sentence carries that rating", read
-	 * off the records the model was given. The record and not {@link RecordMapping#getFindingSeverity()}:
-	 * a condition-mediated finding has no rating field and its detail states each drug-disease rating
-	 * ("Metformin is rated Major in Acidosis, Lactic"), and a rated finding's record states its rating
-	 * wherever that field is set ({@code DrugReferenceInjector.ratingThisRecordStates}). The unrated
-	 * finding's OWN record is asked too, so a word an operator dataset's note put inside it is not
-	 * reported either. Reading a record can only EXEMPT — a mechanism's own "major bleeding" silences a
-	 * report, never raises one — which is the direction this check must fail in.
+	 * Whether a finding cited in the sentence CARRIES {@code rating} — the exemption the issue's owner
+	 * decided, "no other finding cited in the same sentence carries that rating". A finding with a rating
+	 * field carries that rating and no other: its {@link RecordMapping#getFindingSeverity()} is asked, and
+	 * never its prose, whose mechanism can say "moderate inhibitors of CYP450 3A4" on a rule rated Major.
+	 * A finding with no rating field is asked what its RECORD states, because that is where what it
+	 * carries is: a condition-mediated finding's detail states each drug-disease rating ("Metformin is
+	 * rated Major in Acidosis, Lactic"), and the unrated finding's own record can carry a word an
+	 * operator dataset's note put there. Reading a record can only EXEMPT, the direction this check must
+	 * fail in. Both halves go through {@link ChartSearchAiUtils#statesWord}, the one scan, so a field
+	 * spelled {@code major} by an operator is read as the rating {@code Major}.
 	 */
-	private static boolean aCitedFindingStates(String rating, Set<Integer> citedHere,
-			Map<Integer, String> findingTexts) {
-		for (Integer finding : citedHere) {
-			if (ChartSearchAiUtils.statesWord(findingTexts.get(finding), rating)) {
+	private static boolean aCitedFindingCarries(String rating, Set<Integer> citedHere,
+			Map<Integer, RecordMapping> findings) {
+		for (Integer cited : citedHere) {
+			RecordMapping finding = findings.get(cited);
+			if (finding == null) {
+				continue;
+			}
+			String carried = finding.getFindingSeverity() != null ? finding.getFindingSeverity() : finding.getText();
+			if (ChartSearchAiUtils.statesWord(carried, rating)) {
 				return true;
 			}
 		}

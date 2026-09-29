@@ -760,12 +760,12 @@ public class DrugReferenceInjector {
 			// marker reaches this record, never the chip.
 			// And, since issue #515, whether the clause this record ends in withholds, and the rows of the
 			// substance it is about — both off the finding in hand, the one place either is written — and
-			// since issue #553 when the partner it names starts, for one that has not started.
+			// since issue #553 when each partner it names that has not started starts.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
 					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
-					finding.namedPartners(), SafetyWarning.orderNamesOf(finding), finding.partnerScheduledStart(),
+					finding.namedPartners(), SafetyWarning.orderNamesOf(finding), finding.partnerScheduledStarts(),
 					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;

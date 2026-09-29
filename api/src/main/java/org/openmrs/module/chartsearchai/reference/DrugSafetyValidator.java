@@ -4774,9 +4774,8 @@ public class DrugSafetyValidator {
 		private String collapseKey() {
 			String note = rule.getNote();
 			// A chip naming an order that has not started is never merged (issue #553): the merged chip
-			// renders ONE phrase for every partner it names, and SafetyWarning.partnerScheduledStart is a
-			// value about one partner.
-			if (folded || note == null || note.isEmpty() || chip.partnerScheduledStart() != null) {
+			// renders ONE phrase for every partner it names.
+			if (folded || note == null || note.isEmpty() || !chip.partnerScheduledStarts().isEmpty()) {
 				return null;
 			}
 			return (rule.getSeverity() == null ? "" : rule.getSeverity()) + "\u0000" + note;
@@ -4933,7 +4932,31 @@ public class DrugSafetyValidator {
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + (noneHasStarted(carriers) ? " is in " : " is already in ") + ordersNamed(carriers)
 					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()), herOrder);
+			new ArrayList<String>(ordersByDisplay.keySet()), herOrder)
+				.withPartnerScheduledStarts(notStartedByDisplay(carriers));
+	}
+
+	/**
+	 * Each display of {@code carriers} no carrier of which has started, with the earliest start among
+	 * them — the partners issue #477's two findings name that {@code FindingPartnerCoverageCheck} must
+	 * name as scheduled, never as active (issue #553). A display one started order carries is left out:
+	 * that order is in force.
+	 */
+	private static Map<String, Date> notStartedByDisplay(List<PatientClinicalContext.ActiveDrugOrder> carriers) {
+		Map<String, Date> starts = new LinkedHashMap<String, Date>();
+		Set<String> started = new HashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : carriers) {
+			if (order.hasStarted()) {
+				started.add(order.getDisplay());
+			} else {
+				Date earliest = starts.get(order.getDisplay());
+				if (earliest == null || order.getScheduledStart().before(earliest)) {
+					starts.put(order.getDisplay(), order.getScheduledStart());
+				}
+			}
+		}
+		starts.keySet().removeAll(started);
+		return starts;
 	}
 
 	/**
@@ -5084,7 +5107,8 @@ public class DrugSafetyValidator {
 			warnings.add(at++, SafetyWarning.ordersSharingASubstance(named,
 				named + (substances.size() == 1 ? " is in " : " are in ") + ordersNamed(set.getKey())
 						+ " — possible duplicate therapy",
-				new ArrayList<String>(ordersByDisplay.keySet())).aboutSubstance(sharedRows.get(set.getKey())));
+				new ArrayList<String>(ordersByDisplay.keySet())).aboutSubstance(sharedRows.get(set.getKey()))
+					.withPartnerScheduledStarts(notStartedByDisplay(set.getKey())));
 		}
 	}
 
@@ -7802,7 +7826,8 @@ public class DrugSafetyValidator {
 				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName,
 				chartOrderBridges, aboutACurrentMedication,
 				namedPartners == null ? Collections.singletonList(partnerName) : namedPartners)
-				.withPartnerScheduledStart(partnerStart);
+				.withPartnerScheduledStarts(partnerStart == null ? null
+						: Collections.singletonMap(partnerName, partnerStart));
 	}
 
 	/**

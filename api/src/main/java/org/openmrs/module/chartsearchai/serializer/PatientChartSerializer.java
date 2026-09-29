@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -869,14 +871,15 @@ public class PatientChartSerializer {
 		private final Boolean orderDrugNamed;
 
 		/**
-		 * For an injected {@code safety_finding}, when the one active order it names as its partner is
-		 * scheduled to start, for a partner that has not started — spelled {@code yyyy-MM-dd}, off the
-		 * finding in hand ({@code SafetyWarning.partnerScheduledStart}) — else {@code null} (issue #553).
-		 * Metadata beside the record and not a reading of its text, for the reason
-		 * {@link #findingPartners} is: {@code FindingPartnerCoverageCheck} names that partner as a
-		 * scheduled order, never as an active one.
+		 * For an injected {@code safety_finding}, each order among {@link #findingPartners} that has not
+		 * started, keyed by that partner's name, mapped to when it is scheduled to start — spelled
+		 * {@code yyyy-MM-dd}, off the finding in hand ({@code SafetyWarning.partnerScheduledStarts}) — and
+		 * empty on every other record (issue #553). Per partner, because one finding may name a started
+		 * order and a scheduled one (issue #477's duplicate therapy). Metadata beside the record and not a
+		 * reading of its text, for the reason {@link #findingPartners} is: {@code FindingPartnerCoverageCheck}
+		 * names each such partner as a scheduled order, never as an active one.
 		 */
-		private final String findingPartnerScheduledStart;
+		private final Map<String, String> findingPartnerScheduledStarts;
 
 		/**
 		 * The daily dosing ceilings an injected {@code drug_reference} record's own text states for
@@ -1012,16 +1015,16 @@ public class PatientChartSerializer {
 		 * constructor's javadoc states: this rung keeps its list tail and the widest its list-then-Boolean
 		 * one. The finding-rating rung above defaults it to empty. Since issue #514
 		 * {@link #findingBridgeNames} follows it in both rungs, for the same constraint, and since issue
-		 * #553 {@link #findingPartnerScheduledStart} follows that.
+		 * #553 {@link #findingPartnerScheduledStarts} follows that.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, String findingPartnerScheduledStart,
+				List<String> findingPartners, List<String> findingBridgeNames, Map<String, String> findingPartnerScheduledStarts,
 				List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
 					orderStopDate, findingSeverity, findingWithholds, findingSubjectRows, findingPartners,
-					findingBridgeNames, findingPartnerScheduledStart, derivedFrom, null, null);
+					findingBridgeNames, findingPartnerScheduledStarts, derivedFrom, null, null);
 		}
 
 		/**
@@ -1051,14 +1054,17 @@ public class PatientChartSerializer {
 		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
 		 * was — and issue #515 once more, with {@link #findingWithholds} and {@link #findingSubjectRows}
 		 * before it, and issue #514 with {@link #findingBridgeNames} after it, in both — and issue #553
-		 * with {@link #findingPartnerScheduledStart} after that, in both.
+		 * with {@link #findingPartnerScheduledStarts} after that, in both.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, String findingPartnerScheduledStart,
+				List<String> findingPartners, List<String> findingBridgeNames, Map<String, String> findingPartnerScheduledStarts,
 				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
-			this.findingPartnerScheduledStart = findingPartnerScheduledStart;
+			// Copied and wrapped, and never null, for the reason derivedFrom below is.
+			this.findingPartnerScheduledStarts = findingPartnerScheduledStarts == null
+					|| findingPartnerScheduledStarts.isEmpty() ? Collections.<String, String> emptyMap()
+					: Collections.unmodifiableMap(new LinkedHashMap<String, String>(findingPartnerScheduledStarts));
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -1240,9 +1246,9 @@ public class PatientChartSerializer {
 			return orderDrugNamed;
 		}
 
-		/** @return see {@link #findingPartnerScheduledStart}; {@code null} on every other record */
-		public String getFindingPartnerScheduledStart() {
-			return findingPartnerScheduledStart;
+		/** @return see {@link #findingPartnerScheduledStarts}; never null, and empty on every other record */
+		public Map<String, String> getFindingPartnerScheduledStarts() {
+			return findingPartnerScheduledStarts;
 		}
 
 		/**

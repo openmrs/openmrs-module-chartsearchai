@@ -13,8 +13,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
@@ -146,8 +148,8 @@ public class SafetyWarning {
 	/** @see #isStatedInTheAnswer() */
 	private final boolean statedInTheAnswer;
 
-	/** @see #partnerScheduledStart() */
-	private final String partnerScheduledStart;
+	/** @see #partnerScheduledStarts() */
+	private final Map<String, String> partnerScheduledStarts;
 
 	/** @see #orderScheduledStart() */
 	private final String orderScheduledStart;
@@ -428,9 +430,12 @@ public class SafetyWarning {
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
 			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
-			Collection<String> currentOrderDisplays, boolean statedInTheAnswer, String partnerScheduledStart,
+			Collection<String> currentOrderDisplays, boolean statedInTheAnswer, Map<String, String> partnerScheduledStarts,
 			String orderScheduledStart) {
-		this.partnerScheduledStart = partnerScheduledStart;
+		// Copied and wrapped for the reason chartOrderBridges is; never null.
+		this.partnerScheduledStarts = partnerScheduledStarts == null || partnerScheduledStarts.isEmpty()
+				? Collections.<String, String> emptyMap()
+				: Collections.unmodifiableMap(new LinkedHashMap<String, String>(partnerScheduledStarts));
 		this.orderScheduledStart = orderScheduledStart;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.currentOrderDisplays = currentOrderDisplays == null || currentOrderDisplays.isEmpty()
@@ -1169,7 +1174,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
 				matchedOrderNames, subjectRows, currentOrderDisplays, statedInTheAnswer,
-				partnerScheduledStart, orderScheduledStart);
+				partnerScheduledStarts, orderScheduledStart);
 	}
 
 	/**
@@ -1184,7 +1189,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentOrderDisplays, statedInTheAnswer,
-				partnerScheduledStart, orderScheduledStart);
+				partnerScheduledStarts, orderScheduledStart);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1228,7 +1233,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, displays, statedInTheAnswer,
-				partnerScheduledStart, orderScheduledStart);
+				partnerScheduledStarts, orderScheduledStart);
 	}
 
 	/**
@@ -1245,37 +1250,45 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * This warning, stating that the one active order it names as its PARTNER has not started and is
-	 * scheduled to start on {@code start} (issue #553). Package-private: written only by
-	 * {@code DrugSafetyValidator.interactionWarning}, from the same answer that worded the detail's
-	 * "scheduled order" — so the two cannot disagree. Changes nothing this warning prints.
+	 * This warning, stating that each order {@code starts} keys, among those it names as its partners
+	 * ({@link #namedPartners()}), has not started and is scheduled to start on the date it maps to (issue
+	 * #553). Package-private: written by {@code DrugSafetyValidator.interactionWarning}, from the same
+	 * answer that worded the detail's "scheduled order", and by issue #477's two duplicate-therapy
+	 * findings, from the carriers whose displays they name — so a finding and its detail cannot disagree.
+	 * Changes nothing this warning prints.
 	 */
-	SafetyWarning withPartnerScheduledStart(Date start) {
-		if (start == null && partnerScheduledStart == null) {
+	SafetyWarning withPartnerScheduledStarts(Map<String, Date> starts) {
+		if ((starts == null || starts.isEmpty()) && partnerScheduledStarts.isEmpty()) {
 			return this;
+		}
+		Map<String, String> spelled = new LinkedHashMap<String, String>();
+		if (starts != null) {
+			for (Map.Entry<String, Date> start : starts.entrySet()) {
+				spelled.put(start.getKey(), DateFormatUtil.formatDate(start.getValue()));
+			}
 		}
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
-				statedInTheAnswer, start == null ? null : DateFormatUtil.formatDate(start), orderScheduledStart);
+				statedInTheAnswer, spelled, orderScheduledStart);
 	}
 
 	/**
-	 * When the one active order this chip names as its partner is scheduled to start, spelled as
-	 * {@code DateFormatUtil.formatDate} spells every date this module publishes, for a partner that has
-	 * not started — or {@code null}, on every chip whose partner has started or that names no order
-	 * (issue #553). Set on a chip naming exactly one partner: {@code DrugSafetyValidator.collapseSharedMechanisms}
-	 * reads it to keep such a chip out of a merge. Package-private and not a getter, so it reaches no wire;
+	 * For each partner this chip names ({@link #namedPartners()}) that has not started, keyed by that
+	 * name, when it is scheduled to start, spelled as {@code DateFormatUtil.formatDate} spells every date
+	 * this module publishes; a partner that has started is not a key, and a chip naming no such partner
+	 * maps nothing (issue #553). Never null. {@code DrugSafetyValidator.collapseSharedMechanisms} reads it
+	 * to keep such a chip out of a merge. Package-private and not a getter, so it reaches no wire;
 	 * {@code DrugReferenceInjector} carries it onto the finding's record for {@code FindingPartnerCoverageCheck}.
 	 */
-	String partnerScheduledStart() {
-		return partnerScheduledStart;
+	Map<String, String> partnerScheduledStarts() {
+		return partnerScheduledStarts;
 	}
 
 	/**
 	 * When the order this CONTRAINDICATION is about is scheduled to start, spelled as
-	 * {@link #partnerScheduledStart()} is — set by {@link #statingItsOrderHasNotStarted} alone, in the
+	 * {@link #partnerScheduledStarts()} does — set by {@link #statingItsOrderHasNotStarted} alone, in the
 	 * step that writes the detail's "has not started" sentence, and {@code null} on every chip that step
 	 * did not build (issue #553, review round 2 of PR #559). Package-private and not a getter, so it
 	 * reaches no wire: {@code DrugReferenceInjector.composeFromFindings} reads it to leave out the
@@ -1301,7 +1314,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
-				statedInTheAnswer, partnerScheduledStart, DateFormatUtil.formatDate(start));
+				statedInTheAnswer, partnerScheduledStarts, DateFormatUtil.formatDate(start));
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
@@ -1311,7 +1324,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
-				true, partnerScheduledStart, orderScheduledStart);
+				true, partnerScheduledStarts, orderScheduledStart);
 	}
 
 	/**
@@ -1342,7 +1355,7 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentOrderDisplays,
-				statedInTheAnswer, partnerScheduledStart, orderScheduledStart);
+				statedInTheAnswer, partnerScheduledStarts, orderScheduledStart);
 	}
 
 	/**

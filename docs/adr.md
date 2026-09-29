@@ -12141,7 +12141,11 @@ month would be a safety loss — and fix the wording.
   the sentence `FindingPartnerCoverageCheck` appends; the duplicate-therapy sentence naming several of her
   orders (#477) names each carrier that has not started after the started ones — *"X is in active order A
   and scheduled order B (scheduled to start <date>)"* — and says "is in" rather than "is already in" where
-  none has started (`DrugSafetyValidator.ordersNamed`; found by review round 3 of PR #559); the stand-in
+  none has started (`DrugSafetyValidator.ordersNamed`; found by review round 3 of PR #559). The appended
+  sentence reads each partner's own date, off `RecordMapping.getFindingPartnerScheduledStarts()`, which both
+  duplicate-therapy findings write as well as the rule chip — one date per finding named every partner of
+  such a finding "active order" (review round 4 of PR #559); a display a started order also carries stays
+  "active order". The stand-in
   record for an order the chart has no record of reads `Scheduled drug order: …` with the same status.
 - **A question proposing the drug treats it as a proposal.** Where a question PROPOSES a drug she holds only
   as orders that have not started, the drug-in-play arm states the proposal referent rather than Decision

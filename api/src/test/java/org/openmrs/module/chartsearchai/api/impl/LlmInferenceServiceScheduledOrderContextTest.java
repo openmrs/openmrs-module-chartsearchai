@@ -161,6 +161,37 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 				"the started order's line keeps its referent: " + answer.getAnswer());
 	}
 
+	@Test
+	public void aDuplicateTherapyScreenNamesEachUnnamedOrderAsItStands() throws IOException {
+		// Review round 4 of PR #559: issue #477's screening finding names her started Rifampicin 300mg and
+		// her scheduled Rifampicin, and the sentence the module appends for an answer naming neither called
+		// both "active order" — its wording read one date per finding, which only the interaction arm wrote.
+		// The started order is the other value, and keeps "active order".
+		assertDuplicateTherapyPartnersNamedAsTheyStand("Are there any drug interactions among her current medications?");
+	}
+
+	@Test
+	public void aDuplicateTherapyFindingAboutTheDrugInPlayNamesEachUnnamedOrderAsItStands() throws IOException {
+		// The same, for #477's finding about the drug the question puts in play.
+		assertDuplicateTherapyPartnersNamedAsTheyStand("Can I give her rifampicin?");
+	}
+
+	private void assertDuplicateTherapyPartnersNamedAsTheyStand(String question) throws IOException {
+		executeDataSet("StartedRifampicinOrderTestData.xml");
+		Recorder reader = serviceAnswering("The model was called.");
+		reader.service.search(patient, question);
+		Matcher line = Pattern.compile("(?m)^\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX)
+				+ ".*possible duplicate therapy.*$").matcher(reader.prompt);
+		assertTrue(line.find(), "precondition: a duplicate-therapy finding, prompt was:\n" + reader.prompt);
+		String modelAnswer = "Yes — there is a possible duplicate therapy [" + line.group(1) + "].";
+
+		ChartAnswer answer = serviceAnswering(modelAnswer).service.search(patient, question);
+
+		assertEquals(modelAnswer + " Also covered by those findings and not named above: scheduled order Rifampicin ("
+				+ STARTS + ") and active order Rifampicin 300mg.", answer.getAnswer(),
+				"each order the answer left unnamed is named as it stands, prompt was:\n" + reader.prompt);
+	}
+
 	/** The prompt the module builds for the amlodipine question, read once through the real pipeline. */
 	private String prompt() throws IOException {
 		Recorder recorder = serviceAnswering("Amlodipine can be given.");

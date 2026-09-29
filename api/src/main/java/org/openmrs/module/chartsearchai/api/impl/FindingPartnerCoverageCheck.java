@@ -106,7 +106,7 @@ public final class FindingPartnerCoverageCheck {
 			for (String partner : finding.getFindingPartners()) {
 				String key = comparable(partner);
 				if (!haystack.contains(key) && listed.add(key)) {
-					unstated.add(partnerWords(partner, finding.getFindingPartnerScheduledStart()));
+					unstated.add(partnerWords(partner, finding.getFindingPartnerScheduledStarts().get(partner)));
 				}
 			}
 		}
@@ -147,8 +147,8 @@ public final class FindingPartnerCoverageCheck {
 	}
 
 	/**
-	 * The words an unstated partner is named with: {@code "active order X"}, or, for a partner whose
-	 * finding's stamp says it has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStart()}),
+	 * The words an unstated partner is named with: {@code "active order X"}, or, for a partner its
+	 * finding's stamp says has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStarts()}),
 	 * {@code "scheduled order X (scheduled to start <date>)"} — the date in brackets, so in a list of several
 	 * it cannot be read as the next item's. A partner name carrying a bracket of its own ("Rifampicin
 	 * (rifampin)") then reads with two, which is accepted as the price of that. Worded from the stamp,

@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * current-medication column — {@link #theOneOrderFindingIsACautionAboutHerMedicationAndNotAReasonToChangeIt}
  * — and two keep the call to change her medication —
  * {@link #twoOfHerOrdersCarryingTheProposedDrugStillStateTheCallToChangeHerMedication}.
+ *
+ * <p><b>What adding it would duplicate</b> (review round 3 of PR #554): the order, or where an order may
+ * carry another substance, the drug that order carries —
+ * {@link #aCombinationOrderIsSaidToCarryTheProposedDrugAndNotToBeDuplicatedByIt} and
+ * {@link #severalOrdersOneOfThemACombinationAreSaidToCarryTheProposedDrug}.
  */
 public class ProposedDrugAlreadyInHerOrdersTest {
 
@@ -68,6 +74,11 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 	 *  above so a reword of the one cannot leave the other asserting a string production never emits. */
 	private static final String ALREADY_IN = PREDNISONE_ALREADY_IN.substring("Prednisone ".length(),
 			"Prednisone is already in active order".length());
+
+	/** What the stamp says adding a single-substance drug would do, for one order and for several. */
+	private static final String THAT_ORDER = "adding it would duplicate that order";
+
+	private static final String THOSE_ORDERS = "adding it would duplicate those orders";
 
 	@Test
 	public void eachOfTheIssuesPhrasingsIsToldTheDrugIsAlreadyInHerOrder() {
@@ -94,7 +105,7 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 			assertTrue(DrugReferenceTestSupport.findingTexts(chart).stream().anyMatch(t -> t.contains(PREDNISONE_ALREADY_IN)),
 				"the finding reaches the prompt: " + chart.getText());
 			assertEquals(Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
-					Arrays.asList(PREDNISONE_ORDER), 1)), chart.getDrugsAlreadyOrdered(),
+					Arrays.asList(PREDNISONE_ORDER), 1, THAT_ORDER)), chart.getDrugsAlreadyOrdered(),
 				"the chart states the fact the user-message clause is written from: " + question);
 		}
 	}
@@ -130,7 +141,7 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 								+ question + " — " + warning.getDetail());
 				}
 			}
-			assertEquals(Collections.singletonList(new AlreadyOrderedDrug(drug, Arrays.asList(order), 1)),
+			assertEquals(Collections.singletonList(new AlreadyOrderedDrug(drug, Arrays.asList(order), 1, THAT_ORDER)),
 				inject(context, question).getDrugsAlreadyOrdered(), question);
 		}
 	}
@@ -192,7 +203,7 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 		assertEquals("Prednisone is already in active orders " + PREDNISONE_ORDER
 				+ " and Prednisone 20mg — possible duplicate therapy", found.get(0).getDetail());
 		assertEquals(Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
-				Arrays.asList(PREDNISONE_ORDER, "Prednisone 20mg"), 2)), inject(context, question).getDrugsAlreadyOrdered());
+				Arrays.asList(PREDNISONE_ORDER, "Prednisone 20mg"), 2, THOSE_ORDERS)), inject(context, question).getDrugsAlreadyOrdered());
 	}
 
 	@Test
@@ -209,8 +220,11 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 		assertEquals(1, found.size());
 		assertEquals("Prednisone is already in active orders " + PREDNISONE_ORDER
 				+ " (2 orders) — possible duplicate therapy", found.get(0).getDetail());
+		assertTrue(DrugSafetyValidator.licensesWithholding(found.get(0)),
+			"two prescriptions duplicate each other, so the strength counts the orders as the stamp does, and "
+					+ "not the one label they share");
 		assertEquals(Collections.singletonList(new AlreadyOrderedDrug("Prednisone",
-				Arrays.asList(PREDNISONE_ORDER + " (2 orders)"), 2)), inject(context, question).getDrugsAlreadyOrdered());
+				Arrays.asList(PREDNISONE_ORDER + " (2 orders)"), 2, THOSE_ORDERS)), inject(context, question).getDrugsAlreadyOrdered());
 	}
 
 	@Test
@@ -287,6 +301,64 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 		assertTrue(warnings.stream().anyMatch(w -> w.getDrug().startsWith("Prednisone")),
 			"precondition: the answer put prednisone in play: " + DrugReferenceTestSupport.details(warnings));
 		assertNoneAlreadyIn(warnings);
+	}
+
+	@Test
+	public void aCombinationOrderIsSaidToCarryTheProposedDrugAndNotToBeDuplicatedByIt() {
+		// Review round 3 of PR #554: a combination's display establishes the proposed constituent, so the
+		// finding is raised, but adding one constituent doubles that constituent and is not a second prescription of
+		// the combination. So the sentence, and the stamp the clause after the question is written from, say
+		// which: the drug that order carries. Each cell: {question, her order's display, another name the chart
+		// records for it or null, the finding's subject label}. The shipped knowledge base resolves a Bactrim DS
+		// display to the trimethoprim row alone, so there it is the concept's recorded name that shows the
+		// combination.
+		String[][] cells = {
+			{ "Can I give her hydrochlorothiazide?", "Lisinopril/hydrochlorothiazide 20/12.5", null,
+				"Hydrochlorothiazide" },
+			{ "Can I give her acetaminophen?", "Acetaminophen and codeine 300/30", null, "Acetaminophen" },
+			{ "Can I give her codeine?", "Tylenol with Codeine #3", null, "Codeine" },
+			{ "Can I give her trimethoprim?", "Bactrim DS", "Sulfamethoxazole / trimethoprim", "Trimethoprim" } };
+		for (String[] cell : cells) {
+			String question = cell[0];
+			String order = cell[1];
+			String drug = cell[3];
+			List<String> names = cell[2] == null ? Arrays.asList(order) : Arrays.asList(order, cell[2]);
+			PatientClinicalContext context = SHIPPED.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set(order, WARFARIN_ORDER), null, null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-combination", order,
+						new LinkedHashSet<String>(names), Collections.<String> emptySet()),
+					DrugReferenceTestSupport.activeOrder("order-warfarin", WARFARIN_ORDER))));
+			List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(SHIPPED).validate("", question, context);
+
+			List<SafetyWarning> found = alreadyIn(warnings);
+			assertEquals(1, found.size(), question + " — was: " + DrugReferenceTestSupport.details(warnings));
+			String consequence = "adding it would duplicate the " + drug + " that order carries";
+			assertEquals(drug + " is already in active order " + order + " — " + consequence, found.get(0).getDetail(),
+				question);
+			assertFalse(DrugSafetyValidator.licensesWithholding(found.get(0)),
+				"still one order, so still a caution about her medication: " + question);
+			assertEquals(Collections.singletonList(new AlreadyOrderedDrug(drug, Arrays.asList(order), 1, consequence)),
+				inject(context, question).getDrugsAlreadyOrdered(), question);
+		}
+	}
+
+	@Test
+	public void severalOrdersOneOfThemACombinationAreSaidToCarryTheProposedDrug() {
+		// The plural form of the same claim: "adding it would duplicate those orders" is as false of a
+		// combination among them as the singular is of one.
+		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(SHIPPED, 60, null,
+			"Lisinopril/hydrochlorothiazide 20/12.5", "Hydrochlorothiazide 25mg", WARFARIN_ORDER);
+		String question = "Can I give her hydrochlorothiazide?";
+		List<SafetyWarning> found = alreadyIn(DrugReferenceTestSupport.validator(SHIPPED).validate("", question,
+			context));
+		assertEquals(1, found.size());
+		assertTrue(found.get(0).getDetail().endsWith(" — possible duplicate therapy"),
+			"two orders duplicate each other, so the finding keeps #477's sentence: " + found.get(0).getDetail());
+		assertEquals(Collections.singletonList(new AlreadyOrderedDrug("Hydrochlorothiazide",
+				Arrays.asList("Lisinopril/hydrochlorothiazide 20/12.5", "Hydrochlorothiazide 25mg"), 2,
+				"adding it would duplicate the Hydrochlorothiazide those orders carry")),
+			inject(context, question).getDrugsAlreadyOrdered());
 	}
 
 	private static PatientClinicalContext prednisoneChart() {

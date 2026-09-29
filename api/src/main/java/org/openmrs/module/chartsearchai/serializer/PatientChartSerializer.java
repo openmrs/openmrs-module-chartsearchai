@@ -682,16 +682,21 @@ public class PatientChartSerializer {
 
 		private final int orderCount;
 
+		private final String consequence;
+
 		/**
 		 * @param drug the drug as the finding names it
 		 * @param orders the orders as the finding names them, in its order: each display once, followed by
 		 *        the count of orders carrying it where that is more than one
 		 * @param orderCount how many active orders those labels stand for
+		 * @param consequence what adding the drug would duplicate, in the words the clause after the question
+		 *        states and a one-order finding's sentence ends with ({@code DrugSafetyValidator.consequenceOfAdding})
 		 */
-		public AlreadyOrderedDrug(String drug, List<String> orders, int orderCount) {
+		public AlreadyOrderedDrug(String drug, List<String> orders, int orderCount, String consequence) {
 			this.drug = drug;
 			this.orders = Collections.unmodifiableList(new ArrayList<String>(orders));
 			this.orderCount = orderCount;
+			this.consequence = consequence;
 		}
 
 		public String getDrug() {
@@ -708,18 +713,26 @@ public class PatientChartSerializer {
 			return orderCount;
 		}
 
+		/** What adding the drug would duplicate — the orders, or where one of them may carry another
+		 *  substance, the drug they carry (review round 3 of PR #554). Written beside the finding's sentence,
+		 *  so the clause after the question and a one-order finding cannot state two consequences. */
+		public String getConsequence() {
+			return consequence;
+		}
+
 		@Override
 		public boolean equals(Object other) {
 			if (!(other instanceof AlreadyOrderedDrug)) {
 				return false;
 			}
 			AlreadyOrderedDrug that = (AlreadyOrderedDrug) other;
-			return drug.equals(that.drug) && orders.equals(that.orders) && orderCount == that.orderCount;
+			return drug.equals(that.drug) && orders.equals(that.orders) && orderCount == that.orderCount
+					&& consequence.equals(that.consequence);
 		}
 
 		@Override
 		public int hashCode() {
-			return 31 * (31 * drug.hashCode() + orders.hashCode()) + orderCount;
+			return 31 * (31 * (31 * drug.hashCode() + orders.hashCode()) + orderCount) + consequence.hashCode();
 		}
 
 		// No toString: it would render the names of this patient's medications, and a diagnostic log line

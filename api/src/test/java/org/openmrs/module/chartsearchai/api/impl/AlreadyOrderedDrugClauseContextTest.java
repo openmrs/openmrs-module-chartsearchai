@@ -61,23 +61,33 @@ public class AlreadyOrderedDrugClauseContextTest {
 	private static final String CLAUSE_MARK = "is already in the patient's active orders";
 
 	private static PatientChart baseChart() {
+		return baseChart(PREDNISONE_ORDER);
+	}
+
+	/** The chart of a patient on {@code display} and warfarin. */
+	private static PatientChart baseChart(String display) {
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>();
-		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "order-prednisone",
-				PREDNISONE_ORDER + " tablet, 1 daily", null));
+		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "order-proposed",
+				display + " tablet, 1 daily", null));
 		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "order-warfarin",
 				"Warfarin 5mg tablet, 1 daily", null));
 		return new PatientChartSerializer().serialize(null, records, Collections.<String> emptySet());
 	}
 
 	private static PatientChart injectedFor(String question) {
+		return injectedFor(question, PREDNISONE_ORDER);
+	}
+
+	/** The real injector's chart for {@code question}, over {@link #baseChart(String)}'s two orders. */
+	private static PatientChart injectedFor(String question, String display) {
 		DrugReferenceService service = DrugReferenceTestSupport.shippedServiceWithGroups();
 		List<PatientClinicalContext.ActiveDrugOrder> orders = Arrays.asList(
-			new PatientClinicalContext.ActiveDrugOrder("order-prednisone", PREDNISONE_ORDER,
-					new LinkedHashSet<String>(Arrays.asList(PREDNISONE_ORDER))),
+			new PatientClinicalContext.ActiveDrugOrder("order-proposed", display,
+					new LinkedHashSet<String>(Arrays.asList(display))),
 			new PatientClinicalContext.ActiveDrugOrder("order-warfarin", "Warfarin 5mg",
 					new LinkedHashSet<String>(Arrays.asList("Warfarin 5mg"))));
-		return DrugReferenceTestSupport.injectedFindingsOver(service, baseChart(), question,
-			new LinkedHashSet<String>(Arrays.asList(PREDNISONE_ORDER, "Warfarin 5mg")),
+		return DrugReferenceTestSupport.injectedFindingsOver(service, baseChart(display), question,
+			new LinkedHashSet<String>(Arrays.asList(display, "Warfarin 5mg")),
 			Collections.<String> emptySet(), orders);
 	}
 
@@ -144,6 +154,29 @@ public class AlreadyOrderedDrugClauseContextTest {
 		assertEquals(1, records.size(), "the finding, in the message the engine is sent: " + message);
 		assertTrue(records.get(0).endsWith(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION),
 			"and its caution, which no longer stands alone as the finding's meaning: " + records.get(0));
+	}
+
+	@Test
+	public void aCombinationOrderIsSaidToCarryTheDrugInTheClauseAsInTheFinding() {
+		// Review round 3 of PR #554: adding hydrochlorothiazide to a lisinopril/hydrochlorothiazide order doubles
+		// its hydrochlorothiazide and is not a second prescription of the combination, so neither the record nor
+		// the clause may say it duplicates the order. The two state one consequence, since the clause reads it
+		// off the finding's stamp.
+		String question = "Can I give her hydrochlorothiazide?";
+		String order = "Lisinopril/hydrochlorothiazide 20/12.5";
+		String consequence = "adding it would duplicate the Hydrochlorothiazide that order carries";
+		RecordingEngine engine = new RecordingEngine();
+		newService(injectedFor(question, order), engine).search(new Patient(), question);
+		String message = engine.messages.get(0);
+
+		assertTrue(message.endsWith(" Hydrochlorothiazide is already in the patient's active orders (" + order
+				+ "): open by saying so; " + consequence + "; then say what the other findings about"
+				+ " Hydrochlorothiazide mean for the patient's current Hydrochlorothiazide, as calls about that"
+				+ " medication and not about adding it."),
+			"was: " + message);
+		String finding = "Hydrochlorothiazide is already in active order " + order + " — " + consequence + ".";
+		assertEquals(1, Arrays.stream(message.split("\n")).filter(line -> line.contains(finding)).count(),
+			"the finding states the same consequence, in the message the engine is sent: " + message);
 	}
 
 	@Test

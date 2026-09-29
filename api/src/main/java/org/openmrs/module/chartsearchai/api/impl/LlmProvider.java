@@ -1194,15 +1194,14 @@ public class LlmProvider {
 			// are pinned by LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes; ADR
 			// Decision 125 carries the gate and the measurement. Its last part scopes the drug's OTHER findings
 			// to the medication she is on (review round 2 of PR #554): given the adding frame alone, the model
-			// refused a second order of her aspirin on an interaction finding about her current aspirin.
+			// refused a second order of her aspirin on an interaction finding about her current aspirin. What
+			// adding it would duplicate is the stamp's own (AlreadyOrderedDrug.getConsequence), written beside the
+			// finding's sentence, so a combination order is said to carry the drug here as there (review round 3).
 			if (drugsAlreadyOrdered != null) {
 				for (PatientChartSerializer.AlreadyOrderedDrug drug : drugsAlreadyOrdered) {
-					boolean one = drug.getOrderCount() == 1;
 					sb.append(' ').append(drug.getDrug()).append(" is already in the patient's active orders (")
 							.append(DrugSafetyValidator.joinPartners(drug.getOrders()))
-							.append("): open by saying so; ")
-							.append(one ? DrugSafetyValidator.ADDING_IT_WOULD_DUPLICATE_THAT_ORDER
-									: "adding it would duplicate those orders")
+							.append("): open by saying so; ").append(drug.getConsequence())
 							.append("; then say what the other findings about ").append(drug.getDrug())
 							.append(" mean for the patient's current ").append(drug.getDrug())
 							.append(", as calls about that medication and not about adding it.");

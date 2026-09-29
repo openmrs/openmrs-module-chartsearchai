@@ -12172,12 +12172,25 @@ contradicts. The caution branch makes neither claim.
 
 **The one-order sentence states what the proposal would do.** Where #477's sentence ends *"— possible
 duplicate therapy"*, this one ends *"— adding it would duplicate that order"*
-(`DrugSafetyValidator.ADDING_IT_WOULD_DUPLICATE_THAT_ORDER`, which the clause below also reads). Review
+(`DrugSafetyValidator.ADDING_IT_WOULD_DUPLICATE_THAT_ORDER`, which the clause below also states). Review
 round 2 of PR #554 found the reason on the issue's own cell (measured under *The measurement*): the answer
 said prednisone was already in her order, then restated the caution clause as the meaning of the finding
 and never said that adding it would duplicate the order. The clause after the question said so, but the
 record did not, and the answer followed the record. So the record carries the words itself. Its strength
 stays a caution. Two or more orders keep #477's sentence, because their duplication is of one another.
+
+**Where an order may carry another substance, the consequence names the drug.** Adding hydrochlorothiazide
+to a `Lisinopril/hydrochlorothiazide 20/12.5` order doubles its hydrochlorothiazide. It is not a second
+prescription of the combination. So the sentence and the clause say *"adding it would duplicate the
+Hydrochlorothiazide that order carries"* (*"those orders carry"* for several) wherever the display or
+another recorded name of a counted order puts another substance in play
+(`DrugSafetyValidator.consequenceOfAdding`, review round 3 of PR #554). The test is what a name PUTS IN
+PLAY, not what it establishes, because the drug-framed wording is true of a single-substance order too:
+`Tylenol with Codeine #3` establishes codeine alone, yet it carries acetaminophen. The consequence is
+written into the chart stamp (`AlreadyOrderedDrug.getConsequence`), so the clause reads it rather than
+deciding it again. The residue is a combination that no recorded name shows. The shipped knowledge base
+files a `Bactrim DS` display under the trimethoprim row alone, so an order recorded under that name only
+is still said to duplicate the order.
 
 **The same fact is stated after the question.** The finding marks itself
 (`SafetyWarning.statesAProposedDrugIsAlreadyOrdered`). `DrugReferenceInjector` stamps the chart with each
@@ -12189,6 +12202,7 @@ stamp, read off the post-inject chart, to `LlmProvider`, and `buildUserMessage` 
 > current Prednisone, as calls about that medication and not about adding it.
 
 - Up to *"then say what"* it is the issue's suggested wording, with *her* rendered *the patient's*.
+  For a combination order the consequence is the drug-framed one above, not the issue's.
 - The last part is not the issue's wording. It scopes the drug's OTHER findings to the medication she is
   on (review round 2 of PR #554). With the issue's wording, Barbara Miller's *"Is aspirin safe for her?"*
   answered in its second sentence *"No — the patient should avoid adding more … aspirin because it
@@ -12282,10 +12296,44 @@ wording and the one-order sentence ending *"— possible duplicate therapy"*.
   moves the answer. Read that row against the pre-answer findings.
 
 The two changes above (the one-order sentence and the clause's last part) answer the first and fourth
-rows. They were not measured on a model in this revision, and the next run of the gate on the head that
-carries them is the measurement.
+rows. The gate ran again on head `f60c15a9`, which carries both (2026-09-29, the same rig, two runs per
+cell, plus two reviewer re-runs of the *give* cell in review round 3 of PR #554):
+
+- Sarah, *"Is it safe to add prednisone for her?"*: all three parts of criterion 1, in both runs.
+- Sarah, *"Is prednisone safe for her?"* and *"Can I give her prednisone?"*: each answer opened by stating
+  the order and that adding it would duplicate it. None refused.
+- Sarah, clarithromycin: byte-identical to `main`.
+- Barbara's ibuprofen and aspirin, Susan's tiotropium and Helen's salicylic acid: each answer opened with
+  the duplicate-order statement, and none refused, in 8 runs. The chips were `main`'s plus the new chip,
+  except on Barbara's ibuprofen cell. There the answer named aspirin, so the post-answer `validate` also
+  raised the aspirin NSAID cross-reactivity chip.
+- **The rating row failed.** On *"Can I give her prednisone?"*, 3 of the 4 runs called her unrated
+  dexamethasone cross-reactivity finding [354] *"a Major finding"*. The chip's severity is null, and the
+  record states *"No severity is rated for this finding."* The fourth run's "Major" was quoted from another
+  chip's detail. On `main` the same residue appeared on *"Is prednisone safe for her?"* (the owner's
+  2026-09-28 comment), and on this head that phrasing stated no rating that no chip carried. So this
+  change moved the residue to another phrasing and did not remove it. It is #402's residue (a), which
+  Decision 123's no-severity sentence did not close.
+
+Nothing in this PR removes that residue, and no change within its scope was found that would:
+
+- Rewording a record or a prompt clause to chase it is the incidental-wording lever the issue rejects.
+  Decision 123's no-severity sentence is already that lever, and it did not hold here.
+- A deterministic remedy would be a post-answer check that reports a rating the answer attaches to a
+  citation whose finding carries none: `unstatedFindingSeverities` in the opposite direction, published as
+  its own key. That would be a new wire contract covering every safety answer, not just a proposal of her
+  own drug, so it is not taken here.
+
+So on this head the row is unmet. Whether #548 closes with it is the owner's call.
+
+The combination consequence (review round 3) was not measured on a model. The gate's cells name
+single-substance orders. For `Prednisone Co 5mg`, `Advil 400mg` and `Aspirin 81mg`,
+`findImpliedByDrugName` returns one substance over the shipped knowledge base (a throwaway test, since
+deleted), so their displays keep the bytes measured above. Their recorded concept names, and Susan's and
+Helen's orders, which returned HTTP 400 from `:8081`'s order resource, were not run through the code.
 
 → `ProposedDrugAlreadyInHerOrdersTest` (its class javadoc names the case each gate is mutated against);
 `SubstanceInSeveralActiveOrdersTest.aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt`;
+`ProposedDrugAlreadyInHerOrdersTest.aCombinationOrderIsSaidToCarryTheProposedDrugAndNotToBeDuplicatedByIt`;
 `LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes`;
 `AlreadyOrderedDrugClauseContextTest`.

@@ -61,9 +61,11 @@ public class SubstanceInSeveralActiveOrdersTest {
 	private static final String RIFAMPICIN_IN_BOTH = "Rifampicin (rifampin) is already in active orders "
 			+ RHZ + " and " + RHZE + " — possible duplicate therapy";
 
-	/** The finding for one order carrying the drug a question proposes (issue #548). */
+	/** The finding for one order carrying the drug a question proposes (issue #548). The order is a
+	 *  combination, so adding rifampicin would duplicate the rifampicin it carries and not the order (review
+	 *  round 3 of PR #554). */
 	private static final String RIFAMPICIN_IN_RHZ = "Rifampicin (rifampin) is already in active order " + RHZ
-			+ " — adding it would duplicate that order";
+			+ " — adding it would duplicate the Rifampicin (rifampin) that order carries";
 
 	private static final String OMEPRAZOLE_IN_ITS_OWN = "Omeprazole is already in active order Omeprazole 20mg"
 			+ " — adding it would duplicate that order";

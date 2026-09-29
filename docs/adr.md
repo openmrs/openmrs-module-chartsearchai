@@ -12369,3 +12369,61 @@ Pinned by `DrugOrderCurrencyMarkTest.aScheduledOrderIsNeitherInForceNorEndedAndI
 `ScheduledOrderInteractionContextTest` and `LlmInferenceServiceScheduledOrderContextTest`, each over
 `ScheduledDrugOrderTestData.xml` read by the real builders; `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace`
 now selects the rung carrying both dates.
+
+## Decision 127: The drug-in-play check names her orders it relates only below the severity floor
+
+**Status: Accepted** (September 2026) — implemented, no issue (reported and ruled in session on the 3.7.1
+standalone).
+
+### Context
+
+*"Is it safe to start her on clarithromycin?"*, asked of a patient whose active drug orders include Lidocaine,
+Metoclopramide, Neomycin and Tiotropium, came back on `main` @ `945b89e0` as *"The records address
+Clarithromycin and list the following interactions: lidocaine (Unknown severity interaction [45]),
+metoclopramide (Unknown [45]), neomycin (Unknown [45]), tiotropium (Unknown [45]), and ivosidenib (Major
+[45])."*, with `safetyWarnings: []` and `interactionPairs: { "found": 0, "reported": 0 }`. Four of the five
+drugs listed are hers and nothing on the response said so. DDInter rates all four `Unknown` (checked in the
+loaded `ddi-knowledge-base.json`); `DrugSafetyValidator.severityRank` ranks that 0 against the shipped
+`minor` floor's 1, so `bestRulePerPartner` drops each before asking whether she is on the partner, and the
+drug-in-play check's `of(0, 0)` is true of what it counts and silent on the four it related.
+
+### Decision
+
+`PairChipExtent` gains `getBelowFloor()` — published inside `interactionPairs` as `belowFloor` — and the
+drug-in-play arm states it beside its count, over the same population (the question's substances):
+`DrugSafetyValidator.belowFloorPairs`, the complement of `bestRulePerPartner` over the same rows. The same
+her-order question (`hasActiveDrug`), the same partner key (`SubjectRule.partnerKey`), the floor test negated,
+one pair per partner at its most severe sub-floor row, and none for a partner the grouping keeps, since an
+above-floor rule already chips it. `Sink.record(found, reported, belowFloor)` carries it through
+`recordPairExtent`, the sink's one production writer, so it reaches every surface `interactionPairs` does.
+
+**No chip, no floor change, no prompt change.** The statement is deterministic and on the wire; the answer's
+prose is untouched. The reference frontend draws it beside the answer.
+
+### Alternatives
+
+**Say it in the injected record** — a section after `Interactions:` naming which listed partners are hers
+(*"Of these, drugs this patient has an active or scheduled order for: lidocaine; metoclopramide; neomycin;
+tiotropium."*). Built, pinned through the real `injectRecords`, and **refuted live** on the reported cell:
+with the record 355 characters instead of 239 and nothing else in the prompt moved (audit rows 12999 and
+13000), the answer became *"The records do not address the safety of starting Clarithromycin."* with no
+citation, twice; restoring the build restored the original answer (row 13001). The system prompt calls a
+`Drug reference` record "clinical reference data, not this patient's data" and routes a safety question no
+record addresses to that one-sentence abstention; a reference record asserting her orders reads as the first
+rule broken and lands in the second. Not re-proposed without an A/B against null arms.
+
+**Chip the sub-floor pairs.** Declined on #84's own grounds, with no new evidence of the kind it asks for.
+
+**Widen `found`.** Declined: `found` is defined above the floor on three arms, and a client already reads it
+so; a second population added into one integer is the ratio `PairChipExtent` forbids.
+
+### Residue
+
+- **Only the drug-in-play arm measures it.** An extent a pairwise arm stated carries `belowFloor: null`, so a
+  two-drug question or a screen says nothing below the floor.
+- **The answer's prose still lists her orders as the drug's general interactions**; the statement sits beside
+  it, not in it.
+
+Pinned by `BelowFloorOrderInteractionsTest` (the shipped knowledge base for the reported drugs; the pinned
+excerpt and `drug-reference-partner-rated-and-unrated-rows.json` for the shapes) through the real `validate`
+and its sink, and `ChartSearchAiInteractionPairExtentTest` for the wire.

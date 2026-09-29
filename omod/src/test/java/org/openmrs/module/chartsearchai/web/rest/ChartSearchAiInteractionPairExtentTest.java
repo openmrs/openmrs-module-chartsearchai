@@ -149,6 +149,44 @@ public class ChartSearchAiInteractionPairExtentTest {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	public void theSearchResponseNamesThePairsItsScreenRelatedBelowTheFloor() {
+		// ADR Decision 127: her own orders the drug in play relates only below the floor are named, the
+		// drug by its chip name, the partner by the record's name and the source's rating verbatim.
+		PairChipExtent.Sink sink = new PairChipExtent.Sink();
+		sink.record(0, 0, Arrays.asList(new PairChipExtent.BelowFloorPair("Clarithromycin", "lidocaine", "Unknown")));
+		stated = sink.stated();
+
+		Map<String, Object> pairs = (Map<String, Object>) searchPayload().get("interactionPairs");
+		List<Map<String, Object>> belowFloor = (List<Map<String, Object>>) pairs.get("belowFloor");
+		assertNotNull(belowFloor, "the extent stated them, so the key must carry them: " + pairs);
+		assertEquals(1, belowFloor.size());
+		assertEquals("Clarithromycin", belowFloor.get(0).get("drug"));
+		assertEquals("lidocaine", belowFloor.get(0).get("partner"));
+		assertEquals("Unknown", belowFloor.get(0).get("severity"));
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void anExtentStatingNoBelowFloorMeasurementPublishesTheKeyAsNull() {
+		Map<String, Object> pairs = (Map<String, Object>) searchPayload().get("interactionPairs");
+
+		assertTrue(pairs.containsKey("belowFloor"), "the key is always present on a stated extent: " + pairs);
+		assertEquals(null, pairs.get("belowFloor"), "null is no measurement, never an empty list");
+	}
+
+	@Test
+	public void theDoneEventNamesThemToo() throws Exception {
+		PairChipExtent.Sink sink = new PairChipExtent.Sink();
+		sink.record(0, 0, Arrays.asList(new PairChipExtent.BelowFloorPair("Clarithromycin", "lidocaine", "Unknown")));
+		stated = sink.stated();
+		controller.streamAnswer(out, patient(), "Is it safe to start her on clarithromycin?", new User(3), false);
+
+		JsonNode belowFloor = eventData("done").get("interactionPairs").get("belowFloor");
+		assertEquals("lidocaine", belowFloor.get(0).get("partner").asText());
+	}
+
+	@Test
 	public void theKeyIsPresentAndNullWhenNothingWasStated() {
 		// Absence of a measurement is itself something a client must be able to read, and it is not
 		// "the screen was complete". Present-and-null rather than omitted, like `source` and

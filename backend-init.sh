@@ -203,8 +203,10 @@ fetch_llm_in_background() {
   # copy of that logic whose only job is to guess the first one's answer.
   echo "Providing $label (${size_hint}) in background${availability_note}..."
   # Recorded here, in the start's own shell and before the fork, so the artifact is in the state
-  # directory before anything can read it — a fetch that has not reached its first line yet still
-  # reads as fetching rather than as absent, which is what a verified artifact reads as.
+  # directory before anything can read it — a fetch that has not reached its first line yet reads
+  # as fetching. And named in WEIGHTS_ARTIFACTS, which publish_weights_status, forked later from
+  # this same shell, inherits: that is how it tells an artifact with no file from one that verified.
+  WEIGHTS_ARTIFACTS="${WEIGHTS_ARTIFACTS:+$WEIGHTS_ARTIFACTS }$artifact_id"
   record_weights_state "$artifact_id" "fetching:$artifact_id"
   _download_llm_file "$artifact_id" "$target" "$label" &
 }
@@ -220,12 +222,13 @@ fetch_llm_in_background() {
 # written from here would be wiped, or overwritten with an older start's value. Reset once per
 # start, before anything is forked, so what is in it is this start's.
 WEIGHTS_STATE_DIR="$LLM_DIR/.weights-status"
+WEIGHTS_ARTIFACTS=''
 rm -rf "$WEIGHTS_STATE_DIR"
 mkdir -p "$WEIGHTS_STATE_DIR"
 
 # record_weights_state <id> <entry> — renames the artifact's file to <entry>, which is never seen as
 # half of either name; creates it where there is none yet. A scan that races the rename can list
-# the old name or neither, and publish_weights_status's exit rule is what covers that.
+# the old name, the new one, both or neither; publish_weights_status reads neither as unrecorded.
 record_weights_state() {
   for _rws_file in "$WEIGHTS_STATE_DIR"/*":$1" "$WEIGHTS_STATE_DIR"/*":$1:"*; do
     [ -e "$_rws_file" ] || continue
@@ -899,9 +902,10 @@ record_cpu_breadcrumb || true
 # subshell reaches no one — #466 ran for a day with no model file and the only symptom a 500.
 #
 # The value is one entry per artifact, space-separated: `fetching:<id>` while its fetch runs,
-# `refused:<id>:<code>` with the library's exit code once it failed, and nothing once it verified,
-# so a start whose weights all verified leaves the row present and empty. It carries ids and codes
-# and never a path, the rule the embedder's status keeps.
+# `refused:<id>:<code>` with the library's exit code once it failed, `unrecorded:<id>` for an
+# artifact this start fetched whose state it could not record, and nothing once it verified, so a
+# start whose weights all verified leaves the row present and empty. It carries ids and codes and
+# never a path, the rule the embedder's status keeps.
 #
 # The ONE writer, so the two fetches never read-modify-write one row against each other. Started
 # below the demo seed, so nothing it writes is dropped or overwritten by the seed's snapshot
@@ -911,41 +915,61 @@ record_cpu_breadcrumb || true
 # It polls the state directory and writes whenever what it reads differs from the last value that
 # LANDED, reading each statement's status: a virgin database has no global_property table until
 # OpenMRS creates it, so an outcome recorded before then is sent again until it is taken rather
-# than counted the first time it was sent. It ends on the second idle scan in a row that reads the
-# value that landed, for the reason given where the loop checks it; with nothing running and the
-# database still refusing, it gives up after 900 refused writes two seconds apart — at least half
-# an hour, the order of the backend's health start_period — and says so.
+# than counted the first time it was sent. It ends on the first scan with no fetch running that
+# reads the value that landed; with nothing running and the database still refusing, it gives up
+# after 900 refused writes two seconds apart — at least half an hour, the order of the backend's
+# health start_period — and says so.
+#
+# It composes from WEIGHTS_ARTIFACTS, the artifacts this start forked a fetch for, and not from
+# what the directory happens to list: an artifact with no file is `unrecorded:`, never absent, since
+# absent is what a verified artifact reads as. A scan can miss a file that a rename is moving, so a
+# value with an `unrecorded:` entry is written only once a second scan in a row reads it too; a
+# rename that has finished by then is read as its new name.
 publish_weights_status() {
   command -v mariadb >/dev/null 2>&1 || { echo "[weights-status] mariadb client absent; chartsearchai.models.weightsStatus is not recorded."; return 0; }
   _ws_landed=no
   _ws_landed_value=''
   _ws_idle_misses=0
-  _ws_idle_before=''
+  _ws_scanned_before=''
   while :; do
-    _ws_value='' _ws_running=no _ws_artifacts=0
+    _ws_listed='' _ws_value='' _ws_running=no _ws_unrecorded=no
     for _ws_file in "$WEIGHTS_STATE_DIR"/*; do
       # Only the pattern itself, left unexpanded by an empty directory, is skipped. A name the glob
-      # listed and a rename then took away still stands for that artifact's previous entry, which
-      # is better than reading it as absent — absent is what a verified artifact reads as.
+      # listed and a rename then took away still stands for that artifact's previous entry.
       if [ "$_ws_file" = "$WEIGHTS_STATE_DIR/*" ] && [ ! -e "$_ws_file" ]; then
         continue
       fi
-      _ws_artifacts=$((_ws_artifacts + 1))
-      _ws_entry=${_ws_file##*/}
-      case $_ws_entry in
-        verified:*) continue ;;
-        fetching:*) _ws_running=yes ;;
-      esac
-      _ws_value="${_ws_value:+$_ws_value }$_ws_entry"
+      _ws_listed="${_ws_listed:+$_ws_listed }${_ws_file##*/}"
     done
     # Every fetch records itself before it is forked, so an empty directory is a recording that
-    # failed, and publishing it would read as every artifact having verified. A directory missing
-    # only SOME artifacts is not caught here, and publishes as if those had verified.
-    if [ "$_ws_artifacts" -eq 0 ]; then
+    # failed for every artifact, and this start has nothing of its own to publish.
+    if [ -z "$_ws_listed" ]; then
       echo "[weights-status] no weights fetch recorded its state, so chartsearchai.models.weightsStatus is not written." >&2
       return 1
     fi
-    if [ "$_ws_landed" = no ] || [ "$_ws_value" != "$_ws_landed_value" ]; then
+    for _ws_id in $WEIGHTS_ARTIFACTS; do
+      _ws_found=no
+      for _ws_entry in $_ws_listed; do
+        case $_ws_entry in
+          *":$_ws_id" | *":$_ws_id:"*) _ws_found=yes ;;
+          *) continue ;;
+        esac
+        case $_ws_entry in
+          verified:*) continue ;;
+          fetching:*) _ws_running=yes ;;
+        esac
+        _ws_value="${_ws_value:+$_ws_value }$_ws_entry"
+      done
+      if [ "$_ws_found" = no ]; then
+        _ws_unrecorded=yes
+        _ws_value="${_ws_value:+$_ws_value }unrecorded:$_ws_id"
+      fi
+    done
+    # A value naming an unrecorded artifact is held back until a second scan in a row reads it: the
+    # first may have missed a file mid-rename.
+    if [ "$_ws_unrecorded" = yes ] && [ "$_ws_scanned_before" != "scanned:$_ws_value" ]; then
+      :
+    elif [ "$_ws_landed" = no ] || [ "$_ws_value" != "$_ws_landed_value" ]; then
       _ws_sql=$(printf %s "$_ws_value" | sed "s/'/''/g")
       # A connect timeout of its own, so a database address that black-holes costs each attempt
       # seconds rather than the OS's TCP timeout, and the bound below stays of the order it says.
@@ -958,22 +982,17 @@ publish_weights_status() {
         [ "$_ws_running" = yes ] || _ws_idle_misses=$((_ws_idle_misses + 1))
       fi
     fi
-    # Ends on the SECOND idle scan in a row reading the same value, once that value has landed —
-    # never on the first: a scan that overlapped a rename can miss an artifact entirely (measured
-    # under dash, rarely), and if that was the last fetch finishing, a first-scan exit would leave it
-    # published as verified for good. Once every fetch has finished nothing renames any more, so the
-    # second scan is exact.
+    _ws_scanned_before="scanned:$_ws_value"
+    # A scan that missed a file mid-rename reads it as unrecorded rather than as verified, so it
+    # differs from what landed and does not end this.
     if [ "$_ws_running" = no ]; then
-      if [ "$_ws_landed" = yes ] && [ "$_ws_idle_before" = "idle:$_ws_value" ]; then
+      if [ "$_ws_landed" = yes ] && [ "$_ws_value" = "$_ws_landed_value" ]; then
         return 0
       fi
       if [ "$_ws_idle_misses" -ge 900 ]; then
         echo "[weights-status] the database refused chartsearchai.models.weightsStatus 900 times with no fetch running; giving up on: ${_ws_value:-every weights artifact verified}" >&2
         return 1
       fi
-      _ws_idle_before="idle:$_ws_value"
-    else
-      _ws_idle_before=''
     fi
     sleep 2
   done

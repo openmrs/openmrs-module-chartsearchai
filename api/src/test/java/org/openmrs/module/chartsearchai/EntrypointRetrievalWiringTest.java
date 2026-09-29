@@ -393,7 +393,8 @@ public class EntrypointRetrievalWiringTest {
 		origin.setExecutor(handlers);
 		origin.start();
 		try (Started start = startTheWholeEntrypoint(
-				manifestServingTheWeightsFrom("http://127.0.0.1:" + origin.getAddress().getPort() + "/"), Map.of())) {
+				manifestServingTheWeightsFrom("http://127.0.0.1:" + origin.getAddress().getPort() + "/", E4B, E2B),
+				Map.of())) {
 			start.awaitTheHandOff();
 			String during = awaitTheWeightsStatus(value -> entries(value).equals(
 					Set.of("fetching:" + E4B, "fetching:" + E2B)), start);
@@ -476,7 +477,7 @@ public class EntrypointRetrievalWiringTest {
 	/**
 	 * <b>A recording that failed is not a start whose weights verified.</b> A verified artifact
 	 * records an empty entry, so a state directory the start could not write reads, to anything that
-	 * composes it, exactly like one where every artifact verified — and an empty value published
+	 * composes only what it lists, exactly like one where every artifact verified — and an empty value published
 	 * from it tells a deployment the weights are fine when nothing was measured. Driven with the
 	 * weights directory present and not writable: the publisher has to say so and leave the
 	 * property alone.
@@ -502,6 +503,68 @@ public class EntrypointRetrievalWiringTest {
 		}
 		finally {
 			weights.toFile().setWritable(true, false);
+		}
+	}
+
+	/**
+	 * <b>An artifact whose state is lost is not an artifact that verified.</b> A verified artifact
+	 * records an entry the value leaves out, so an artifact whose file is missing from the state
+	 * directory — a record that failed, or a file a scan missed mid-rename — reads, to anything that
+	 * composes only what it lists, exactly as if it had verified. Driven with the served model's
+	 * download held and the standby refused at once for want of a manifest row: once the standby's
+	 * refusal is recorded its file is deleted, and nothing records it again. The publisher knows which
+	 * artifacts this start fetched, so the standby has to read as unrecorded, both while the served
+	 * model is still fetching and after it verified — never as nothing.
+	 */
+	@Test
+	public void anArtifactWhoseRecordedStateIsLostIsPublishedAsUnrecordedRatherThanAsVerified() throws Exception {
+		given(SEEDED_DATASET_GP, demoSeedTag());
+		Files.write(onnx, RECORDED_BYTES);
+		Files.write(vocab, RECORDED_BYTES);
+		Path standbysState = work.resolve("openmrs/data/chartsearchai/.weights-status/refused:" + E2B + ":4");
+		CountDownLatch release = new CountDownLatch(1);
+		ExecutorService handlers = Executors.newCachedThreadPool();
+		HttpServer origin = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		origin.createContext("/", exchange -> {
+			try {
+				release.await(50, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			exchange.sendResponseHeaders(200, RECORDED_BYTES.length);
+			try (OutputStream out = exchange.getResponseBody()) {
+				out.write(RECORDED_BYTES);
+			}
+		});
+		origin.setExecutor(handlers);
+		origin.start();
+		try (Started start = startTheWholeEntrypoint(
+				manifestServingTheWeightsFrom("http://127.0.0.1:" + origin.getAddress().getPort() + "/", E4B),
+				Map.of())) {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+			while (!Files.exists(standbysState) && System.nanoTime() < deadline) {
+				Thread.sleep(50);
+			}
+			assertTrue(Files.exists(standbysState), "the standby's refusal was never recorded, so this case is not"
+					+ " the state it is about\n" + start.output);
+			Files.delete(standbysState);
+			String during = awaitTheWeightsStatus(value -> entries(value).equals(
+					Set.of("fetching:" + E4B, "unrecorded:" + E2B)), start);
+
+			release.countDown();
+			Run run = start.finish();
+
+			assertEquals(0, run.exit, "the start did not survive its own statements\n" + run);
+			assertEquals("unrecorded:" + E2B, gp(WEIGHTS_STATUS_GP), "while the served model was fetching it read "
+					+ during + "; once it verified, the standby, whose state was lost, should read as unrecorded"
+					+ " rather than as verified\n" + run);
+			assertTheStandInUnderstoodEveryStatement(run);
+		}
+		finally {
+			release.countDown();
+			origin.stop(0);
+			handlers.shutdownNow();
 		}
 	}
 
@@ -980,13 +1043,13 @@ public class EntrypointRetrievalWiringTest {
 	}
 
 	/**
-	 * The fixture manifest with rows for the two weights artifacts added, each served from
-	 * {@code origin} under its own id — the embedder rows are the ones the start verifies off bytes
-	 * already on the volume.
+	 * The fixture manifest with rows for {@code artifacts} added, each served from {@code origin}
+	 * under its own id — the embedder rows are the ones the start verifies off bytes already on the
+	 * volume. A weights artifact left out has no row, so its fetch is refused at once at code 4.
 	 */
-	private Path manifestServingTheWeightsFrom(String origin) throws Exception {
+	private Path manifestServingTheWeightsFrom(String origin, String... artifacts) throws Exception {
 		StringBuilder rows = new StringBuilder(new String(Files.readAllBytes(manifest), StandardCharsets.UTF_8));
-		for (String artifact : List.of(E4B, E2B)) {
+		for (String artifact : artifacts) {
 			rows.append(artifact).append('\t').append(ModelManifest.sha256(RECORDED_BYTES)).append('\t')
 					.append(RECORDED_BYTES.length).append('\t').append(origin).append(artifact).append('\n');
 		}

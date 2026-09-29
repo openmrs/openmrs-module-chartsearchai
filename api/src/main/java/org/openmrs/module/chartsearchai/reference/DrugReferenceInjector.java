@@ -680,7 +680,7 @@ public class DrugReferenceInjector {
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
 					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null, null,
-					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
+					null, Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -709,7 +709,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -758,12 +758,13 @@ public class DrugReferenceInjector {
 			// ADR Decision 100's completion names the orders of the findings an answer CITES, and a
 			// marker reaches this record, never the chip.
 			// And, since issue #515, whether the clause this record ends in withholds, and the rows of the
-			// substance it is about — both off the finding in hand, the one place either is written.
+			// substance it is about — both off the finding in hand, the one place either is written. And,
+			// since issue #555, the rows each order it names was resolved to, in the order it names them.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
 					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
-					finding.namedPartners(), SafetyWarning.orderNamesOf(finding),
+					finding.namedPartners(), SafetyWarning.orderNamesOf(finding), partnerRowIds(finding),
 					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -2781,6 +2782,16 @@ public class DrugReferenceInjector {
 		List<String> ids = new ArrayList<String>(rows.size());
 		for (DrugReference row : rows) {
 			ids.add(row.getId());
+		}
+		return ids;
+	}
+
+	/** The ids of the rows each of {@code finding}'s {@link SafetyWarning#namedPartners()} was resolved to,
+	 *  index-aligned with them — {@code RecordMapping.getFindingPartnerRows()} (issue #555). */
+	private static List<List<String>> partnerRowIds(SafetyWarning finding) {
+		List<List<String>> ids = new ArrayList<List<String>>(finding.namedPartners().size());
+		for (String partner : finding.namedPartners()) {
+			ids.add(rowIds(finding.rowsOfPartner(partner)));
 		}
 		return ids;
 	}

@@ -7787,6 +7787,31 @@ data leak. So:
   helper both methods and the sentence's dedup share: an answer writing *Isoniazid /
   pyrazinamide/rifampin* was told that order was "not named above".
 
+**Amended by [#555](https://github.com/openmrs/openmrs-module-chartsearchai/issues/555): an order is
+also stated where the prose names its DRUG.** A finding names her order by the knowledge base's label
+where the order resolved to a row — *Rifampicin (rifampin)* for her *Rifampicin* — and no answer writes
+the label, so containment of it read *"interacts with active order Rifampicin"* as leaving the order out:
+the issue measured the false *"not named above: active order Rifampicin (rifampin)"* in 6 of 22 answers
+on its patient. So:
+
+- A partner is stated where the answer contains its printed name as before, or where
+  `DrugSafetyValidator.namesThePartner` — the drug-name PROSE rule, `DrugReference.matchesText`, over
+  the rows the chip resolved that partner to — says the prose names it. Both methods read one decision,
+  `FindingPartnerCoverageCheck.statedPartners`. The rows travel structurally, `SafetyWarning.rowsOfPartner`
+  onto `RecordMapping.getFindingPartnerRows()` as ids, written in the injector's finding mapping beside
+  `getFindingPartners()`; never re-resolved from the printed label, which is #151's shape.
+- **Stripping the label's parenthetical was proposed and rejected** before any code: a substring of a
+  stem is a fourth answer to "does this prose name this drug" beside `matchesText` (reference
+  `CLAUDE.md`, *Matching a drug name*), and PR #478's round two already replaced a substring test of
+  such a label with the prose rule (`DrugSafetyValidator.namesTheEndedOrderDrug`).
+- Only an interaction RULE chip's partner carries rows — both active-order arms' chips, and a merged
+  chip the union of its members'. Issue #477's two findings name several of her orders of ONE
+  substance, whose name is what an answer writing about that drug writes, so they carry none and each
+  of their orders is stated only by its display: the residue there stays toward reporting,
+  `CitedFindingPartnerCompletionTest.ordersOfOneSubstanceAreNotStatedByThatSubstancesName`. So do the
+  condition-mediated finding's orders, which no case measures. The prose rule's own residue comes
+  with it: an alias one substance shares with another names both.
+
 **Spec changed deliberately, by the product owner (issue #516, decision 4).**
 `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` required
 every chip's orders in an answer carrying no citation marker — the case this amendment decides gets

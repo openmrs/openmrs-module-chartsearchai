@@ -4783,13 +4783,7 @@ public class DrugSafetyValidator {
 				}
 				matchedNames.addAll(member.chip.matchedOrderNames());
 				for (Map.Entry<String, List<DrugReference>> rows : member.chip.partnerRows().entrySet()) {
-					List<DrugReference> union =
-							partnerRows.computeIfAbsent(rows.getKey(), k -> new ArrayList<DrugReference>());
-					for (DrugReference row : rows.getValue()) {
-						if (!union.contains(row)) {
-							union.add(row);
-						}
-					}
+					unionPartnerRows(partnerRows, rows.getKey(), rows.getValue());
 				}
 				if (member.bridges != null) {
 					for (SafetyWarning.ChartOrderBridge bridge : member.bridges) {
@@ -7879,11 +7873,15 @@ public class DrugSafetyValidator {
 		List<SafetyWarning.ChartOrderBridge> bridges = new ArrayList<SafetyWarning.ChartOrderBridge>();
 		Set<String> seenBridges = new HashSet<String>();
 		Set<String> matchedNames = new LinkedHashSet<String>();
+		// Each printed name -> the rows of every substance printed under it, what a check of the answer
+		// asks the prose rule of (issue #555) — the rows the rule-chip sites hand withPartnerRows too.
+		Map<String, List<DrugReference>> rowsByName = new LinkedHashMap<String, List<DrugReference>>();
 		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> link : links.entrySet()) {
 			DrugReference partnerRow = partners.get(link.getKey()).get(0);
 			String name = conditionMediatedPartnerName(partnerRow, subjects, coMedications);
 			linksByName.computeIfAbsent(name, k -> new ArrayList<DrugReference.ConditionMediatedRisk>())
 					.add(link.getValue());
+			unionPartnerRows(rowsByName, name, partners.get(link.getKey()));
 			for (SafetyWarning.ChartOrderBridge bridge : chartOrderBridges(rows, subject, partnerRow, name,
 					context, context.getActiveDrugOrders(), orderEntries, bridgedOrders, subjects, matchedNames)) {
 				if (seenBridges.add(bridge.toString())) {
@@ -7898,6 +7896,7 @@ public class DrugSafetyValidator {
 		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> member : coMembers.entrySet()) {
 			DrugReference memberRow = partners.get(member.getKey()).get(0);
 			String name = conditionMediatedPartnerName(memberRow, subjects, coMedications);
+			unionPartnerRows(rowsByName, name, partners.get(member.getKey()));
 			if (linksByName.containsKey(name)) {
 				continue;
 			}
@@ -7971,7 +7970,23 @@ public class DrugSafetyValidator {
 					+ " (DDInter drug-disease). " + CONDITION_MEDIATED_PROVENANCE;
 		}
 		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names, herOrder)
-				.withMatchedOrderNames(matchedNames);
+				.withMatchedOrderNames(matchedNames).withPartnerRows(rowsByName);
+	}
+
+	/**
+	 * Adds {@code rows} to the rows {@code byPartner} holds for the printed partner {@code name}, each row
+	 * once — the {@code SafetyWarning.withPartnerRows} map a chip naming one partner for several
+	 * substances builds: a merged chip over its members' ({@link #collapseSharedMechanisms}), and a
+	 * condition-mediated chip over the substances its ladder prints under one name.
+	 */
+	private static void unionPartnerRows(Map<String, List<DrugReference>> byPartner, String name,
+			List<DrugReference> rows) {
+		List<DrugReference> union = byPartner.computeIfAbsent(name, k -> new ArrayList<DrugReference>());
+		for (DrugReference row : rows) {
+			if (!union.contains(row)) {
+				union.add(row);
+			}
+		}
 	}
 
 	/**

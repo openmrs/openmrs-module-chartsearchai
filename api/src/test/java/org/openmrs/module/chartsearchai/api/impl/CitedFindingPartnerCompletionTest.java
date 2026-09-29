@@ -446,7 +446,7 @@ public class CitedFindingPartnerCompletionTest {
 		return modelAnswer;
 	}
 
-	private static void assertCoverage(int named, int stated, ChartAnswer answer) {
+	static void assertCoverage(int named, int stated, ChartAnswer answer) {
 		FindingPartnerCoverage coverage = answer.getFindingPartnerCoverage();
 		assertNotNull(coverage, "the answer cited findings, so it is measured");
 		assertEquals(named, coverage.getNamed(), "was: " + coverage);
@@ -454,15 +454,18 @@ public class CitedFindingPartnerCompletionTest {
 	}
 
 	/**
-	 * A patient over the knowledge base the module SHIPS: her orders, one per display with its ATC code,
+	 * A patient over the knowledge base the module SHIPS: her orders, one per display with its ATC code
+	 * (null for an order the chart records no code for, which the module resolves by its name alone),
 	 * the findings the real injector wrote for {@code question} and the chips the real validator raises —
-	 * one dataset for the chart, the chips and the validator the answer is judged by.
+	 * one dataset for the chart, the chips and the validator the answer is judged by. Package-private for
+	 * {@code ConditionMediatedFindingPartnerCompletionContextTest}, whose finding is gated on a global
+	 * property only a context-sensitive case can set.
 	 */
-	private static final class OverShippedData {
+	static final class OverShippedData {
 
 		private final DrugReferenceService dataset = DrugReferenceTestSupport.shippedServiceWithGroups();
 
-		private final String question;
+		final String question;
 
 		private final Set<String> drugs = new LinkedHashSet<String>();
 
@@ -473,24 +476,27 @@ public class CitedFindingPartnerCompletionTest {
 
 		private final PatientChart chart;
 
-		private OverShippedData(String question, String[][] displaysAndCodes) {
+		OverShippedData(String question, String[][] displaysAndCodes) {
 			this.question = question;
 			List<SerializedRecord> records = new ArrayList<SerializedRecord>();
 			for (String[] order : displaysAndCodes) {
 				drugs.add(order[0]);
-				atc.add(order[1]);
-				orders.add(new PatientClinicalContext.ActiveDrugOrder("order-" + order[1], order[0],
-						Collections.singleton(order[0]), Collections.singleton(order[1])));
-				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "order-" + order[1],
+				Set<String> codes = order[1] == null ? Collections.<String> emptySet()
+						: Collections.singleton(order[1]);
+				atc.addAll(codes);
+				String uuid = "order-" + (order[1] == null ? order[0] : order[1]);
+				orders.add(new PatientClinicalContext.ActiveDrugOrder(uuid, order[0],
+						Collections.singleton(order[0]), codes));
+				records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, uuid,
 						order[0] + ", 1 daily", null));
 			}
-			chart = DrugReferenceTestSupport.injectedFindingsOver(dataset,
+			chart = DrugReferenceTestSupport.injectedFindingsOverDataset(dataset,
 					new PatientChartSerializer().serialize(null, records, Collections.<String> emptySet()), question,
 					drugs, atc, orders);
 		}
 
 		/** The one injected finding naming exactly {@code partners}, failing on the chart where none does. */
-		private RecordMapping findingNaming(List<String> partners) {
+		RecordMapping findingNaming(List<String> partners) {
 			for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
 				if (finding.getFindingPartners().equals(partners)) {
 					return finding;
@@ -499,10 +505,10 @@ public class CitedFindingPartnerCompletionTest {
 			throw new AssertionError("the premise: a finding names " + partners + ", was: " + chart.getText());
 		}
 
-		private LlmInferenceService service(String modelAnswer) {
+		LlmInferenceService service(String modelAnswer) {
 			return CitedFindingPartnerCompletionTest.service(chart,
 					DrugReferenceTestSupport.validatorRaising(dataset,
-							DrugReferenceTestSupport.chipsOverAnswer(dataset, modelAnswer, question, drugs, atc, orders)),
+							DrugReferenceTestSupport.chipsOverAnswerFromDataset(dataset, modelAnswer, question, drugs, atc, orders)),
 					modelAnswer, Collections.<Integer> emptyList());
 		}
 	}
@@ -589,7 +595,7 @@ public class CitedFindingPartnerCompletionTest {
 		}
 	}
 
-	private static Patient patient() {
+	static Patient patient() {
 		Patient p = new Patient();
 		p.setPatientId(1);
 		p.setUuid("uuid-1");

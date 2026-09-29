@@ -533,8 +533,8 @@ public final class DrugReferenceTestSupport {
 	public static List<SafetyWarning> chipsOverAnswer(String answer, String question,
 			Set<String> activeDrugs, Set<String> activeAtcCodes,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
-		return chipsOverAnswer(ddinterServiceWithGroups(), answer, question, activeDrugs, activeAtcCodes,
-				orders);
+		return chipsOverAnswerFromDataset(ddinterServiceWithGroups(), answer, question, activeDrugs,
+				activeAtcCodes, orders);
 	}
 
 	/**
@@ -550,11 +550,13 @@ public final class DrugReferenceTestSupport {
 
 	/**
 	 * {@link #injectedFindingsOver(PatientChart, String, Set, Set, List)} over {@code service} rather
-	 * than the excerpt.
+	 * than the excerpt. Named apart from those overloads, as {@link #chipsOverAnswerFromDataset} is, because
+	 * {@code SlicedReferenceRowProvenanceTest}'s fixture reach resolves a call by NAME: a caller over the
+	 * shipped dataset that turns the derived tier on would otherwise be read as loading the excerpt.
 	 *
 	 * @throws IllegalStateException when the arrangement injects no finding
 	 */
-	public static PatientChart injectedFindingsOver(DrugReferenceService service, PatientChart base,
+	public static PatientChart injectedFindingsOverDataset(DrugReferenceService service, PatientChart base,
 			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		return injectedOrThrow(service, base, ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders),
@@ -564,10 +566,9 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * {@link #chipsOverAnswer(String, String, Set, Set, List)} over {@code service} rather than the
 	 * excerpt — the chips for the patient
-	 * {@link #injectedFindingsOver(DrugReferenceService, PatientChart, String, Set, Set, List)} injects
-	 * findings for.
+	 * {@link #injectedFindingsOverDataset} injects findings for.
 	 */
-	public static List<SafetyWarning> chipsOverAnswer(DrugReferenceService service, String answer,
+	public static List<SafetyWarning> chipsOverAnswerFromDataset(DrugReferenceService service, String answer,
 			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		return validator(service).validate(answer, question,

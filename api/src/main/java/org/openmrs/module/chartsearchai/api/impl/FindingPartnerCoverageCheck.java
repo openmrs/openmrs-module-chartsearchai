@@ -67,8 +67,8 @@ import org.slf4j.LoggerFactory;
  * prose names it by the drug-name PROSE rule over the rows its chip resolved it to — the difference
  * between the knowledge base's label a finding prints (<em>Rifampicin (rifampin)</em>) and the name an
  * answer writes (<em>Rifampicin</em>), measured putting the same false sentence into 6 of 22 answers on
- * that issue's patient. Only an interaction rule chip's partners carry rows ({@link #statedPartners});
- * every other spelling difference reads as unstated. Containment has a residue in the other direction
+ * that issue's patient. Which findings' partners carry rows is {@link #statedPartners}'; every other
+ * spelling difference reads as unstated. Containment has a residue in the other direction
  * too: an order whose name sits inside a longer one the answer wrote ({@code Lamivudine} inside
  * {@code Lamivudine / zidovudine}) reads as stated, and so, through the prose rule, does a partner named
  * by an alias the reference data files under two substances. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
@@ -265,8 +265,9 @@ public final class FindingPartnerCoverageCheck {
 	 * own. That is what reads <em>"Rifampicin"</em> as naming the partner a finding prints by the knowledge
 	 * base's label <em>"Rifampicin (rifampin)"</em>.
 	 *
-	 * <p><b>Only an interaction RULE chip's partner carries rows</b> ({@code SafetyWarning.rowsOfPartner}).
-	 * The findings that name several of her orders of ONE substance — issue #477's two — carry none: an
+	 * <p><b>Which partners carry rows</b> is {@code SafetyWarning.rowsOfPartner}'s: an interaction rule
+	 * chip's, a merged chip's and a condition-mediated finding's. The findings that name several of her
+	 * orders of ONE substance — issue #477's two — carry none: an
 	 * answer writing that substance's name has not said which of those orders it meant, so each is stated
 	 * only by its printed name, and the residue there runs toward reporting, the direction this class's
 	 * javadoc states.

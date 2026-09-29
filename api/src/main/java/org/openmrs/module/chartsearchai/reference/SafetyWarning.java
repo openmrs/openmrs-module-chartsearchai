@@ -1306,11 +1306,11 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * This warning, carrying {@code rows} as the reference rows of the substance each of its
-	 * {@link #namedPartners()} was resolved to where the chip was decided — see {@link #rowsOfPartner}.
-	 * Package-private: written only by {@code DrugSafetyValidator}, at the rule-chip sites that hold the
-	 * partner ENTRY, and unioned across the members of a merged chip by
-	 * {@code collapseSharedMechanisms}. Changes nothing this warning prints or publishes.
+	 * This warning, carrying {@code rows} as the reference rows each of its {@link #namedPartners()} was
+	 * resolved to where the chip was decided — see {@link #rowsOfPartner}. Package-private: written by
+	 * {@code DrugSafetyValidator} at the chip sites that hold the partner's ENTRIES — both active-order
+	 * arms' rule chips, and {@code conditionMediatedWarning} — and unioned across the members of a merged
+	 * chip by {@code collapseSharedMechanisms}. Changes nothing this warning prints or publishes.
 	 */
 	SafetyWarning withPartnerRows(Map<String, List<DrugReference>> rows) {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
@@ -1321,19 +1321,21 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * The reference rows of the substance the partner {@code partner} — one of {@link #namedPartners()},
-	 * as printed — was resolved to where this chip was decided (issue #555), so that a check of the answer
+	 * The reference rows the partner {@code partner} — one of {@link #namedPartners()}, as printed — was
+	 * resolved to where this chip was decided (issue #555), so that a check of the answer
 	 * can ask whether the PROSE names that partner through {@link DrugReference#matchesText} rather than
 	 * by containment of the printed name: a finding printing her order by the knowledge base's label
 	 * <em>"Rifampicin (rifampin)"</em> is named by an answer writing <em>"Rifampicin"</em>, which no
 	 * containment of the label can see. {@code DrugReferenceInjector} carries it onto the finding's
-	 * record, as each row's id, beside {@code RecordMapping.getFindingPartners()}.
+	 * record, as each row's id, beside {@code RecordMapping.getFindingPartners()}. The rows of ONE
+	 * substance on an interaction rule chip; on a merged chip, and on a {@link #conditionMediated} chip
+	 * whose name for a prescription stands for several of its substances, the union of theirs, so an answer
+	 * naming any one of those substances states that partner.
 	 *
-	 * <p>Empty, never null, for a partner no rule-chip site resolved to an entry — every partner of a
-	 * chip other than an interaction RULE chip ({@link #substanceInSeveralActiveOrders}',
-	 * {@link #ordersSharingASubstance}' and {@link #conditionMediated}' orders among them), and a rule
-	 * whose partner the dataset identifies by no entry. Such a partner is stated only where the answer
-	 * contains its printed name. Package-private and not a getter, so it reaches no wire.
+	 * <p>Empty, never null, for a partner no {@link #withPartnerRows} site resolved to an entry — the
+	 * orders {@link #substanceInSeveralActiveOrders} and {@link #ordersSharingASubstance} name among them,
+	 * and a rule whose partner the dataset identifies by no entry. Such a partner is stated only where the
+	 * answer contains its printed name. Package-private and not a getter, so it reaches no wire.
 	 */
 	List<DrugReference> rowsOfPartner(String partner) {
 		List<DrugReference> rows = partnerRows.get(partner);

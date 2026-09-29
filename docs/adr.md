@@ -7804,13 +7804,16 @@ on its patient. So:
   stem is a fourth answer to "does this prose name this drug" beside `matchesText` (reference
   `CLAUDE.md`, *Matching a drug name*), and PR #478's round two already replaced a substring test of
   such a label with the prose rule (`DrugSafetyValidator.namesTheEndedOrderDrug`).
-- Only an interaction RULE chip's partner carries rows — both active-order arms' chips, and a merged
-  chip the union of its members'. Issue #477's two findings name several of her orders of ONE
-  substance, whose name is what an answer writing about that drug writes, so they carry none and each
-  of their orders is stated only by its display: the residue there stays toward reporting,
-  `CitedFindingPartnerCompletionTest.ordersOfOneSubstanceAreNotStatedByThatSubstancesName`. So do the
-  condition-mediated finding's orders, which no case measures. The prose rule's own residue comes
-  with it: an alias one substance shares with another names both.
+- Rows are written where a chip holds its partners' entries — both active-order arms' rule chips, a
+  merged chip the union of its members', and the condition-mediated finding (Decision 111), whose
+  orders are printed by the same labels (*Lactic acid (lactate)*;
+  `ConditionMediatedFindingPartnerCompletionContextTest`). Issue #477's two findings name several of
+  her orders of ONE substance, whose name is what an answer writing about that drug writes, so they
+  carry none and each of their orders is stated only by its display: the residue there stays toward
+  reporting, `CitedFindingPartnerCompletionTest.ordersOfOneSubstanceAreNotStatedByThatSubstancesName`.
+  The prose rule's own residue comes with it: an alias one substance shares with another names both,
+  and a condition-mediated partner whose one printed name stands for several substances is stated by
+  the prose naming any of them.
 
 **Spec changed deliberately, by the product owner (issue #516, decision 4).**
 `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` required

@@ -61,6 +61,16 @@ import org.springframework.http.ResponseEntity;
  */
 public class ChartSearchAiChartAlertsTest {
 
+	/** The active orders the two alerts are about, stamped as {@code DrugSafetyValidator} stamps them
+	 *  (issue #552) — displays that are not the chips' {@code drug}, as a brand order's is not. */
+	private static final String LIDOCAINE_ORDER = "Xylocaine 2% injection";
+
+	private static final String LIDOCAINE_ORDER_UUID = "uuid-xylocaine";
+
+	private static final String BUPIVACAINE_ORDER = "Marcaine 0.5% injection";
+
+	private static final String BUPIVACAINE_ORDER_UUID = "uuid-marcaine";
+
 	/**
 	 * The standing findings a client receives. Drawn from issue #280's own reproduction — patient
 	 * {@code a7090f70}, an active Lidocaine order and a recorded Lidocaine allergy — plus the
@@ -68,19 +78,21 @@ public class ChartSearchAiChartAlertsTest {
 	 * a single row. Contraindications carry no rating, which is what makes
 	 * {@link #everyFindingIsShapedExactlyAsASearchChipIs} able to assert that the key is present and
 	 * null rather than absent. Built by the two contraindication factories the standing pass reaches,
-	 * with the referent it hands them — every standing alert is raised from one of her active orders
-	 * (issue #527) — so {@link #everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes} reads a value
+	 * with the referent and the order stamp it hands them — every standing alert is raised from one of
+	 * her active orders (issue #527) — so {@link #everyStandingAlertSaysItIsAboutAMedicationSheAlreadyTakes} reads a value
 	 * production would publish. Each sentence is one its factory's arm writes: the curated-rule arm's, for
 	 * a Lidocaine rule noted as the bundled seed notes its own self-named allergy rules, and the allergen
 	 * arm's cross-reactivity-group sentence.
 	 */
 	private static List<SafetyWarning> fixtureAlerts() {
 		return Arrays.asList(
-				SafetyWarningFixtures.curatedRuleContraindication("Lidocaine",
-						"Lidocaine is contraindicated by an active allergy: documented lidocaine allergy", true),
-				SafetyWarningFixtures.recordedAllergenContraindication("Bupivacaine",
-						"Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as the "
-								+ "patient's allergy to Lidocaine — possible cross-reactivity", true));
+				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.curatedRuleContraindication(
+						"Lidocaine", "Lidocaine is contraindicated by an active allergy: documented lidocaine allergy",
+						true), SafetyWarningFixtures.activeOrder(LIDOCAINE_ORDER_UUID, LIDOCAINE_ORDER)),
+				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.recordedAllergenContraindication(
+						"Bupivacaine", "Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as "
+								+ "the patient's allergy to Lidocaine — possible cross-reactivity", true),
+						SafetyWarningFixtures.activeOrder(BUPIVACAINE_ORDER_UUID, BUPIVACAINE_ORDER)));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -184,6 +196,24 @@ public class ChartSearchAiChartAlertsTest {
 					"a standing alert is one of her active orders checked against her own records, and this "
 							+ "surface must say so: " + alert);
 		}
+	}
+
+	/**
+	 * A standing alert names the order it is about (issue #552), so a banner naming the order reads it here
+	 * rather than resolving {@code drug} against her orders itself — what README told a client to do before.
+	 */
+	@Test
+	@SuppressWarnings("unchecked")
+	public void aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid() {
+		List<Map<String, Object>> alerts = alertsOf(okBody(RestControllerContext.PATIENT_UUID));
+
+		assertEquals(2, alerts.size(), "precondition: both fixture alerts, was: " + alerts);
+		assertEquals(Arrays.asList(new SafetyWarning.CurrentMedicationOrder(LIDOCAINE_ORDER, LIDOCAINE_ORDER_UUID)),
+				(List<SafetyWarning.CurrentMedicationOrder>) alerts.get(0).get("currentMedicationOrders"),
+				"was: " + alerts.get(0));
+		assertEquals(Arrays.asList(new SafetyWarning.CurrentMedicationOrder(BUPIVACAINE_ORDER, BUPIVACAINE_ORDER_UUID)),
+				(List<SafetyWarning.CurrentMedicationOrder>) alerts.get(1).get("currentMedicationOrders"),
+				"was: " + alerts.get(1));
 	}
 
 	@Test

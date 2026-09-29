@@ -11,8 +11,11 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -22,6 +25,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingPartnerCov
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,10 +64,17 @@ import org.slf4j.LoggerFactory;
  * rather than toward silence, which is the safe direction for a diagnostic and the opposite of
  * {@code findingCitations}'s. Since issue #516 both operands are compared in {@code comparable} form,
  * which folds case and takes out the whitespace around a slash — the difference that issue measured
- * putting a false "not named above" into an answer — and leaves every other spelling difference
- * unstated. Containment has a residue in the other direction too: an order whose name sits inside a
- * longer one the answer wrote ({@code Lamivudine} inside {@code Lamivudine / zidovudine}) reads as
- * stated. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
+ * putting a false "not named above" into an answer. Since issue #555 a partner is also stated where the
+ * prose writes the NAME of a row its chip resolved it to, by the drug-name PROSE rule — the difference
+ * between the knowledge base's label a finding prints (<em>Rifampicin (rifampin)</em>) and the name an
+ * answer writes (<em>Rifampicin</em>), measured putting the same false sentence into 6 of 22 answers on
+ * that issue's patient. The row's name and never its other names, which include everyday words
+ * ({@code DrugSafetyValidator.namesThePartner} says which). Which findings' partners carry rows is
+ * {@link #statedPartners}'; every other spelling difference reads as unstated. Containment has a residue
+ * in the other direction too: an order whose name sits inside a longer one the answer wrote
+ * ({@code Lamivudine} inside {@code Lamivudine / zidovudine}) reads as stated, and so, through the #555
+ * credit, does a partner whose row's name is itself an everyday word, and a condition-mediated partner
+ * resolved to several substances, by the name of any of them. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
  * partner was named at all. An ordinary finding names one order and is measured like the rest, while
  * the merged finding and, since issue #477, the finding that a drug is already in several of her
  * orders and the finding that several of her orders share a substance are where a list can be
@@ -82,10 +93,11 @@ public final class FindingPartnerCoverageCheck {
 	/**
 	 * The active orders the findings {@code answer} cited name that it does not — in the order the
 	 * injector wrote those findings and each names its orders, each once however many cited findings
-	 * cover it; empty where the answer cited no finding.
+	 * cover it, and each in the words {@link #partnerWords} names it with; empty where the answer cited
+	 * no finding.
 	 *
 	 * <p><b>It shares its population and its comparison with {@link #measure}</b> — {@code citedFindings}
-	 * and {@code comparable} — so an order is stated to both or to neither; {@code measure} counts in a
+	 * and {@link #statedPartners} — so an order is stated to both or to neither; {@code measure} counts in a
 	 * loop of its own and, since issue #439, states no list of names at all. The two do not agree in
 	 * UNIT: {@code measure} counts a partner once per cited finding that names it while this dedups, so
 	 * on two cited findings naming one order {@code named - stated} exceeds the size of the list
@@ -93,18 +105,19 @@ public final class FindingPartnerCoverageCheck {
 	 * sentence used to claim it away.
 	 */
 	private static List<String> unstatedPartners(String answer, List<RecordReference> cited,
-			List<RecordMapping> mappings) {
+			List<RecordMapping> mappings, DrugSafetyValidator validator) {
 		List<String> unstated = new ArrayList<String>();
 		if (ChartSearchAiUtils.isBlank(answer)) {
 			return unstated;
 		}
-		String haystack = comparable(answer);
+		List<RecordMapping> findings = citedFindings(answer, cited, mappings);
+		Set<String> stated = statedPartners(answer, findings, validator);
 		Set<String> listed = new HashSet<String>();
-		for (RecordMapping finding : citedFindings(answer, cited, mappings)) {
+		for (RecordMapping finding : findings) {
 			for (String partner : finding.getFindingPartners()) {
 				String key = comparable(partner);
-				if (!haystack.contains(key) && listed.add(key)) {
-					unstated.add(partner);
+				if (!stated.contains(key) && listed.add(key)) {
+					unstated.add(partnerWords(partner, finding.getFindingPartnerScheduledStarts().get(partner)));
 				}
 			}
 		}
@@ -138,10 +151,27 @@ public final class FindingPartnerCoverageCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *        {@code LlmInferenceService.extractCitedReferences}
 	 * @param mappings the chart's records, the carrier of the findings and of the orders each names
+	 * @param validator asked whether the prose names a partner by the name of a row it was resolved to —
+	 *        {@link #statedPartners}; null asks containment alone
 	 */
 	static String withUnstatedPartnersNamed(String answer, List<RecordReference> cited,
-			List<RecordMapping> mappings) {
-		return withNamed(answer, unstatedPartners(answer, cited, mappings));
+			List<RecordMapping> mappings, DrugSafetyValidator validator) {
+		return withNamed(answer, unstatedPartners(answer, cited, mappings, validator));
+	}
+
+	/**
+	 * The words an unstated partner is named with: {@code "active order X"}, or, for a partner its
+	 * finding's stamp says has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStarts()}),
+	 * {@code "scheduled order X (scheduled to start <date>)"} — the date in brackets, so in a list of several
+	 * it cannot be read as the next item's. A partner name carrying a bracket of its own ("Rifampicin
+	 * (rifampin)") then reads with two, which is accepted as the price of that. Worded from the stamp,
+	 * because these are the module's own words; a partner no stamp reaches keeps "active order" (ADR
+	 * Decision 126's residues).
+	 */
+	private static String partnerWords(String partner, String scheduledStart) {
+		return scheduledStart == null ? DrugSafetyValidator.ACTIVE_ORDER_NOUN + " " + partner
+				: DrugSafetyValidator.SCHEDULED_ORDER_NOUN + " " + partner + " ("
+						+ PatientChartSerializer.SCHEDULED_TO_START_WORDS + scheduledStart + ")";
 	}
 
 	private static String withNamed(String answer, List<String> unstated) {
@@ -156,7 +186,7 @@ public final class FindingPartnerCoverageCheck {
 			if (i > 0) {
 				sb.append(i == unstated.size() - 1 ? " and " : ", ");
 			}
-			sb.append(DrugSafetyValidator.ACTIVE_ORDER_NOUN).append(" ").append(unstated.get(i));
+			sb.append(unstated.get(i));
 		}
 		sb.append(".");
 		return sb.toString();
@@ -170,13 +200,15 @@ public final class FindingPartnerCoverageCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *        {@code LlmInferenceService.extractCitedReferences}
 	 * @param mappings the chart's records, the carrier of the findings and of the orders each names
+	 * @param validator asked whether the prose names a partner by the name of a row it was resolved to —
+	 *        {@link #statedPartners}; null asks containment alone
 	 * @return how many partners the findings the answer cited NAME and how many of those the answer
 	 *         STATED; {@code null} where the answer cited no finding or no cited finding names an
 	 *         order — absence of the population, not a measurement of none — and where the check
 	 *         itself failed, since a broken diagnostic must not read as one that found nothing
 	 */
 	static FindingPartnerCoverage measure(Patient patient, String answer, List<RecordReference> cited,
-			List<RecordMapping> mappings) {
+			List<RecordMapping> mappings, DrugSafetyValidator validator) {
 		Integer patientId = null;
 		try {
 			patientId = patient == null ? null : patient.getPatientId();
@@ -187,13 +219,13 @@ public final class FindingPartnerCoverageCheck {
 			if (findings.isEmpty()) {
 				return null;
 			}
-			String haystack = comparable(answer);
+			Set<String> statedPartners = statedPartners(answer, findings, validator);
 			int named = 0;
 			int stated = 0;
 			for (RecordMapping finding : findings) {
 				for (String partner : finding.getFindingPartners()) {
 					named++;
-					if (haystack.contains(comparable(partner))) {
+					if (statedPartners.contains(comparable(partner))) {
 						stated++;
 					}
 				}
@@ -229,16 +261,58 @@ public final class FindingPartnerCoverageCheck {
 	 * {@code text} in the one form both operands of the containment test are compared in — the answer
 	 * and every order name alike (issue #516): case-folded, and with the whitespace around a {@code /}
 	 * taken out, so an answer writing {@code Isoniazid / pyrazinamide/rifampin} states the order its
-	 * finding names {@code Isoniazid / pyrazinamide / rifampin}. One helper for both methods and for
-	 * {@link #unstatedPartners}' dedup, so a name cannot be stated to one and unstated to the other.
+	 * finding names {@code Isoniazid / pyrazinamide / rifampin}. The key {@link #statedPartners} decides
+	 * over and {@link #unstatedPartners} dedups by, so a name cannot be stated to one method and unstated
+	 * to the other.
 	 * Only that whitespace: {@code DrugReference.collapseWhitespace} is not widened for it.
 	 *
 	 * <p>Package-private since issue #514: {@code InteractionClaimPairFidelityCheck} asks whether a
-	 * claim names a finding's drug, and takes this form rather than one of its own so the two checks
-	 * cannot read one name as stated to one and not to the other.
+	 * claim names a finding's drug, and takes this form rather than one of its own.
 	 */
 	static String comparable(String text) {
 		return SPACING_AROUND_A_SLASH.matcher(text.toLowerCase(Locale.ROOT)).replaceAll("/");
+	}
+
+	/**
+	 * The partners of {@code findings} that {@code answer} states, each as its {@link #comparable} key —
+	 * the ONE decision {@link #unstatedPartners} and {@link #measure} both read, so an order is stated to
+	 * both or to neither. A partner is stated where the answer contains its printed name in that form, or
+	 * (issue #555) where {@code validator} says the prose writes the NAME of one of the rows the finding
+	 * records it was resolved to — {@code RecordMapping.getFindingPartnerRows()}, asked through
+	 * {@code DrugSafetyValidator.namesThePartner}, the prose rule and never a comparison of this class's
+	 * own, and the row's name and never its other names (<em>"lactate"</em> is one of <em>Lactic
+	 * acid</em>'s, and the lab monitored for the condition a finding naming that order is about). That is
+	 * what reads <em>"Rifampicin"</em> as naming the partner a finding prints by the knowledge
+	 * base's label <em>"Rifampicin (rifampin)"</em>.
+	 *
+	 * <p><b>Which partners carry rows</b> is {@code SafetyWarning.rowsOfPartner}'s: an interaction rule
+	 * chip's, a merged chip's and a condition-mediated finding's. The findings that name several of her
+	 * orders of ONE substance — issue #477's two — carry none: an
+	 * answer writing that substance's name has not said which of those orders it meant, so each is stated
+	 * only by its printed name, and the residue there runs toward reporting, the direction this class's
+	 * javadoc states.
+	 */
+	private static Set<String> statedPartners(String answer, List<RecordMapping> findings,
+			DrugSafetyValidator validator) {
+		// A partner several cited findings name is one key, its rows the union of theirs.
+		Map<String, Set<String>> rowsByPartner = new LinkedHashMap<String, Set<String>>();
+		for (RecordMapping finding : findings) {
+			List<String> partners = finding.getFindingPartners();
+			List<List<String>> partnerRows = finding.getFindingPartnerRows();
+			for (int i = 0; i < partners.size(); i++) {
+				rowsByPartner.computeIfAbsent(comparable(partners.get(i)), k -> new LinkedHashSet<String>())
+						.addAll(partnerRows.get(i));
+			}
+		}
+		String haystack = comparable(answer);
+		Set<String> stated = new HashSet<String>();
+		for (Map.Entry<String, Set<String>> partner : rowsByPartner.entrySet()) {
+			if (haystack.contains(partner.getKey()) || validator != null
+					&& validator.namesThePartner(answer, new ArrayList<String>(partner.getValue()))) {
+				stated.add(partner.getKey());
+			}
+		}
+		return stated;
 	}
 
 	/** The injected findings {@code answer} cited, in the order the injector wrote them —

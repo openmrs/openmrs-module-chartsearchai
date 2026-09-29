@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #553, for the FOLDED chip: patient 6 of the standard test dataset (who has no orders and no
+  encounter, so both are supplied) holds one order, "aspirin 81mg", urgency ON_SCHEDULED_DATE with
+  scheduled_date 2099-01-01 (noon, for the reason ScheduledDrugOrderTestData.xml gives). Asked about
+  ibuprofen over the shipped KB with the curated groups, the rule and the class arm both relate the pair,
+  so their two sentences share one chip (issue #88). Patient 6 and not 7, whose own aspirin order has
+  started.
+-->
+<dataset>
+	<encounter encounter_id="9560" encounter_type="1" patient_id="6" location_id="2" form_id="1"
+	           encounter_datetime="2008-08-19 00:00:00.0" creator="1"
+	           date_created="2008-08-19 12:34:40.0" voided="false"
+	           uuid="9560eeee-0000-4000-8000-00000009560a" />
+	<concept concept_id="9560" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9560aaaa-0000-4000-8000-00000009560a" />
+	<concept_name concept_name_id="9560" concept_id="9560" name="aspirin 81mg"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9560bbbb-0000-4000-8000-00000009560a" />
+	<drug drug_id="9560" concept_id="9560" name="aspirin 81mg" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9560cccc-0000-4000-8000-00000009560a" />
+	<orders order_id="9560" order_type_id="1" order_number="ORD-9560" urgency="ON_SCHEDULED_DATE"
+	        scheduled_date="2099-01-01 12:00:00.0"
+	        order_action="NEW" concept_id="9560" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="6" uuid="9560dddd-0000-4000-8000-00000009560a"
+	        care_setting="1" encounter_id="9560" />
+	<drug_order order_id="9560" drug_inventory_id="9560" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

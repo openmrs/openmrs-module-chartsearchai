@@ -114,8 +114,9 @@ import org.slf4j.LoggerFactory;
  *   <li>the subject side names no drug any interaction or condition-mediated finding or chip names —
  *       a pronoun, a brand the findings do not carry, a misspelling. A side names a name by
  *       containment in
- *       {@link FindingPartnerCoverageCheck#comparable} form, the form that class asks "did the answer
- *       name this order" in, so one question has one comparison;</li>
+ *       {@link FindingPartnerCoverageCheck#comparable} form, the form that class compares an order's
+ *       printed name in, so one comparison serves both. That class also credits an order the prose names
+ *       by the rows its finding's chip resolved it to (issue #555); this check does not ask that;</li>
  *   <li>the partner span is blank, or does not start with a known name;</li>
  *   <li>the subject clause carries a word standing for a drug without naming it —
  *       {@link #SUBJECT_STAND_INS}, <em>it</em>, <em>this</em>, <em>which</em>, the <em>the</em> of

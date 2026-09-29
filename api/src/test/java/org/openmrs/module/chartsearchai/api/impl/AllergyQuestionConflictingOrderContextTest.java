@@ -59,6 +59,9 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	/** Her order 111's display, as the chart spells it — the name a clinician finds in her medication list. */
 	private static final String ORDER_DISPLAY = "ASPIRIN";
 
+	/** A brand order 111's drug row is renamed to, standing for the ticket's {@code Advil 400mg}. */
+	private static final String BRAND = "Brandolin 400mg";
+
 	private Patient patient;
 
 	@BeforeEach
@@ -153,18 +156,49 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	@Test
-	public void aFindingNoOrderWasResolvedForKeepsEveryFindingAsAChip() throws IOException {
+	public void aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip() throws IOException {
 		// The question names her allergen, which puts the drug in play: its finding is the drug-in-play
-		// arm's, which resolves no order, so the answer cannot name one and states nothing at all.
+		// arm's, a drug the question put in play, which ADR Decision 124 keeps a chip. Since issue #552 that
+		// chip names her order on the wire, so the statement's gate is not "no order is known".
 		String question = "Is she allergic to aspirin?";
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, question);
+		String orderUuid = Context.getOrderService().getOrder(111).getUuid();
 
 		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the question raised a finding, chips "
 				+ "were: " + answer.getSafetyWarnings());
-		assertEquals(MODEL_ANSWER, answer.getAnswer(), "a finding the answer cannot name an order for is not stated");
-		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			assertFalse(chip.isStatedInTheAnswer(), "and no chip says it is, was: " + chip);
+		SafetyWarning chip = theAspirinChip(answer);
+		assertEquals(Collections.singletonList(new SafetyWarning.CurrentMedicationOrder(ORDER_DISPLAY, orderUuid)),
+				chip.currentMedicationOrders(), "the chip names the order it is about, as every current-medication "
+						+ "contraindication chip does");
+		assertEquals(MODEL_ANSWER, answer.getAnswer(), "a finding of a drug the question named is not stated");
+		for (SafetyWarning each : answer.getSafetyWarnings()) {
+			assertFalse(each.isStatedInTheAnswer(), "and no chip says it is, was: " + each);
 		}
+	}
+
+	/**
+	 * Issue #552: the chip itself names the order it is about, by her chart's display and the order's
+	 * uuid, where the display is a brand the chip's {@code drug} does not spell. Order 111's drug row is
+	 * renamed to a brand on its ASPIRIN concept, as {@code RecordedOrderNameBeyondItsDisplayTest} does, so
+	 * the substance is resolved off the concept's name while the order displays the brand.
+	 */
+	@Test
+	public void search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid() throws IOException {
+		Context.getAdministrationService().executeSQL("update drug set name = '" + BRAND
+				+ "' where drug_id = (select drug_inventory_id from drug_order where order_id = 111)", false);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		String orderUuid = Context.getOrderService().getOrder(111).getUuid();
+
+		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);
+
+		SafetyWarning chip = theAspirinChip(answer);
+		assertFalse(chip.getDrug().contains(BRAND), "precondition: the chip names the substance, not her "
+				+ "prescription, was: " + chip.getDrug());
+		assertEquals(Collections.singletonList(new SafetyWarning.CurrentMedicationOrder(BRAND, orderUuid)),
+				chip.currentMedicationOrders(),
+				"the chip names the one order it is about, as her chart displays it and by its uuid");
 	}
 
 	/** A recorder standing in for the model: answers {@code answer}. */

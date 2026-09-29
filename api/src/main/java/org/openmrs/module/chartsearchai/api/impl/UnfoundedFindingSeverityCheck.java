@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Reports a rating the answer attaches to a cited safety finding that carries NONE — issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, ADR
- * Decision 126. {@link SafetyFindingSeverityFidelityCheck}'s question asked in the opposite direction:
+ * Decision 127. {@link SafetyFindingSeverityFidelityCheck}'s question asked in the opposite direction:
  * that one asks whether a finding's rating survives into the answer, and by construction says nothing
  * about a record with no rating. A deterministic comparison, no model call.
  *

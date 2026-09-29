@@ -491,7 +491,7 @@ public class ActiveOrderCitationFidelityTest {
 		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
 				"order-uuid-stopped", "Simvastatin 20mg tablet, stopped 2026-01-04", null,
 				Collections.<String> emptyList(), null, null, Boolean.FALSE,
-				STOPPED_ORDER_END));
+				STOPPED_ORDER_END, null));
 		PatientChart stopped = DrugReferenceTestSupport.injectedFindingsOver(
 				new PatientChartSerializer().serialize(null, records,
 						Collections.<String> emptySet()),

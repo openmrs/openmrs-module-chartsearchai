@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #553, loaded beside ScheduledDrugOrderTestData.xml: a second NOT-STARTED Rifampicin order for
+  patient 7, Rifampicin 300mg, ON_SCHEDULED_DATE 2099-01-01 (noon, for ScheduledDrugOrderTestData.xml's
+  reason), on the first one's concept (9554). Neither of her two Rifampicin orders has started. The
+  encounter is order 111's own.
+-->
+<dataset>
+	<drug drug_id="9562" concept_id="9554" name="Rifampicin 300mg" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9562cccc-0000-4000-8000-00000009562a" />
+	<orders order_id="9562" order_type_id="1" order_number="ORD-9562" urgency="ON_SCHEDULED_DATE"
+	        scheduled_date="2099-01-01 12:00:00.0"
+	        order_action="NEW" concept_id="9554" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9562dddd-0000-4000-8000-00000009562a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9562" drug_inventory_id="9562" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

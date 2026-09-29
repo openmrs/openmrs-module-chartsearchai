@@ -221,10 +221,14 @@ final class PatientClinicalContextBuilder {
 				// the order carries a coded Drug those two differ, and keying one join on each would
 				// let two layers disagree about which concept one prescription is — issue #151's shape.
 				String orderConceptUuid = conceptUuid(concept);
+				// Whether core calls this order STARTED, and when it will where it has not (issue #553):
+				// getActiveOrders above admits an order on its dateActivated alone, so one scheduled for
+				// next month is on this list. Core's own two calls, never a reading of scheduledDate.
+				Date scheduledStart = ChartSearchAiUtils.scheduledStartOf(drugOrder);
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
-							orderConceptUuid));
+							orderConceptUuid, scheduledStart));
 				} else if (!normalizedCodes.isEmpty()) {
 					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
 					log.warn("Active drug order {} has no readable name; it will be identified by its ATC "
@@ -233,7 +237,7 @@ final class PatientClinicalContextBuilder {
 							+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
 							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
-							orderConceptUuid));
+							orderConceptUuid, scheduledStart));
 				} else if (coded.unreadable) {
 					// Neither rung, and the reason is a read this pass could not make. The skip itself
 					// is older than issue #413 and is untouched below; what #413 adds is a way INTO it,

@@ -291,7 +291,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// see FindingPartnerCoverage.
 			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
 					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), cited,
-							chart.getMappings());
+							chart.getMappings(), drugSafetyValidator);
 			// And whether each "X interacts with active order Y" claim the model wrote states a pair the
 			// findings relate (issue #514). After validate() because the chips are part of what can
 			// relate a pair, and on the MODEL's prose, before anything below appends to it.
@@ -299,7 +299,7 @@ public class LlmInferenceService implements ChartSearchService {
 					InteractionClaimPairFidelityCheck.examine(patient, response.getAnswer(), cited,
 							chart.getMappings(), safetyWarnings);
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
-					response.getAnswer(), cited, chart.getMappings());
+					response.getAnswer(), cited, chart.getMappings(), drugSafetyValidator);
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
 			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
@@ -837,7 +837,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// see FindingPartnerCoverage.
 			ChartSearchService.FindingPartnerCoverage findingPartnerCoverage =
 					FindingPartnerCoverageCheck.measure(patient, response.getAnswer(), cited,
-							chart.getMappings());
+							chart.getMappings(), drugSafetyValidator);
 			// And whether each "X interacts with active order Y" claim the model wrote states a pair the
 			// findings relate (issue #514). After validate() because the chips are part of what can
 			// relate a pair, and on the MODEL's prose, before anything below appends to it.
@@ -845,7 +845,7 @@ public class LlmInferenceService implements ChartSearchService {
 					InteractionClaimPairFidelityCheck.examine(patient, response.getAnswer(), cited,
 							chart.getMappings(), safetyWarnings);
 			String completedAnswer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(
-					response.getAnswer(), cited, chart.getMappings());
+					response.getAnswer(), cited, chart.getMappings(), drugSafetyValidator);
 			// And, beside it and asked of the MODEL's prose too, what the chart records of a drug held
 			// only as an ended order where the answer did not say it (issue #472, ADR Decision 110).
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
@@ -934,7 +934,7 @@ public class LlmInferenceService implements ChartSearchService {
 		List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate("", question, patient,
 				mappings, pairExtent);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
-				extractCitedReferences(composed, null, mappings), mappings);
+				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is
 		// about an ended order today: strengthRank refuses the ended-order clauses, so a question whose
 		// findings carry one keeps the model call.

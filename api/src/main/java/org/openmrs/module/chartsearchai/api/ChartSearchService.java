@@ -713,13 +713,20 @@ public interface ChartSearchService {
 	 * the finding types naming no active order, so this is not a partner total and must not be read
 	 * against {@code interactionPairs}, which counts PAIRS over a different population.
 	 *
-	 * <p><b>What {@code stated} counts</b> is those the MODEL's prose names, by containment, and it is
-	 * measured BEFORE the module names the rest itself (ADR Decision 100) — so prose naming every order
-	 * beside {@code stated < named} says the module supplied the difference. Case and the spacing
-	 * around a {@code /} are ignored (issue #516); a name the model spells differently in any other way
-	 * reads as unstated, so that residue runs toward reporting a shortfall, which is the safe direction
-	 * for a diagnostic and the opposite of {@code findingCitations}'s. Containment also reads an order
-	 * whose name sits inside a longer one the prose wrote as stated, the opposite direction.
+	 * <p><b>What {@code stated} counts</b> is those the MODEL's prose names, and it is measured BEFORE
+	 * the module names the rest itself (ADR Decision 100) — so prose naming every order beside
+	 * {@code stated < named} says the module supplied the difference. Names are compared by containment,
+	 * ignoring case and the spacing around a {@code /} (issue #516); an order an interaction rule finding or
+	 * a condition-mediated finding names is also stated where the prose writes the NAME of the reference
+	 * entry that order was resolved to, by the drug-name prose rule (issue #555: <em>Rifampicin</em> states
+	 * the order printed <em>Rifampicin (rifampin)</em>) — the entry's name and never its other names, which
+	 * include everyday words (<em>lactate</em> is one of <em>Lactic acid</em>'s);
+	 * a name the model spells differently in any other way reads as unstated, so that residue runs toward
+	 * reporting a shortfall, which is the safe direction for a diagnostic and the opposite of
+	 * {@code findingCitations}'s. Containment also reads an order whose name sits inside a longer one the
+	 * prose wrote as stated, and the #555 credit an entry whose name is itself an everyday word
+	 * (<em>Iron</em>) and a condition-mediated finding's order resolved to several entries, by the name of
+	 * any of them — the opposite direction.
 	 *
 	 * <p><b>Absence is not zero.</b> Null says the answer cited no finding, or no finding it cited named
 	 * an order, or the producer stated no measurement. {@code stated == named} is not a certificate
@@ -911,7 +918,7 @@ public interface ChartSearchService {
 	/**
 	 * A rating the answer attaches to a cited safety finding that carries NONE — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, ADR
-	 * Decision 126: {@link UnstatedFindingSeverity}'s question asked in the opposite direction.
+	 * Decision 127: {@link UnstatedFindingSeverity}'s question asked in the opposite direction.
 	 * {@code UnfoundedFindingSeverityCheck} is canonical for the unit, the vocabulary and the residues.
 	 *
 	 * <p><b>What it asserts.</b> That a sentence of the answer cites this finding, that the finding's
@@ -1620,7 +1627,7 @@ public interface ChartSearchService {
 		/**
 		 * The ratings this answer attaches to cited safety findings that carry none — issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, ADR
-		 * Decision 126, published as the {@code unfoundedFindingSeverities} response key.
+		 * Decision 127, published as the {@code unfoundedFindingSeverities} response key.
 		 * {@link UnfoundedFindingSeverity} is canonical for what an entry asserts. Read it BESIDE
 		 * {@link #getUnstatedFindingSeverities()}, which asks the opposite question and by construction
 		 * says nothing about a finding with no rating.

@@ -41,9 +41,10 @@ import org.slf4j.LoggerFactory;
  * failed or moved the fault.
  *
  * <p><b>Which findings carry no rating is not this class's decision.</b> It reads
- * {@link RecordMapping#getFindingUnrated()}, written once by the injector off the same predicate that
- * appends that sentence. {@link RecordMapping#getFindingSeverity()} being {@code null} could not serve:
- * it also answers for a rating {@code DrugSafetyValidator.statableRating} declines and for a rating the
+ * {@link RecordMapping#getFindingUnrated()}, written once by the injector: a finding with no rating of its
+ * own, whose record says so — that sentence, or a condition-mediated finding's own "this finding has no
+ * severity of its own". {@link RecordMapping#getFindingSeverity()} being {@code null} could not serve: it
+ * also answers for a rating {@code DrugSafetyValidator.statableRating} declines and for a rating the
  * record does not state, and an answer stating either has attached nothing the finding lacks.
  *
  * <p><b>The unit is the SENTENCE citing the unrated finding</b>, split by
@@ -75,6 +76,9 @@ import org.slf4j.LoggerFactory;
  *   <li>a marker placed after its sentence's terminator ("…a Major finding. [354]"), which the
  *       splitter puts in the next sentence: the finding's own sentence is then silent, and the next
  *       one's rating, if any, is attached to it;</li>
+ *   <li>a rating the sentence owes to a co-cited finding that carries it but whose record does not state
+ *       it — an operator dataset's note that omits the rating — IS reported, that finding's
+ *       {@code getFindingSeverity()} being null;</li>
  *   <li>a rating the sentence owes to a co-cited record that is not a finding — a {@code drug_reference}
  *       record lists its interactions with their ratings — IS reported. The owner's decision exempts a
  *       rating another FINDING carries;</li>
@@ -181,15 +185,23 @@ final class UnfoundedFindingSeverityCheck {
 
 	/**
 	 * Whether a finding cited in the sentence CARRIES {@code rating} — the exemption the issue's owner
-	 * decided, "no other finding cited in the same sentence carries that rating". A finding with a rating
-	 * field carries that rating and no other: its {@link RecordMapping#getFindingSeverity()} is asked, and
-	 * never its prose, whose mechanism can say "moderate inhibitors of CYP450 3A4" on a rule rated Major.
-	 * A finding with no rating field is asked what its RECORD states, because that is where what it
-	 * carries is: a condition-mediated finding's detail states each drug-disease rating ("Metformin is
-	 * rated Major in Acidosis, Lactic"), and the unrated finding's own record can carry a word an
-	 * operator dataset's note put there. Reading a record can only EXEMPT, the direction this check must
-	 * fail in. Both halves go through {@link ChartSearchAiUtils#statesWord}, the one scan, so a field
-	 * spelled {@code major} by an operator is read as the rating {@code Major}.
+	 * decided, "no other finding cited in the same sentence carries that rating". Asked by the stamp, and
+	 * never by whether {@link RecordMapping#getFindingSeverity()} is null, which also answers for a rated
+	 * finding.
+	 * <ul>
+	 *   <li>A finding carrying a rating ({@link RecordMapping#getFindingUnrated()} {@code FALSE}) carries
+	 *       that rating and no other — its {@code getFindingSeverity()}, and never its prose, whose
+	 *       mechanism can say "moderate inhibitors of CYP450 3A4" on a rule rated Major. Where that field is
+	 *       null — a rating {@code statableRating} declines, or one an operator's record does not state — it
+	 *       carries no word this check asks about.</li>
+	 *   <li>A finding carrying none ({@code TRUE}) carries what its RECORD states: a condition-mediated
+	 *       finding's detail states each drug-disease rating ("Metformin is rated Major in Acidosis,
+	 *       Lactic"), and an unrated finding's record can carry a word an operator dataset's note put there.
+	 *       The unrated finding being judged is asked too.</li>
+	 * </ul>
+	 * Reading a record can only EXEMPT, the direction this check must fail in. Both halves go through
+	 * {@link ChartSearchAiUtils#statesWord}, the one scan, so a field an operator spells {@code major} is
+	 * read as the rating {@code Major}.
 	 */
 	private static boolean aCitedFindingCarries(String rating, Set<Integer> citedHere,
 			Map<Integer, RecordMapping> findings) {
@@ -198,7 +210,8 @@ final class UnfoundedFindingSeverityCheck {
 			if (finding == null) {
 				continue;
 			}
-			String carried = finding.getFindingSeverity() != null ? finding.getFindingSeverity() : finding.getText();
+			String carried = finding.getFindingUnrated().booleanValue() ? finding.getText()
+					: finding.getFindingSeverity();
 			if (ChartSearchAiUtils.statesWord(carried, rating)) {
 				return true;
 			}

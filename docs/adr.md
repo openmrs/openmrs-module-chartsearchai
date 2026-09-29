@@ -12143,14 +12143,15 @@ The issue's owner decided the three open questions on the issue, and this implem
   editing what the model said.
 - **The unit is the sentence** citing an unrated finding, split by `ChartSearchAiUtils.SENTENCE_BOUNDARY`.
   The sibling's whole-answer unit cannot serve the inverse question, because "Major" elsewhere is exactly
-  the false report. A rating word in that sentence is reported only where no other finding the sentence
-  cites carries that rating, which keeps the #554 fourth run's case silent — the unrated finding itself
-  included, so a word an operator's note put in its record is not reported. A finding with a rating field
-  carries that rating and no other, so its mechanism's *"moderate inhibitors of CYP450 3A4"* on a rule rated
-  Major exempts nothing. A finding with none carries what its record states: a condition-mediated finding's
-  detail states each drug-disease rating. Reading a record can only exempt, the direction the check must
-  fail in. (The first version read only the field and missed the condition-mediated case; the second read
-  every record and let a rated finding's mechanism exempt. Phase 2 reviews of this change found each.)
+  the false report. A rating word in that sentence is reported only where no finding the sentence cites
+  carries that rating, which keeps the #554 fourth run's case silent. The unrated finding itself is one of
+  those asked, so a word an operator's note put in its record is not reported. A finding carrying a rating
+  (stamp `FALSE`) carries that rating and no other, read off `getFindingSeverity()`, so its mechanism's
+  *"moderate inhibitors of CYP450 3A4"* on a rule rated Major exempts nothing. A finding carrying none
+  (stamp `TRUE`) carries what its record states: a condition-mediated finding's detail states each
+  drug-disease rating. Reading a record can only exempt, the direction the check must fail in. (Three
+  earlier versions read only the field, every record, and the field's nullness as "no rating"; Phase 2
+  reviews of this change found the case each got wrong.)
   Which findings a sentence cites is `SafetyFindingCitationExtentCheck.citedFindingIndexes`, asked of the
   sentence — [Decision 97](#decision-97-the-accusation-that-a-finding-lost-its-rating-counts-cited-the-way-the-published-count-does)'s
   one reading, so the #305 filter and the resolution's admission come with it.
@@ -12165,10 +12166,11 @@ The issue's owner decided the three open questions on the issue, and this implem
 `getFindingSeverity() == null`. That `null` answers three cases (`DrugReferenceInjector.ratingThisRecordStates`):
 a finding with no rating, a rating `statableRating` declines (`unknown`), and a rating the record's own text
 does not state (an operator dataset). An answer stating the rating in either of the last two has attached
-nothing the finding lacks. The stamp is written in the injector's finding mapping off `statesNoSeverity`,
-the predicate that appends the no-severity sentence, so the stamp and what the model read are one decision.
-A condition-mediated finding is not unrated for it: its detail says it has no severity of its own, and
-names each partner with its own rating.
+nothing the finding lacks. The stamp is written in the injector's finding mapping off `carriesNoRating`,
+`SafetyWarning.getSeverity() == null`, and every such record says so: an unrated finding's in the
+no-severity sentence, a condition-mediated finding's in its detail's own last clause. So a condition-mediated
+finding is one the check judges, and the Major its detail states for the drug-disease chain is exempt
+through its own record.
 
 ### Rejected
 
@@ -12189,6 +12191,8 @@ names each partner with its own rating.
   sentence scoping with. The exemption buys the #554 fourth run's silence, and this is what it costs.
 - A marker after its sentence's terminator (*"…a Major finding. [354]"*) lands in the next sentence, so the
   finding's own sentence is silent and the next one's rating, if any, is attached to it.
+- A rating the sentence owes to a co-cited finding that carries it while its record does not state it — an
+  operator dataset's note omitting the rating — is reported: that finding's `getFindingSeverity()` is null.
 - A rating the sentence owes to a co-cited record that is NOT a finding is reported — a `drug_reference`
   record lists its partners with their ratings. The owner's decision exempts a rating another FINDING
   carries.

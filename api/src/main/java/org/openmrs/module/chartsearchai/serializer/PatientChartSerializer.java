@@ -749,15 +749,15 @@ public class PatientChartSerializer {
 		private final Boolean findingWithholds;
 
 		/**
-		 * Whether an injected {@code safety_finding} carries NO rating of its own: {@code TRUE} where its
-		 * record states {@code DrugReferenceInjector.FINDING_NO_SEVERITY} ("No severity is rated for this
-		 * finding."), {@code FALSE} on every other finding, {@code null} on every record that is not a
-		 * finding (issue #560). Written in exactly ONE place, {@code DrugReferenceInjector}'s finding
-		 * mapping, off the same predicate that appends that sentence, so the stamp and what the model read
-		 * cannot disagree. Never re-derived from {@link #getText()}, and never from
-		 * {@link #getFindingSeverity()} being null — that also answers for a rating
-		 * {@code DrugSafetyValidator.statableRating} declines and for a rating the record does not state,
-		 * and an answer stating either of those has attached no rating the finding lacks.
+		 * Whether an injected {@code safety_finding} carries NO rating of its own: {@code TRUE} where the
+		 * finding has none — its record says so, in {@code DrugReferenceInjector.FINDING_NO_SEVERITY} ("No
+		 * severity is rated for this finding.") or, for a condition-mediated finding, in its detail's own
+		 * last clause — {@code FALSE} on a finding that carries a rating, {@code null} on every record that
+		 * is not a finding (issue #560). Written in exactly ONE place, {@code DrugReferenceInjector}'s
+		 * finding mapping, off {@code DrugReferenceInjector.carriesNoRating}. Never re-derived from
+		 * {@link #getText()}, and never from {@link #getFindingSeverity()} being null — that also answers
+		 * for a rating {@code DrugSafetyValidator.statableRating} declines and for a rating the record does
+		 * not state, and a finding in either case does carry a rating.
 		 */
 		private final Boolean findingUnrated;
 

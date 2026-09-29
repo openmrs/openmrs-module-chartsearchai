@@ -29,10 +29,11 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, the
- * derived tier: a condition-mediated finding carries NO rating field — the derived tier assigns the pair
- * none — yet its detail states each drug-disease rating, "Metformin is rated Major in Acidosis, Lactic".
- * So a sentence citing it beside an unrated finding and quoting "Major" from it is the #554 fourth run's
- * shape, a rating another cited finding's record states, and must stay silent.
+ * derived tier: a condition-mediated finding carries NO rating of its own — the derived tier assigns the
+ * pair none, and its detail ends by saying so — yet that detail states each drug-disease rating,
+ * "Metformin is rated Major in Acidosis, Lactic". So it is a finding the check judges, and the Major its
+ * record states is one it carries: quoted in a sentence citing it, beside an unrated finding or alone, that
+ * word is the #554 fourth run's shape and stays silent, while a rating its record does not state is reported.
  *
  * <p>Context-sensitive because that tier is gated on {@code chartsearchai.drugSafety.derivedFindings},
  * which ships off (ADR Decision 111); {@link #setUp} turns it on. Everything else is the real pipeline
@@ -54,7 +55,7 @@ public class UnfoundedFindingSeverityDerivedTierContextTest extends BaseModuleCo
 		int unrated = findingWhoseText(chart, "No severity is rated for this finding.");
 		int derived = findingWhoseText(chart, "is rated Major in");
 		assertNull(DrugReferenceTestSupport.findingAt(chart, derived).getFindingSeverity(),
-				"precondition: the condition-mediated finding carries no rating field of its own");
+				"precondition: the condition-mediated finding carries no rating of its own");
 		LlmInferenceService service = UnfoundedFindingSeverityTest.serviceOver(chart,
 				"Metformin is rated Major for lactic acidosis with her stavudine and lamivudine, and she is "
 						+ "allergic to it [" + derived + "] [" + unrated + "].");
@@ -71,17 +72,38 @@ public class UnfoundedFindingSeverityDerivedTierContextTest extends BaseModuleCo
 		LlmInferenceService service = UnfoundedFindingSeverityTest.serviceOver(chart,
 				"Her metformin allergy is a Moderate finding beside the lactic acidosis link [" + derived + "] ["
 						+ unrated + "].");
-		assertEquals(Collections.singletonList(new UnfoundedFindingSeverity(unrated, "Moderate")),
+		// Both cited findings carry no rating and neither record states Moderate, so the sentence unit
+		// reports each: it cannot tell which of the two the answer gave the word to.
+		assertEquals(Arrays.asList(new UnfoundedFindingSeverity(derived, "Moderate"),
+				new UnfoundedFindingSeverity(unrated, "Moderate")),
 				service.search(UnfoundedFindingSeverityTest.patient(), QUESTION).getUnfoundedFindingSeverities());
 	}
 
 	@Test
-	public void theConditionMediatedFindingIsNotStampedUnrated() {
-		// Its detail says it has no severity of its own, but it names each partner with its rating, so it
-		// is not a finding that carries none; the stamp follows the no-severity sentence, which it does not get.
+	public void aRatingAttachedToTheConditionMediatedFindingAloneIsReportedUnlessItsRecordStatesIt() {
 		PatientChart chart = chart();
 		int derived = findingWhoseText(chart, "is rated Major in");
-		assertEquals(Boolean.FALSE, DrugReferenceTestSupport.findingAt(chart, derived).getFindingUnrated());
+		LlmInferenceService moderate = UnfoundedFindingSeverityTest.serviceOver(chart,
+				"The lactic acidosis link with her stavudine and lamivudine is a Moderate finding [" + derived + "].");
+		assertEquals(Collections.singletonList(new UnfoundedFindingSeverity(derived, "Moderate")),
+				moderate.search(UnfoundedFindingSeverityTest.patient(), QUESTION).getUnfoundedFindingSeverities(),
+				"the finding carries no rating, and its record states no Moderate");
+		LlmInferenceService major = UnfoundedFindingSeverityTest.serviceOver(chart,
+				"Metformin is rated Major for lactic acidosis with her stavudine and lamivudine [" + derived + "].");
+		assertEquals(Collections.<UnfoundedFindingSeverity> emptyList(),
+				major.search(UnfoundedFindingSeverityTest.patient(), QUESTION).getUnfoundedFindingSeverities(),
+				"Major is the drug-disease rating its own record states");
+	}
+
+	@Test
+	public void theConditionMediatedFindingIsStampedAsCarryingNoRating() {
+		// Its detail says it has no severity of its own, though it does not get the no-severity sentence the
+		// other unrated findings do (ConditionMediatedFindingTest.theInjectedRecordSaysItHasNoSeverityOnce).
+		PatientChart chart = chart();
+		int derived = findingWhoseText(chart, "is rated Major in");
+		assertTrue(DrugReferenceTestSupport.findingAt(chart, derived).getText().contains("no severity of its own"),
+				"precondition: its record says so");
+		assertEquals(Boolean.TRUE, DrugReferenceTestSupport.findingAt(chart, derived).getFindingUnrated());
 	}
 
 	/** Metformin proposed for a patient on stavudine and lamivudine (the derived tier's own case, ADR

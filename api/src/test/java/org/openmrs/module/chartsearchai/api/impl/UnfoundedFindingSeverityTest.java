@@ -186,6 +186,35 @@ public class UnfoundedFindingSeverityTest {
 	}
 
 	@Test
+	public void aRatedFindingWhoseRecordOmitsItsRatingLendsNoWordOfItsMechanism() throws java.io.IOException {
+		// The same rule where the record does not state the rating, which only an operator dataset
+		// produces: getFindingSeverity() is null for a finding that DOES carry a rating, so nullness is not
+		// "carries none", and the mechanism's "moderate" still lends nothing to the unrated finding.
+		String question = "Can I give her ibuprofen?";
+		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOverOrdersWithRecordedAllergies(
+				DrugReferenceTestSupport.curatedFixtureService(
+						"chartsearchai-test/drug-reference-rated-note-omits-its-rating.json"),
+				DrugReferenceTestSupport.oneRecordChart(), question, setOf("ibuprofen"), "Warfarin");
+		int allergy = unratedFindingNaming(chart, "Ibuprofen");
+		int interaction = -1;
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+			if (finding.getText().contains("moderate doses")) {
+				interaction = finding.getIndex();
+			}
+		}
+		assertTrue(interaction > 0, "precondition: the interaction finding reached the prompt: " + chart.getText());
+		assertEquals(null, DrugReferenceTestSupport.findingAt(chart, interaction).getFindingSeverity(),
+				"precondition: its record does not state its Major rating, so the field is null");
+		assertEquals(Boolean.FALSE, DrugReferenceTestSupport.findingAt(chart, interaction).getFindingUnrated(),
+				"precondition: and it still carries a rating");
+		LlmInferenceService service = serviceOver(chart,
+				"Ibuprofen interacts with active order Warfarin, and her ibuprofen allergy is a Moderate concern ["
+						+ interaction + "] [" + allergy + "].");
+		assertEquals(Collections.singletonList(new UnfoundedFindingSeverity(allergy, "Moderate")),
+				service.search(patient(), question).getUnfoundedFindingSeverities());
+	}
+
+	@Test
 	public void everyRatingStatableRatingKnowsIsReportedAndUnknownIsNot() {
 		// The vocabulary is statableRating's: the three ratings an answer is asked to carry, and never
 		// "unknown", which DDInter uses for rows with no mechanism and which a correct answer can say of

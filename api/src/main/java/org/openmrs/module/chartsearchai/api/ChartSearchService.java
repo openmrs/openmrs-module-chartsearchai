@@ -917,7 +917,7 @@ public interface ChartSearchService {
 	 * <p><b>What it asserts.</b> That a sentence of the answer cites this finding, that the finding's
 	 * record states it carries no severity ({@code RecordMapping.getFindingUnrated()}), and that the
 	 * same sentence states {@link #getRating()} while no finding it cites, this one included, carries that
-	 * rating — its rating field where it has one, what its record states where it has none.
+	 * rating — its rating where it carries one, what its record states where it carries none.
 	 * Never that the finding is wrong, and never that the rating belongs to some other record the
 	 * sentence cites: a sentence can state a rating for a reason this check cannot see.
 	 *

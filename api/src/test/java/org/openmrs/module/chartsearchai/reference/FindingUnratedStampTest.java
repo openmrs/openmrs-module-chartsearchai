@@ -26,9 +26,12 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 /**
  * {@code RecordMapping.getFindingUnrated()} — issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a> — says of an
- * injected finding exactly what its record says to the model: {@code TRUE} where the record states
- * {@link DrugReferenceInjector#FINDING_NO_SEVERITY}, {@code FALSE} on every other finding, and
- * {@code null} on every record that is not a finding. {@code getFindingSeverity() == null} cannot say
+ * injected finding what its record says to the model: {@code TRUE} where the finding carries no rating
+ * of its own, {@code FALSE} where it carries one, and {@code null} on every record that is not a finding.
+ * In the arrangement here the unrated findings' records state {@link DrugReferenceInjector#FINDING_NO_SEVERITY};
+ * a condition-mediated finding says it in its own detail instead, and
+ * {@code UnfoundedFindingSeverityDerivedTierContextTest.theConditionMediatedFindingIsStampedAsCarryingNoRating}
+ * is that half. {@code getFindingSeverity() == null} cannot say
  * it: that also answers for a rating {@code statableRating} declines and for a rating the record's
  * text does not state, and an answer stating either of those is not wrong.
  *

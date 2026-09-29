@@ -1844,14 +1844,14 @@ public class InteractionClaimPairFidelityTest {
 			this.orders = orders;
 			this.chart = dataset == null
 					? DrugReferenceTestSupport.injectedFindingsOver(baseChart(), question, drugs, atc, orders)
-					: DrugReferenceTestSupport.injectedFindingsOver(dataset, baseChart(), question, drugs, atc,
+					: DrugReferenceTestSupport.injectedFindingsOverDataset(dataset, baseChart(), question, drugs, atc,
 							orders);
 		}
 
 		private List<SafetyWarning> chipsOver(String answer) {
 			return dataset == null
 					? DrugReferenceTestSupport.chipsOverAnswer(answer, question, drugs, atc, orders)
-					: DrugReferenceTestSupport.chipsOverAnswer(dataset, answer, question, drugs, atc, orders);
+					: DrugReferenceTestSupport.chipsOverAnswerFromDataset(dataset, answer, question, drugs, atc, orders);
 		}
 
 		/** The citation number of the {@code active_drug_order} record the injector wrote for the order

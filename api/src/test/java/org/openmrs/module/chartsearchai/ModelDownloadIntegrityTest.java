@@ -47,7 +47,8 @@ import com.sun.net.httpserver.HttpServer;
  * <p><b>This drives the real shell.</b> {@code scripts/model-manifest.sh} is production code — it is
  * sourced by {@code backend-init.sh} (the published backend image's ENTRYPOINT) and by
  * {@code .github/workflows/build-standalone.yml} (the release pipeline for the README's download) —
- * and every case here executes it with {@code /bin/sh} rather than restating what it ought to do.
+ * and every case here executes it with {@link EntrypointSource#shell()}, dash where it is installed,
+ * rather than restating what it ought to do.
  * The composed step {@code fetch_and_verify_url} is what both call sites reach, through the id and
  * override forms above it, so that is what is tested: calling a download helper and a digest helper in sequence from Java would test an assembly
  * no call site uses, which is the failure the project instructions' composed-method rule names.
@@ -114,7 +115,7 @@ public class ModelDownloadIntegrityTest {
 
 	@BeforeEach
 	public void startServer() throws IOException {
-		assumeTrue(Files.isExecutable(Paths.get("/bin/sh")), "POSIX /bin/sh is required to drive the library");
+		assumeTrue(Files.isExecutable(Paths.get(EntrypointSource.shell())), "a POSIX shell is required to drive the library");
 		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		server.createContext("/model", exchange -> {
 			if (status != 200) {
@@ -1110,7 +1111,7 @@ public class ModelDownloadIntegrityTest {
 		Path script = work.resolve("drive-" + System.nanoTime() + ".sh");
 		Files.write(script, (". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'\n" + call + "\n").getBytes(StandardCharsets.UTF_8));
 
-		ProcessBuilder builder = new ProcessBuilder("/bin/sh", script.toString());
+		ProcessBuilder builder = new ProcessBuilder(EntrypointSource.shell(), script.toString());
 		builder.environment().put("MODEL_MANIFEST_FILE", manifestFile.toString());
 		if (onlyPathEntry != null) {
 			builder.environment().put("PATH", onlyPathEntry.toString());

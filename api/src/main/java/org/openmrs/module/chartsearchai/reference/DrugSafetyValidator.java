@@ -2119,6 +2119,48 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Whether {@code prose} names one of the reference rows {@code partnerRowIds} identify BY THAT ROW'S
+	 * NAME — {@code RecordMapping.getFindingPartnerRows()} for ONE partner of a finding, the rows the chip
+	 * that named it resolved it to (issue #555). So an answer writing <em>"Rifampicin"</em> names the partner
+	 * a finding prints <em>"Rifampicin (rifampin)"</em>. {@code false} where no row carries one of the ids or
+	 * no dataset is wired.
+	 *
+	 * <p><b>The row's {@link DrugReference#getName()}, never its other names</b> (PR #556, review round 3).
+	 * The knowledge base files everyday words among a row's names: <em>Lactic acid</em>'s rxnorm name is
+	 * <em>lactate</em>, also the lab a clinician monitors for lactic acidosis, the condition a
+	 * condition-mediated finding naming her Lactic acid order is about. Crediting every name read <em>"Monitor
+	 * her lactate"</em> as naming that order. Where the prose names a row is
+	 * {@link DrugReference#namedOccurrences}, the prose rule's own spans. A span counts only where the text it
+	 * covers is the row's name, both in {@link DrugReference#foldedLower} form, so nothing here decides
+	 * whether the prose names a drug. It only decides by WHICH name.
+	 *
+	 * <p>Its residues. Toward reporting: a partner the prose names only by another name of its row — the
+	 * label's own parenthetical (<em>rifampin</em>) included — reads as unstated. Toward silence: a row's
+	 * name that is itself an everyday word (<em>Iron</em>, <em>Oxygen</em>) is credited from the prose
+	 * naming that word, and an order the module resolved to several substances is credited by the name of any
+	 * of them.
+	 */
+	public boolean namesThePartner(String prose, List<String> partnerRowIds) {
+		if (prose == null || partnerRowIds == null || partnerRowIds.isEmpty() || drugReferenceService == null) {
+			return false;
+		}
+		Set<String> ids = new HashSet<String>(partnerRowIds);
+		String folded = DrugReference.foldedLower(prose);
+		for (DrugReference row : drugReferenceService.getAll()) {
+			if (!ids.contains(row.getId()) || row.getName() == null) {
+				continue;
+			}
+			String name = DrugReference.foldedLower(row.getName().trim());
+			for (DrugReference.NamedOccurrence occurrence : row.namedOccurrences(folded, 0)) {
+				if (folded.substring(occurrence.getStart(), occurrence.getEnd()).equals(name)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * The drug {@link #cautionLead} read an answer's caution lead to give, as the substances its name named
 	 * — opaque, so what travels between the two methods above is never a string a caller could mistake for
 	 * one of another form (issue #515).
@@ -4617,8 +4659,11 @@ public class DrugSafetyValidator {
 					fold.sentence, bridges, herOrder);
 			}
 			// The displays of the orders that walk matched, on the chip before anything else reads it —
-			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514).
-			chip = chip.withMatchedOrderNames(matchedNames);
+			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514). And the
+			// rows of the partner entry this chip names by partnerName, the rows chartOrderBridges took
+			// for it, so a check of the answer asks the prose rule of them (#555).
+			chip = chip.withMatchedOrderNames(matchedNames).withPartnerRows(
+					Collections.singletonMap(partnerName, rowsOfSubstance(orderEntries, rule.partner)));
 			// Emitted only if it says something this pass has not already said. Two rules about ONE
 			// prescription are two chips — bestRulePerPartner keys them on the partner ENTRY and keeps
 			// them apart deliberately — but since issue #339 named both after that prescription, two
@@ -4782,11 +4827,15 @@ public class DrugSafetyValidator {
 					new ArrayList<SafetyWarning.ChartOrderBridge>();
 			Set<String> seenBridges = new HashSet<String>();
 			Set<String> matchedNames = new LinkedHashSet<String>();
+			Map<String, List<DrugReference>> partnerRows = new LinkedHashMap<String, List<DrugReference>>();
 			for (MechanismStatement member : group) {
 				if (!partners.contains(member.partnerName)) {
 					partners.add(member.partnerName);
 				}
 				matchedNames.addAll(member.chip.matchedOrderNames());
+				for (Map.Entry<String, List<DrugReference>> rows : member.chip.partnerRows().entrySet()) {
+					unionPartnerRows(partnerRows, rows.getKey(), rows.getValue());
+				}
 				if (member.bridges != null) {
 					for (SafetyWarning.ChartOrderBridge bridge : member.bridges) {
 						if (seenBridges.add(bridge.toString())) {
@@ -4808,7 +4857,7 @@ public class DrugSafetyValidator {
 			// travels structurally and nothing downstream recovers it by parsing the string this just
 			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
 			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null,
-				bridges, herOrder, partners).withMatchedOrderNames(matchedNames));
+				bridges, herOrder, partners).withMatchedOrderNames(matchedNames).withPartnerRows(partnerRows));
 		}
 		return out;
 	}
@@ -7875,11 +7924,15 @@ public class DrugSafetyValidator {
 		List<SafetyWarning.ChartOrderBridge> bridges = new ArrayList<SafetyWarning.ChartOrderBridge>();
 		Set<String> seenBridges = new HashSet<String>();
 		Set<String> matchedNames = new LinkedHashSet<String>();
+		// Each printed name -> the rows of every substance printed under it, what a check of the answer
+		// asks the prose rule of (issue #555) — the rows the rule-chip sites hand withPartnerRows too.
+		Map<String, List<DrugReference>> rowsByName = new LinkedHashMap<String, List<DrugReference>>();
 		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> link : links.entrySet()) {
 			DrugReference partnerRow = partners.get(link.getKey()).get(0);
 			String name = conditionMediatedPartnerName(partnerRow, subjects, coMedications);
 			linksByName.computeIfAbsent(name, k -> new ArrayList<DrugReference.ConditionMediatedRisk>())
 					.add(link.getValue());
+			unionPartnerRows(rowsByName, name, partners.get(link.getKey()));
 			for (SafetyWarning.ChartOrderBridge bridge : chartOrderBridges(rows, subject, partnerRow, name,
 					context, context.getActiveDrugOrders(), orderEntries, bridgedOrders, subjects, matchedNames)) {
 				if (seenBridges.add(bridge.toString())) {
@@ -7894,6 +7947,7 @@ public class DrugSafetyValidator {
 		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> member : coMembers.entrySet()) {
 			DrugReference memberRow = partners.get(member.getKey()).get(0);
 			String name = conditionMediatedPartnerName(memberRow, subjects, coMedications);
+			unionPartnerRows(rowsByName, name, partners.get(member.getKey()));
 			if (linksByName.containsKey(name)) {
 				continue;
 			}
@@ -7967,7 +8021,23 @@ public class DrugSafetyValidator {
 					+ " (DDInter drug-disease). " + CONDITION_MEDIATED_PROVENANCE;
 		}
 		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names, herOrder)
-				.withMatchedOrderNames(matchedNames);
+				.withMatchedOrderNames(matchedNames).withPartnerRows(rowsByName);
+	}
+
+	/**
+	 * Adds {@code rows} to the rows {@code byPartner} holds for the printed partner {@code name}, each row
+	 * once — the {@code SafetyWarning.withPartnerRows} map a chip naming one partner for several
+	 * substances builds: a merged chip over its members' ({@link #collapseSharedMechanisms}), and a
+	 * condition-mediated chip over the substances its ladder prints under one name.
+	 */
+	private static void unionPartnerRows(Map<String, List<DrugReference>> byPartner, String name,
+			List<DrugReference> rows) {
+		List<DrugReference> union = byPartner.computeIfAbsent(name, k -> new ArrayList<DrugReference>());
+		for (DrugReference row : rows) {
+			if (!union.contains(row)) {
+				union.add(row);
+			}
+		}
 	}
 
 	/**
@@ -8889,7 +8959,9 @@ public class DrugSafetyValidator {
 				SafetyWarning chip = (reconciled == null
 						? interactionWarning(subject, i, bridges, true)
 						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
-							bridges, true)).withMatchedOrderNames(matchedNames);
+							bridges, true)).withMatchedOrderNames(matchedNames)
+						.withPartnerRows(Collections.singletonMap(chipPartnerName,
+								rowsOfSubstance(orderDrugs, partner)));
 				// Before the candidate is collected rather than after the cap, so the extent this arm
 				// states counts what a clinician can tell apart: a restatement is not a pair that was
 				// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —

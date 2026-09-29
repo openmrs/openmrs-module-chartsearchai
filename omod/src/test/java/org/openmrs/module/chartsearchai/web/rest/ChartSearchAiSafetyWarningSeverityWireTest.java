@@ -183,6 +183,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       two fixtures whose {@code true}-answering chips came from one population let a serializer
 	 *       narrowing the published value to that population pass the whole build (issue #412), so each
 	 *       fixture holds a population of its own.</li>
+	 *   <li>14 — a chip {@code ConflictingOrderStatement} stated in the answer (ADR Decision 124).</li>
+	 *   <li>15 — a chip naming a NON-EMPTY {@code currentMedicationOrders} (issue #552), for chip 7's
+	 *       reason.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -267,7 +270,15 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				// states it (ADR Decision 124) — the only chip here answering true, so a put hardcoded to
 				// `false` disagrees with it. Mutate the put and read this class's failure.
 				SafetyWarningFixtures.statedInTheAnswer(SafetyWarningFixtures.recordedAllergenContraindication(
-						"Ibuprofen", "The patient has a recorded allergy to Ibuprofen.", true)));
+						"Ibuprofen", "The patient has a recorded allergy to Ibuprofen.", true)),
+				// Chip 15: a current-medication chip naming the TWO orders it is about (issue #552), so the
+				// accessor guard compares a non-empty currentMedicationOrders element by element, and a
+				// serializer reshaping the entries into maps or sentences disagrees with it — chip 7's
+				// reason, for this key. The second order has no readable uuid, which the key still lists.
+				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.recordedAllergenContraindication(
+						"Ibuprofen", "The patient has a recorded allergy to Ibuprofen.", true),
+						SafetyWarningFixtures.activeOrder("uuid-advil", "Advil 400mg"),
+						SafetyWarningFixtures.activeOrder(null, "Nurofen 200mg")));
 	}
 
 	private ChartSearchAiRestController controller;

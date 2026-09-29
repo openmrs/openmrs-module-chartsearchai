@@ -12156,7 +12156,7 @@ drops a `true` chip from the box, and with no chip left in it the coverage note'
   already holds (#151) — keeping only a display `displayNamesADrug`. `ContraindicationChips.add` stamps
   them onto each current-medication chip, so a chip the ledger replaces keeps them. Unpublished
   (`SafetyWarning.currentOrderDisplays()`): the statement is its reader, and publishing the order on the
-  chip is #552's question.
+  chip is #552's question — Decision 125 publishes it.
 - **The detail is quoted, never paraphrased**, so the statement claims exactly what the finding does, at
   no strength of its own, and cannot say *"she is taking Ibuprofen"* of an *Advil* order — README's rule
   for rendering `aboutACurrentMedication`.
@@ -12184,3 +12184,78 @@ Pinned by `AllergyQuestionConflictingOrderContextTest` — each gate leg, the al
 order stamp reddens its own case under mutation — and, for the key, by
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`,
 whose chip 14 is the only `true`.
+
+## Decision 125: A contraindication chip about her own prescription names every order it is about
+
+### Context
+
+A contraindication chip raised from one of the patient's own active orders said THAT it was about one
+of them (`aboutACurrentMedication`, #527) and not WHICH. Where the order's name is the chip's `drug`
+the clinician can still find it; where it is not, an *Advil 400mg* order behind an `Ibuprofen` chip,
+nothing on the wire linked the two, and README told a client to resolve `drug` against her orders
+itself — a second resolution that can disagree with the module's (#151). `chartOrderBridges` does not
+cover it: only the interaction and condition-mediated arms build it, and it is empty wherever the
+order's own names reach the substance, which is the common case. Decision 124 had already resolved the
+orders once, in `addActiveOrderContraindications`, for its own statement, and kept them unpublished.
+
+### Decision
+
+A new chip key, `currentMedicationOrders` (`SafetyWarning.currentMedicationOrders()`), always present,
+listing `{ orderDisplay, orderUuid }`, in her chart's order, for EVERY active order a contraindication
+chip about a medication she already takes is about (#552). `chartOrderBridges` keeps its meaning.
+
+- **One resolution, stamped where the chip is raised.** `addActiveOrderContraindications` records the
+  ORDERS per substance and `ContraindicationChips.add` stamps both the published list and Decision 124's
+  printable projection off them, so the two cannot disagree about which orders a chip is about. The
+  serializer copies the list and re-derives nothing. Its orders are every one any row of the chip's
+  substance `resolvesFromAny`.
+- **Both arms that state the referent.** The drug-in-play arm marks a contraindication
+  `aboutACurrentMedication` too, wherever her orders establish its substance (#402, Decision 123), and the
+  owner's ruling was every current-medication contraindication chip. So `validate` records, off
+  `currentMedicationsInPlay`, the orders that ESTABLISH each such substance (`ordersEstablishing`) — the
+  orders its referent was decided on, not every order resolving to it: on a chip this arm raises, her
+  *Nexium 40mg*, which resolves to omeprazole without naming it, is not listed beside her
+  *Omeprazole 20mg*. The ledger stamps them onto the wire list ALONE. Decision 124's statement stays the
+  active-order arm's, since a drug the question put in play is a chip of another kind there; stamping the sentence
+  projection too makes *"Is she allergic to aspirin?"* state her order, which
+  `AllergyQuestionConflictingOrderContextTest.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
+  reddens on.
+- **Every order, not every printable display.** The owner's ruling was every order the chip covers, with
+  its uuid, so the `displayNamesADrug` filter Decision 124 applies stays on the SENTENCE projection
+  (`SafetyWarning.currentOrderDisplays()`) and off the wire: a codes-only order is listed under its
+  stand-in display, because labelling an order that has no other name is what the display is for
+  (`ActiveDrugOrder.hasKnownName()`), while a sentence must not print it as a name. The wire list is not
+  de-duplicated and the sentence projection still is, by display, so two prescriptions under one display
+  are two entries on the wire and one name in the sentence.
+- **`/chartalerts` carries it** through the shared serializer, and README's "resolve it from the `drug`
+  field" sentence is replaced by a pointer to it.
+
+### Rejected
+
+- **Widen `chartOrderBridges`.** Its readers, the prompt clause included, depend on it meaning "where the
+  names differ"; the ticket's own first open question, settled by the owner.
+- **Keep the display filter on the wire.** It publishes
+  `aboutACurrentMedication: true` beside `[]` for a codes-only order whose uuid the module holds, which is
+  #552's own defect for that population.
+
+### Residues
+
+- A chip of another type carries `[]`, the interaction and dose chips the drug-in-play arm marks
+  `aboutACurrentMedication` included. `[]` is never a claim that no order is behind a chip.
+- A context carrying no per-order list (#118's flattened fallback) has no order to name, from either arm.
+- The two arms list by different tests, `resolvesFromAny` and `ordersEstablishing`, because each lists
+  the orders its own referent was decided on. So one chip, of the same type, drug and detail, can list
+  different orders by which arm raised it: over the shipped data, with orders *Nexium 40mg* and
+  *Omeprazole 20mg* and an omeprazole allergy, the Omeprazole identity chip lists both on `/chartalerts`
+  and on *"Does she have any allergies?"*, and *Omeprazole 20mg* alone on *"Can I give her omeprazole?"*
+  (measured 2026-09-29 at b30fca1e by a throwaway test driving `standingChartAlerts` and `validate`).
+
+Pinned by `CurrentMedicationOrdersTest` (every order, shared displays, a codes-only order, a second
+substance's own list, a proposal's `[]` with no order of its substance and with one her orders establish
+on a sibling row, a drug-in-play chip's order asked by substance and by brand, the establishing order and
+not the resolving one, and the statement's text unchanged),
+`AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
+(the real `OrderService` order under a brand display) and `.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
+(a drug-in-play chip names her order and is not stated), and on the wire by
+`ChartSearchAiCurrentMedicationOrdersTest`, `ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid`
+and `ChartSearchAiSafetyWarningSeverityWireTest`'s chip 15.

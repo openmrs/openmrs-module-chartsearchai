@@ -24,8 +24,8 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
- * Issue #553: an order scheduled to start in the future is still screened, but no finding calls it an
- * active order she is already taking. Driven through the public {@code validate(answer, question, Patient)},
+ * Issue #553: an order scheduled to start in the future is still screened, but no finding's detail these
+ * cases reach calls it an active order, and the drug-in-play arm does not state it as her medication. Driven through the public {@code validate(answer, question, Patient)},
  * so the patient's orders are read by the real {@link PatientClinicalContextBuilder} from the database —
  * {@code ScheduledDrugOrderTestData.xml}'s started Nevirapine and scheduled Rifampicin — and screened over
  * the verbatim DDInter slice that relates the two.

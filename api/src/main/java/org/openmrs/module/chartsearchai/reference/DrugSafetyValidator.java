@@ -7602,7 +7602,7 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction, List, boolean)},
+	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction, List, boolean, Date, Date)},
 	 * additionally naming the partner by {@link #reconciledPartnerName}'s answer, and — where the class
 	 * arm had a finding about that SAME active order — folding its sentence into this one chip (issue
 	 * #88).
@@ -8784,8 +8784,10 @@ public class DrugSafetyValidator {
 		// A substance she holds only as orders that have not started is visited LAST (issue #553), so a
 		// pair of a started and a scheduled order is stated from the started side — whose
 		// current-medication clause below is true of it — and names the other as a scheduled order. The
-		// pair key is unordered, so nothing is lost: a pair the started side does not relate is still
-		// reached from the scheduled one. On a chart with no such order the order is untouched.
+		// pair key is unordered, so no pair is lost: one the started side does not relate is still reached
+		// from the scheduled one. What does move, on such a chart only, is WHICH chip the maxPairChips cap
+		// keeps inside one rating — the sort below is stable, so a pair with a scheduled-only subject now
+		// trails its equals. On a chart with no such order the visiting order is untouched.
 		for (DrugReference ref : startedSubjectsFirst(orderDrugs, context, bridgedOrders)) {
 			List<DrugReference> substance = substances.remove(ref.substanceGroupKey());
 			if (substance == null) {
@@ -9494,9 +9496,16 @@ public class DrugSafetyValidator {
 		}
 		List<DrugReference> started = new ArrayList<DrugReference>();
 		List<DrugReference> scheduled = new ArrayList<DrugReference>();
+		// Decided once per SUBSTANCE, the unit the arm drains on, and never once per row of it. A per-call
+		// local, for issue #172's reason.
+		Map<Object, Boolean> scheduledOnly = new HashMap<Object, Boolean>();
 		for (DrugReference ref : orderDrugs) {
-			(scheduledStartOf(orderDrugs, ref, context.getActiveDrugOrders(), bridged) == null ? started : scheduled)
-					.add(ref);
+			Boolean late = scheduledOnly.get(ref.substanceGroupKey());
+			if (late == null) {
+				late = Boolean.valueOf(scheduledStartOf(orderDrugs, ref, context.getActiveDrugOrders(), bridged) != null);
+				scheduledOnly.put(ref.substanceGroupKey(), late);
+			}
+			(late.booleanValue() ? scheduled : started).add(ref);
 		}
 		started.addAll(scheduled);
 		return started;

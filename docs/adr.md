@@ -12176,7 +12176,10 @@ month would be a safety loss — and fix the wording.
   `resourceUuid` reads it from the chart.
 - A pair of two not-started orders, and a contraindication about a not-started order, still state the
   current-medication clause ("a medication this patient is already taking") and publish
-  `aboutACurrentMedication: true`; their details and the chart record carry the start date.
+  `aboutACurrentMedication: true`. The pair's detail carries both start dates; the contraindication's does
+  not, and its date is in the chart record and, on an allergy-only question, the "Currently prescribed" line.
+- On a chart holding a scheduled order, a screened pair whose subject is scheduled-only sorts behind its
+  equally rated pairs, so it is the one the `maxPairChips` cap withholds inside that rating.
 - `LlmInferenceService`'s enumeration-repair instruction asks the model to name "the active order it is about"
   for each finding; it is prompt text and was not re-measured here.
 - What the model writes in its own prose is pinned by no test here.

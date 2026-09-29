@@ -150,7 +150,8 @@ public final class FindingPartnerCoverageCheck {
 	 * The words an unstated partner is named with: {@code "active order X"}, or, for a partner whose
 	 * finding's stamp says it has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStart()}),
 	 * {@code "scheduled order X (scheduled to start <date>)"} — the date in brackets, so in a list of several
-	 * it cannot be read as the next item's. Worded from the stamp, because these are the module's own
+	 * it cannot be read as the next item's. A partner name carrying a bracket of its own ("Rifampicin
+	 * (rifampin)") then reads with two, which is accepted as the price of that. Worded from the stamp, because these are the module's own
 	 * words; a partner no stamp reaches keeps "active order" (ADR Decision 125's residues).
 	 */
 	private static String partnerWords(String partner, String scheduledStart) {

@@ -11,7 +11,8 @@ by deterministic Java code *before* the model is called, using two things:
 2. **Cue-word patterns.** Regular expressions over the question text in `QueryScopeRouter`.
 
 The interaction findings themselves are lookups in the knowledge base, not model inference. The
-model only writes prose around findings the module has already computed.
+model still writes the answer, and it has more influence on that answer than just phrasing it; see
+[What the model does](#what-the-model-does).
 
 Companion documents:
 
@@ -171,6 +172,52 @@ These are grammars over word order, not word lists, and they **fail closed**. A 
 doesn't match exactly goes to the model as usual, so a missed phrasing costs nothing. The module
 also answers only when there are findings to state and the patient's orders were read and all
 resolved (`DrugReferenceInjector.answersFromFindings`).
+
+---
+
+## What the model does
+
+The routing and the findings are the module's. The model still has three roles, and each is
+documented where it is decided; this section links to those places rather than restating them.
+
+1. **It writes the answer.** The pre-answer findings are injected as citable `safety_finding`
+   records, alongside the `drug_reference` records for the drugs involved. The model turns them into
+   prose and chooses what to cite. With `chartsearchai.drugSafety.answerFromFindings` at its default
+   of `false`, every DDI answer is written by the model. See
+   [ADR Decision 23](adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
+2. **It can state interactions the checks did not raise.** A `drug_reference` record carries the
+   drug's reference text, interactions included. Injection exists so the model can ground those
+   facts
+   ([README — Drug-reference injection & safety validation](../README.md#drug-reference-injection--safety-validation)),
+   so the prose can state an interaction that no finding carries.
+3. **Its answer feeds the chips.** In the post-answer pass, drugs the answer names are added to the
+   drugs checked, unless the mention only repeats a record the model was shown (issues #105 and
+   #360). The `chartsearchai.drugSafety.warnOnInteractions` row of the README's global-property
+   table documents this. The pairwise gates read the question alone, so the answer can add chips but
+   cannot change which pairwise check runs.
+
+### The prose is the weak part
+
+`answer` is the model's rendering, and `safetyWarnings` is the deterministic layer:
+[ddi-interaction-question-examples.md](ddi-interaction-question-examples.md#how-to-ask) says to
+judge the chips, not only the prose. A live run recorded in
+[ADR Decision 89](adr.md#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)
+(sixteen DDI questions on eight patients, 2026-09-10) found no chip that contradicted the chart, yet
+six of the sixteen answers were ones a clinician should not read. Two of those six were misses of
+the question gate described above, not the model's doing.
+
+That is why most of the drug-safety code that is not the checks themselves checks the model's
+prose. The README's [Citation grounding](../README.md#citation-grounding) section describes those
+checks, and each has its own decision:
+
+- a cited reference record reproduced in different words —
+  [Decision 61](adr.md#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully),
+  published on the response per
+  [Decision 74](adr.md#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log);
+- a dosing ceiling quoted while a stricter one is left unstated —
+  [Decision 96](adr.md#decision-96-an-answer-quoting-one-of-a-substances-ceilings-says-which-stricter-one-it-left-unstated);
+- an interaction partner the prose left unnamed, which the module names itself —
+  [Decision 100](adr.md#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again).
 
 ---
 

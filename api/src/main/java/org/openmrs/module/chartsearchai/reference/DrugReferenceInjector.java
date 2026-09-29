@@ -680,7 +680,7 @@ public class DrugReferenceInjector {
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
 					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null, null,
-					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
+					null, Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -709,7 +709,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -759,10 +759,13 @@ public class DrugReferenceInjector {
 			// marker reaches this record, never the chip.
 			// And, since issue #515, whether the clause this record ends in withholds, and the rows of the
 			// substance it is about — both off the finding in hand, the one place either is written.
+			// And, since issue #560, whether it carries no rating at all: the predicate that appended
+			// FINDING_NO_SEVERITY to `rendered`, so the stamp says what the model read.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
-					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
+					withholds(strengthClause(finding)), Boolean.valueOf(statesNoSeverity(finding)),
+					rowIds(finding.subjectRows()),
 					finding.namedPartners(), SafetyWarning.orderNamesOf(finding),
 					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
@@ -2418,7 +2421,9 @@ public class DrugReferenceInjector {
 	 * its own — every contraindication, a class-only relationship, an authored unrated rule, the
 	 * several-orders finding, the finding that her orders share a substance. Not a FOLDED chip, whose
 	 * severity is its rule's. Not a condition-mediated finding, whose detail already ends by saying it has
-	 * no severity of its own ({@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}).
+	 * no severity of its own ({@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}) and which names
+	 * each partner WITH its rating. Since issue #560 it is also what writes
+	 * {@code RecordMapping.getFindingUnrated()}, so that stamp and this sentence are one decision.
 	 */
 	private static boolean statesNoSeverity(SafetyWarning finding) {
 		return finding.getSeverity() == null

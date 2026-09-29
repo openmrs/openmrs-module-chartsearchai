@@ -562,6 +562,22 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * {@link #injectedFindingsOverWithRecordedAllergies(PatientChart, String, Set, Set, Set)} over
+	 * {@code service} rather than the excerpt — for a case whose premise is a finding the SHIPPED
+	 * knowledge base raises for a patient with recorded allergies (issue #560: her prednisone order
+	 * against her dexamethasone allergy, a cross-reactivity finding that carries no rating).
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding
+	 */
+	public static PatientChart injectedFindingsOverWithRecordedAllergies(DrugReferenceService service,
+			PatientChart base, String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			Set<String> allergies) {
+		return injectedOrThrow(service, base,
+				ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, null), question,
+				"drugs " + activeDrugs + " and allergies " + allergies);
+	}
+
+	/**
 	 * {@link #chipsOverAnswer(String, String, Set, Set, List)} over {@code service} rather than the
 	 * excerpt — the chips for the patient
 	 * {@link #injectedFindingsOver(DrugReferenceService, PatientChart, String, Set, Set, List)} injects
@@ -1836,7 +1852,7 @@ public final class DrugReferenceTestSupport {
 						+ "using this record is about a record that names it: " + text);
 		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
 				order.getUuid() + "-" + index, null, text, null, 0, orderActive, stopDate, null, null, null,
-				null, null, null, null, null);
+				null, null, null, null, null, null);
 	}
 
 	/**

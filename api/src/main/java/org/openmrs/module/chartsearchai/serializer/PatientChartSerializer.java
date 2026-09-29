@@ -749,6 +749,19 @@ public class PatientChartSerializer {
 		private final Boolean findingWithholds;
 
 		/**
+		 * Whether an injected {@code safety_finding} carries NO rating of its own: {@code TRUE} where its
+		 * record states {@code DrugReferenceInjector.FINDING_NO_SEVERITY} ("No severity is rated for this
+		 * finding."), {@code FALSE} on every other finding, {@code null} on every record that is not a
+		 * finding (issue #560). Written in exactly ONE place, {@code DrugReferenceInjector}'s finding
+		 * mapping, off the same predicate that appends that sentence, so the stamp and what the model read
+		 * cannot disagree. Never re-derived from {@link #getText()}, and never from
+		 * {@link #getFindingSeverity()} being null — that also answers for a rating
+		 * {@code DrugSafetyValidator.statableRating} declines and for a rating the record does not state,
+		 * and an answer stating either of those has attached no rating the finding lacks.
+		 */
+		private final Boolean findingUnrated;
+
+		/**
 		 * The ids of every reference row of the substance an injected {@code safety_finding} is about —
 		 * its SUBJECT as the arm that raised it named it, both drugs of a question-pair finding, and every
 		 * substance a finding that her orders share substances names ({@code SafetyWarning.subjectRows()}) —
@@ -941,7 +954,7 @@ public class PatientChartSerializer {
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, null, null, null, null, null);
+					orderStopDate, findingSeverity, null, null, null, null, null, null);
 		}
 
 		/**
@@ -964,11 +977,12 @@ public class PatientChartSerializer {
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom) {
+				String findingSeverity, Boolean findingWithholds, Boolean findingUnrated,
+				List<String> findingSubjectRows, List<String> findingPartners, List<String> findingBridgeNames,
+				List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, findingWithholds, findingSubjectRows, findingPartners,
-					findingBridgeNames, derivedFrom, null, null);
+					orderStopDate, findingSeverity, findingWithholds, findingUnrated, findingSubjectRows,
+					findingPartners, findingBridgeNames, derivedFrom, null, null);
 		}
 
 		/**
@@ -997,13 +1011,14 @@ public class PatientChartSerializer {
 		 * <p><b>Issue #516 answered it the same way again</b>, inserting {@link #findingPartners} after
 		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
 		 * was — and issue #515 once more, with {@link #findingWithholds} and {@link #findingSubjectRows}
-		 * before it, and issue #514 with {@link #findingBridgeNames} after it, in both.
+		 * before it, issue #514 with {@link #findingBridgeNames} after it, and issue #560 with
+		 * {@link #findingUnrated} after {@link #findingWithholds}, in both.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
-				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom,
-				List<String> dosingCeilings, Boolean orderDrugNamed) {
+				String findingSeverity, Boolean findingWithholds, Boolean findingUnrated,
+				List<String> findingSubjectRows, List<String> findingPartners, List<String> findingBridgeNames,
+				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -1015,6 +1030,7 @@ public class PatientChartSerializer {
 			this.orderStopDate = orderStopDate;
 			this.findingSeverity = findingSeverity;
 			this.findingWithholds = findingWithholds;
+			this.findingUnrated = findingUnrated;
 			// Copied and wrapped, and never null, for the reason derivedFrom below is.
 			this.findingSubjectRows = findingSubjectRows == null || findingSubjectRows.isEmpty()
 					? Collections.<String> emptyList()
@@ -1213,6 +1229,11 @@ public class PatientChartSerializer {
 		 */
 		public String getFindingSeverity() {
 			return findingSeverity;
+		}
+
+		/** @return see {@link #findingUnrated}; {@code null} on every record that is not an injected finding */
+		public Boolean getFindingUnrated() {
+			return findingUnrated;
 		}
 
 		/** @return see {@link #findingWithholds}; {@code null} on every record that is not an injected finding */

@@ -917,6 +917,72 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * A rating the answer attaches to a cited safety finding that carries NONE — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, ADR
+	 * Decision 128: {@link UnstatedFindingSeverity}'s question asked in the opposite direction.
+	 * {@code UnfoundedFindingSeverityCheck} is canonical for the unit, the vocabulary and the residues.
+	 *
+	 * <p><b>What it asserts.</b> That a sentence of the answer cites this finding, that the finding's
+	 * record states it carries no severity ({@code RecordMapping.getFindingUnrated()}), and that the
+	 * same sentence states {@link #getRating()} while no finding it cites, this one included, carries that
+	 * rating — its rating where it carries one, what its record states where it carries none.
+	 * Never that the finding is wrong, and never that the rating belongs to some other record the
+	 * sentence cites: a sentence can state a rating for a reason this check cannot see.
+	 *
+	 * <p>Shaped on {@link UnstatedFindingSeverity}, and for its reasons: the citation is the finding
+	 * record's index, the number a client joins to the response's {@code references}; {@code rating} is
+	 * required, since {@link #equals} dereferences it; and {@link #toString()} is the one spelling of the
+	 * pair, which the check's {@code WARN} takes. The pair is the entry's identity — one citation may be
+	 * given two different ratings, and each is its own entry.
+	 */
+	final class UnfoundedFindingSeverity {
+
+		private final int citation;
+
+		private final String rating;
+
+		public UnfoundedFindingSeverity(int citation, String rating) {
+			this.citation = citation;
+			this.rating = rating;
+		}
+
+		/** @return the citation index of the unrated finding, the {@code index} of its entry in {@code references} */
+		public int getCitation() {
+			return citation;
+		}
+
+		/**
+		 * @return the rating the answer attached to it, spelled as the module's own vocabulary spells it
+		 *         ({@code DrugSafetyValidator.statableRatings()}) rather than as the answer cased it
+		 */
+		public String getRating() {
+			return rating;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof UnfoundedFindingSeverity)) {
+				return false;
+			}
+			UnfoundedFindingSeverity that = (UnfoundedFindingSeverity) other;
+			return citation == that.citation && rating.equals(that.rating);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * citation + rating.hashCode();
+		}
+
+		@Override
+		public String toString() {
+			return "[" + citation + "] " + rating;
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -970,6 +1036,9 @@ public interface ChartSearchService {
 
 		/** @see #getCautionLedOverWithholding() */
 		private final List<CautionLedOverWithholding> cautionLedOverWithholding;
+
+		/** @see #getUnfoundedFindingSeverities() */
+		private final List<UnfoundedFindingSeverity> unfoundedFindingSeverities;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
@@ -1031,7 +1100,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null);
+					null, null, null, null, null, null, null, null, null, false, null, null, null);
 		}
 
 		/**
@@ -1069,7 +1138,12 @@ public interface ChartSearchService {
 				FindingPartnerCoverage findingPartnerCoverage,
 				boolean answeredByTheModule,
 				InteractionClaimPairs interactionClaimPairs,
-				List<CautionLedOverWithholding> cautionLedOverWithholding) {
+				List<CautionLedOverWithholding> cautionLedOverWithholding,
+				List<UnfoundedFindingSeverity> unfoundedFindingSeverities) {
+			// Null survives as null, the rule the measurement lists here share (issue #560).
+			this.unfoundedFindingSeverities = unfoundedFindingSeverities == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<UnfoundedFindingSeverity>(unfoundedFindingSeverities));
 			this.findingPartnerCoverage = findingPartnerCoverage;
 			this.answeredByTheModule = answeredByTheModule;
 			// Immutable, so carried rather than copied; null is the absence of a measurement (issue #514).
@@ -1508,7 +1582,8 @@ public interface ChartSearchService {
 		 * {@link #getMisattributedOrderCitations()}, {@link #getActiveOrderClaims()},
 		 * {@link #getUnstatedFindingSeverities()}, {@link #getFindingCitationExtent()},
 		 * {@link #getUnstatedDosingCeilings()}, {@link #getFindingPartnerCoverage()},
-		 * {@link #getInteractionClaimPairs()} and {@link #getCautionLedOverWithholding()} — state
+		 * {@link #getInteractionClaimPairs()}, {@link #getCautionLedOverWithholding()} and
+		 * {@link #getUnfoundedFindingSeverities()} — state
 		 * {@code null}, no measurement, because no model wrote anything for them to judge. {@code null}
 		 * is also what those keys state for other reasons, and a token count of zero is also what an
 		 * engine reporting no usage produces, so neither pattern tells a consumer that no model ran;
@@ -1548,6 +1623,28 @@ public interface ChartSearchService {
 		 */
 		public List<CautionLedOverWithholding> getCautionLedOverWithholding() {
 			return cautionLedOverWithholding;
+		}
+
+		/**
+		 * The ratings this answer attaches to cited safety findings that carry none — issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, ADR
+		 * Decision 128, published as the {@code unfoundedFindingSeverities} response key.
+		 * {@link UnfoundedFindingSeverity} is canonical for what an entry asserts. Read it BESIDE
+		 * {@link #getUnstatedFindingSeverities()}, which asks the opposite question and by construction
+		 * says nothing about a finding with no rating.
+		 *
+		 * <p><b>Null is not empty, and empty is not a certificate.</b> {@code null} states no
+		 * measurement: the check failed, the module wrote the answer ({@link #isAnsweredByTheModule()}),
+		 * or this is the async path's early {@code done}, built before the check runs. {@code []} says it
+		 * ran and found none — which is also the answer for a chart carrying no unrated finding, and on a
+		 * stock install, where {@code chartsearchai.drugReference.enabled} is off and no finding exists.
+		 * {@code UnfoundedFindingSeverityCheck} enumerates what the check cannot see.
+		 *
+		 * @return one entry per distinct (citation, rating) pair, in sentence order and, within one
+		 *         sentence, in citation then vocabulary order; null where no measurement was made
+		 */
+		public List<UnfoundedFindingSeverity> getUnfoundedFindingSeverities() {
+			return unfoundedFindingSeverities;
 		}
 
 		public FindingCitationExtent getFindingCitationExtent() {
@@ -1592,7 +1689,9 @@ public interface ChartSearchService {
 		 * drops another's is silent; it says nothing about a finding whose record carries no rating
 		 * for it to ask after, which is three different cases
 		 * ({@code DrugReferenceInjector.ratingThisRecordStates}); and it is satisfied by the word
-		 * appearing for any reason, including inside a mechanism the answer reproduced. <b>And
+		 * appearing for any reason, including inside a mechanism the answer reproduced. A rating
+		 * the answer attaches to a finding that carries none is the inverse question, and
+		 * {@link #getUnfoundedFindingSeverities()} asks it. <b>And
 		 * empty says less than it looks on a stock install</b>: {@code
 		 * chartsearchai.drugReference.enabled} defaults to false, so no finding exists to have a
 		 * rating dropped — the same qualification both siblings carry, for the same GP. Null's

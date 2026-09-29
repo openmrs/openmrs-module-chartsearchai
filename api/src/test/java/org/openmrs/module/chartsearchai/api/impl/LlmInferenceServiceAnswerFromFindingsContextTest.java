@@ -184,6 +184,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertNull(answer.getMisattributedOrderCitations(), "misattributedOrderCitations");
 		assertNull(answer.getActiveOrderClaims(), "activeOrderClaims");
 		assertNull(answer.getUnstatedFindingSeverities(), "unstatedFindingSeverities");
+		assertNull(answer.getUnfoundedFindingSeverities(), "unfoundedFindingSeverities");
 		assertNull(answer.getFindingCitationExtent(), "findingCitations");
 		assertNull(answer.getUnstatedDosingCeilings(), "unstatedDosingCeilings");
 		assertNull(answer.getFindingPartnerCoverage(), "findingPartners");

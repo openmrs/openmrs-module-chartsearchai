@@ -243,6 +243,11 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// And its inverse (issue #560): a rating the answer attaches, in the sentence citing it, to a
+			// finding that carries none. Carried for the reason the fourth is.
+			List<ChartSearchService.UnfoundedFindingSeverity> unfoundedFindingSeverities =
+					UnfoundedFindingSeverityCheck.reportUnfoundedFindingSeverities(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			// And the fifth (issue #395): the findings the prompt carried, counted against the ones
 			// the answer cited. ChartSearchService.ChartAnswer.getFindingCitationExtent() is
 			// canonical for what that measures and for the gap it was published to fill.
@@ -267,7 +272,7 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnstatedDosingCeiling> unstatedDosingCeilings =
 					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
 							response.getAnswer(), cited, chart.getMappings());
-			// And the statement none of the six above is (issue #315): the cited chart records whose
+			// And the statement none of the checks above is (issue #315): the cited chart records whose
 			// drug order has ended, each with the date it ended. A projection rather than a check —
 			// it judges no prose and reports no discrepancy — so it lives in ChartSearchAiUtils beside
 			// the chart's other statements. Carried rather than re-derived for the reason its
@@ -323,7 +328,8 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding);
+					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
+					unfoundedFindingSeverities);
 			outcome = "ok";
 			return answer;
 		}
@@ -747,7 +753,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
-					cautionLedOverWithholding));
+					cautionLedOverWithholding, null));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -795,6 +801,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// reason (issue #337 round three): the check runs here, after the user-visible handoff.
 			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
+							response.getAnswer(), cited, chart.getMappings());
+			// And its inverse (issue #560), carried the same way and stating null on the early `done` for
+			// the same reason.
+			List<ChartSearchService.UnfoundedFindingSeverity> unfoundedFindingSeverities =
+					UnfoundedFindingSeverityCheck.reportUnfoundedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #395): the check runs here, after the user-visible handoff. It is two
@@ -866,7 +877,8 @@ public class LlmInferenceService implements ChartSearchService {
 					misattributedOrderCitations, unstatedFindingSeverities, unstatedDosingCeilings,
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
-					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding);
+					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
+					unfoundedFindingSeverities);
 			outcome = "ok";
 			return answer;
 		}
@@ -899,7 +911,8 @@ public class LlmInferenceService implements ChartSearchService {
 	 *
 	 * <p><b>The checks of what a model WROTE are not run</b>: the class-code check logs nothing, and the
 	 * prose, active-order, finding-severity, finding-citation and dosing-ceiling keys,
-	 * {@code findingPartners}, {@code interactionClaimPairs} and {@code cautionLedOverWithholding} state null, no measurement. ADR Decision 85 already said two of them would otherwise
+	 * {@code findingPartners}, {@code interactionClaimPairs}, {@code cautionLedOverWithholding} and
+	 * {@code unfoundedFindingSeverities} state null, no measurement. ADR Decision 85 already said two of them would otherwise
 	 * report on prose no model wrote. {@code answeredByTheModule} says why they are null, since a null
 	 * alone could mean a check that failed. The statements that are not judgements of prose are made
 	 * as on the model's path: the references (inline markers, and the chart records a cited finding
@@ -950,10 +963,10 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
-				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null);
+				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null);
 	}
 
 	/**

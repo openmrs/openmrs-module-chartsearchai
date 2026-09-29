@@ -1902,6 +1902,34 @@ public class ChartSearchAiRestController {
 		// ChartAnswer.getCautionLedOverWithholding() is canonical for null and for what [] does not say.
 		target.put("cautionLedOverWithholding",
 			serializeCautionLedOverWithholding(answer.getCautionLedOverWithholding()));
+		// Issue #560: the ratings the answer attaches to cited findings that carry none.
+		// ChartAnswer.getUnfoundedFindingSeverities() is canonical for null and for what [] does not say.
+		target.put("unfoundedFindingSeverities",
+			serializeUnfoundedFindingSeverities(answer.getUnfoundedFindingSeverities()));
+	}
+
+	/**
+	 * The wire shape of {@code unfoundedFindingSeverities}: one object per (citation, rating) pair,
+	 * {@code citation} the unrated finding's record index and {@code rating} the rating the answer
+	 * attached to it — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>. The same two
+	 * key names as {@code unstatedFindingSeverities}, deliberately: the two keys ask one question in
+	 * opposite directions. {@code null} for an answer whose check stated no measurement, and a fresh
+	 * {@link ArrayList} otherwise, for the XML client {@link #serializeUnstatedFindingSeverities} names.
+	 */
+	private List<Map<String, Object>> serializeUnfoundedFindingSeverities(
+			List<ChartSearchService.UnfoundedFindingSeverity> reported) {
+		if (reported == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (ChartSearchService.UnfoundedFindingSeverity entry : reported) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("rating", entry.getRating());
+			out.add(map);
+		}
+		return out;
 	}
 
 	/**

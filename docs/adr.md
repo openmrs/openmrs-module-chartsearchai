@@ -131,6 +131,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
 - [Decision 124: An allergy question states her conflicting orders in the answer](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer)
 - [Decision 126: An order that has not started is screened, and stated as scheduled with its date](#decision-126-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date)
+- [Decision 128: A rating the answer attaches to a finding that carries none is reported](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)
 - [Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
@@ -6035,7 +6036,7 @@ The shipped `curated` file was safe only by accident — its entries set no seve
 
 ### Which ratings are asked about, and the two that are not
 
-`DrugSafetyValidator.statableRating` decides it, at the write site, expressed against `severityRank` so it cannot fall out of step with that switch. Two ratings answer `null` and they are different cases.
+`DrugSafetyValidator.statableRating` decides it, at the write site, expressed against `severityRank` so it cannot fall out of step with that table (a `switch` until [Decision 128](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)). Two ratings answer `null` and they are different cases.
 
 An **unrated** finding — a curated hand-authored rule, or an ATC-subgroup or cross-reactivity join — has no word at all. `severityRank` answers `-1`, which is also its answer for an operator dataset's own spelling this module does not recognise, so such a rating is left alone by the same arm.
 
@@ -7606,6 +7607,8 @@ What was taken instead is a maintainer's decision, recorded as such: **one quest
 - **−** **`RecordReference.getGrounded()` is a per-citation verdict published on the same union and is untouched.** An unanchored citation can carry one. That is [Decision 41](#decision-41-a-composite-claims-negative-says-nothing-about-the-citation)'s territory, which resolves it by WITHHOLDING rather than by narrowing, and for a `reference`-group citation [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201) serializes `null` regardless. Named so the inventory above does not read as closed.
 - **−** **Nothing behavioural pins where the reading comes from.** A local re-derivation over the shared decode step passes every case in `SafetyFindingSeverityFidelityTest` — measured, by making that substitution and running it — so `ArchitectureGuardTest.theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck` reads the source instead, positively, for the reason its two neighbours record. It does not reuse their shared helper: that helper exists so its callers' needle set cannot drift, and a third caller needing a different needle is that drift arriving by parameter. What they DO share is the comment strip — reading a maintainer's *was …* note as code is how a source-text rule of this shape passes on a relocation that already happened, and each comment form that did so is measured in `ArchitectureGuardTest.codeLines`' javadoc, with the residues that survive it.
 - **−** **The reporter's Mode A is not closed by this and no round has closed it.** `[370]` cited twice, once for a sentence about a different drug pair, is a citation attached to the wrong finding; nothing here judges which finding a sentence is about. The shape [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)'s cost bullet already names as open — a citation of the WRONG record inside a safety sentence — is this one, one record type over.
+
+**Amended by [Decision 128](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported) (issue #560).** `unfoundedFindingSeverities` takes this reading too, asked of each SENTENCE of the answer rather than of the whole, so an entry there also names only a finding the prose anchored a marker for.
 
 
 ## Decision 98: The module states when a cited prescription stopped, because no wording of the prompt will
@@ -12432,6 +12435,123 @@ so; a second population added into one integer is the ratio `PairChipExtent` for
 Pinned by `BelowFloorOrderInteractionsTest` (the shipped knowledge base for the reported drugs; the pinned
 excerpt and `drug-reference-partner-rated-and-unrated-rows.json` for the shapes) through the real `validate`
 and its sink, and `ChartSearchAiInteractionPairExtentTest` for the wire.
+
+## Decision 128: A rating the answer attaches to a finding that carries none is reported
+
+**Status: Accepted** (September 2026) — implemented. `UnfoundedFindingSeverityCheck`, the
+`RecordMapping.getFindingUnrated()` stamp, `DrugSafetyValidator.statableRatings()`, and the
+`unfoundedFindingSeverities` wire key ([#560](https://github.com/openmrs/openmrs-module-chartsearchai/issues/560)).
+
+### Context
+
+Sarah Taylor's chart carries `Prednisone Co 5mg` and recorded allergies to dexamethasone and hydrocortisone.
+Her dexamethasone cross-reactivity finding has no rating: the chip's `severity` is `null` and the record
+states [Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)'s
+*"No severity is rated for this finding."* Answers still called it Major — on `main` @ `0145d74a`,
+*"Is prednisone safe for her?"* drew *"a Major reason to change…"* and *"a Major finding"* (2 of 2 runs), and
+on PR #554, *"Can I give her prednisone?"* drew *"a Major finding"* about that record (3 of 4 runs; the
+fourth quoted "Major" from another chip's detail). Those figures are the issue's, measured on the `:8081`
+rig. The issue records it as #402's residue (a), which Decision 123's sentence was added for and did not
+stop, and which #554 moved from one phrasing to another (the decision numbered 125 on that PR's branch, *Live
+gate* — a number `main` has since given to Decision 125 here).
+
+`unstatedFindingSeverities` ([Decision 78](#decision-78-a-safety-findings-rating-has-to-survive-into-the-answer-that-states-it))
+asks the opposite question, and by construction says nothing about a record with no rating: what reaches it
+is `RecordMapping.getFindingSeverity()`, one nullable field. No other check compared a rating word in the
+prose against the finding it cites. The issue records that every wording lever tried on this family had
+failed or moved the fault (the #539/#337 prompt arms, #548's arm B, Decision 123's own sentence), so the
+remedy is deterministic.
+
+### Decision
+
+The issue's owner decided the three open questions on the issue, and this implements them, with one
+departure named in the unit's bullet: the exemption asks the unrated finding being judged as well as the
+OTHER findings the owner's wording names.
+
+- **Report only.** The citation and the rating reach their own always-present `ChartAnswer` key, resolved
+  once at the check's call site, as `unstatedFindingSeverities` is. `null` is no measurement; `[]` is a
+  measurement of none and not a certificate. The answer is not rewritten: a rewrite would be the module
+  editing what the model said.
+- **The unit is the sentence** citing an unrated finding, split by `ChartSearchAiUtils.SENTENCE_BOUNDARY`.
+  The sibling's whole-answer unit cannot serve the inverse question, because "Major" elsewhere is exactly
+  the false report. A rating word in that sentence is reported only where no finding the sentence cites
+  carries that rating, which keeps the #554 fourth run's case silent. The unrated finding itself is one of
+  those asked, so a word an operator's note put in its record is not reported — past the owner's "no other
+  finding cited in the same sentence", and paid for by the Residues entry on a rating the judged finding's own record states. A finding carrying a rating
+  (stamp `FALSE`) carries that rating and no other, read off `getFindingSeverity()`, so its mechanism's
+  *"moderate inhibitors of CYP450 3A4"* on a rule rated Major exempts nothing. A finding carrying none
+  (stamp `TRUE`) carries what its record states: a condition-mediated finding's detail states each
+  drug-disease rating. Reading a record can only exempt, the direction the check must fail in. (Three
+  earlier versions read only the field, every record, and the field's nullness as "no rating"; Phase 2
+  reviews of this change found the case each got wrong.)
+  Which findings a sentence cites is `SafetyFindingCitationExtentCheck.citedFindingIndexes`, asked of the
+  sentence — [Decision 97](#decision-97-the-accusation-that-a-finding-lost-its-rating-counts-cited-the-way-the-published-count-does)'s
+  one reading, so the #305 filter and the resolution's admission come with it.
+- **The vocabulary is `statableRating`'s.** `DrugSafetyValidator.statableRatings()` enumerates the ratings
+  that method states, by calling it over the recognised severities, so the check spells no severity
+  literal. `severityRank`'s `switch` became a nested enum of those severities so they can be enumerated at
+  all; an enum rather than a `static final` list because
+  `CoMedicationResolutionPerPassTest.theBeanHoldsNoStateButTheInjectedService` refuses a collection on that
+  bean.
+
+**Which findings carry no rating is a new stamp, `RecordMapping.getFindingUnrated()`**, and not
+`getFindingSeverity() == null`. That `null` answers three cases (`DrugReferenceInjector.ratingThisRecordStates`):
+a finding with no rating, a rating `statableRating` declines (`unknown`), and a rating the record's own text
+does not state (an operator dataset). An answer stating the rating in either of the last two has attached
+nothing the finding lacks. The stamp is written in the injector's finding mapping off `carriesNoRating`,
+`SafetyWarning.getSeverity() == null`, and every such record says so: an unrated finding's in the
+no-severity sentence, a condition-mediated finding's in its detail's own last clause. So a condition-mediated
+finding is one the check judges, and the Major its detail states for the drug-disease chain is exempt
+through its own record.
+
+### Rejected
+
+- **Rewrite or strip the word.** Rejected by the owner, above.
+- **The whole answer as the unit**, the sibling's: it reports the correct answer that rates another
+  finding elsewhere.
+- **`ActiveOrderCitationFidelityCheck`'s marker run as the unit.** Offered by the issue; the owner chose
+  the sentence.
+
+### Residues
+
+- *"Unknown severity"* on an unrated finding, which Decision 123 measured, is not reported:
+  `statableRating` declines `unknown`, and reading it would report correct prose ("its severity is
+  unknown").
+- A sentence citing the unrated finding beside a finding carrying the rating is silent even where the
+  rating was attached to the unrated one — the enumeration sentence
+  [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response) refuted
+  sentence scoping with. The exemption buys the #554 fourth run's silence, and this is what it costs.
+- A rating the judged finding's own record states, attached to that finding, is not reported. The
+  exemption asks the unrated finding itself, so correct prose reproducing its record (*"Metformin is rated
+  Major in lactic acidosis"*) is silent, and so is the defect in the same word: a condition-mediated
+  finding's record states each drug-disease rating, Major on the `major` derived tier, so *"Metformin has a
+  Major interaction with her stavudine and lamivudine [n]"* is not reported. An operator dataset's note
+  using a rating word in another sense (*"moderate to severe hepatic impairment"*) exempts that word for its
+  finding. Following the owner's "other" instead would report the correct prose; the word scan cannot tell
+  the two apart.
+- A marker after its sentence's terminator (*"…a Major finding. [354]"*) lands in the next sentence, so the
+  finding's own sentence is silent and the next one's rating, if any, is attached to it.
+- A rating the sentence owes to a co-cited finding that carries it while its record does not state it — an
+  operator dataset's note omitting the rating — is reported: that finding's `getFindingSeverity()` is null.
+- A rating the sentence owes to a co-cited record that is NOT a finding is reported — a `drug_reference`
+  record lists its partners with their ratings. The owner's decision exempts a rating another FINDING
+  carries.
+- A rating word negated (*"not Major"*) or used in ordinary English (*"a minor rash"*) is reported.
+
+### Live gate
+
+The issue's gate names two live cells and a control. *"Is prednisone safe for her?"* on `main` and the
+clarithromycin control are this branch's. *"Can I give her prednisone?"* on #554's head is not: that code is
+#554's, and the issue says #554's unmet row is read against this key once both land.
+
+Pinned by `UnfoundedFindingSeverityTest`, over the shipped knowledge base and two hand-authored operator
+fixtures through the real `injectRecords`
+and `search`/`searchStreaming` — mutate the stamp, the sentence unit, the per-sentence citation reading, the
+co-cited exemption or the vocabulary and read which case reddens — by
+`UnfoundedFindingSeverityDerivedTierContextTest` for the condition-mediated finding, by
+`FindingUnratedStampTest` for the stamp, by `ArchitectureGuardTest.theUnfoundedFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck`
+for the reading, and by `ChartSearchAiUnfoundedFindingSeverityTest` for the wire.
+
 ## Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question
 
 **Status: Accepted** (September 2026) — implemented, issue

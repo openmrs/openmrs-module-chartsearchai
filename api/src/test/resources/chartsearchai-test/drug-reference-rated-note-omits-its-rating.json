@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #560 — not shipped data",
+  "description": "An operator dataset whose interaction note does not restate its Major rating but does contain the word 'moderate', beside a self-named allergy rule. The interaction finding carries a rating the record never states, so its findingSeverity is null; the allergy finding carries none. A Moderate the answer gives the allergy finding in a sentence citing both is not a rating the interaction carries, and unfoundedFindingSeverities must report it.",
+  "entries": [
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "interactions": [
+        { "token": "warfarin", "severity": "Major", "note": "Even moderate doses may increase the risk of bleeding." }
+      ],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "documented ibuprofen allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "warfarin",
+      "name": "Warfarin",
+      "aliases": ["warfarin"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

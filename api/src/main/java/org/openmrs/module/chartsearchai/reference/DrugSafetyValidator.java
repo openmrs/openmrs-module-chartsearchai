@@ -1226,27 +1226,73 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The source-assigned interaction severities this module RECOGNISES, lowest first, each at its
+	 * {@link #severityRank} — and spelled as the shipped knowledge base spells them, so that
+	 * {@link #statableRatings()} can hand a member on as a word a client reads (issue #560). The one
+	 * table of the vocabulary: {@link #severityRank} reads it, and every rule expressed against that
+	 * rank moves with it. It was a {@code switch} over lower-case literals until #560, which needed the
+	 * members enumerable by the {@code api.impl} checks without their spelling a literal of their own.
+	 *
+	 * <p>An enum and not a {@code static final} list, because the list is what
+	 * {@code CoMedicationResolutionPerPassTest.theBeanHoldsNoStateButTheInjectedService} refuses on this
+	 * bean, and rightly: a list's contents can move and an enum's constants cannot.
+	 */
+	private enum RecognisedSeverity {
+		UNKNOWN("Unknown"), MINOR("Minor"), MODERATE("Moderate"), MAJOR("Major");
+
+		private final String word;
+
+		/** {@link #word} folded once, so {@link #severityRank} — on every rule's path — allocates nothing for it. */
+		private final String folded;
+
+		RecognisedSeverity(String word) {
+			this.word = word;
+			this.folded = word.toLowerCase(Locale.ROOT);
+		}
+	}
+
+	/**
 	 * @return the rank of a source-assigned interaction severity in the floor's ordering
-	 *         ({@code unknown}=0 &lt; {@code minor}=1 &lt; {@code moderate}=2 &lt; {@code major}=3),
-	 *         or {@code -1} for null/unrecognized — which the rule filter treats as exempt
-	 *         (unrated is not low-rated).
+	 *         ({@code unknown}=0 &lt; {@code minor}=1 &lt; {@code moderate}=2 &lt; {@code major}=3,
+	 *         the {@link RecognisedSeverity} ordinals), or {@code -1} for null/unrecognized — which the
+	 *         rule filter treats as exempt (unrated is not low-rated). Recognised through
+	 *         {@code trim().toLowerCase(Locale.ROOT)} on BOTH operands, as the switch this replaced did,
+	 *         and never {@code equalsIgnoreCase}, which folds character by character and would
+	 *         recognise spellings the switch did not.
 	 */
 	private static int severityRank(String severity) {
 		if (severity == null) {
 			return -1;
 		}
-		switch (severity.trim().toLowerCase(Locale.ROOT)) {
-			case "unknown":
-				return 0;
-			case "minor":
-				return 1;
-			case "moderate":
-				return 2;
-			case "major":
-				return 3;
-			default:
-				return -1;
+		String folded = severity.trim().toLowerCase(Locale.ROOT);
+		for (RecognisedSeverity recognised : RecognisedSeverity.values()) {
+			if (recognised.folded.equals(folded)) {
+				return recognised.ordinal();
+			}
 		}
+		return -1;
+	}
+
+	/**
+	 * The ratings {@link #statableRating} states — the words an answer stating a finding is asked to
+	 * carry — lowest first, in the vocabulary's own spelling. Derived by CALLING
+	 * {@link #statableRating} over {@link RecognisedSeverity}, so the list moves with that method in
+	 * both directions and is never a second statement of which ratings count.
+	 *
+	 * <p>Public for the check that reads an ANSWER for these words, {@code UnfoundedFindingSeverityCheck}
+	 * (issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>),
+	 * which lives outside this package and must spell no severity literal of its own.
+	 *
+	 * @return an unmodifiable list, never null
+	 */
+	public static List<String> statableRatings() {
+		List<String> statable = new ArrayList<String>();
+		for (RecognisedSeverity recognised : RecognisedSeverity.values()) {
+			if (statableRating(recognised.word) != null) {
+				statable.add(recognised.word);
+			}
+		}
+		return Collections.unmodifiableList(statable);
 	}
 
 	/**
@@ -1293,7 +1339,7 @@ public class DrugSafetyValidator {
 	 * mechanism text ending "No special precautions are necessary".
 	 *
 	 * <p>The boundary is expressed against {@link #severityRank} rather than as a number, so it
-	 * cannot fall out of step with that switch: {@code major} withholds and every rating below it is a
+	 * cannot fall out of step with that table: {@code major} withholds and every rating below it is a
 	 * caution, because that is where DDInter's own tiers put it — ADR Decision 109 quotes them (issue
 	 * #471). {@code unknown} carries no mechanism text, which is why the default floor filters it out of
 	 * the chips entirely.
@@ -1375,7 +1421,7 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>The boundary is expressed against {@link #severityRank} for the reason
 	 * {@link #ratingLicensesWithholding}'s is: written as a number or as a list of members it could
-	 * fall out of step with that switch, and this one has to move with it in BOTH directions — a
+	 * fall out of step with that table, and this one has to move with it in BOTH directions — a
 	 * rating added below {@code unknown} would be excluded and one added above it included, without
 	 * this method changing.
 	 *

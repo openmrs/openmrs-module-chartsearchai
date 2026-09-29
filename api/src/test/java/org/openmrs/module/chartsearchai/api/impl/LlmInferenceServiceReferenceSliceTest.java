@@ -10,6 +10,8 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,6 +25,8 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
@@ -36,6 +40,7 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #229 — the injected reference slice's size travelling from the chart the LLM actually saw to
@@ -48,9 +53,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  *
  * <p><b>It is resolved off the POST-inject chart.</b> The strategy here builds a chart with no
  * reference material and the injector seam returns one the REAL injector produced, so a slice
- * resolved before {@code inject()} reports zero and both ordering cases below fail — measured, and
- * stated as two rather than as "every case here", because the third pins the producer-side
- * null-versus-zero contract on a directly constructed answer and no ordering can move it. That is deliberate:
+ * resolved before {@code inject()} reports zero and the ordering cases below fail — not "every case
+ * here", because the null-versus-zero case pins the producer-side contract on a directly
+ * constructed answer and no ordering can move it. Hoist the resolution and read which fail.
+ * That is deliberate:
  * a seam returning the chart unchanged — which is what every other test in this package installs —
  * cannot tell the two orderings apart, so those cases would stay green under exactly the mutation
  * {@code LlmInferenceService}'s own comment guards ("After inject() deliberately: that is the chart
@@ -65,8 +71,15 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * two independent derivations over one chart are equal, so an equality check on the numbers stays
  * green under a second resolution at the ungrounded site — measured — and would state a guard that
  * is not there.
+ *
+ * <p><b>Both answer paths are pinned, each by its own cases.</b> The arrangement is a drug-safety
+ * question over a Major-interaction chart, which since issue #562 the module answers itself by
+ * default (ADR Decision 131) — so a case that inherited the shipped default would reach
+ * {@code answerFromTheModule} and never the model. {@link #setUp} states the property off, before
+ * the chart is injected because that is where it is read, and the model-path cases assert that
+ * the model wrote the answer; the module-path case turns it back on and asserts the module did.
  */
-public class LlmInferenceServiceReferenceSliceTest {
+public class LlmInferenceServiceReferenceSliceTest extends BaseModuleContextSensitiveTest {
 
 	/** The real injected chart the seam hands back — produced by the real injector over the real
 	 *  DDInter excerpt, so the mappings being measured are production's own, not a hand-built
@@ -78,8 +91,9 @@ public class LlmInferenceServiceReferenceSliceTest {
 
 	@BeforeEach
 	public void setUp() {
-		injected = DrugReferenceTestSupport.injectedSafetyFindingChart(
-				"is it safe to give clarithromycin?", "simvastatin", "C10AA01");
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+		injected = injectedChart();
 		service = new TestableService();
 		service.setChartBuildingStrategy(new StubStrategy());
 		service.setLlmProvider(new StubProvider());
@@ -102,6 +116,11 @@ public class LlmInferenceServiceReferenceSliceTest {
 				return Collections.emptyList();
 			}
 		});
+	}
+
+	private static PatientChart injectedChart() {
+		return DrugReferenceTestSupport.injectedSafetyFindingChart(
+				"is it safe to give clarithromycin?", "simvastatin", "C10AA01");
 	}
 
 	private static Patient patient() {
@@ -127,6 +146,7 @@ public class LlmInferenceServiceReferenceSliceTest {
 
 		ChartAnswer answer = service.search(patient(), "is it safe to give clarithromycin?");
 
+		assertFalse(answer.isAnsweredByTheModule(), "the premise: the MODEL wrote this answer");
 		assertEquals(expected().getRecords(), answer.getReferenceSlice().getRecords());
 		assertEquals(expected().getCharacters(), answer.getReferenceSlice().getCharacters());
 	}
@@ -141,12 +161,44 @@ public class LlmInferenceServiceReferenceSliceTest {
 				early -> ungrounded.add(early.getReferenceSlice()));
 
 		assertEquals(1, ungrounded.size(), "the early-done consumer must have fired");
+		assertFalse(answer.isAnsweredByTheModule(), "the premise: the MODEL wrote this answer");
 		assertEquals(expected().getRecords(), answer.getReferenceSlice().getRecords());
 		assertEquals(expected().getRecords(), ungrounded.get(0).getRecords(),
 				"the early-done audit row and the classic one must state the same slice");
 		assertSame(answer.getReferenceSlice(), ungrounded.get(0),
 				"one resolution reaches both answers; equal numbers from two resolutions pass an "
 						+ "equality check and leave the mechanism unpinned");
+	}
+
+	/**
+	 * The module's own answer states the same slice, on both methods and on both of the streaming
+	 * path's answers — the path this arrangement's question takes by default since #562.
+	 */
+	@Test
+	public void theModulesOwnAnswerStatesTheSliceOnBothMethodsAndBothStreamedAnswers() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
+		injected = injectedChart();
+		assertNotNull(injected.getModuleAnswer(),
+				"the premise: with the property on, the real injector composed an answer for this chart");
+
+		ChartAnswer searched = service.search(patient(), "is it safe to give clarithromycin?");
+
+		assertTrue(searched.isAnsweredByTheModule(), "the premise: the MODULE wrote this answer");
+		assertEquals(expected().getRecords(), searched.getReferenceSlice().getRecords());
+		assertEquals(expected().getCharacters(), searched.getReferenceSlice().getCharacters());
+
+		final List<ChartSearchAiUtils.ReferenceSlice> ungrounded =
+				new ArrayList<ChartSearchAiUtils.ReferenceSlice>();
+		ChartAnswer streamed = service.searchStreaming(patient(), "is it safe to give clarithromycin?",
+				token -> { }, reasoning -> { }, citations -> { },
+				early -> ungrounded.add(early.getReferenceSlice()));
+
+		assertTrue(streamed.isAnsweredByTheModule(), "the premise: the MODULE wrote this answer");
+		assertEquals(1, ungrounded.size(), "the early-done consumer must have fired");
+		assertEquals(expected().getRecords(), streamed.getReferenceSlice().getRecords());
+		assertSame(streamed.getReferenceSlice(), ungrounded.get(0),
+				"one resolution reaches both of the module path's answers too");
 	}
 
 	@Test
@@ -185,7 +237,7 @@ public class LlmInferenceServiceReferenceSliceTest {
 	}
 
 	/**
-	 * Builds a chart with no reference material, so the two ordering cases above cannot pass on a
+	 * Builds a chart with no reference material, so the ordering cases above cannot pass on a
 	 * pre-{@code inject()} chart.
 	 *
 	 * <p>It does NOT guard the whole file, and the difference matters to anyone swapping this for the

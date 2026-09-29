@@ -12982,12 +12982,16 @@ Decision 108 names two things to read beyond the scorer:
   `changed_by` stay null whether or not an operator later wrote the value. So the module cannot tell an
   untouched default from an operator's choice, and it does not switch the drug-safety answer path for an
   operator who may have chosen off. `config.xml` and the README say how to turn it on there.
-- **Tests whose subject is a model-written answer now say so.** Thirteen test classes judged model prose on
-  questions the module now answers, and read the old default by never setting the property. Each now sets
-  it to `false` in a `@BeforeEach`. Eleven of them were contextless, and a contextless case cannot set a
-  property: without a context every property reads its default. Those eleven became context-sensitive,
-  following `InteractionFindingChartOrderBridgeTest`'s precedent for `citeOrderRecords`. No assertion
-  changed.
+- **Tests whose subject is a model-written answer now say so.** Test classes that judged model prose on
+  questions the module now answers read the old default by never setting the property. Each now sets
+  it to `false` in a `@BeforeEach`. A contextless case cannot set a property: without a context every
+  property reads its default. So the contextless ones became context-sensitive, following
+  `InteractionFindingChartOrderBridgeTest`'s precedent for `citeOrderRecords`. No existing assertion
+  changed. `LlmInferenceServiceReferenceSliceTest` and `LlmInferenceServiceUnresolvedDrugClassTest` also
+  assert that the model wrote the answer, because a case of theirs left on the default passed on the
+  module's path and stopped pinning the model's; the first also pins the slice on the module's path.
+  To find a class still on the
+  module's path, log the caller inside `answerFromTheModule` and run the api suite.
 
 ### What turning it on makes visible
 

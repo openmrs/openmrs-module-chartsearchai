@@ -16,7 +16,8 @@ answer different questions and fail differently; a test pass that only ever asks
 Companion documents: [README — Drug-reference injection & safety validation](../README.md#drug-reference-injection--safety-validation)
 for the configuration reference, [ADR Decisions 23 & 24](adr.md) for the design, and
 [drug-kb-demo.md](drug-kb-demo.md) for a self-contained SQL fixture if your database has no
-suitable patients.
+suitable patients. [ddi-question-routing.md](ddi-question-routing.md) explains how a question is
+routed to each arm in the first place.
 
 ---
 

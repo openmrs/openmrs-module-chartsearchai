@@ -22,6 +22,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingPartnerCov
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +83,8 @@ public final class FindingPartnerCoverageCheck {
 	/**
 	 * The active orders the findings {@code answer} cited name that it does not — in the order the
 	 * injector wrote those findings and each names its orders, each once however many cited findings
-	 * cover it; empty where the answer cited no finding.
+	 * cover it, and each in the words {@link #partnerWords} names it with; empty where the answer cited
+	 * no finding.
 	 *
 	 * <p><b>It shares its population and its comparison with {@link #measure}</b> — {@code citedFindings}
 	 * and {@code comparable} — so an order is stated to both or to neither; {@code measure} counts in a
@@ -104,7 +106,7 @@ public final class FindingPartnerCoverageCheck {
 			for (String partner : finding.getFindingPartners()) {
 				String key = comparable(partner);
 				if (!haystack.contains(key) && listed.add(key)) {
-					unstated.add(partner);
+					unstated.add(partnerWords(partner, finding.getFindingPartnerScheduledStart()));
 				}
 			}
 		}
@@ -144,6 +146,18 @@ public final class FindingPartnerCoverageCheck {
 		return withNamed(answer, unstatedPartners(answer, cited, mappings));
 	}
 
+	/**
+	 * The words an unstated partner is named with: {@code "active order X"}, or, for a partner whose
+	 * finding says it has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStart()}),
+	 * {@code "scheduled order X, scheduled to start <date>"} — never "active order" for a drug she has not
+	 * started. Worded here, from the finding's stamp, because these are the module's own words.
+	 */
+	private static String partnerWords(String partner, String scheduledStart) {
+		return scheduledStart == null ? DrugSafetyValidator.ACTIVE_ORDER_NOUN + " " + partner
+				: DrugSafetyValidator.SCHEDULED_ORDER_NOUN + " " + partner + ", "
+						+ PatientChartSerializer.SCHEDULED_TO_START_WORDS + scheduledStart;
+	}
+
 	private static String withNamed(String answer, List<String> unstated) {
 		if (unstated == null || unstated.isEmpty()) {
 			return answer;
@@ -156,7 +170,7 @@ public final class FindingPartnerCoverageCheck {
 			if (i > 0) {
 				sb.append(i == unstated.size() - 1 ? " and " : ", ");
 			}
-			sb.append(DrugSafetyValidator.ACTIVE_ORDER_NOUN).append(" ").append(unstated.get(i));
+			sb.append(unstated.get(i));
 		}
 		sb.append(".");
 		return sb.toString();

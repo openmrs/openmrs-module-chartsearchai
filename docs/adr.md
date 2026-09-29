@@ -129,6 +129,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 121: The "Drug reference" record-type sentence is unchanged, and the three rewordings measured for it are inconclusive rather than refuted](#decision-121-the-drug-reference-record-type-sentence-is-unchanged-and-the-three-rewordings-measured-for-it-are-inconclusive-rather-than-refuted)
 - [Decision 122: Every record of the whole chart carries its own date](#decision-122-every-record-of-the-whole-chart-carries-its-own-date)
 - [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+- [Decision 125: An order that has not started is screened, and stated as scheduled with its date](#decision-125-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -12103,3 +12104,75 @@ Pinned by `AllergyQuestionConflictingOrderContextTest` — each gate leg, the al
 order stamp reddens its own case under mutation — and, for the key, by
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`,
 whose chip 14 is the only `true`.
+
+## Decision 125: An order that has not started is screened, and stated as scheduled with its date
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#553](https://github.com/openmrs/openmrs-module-chartsearchai/issues/553).
+
+### Context
+
+A drug order scheduled to start in the future (`urgency` `ON_SCHEDULED_DATE`, `scheduledDate` ahead) was
+screened as an active order the patient is already taking. On a 3.7.1 standalone, a patient with a
+started Nevirapine order and a Rifampicin order scheduled a month out got *"Nevirapine interacts with active
+order Rifampicin (rifampin)"* (Major) on a screening question, *"Dabigatran etexilate interacts with active
+order Rifampicin"* on a proposal, and an answer saying she "is taking Nevirapine and Rifampicin". The chart
+record said `. Order status: in force`. Core's `Order.isActive()` checks voided, the `DISCONTINUE` action,
+`dateActivated`, discontinuation and expiry, and never `scheduledDate`; `Order.isStarted()` is the check that
+reads the effective start date. The module takes "active" from `isActive()` (the chart mark) and from the SQL
+`getActiveOrders` (the safety context), which agree on this.
+
+The owner's ruling on the ticket: keep screening it — dropping a Major interaction with a drug due next
+month would be a safety loss — and fix the wording.
+
+### Decision
+
+- **Started is core's `Order.isStarted()`, and the date is `getEffectiveStartDate()`**, read in the two
+  places each read already happens and nowhere else: `QueryStoreChartBuilder.readingOf` for the chart, and
+  `PatientClinicalContextBuilder` for `ActiveDrugOrder.getScheduledStart()`.
+- **The chart record says so.** Such an order's `orderActive` is `null` — it is neither in force (`TRUE`) nor
+  this patient's order out of force (`FALSE`, which the system prompt teaches as ended) — and
+  `SerializedRecord.orderStartDate` states the date; the line renders
+  `. Order status: scheduled to start <yyyy-MM-dd>` (`PatientChartSerializer.scheduledOrderStatus`). Every
+  production reader of `RecordMapping.getOrderActive()` tests `FALSE` alone, so `null` reads as "not ended"
+  at each of them.
+- **The order stays on every list an arm screens.** Where a chip names it, it is a *scheduled order* with its
+  date (`DrugSafetyValidator.SCHEDULED_ORDER_INTERACTION_PHRASE`), in the rule chip, the class sentence and
+  the sentence `FindingPartnerCoverageCheck` appends; the stand-in record for an order the chart has no
+  record of reads `Scheduled drug order: …` with the same status.
+- **It is not a medication she is already taking.** The current-medication referent (Decision 72) requires
+  a STARTED order, at every arm that states it: the screening arm's subject, the order-driven contraindication
+  arm, and the drug-in-play arm's `currentMedicationsInPlay`. A substance she holds only as not-started orders
+  takes the proposal referent, which is true of a drug not yet given. Decision 72's defect — a refusal lead
+  about a drug she is on, on a question that proposed nothing — does not transfer, because its premise is a
+  drug she is on. One rule decides it (`scheduledStartOf`): any started order carrying the substance makes it
+  hers and current.
+
+### Rejected
+
+- **Exclude a not-started order from the active set** (`!isStarted()`). A safety loss the owner ruled out.
+- **Leave the referent axis alone and change only the wording.** The chip would stop saying "active order"
+  while the finding's clause still said "a medication this patient is already taking", and
+  `aboutACurrentMedication` would publish `true` — the ticket's defect through the referent.
+- **A third referent column for a scheduled order**, beside Decision 110's ended one. It needs a prompt
+  branch per class and an interleaved A/B; the proposal clause is already true of the drug.
+- **Reorder the screening arm so a started order is always the subject.** Unneeded once the referent follows
+  the subject's own start.
+
+### Residues
+
+- A partner the dataset carries no entry for, keyed on its rule's label (#155/#290), has no rows to resolve,
+  so its chip keeps "active order" even where that order has not started.
+- The answer-side recognisers (`ActiveOrderCitationFidelityCheck`, `InteractionClaimPairFidelityCheck`) key on
+  `ACTIVE_ORDER_NOUN`, so a claim an answer recites as "scheduled order" is outside what they examine.
+- The duplicate-therapy sentence naming several of her orders ("active orders A and B"), the
+  condition-mediated arm (off by default) and `FINDING_CHART_ORDER_LEAD` ("…from this patient's own active
+  orders", true in core's sense) are unchanged.
+- No wire key carries the start date; the chip's `detail` states it. A client reading the order itself by
+  `resourceUuid` reads it from the chart.
+- What the model writes in its own prose is pinned by no test here.
+
+Pinned by `DrugOrderCurrencyMarkTest.aScheduledOrderIsNeitherInForceNorEndedAndItsRecordSaysWhenItStarts`,
+`ScheduledOrderInteractionContextTest` and `LlmInferenceServiceScheduledOrderContextTest`, each over
+`ScheduledDrugOrderTestData.xml` read by the real builders; `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace`
+now selects the rung carrying both dates.

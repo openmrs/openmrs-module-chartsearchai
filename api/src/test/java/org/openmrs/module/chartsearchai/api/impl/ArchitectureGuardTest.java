@@ -99,16 +99,19 @@ public class ArchitectureGuardTest {
 			"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer.class";
 
 	/** The descriptor tail that tells {@code SerializedRecord}'s widest constructor — the only one
-	 *  taking the order stop date of issue #315 — from every other one. TWO types, not one: the
-	 *  four-argument rung {@code (String,String,String,Date)} ends in the same {@code Date}, so a
-	 *  single-type tail cannot tell them apart, and the {@code Boolean} immediately in front of it is
-	 *  what makes this pair unique. Verified against {@code javap -s}. */
-	private static final String STOP_DATE_TAIL = "Ljava/lang/Boolean;Ljava/util/Date;)V";
+	 *  taking the order stop date of issue #315, and since issue #553 the scheduled start beside it —
+	 *  from every other one. THREE types, not one: the four-argument rung {@code (String,String,String,Date)}
+	 *  ends in the same {@code Date}, so a single-type tail cannot tell them apart, and the
+	 *  {@code Boolean} and the stop {@code Date} in front of the start date are what make it unique.
+	 *  Issue #553 re-pointed it rather than keeping the stop-date rung as a second one below: a rung
+	 *  that takes the stop date without the start would be a writer of that stamp no selector reaches. */
+	private static final String STOP_DATE_TAIL = "Ljava/lang/Boolean;Ljava/util/Date;Ljava/util/Date;)V";
 
 	/** The descriptor tail of the NARROWEST {@code RecordMapping} rung taking the order stop date of
 	 *  issue #315 — the order-currency-and-date rung, whose last two parameters are {@code orderActive}
-	 *  and {@code orderStopDate}. The same string as {@link #STOP_DATE_TAIL} and a different claim: on
-	 *  {@code SerializedRecord} it picks the widest constructor and the only one taking the date, while
+	 *  and {@code orderStopDate}. Until issue #553 the same string as {@link #STOP_DATE_TAIL}, and a
+	 *  different claim either way: on {@code SerializedRecord} that one picks the widest constructor and
+	 *  the only one taking the date, while
 	 *  on {@code RecordMapping} every WIDER rung takes the date too, at the same position, because the
 	 *  ladder is a prefix chain of the widest. So it selects the prefix every date-carrying rung
 	 *  starts with rather than one constructor. Verified against {@code javap -s}: exactly one
@@ -392,7 +395,7 @@ public class ArchitectureGuardTest {
 	public void theOrderStopDateStampIsWrittenInOnePlace() throws IOException {
 		assertSoleCallerOfStampCarryingConstructor(SERIALIZED_RECORD_CLASS_FILE, "SerializedRecord",
 				"QueryStoreChartBuilder", CHART_BUILDER_CLASS_FILE, STOP_DATE_TAIL,
-				"the order stop date of issue #315", true,
+				"the order stop date of issue #315 and the scheduled start of issue #553", true,
 				"A second writer would be a second answer to when a prescription ended, published to a "
 						+ "clinician with nothing reconciling them — see this test's javadoc.");
 	}

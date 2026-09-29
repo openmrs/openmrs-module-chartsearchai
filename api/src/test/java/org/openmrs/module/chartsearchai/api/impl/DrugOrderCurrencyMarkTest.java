@@ -521,6 +521,39 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aScheduledOrderIsNeitherInForceNorEndedAndItsRecordSaysWhenItStarts() {
+		// Issue #553. Core's Order.isActive() reads dateActivated and never scheduledDate, so an order
+		// due to start next year is "active" to it — and this chart used to say "in force" of a drug the
+		// patient has not started. Order.isStarted() is core's answer to the question that matters here.
+		executeDataSet("ScheduledDrugOrderTestData.xml");
+		Patient dora = Context.getPatientService().getPatient(7);
+		Order scheduled = Context.getOrderService().getOrder(9554);
+		assertTrue(scheduled.isActive(), "precondition: core calls the scheduled order active");
+		assertFalse(scheduled.isStarted(), "precondition: and not started");
+		chartOf(drugOrderDoc(9554), drugOrderDoc(9553));
+
+		PatientChart chart = builder.build(dora, MEDICATIONS_QUESTION);
+
+		String line = lineFor(chart, scheduled.getUuid());
+		assertTrue(line.endsWith(". Order status: scheduled to start 2099-01-01"),
+				"the record says it is scheduled, and from when: " + line);
+		assertFalse(line.contains(PatientChartSerializer.ACTIVE_ORDER_LABEL + "."),
+				"and never that it is in force: " + line);
+		assertFalse(line.contains(PatientChartSerializer.INACTIVE_ORDER_LABEL),
+				"nor that it is not in force, which reads as ended: " + line);
+		RecordMapping mapping = mappingFor(chart, scheduled.getUuid());
+		assertNull(mapping.getOrderActive(),
+				"neither TRUE (in force) nor FALSE (this patient's order, not in force): the mark says nothing");
+		assertNull(mapping.getOrderStopDate(), "and it states no stop date");
+		assertTrue(mapping.getText().endsWith(". Order status: scheduled to start 2099-01-01"),
+				"and the grounding mapping carries the same words: " + mapping.getText());
+		String started = uuidOf(9553);
+		assertTrue(lineFor(chart, started).endsWith(PatientChartSerializer.ACTIVE_ORDER_LABEL),
+				"the started order beside it is still in force: " + lineFor(chart, started));
+		assertEquals(Boolean.TRUE, mappingFor(chart, started).getOrderActive());
+	}
+
+	@Test
 	public void theTwoPredicatesTheModuleAsksAgreeOnEveryOrderEitherCanEvaluate() throws Exception {
 		// Since issue #317 the module holds TWO answers to "is this order in force" and they are not
 		// one answer by construction. Chart assembly asks core's Java Order.isActive() over

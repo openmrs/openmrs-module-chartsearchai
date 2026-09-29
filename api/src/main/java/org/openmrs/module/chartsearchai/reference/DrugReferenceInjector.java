@@ -30,6 +30,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -680,7 +681,7 @@ public class DrugReferenceInjector {
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
 					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null, null,
-					Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
+					null, Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -709,7 +710,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -758,12 +759,13 @@ public class DrugReferenceInjector {
 			// ADR Decision 100's completion names the orders of the findings an answer CITES, and a
 			// marker reaches this record, never the chip.
 			// And, since issue #515, whether the clause this record ends in withholds, and the rows of the
-			// substance it is about — both off the finding in hand, the one place either is written.
+			// substance it is about — both off the finding in hand, the one place either is written — and
+			// since issue #553 when the partner it names starts, for one that has not started.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
 					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
-					finding.namedPartners(), SafetyWarning.orderNamesOf(finding),
+					finding.namedPartners(), SafetyWarning.orderNamesOf(finding), finding.partnerScheduledStart(),
 					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -1632,8 +1634,20 @@ public class DrugReferenceInjector {
 	 * refute the failure mode, not enough to call it impossible). Recorded because the next person to
 	 * change either the field or this line's shape needs to know they are load-bearing together; ADR
 	 * Decision 47 carries it as a residue rather than a guarantee.
+	 *
+	 * <p><strong>Since issue #553 an order that has not started renders otherwise</strong>:
+	 * {@code "Scheduled drug order: <display>. Order status: scheduled to start <date>."}, the status a
+	 * real record of it carries ({@code PatientChartSerializer.scheduledOrderStatus}), so the stand-in does
+	 * not call a drug due to start next month an active one. The display is still the only drug name the
+	 * line carries, so {@code RecordMapping.orderDrugNamed} is decided as before.
 	 */
 	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
+		// An order that has not started is not an active drug order in any sense a clinician reads (issue
+		// #553): it says what it is, and states the status its own chart record would carry.
+		if (!order.hasStarted()) {
+			return "Scheduled drug order: " + order.getDisplay()
+					+ PatientChartSerializer.scheduledOrderStatus(order.getScheduledStart()) + ".";
+		}
 		return "Active drug order: " + order.getDisplay() + ".";
 	}
 

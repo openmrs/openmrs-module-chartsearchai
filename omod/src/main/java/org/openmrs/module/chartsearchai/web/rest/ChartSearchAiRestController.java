@@ -2213,6 +2213,20 @@ public class ChartSearchAiRestController {
 		Map<String, Object> map = new LinkedHashMap<String, Object>();
 		map.put("found", extent.getFound());
 		map.put("reported", extent.getReported());
+		// Always present on a stated extent, and null where its arm measured nothing below the floor —
+		// the pairwise arms' case (ADR Decision 127). A list, even an empty one, is a measurement.
+		List<Map<String, Object>> belowFloor = null;
+		if (extent.getBelowFloor() != null) {
+			belowFloor = new ArrayList<Map<String, Object>>();
+			for (PairChipExtent.BelowFloorPair pair : extent.getBelowFloor()) {
+				Map<String, Object> entry = new LinkedHashMap<String, Object>();
+				entry.put("drug", pair.getDrug());
+				entry.put("partner", pair.getPartner());
+				entry.put("severity", pair.getSeverity());
+				belowFloor.add(entry);
+			}
+		}
+		map.put("belowFloor", belowFloor);
 		return map;
 	}
 

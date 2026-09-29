@@ -130,7 +130,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 122: Every record of the whole chart carries its own date](#decision-122-every-record-of-the-whole-chart-carries-its-own-date)
 - [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
 - [Decision 126: An order that has not started is screened, and stated as scheduled with its date](#decision-126-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date)
-- [Decision 127: A rating the answer attaches to a finding that carries none is reported](#decision-127-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)
+- [Decision 128: A rating the answer attaches to a finding that carries none is reported](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -6034,7 +6034,7 @@ The shipped `curated` file was safe only by accident — its entries set no seve
 
 ### Which ratings are asked about, and the two that are not
 
-`DrugSafetyValidator.statableRating` decides it, at the write site, expressed against `severityRank` so it cannot fall out of step with that table (a `switch` until [Decision 127](#decision-127-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)). Two ratings answer `null` and they are different cases.
+`DrugSafetyValidator.statableRating` decides it, at the write site, expressed against `severityRank` so it cannot fall out of step with that table (a `switch` until [Decision 128](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)). Two ratings answer `null` and they are different cases.
 
 An **unrated** finding — a curated hand-authored rule, or an ATC-subgroup or cross-reactivity join — has no word at all. `severityRank` answers `-1`, which is also its answer for an operator dataset's own spelling this module does not recognise, so such a rating is left alone by the same arm.
 
@@ -7606,7 +7606,7 @@ What was taken instead is a maintainer's decision, recorded as such: **one quest
 - **−** **Nothing behavioural pins where the reading comes from.** A local re-derivation over the shared decode step passes every case in `SafetyFindingSeverityFidelityTest` — measured, by making that substitution and running it — so `ArchitectureGuardTest.theFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck` reads the source instead, positively, for the reason its two neighbours record. It does not reuse their shared helper: that helper exists so its callers' needle set cannot drift, and a third caller needing a different needle is that drift arriving by parameter. What they DO share is the comment strip — reading a maintainer's *was …* note as code is how a source-text rule of this shape passes on a relocation that already happened, and each comment form that did so is measured in `ArchitectureGuardTest.codeLines`' javadoc, with the residues that survive it.
 - **−** **The reporter's Mode A is not closed by this and no round has closed it.** `[370]` cited twice, once for a sentence about a different drug pair, is a citation attached to the wrong finding; nothing here judges which finding a sentence is about. The shape [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)'s cost bullet already names as open — a citation of the WRONG record inside a safety sentence — is this one, one record type over.
 
-**Amended by [Decision 127](#decision-127-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported) (issue #560).** `unfoundedFindingSeverities` takes this reading too, asked of each SENTENCE of the answer rather than of the whole, so an entry there also names only a finding the prose anchored a marker for.
+**Amended by [Decision 128](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported) (issue #560).** `unfoundedFindingSeverities` takes this reading too, asked of each SENTENCE of the answer rather than of the whole, so an entry there also names only a finding the prose anchored a marker for.
 
 
 ## Decision 98: The module states when a cited prescription stopped, because no wording of the prompt will
@@ -12373,7 +12373,65 @@ Pinned by `DrugOrderCurrencyMarkTest.aScheduledOrderIsNeitherInForceNorEndedAndI
 `ScheduledDrugOrderTestData.xml` read by the real builders; `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace`
 now selects the rung carrying both dates.
 
-## Decision 127: A rating the answer attaches to a finding that carries none is reported
+## Decision 127: The drug-in-play check names her orders it relates only below the severity floor
+
+**Status: Accepted** (September 2026) — implemented, no issue (reported and ruled in session on the 3.7.1
+standalone).
+
+### Context
+
+*"Is it safe to start her on clarithromycin?"*, asked of a patient whose active drug orders include Lidocaine,
+Metoclopramide, Neomycin and Tiotropium, came back on `main` @ `945b89e0` as *"The records address
+Clarithromycin and list the following interactions: lidocaine (Unknown severity interaction [45]),
+metoclopramide (Unknown [45]), neomycin (Unknown [45]), tiotropium (Unknown [45]), and ivosidenib (Major
+[45])."*, with `safetyWarnings: []` and `interactionPairs: { "found": 0, "reported": 0 }`. Four of the five
+drugs listed are hers and nothing on the response said so. DDInter rates all four `Unknown` (checked in the
+loaded `ddi-knowledge-base.json`); `DrugSafetyValidator.severityRank` ranks that 0 against the shipped
+`minor` floor's 1, so `bestRulePerPartner` drops each before asking whether she is on the partner, and the
+drug-in-play check's `of(0, 0)` is true of what it counts and silent on the four it related.
+
+### Decision
+
+`PairChipExtent` gains `getBelowFloor()` — published inside `interactionPairs` as `belowFloor` — and the
+drug-in-play arm states it beside its count, over the same population (the question's substances):
+`DrugSafetyValidator.belowFloorPairs`, the complement of `bestRulePerPartner` over the same rows. The same
+her-order question (`hasActiveDrug`), the same partner key (`SubjectRule.partnerKey`), the floor test negated,
+one pair per partner at its most severe sub-floor row, and none for a partner the grouping keeps, since an
+above-floor rule already chips it. `Sink.record(found, reported, belowFloor)` carries it through
+`recordPairExtent`, the sink's one production writer, so it reaches every surface `interactionPairs` does.
+
+**No chip, no floor change, no prompt change.** The statement is deterministic and on the wire; the answer's
+prose is untouched. The reference frontend draws it beside the answer.
+
+### Alternatives
+
+**Say it in the injected record** — a section after `Interactions:` naming which listed partners are hers
+(*"Of these, drugs this patient has an active or scheduled order for: lidocaine; metoclopramide; neomycin;
+tiotropium."*). Built, pinned through the real `injectRecords`, and **refuted live** on the reported cell:
+with the record 355 characters instead of 239 and nothing else in the prompt moved (audit rows 12999 and
+13000), the answer became *"The records do not address the safety of starting Clarithromycin."* with no
+citation, twice; restoring the build restored the original answer (row 13001). The system prompt calls a
+`Drug reference` record "clinical reference data, not this patient's data" and routes a safety question no
+record addresses to that one-sentence abstention; a reference record asserting her orders reads as the first
+rule broken and lands in the second. Not re-proposed without an A/B against null arms.
+
+**Chip the sub-floor pairs.** Declined on #84's own grounds, with no new evidence of the kind it asks for.
+
+**Widen `found`.** Declined: `found` is defined above the floor on three arms, and a client already reads it
+so; a second population added into one integer is the ratio `PairChipExtent` forbids.
+
+### Residue
+
+- **Only the drug-in-play arm measures it.** An extent a pairwise arm stated carries `belowFloor: null`, so a
+  two-drug question or a screen says nothing below the floor.
+- **The answer's prose still lists her orders as the drug's general interactions**; the statement sits beside
+  it, not in it.
+
+Pinned by `BelowFloorOrderInteractionsTest` (the shipped knowledge base for the reported drugs; the pinned
+excerpt and `drug-reference-partner-rated-and-unrated-rows.json` for the shapes) through the real `validate`
+and its sink, and `ChartSearchAiInteractionPairExtentTest` for the wire.
+
+## Decision 128: A rating the answer attaches to a finding that carries none is reported
 
 **Status: Accepted** (September 2026) — implemented. `UnfoundedFindingSeverityCheck`, the
 `RecordMapping.getFindingUnrated()` stamp, `DrugSafetyValidator.statableRatings()`, and the

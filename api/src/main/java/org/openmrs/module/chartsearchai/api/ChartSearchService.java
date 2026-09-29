@@ -918,7 +918,7 @@ public interface ChartSearchService {
 	/**
 	 * A rating the answer attaches to a cited safety finding that carries NONE — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, ADR
-	 * Decision 127: {@link UnstatedFindingSeverity}'s question asked in the opposite direction.
+	 * Decision 128: {@link UnstatedFindingSeverity}'s question asked in the opposite direction.
 	 * {@code UnfoundedFindingSeverityCheck} is canonical for the unit, the vocabulary and the residues.
 	 *
 	 * <p><b>What it asserts.</b> That a sentence of the answer cites this finding, that the finding's
@@ -1627,7 +1627,7 @@ public interface ChartSearchService {
 		/**
 		 * The ratings this answer attaches to cited safety findings that carry none — issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, ADR
-		 * Decision 127, published as the {@code unfoundedFindingSeverities} response key.
+		 * Decision 128, published as the {@code unfoundedFindingSeverities} response key.
 		 * {@link UnfoundedFindingSeverity} is canonical for what an entry asserts. Read it BESIDE
 		 * {@link #getUnstatedFindingSeverities()}, which asks the opposite question and by construction
 		 * says nothing about a finding with no rating.

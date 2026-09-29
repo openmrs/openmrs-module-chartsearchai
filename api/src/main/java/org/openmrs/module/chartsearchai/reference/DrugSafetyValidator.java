@@ -1005,6 +1005,9 @@ public class DrugSafetyValidator {
 		}
 		boolean questionDrugScreened = false;
 		int questionDrugPairs = 0;
+		// What the same screen related below the floor (ADR Decision 127), stated beside the count and
+		// over the same population: the question's substances, never the answer's.
+		List<PairChipExtent.BelowFloorPair> questionDrugBelowFloor = new ArrayList<PairChipExtent.BelowFloorPair>();
 
 		// The substances in play the drug-in-play arm states the CURRENT-medication referent for, asked
 		// per drug in play below (issue #402, ADR Decision 123): those her active orders establish she
@@ -1075,6 +1078,8 @@ public class DrugSafetyValidator {
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
 					questionDrugPairs += related;
+					questionDrugBelowFloor.addAll(belowFloorPairs(rows, subjects, context, severityFloor,
+						orderEntries));
 				}
 			}
 			if (dosePending.remove(substance)) {
@@ -1199,7 +1204,7 @@ public class DrugSafetyValidator {
 		// addActiveOrderPairInteractions, which states of(0, 0) on the same chart because the clinician
 		// asked it for a screen and "no pairs" is a direct answer to that; ADR Decision 65 carries it.
 		if (pairExtent == null && questionDrugScreened && hasActiveMedicationRecords(context)) {
-			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs);
+			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs, questionDrugBelowFloor);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -1653,7 +1658,7 @@ public class DrugSafetyValidator {
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {
-			sink.record(extent.getFound(), extent.getReported());
+			sink.record(extent.getFound(), extent.getReported(), extent.getBelowFloor());
 		}
 	}
 
@@ -6894,6 +6899,52 @@ public class DrugSafetyValidator {
 	 *        {@link #activeOrderEntryFor} identifies the partner drug a rule points at; an empty list
 	 *        falls the grouping back to the label alone
 	 */
+	/**
+	 * @return the pairs between the substance {@code rows} are and this patient's active or scheduled
+	 *         orders whose rules the severity floor filtered — {@link PairChipExtent#getBelowFloor()}'s
+	 *         population, one per partner. The complement of {@link #bestRulePerPartner} over the same
+	 *         rows: the same her-order question ({@code hasActiveDrug}), the same partner key
+	 *         ({@link SubjectRule#partnerKey}, so two names of one order are one pair), with the floor
+	 *         test negated — and a partner that grouping keeps is skipped, because an above-floor rule
+	 *         already chips it and a second, weaker statement about that pair would contradict the chip.
+	 *         Where one partner carries several sub-floor rows the most severe is stated.
+	 */
+	static List<PairChipExtent.BelowFloorPair> belowFloorPairs(List<DrugReference> rows,
+			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
+			List<DrugReference> orderEntries) {
+		if (context == null || rows.isEmpty()) {
+			return Collections.emptyList();
+		}
+		Set<Object> chipped = new HashSet<Object>();
+		for (SubjectRule rule : bestRulePerPartner(rows, context, severityFloor, orderEntries)) {
+			chipped.add(rule.partnerKey());
+		}
+		String drug = subjects.subjectOf(rows.get(0)).displayLabel();
+		Map<Object, DrugReference.Interaction> worst = new LinkedHashMap<Object, DrugReference.Interaction>();
+		for (DrugReference ref : rows) {
+			for (DrugReference.Interaction i : ref.getInteractions()) {
+				if (clearsSeverityFloor(i, severityFloor) || partnerLabel(i) == null
+						|| !context.hasActiveDrug(i.getToken(), i.getAtc())) {
+					continue;
+				}
+				Object key = new SubjectRule(ref, i, activeOrderEntryFor(orderEntries, ref, i)).partnerKey();
+				if (chipped.contains(key)) {
+					continue;
+				}
+				DrugReference.Interaction incumbent = worst.get(key);
+				if (incumbent == null || severityRank(i.getSeverity()) > severityRank(incumbent.getSeverity())) {
+					worst.put(key, i);
+				}
+			}
+		}
+		List<PairChipExtent.BelowFloorPair> pairs = new ArrayList<PairChipExtent.BelowFloorPair>();
+		for (DrugReference.Interaction i : worst.values()) {
+			pairs.add(new PairChipExtent.BelowFloorPair(drug, partnerLabel(i),
+					ChartSearchAiUtils.firstNonBlank(i.getSeverity())));
+		}
+		return pairs;
+	}
+
 	private static Collection<SubjectRule> bestRulePerPartner(List<DrugReference> subjects,
 			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
 		// Keys are either the partner DrugReference (object identity — the class defines no equals, and

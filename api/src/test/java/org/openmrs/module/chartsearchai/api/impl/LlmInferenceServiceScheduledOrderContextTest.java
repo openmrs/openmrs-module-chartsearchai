@@ -33,6 +33,7 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
@@ -214,7 +215,8 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			prompt = numberedRecords;
 			return new LlmResponse(answer, Collections.singletonList(Integer.valueOf(1)));
 		}
@@ -222,9 +224,11 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			tokenConsumer.accept(answer);
-			return search(numberedRecords, focusIndices, question, enumerateFindings, referenceRecords);
+			return search(numberedRecords, focusIndices, question, enumerateFindings, referenceRecords,
+				drugsAlreadyOrdered);
 		}
 	}
 

@@ -95,7 +95,8 @@ import java.util.List;
  * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a
  * curated cross-reactivity group — are chips and are deliberately NOT counted here, because neither
  * pairwise arm has a class leg at all and one wire key must not mean two things by question shape.
- * Nor is that arm's finding that the drug is already in several of her orders (issue #477), which
+ * Nor is that arm's finding that the drug is already in several of her orders (issue #477), or in one
+ * where the question proposes it (issue #548), which
  * relates it to no partner substance, nor the finding that several of her orders share one.
  * The three differ in what they draw pairs FROM, exactly as the two pairwise arms already did.
  *

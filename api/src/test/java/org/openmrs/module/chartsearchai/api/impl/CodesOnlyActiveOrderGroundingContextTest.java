@@ -34,6 +34,7 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/294">#294</a>: what
@@ -477,7 +478,8 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			Matcher matcher = ACTIVE_ORDER_LINE.matcher(numberedRecords);
 			if (!matcher.find()) {
 				throw new IllegalStateException(

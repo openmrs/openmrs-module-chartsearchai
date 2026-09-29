@@ -420,8 +420,10 @@ public class OneOrderNameAcrossOneResponseTest {
 			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
 				COMBINATION_DISPLAY, DrugReferenceTestSupport.set("isoniazid / rifapentine"), codes)));
 
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", "Can I give her isoniazid?", chart);
+		// Beside issue #548's finding that the isoniazid proposed is already in this prescription, which
+		// names it by the same display: this case is about the interaction chip.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(
+				DrugReferenceTestSupport.validator(service).validate("", "Can I give her isoniazid?", chart));
 
 		assertEquals(1, warnings.size(), "one chip, was: " + warnings);
 		assertEquals(java.util.Arrays.asList(COMBINATION_DISPLAY), orderNames(warnings),

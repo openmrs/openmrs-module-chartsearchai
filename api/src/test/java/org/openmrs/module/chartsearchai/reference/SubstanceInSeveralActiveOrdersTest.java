@@ -25,7 +25,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * Whether a drug in play that the patient already receives through MORE THAN ONE active order is
- * said to be — issue #477.
+ * said to be — issue #477 — and, where the question proposes it, through one (issue #548, whose other
+ * cases are {@code ProposedDrugAlreadyInHerOrdersTest}).
  *
  * <p><b>The defect.</b> The class arm's restating-existing-therapy skip
  * ({@code DrugSafetyValidator.classRelationships}) is right for one co-medication and blind to a
@@ -59,6 +60,15 @@ public class SubstanceInSeveralActiveOrdersTest {
 	/** The finding this issue adds, for the reproduction — the full detail, so a reword is a decision. */
 	private static final String RIFAMPICIN_IN_BOTH = "Rifampicin (rifampin) is already in active orders "
 			+ RHZ + " and " + RHZE + " — possible duplicate therapy";
+
+	/** The finding for one order carrying the drug a question proposes (issue #548). The order is a
+	 *  combination, so adding rifampicin would duplicate the rifampicin it carries and not the order (review
+	 *  round 3 of PR #554). */
+	private static final String RIFAMPICIN_IN_RHZ = "Rifampicin (rifampin) is already in active order " + RHZ
+			+ " — adding it would duplicate the Rifampicin (rifampin) that order carries";
+
+	private static final String OMEPRAZOLE_IN_ITS_OWN = "Omeprazole is already in active order Omeprazole 20mg"
+			+ " — adding it would duplicate that order";
 
 	/** The finding that her two orders share a substance, which a question putting a drug in play states
 	 *  too, after every other finding (issue #477's decision comment; {@code OrdersSharingASubstanceTest}). */
@@ -137,10 +147,29 @@ public class SubstanceInSeveralActiveOrdersTest {
 	@Test
 	public void oneOrderContainingItIsStillRestatingExistingTherapy() throws IOException {
 		// The skip's own case, issue #185: one order carrying the substance is the drug itself, and
-		// saying it duplicates itself is the defect that issue removed.
+		// saying it duplicates itself is the defect that issue removed. On a question that does not
+		// PROPOSE the drug: since issue #548 a proposal of it is told the order already carries it
+		// (the case below), and this question asks about the drug she is on.
 		PatientClinicalContext context = contextOf(DrugReferenceTestSupport.activeOrder("order-rhz", RHZ));
 
-		assertNoneAlreadyIn(chips(FIXTURE, QUESTION, context));
+		List<SafetyWarning> warnings = chips(FIXTURE, "What is her rifampicin dose?", context);
+		assertTrue(warnings.stream().anyMatch(w -> w.getDrug().startsWith("Rifampicin")),
+				"precondition: the question puts rifampicin in play and the arm raises its chips: "
+						+ DrugReferenceTestSupport.details(warnings));
+		assertNoneAlreadyIn(warnings);
+	}
+
+	@Test
+	public void aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt() throws IOException {
+		// Issue #548: proposing a drug one of her orders already carries would duplicate that order, so
+		// the one order is named — the case above's chart, asked the proposal this class asks.
+		PatientClinicalContext context = contextOf(DrugReferenceTestSupport.activeOrder("order-rhz", RHZ));
+
+		List<SafetyWarning> found = alreadyIn(chips(FIXTURE, QUESTION, context));
+
+		assertEquals(1, found.size());
+		assertEquals(RIFAMPICIN_IN_RHZ, found.get(0).getDetail());
+		assertEquals(Arrays.asList(RHZ), found.get(0).namedPartners());
 	}
 
 	@Test
@@ -172,7 +201,9 @@ public class SubstanceInSeveralActiveOrdersTest {
 				DrugReferenceTestSupport.activeOrder("order-rhz", RHZ),
 				DrugReferenceTestSupport.activeOrder("order-inh", "Isoniazid 300mg", "Rifampicin 150mg"));
 
-		assertNoneAlreadyIn(chips(FIXTURE, QUESTION, context));
+		// The question proposes the drug and one order's display does name it, so since issue #548 the
+		// finding is stated for that ONE order — and only for it.
+		assertOnlyAlreadyIn(chips(FIXTURE, QUESTION, context), RIFAMPICIN_IN_RHZ);
 	}
 
 	@Test
@@ -187,7 +218,9 @@ public class SubstanceInSeveralActiveOrdersTest {
 						PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly("order-codes", "Rifampicin 150mg",
 								DrugReferenceTestSupport.set("J04AB02"))));
 
-		assertNoneAlreadyIn(chips(FIXTURE, QUESTION, context));
+		// The question proposes the drug and one order's display does name it, so since issue #548 the
+		// finding is stated for that ONE order — and only for it.
+		assertOnlyAlreadyIn(chips(FIXTURE, QUESTION, context), RIFAMPICIN_IN_RHZ);
 	}
 
 	@Test
@@ -205,7 +238,9 @@ public class SubstanceInSeveralActiveOrdersTest {
 								DrugReferenceTestSupport.set("Esomeprazole 40mg"),
 								DrugReferenceTestSupport.set("A02BC05"))));
 
-		assertNoneAlreadyIn(chips(PPI_FIXTURE, "Is it safe to give omeprazole?", context));
+		// The question proposes the drug and one order's display does name it, so since issue #548 the
+		// finding is stated for that ONE order — and only for it.
+		assertOnlyAlreadyIn(chips(PPI_FIXTURE, "Is it safe to give omeprazole?", context), OMEPRAZOLE_IN_ITS_OWN);
 	}
 
 	@Test
@@ -219,8 +254,10 @@ public class SubstanceInSeveralActiveOrdersTest {
 		PatientClinicalContext context = DrugReferenceTestSupport.contextNaming(service, 60, null,
 				"Nexium 40mg", "Omeprazole 20mg");
 
-		assertNoneAlreadyIn(DrugReferenceTestSupport.validator(service).validate("",
-				"Is it safe to give omeprazole?", context));
+		// The question proposes the drug and one order's display does name it, so since issue #548 the
+		// finding is stated for that ONE order — and only for it.
+		assertOnlyAlreadyIn(DrugReferenceTestSupport.validator(service).validate("",
+				"Is it safe to give omeprazole?", context), OMEPRAZOLE_IN_ITS_OWN);
 	}
 
 	@Test
@@ -356,6 +393,13 @@ public class SubstanceInSeveralActiveOrdersTest {
 		// The phrase is production's own: aDrugInPlayThatTwoOfHerOrdersContainIsNamedAsAlreadyTakenInBoth
 		// asserts the full sentence it is cut from.
 		assertEquals(0, alreadyIn(warnings).size(), "was: " + DrugReferenceTestSupport.details(warnings));
+	}
+
+	/** Exactly one "already in" finding, and it is {@code detail} — so an order the case excludes being
+	 *  counted reads as a second name in it rather than passing. */
+	private static void assertOnlyAlreadyIn(List<SafetyWarning> warnings, String detail) {
+		List<String> found = DrugReferenceTestSupport.details(alreadyIn(warnings));
+		assertEquals(Arrays.asList(detail), found, "was: " + DrugReferenceTestSupport.details(warnings));
 	}
 
 	private static List<SafetyWarning> alreadyIn(List<SafetyWarning> warnings) {

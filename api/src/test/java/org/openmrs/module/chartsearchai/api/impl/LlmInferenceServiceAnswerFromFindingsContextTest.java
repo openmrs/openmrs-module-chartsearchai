@@ -36,6 +36,7 @@ import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>: where
@@ -220,7 +221,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		answerFromFindings(true);
 		for (String question : new String[] { "Is ibuprofen safe for her?", "Is ibuprofen appropriate for her?",
 				"Can this patient take ibuprofen?", "Is it safe to give her ibuprofen?",
-				"Would ibuprofen be appropriate for her?", "Can I give ibuprofen to her?" }) {
+				"Would ibuprofen be appropriate for her?", "Can I give ibuprofen to her?",
+				// The patient after the drug in the "is it safe to" shape (issue #548).
+				"Is it safe to give ibuprofen for her?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question);
@@ -892,14 +895,16 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return record(numberedRecords);
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			tokenConsumer.accept(ANSWER);
 			return record(numberedRecords);
 		}

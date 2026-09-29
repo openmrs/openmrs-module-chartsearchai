@@ -552,6 +552,9 @@ public class PatientChartSerializer {
 		/** @see #getListedDrugsWithNoActiveOrder() */
 		private List<String> listedDrugsWithNoActiveOrder = Collections.<String> emptyList();
 
+		/** @see #getDrugsAlreadyOrdered() */
+		private List<AlreadyOrderedDrug> drugsAlreadyOrdered = Collections.<AlreadyOrderedDrug> emptyList();
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -681,11 +684,100 @@ public class PatientChartSerializer {
 			return listedDrugsWithNoActiveOrder;
 		}
 
+		/** Records the drugs the question proposes that her active orders already carry — issue #548, and
+		 *  {@code DrugReferenceInjector} is the only caller. */
+		public void markDrugsAlreadyOrdered(List<AlreadyOrderedDrug> drugs) {
+			this.drugsAlreadyOrdered = drugs == null || drugs.isEmpty() ? Collections.<AlreadyOrderedDrug> emptyList()
+					: Collections.unmodifiableList(new ArrayList<AlreadyOrderedDrug>(drugs));
+		}
+
+		/**
+		 * The drugs the question PROPOSES that the patient's own active orders already carry, each with the
+		 * orders it is in — issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/548">#548</a>. One entry per
+		 * finding the drug-safety layer raised to say so on this chart's question, and nothing else: which
+		 * findings those are is {@code DrugSafetyValidator.alreadyInSeveralOrders}'. Empty, never null, on
+		 * every other chart. {@code LlmInferenceService} hands it to {@code LlmProvider}, which states it in
+		 * a clause after the question.
+		 */
+		public List<AlreadyOrderedDrug> getDrugsAlreadyOrdered() {
+			return drugsAlreadyOrdered;
+		}
+
 		/** The types declared via {@link #markCompleteFor}, so a caller rebuilding this chart can
 		 *  carry the declaration across; empty on a full chart, which needs none. */
 		public Set<String> getCompleteResourceTypes() {
 			return completeResourceTypes;
 		}
+	}
+
+	/**
+	 * A drug the question proposes and the active orders it is already in, as the drug-safety finding
+	 * saying so names them — {@link PatientChart#getDrugsAlreadyOrdered()} (issue #548).
+	 */
+	public static final class AlreadyOrderedDrug {
+
+		private final String drug;
+
+		private final List<String> orders;
+
+		private final int orderCount;
+
+		private final String consequence;
+
+		/**
+		 * @param drug the drug as the finding names it
+		 * @param orders the orders as the finding names them, in its order: each display once, followed by
+		 *        the count of orders carrying it where that is more than one
+		 * @param orderCount how many active orders those labels stand for
+		 * @param consequence what adding the drug would duplicate, in the words the clause after the question
+		 *        states and a one-order finding's sentence ends with ({@code DrugSafetyValidator.consequenceOfAdding})
+		 */
+		public AlreadyOrderedDrug(String drug, List<String> orders, int orderCount, String consequence) {
+			this.drug = drug;
+			this.orders = Collections.unmodifiableList(new ArrayList<String>(orders));
+			this.orderCount = orderCount;
+			this.consequence = consequence;
+		}
+
+		public String getDrug() {
+			return drug;
+		}
+
+		public List<String> getOrders() {
+			return orders;
+		}
+
+		/** How many active orders {@link #getOrders()} stands for — more than its size where two orders
+		 *  share one display. */
+		public int getOrderCount() {
+			return orderCount;
+		}
+
+		/** What adding the drug would duplicate — the orders, or where one of them may carry another
+		 *  substance, the drug they carry (review round 3 of PR #554). Written beside the finding's sentence,
+		 *  so the clause after the question and a one-order finding cannot state two consequences. */
+		public String getConsequence() {
+			return consequence;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (!(other instanceof AlreadyOrderedDrug)) {
+				return false;
+			}
+			AlreadyOrderedDrug that = (AlreadyOrderedDrug) other;
+			return drug.equals(that.drug) && orders.equals(that.orders) && orderCount == that.orderCount
+					&& consequence.equals(that.consequence);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * (31 * (31 * drug.hashCode() + orders.hashCode()) + orderCount) + consequence.hashCode();
+		}
+
+		// No toString: it would render the names of this patient's medications, and a diagnostic log line
+		// may carry none (issue #439).
 	}
 
 	/**

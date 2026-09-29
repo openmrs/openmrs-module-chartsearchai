@@ -31,6 +31,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 public class LlmInferenceServiceTest {
 
@@ -512,7 +513,8 @@ public class LlmInferenceServiceTest {
 			@Override
 			public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 					String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-					String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+					String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+					List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 				tokenConsumer.accept("Finding A [1] and finding B [2].");
 				return new LlmResponse("Finding A [1] and finding B [2].", Arrays.asList(1, 2));
 			}

@@ -238,7 +238,8 @@ public interface ChartSearchService {
 	 * states one claim about two orders, because the second name carries no <em>interacts with</em>
 	 * before it. That is a residue rather than a rounding: the module's own recogniser is the phrase,
 	 * and a second rule for the conjunction would be a second recogniser.
-	 * The module's own finding that a drug is already in several of her orders (issue #477) is counted
+	 * The module's own finding that a drug is already in several of her orders (issue #477), or in one
+	 * where the question proposes it (issue #548), is counted
 	 * too, once, and so is the finding that several of her orders share a substance:
 	 * {@code ActiveOrderCitationFidelityCheck} anchors on
 	 * {@code DrugSafetyValidator.ACTIVE_ORDER_NOUN}, which each of the two sentences carries once. Where

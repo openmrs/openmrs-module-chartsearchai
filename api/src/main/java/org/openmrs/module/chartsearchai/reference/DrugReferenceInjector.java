@@ -875,6 +875,10 @@ public class DrugReferenceInjector {
 		// And, for the same reason, the drugs the question lists that her chart holds no active order for
 		// (issue #515), which LlmInferenceService states after the answer.
 		injected.markListedDrugsWithNoActiveOrder(listed.stated());
+		// And the drugs the question proposes that her orders already carry (issue #548), off the findings
+		// that say so and nothing else, so LlmProvider's clause after the question is stated exactly where
+		// such a finding is in the prompt.
+		injected.markDrugsAlreadyOrdered(drugsAlreadyOrdered(findings));
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
 		// derives its KV-cache decision from PatientChart.isQueryScoped() precisely so a mode-flip /
 		// GP-read race cannot mis-scope the persist; a fresh PatientChart defaults the flag to false,
@@ -2565,6 +2569,24 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * The drug and orders of every finding saying a drug the question proposes is already in her active
+	 * orders ({@link SafetyWarning#statesAProposedDrugIsAlreadyOrdered()}), in finding order — what
+	 * {@link PatientChart#getDrugsAlreadyOrdered()} states (issue #548). Each is the finding's own
+	 * {@link SafetyWarning#alreadyOrdered()}, written where its sentence is.
+	 */
+	private static List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered(
+			List<SafetyWarning> findings) {
+		List<PatientChartSerializer.AlreadyOrderedDrug> drugs =
+				new ArrayList<PatientChartSerializer.AlreadyOrderedDrug>();
+		for (SafetyWarning finding : findings) {
+			if (finding.statesAProposedDrugIsAlreadyOrdered()) {
+				drugs.add(finding.alreadyOrdered());
+			}
+		}
+		return drugs;
+	}
+
+	/**
 	 * Whether {@code finding} is one that licenses the module's "No" — an INTERACTION the data RATES a
 	 * reason to withhold. One spelling for its two readers, which must not disagree: {@link
 	 * #answersFromFindings} admits a proposal only where some finding answers it, and {@link
@@ -2583,7 +2605,9 @@ public class DrugReferenceInjector {
 	 * proposal by it (issue #469), and {@code DrugSafetyValidator}'s ended-order holder keeps a proposed
 	 * drug a proposal by it (issue #472), so a question the module answers from its findings is one
 	 * whose drug is never re-referred — and that validator's {@code proposedByTheQuestion} keeps a drug
-	 * she holds only as orders that have not started a proposal by it (issue #553).
+	 * she holds only as orders that have not started a proposal by it (issue #553), and
+	 * {@code DrugSafetyValidator.validate} reads it to say that a drug proposed is already in her orders
+	 * (issue #548, ADR Decision 129).
 	 */
 	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
 		return !questionDrugs.isEmpty()

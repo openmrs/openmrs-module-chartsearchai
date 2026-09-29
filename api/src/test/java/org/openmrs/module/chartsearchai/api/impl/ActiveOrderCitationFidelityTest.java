@@ -42,6 +42,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
 /**
  * Issue #377: an answer sentence reproducing this module's own finding — <em>"X interacts with
@@ -779,7 +780,9 @@ public class ActiveOrderCitationFidelityTest {
 		for (String[] displays : new String[][] {
 				{ "Isoniazid / pyrazinamide / rifampin",
 						"Rifampicin isoniazid pyrazinamide and ethambutol 150/75/400/275mg" },
-				{ "Rifampicin 150mg", "Rifampicin 150mg" } }) {
+				{ "Rifampicin 150mg", "Rifampicin 150mg" },
+				// One order, the shape a question proposing a drug she already takes raises (issue #548).
+				{ "Rifampicin 150mg" } }) {
 			String sentence = alreadyInSeveralOrders(DrugReferenceTestSupport.chipsOverOrders(
 				"chartsearchai-test/ddi-substance-in-several-orders.json", "Is it safe to give rifampicin?",
 				displays));
@@ -792,7 +795,8 @@ public class ActiveOrderCitationFidelityTest {
 		}
 	}
 
-	/** The one detail among {@code warnings} that is issue #477's finding. */
+	/** The one detail among {@code warnings} that is issue #477's finding — raised on one order too where
+	 *  the question proposes the drug (issue #548). */
 	private static String alreadyInSeveralOrders(List<SafetyWarning> warnings) {
 		String found = null;
 		for (SafetyWarning warning : warnings) {
@@ -1000,14 +1004,16 @@ public class ActiveOrderCitationFidelityTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}
 	}

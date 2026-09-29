@@ -129,8 +129,10 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 121: The "Drug reference" record-type sentence is unchanged, and the three rewordings measured for it are inconclusive rather than refuted](#decision-121-the-drug-reference-record-type-sentence-is-unchanged-and-the-three-rewordings-measured-for-it-are-inconclusive-rather-than-refuted)
 - [Decision 122: Every record of the whole chart carries its own date](#decision-122-every-record-of-the-whole-chart-carries-its-own-date)
 - [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+- [Decision 124: An allergy question states her conflicting orders in the answer](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer)
 - [Decision 126: An order that has not started is screened, and stated as scheduled with its date](#decision-126-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date)
 - [Decision 128: A rating the answer attaches to a finding that carries none is reported](#decision-128-a-rating-the-answer-attaches-to-a-finding-that-carries-none-is-reported)
+- [Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10633,7 +10635,10 @@ them.
 ## Decision 112: A substance already in two of the patient's own orders is stated as such, on the name the finding prints
 
 **Status: Accepted** (September 2026) — implemented, issue
-[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
+[#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its
+*"One order states nothing"* holds, since
+[Decision 129](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question),
+only for a question that does not propose the drug. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
 [Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site):
 the finding still states its arm's referent, and that referent is now the current-medication one where
 the drug is hers.
@@ -12546,3 +12551,232 @@ co-cited exemption or the vocabulary and read which case reddens — by
 `UnfoundedFindingSeverityDerivedTierContextTest` for the condition-mediated finding, by
 `FindingUnratedStampTest` for the stamp, by `ArchitectureGuardTest.theUnfoundedFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck`
 for the reading, and by `ChartSearchAiUnfoundedFindingSeverityTest` for the wire.
+
+## Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#548](https://github.com/openmrs/openmrs-module-chartsearchai/issues/548), the lead criterion
+[Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+split off. Extends
+[Decision 112](#decision-112-a-substance-already-in-two-of-the-patients-own-orders-is-stated-as-such-on-the-name-the-finding-prints)
+to one order on a proposal, and puts a clause in
+[Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)'s
+position.
+
+### Context
+
+On a chart holding `Prednisone Co 5mg`, *"Is it safe to add prednisone for her?"* opened *"No —
+Prednisone should not be added"*, although every chip about prednisone carried
+`aboutACurrentMedication: true`. The owner's measurements on the issue (`:8081`, `main` @ `0145d74a`,
+Gemma 4 E4B, two runs per question, 2026-09-28):
+
+- the same chart and findings, asked *"Is prednisone safe for her?"* and *"Can I give her prednisone?"*,
+  did not refuse. So the refusal follows the question's verb *add*, not the findings;
+- an arm rewording `DEFAULT_SYSTEM_PROMPT`'s current-medication branch still refused in both runs.
+
+Nothing the model read said that the drug proposed is one of her orders, so nothing told it that adding
+it duplicates that order.
+
+### The decision
+
+**The module states the fact itself, as a finding.** `DrugSafetyValidator.alreadyInSeveralOrders` now
+raises its finding for ONE order where the question proposes the drug and the drug is hers. Its sentence
+is *"Prednisone is already in active order Prednisone Co 5mg — adding it would duplicate that order"*. The gate is
+three conjuncts, asked per drug in play:
+
+- the drug-in-play arm's referent (`herOrder`, `currentMedicationsInPlay`), and the orders the finding
+  names are drawn from that referent's own witnesses (`ordersEstablishing`), as the issue's direction
+  asks, so no finding says a drug is in her orders while `aboutACurrentMedication` says it is a proposal,
+  and a brand-named order (`Advil 400mg` for ibuprofen, the issue's Barbara Miller cell) is told too. The
+  converse has a residue, under Consequences. A drug her orders resolve to without establishing it
+  (`Nexium 40mg` for omeprazole), and one a question may be proposing in a presentation she does not take
+  (a `Diclofenac gel 1%` order), are refused here;
+- the question proposes a drug (`DrugReferenceInjector.questionProposes`). A screen, a question that
+  lists the drug as current and a question about her dose keep today's behaviour;
+- the QUESTION put the drug in play. A drug of hers that only the answer names was proposed by nobody.
+
+An order is counted where its DISPLAY, the name the sentence prints, establishes the drug on its own
+(`CoMedications.substancesTheNameEstablishes`, for an order `displayNamesADrug` admits). So the evidence
+and the printed name stay one string, as Decision 112 has them, and an order that another of its recorded
+names establishes the drug for, under a display naming something else, is not counted (#293's shape). Where
+Decision 112's display rule already finds two orders, its finding is raised as before, now marked too. The
+referent is the arm's, and the finding trails the rule chips.
+
+**One order is a caution.** Only the proposal would duplicate it, so nothing about the order she is on
+needs changing. `SafetyWarning.restsOnTheProposalAlone` answers true for it, and
+`DrugSafetyValidator.licensesWithholding` then answers a caution, so the record states the existing
+current-medication caution clause (*"a caution about a medication this patient is already taking, not a
+reason to change it"*, Decision 72) and its existing prompt branch. Two or more orders of hers duplicate
+one another and keep Decision 112's unrated default. Review round 1 of PR #554 found the one-order finding
+in that default's class: its record told the model the proposal was a reason to change her current
+medication, the ranking sentence then handed it the lead over her cautions, and the change-class branch
+says such a finding *"is not about a drug anything proposed"*, which the clause after the question
+contradicts. The caution branch makes neither claim.
+
+**The one-order sentence states what the proposal would do.** Where #477's sentence ends *"— possible
+duplicate therapy"*, this one ends *"— adding it would duplicate that order"*
+(`DrugSafetyValidator.ADDING_IT_WOULD_DUPLICATE_THAT_ORDER`, which the clause below also states). Review
+round 2 of PR #554 found the reason on the issue's own cell (measured under *The measurement*): the answer
+said prednisone was already in her order, then restated the caution clause as the meaning of the finding
+and never said that adding it would duplicate the order. The clause after the question said so, but the
+record did not, and the answer followed the record. So the record carries the words itself. Its strength
+stays a caution. Two or more orders keep #477's sentence, because their duplication is of one another.
+
+**Where an order may carry another substance, the consequence names the drug.** Adding hydrochlorothiazide
+to a `Lisinopril/hydrochlorothiazide 20/12.5` order doubles its hydrochlorothiazide. It is not a second
+prescription of the combination. So the sentence and the clause say *"adding it would duplicate the
+Hydrochlorothiazide that order carries"* (*"those orders carry"* for several) wherever the display or
+another recorded name of a counted order puts another substance in play
+(`DrugSafetyValidator.consequenceOfAdding`, review round 3 of PR #554). The test is what a name PUTS IN
+PLAY, not what it establishes, because the drug-framed wording is true of a single-substance order too:
+`Tylenol with Codeine #3` establishes codeine alone, yet it carries acetaminophen. The consequence is
+written into the chart stamp (`AlreadyOrderedDrug.getConsequence`), so the clause reads it rather than
+deciding it again. The residue is a combination that no recorded name shows. The shipped knowledge base
+files a `Bactrim DS` display under the trimethoprim row alone, so an order recorded under that name only
+is still said to duplicate the order.
+
+**The same fact is stated after the question.** The finding marks itself
+(`SafetyWarning.statesAProposedDrugIsAlreadyOrdered`). `DrugReferenceInjector` stamps the chart with each
+such finding's drug and orders (`PatientChart.getDrugsAlreadyOrdered`). `LlmInferenceService` hands that
+stamp, read off the post-inject chart, to `LlmProvider`, and `buildUserMessage` appends:
+
+> Prednisone is already in the patient's active orders (Prednisone Co 5mg): open by saying so; adding it
+> would duplicate that order; then say what the other findings about Prednisone mean for the patient's
+> current Prednisone, as calls about that medication and not about adding it.
+
+- Up to *"then say what"* it is the issue's suggested wording, with *her* rendered *the patient's*.
+  For a combination order the consequence is the drug-framed one above, not the issue's.
+- The last part is not the issue's wording. It scopes the drug's OTHER findings to the medication she is
+  on (review round 2 of PR #554). With the issue's wording, Barbara Miller's *"Is aspirin safe for her?"*
+  answered in its second sentence *"No — the patient should avoid adding more … aspirin because it
+  interacts with active order Ibuprofen, a Major problem"*. That turned a finding about her current
+  aspirin into a refusal of a second order of it, which is the #402 defect one sentence later.
+- It comes after the finding-prose clause, so #397's measured layout is unchanged where both fire.
+- The finding-enumeration repair and the progressive preview are not handed it. The first asks its own
+  question, and the second's chart never passes the injector.
+- `DEFAULT_SYSTEM_PROMPT` is not reworded, because the issue measured that arm and it failed.
+
+**The proposal grammar admits the drug-then-patient order.** `QueryScopeRouter`'s shape *"is it safe to
+add X"* allowed *"for her"* only before *to*, so the issue's own question fitted no shape. The
+plan-refutation gate measured that against the compiled class. The shape now takes a trailing *"for
+her"*, the allowance two other shapes already make, and a reordering of *"Is it safe for her to add
+X?"*, which it already admitted. Every reader of that grammar moves with it:
+
+- The module's composed "No" (Decision 108), which ships off. It now also answers *"Is it safe to add X
+  for her?"* for a drug she does not take
+  (`LlmInferenceServiceAnswerFromFindingsContextTest.aSuitabilityQuestionIsAnsweredFromTheFindingsToo`).
+  This is unmeasured against Decision 108's *What gates turning it on*.
+- The ended-order holder (Decision 110), which now keeps such a phrasing a proposal.
+- `listedBeforeTheProposal` (#515), which can now find the proposal clause in such a phrasing.
+
+Each has a case in the drug-then-patient order, and each reddens when the widening is reverted:
+`LlmInferenceServiceAnswerFromFindingsContextTest.aSuitabilityQuestionIsAnsweredFromTheFindingsToo`,
+`EndedOrderFindingReferentTest.aProposalNamingThePatientAfterTheDrugKeepsTheProposalCallToo`, and
+`DrugInPlayHerOwnOrderReferentTest.aListingBeforeAProposalNamingThePatientAfterTheDrugIsStillAListing`.
+
+### What it changes in the specification
+
+Decision 112's *"One order states nothing"* held for every question, and several cases pinned it through
+a proposal question. Where the question proposes the drug it no longer holds.
+
+- `SubstanceInSeveralActiveOrdersTest.oneOrderContainingItIsStillRestatingExistingTherapy` now asks a
+  question that does not propose the drug. Its old input is
+  `.aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt`.
+- `DrugInPlayHerOwnOrderReferentTest`'s helper that sets this finding aside asserts its caution clause.
+- Four cases of that class pin which order a display rule refuses. They now assert the one finding naming
+  only the order the rule admits.
+- Cases about the class arm's restating-existing-therapy skip read their chips beside this finding
+  (`DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered`, and `classChipDetails`). This finding
+  decides nothing about a co-medication, which is the reason those helpers already set #477's other
+  finding aside.
+
+### Consequences
+
+- For a drug of hers that has no other finding, this finding is now the only one: a caution in the
+  current-medication column. With one order it cannot outrank her other findings; two or more orders keep
+  the withholding class, as Decision 112 has it. Where the drug had exactly one other finding, #397's gate
+  (`severalFindingsAboutOneDrug`) now fires.
+- Where every order establishing the drug does so through something other than its display — a code,
+  a bridged concept, a recorded name the display is not — or is an order the module read no name for, the
+  drug gets the referent but no finding and no clause: no order's printed name says it carries the drug.
+- The finding exists only where the interaction arm runs, as Decision 112's does.
+- The finding's sentence contains `ACTIVE_ORDER_NOUN`, and so does the clause. An answer that restates
+  either is counted as an active-order claim by `ActiveOrderCitationFidelityCheck`.
+- **The safety probe's scorer does not know this lead or this chip yet**
+  (`eval/drift-metric/score_probe_safety.py`). Its default question is a proposal, so on an `own_drug`
+  cell whose order's display establishes the drug the chip is now raised. `adverse_finding` counts it, so
+  `unsupported_no` — the guard for a model refusing her own drug, the defect this decision is about —
+  stops firing there. The lead the clause asks for, *"X is already in the patient's active orders"*,
+  scores as neither verdict- nor caution-led. A probe A/B over those cells therefore reads a
+  verdict-led drop by design and is blind to a surviving refusal. The chip carries no wire field telling
+  it from #477's, so teaching the scorer needs one; not done here.
+- Where two or more of her orders carry a proposed drug, the finding keeps the change-class clause, and
+  that class's prompt branch says such a finding *"is not about a drug anything proposed"*, beside a clause
+  saying adding it would duplicate those orders. Moving it to a caution would understate a duplication
+  among her own orders. `DEFAULT_SYSTEM_PROMPT` cannot be reworded to remove the tension (the issue measured
+  that arm). This case is unmeasured.
+
+### The measurement
+
+The issue's live gate ran on PR #554's head `29e33d42` (2026-09-29, `:8081`, Gemma 4 E4B, stock GPs,
+non-streaming `/search`, two runs per cell, the two runs identical). That head carried the issue's clause
+wording and the one-order sentence ending *"— possible duplicate therapy"*.
+
+- Sarah Taylor, *"Is it safe to add prednisone for her?"*: failed criterion 1.2. The answer said
+  *"Prednisone is already in active order Prednisone Co 5mg, which is a caution about a medication this
+  patient is already taking, not a reason to change it"*, citing the new finding. Neither *duplicate* nor
+  *adding* appeared. A reviewer's re-run matched, three runs in all.
+- Sarah, *"Is prednisone safe for her?"* and *"Can I give her prednisone?"*: the answers stated that adding
+  it would duplicate her order.
+- Sarah, *"Is it safe to start her on clarithromycin?"*: byte-identical to `main`.
+- Barbara Miller, *"Is aspirin safe for her?"*: sentence 1 stated the order, and sentence 2 was the *"No —
+  … avoid adding more …"* refusal quoted above, in both runs and in a reviewer's re-run. `main` has no
+  "No" on this cell. The gate row asks for no refusal, so this row failed.
+- No answer stated a rating that no chip carried.
+- Barbara's chips differed from `main`'s by more than the new chip. The differences come from the post-answer
+  `validate`, which raises chips for drugs the answer names, so an answer naming other drugs carries other
+  chips. The gate row *"chips identical to `main` apart from the new chip"* cannot be met by a change that
+  moves the answer. Read that row against the pre-answer findings.
+
+The two changes above (the one-order sentence and the clause's last part) answer the first and fourth
+rows. The gate ran again on head `f60c15a9`, which carries both (2026-09-29, the same rig, two runs per
+cell, plus two reviewer re-runs of the *give* cell in review round 3 of PR #554):
+
+- Sarah, *"Is it safe to add prednisone for her?"*: all three parts of criterion 1, in both runs.
+- Sarah, *"Is prednisone safe for her?"* and *"Can I give her prednisone?"*: each answer opened by stating
+  the order and that adding it would duplicate it. None refused.
+- Sarah, clarithromycin: byte-identical to `main`.
+- Barbara's ibuprofen and aspirin, Susan's tiotropium and Helen's salicylic acid: each answer opened with
+  the duplicate-order statement, and none refused, in 8 runs. The chips were `main`'s plus the new chip,
+  except on Barbara's ibuprofen cell. There the answer named aspirin, so the post-answer `validate` also
+  raised the aspirin NSAID cross-reactivity chip.
+- **The rating row failed.** On *"Can I give her prednisone?"*, 3 of the 4 runs called her unrated
+  dexamethasone cross-reactivity finding [354] *"a Major finding"*. The chip's severity is null, and the
+  record states *"No severity is rated for this finding."* The fourth run's "Major" was quoted from another
+  chip's detail. On `main` the same residue appeared on *"Is prednisone safe for her?"* (the owner's
+  2026-09-28 comment), and on this head that phrasing stated no rating that no chip carried. So this
+  change moved the residue to another phrasing and did not remove it. It is #402's residue (a), which
+  Decision 123's no-severity sentence did not close.
+
+Nothing in this PR removes that residue, and no change within its scope was found that would:
+
+- Rewording a record or a prompt clause to chase it is the incidental-wording lever the issue rejects.
+  Decision 123's no-severity sentence is already that lever, and it did not hold here.
+- A deterministic remedy would be a post-answer check that reports a rating the answer attaches to a
+  citation whose finding carries none: `unstatedFindingSeverities` in the opposite direction, published as
+  its own key. That would be a new wire contract covering every safety answer, not just a proposal of her
+  own drug, so it is not taken here.
+
+So on this head the row is unmet. Whether #548 closes with it is the owner's call.
+
+The combination consequence (review round 3) was not measured on a model. The gate's cells name
+single-substance orders. For `Prednisone Co 5mg`, `Advil 400mg` and `Aspirin 81mg`,
+`findImpliedByDrugName` returns one substance over the shipped knowledge base (a throwaway test, since
+deleted), so their displays keep the bytes measured above. Their recorded concept names, and Susan's and
+Helen's orders, which returned HTTP 400 from `:8081`'s order resource, were not run through the code.
+
+→ `ProposedDrugAlreadyInHerOrdersTest` (its class javadoc names the case each gate is mutated against);
+`SubstanceInSeveralActiveOrdersTest.aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt`;
+`ProposedDrugAlreadyInHerOrdersTest.aCombinationOrderIsSaidToCarryTheProposedDrugAndNotToBeDuplicatedByIt`;
+`LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes`;
+`AlreadyOrderedDrugClauseContextTest`.

@@ -394,8 +394,11 @@ public class UnmappedOrderClassPartnerTest {
 
 	private static List<SafetyWarning> chips(String question, PatientClinicalContext context)
 			throws IOException {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
-				.validate("", question, context);
+		// Beside issue #548's finding, raised where a case proposes a drug one of her orders carries: what
+		// these cases assert is the class arm's skip, which that finding does not decide.
+		return DrugReferenceTestSupport.besideTheProposedDrugAlreadyOrdered(
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+						.validate("", question, context));
 	}
 
 	private static List<SafetyWarning> nitroimidazoleChips(String question, PatientClinicalContext context)

@@ -179,6 +179,13 @@ public class ProjectInstructionsGuardTest {
 	 * condition naming every partner, a caution, never in the pair extent), its evidence going to ADR
 	 * Decision 111 and the method's javadoc. The residue that would not fit is that directive.
 	 *
+	 * <p><b>The reference budget was raised from 76,500 to 77,000 on 2026-09-29</b> (issue #548), in the
+	 * same state: the file measured 76,494 bytes at base {@code c718bc65}, 6 under the cap, so no pointer
+	 * of any size could land. Raised in a commit of its own, while the file still fit the number being
+	 * replaced, and the rule that followed it was cut to its directive — one clause on an existing
+	 * bullet — its evidence going to ADR Decision 129 and the javadoc of
+	 * {@code DrugSafetyValidator.alreadyInSeveralOrders}.
+	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once
 	 * {@link #noBulletCarriesMoreProseThanItsBudget} had been satisfied — room for a few rules, not
@@ -194,7 +201,7 @@ public class ProjectInstructionsGuardTest {
 	private static Map<Path, Integer> budgets() {
 		Map<Path, Integer> m = new LinkedHashMap<>();
 		m.put(ROOT_INSTRUCTIONS, 25_000);
-		m.put(REFERENCE_INSTRUCTIONS, 76_500);
+		m.put(REFERENCE_INSTRUCTIONS, 77_000);
 		// The local-LLM subprocess rules (#445). The principle above asks for headroom of roughly a
 		// tenth; the first two drafts of this entry said it had that and did not — the second
 		// announced the correction while repeating the arithmetic of the first, which a review

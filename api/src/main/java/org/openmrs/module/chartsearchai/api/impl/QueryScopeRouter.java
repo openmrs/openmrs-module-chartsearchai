@@ -264,9 +264,12 @@ public final class QueryScopeRouter {
 			// "Can this patient take warfarin?", "Can she take ibuprofen?"
 			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on) "
 					+ D + "(?: now| today)?",
-			// "Is it safe to give her ibuprofen?", "Is it safe to start her on clarithromycin?"
+			// "Is it safe to give her ibuprofen?", "Is it safe to start her on clarithromycin?", "Is it
+			// safe to add prednisone for her?" — the patient after the drug too (issue #548), the
+			// allowance the first and fourth shapes make, as a reordering of "Is it safe for her to add
+			// prednisone?", which this shape already admits.
 			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
-					+ PATIENT + " )?(?:on )?|take )" + D + "(?: now| today)?",
+					+ PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?"
 			"is " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"
@@ -322,6 +325,12 @@ public final class QueryScopeRouter {
 	 * did not cost before; only an ADMISSION can go wrong. That is why this may be a closed list where
 	 * {@link #isInteractionScreening} had to be widened after a list MISSED screens (ADR Decision 89):
 	 * there a miss hid a hazard, here a miss hides nothing.
+	 *
+	 * <p><b>Except to one reader</b> (issue #548): {@code DrugSafetyValidator.validate} states that a drug
+	 * the question proposes is already in her orders only where this admits the question, so a phrasing
+	 * it misses withholds that fact — which is how <em>"Is it safe to add prednisone for her?"</em> went
+	 * untold until its shape was admitted. A miss there costs the statement, never a refusal. ADR Decision
+	 * 129.
 	 */
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);

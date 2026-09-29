@@ -24,6 +24,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -453,13 +454,19 @@ public class LlmProvider {
 	 *        double of this method drops it, which is the cost {@link #findingProse} names and
 	 *        here costs nothing: a double returns its own answer and reaches no engine, and
 	 *        {@code ReferenceRecordsReachTheEngineTest} drives this real method instead
+	 * @param drugsAlreadyOrdered the drugs the question proposes that the patient's own active orders
+	 *        already carry, which the message states after the question (issue #548) — the caller reads
+	 *        them off the injected chart ({@code PatientChart.getDrugsAlreadyOrdered()}), and a pass whose
+	 *        question is not the clinician's hands an empty list. A parameter of this one arity for the
+	 *        reason {@code enumerateFindings} is
 	 * @return the LLM's response with answer text and structured citation indices
 	 */
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-			boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+			boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				findingProse(enumerateFindings));
+				findingProse(enumerateFindings), drugsAlreadyOrdered);
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
@@ -502,14 +509,17 @@ public class LlmProvider {
 	 *        byte-prefix of this query; why it is a parameter of the one arity is the paragraph
 	 *        above and {@code search}'s own @param
 	 * @param referenceRecords see {@code search}'s own @param
+	 * @param drugsAlreadyOrdered see {@code search}'s own @param. Like {@code enumerateFindings} it reaches
+	 *        the user message and never the KV seed
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				findingProse(enumerateFindings));
+				findingProse(enumerateFindings), drugsAlreadyOrdered);
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
 		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
@@ -1056,6 +1066,23 @@ public class LlmProvider {
 
 	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
 			String question, FindingProse findingProse) {
+		return buildUserMessage(numberedRecords, focusIndices, question, findingProse,
+				Collections.<PatientChartSerializer.AlreadyOrderedDrug> emptyList());
+	}
+
+	/**
+	 * As {@link #buildUserMessage(String, List, String, FindingProse)}, additionally stating, after the
+	 * question and any finding-prose clause, that each drug of {@code drugsAlreadyOrdered} is already in
+	 * the patient's active orders — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/548">#548</a>, ADR Decision
+	 * 129.
+	 *
+	 * @param drugsAlreadyOrdered the drugs the question proposes that her orders already carry, as
+	 *        {@code PatientChart.getDrugsAlreadyOrdered()} states them; null or empty for none
+	 */
+	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
+			String question, FindingProse findingProse,
+			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Patient records (most recent first):\n").append(normalizeRecords(numberedRecords));
 		if (focusIndices != null && !focusIndices.isEmpty()) {
@@ -1158,6 +1185,27 @@ public class LlmProvider {
 			} else if (findingProse == FindingProse.SUMMARISED) {
 				sb.append(" The clinician is shown every finding in full beside your answer, so summarise "
 						+ "rather than list them, citing each finding you rely on and stating its severity.");
+			}
+			// ISSUE #548. The question proposes a drug her own active orders already carry, and the owner
+			// measured the refusal lead following the question's VERB and not the findings, so the fact the
+			// verb needs is stated here, in ADR Decision 84's position, rather than in DEFAULT_SYSTEM_PROMPT,
+			// whose rewording was measured not to move the lead. AFTER the finding-prose clause, so #397's
+			// measured layout — the question, a space, its clause — is unchanged where both fire. The bytes
+			// are pinned by LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes; ADR
+			// Decision 129 carries the gate and the measurement. Its last part scopes the drug's OTHER findings
+			// to the medication she is on (review round 2 of PR #554): given the adding frame alone, the model
+			// refused a second order of her aspirin on an interaction finding about her current aspirin. What
+			// adding it would duplicate is the stamp's own (AlreadyOrderedDrug.getConsequence), written beside the
+			// finding's sentence, so a combination order is said to carry the drug here as there (review round 3).
+			if (drugsAlreadyOrdered != null) {
+				for (PatientChartSerializer.AlreadyOrderedDrug drug : drugsAlreadyOrdered) {
+					sb.append(' ').append(drug.getDrug()).append(" is already in the patient's active orders (")
+							.append(DrugSafetyValidator.joinPartners(drug.getOrders()))
+							.append("): open by saying so; ").append(drug.getConsequence())
+							.append("; then say what the other findings about ").append(drug.getDrug())
+							.append(" mean for the patient's current ").append(drug.getDrug())
+							.append(", as calls about that medication and not about adding it.");
+				}
 			}
 		}
 		return sb.toString();

@@ -31,6 +31,7 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -174,8 +175,11 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 
 			long llmStart = System.currentTimeMillis();
+			// The drugs the question proposes that her orders already carry (issue #548), off the
+			// post-inject chart for the reason the flag above is: the injector is the stamp's only writer.
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
-					chart.getFocusIndices(), question, enumerateFindings, referenceRecords);
+					chart.getFocusIndices(), question, enumerateFindings, referenceRecords,
+					chart.getDrugsAlreadyOrdered());
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -194,7 +198,8 @@ public class LlmInferenceService implements ChartSearchService {
 				long repairStart = System.currentTimeMillis();
 				response = withRepairedFindingEnumeration(response,
 						llmProvider.search(chartTextOrPlaceholder(chart), chart.getFocusIndices(),
-								findingEnumerationRepairQuestion(owedRepair), false, referenceRecords),
+								findingEnumerationRepairQuestion(owedRepair), false, referenceRecords,
+								noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
@@ -548,7 +553,8 @@ public class LlmInferenceService implements ChartSearchService {
 				// chart is none, and a read cannot go stale if that ever changes.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
 						DISCARD_TOKENS, previewReasoningConsumer, null, false,
-						LlmEngine.ReferenceRecords.in(ChartSearchAiUtils.referenceSlice(focused.getMappings())));
+						LlmEngine.ReferenceRecords.in(ChartSearchAiUtils.referenceSlice(focused.getMappings())),
+						focused.getDrugsAlreadyOrdered());
 			}
 		}
 		catch (RuntimeException e) {
@@ -678,7 +684,8 @@ public class LlmInferenceService implements ChartSearchService {
 			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer, kvCacheScope, enumerateFindings, referenceRecords);
+					reasoningConsumer, kvCacheScope, enumerateFindings, referenceRecords,
+					chart.getDrugsAlreadyOrdered());
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -703,7 +710,8 @@ public class LlmInferenceService implements ChartSearchService {
 						llmProvider.searchStreaming(chartTextOrPlaceholder(chart),
 								chart.getFocusIndices(),
 								findingEnumerationRepairQuestion(owedRepair), tokenConsumer,
-								reasoningConsumer, kvCacheScope, false, referenceRecords),
+								reasoningConsumer, kvCacheScope, false, referenceRecords,
+								noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
@@ -1144,6 +1152,15 @@ public class LlmInferenceService implements ChartSearchService {
 		List<RecordMapping> mappings = chart.getMappings();
 		return ChartSearchAiUtils.safetyFindingMappings(mappings).size() > 1
 				&& ChartSearchAiUtils.findingSubjects(mappings).size() == 1;
+	}
+
+	/**
+	 * What the finding-enumeration repair hands the provider for issue #548's clause: nothing. The repair
+	 * asks a question of its own about the findings the answer left out, and the clause is about the
+	 * clinician's question.
+	 */
+	private static List<PatientChartSerializer.AlreadyOrderedDrug> noDrugsAlreadyOrdered() {
+		return Collections.<PatientChartSerializer.AlreadyOrderedDrug> emptyList();
 	}
 
 	static boolean isWarmupEnabled() {

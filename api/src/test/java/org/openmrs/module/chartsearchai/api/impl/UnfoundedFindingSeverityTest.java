@@ -187,6 +187,23 @@ public class UnfoundedFindingSeverityTest {
 	}
 
 	@Test
+	public void aRatingWordTheUnratedFindingsOwnRecordStatesIsNotReported() throws java.io.IOException {
+		// An operator dataset's note can put a rating word inside the unrated finding's own record. An
+		// answer reproducing it has attached nothing the finding lacks, so the exemption asks that record
+		// too, and not only the other findings the sentence cites.
+		PatientChart chart = DrugReferenceTestSupport.injectedCuratedAllergyFindingChart(
+				"chartsearchai-test/drug-reference-unrated-note-states-a-rating.json", "Can I give her carbamazepine?",
+				Collections.singletonList("carbamazepine"));
+		int unrated = unratedFindingNaming(chart, "Carbamazepine");
+		assertTrue(DrugReferenceTestSupport.findingAt(chart, unrated).getText().contains("major hypersensitivity"),
+				"precondition: the note's rating word is in the unrated finding's own record: " + chart.getText());
+		LlmInferenceService service = serviceOver(chart,
+				"Her carbamazepine allergy carries a risk of a major hypersensitivity reaction [" + unrated + "].");
+		assertEquals(Collections.<UnfoundedFindingSeverity> emptyList(),
+				service.search(patient(), "Can I give her carbamazepine?").getUnfoundedFindingSeverities());
+	}
+
+	@Test
 	public void anAnswerStatingNoRatingForTheUnratedFindingStatesNone() {
 		PatientChart chart = sarahTaylor(CAN_I_GIVE, false);
 		int dexamethasone = unratedFindingNaming(chart, "Dexamethasone");

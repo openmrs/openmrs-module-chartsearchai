@@ -440,6 +440,24 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * {@link #injectedAllergyFindingChart} over a dataset in the module's own JSON schema, parsed by the
+	 * real {@link JsonDrugReferenceSource#parse} — for a case whose premise is a hand-authored
+	 * contraindication rule and its NOTE (issue #560).
+	 *
+	 * @throws IllegalStateException when the arrangement raises no finding at all
+	 */
+	public static PatientChart injectedCuratedAllergyFindingChart(String fixtureResource, String question,
+			List<String> allergies) throws IOException {
+		PatientChart chart = injectorWithSafety(serviceWith(fixtureEntries(fixtureResource))).injectRecords(
+				oneRecordChart(), ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null), question);
+		if (injectedFindings(chart).isEmpty()) {
+			throw new IllegalStateException("no safety finding was injected for allergies " + allergies
+					+ " and question: " + question);
+		}
+		return chart;
+	}
+
+	/**
 	 * The whole chart the REAL pipeline produces for a question naming a drug CLASS the reference
 	 * data resolves no substance for (issue #354) — the DDInter excerpt and the shipped
 	 * cross-reactivity groups behind the real injector, so the {@code drug_class_note} mapping in it

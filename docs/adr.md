@@ -12138,7 +12138,7 @@ it duplicates that order.
 
 **The module states the fact itself, as a finding.** `DrugSafetyValidator.alreadyInSeveralOrders` now
 raises its finding for ONE order where the question proposes the drug and the drug is hers. Its sentence
-is *"Prednisone is already in active order Prednisone Co 5mg — possible duplicate therapy"*. The gate is
+is *"Prednisone is already in active order Prednisone Co 5mg — adding it would duplicate that order"*. The gate is
 three conjuncts, asked per drug in play:
 
 - the drug-in-play arm's referent (`herOrder`, `currentMedicationsInPlay`), and the orders the finding
@@ -12170,15 +12170,30 @@ medication, the ranking sentence then handed it the lead over her cautions, and 
 says such a finding *"is not about a drug anything proposed"*, which the clause after the question
 contradicts. The caution branch makes neither claim.
 
+**The one-order sentence states what the proposal would do.** Where #477's sentence ends *"— possible
+duplicate therapy"*, this one ends *"— adding it would duplicate that order"*
+(`DrugSafetyValidator.ADDING_IT_WOULD_DUPLICATE_THAT_ORDER`, which the clause below also reads). Review
+round 2 of PR #554 found the reason on the issue's own cell (measured under *The measurement*): the answer
+said prednisone was already in her order, then restated the caution clause as the meaning of the finding
+and never said that adding it would duplicate the order. The clause after the question said so, but the
+record did not, and the answer followed the record. So the record carries the words itself. Its strength
+stays a caution. Two or more orders keep #477's sentence, because their duplication is of one another.
+
 **The same fact is stated after the question.** The finding marks itself
 (`SafetyWarning.statesAProposedDrugIsAlreadyOrdered`). `DrugReferenceInjector` stamps the chart with each
 such finding's drug and orders (`PatientChart.getDrugsAlreadyOrdered`). `LlmInferenceService` hands that
 stamp, read off the post-inject chart, to `LlmProvider`, and `buildUserMessage` appends:
 
 > Prednisone is already in the patient's active orders (Prednisone Co 5mg): open by saying so; adding it
-> would duplicate that order; then say what the findings mean for the patient's current Prednisone.
+> would duplicate that order; then say what the other findings about Prednisone mean for the patient's
+> current Prednisone, as calls about that medication and not about adding it.
 
-- It is the issue's suggested wording, with *her* rendered *the patient's*.
+- Up to *"then say what"* it is the issue's suggested wording, with *her* rendered *the patient's*.
+- The last part is not the issue's wording. It scopes the drug's OTHER findings to the medication she is
+  on (review round 2 of PR #554). With the issue's wording, Barbara Miller's *"Is aspirin safe for her?"*
+  answered in its second sentence *"No — the patient should avoid adding more … aspirin because it
+  interacts with active order Ibuprofen, a Major problem"*. That turned a finding about her current
+  aspirin into a refusal of a second order of it, which is the #402 defect one sentence later.
 - It comes after the finding-prose clause, so #397's measured layout is unchanged where both fire.
 - The finding-enumeration repair and the progressive preview are not handed it. The first asks its own
   question, and the second's chart never passes the injector.
@@ -12238,8 +12253,37 @@ a proposal question. Where the question proposes the drug it no longer holds.
   scores as neither verdict- nor caution-led. A probe A/B over those cells therefore reads a
   verdict-led drop by design and is blind to a surviving refusal. The chip carries no wire field telling
   it from #477's, so teaching the scorer needs one; not done here.
-- **Not measured on a model in this revision.** The issue's live gate is the measurement: its cells, plus
-  a proposal of a drug of hers that has no other finding.
+- Where two or more of her orders carry a proposed drug, the finding keeps the change-class clause, and
+  that class's prompt branch says such a finding *"is not about a drug anything proposed"*, beside a clause
+  saying adding it would duplicate those orders. Moving it to a caution would understate a duplication
+  among her own orders. `DEFAULT_SYSTEM_PROMPT` cannot be reworded to remove the tension (the issue measured
+  that arm). This case is unmeasured.
+
+### The measurement
+
+The issue's live gate ran on PR #554's head `29e33d42` (2026-09-29, `:8081`, Gemma 4 E4B, stock GPs,
+non-streaming `/search`, two runs per cell, the two runs identical). That head carried the issue's clause
+wording and the one-order sentence ending *"— possible duplicate therapy"*.
+
+- Sarah Taylor, *"Is it safe to add prednisone for her?"*: failed criterion 1.2. The answer said
+  *"Prednisone is already in active order Prednisone Co 5mg, which is a caution about a medication this
+  patient is already taking, not a reason to change it"*, citing the new finding. Neither *duplicate* nor
+  *adding* appeared. A reviewer's re-run matched, three runs in all.
+- Sarah, *"Is prednisone safe for her?"* and *"Can I give her prednisone?"*: the answers stated that adding
+  it would duplicate her order.
+- Sarah, *"Is it safe to start her on clarithromycin?"*: byte-identical to `main`.
+- Barbara Miller, *"Is aspirin safe for her?"*: sentence 1 stated the order, and sentence 2 was the *"No —
+  … avoid adding more …"* refusal quoted above, in both runs and in a reviewer's re-run. `main` has no
+  "No" on this cell. The gate row asks for no refusal, so this row failed.
+- No answer stated a rating that no chip carried.
+- Barbara's chips differed from `main`'s by more than the new chip. The differences come from the post-answer
+  `validate`, which raises chips for drugs the answer names, so an answer naming other drugs carries other
+  chips. The gate row *"chips identical to `main` apart from the new chip"* cannot be met by a change that
+  moves the answer. Read that row against the pre-answer findings.
+
+The two changes above (the one-order sentence and the clause's last part) answer the first and fourth
+rows. They were not measured on a model in this revision, and the next run of the gate on the head that
+carries them is the measurement.
 
 → `ProposedDrugAlreadyInHerOrdersTest` (its class javadoc names the case each gate is mutated against);
 `SubstanceInSeveralActiveOrdersTest.aProposalOfTheDrugOneOfHerOrdersCarriesIsToldThatOrderCarriesIt`;

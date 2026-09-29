@@ -1192,16 +1192,20 @@ public class LlmProvider {
 			// whose rewording was measured not to move the lead. AFTER the finding-prose clause, so #397's
 			// measured layout — the question, a space, its clause — is unchanged where both fire. The bytes
 			// are pinned by LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes; ADR
-			// Decision 125 carries the gate and the measurement.
+			// Decision 125 carries the gate and the measurement. Its last part scopes the drug's OTHER findings
+			// to the medication she is on (review round 2 of PR #554): given the adding frame alone, the model
+			// refused a second order of her aspirin on an interaction finding about her current aspirin.
 			if (drugsAlreadyOrdered != null) {
 				for (PatientChartSerializer.AlreadyOrderedDrug drug : drugsAlreadyOrdered) {
 					boolean one = drug.getOrderCount() == 1;
 					sb.append(' ').append(drug.getDrug()).append(" is already in the patient's active orders (")
 							.append(DrugSafetyValidator.joinPartners(drug.getOrders()))
-							.append("): open by saying so; adding it would duplicate ")
-							.append(one ? "that order" : "those orders")
-							.append("; then say what the findings mean for the patient's current ")
-							.append(drug.getDrug()).append('.');
+							.append("): open by saying so; ")
+							.append(one ? DrugSafetyValidator.ADDING_IT_WOULD_DUPLICATE_THAT_ORDER
+									: "adding it would duplicate those orders")
+							.append("; then say what the other findings about ").append(drug.getDrug())
+							.append(" mean for the patient's current ").append(drug.getDrug())
+							.append(", as calls about that medication and not about adding it.");
 				}
 			}
 		}

@@ -272,8 +272,8 @@ public class ReferenceRecordRowAttributionTest {
 				+ "Moderate. Phenytoin and other hydantoins may induce the CYP450 3A4 hepatic metabolism "
 				+ "of corticosteroids and increase their clearance and decrease their half-lives, "
 				+ "possibly reducing their therapeutic efficacy.",
-				"Dexamethasone (ophthalmic) is already in active order Dexamethasone (ophthalmic) — possible"
-						+ " duplicate therapy"),
+				"Dexamethasone (ophthalmic) is already in active order Dexamethasone (ophthalmic) — adding it"
+						+ " would duplicate that order"),
 				DrugReferenceTestSupport.details(chips),
 				"the chips are #206's and this change may not move them — the second is #548's, was: " + chips);
 	}

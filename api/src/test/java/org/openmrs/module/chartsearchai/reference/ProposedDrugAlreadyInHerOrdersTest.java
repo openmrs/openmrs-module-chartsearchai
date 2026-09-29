@@ -58,9 +58,11 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 	/** A second order of hers the question does not name, so the chart is not the drug alone. */
 	private static final String WARFARIN_ORDER = "Warfarin 5mg";
 
-	/** The finding this issue adds for the issue's chart — the full detail, so a reword is a decision. */
+	/** The finding this issue adds for the issue's chart — the full detail, so a reword is a decision. It
+	 *  states the proposal's consequence in the words the clause after the question uses (review round 2 of
+	 *  PR #554): the record's caution clause is what the model restated, so the record has to carry it. */
 	private static final String PREDNISONE_ALREADY_IN = "Prednisone is already in active order "
-			+ PREDNISONE_ORDER + " — possible duplicate therapy";
+			+ PREDNISONE_ORDER + " — adding it would duplicate that order";
 
 	/** The phrase the finding is recognised by where a case asserts its ABSENCE, cut from the sentence
 	 *  above so a reword of the one cannot leave the other asserting a string production never emits. */
@@ -118,7 +120,7 @@ public class ProposedDrugAlreadyInHerOrdersTest {
 
 			List<SafetyWarning> found = alreadyIn(warnings);
 			assertEquals(1, found.size(), question + " — was: " + DrugReferenceTestSupport.details(warnings));
-			assertEquals(drug + " is already in active order " + order + " — possible duplicate therapy",
+			assertEquals(drug + " is already in active order " + order + " — adding it would duplicate that order",
 				found.get(0).getDetail(), question);
 			assertEquals(Arrays.asList(order), found.get(0).namedPartners(), question);
 			for (SafetyWarning warning : warnings) {

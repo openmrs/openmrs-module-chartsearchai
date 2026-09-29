@@ -4875,6 +4875,11 @@ public class DrugSafetyValidator {
 	 * <li><b>One order is a caution</b> ({@link SafetyWarning#restsOnTheProposalAlone()}): only the
 	 *     proposal would duplicate it, so nothing about her current medication needs changing. Two or
 	 *     more orders of hers duplicate one another, and keep the unrated default.</li>
+	 * <li><b>And one order's sentence states what the proposal would do</b>
+	 *     ({@link #ADDING_IT_WOULD_DUPLICATE_THAT_ORDER}) where the others say <em>possible duplicate
+	 *     therapy</em>: with only the caution clause beside the order, the issue's cell restated that clause
+	 *     as the finding's meaning and never said adding it would duplicate the order (review round 2 of PR
+	 *     #554).</li>
 	 * </ul>
 	 * ADR Decision 125.
 	 *
@@ -4902,13 +4907,27 @@ public class DrugSafetyValidator {
 			}
 		}
 		Map<String, Integer> ordersByDisplay = ordersByDisplay(carriers);
+		PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered = proposedHerOwn != null
+				? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(), orderLabels(ordersByDisplay),
+					carriers.size())
+				: null;
+		// The one-order finding states the proposal's consequence where the others state duplicate therapy:
+		// SafetyWarning.restsOnTheProposalAlone's condition, which is why its strength is a caution.
+		boolean proposalAlone = alreadyOrdered != null && alreadyOrdered.getOrderCount() == 1;
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
-					+ " — possible duplicate therapy",
-			new ArrayList<String>(ordersByDisplay.keySet()), herOrder,
-			proposedHerOwn != null ? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(),
-				orderLabels(ordersByDisplay), carriers.size()) : null);
+					+ (proposalAlone ? " — " + ADDING_IT_WOULD_DUPLICATE_THAT_ORDER : " — possible duplicate therapy"),
+			new ArrayList<String>(ordersByDisplay.keySet()), herOrder, alreadyOrdered);
 	}
+
+	/**
+	 * What the one-order finding a proposal of her own drug raises says the proposal would do (issue #548,
+	 * review round 2 of PR #554), in the words {@code LlmProvider}'s clause after the question uses. On the
+	 * issue's cell the answer restated that finding's caution clause as its meaning and dropped the
+	 * duplication, so the record's own words carry it. Shared rather than spelled twice so the record and
+	 * the clause cannot state two consequences; the clause's plural form is its own.
+	 */
+	public static final String ADDING_IT_WOULD_DUPLICATE_THAT_ORDER = "adding it would duplicate that order";
 
 	/**
 	 * Each distinct display of {@code carriers} once, in chart order, with how many orders carry it —

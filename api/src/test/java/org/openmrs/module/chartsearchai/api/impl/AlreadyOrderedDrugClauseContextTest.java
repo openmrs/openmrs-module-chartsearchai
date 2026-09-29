@@ -53,8 +53,9 @@ public class AlreadyOrderedDrugClauseContextTest {
 	private static final String PREDNISONE_ORDER = "Prednisone Co 5mg";
 
 	private static final String CLAUSE = " Prednisone is already in the patient's active orders (Prednisone Co 5mg):"
-			+ " open by saying so; adding it would duplicate that order; then say what the findings mean for the"
-			+ " patient's current Prednisone.";
+			+ " open by saying so; adding it would duplicate that order; then say what the other findings about"
+			+ " Prednisone mean for the patient's current Prednisone, as calls about that medication and not about"
+			+ " adding it.";
 
 	/** Cut from {@link #CLAUSE}, so a case asserting its absence tracks the clause production writes. */
 	private static final String CLAUSE_MARK = "is already in the patient's active orders";
@@ -119,6 +120,30 @@ public class AlreadyOrderedDrugClauseContextTest {
 		assertEquals(2, engine.messages.size(), "and on the streaming path: " + engine.messages);
 		assertTrue(engine.messages.get(0).endsWith(CLAUSE));
 		assertFalse(engine.messages.get(1).contains(CLAUSE_MARK), "its repair: " + engine.messages.get(1));
+	}
+
+	@Test
+	public void theFindingTheModelReadsStatesTheConsequenceOfAddingItInTheClausesOwnWords() {
+		// Review round 2 of PR #554: on the issue's cell the answer restated the one-order finding's caution
+		// clause as the meaning of the finding and dropped the duplication, so the clause and the record made
+		// two claims about one finding and the record's won. The record now carries the clause's words.
+		String question = "Is it safe to add prednisone for her?";
+		String consequence = "adding it would duplicate that order";
+		assertTrue(CLAUSE.contains("; " + consequence + ";"), "the premise: the clause states it: " + CLAUSE);
+
+		RecordingEngine engine = new RecordingEngine();
+		newService(injectedFor(question), engine).search(new Patient(), question);
+		String message = engine.messages.get(0);
+		String finding = "Prednisone is already in active order " + PREDNISONE_ORDER + " — " + consequence + ".";
+		List<String> records = new ArrayList<String>();
+		for (String line : message.split("\n")) {
+			if (line.contains(finding)) {
+				records.add(line);
+			}
+		}
+		assertEquals(1, records.size(), "the finding, in the message the engine is sent: " + message);
+		assertTrue(records.get(0).endsWith(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION),
+			"and its caution, which no longer stands alone as the finding's meaning: " + records.get(0));
 	}
 
 	@Test

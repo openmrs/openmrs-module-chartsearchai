@@ -63,10 +63,10 @@ public class SubstanceInSeveralActiveOrdersTest {
 
 	/** The finding for one order carrying the drug a question proposes (issue #548). */
 	private static final String RIFAMPICIN_IN_RHZ = "Rifampicin (rifampin) is already in active order " + RHZ
-			+ " — possible duplicate therapy";
+			+ " — adding it would duplicate that order";
 
 	private static final String OMEPRAZOLE_IN_ITS_OWN = "Omeprazole is already in active order Omeprazole 20mg"
-			+ " — possible duplicate therapy";
+			+ " — adding it would duplicate that order";
 
 	/** The finding that her two orders share a substance, which a question putting a drug in play states
 	 *  too, after every other finding (issue #477's decision comment; {@code OrdersSharingASubstanceTest}). */

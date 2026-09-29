@@ -433,8 +433,9 @@ public class LlmProviderUserMessageTest {
 		assertTrue(with.startsWith(without), "the clause is APPENDED.\n  without: " + without + "\n  with:    "
 				+ with);
 		assertEquals(" Prednisone is already in the patient's active orders (Prednisone Co 5mg): open by saying "
-				+ "so; adding it would duplicate that order; then say what the findings mean for the patient's "
-				+ "current Prednisone.", with.substring(without.length()));
+				+ "so; adding it would duplicate that order; then say what the other findings about Prednisone "
+				+ "mean for the patient's current Prednisone, as calls about that medication and not about adding "
+				+ "it.", with.substring(without.length()));
 	}
 
 	@Test
@@ -461,8 +462,9 @@ public class LlmProviderUserMessageTest {
 						Arrays.asList("Prednisone Co 5mg", "Prednisone 20mg"), 2)));
 
 		assertEquals(" Prednisone is already in the patient's active orders (Prednisone Co 5mg and Prednisone "
-				+ "20mg): open by saying so; adding it would duplicate those orders; then say what the findings "
-				+ "mean for the patient's current Prednisone.", with.substring(without.length()));
+				+ "20mg): open by saying so; adding it would duplicate those orders; then say what the other "
+				+ "findings about Prednisone mean for the patient's current Prednisone, as calls about that "
+				+ "medication and not about adding it.", with.substring(without.length()));
 	}
 
 	@Test
@@ -485,7 +487,8 @@ public class LlmProviderUserMessageTest {
 						Arrays.asList("Prednisone 5mg (2 orders)"), 2)));
 
 		assertEquals(" Prednisone is already in the patient's active orders (Prednisone 5mg (2 orders)): open by "
-				+ "saying so; adding it would duplicate those orders; then say what the findings mean for the "
-				+ "patient's current Prednisone.", with.substring(without.length()));
+				+ "saying so; adding it would duplicate those orders; then say what the other findings about "
+				+ "Prednisone mean for the patient's current Prednisone, as calls about that medication and not "
+				+ "about adding it.", with.substring(without.length()));
 	}
 }

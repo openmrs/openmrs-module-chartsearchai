@@ -227,4 +227,38 @@ public class CurrentMedicationOrdersTest {
 				stated.getAnswer().lastIndexOf(ConflictingOrderStatement.CURRENTLY_PRESCRIBED),
 				"one statement of her orders, however many chips of the substance there are: " + stated.getAnswer());
 	}
+
+	/**
+	 * A chip that is NOT about her medication names no order, even where her orders establish she takes its
+	 * substance. {@code CurrentMedicationFindingStrengthTest}'s sibling-row arrangement: her gel order
+	 * establishes levoketoconazole, so the drug-in-play arm records that order for the substance, while the
+	 * question's "levo" proposes the tablets row, a sibling row of the same substance. The chip that
+	 * survives is therefore a proposal ({@code aboutACurrentMedication} false) under the same
+	 * {@code substanceGroupKey}, and the recorded list must not be stamped on it. Unlike the flattened chart
+	 * those cases use, this chart carries her order, so a list exists that could leak.
+	 */
+	@Test
+	public void aProposalChipOfASubstanceHerOrdersEstablishNamesNoOrder() throws java.io.IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(
+					"chartsearchai-test/drug-reference-rule-rows-rank-crossing.json"));
+		PatientClinicalContext.ActiveDrugOrder gel =
+				DrugReferenceTestSupport.activeOrder("uuid-gel", "Levoketoconazole (gel)");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Levoketoconazole (gel)"), null,
+				DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null, Collections.singletonList(gel));
+
+		for (String question : Arrays.asList("Is it safe to give her levo, and what other medications is she on?",
+				"Is it safe to give her levo? Does she have any allergies?")) {
+			List<SafetyWarning> chips = DrugReferenceTestSupport.contraindications(
+					DrugReferenceTestSupport.validator(service).validate("", question, chart));
+
+			assertEquals(1, chips.size(), "precondition: one substance is one chip, " + question + ": " + chips);
+			SafetyWarning chip = chips.get(0);
+			assertFalse(chip.isAboutACurrentMedication(),
+					"precondition: the question proposed this substance, " + question + ": " + chip);
+			assertEquals(Collections.emptyList(), chip.currentMedicationOrders(),
+					"a proposal chip names none of her orders, " + question + ": " + chip);
+		}
+	}
 }

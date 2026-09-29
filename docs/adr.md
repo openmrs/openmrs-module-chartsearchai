@@ -12132,10 +12132,10 @@ chip about a medication she already takes is about (#552). `chartOrderBridges` k
   `aboutACurrentMedication` too, wherever her orders establish its substance (#402, Decision 123), and the
   owner's ruling was every current-medication contraindication chip. So `validate` records, off
   `currentMedicationsInPlay`, the orders that ESTABLISH each such substance (`ordersEstablishing`) — the
-  orders its referent was decided on, not every order resolving to it: her *Nexium 40mg* resolves to
-  omeprazole without naming it and is not listed on an omeprazole chip beside her *Omeprazole 20mg*. The
-  ledger stamps them onto the wire list ALONE. Decision 124's statement stays the active-order arm's,
-  since a drug the question put in play is a chip of another kind there; stamping the sentence
+  orders its referent was decided on, not every order resolving to it: on a chip this arm raises, her
+  *Nexium 40mg*, which resolves to omeprazole without naming it, is not listed beside her
+  *Omeprazole 20mg*. The ledger stamps them onto the wire list ALONE. Decision 124's statement stays the
+  active-order arm's, since a drug the question put in play is a chip of another kind there; stamping the sentence
   projection too makes *"Is she allergic to aspirin?"* state her order, which
   `AllergyQuestionConflictingOrderContextTest.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
   reddens on.
@@ -12163,11 +12163,16 @@ chip about a medication she already takes is about (#552). `chartOrderBridges` k
   `aboutACurrentMedication` included. `[]` is never a claim that no order is behind a chip.
 - A context carrying no per-order list (#118's flattened fallback) has no order to name, from either arm.
 - The two arms list by different tests, `resolvesFromAny` and `ordersEstablishing`, because each lists
-  the orders its own referent was decided on.
+  the orders its own referent was decided on. So one chip, of the same type, drug and detail, can list
+  different orders by which arm raised it: over the shipped data, with orders *Nexium 40mg* and
+  *Omeprazole 20mg* and an omeprazole allergy, the Omeprazole identity chip lists both on `/chartalerts`
+  and on *"Does she have any allergies?"*, and *Omeprazole 20mg* alone on *"Can I give her omeprazole?"*
+  (measured 2026-09-29 at b30fca1e by a throwaway test driving `standingChartAlerts` and `validate`).
 
 Pinned by `CurrentMedicationOrdersTest` (every order, shared displays, a codes-only order, a second
-substance's own list, a proposal's `[]`, a drug-in-play chip's order asked by substance and by brand, the
-establishing order and not the resolving one, and the statement's text unchanged),
+substance's own list, a proposal's `[]` with no order of its substance and with one her orders establish
+on a sibling row, a drug-in-play chip's order asked by substance and by brand, the establishing order and
+not the resolving one, and the statement's text unchanged),
 `AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
 (the real `OrderService` order under a brand display) and `.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
 (a drug-in-play chip names her order and is not stated), and on the wire by

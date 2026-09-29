@@ -72,11 +72,13 @@ well, unless the mention only echoes a record the module already put in front of
 `QueryScopeRouter.isInteractionScreening(question)` is true only when **both** of these hold:
 
 1. **A safety cue** (`asksForADrugSafetyReading`), which is either:
-   - an `interact*` word: interact, interacts, interacting, interaction, interactions
+   - an `interact*` word: interact, interacts, interacted, interacting, interaction, interactions
      (`INTERACTION_CUES`); or
-   - a safety-or-change word (`MEDICATION_SAFETY_CUES`): safe, unsafe, safety, dangerous, harmful,
-     risk(s/y), worry/worried, concern(s), problem(s), wrong, stop(ped/ping), discontinue(d),
-     deprescribe(d), change(d/s), adjust(ed/ment).
+   - a safety-or-change word (`MEDICATION_SAFETY_CUES`): safe, unsafe, safety, danger, dangerous,
+     harmful, risk, risks, risky, worry, worried, worrying, concern, concerns, concerned,
+     concerning, problem, problems, problematic, wrong, stop, stopped, stopping, discontinue,
+     discontinued, deprescribe, deprescribed, change, changed, changes, adjust, adjusted,
+     adjustment, adjustments.
 2. **The medications intent** (`Intent.MEDICATIONS`), meaning the question contains one of:
    medication(s), medicine(s), meds, drug(s), prescription(s), prescribed.
 
@@ -102,13 +104,14 @@ In brief:
 - The same gate must give the same answer in the pre-answer and post-answer passes (step 3).
 - Firing on an unrelated question is ranked as worse than missing a phrasing (issue #143). So
   looser synonyms with everyday non-drug meanings ("conflict", "interfere", an unqualified
-  "review", a bare "check") are left out, and so are list requests such as "what is she on?".
+  "review", a bare "check") are left out, and a list request such as "What medications is the
+  patient taking?" does not screen.
 - There is one definition of "medication question", shared with the contraindication checks
   ([ADR Decision 89](adr.md#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)).
 
 **The trade-off:** phrasing is the weak point. A screening request worded with none of the cues
-above does not screen. It is still answered as an ordinary chart question, but with no interaction
-findings behind it. Decision 89 widened the cue list after exactly such a miss, and
+above does not screen. It is still answered as an ordinary chart question, but her orders are not
+checked against each other. Decision 89 widened the cue list after exactly such a miss, and
 `DrugSafetyScreeningPhrasingCorpusTest.knownToBeMissed` tracks the misses still open.
 
 A model or embedding classifier for this gate has **not been evaluated**, so it is untested rather
@@ -125,7 +128,8 @@ than refuted. Decision 130 states what an evaluation would have to show.
    `safety_finding` records, alongside the knowledge-base records for the drugs involved. The model
    reads them and writes the prose.
 2. **After the answer.** The validator runs again over the model's answer to produce the
-   `safetyWarnings` chips on the response.
+   `safetyWarnings` chips on the response. Where the module answers the question itself (step 4),
+   this pass reads an empty answer instead.
 
 Both passes decide the pairwise checks from the question alone. The call-site comment in
 `DrugSafetyValidator` gives the reason: if the answer could change the gate, the prose could
@@ -169,9 +173,13 @@ A question qualifies only when it matches one of two small fixed grammars in `Qu
   meds interact?"
 
 These are grammars over word order, not word lists, and they **fail closed**. A question that
-doesn't match exactly goes to the model as usual, so a missed phrasing costs nothing. The module
-also answers only when there are findings to state and the patient's orders were read and all
-resolved (`DrugReferenceInjector.answersFromFindings`).
+doesn't match exactly goes to the model as usual, so a missed phrasing costs nothing. Matching a
+grammar is not enough on its own (`DrugReferenceInjector.answersFromFindings`):
+
+- the patient's orders must have been read, and every one of them resolved;
+- for a proposal, the question must name exactly one substance, not one she is already taking, and
+  an interaction finding must carry a rating that is a reason to withhold it;
+- for a screen, the findings must include an interaction between her orders.
 
 ---
 
@@ -206,9 +214,9 @@ judge the chips, not only the prose. A live run recorded in
 six of the sixteen answers were ones a clinician should not read. Two of those six were misses of
 the question gate described above, not the model's doing.
 
-That is why most of the drug-safety code that is not the checks themselves checks the model's
-prose. The README's [Citation grounding](../README.md#citation-grounding) section describes those
-checks, and each has its own decision:
+That is why the module also checks the model's prose. The README's
+[Citation grounding](../README.md#citation-grounding) section describes the first two checks below,
+and each check has its own decision:
 
 - a cited reference record reproduced in different words —
   [Decision 61](adr.md#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully),

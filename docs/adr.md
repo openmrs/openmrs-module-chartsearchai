@@ -12805,8 +12805,8 @@ language.
 
 ### Decision
 
-The gate stays deterministic. The reasons below are all recorded elsewhere, and this entry links to
-them rather than restating them:
+The gate stays deterministic. Each reason below rests on something already recorded, and links to
+it rather than restating it. What is new here is only how each one applies to a classifier:
 
 1. **The safety layer is deterministic by design.**
    [Decision 23](#decision-23-drug-reference-injection--post-answer-drug-safety-validation) (*Why
@@ -12833,7 +12833,7 @@ them rather than restating them:
    [Decision 89](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)
    rejected even a second keyword list for this gate, because two definitions drift. The same
    vocabulary also widens which contraindication chips a question raises
-   (`DrugSafetyValidator.SubjectMatter`). A classifier for the gate would be a further definition,
+   (`DrugSafetyValidator.SubjectMatter`). A classifier for the gate would be a second definition,
    and it could disagree with the one the contraindication arm reads.
 5. **Knowledge is data, not code.** Decision 23 keeps clinical knowledge in the dataset and the
    mechanisms domain-agnostic. Name matching finds the drugs from the dataset the operator loaded, so
@@ -12847,27 +12847,28 @@ medications he is on?"* screened nothing, while *"Are any of his current medicat
 reported a Major pair on the same chart. That miss was closed by widening the cue list.
 `DrugSafetyScreeningPhrasingCorpusTest.knownToBeMissed` records the misses still open, such as
 *"Is his current regimen safe?"*, as inverted assertions: each goes red once a widening catches it.
-A missed question is not dropped. It is still answered as an ordinary chart question, but with no
-interaction findings behind it and no `interactionPairs` statement.
+A missed question is not dropped. It is still answered as an ordinary chart question, but her
+orders are not checked against each other and no `interactionPairs` statement is made.
 
 ### Not evaluated
 
 **A model or embedding classifier for the gate has not been tried, so it is untested rather than
 refuted.** Four things are known about it without running it:
 
-- It adds a model inference in front of retrieval on every question, drug-related or not. Its cost
-  on the CPU deployments this module targets has not been measured.
+- It adds one more model inference to every question, drug-related or not. Its cost on the CPU
+  deployments this module targets has not been measured.
 - It needs a fixed decision threshold, and that threshold becomes the policy for when the module
   screens.
 - To keep reason 2, the one answer has to be computed once and handed to both passes.
-- It is a third definition of "medication question" unless it also replaces `Intent.MEDICATIONS`.
+- It is a second definition of "medication question" unless it also replaces `Intent.MEDICATIONS`.
 
 **What would reopen this:** an A/B against the keyword gate over
 `DrugSafetyScreeningPhrasingCorpusTest`'s three lists, extended with fresh clinician phrasings. It
 must show fewer misses among `asksForAReading` and `knownToBeMissed`, no firing on
-`asksForNoReading`, both measured over repeated runs, and a stated latency cost. Per
-[Decision 89](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact),
-a candidate that buys positives by firing on `asksForNoReading` is wrong however many positives it
-buys.
+`asksForNoReading`, both measured over repeated runs, and a stated latency cost. The javadoc of
+`asksForNoReading` sets the bar: a widening that reddens one of its cases "is wrong however many
+positives it buys", the same trade
+[Decision 89](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)
+calls the one this area is least allowed to make.
 
 → `DrugSafetyScreeningPhrasingCorpusTest`, `QueryScopeRouterTest`.

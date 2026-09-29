@@ -114,32 +114,25 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		ChartAnswer answer = serviceAnswering(modelAnswer).service.search(patient, AMLODIPINE_QUESTION);
 
 		assertEquals(modelAnswer + " Also covered by those findings and not named above: scheduled order "
-				+ "Rifampicin (rifampin), " + STARTS + ".", answer.getAnswer(),
+				+ "Rifampicin (rifampin) (" + STARTS + ").", answer.getAnswer(),
 				"the module names the partner as a scheduled order, with its date");
 	}
 
 	@Test
-	public void anAllergyQuestionDoesNotStateHerScheduledOrderAsOneSheIsTaking() throws IOException {
+	public void anAllergyQuestionStatesHerScheduledOrderWithTheDateItStarts() throws IOException {
 		// ADR Decision 124 states, in an allergy answer, the orders of hers a recorded allergy conflicts
-		// with, and the finding they carry reads "a medication this patient is already taking". An order
-		// that has not started is neither, so that finding is a proposal's and the answer is the model's.
+		// with, as "Currently prescribed: <display>". Her Rifampicin is prescribed and has not started, so
+		// the statement says when it starts rather than reading as a drug she is taking.
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
 		String modelAnswer = "Yes — the patient has a recorded allergy to Rifampicin [1].";
 
 		ChartAnswer answer = serviceAnswering(modelAnswer).service.search(patient, "any allergies?");
 
-		boolean aboutRifampicin = false;
-		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType())
-					&& chip.getDrug().toLowerCase(Locale.ROOT).contains("rifamp")) {
-				aboutRifampicin = true;
-				assertFalse(chip.isAboutACurrentMedication(),
-						"a contraindication about her scheduled Rifampicin is not about a current medication: " + chip);
-			}
-		}
-		assertTrue(aboutRifampicin, "precondition: the allergy raised a contraindication about Rifampicin, chips were: "
-				+ answer.getSafetyWarnings());
-		assertEquals(modelAnswer, answer.getAnswer(), "so no \"Currently prescribed\" statement names it");
+		// The placeholder concept the free-text allergen needs (88) is her aspirin's, so the answer states her
+		// aspirin order as well; this case is about the Rifampicin statement.
+		assertTrue(answer.getAnswer().startsWith(modelAnswer + " "), answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(" Currently prescribed: Rifampicin (" + STARTS + "). The patient has a "
+				+ "recorded allergy to Rifampicin (rifampin)."), "the order is stated with its start date: " + answer.getAnswer());
 	}
 
 	/** The prompt the module builds for the amlodipine question, read once through the real pipeline. */

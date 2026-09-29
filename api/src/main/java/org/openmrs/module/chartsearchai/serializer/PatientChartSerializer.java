@@ -855,9 +855,9 @@ public class PatientChartSerializer {
 		 * <p><b>The record and the display are one string by construction, which is what makes this a
 		 * fact about the RECORD and not only about the order.</b>
 		 * {@code DrugReferenceInjector.renderActiveOrder} is {@code "Active drug order: " +
-		 * order.getDisplay() + "."} — or, for an order that has not started (issue #553), that display
-		 * followed by its scheduled status, which names no drug — so the display is the whole of what the
-		 * record says the drug is.
+		 * order.getDisplay() + "."} — or, for an order that has not started (issue #553),
+		 * {@code "Scheduled drug order: " + display} followed by its scheduled status, which names no drug —
+		 * so the display is the whole of what the record says the drug is.
 		 * A richer rendering would leave the stamp {@code FALSE} for a record that had since gained a
 		 * name — withholding a verdict it could then give, which is the fail-safe direction — so
 		 * whoever changes that method re-decides this stamp with it.

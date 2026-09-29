@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  Issue #553, loaded beside ScheduledDrugOrderTestData.xml: a STARTED Amlodipine order for patient 7. The
-  slice (ddi-listed-medications-proposal.json) files Rifampicin ahead of Amlodipine, so in dataset order the
-  screening arm would state their Major pair with the scheduled Rifampicin as its SUBJECT. The encounter is order 111's own.
+  Issue #553, loaded beside ScheduledDrugOrderTestData.xml: an Amlodipine order for patient 7 that has NOT
+  started either (scheduled_date 2099-01-01, noon), so the screening arm's Rifampicin x Amlodipine pair has
+  no started side to be stated from. The encounter is order 111's own.
 -->
 <dataset>
 	<concept concept_id="9558" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
@@ -12,7 +12,8 @@
 	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9558bbbb-0000-4000-8000-00000009558a" />
 	<drug drug_id="9558" concept_id="9558" name="Amlodipine" combination="false"
 	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9558cccc-0000-4000-8000-00000009558a" />
-	<orders order_id="9558" order_type_id="1" order_number="ORD-9558" urgency="ROUTINE"
+	<orders order_id="9558" order_type_id="1" order_number="ORD-9558" urgency="ON_SCHEDULED_DATE"
+	        scheduled_date="2099-01-01 12:00:00.0"
 	        order_action="NEW" concept_id="9558" orderer="1" instructions="1x daily"
 	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
 	        voided="false" patient_id="7" uuid="9558dddd-0000-4000-8000-00000009558a"

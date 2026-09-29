@@ -54,7 +54,8 @@ public class SerializedRecord {
 	 * that set and this record's order was not in it, and {@code null} when the module cannot say.
 	 *
 	 * <p>{@code null} is the answer for five different situations and they are deliberately not
-	 * distinguished here, because a consumer must treat them alike: the record is not a drug order;
+	 * distinguished by this field, because a consumer of it must treat them alike (the fifth is told
+	 * apart by {@link #orderStartDate}, not here): the record is not a drug order;
 	 * the order read failed; the record's order could not be attributed to this patient at all; or
 	 * that one order could not be evaluated, because {@code Order.isActive()} throws on a row whose
 	 * stop date is after its auto-expire date. What they have in common is the only thing that

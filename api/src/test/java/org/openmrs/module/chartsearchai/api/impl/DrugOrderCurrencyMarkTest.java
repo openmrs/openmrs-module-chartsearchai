@@ -537,7 +537,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		String line = lineFor(chart, scheduled.getUuid());
 		assertTrue(line.endsWith(". Order status: scheduled to start 2099-01-01"),
 				"the record says it is scheduled, and from when: " + line);
-		assertFalse(line.contains(PatientChartSerializer.ACTIVE_ORDER_LABEL + "."),
+		assertFalse(line.contains(PatientChartSerializer.ACTIVE_ORDER_LABEL),
 				"and never that it is in force: " + line);
 		assertFalse(line.contains(PatientChartSerializer.INACTIVE_ORDER_LABEL),
 				"nor that it is not in force, which reads as ended: " + line);

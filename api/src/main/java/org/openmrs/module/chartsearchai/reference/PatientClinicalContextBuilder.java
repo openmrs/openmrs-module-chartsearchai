@@ -224,7 +224,7 @@ final class PatientClinicalContextBuilder {
 				// Whether core calls this order STARTED, and when it will where it has not (issue #553):
 				// getActiveOrders above admits an order on its dateActivated alone, so one scheduled for
 				// next month is on this list. Core's own two calls, never a reading of scheduledDate.
-				Date scheduledStart = drugOrder.isStarted() ? null : drugOrder.getEffectiveStartDate();
+				Date scheduledStart = ChartSearchAiUtils.scheduledStartOf(drugOrder);
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,

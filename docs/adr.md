@@ -12140,24 +12140,28 @@ month would be a safety loss — and fix the wording.
   date (`DrugSafetyValidator.SCHEDULED_ORDER_INTERACTION_PHRASE`), in the rule chip, the class sentence and
   the sentence `FindingPartnerCoverageCheck` appends; the stand-in record for an order the chart has no
   record of reads `Scheduled drug order: …` with the same status.
-- **It is not a medication she is already taking.** The current-medication referent (Decision 72) requires
-  a STARTED order, at every arm that states it: the screening arm's subject, the order-driven contraindication
-  arm, and the drug-in-play arm's `currentMedicationsInPlay`. A substance she holds only as not-started orders
-  takes the proposal referent, which is true of a drug not yet given. Decision 72's defect — a refusal lead
-  about a drug she is on, on a question that proposed nothing — does not transfer, because its premise is a
-  drug she is on. One rule decides it (`scheduledStartOf`): any started order carrying the substance makes it
-  hers and current.
+- **A question naming the drug treats it as a proposal.** The drug-in-play arm's current-medication
+  referent (Decision 123) requires that an order ESTABLISHING the substance has started
+  (`currentMedicationsInPlay`), so *"Can I give her rifampicin?"* about her scheduled Rifampicin states the
+  proposal call — true of a drug not yet given.
+- **The order-driven arms keep the current-medication referent.** The screening arm and the active-order
+  contraindication arm have no proposal to refuse, and the proposal clause there is Decision 72's defect: a
+  module-composed screening answer opened *"No — … a reason to withhold Rifampicin"*, found by review of this
+  change. So the start date goes into the words instead: the screening arm visits a substance she holds only
+  as not-started orders LAST (`startedSubjectsFirst`), so a pair with a started side is stated from it, and
+  the contraindication arm's *"Currently prescribed: …"* line prints a not-started order with its start date.
+- **Whether a side has started is one decision**, `DrugSafetyValidator.scheduledStartOf`: the earliest start
+  among the orders the arm's own `resolvesFromAny` matched, or none where any of them has started.
 
 ### Rejected
 
 - **Exclude a not-started order from the active set** (`!isStarted()`). A safety loss the owner ruled out.
-- **Leave the referent axis alone and change only the wording.** The chip would stop saying "active order"
-  while the finding's clause still said "a medication this patient is already taking", and
-  `aboutACurrentMedication` would publish `true` — the ticket's defect through the referent.
+- **Require a started order for the referent at EVERY arm.** Taken first, and it reopened Decision 72 on
+  the order-driven arms, as above.
+- **Leave the drug-in-play referent alone too.** Its question names the drug, so the proposal call is the
+  true one there, and the current-medication clause would say she takes a drug she has not started.
 - **A third referent column for a scheduled order**, beside Decision 110's ended one. It needs a prompt
   branch per class and an interleaved A/B; the proposal clause is already true of the drug.
-- **Reorder the screening arm so a started order is always the subject.** Unneeded once the referent follows
-  the subject's own start.
 
 ### Residues
 
@@ -12170,6 +12174,11 @@ month would be a safety loss — and fix the wording.
   orders", true in core's sense) are unchanged.
 - No wire key carries the start date; the chip's `detail` states it. A client reading the order itself by
   `resourceUuid` reads it from the chart.
+- A pair of two not-started orders, and a contraindication about a not-started order, still state the
+  current-medication clause ("a medication this patient is already taking") and publish
+  `aboutACurrentMedication: true`; their details and the chart record carry the start date.
+- `LlmInferenceService`'s enumeration-repair instruction asks the model to name "the active order it is about"
+  for each finding; it is prompt text and was not re-measured here.
 - What the model writes in its own prose is pinned by no test here.
 
 Pinned by `DrugOrderCurrencyMarkTest.aScheduledOrderIsNeitherInForceNorEndedAndItsRecordSaysWhenItStarts`,

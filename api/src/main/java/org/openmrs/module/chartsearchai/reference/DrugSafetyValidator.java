@@ -2710,8 +2710,9 @@ public class DrugSafetyValidator {
 			List<PatientClinicalContext.ActiveDrugOrder> carriers = ordersEstablishing(substance, rows, context,
 				orderEntries, bridgedOrders, coMedications);
 			// Orders that establish it but none of which has STARTED do not make it a medication she is
-			// already taking (issue #553): she holds it as an order scheduled to start, so a finding about
-			// it keeps the proposal referent, as every arm states for such a drug.
+			// already taking (issue #553): she holds it as an order scheduled to start, and the question
+			// names it, so a finding about it keeps the proposal referent. The order-driven arms keep theirs,
+			// having no proposal to refuse (ADR Decision 125).
 			if (!carriers.isEmpty() && noneHasStarted(carriers)) {
 				continue;
 			}
@@ -4536,8 +4537,8 @@ public class DrugSafetyValidator {
 					coMedications);
 				// Whether the rule's partner has started is decided ONCE, here, and travels with the fold, so
 				// the rule half and the class half of one chip cannot name one order two ways (issue #553).
-				Date partnerStart = scheduledStartOf(rowsOfSubstance(orderEntries, rule.partner),
-					context.getActiveDrugOrders(), bridgedOrders);
+				Date partnerStart = scheduledStartOf(orderEntries, rule.partner, context.getActiveDrugOrders(),
+					bridgedOrders);
 				folded.put(rule, new FoldedClassSentence(
 						reconciled != null ? reconciled.chipName : partnerLabel(rule.rule),
 						reconciled != null ? reconciled.noteName : null,
@@ -4597,8 +4598,7 @@ public class DrugSafetyValidator {
 			// Whether the order this chip names as its partner has started (issue #553): over the whole
 			// order list, the witnesses this arm lets name the partner (see the bridge above).
 			Date partnerStart = fold != null ? fold.partnerStart
-					: scheduledStartOf(rowsOfSubstance(orderEntries, rule.partner), context.getActiveDrugOrders(),
-						bridgedOrders);
+					: scheduledStartOf(orderEntries, rule.partner, context.getActiveDrugOrders(), bridgedOrders);
 			SafetyWarning chip;
 			if (fold == null) {
 				// No class sentence to fold, and since issue #339 that no longer decides what the order
@@ -8781,7 +8781,12 @@ public class DrugSafetyValidator {
 		// same drain-once-per-substance idiom validate() uses for the drug-in-play and dose arms, which
 		// since issue #206 drains a key set beside a shared row map rather than a map of its own.
 		Map<Object, List<DrugReference>> substances = substanceRows(orderDrugs);
-		for (DrugReference ref : orderDrugs) {
+		// A substance she holds only as orders that have not started is visited LAST (issue #553), so a
+		// pair of a started and a scheduled order is stated from the started side — whose
+		// current-medication clause below is true of it — and names the other as a scheduled order. The
+		// pair key is unordered, so nothing is lost: a pair the started side does not relate is still
+		// reached from the scheduled one. On a chart with no such order the order is untouched.
+		for (DrugReference ref : startedSubjectsFirst(orderDrugs, context, bridgedOrders)) {
 			List<DrugReference> substance = substances.remove(ref.substanceGroupKey());
 			if (substance == null) {
 				continue;
@@ -8797,6 +8802,9 @@ public class DrugSafetyValidator {
 			// every order, which is the term chartOrderBridges' own cost measurement identifies.
 			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses =
 					ordersOtherThan(substance, context, bridgedOrders);
+			// Whether the subject has STARTED (issue #553), over every order as the bridge asks it — per
+			// SUBSTANCE, beside the witnesses it mirrors, rather than once per pair.
+			Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
 			// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
 			// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
 			// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
@@ -8903,23 +8911,21 @@ public class DrugSafetyValidator {
 				List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
 					partner, chipPartnerName, context, partnerWitnesses, orderDrugs, bridgedOrders, subjects,
 					matchedNames);
-				// Whether each side has STARTED (issue #553): the subject over every order, as the bridge asks
-				// it, and the partner over the witnesses this arm kept. A side known only through orders
-				// that have not started is named as scheduled, with its date.
-				Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
-				Date partnerStart = scheduledStartOf(rowsOfSubstance(orderDrugs, partner), partnerWitnesses,
-					bridgedOrders);
-				// TRUE wherever the subject has started: both of this pair's drugs are the patient's own
-				// prescriptions, so the finding licenses a call about her current therapy and never a
-				// refusal of a proposal nobody made (issue #348). Established here rather than derived
-				// downstream — see SafetyWarning.isAboutACurrentMedication. A subject she holds only as an
-				// order that has not started is not a medication she is already taking, so it takes the
-				// proposal referent every arm gives such a drug (issue #553, ADR Decision 125).
-				boolean current = subjectStart == null;
+				// Whether the partner has STARTED (issue #553), over the witnesses this arm kept. A side known
+				// only through orders that have not started is named as scheduled, with its date.
+				Date partnerStart = scheduledStartOf(orderDrugs, partner, partnerWitnesses, bridgedOrders);
+				// TRUE, and this is one of the two ORDER-DRIVEN arms that say so: both of this pair's drugs
+				// are the patient's own prescriptions, so the finding licenses a call about her current
+				// therapy and never a refusal of a proposal nobody made (issue #348). Established here
+				// rather than derived downstream — see SafetyWarning.isAboutACurrentMedication. Still TRUE
+				// where the subject has not started (issue #553): the proposal clause on a question that
+				// proposed nothing is #348's own defect, and it opened a module-composed screening answer
+				// with "No —". The subject's start date is in the detail instead, and the visiting order
+				// above leaves only a pair of two not-started orders with such a subject (ADR Decision 125).
 				SafetyWarning chip = (reconciled == null
-						? interactionWarning(subject, i, bridges, current, subjectStart, partnerStart)
+						? interactionWarning(subject, i, bridges, true, subjectStart, partnerStart)
 						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
-							bridges, current, subjectStart, partnerStart)).withMatchedOrderNames(matchedNames);
+							bridges, true, subjectStart, partnerStart)).withMatchedOrderNames(matchedNames);
 				// Before the candidate is collected rather than after the cap, so the extent this arm
 				// states counts what a clinician can tell apart: a restatement is not a pair that was
 				// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —
@@ -9436,11 +9442,36 @@ public class DrugSafetyValidator {
 		if (rows.isEmpty() || !anyHasNotStarted(orders)) {
 			return null;
 		}
+		List<PatientClinicalContext.ActiveDrugOrder> carrying = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			if (resolvesFromAny(rows, order, bridged)) {
+				carrying.add(order);
+			}
+		}
+		return earliestStartWhereNoneHasStarted(carrying);
+	}
+
+	/**
+	 * As {@link #scheduledStartOf(List, List, BridgedOrders)} for the substance {@code row} is a row of
+	 * among {@code entries}, resolving those rows only where one of {@code orders} has not started — the
+	 * form a per-chip call site takes, so a chart with no scheduled order builds no row list for it.
+	 */
+	private static Date scheduledStartOf(List<DrugReference> entries, DrugReference row,
+			List<PatientClinicalContext.ActiveDrugOrder> orders, BridgedOrders bridged) {
+		if (row == null || !anyHasNotStarted(orders)) {
+			return null;
+		}
+		return scheduledStartOf(rowsOfSubstance(entries, row), orders, bridged);
+	}
+
+	/**
+	 * @return the earliest scheduled start among {@code orders}, where none of them has started; else
+	 *         {@code null} — for an empty collection, and wherever one of them has started (issue #553).
+	 *         The one fold {@link #scheduledStartOf} and {@link OrderPartner#scheduledStart()} share.
+	 */
+	private static Date earliestStartWhereNoneHasStarted(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
 		Date earliest = null;
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
-			if (!resolvesFromAny(rows, order, bridged)) {
-				continue;
-			}
 			if (order.hasStarted()) {
 				return null;
 			}
@@ -9449,6 +9480,26 @@ public class DrugSafetyValidator {
 			}
 		}
 		return earliest;
+	}
+
+	/**
+	 * {@code orderDrugs} with every row of a substance she holds ONLY as orders that have not started
+	 * moved behind the rest, each part in its own order — the screening arm's visiting order (issue
+	 * #553). The list itself where no order of hers is scheduled.
+	 */
+	private static List<DrugReference> startedSubjectsFirst(List<DrugReference> orderDrugs,
+			PatientClinicalContext context, BridgedOrders bridged) {
+		if (!anyHasNotStarted(context.getActiveDrugOrders())) {
+			return orderDrugs;
+		}
+		List<DrugReference> started = new ArrayList<DrugReference>();
+		List<DrugReference> scheduled = new ArrayList<DrugReference>();
+		for (DrugReference ref : orderDrugs) {
+			(scheduledStartOf(orderDrugs, ref, context.getActiveDrugOrders(), bridged) == null ? started : scheduled)
+					.add(ref);
+		}
+		started.addAll(scheduled);
+		return started;
 	}
 
 	/** @return whether any of {@code orders} has not started — see {@link #scheduledStartOf} */
@@ -9492,7 +9543,11 @@ public class DrugSafetyValidator {
 		Set<String> displays = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			if (displayNamesADrug(order) && resolvesFromAny(rows, order, bridged)) {
-				displays.add(order.getDisplay().trim());
+				// An order that has not started is printed with its start date, so "Currently prescribed"
+				// does not read as a drug she is taking (issue #553).
+				displays.add(order.hasStarted() ? order.getDisplay().trim()
+						: order.getDisplay().trim() + " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart())
+								+ ")");
 			}
 		}
 		return new ArrayList<String>(displays);
@@ -10624,10 +10679,10 @@ public class DrugSafetyValidator {
 			// decides which survives one key. That is a known residue and not a rationale: ADR Decision
 			// 123 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
 			// sibling-row cases pin it.
-			// And FALSE where she holds the substance only as orders that have not STARTED (issue #553):
-			// a drug scheduled to start is not a medication she is already taking.
-			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey())
-					&& scheduledStartOf(rowsOfSubstance(orderEntries, ref), context.getActiveDrugOrders(), bridged) == null;
+			// Not narrowed to an order that has STARTED (issue #553): this arm, like the screening arm, has no
+			// proposal to refuse, so the proposal clause would be #348's defect. The order's start date is
+			// what currentOrderDisplays prints beside it instead (ADR Decision 125).
+			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			if (currentMedication) {
 				chips.recordCurrentOrders(ref.substanceGroupKey(),
 						currentOrderDisplays(ref, orderEntries, context, bridged));
@@ -11125,16 +11180,7 @@ public class DrugSafetyValidator {
 		 *         arm's own sentence, whose partner is this co-medication rather than a rule's entry
 		 */
 		private Date scheduledStart() {
-			if (carriers.isEmpty() || !noneHasStarted(carriers)) {
-				return null;
-			}
-			Date earliest = null;
-			for (PatientClinicalContext.ActiveDrugOrder carrier : carriers) {
-				if (earliest == null || carrier.getScheduledStart().before(earliest)) {
-					earliest = carrier.getScheduledStart();
-				}
-			}
-			return earliest;
+			return earliestStartWhereNoneHasStarted(carriers);
 		}
 
 		/**

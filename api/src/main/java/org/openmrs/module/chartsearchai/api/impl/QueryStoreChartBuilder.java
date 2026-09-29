@@ -24,6 +24,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -683,7 +684,7 @@ class QueryStoreChartBuilder {
 	 * than an empty set. {@code PatientClinicalContext.contraindicationRecordsRead()} is the same
 	 * distinction one layer along.
 	 *
-	 * <p>Since issue #553 a third map sits beside the two sets: the orders {@code Order.isActive()} calls
+	 * <p>Since issue #553 a second map sits beside the two sets and the stop dates: the orders {@code Order.isActive()} calls
 	 * active that have not started, which are in the all-orders set and NOT in the active one, so neither
 	 * mark reaches them — see {@link #scheduledStartsByOrderUuid}.
 	 */
@@ -929,7 +930,7 @@ class QueryStoreChartBuilder {
 				// Whether an order core calls active has STARTED is core's own Order.isStarted() — its
 				// effective start date against now — and never a reading of scheduledDate here (issue
 				// #553). Held before the uuid is recorded as known, for the reason isActive() is.
-				Date scheduledStart = isActive && !order.isStarted() ? order.getEffectiveStartDate() : null;
+				Date scheduledStart = isActive ? ChartSearchAiUtils.scheduledStartOf(order) : null;
 				known.add(order.getUuid());
 				if (scheduledStart != null) {
 					scheduledStarts.put(order.getUuid(), scheduledStart);

@@ -227,9 +227,8 @@ public class SafetyWarning {
 	 *
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
-	 *        walking the patient's own active orders raised it (issue #348) about an order that has
-	 *        started (issue #553), and where the drug-in-play arm states that referent for its drug
-	 *        (issue #402)
+	 *        walking the patient's own active orders raised it (issue #348), and where the drug-in-play
+	 *        arm states that referent for its drug (issue #402)
 	 * @param chartRecords see {@link #chartRecords()} — the recorded allergies or conditions this
 	 *        rule's token matched, from the list {@code recordedContraindicationKind}'s own leg names
 	 */
@@ -517,9 +516,8 @@ public class SafetyWarning {
 	 *        covers — empty is not a degraded state, and no rule about which chips are empty belongs
 	 *        here or anywhere else; every draft of one has been measured false
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true from the screening
-	 *        arm, whose two drugs are both the patient's own active orders (issue #348), where its subject
-	 *        has started (issue #553), and from the drug-in-play arm where it states that referent for its
-	 *        drug (issue #402)
+	 *        arm, whose two drugs are both the patient's own active orders (issue #348), and from the
+	 *        drug-in-play arm where it states that referent for its drug (issue #402)
 	 */
 	// The paragraphs above are worded for the PAIR issue #297 added, and facts have been put beside
 	// them since — issue #349's bridge, issue #348's referent. Read the @param list rather than any
@@ -1117,9 +1115,9 @@ public class SafetyWarning {
 	 * answer of every arm named above as answering false, whatever her chart holds — for a drug in play
 	 * her orders do not resolve to, which includes a prescription recorded under a name the reference
 	 * data does not carry, for one every order of which is coded only as a locally applied presentation
-	 * of a drug the data also files outside those groups, and for the question-pair arm's findings — for
-	 * a drug she holds only as orders that have not started, at every arm (issue #553) — and of every chip
-	 * built through a public constructor. This is the
+	 * of a drug the data also files outside those groups, and for one she holds only as orders that have
+	 * not started (issue #553), and for the question-pair arm's findings — and of every chip built through
+	 * a public constructor. This is the
 	 * one home of that list; {@code README.md} carries it for a client,
 	 * with how to render {@code true}.
 	 */
@@ -1247,6 +1245,9 @@ public class SafetyWarning {
 	 * "scheduled order" — so the two cannot disagree. Changes nothing this warning prints.
 	 */
 	SafetyWarning withPartnerScheduledStart(Date start) {
+		if (start == null && partnerScheduledStart == null) {
+			return this;
+		}
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
@@ -1258,10 +1259,9 @@ public class SafetyWarning {
 	 * When the one active order this chip names as its partner is scheduled to start, spelled as
 	 * {@code DateFormatUtil.formatDate} spells every date this module publishes, for a partner that has
 	 * not started — or {@code null}, on every chip whose partner has started or that names no order
-	 * (issue #553). Set on a chip naming exactly one partner: {@code DrugSafetyValidator} never collapses
-	 * a statement about a not-started order with another. Package-private and not a getter, so it reaches
-	 * no wire; its reader is {@code DrugReferenceInjector}, which carries it onto the finding's record for
-	 * {@code FindingPartnerCoverageCheck}.
+	 * (issue #553). Set on a chip naming exactly one partner: {@code DrugSafetyValidator.collapseSharedMechanisms}
+	 * reads it to keep such a chip out of a merge. Package-private and not a getter, so it reaches no wire;
+	 * {@code DrugReferenceInjector} carries it onto the finding's record for {@code FindingPartnerCoverageCheck}.
 	 */
 	String partnerScheduledStart() {
 		return partnerScheduledStart;

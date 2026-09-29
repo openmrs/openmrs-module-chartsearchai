@@ -148,14 +148,15 @@ public final class FindingPartnerCoverageCheck {
 
 	/**
 	 * The words an unstated partner is named with: {@code "active order X"}, or, for a partner whose
-	 * finding says it has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStart()}),
-	 * {@code "scheduled order X, scheduled to start <date>"} — never "active order" for a drug she has not
-	 * started. Worded here, from the finding's stamp, because these are the module's own words.
+	 * finding's stamp says it has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStart()}),
+	 * {@code "scheduled order X (scheduled to start <date>)"} — the date in brackets, so in a list of several
+	 * it cannot be read as the next item's. Worded from the stamp, because these are the module's own
+	 * words; a partner no stamp reaches keeps "active order" (ADR Decision 125's residues).
 	 */
 	private static String partnerWords(String partner, String scheduledStart) {
 		return scheduledStart == null ? DrugSafetyValidator.ACTIVE_ORDER_NOUN + " " + partner
-				: DrugSafetyValidator.SCHEDULED_ORDER_NOUN + " " + partner + ", "
-						+ PatientChartSerializer.SCHEDULED_TO_START_WORDS + scheduledStart;
+				: DrugSafetyValidator.SCHEDULED_ORDER_NOUN + " " + partner + " ("
+						+ PatientChartSerializer.SCHEDULED_TO_START_WORDS + scheduledStart + ")";
 	}
 
 	private static String withNamed(String answer, List<String> unstated) {

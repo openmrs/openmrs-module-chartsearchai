@@ -100,14 +100,10 @@ public class ScheduledOrderInteractionContextTest extends BaseModuleContextSensi
 		boolean pairStated = false;
 		for (SafetyWarning chip : chips) {
 			String drug = chip.getDrug();
-			if (namesRifampicin(drug)) {
-				assertFalse(chip.isAboutACurrentMedication(),
-						"a finding about her scheduled Rifampicin is not about a medication she is already taking: "
-								+ chip.getDetail());
-				assertTrue(chip.getDetail().startsWith(drug + ", " + STARTS + ", interacts with "),
-						"and says when it starts: " + chip.getDetail());
-				pairStated |= chip.getDetail().contains("interacts with active order Nevirapine");
-			} else if (namesRifampicin(chip.getDetail())) {
+			assertFalse(namesRifampicin(drug),
+					"the pair has a started side, so it is stated from it and not from her scheduled Rifampicin: "
+							+ chip.getDetail());
+			if (namesRifampicin(chip.getDetail())) {
 				assertTrue(chip.getDetail().contains(" interacts with scheduled order Rifampicin (rifampin), " + STARTS),
 						"a finding naming it as the partner says it is scheduled: " + chip.getDetail());
 				pairStated |= "Nevirapine".equals(drug);
@@ -224,32 +220,49 @@ public class ScheduledOrderInteractionContextTest extends BaseModuleContextSensi
 	}
 
 	@Test
-	public void aScreenedPairWhoseSubjectIsHerScheduledOrderSaysSoAndIsNotAboutACurrentMedication() {
-		// The screening arm states a pair once, from whichever order the dataset files first; the slice
-		// files Rifampicin ahead of Amlodipine, so this pair's subject is the order that has not started.
+	public void aScreenedPairOfAStartedAndAScheduledOrderIsStatedFromTheStartedSide() {
+		// The slice files Rifampicin ahead of Amlodipine, so in dataset order the screen would state their
+		// Major pair with the order that has NOT started as its subject — and its current-medication clause
+		// would be false of it. A started subject is visited first instead.
 		executeDataSet("StartedAmlodipineOrderTestData.xml");
 		List<SafetyWarning> chips = chips("Are there any drug interactions among her current medications?");
 
 		SafetyWarning chip = null;
 		for (SafetyWarning candidate : chips) {
-			if (namesRifampicin(candidate.getDrug()) && candidate.getDetail().contains("Amlodipine")) {
-				assertTrue(chip == null, "precondition: one chip about Rifampicin naming Amlodipine, were: "
+			assertFalse(namesRifampicin(candidate.getDrug()),
+					"no pair with a started side takes her scheduled Rifampicin as its subject: " + candidate.getDetail());
+			if ("Amlodipine".equals(candidate.getDrug()) && namesRifampicin(candidate.getDetail())) {
+				assertTrue(chip == null, "precondition: one chip about Amlodipine naming Rifampicin, were: "
 						+ DrugReferenceTestSupport.details(chips));
 				chip = candidate;
 			}
 		}
-		assertTrue(chip != null, "precondition: the screen states the pair with Rifampicin as its subject, chips were: "
+		assertTrue(chip != null, "the screen states the pair from Amlodipine, chips were: "
 				+ DrugReferenceTestSupport.details(chips));
-		assertTrue(chip.getDetail().startsWith("Rifampicin (rifampin), " + STARTS + ", interacts with active order "
-				+ "Amlodipine — "), "the subject is named as scheduled, with its date: " + chip.getDetail());
-		assertFalse(chip.isAboutACurrentMedication(),
-				"and the finding is not about a medication she is already taking: " + chip.getDetail());
-		for (SafetyWarning other : chips) {
-			if ("Nevirapine".equals(other.getDrug()) && namesRifampicin(other.getDetail())) {
-				assertTrue(other.isAboutACurrentMedication(),
-						"a pair whose subject has started is still about her current medication: " + other.getDetail());
+		assertTrue(chip.getDetail().startsWith("Amlodipine interacts with scheduled order Rifampicin (rifampin), "
+				+ STARTS + " — "), "naming the scheduled order as scheduled, with its date: " + chip.getDetail());
+		assertTrue(chip.isAboutACurrentMedication(), "and about a medication she is taking: " + chip.getDetail());
+	}
+
+	@Test
+	public void aScreenedPairOfTwoScheduledOrdersNamesBothAsScheduledAndStaysAboutHerMedication() {
+		// No started side to state it from, so the subject is a scheduled order and the detail says so.
+		// The referent stays the order-driven arm's: the proposal clause on a screening question is issue
+		// #348's defect (ADR Decision 125).
+		executeDataSet("ScheduledAmlodipineOrderTestData.xml");
+		List<SafetyWarning> chips = chips("Are there any drug interactions among her current medications?");
+
+		boolean pair = false;
+		for (SafetyWarning chip : chips) {
+			if (namesRifampicin(chip.getDrug()) && chip.getDetail().contains("Amlodipine")) {
+				pair = true;
+				assertTrue(chip.getDetail().startsWith("Rifampicin (rifampin), " + STARTS
+						+ ", interacts with scheduled order Amlodipine, " + STARTS + " — "),
+						"both sides named as scheduled, with their dates: " + chip.getDetail());
+				assertTrue(chip.isAboutACurrentMedication(), chip.getDetail());
 			}
 		}
+		assertTrue(pair, "precondition: the screen states the pair, chips were: " + DrugReferenceTestSupport.details(chips));
 	}
 
 	@Test

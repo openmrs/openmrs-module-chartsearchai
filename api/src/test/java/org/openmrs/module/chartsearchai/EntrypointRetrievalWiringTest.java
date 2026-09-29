@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -372,8 +374,10 @@ public class EntrypointRetrievalWiringTest {
 		ExecutorService handlers = Executors.newCachedThreadPool();
 		HttpServer origin = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		origin.createContext("/", exchange -> {
+			// Held for less than the library's curl stall abort (--speed-time 60), so a slow run fails
+			// on this case's own wait rather than as a transfer the library timed out.
 			try {
-				release.await(90, TimeUnit.SECONDS);
+				release.await(50, TimeUnit.SECONDS);
 			}
 			catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
@@ -384,14 +388,12 @@ public class EntrypointRetrievalWiringTest {
 				out.write(body);
 			}
 		});
-		// One thread per request: the default executor is a single thread, which would hold the
-		// second download behind the first and let this case pass on a start that ran them in turn.
+		// One thread per request, so both downloads are held at once rather than the second queued
+		// behind the first on the default executor's single thread.
 		origin.setExecutor(handlers);
 		origin.start();
-		try {
-			Started start = startTheWholeEntrypoint(
-					manifestServingTheWeightsFrom("http://127.0.0.1:" + origin.getAddress().getPort() + "/"), Map.of());
-
+		try (Started start = startTheWholeEntrypoint(
+				manifestServingTheWeightsFrom("http://127.0.0.1:" + origin.getAddress().getPort() + "/"), Map.of())) {
 			start.awaitTheHandOff();
 			String during = awaitTheWeightsStatus(value -> entries(value).equals(
 					Set.of("fetching:" + E4B, "fetching:" + E2B)), start);
@@ -450,21 +452,25 @@ public class EntrypointRetrievalWiringTest {
 		environment.put("MARIADB_STAND_IN_REFUSE", WEIGHTS_STATUS_GP);
 		environment.put("MARIADB_STAND_IN_REFUSE_WHILE", refusing.toString());
 
-		Started start = startTheWholeEntrypointWithItsEmbedderRefused(environment);
-		start.awaitTheHandOff();
-		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
-		while (writesOf(WEIGHTS_STATUS_GP) == 0 && System.nanoTime() < deadline) {
-			Thread.sleep(100);
-		}
-		assertTrue(writesOf(WEIGHTS_STATUS_GP) > 0, "nothing tried to record the weights' outcome\n" + start.output);
-		assertEquals("", gp(WEIGHTS_STATUS_GP), "the stand-in took a write it was told to refuse, so this case is not"
-				+ " the state it is about\n" + start.output);
-		Files.delete(refusing);
-		Run run = start.finish();
+		try (Started start = startTheWholeEntrypointWithItsEmbedderRefused(environment)) {
+			start.awaitTheHandOff();
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+			while (writesOf(WEIGHTS_STATUS_GP) == 0 && System.nanoTime() < deadline) {
+				Thread.sleep(100);
+			}
+			assertTrue(writesOf(WEIGHTS_STATUS_GP) > 0, "nothing tried to record the weights' outcome\n"
+					+ start.output);
+			assertEquals("", gp(WEIGHTS_STATUS_GP), "the stand-in took a write it was told to refuse, so this case is"
+					+ " not the state it is about\n" + start.output);
+			Files.delete(refusing);
+			Run run = start.finish();
 
-		assertEquals(Set.of("refused:" + E4B + ":4", "refused:" + E2B + ":4"), entries(gp(WEIGHTS_STATUS_GP)),
-				"a write the database refused was counted as recorded, and nothing sent it again once the database"
-						+ " would take it\n" + run);
+			assertEquals(0, run.exit, "the start did not survive its own statements\n" + run);
+			assertEquals(Set.of("refused:" + E4B + ":4", "refused:" + E2B + ":4"), entries(gp(WEIGHTS_STATUS_GP)),
+					"a write the database refused was counted as recorded, and nothing sent it again once the"
+							+ " database would take it\n" + run);
+			assertTheStandInUnderstoodEveryStatement(run);
+		}
 	}
 
 	/**
@@ -491,6 +497,8 @@ public class EntrypointRetrievalWiringTest {
 					+ " nothing to publish\n" + run);
 			assertEquals("fetching:" + E4B, gp(WEIGHTS_STATUS_GP), "a start that recorded nothing about its weights"
 					+ " published a verdict on them anyway\n" + run);
+			assertEquals(0, run.exit, "the start did not survive a weights directory it cannot write\n" + run);
+			assertTheStandInUnderstoodEveryStatement(run);
 		}
 		finally {
 			weights.toFile().setWritable(true, false);
@@ -990,12 +998,14 @@ public class EntrypointRetrievalWiringTest {
 	/** The weights' status once it satisfies {@code settled}, or a failure showing what it last was. */
 	private String awaitTheWeightsStatus(Predicate<String> settled, Started start) throws Exception {
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
-		while (!settled.test(gp(WEIGHTS_STATUS_GP)) && System.nanoTime() < deadline) {
+		String read = gp(WEIGHTS_STATUS_GP);
+		while (!settled.test(read) && System.nanoTime() < deadline) {
 			Thread.sleep(100);
+			read = gp(WEIGHTS_STATUS_GP);
 		}
-		assertTrue(settled.test(gp(WEIGHTS_STATUS_GP)), "the weights' status never read as expected; last read '"
-				+ gp(WEIGHTS_STATUS_GP) + "'\n" + start.output);
-		return gp(WEIGHTS_STATUS_GP);
+		assertTrue(settled.test(read), "the weights' status never read as expected; last read '" + read + "'\n"
+				+ start.output);
+		return read;
 	}
 
 	/** A status value's entries, which are space-separated and carry no order. */
@@ -1057,7 +1067,9 @@ public class EntrypointRetrievalWiringTest {
 	 * the seed's own sentinel is seeded besides.
 	 */
 	private Run runTheWholeEntrypointWithItsEmbedderRefused() throws Exception {
-		return startTheWholeEntrypointWithItsEmbedderRefused(Map.of()).finish();
+		try (Started start = startTheWholeEntrypointWithItsEmbedderRefused(Map.of())) {
+			return start.finish();
+		}
 	}
 
 	/**
@@ -1491,11 +1503,12 @@ public class EntrypointRetrievalWiringTest {
 	}
 
 	/**
-	 * A start still running: its shell, and its output as collected so far. The output thread ends
-	 * only when every process holding the stream has closed it, which is what {@link #finish} waits
-	 * for.
+	 * A start still running: its shell, and its output as collected so far. The output ends when the
+	 * shell exits — the JDK closes the pipe then — which the rewritten hand-off's {@code wait} delays
+	 * until what the start backgrounded has finished. Closing it kills whatever is still running, so
+	 * a case that fails part-way leaves no publisher looping behind it.
 	 */
-	private static final class Started {
+	private static final class Started implements AutoCloseable {
 
 		private final Process process;
 
@@ -1506,16 +1519,14 @@ public class EntrypointRetrievalWiringTest {
 		private Started(Process process) {
 			this.process = process;
 			this.reader = new Thread(() -> {
-				// Appended as it arrives rather than at the end, so a case can read what the start's
-				// shell printed while what it backgrounded is still holding the stream open.
-				try (InputStream in = process.getInputStream()) {
-					ByteArrayOutputStream pending = new ByteArrayOutputStream();
-					byte[] chunk = new byte[8192];
+				// Appended as it arrives rather than at the end, so a case can read the hand-off while
+				// what the start backgrounded is still running. Decoded by a Reader, which carries a
+				// character split across two reads.
+				try (Reader in = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+					char[] chunk = new char[8192];
 					int read;
 					while ((read = in.read(chunk)) != -1) {
-						pending.write(chunk, 0, read);
-						output.append(new String(pending.toByteArray(), StandardCharsets.UTF_8));
-						pending.reset();
+						output.append(chunk, 0, read);
 					}
 				}
 				catch (IOException e) {
@@ -1545,6 +1556,12 @@ public class EntrypointRetrievalWiringTest {
 					+ " finish\n" + output);
 			reader.join(TimeUnit.SECONDS.toMillis(10));
 			return new Run(process.exitValue(), output.toString());
+		}
+
+		@Override
+		public void close() {
+			process.descendants().forEach(ProcessHandle::destroyForcibly);
+			process.destroyForcibly();
 		}
 	}
 

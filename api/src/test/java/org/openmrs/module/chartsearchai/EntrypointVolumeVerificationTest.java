@@ -19,6 +19,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -131,8 +132,8 @@ public class EntrypointVolumeVerificationTest {
 			// verification came off the volume rather than off a transfer.
 			assertFalse(run.output.contains("Downloading " + call.label), "the file on the volume was re-downloaded"
 					+ " rather than hashed where it lay\n" + run);
-			assertEquals("", weightsState(call.artifact), "a verified artifact left an entry for the weights'"
-					+ " status, which says nothing for one that verified (#467)\n" + run);
+			assertEquals("verified:" + call.artifact, weightsState(call.artifact), "a verified artifact was not"
+					+ " recorded as one for the weights' status, which says nothing for it (#467)\n" + run);
 		}
 	}
 
@@ -172,11 +173,22 @@ public class EntrypointVolumeVerificationTest {
 		return work.resolve("weights-state");
 	}
 
-	/** What a fetch recorded for {@code artifact}, or a failure where it recorded nothing at all. */
+	/**
+	 * What a fetch recorded for {@code artifact} — the NAME of its one file in the state directory,
+	 * which is where the entry lives — or a failure where it recorded none, or more than one.
+	 */
 	private String weightsState(String artifact) throws IOException {
-		Path state = stateDir().resolve(artifact);
-		assertTrue(Files.isRegularFile(state), "nothing was recorded for " + artifact + " at " + state);
-		return new String(Files.readAllBytes(state), StandardCharsets.UTF_8);
+		List<String> recorded = new ArrayList<String>();
+		try (DirectoryStream<Path> entries = Files.newDirectoryStream(stateDir())) {
+			for (Path entry : entries) {
+				String name = entry.getFileName().toString();
+				if (name.endsWith(":" + artifact) || name.contains(":" + artifact + ":")) {
+					recorded.add(name);
+				}
+			}
+		}
+		assertEquals(1, recorded.size(), "not exactly one state was recorded for " + artifact + ": " + recorded);
+		return recorded.get(0);
 	}
 
 	// ---- driving the entrypoint's own weights fetch ---------------------------------------------

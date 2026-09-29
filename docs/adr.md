@@ -9318,7 +9318,8 @@ it verified. It is a property of its own so it cannot be read as the embedder's,
 path. The maintainer's decision on the issue has the fetch subshell write the row. What ships is one
 step removed, and the reason is where that subshell is forked: above `seed_sql` and the connection it
 needs, and above `maybe_seed_demo_data`, whose drop and snapshot restore would wipe or roll back
-anything written while it runs. So each subshell records its own state in a file and ONE writer,
+anything written while it runs. So each subshell records its own state as the name of a file — a rename, which needs no data
+blocks where written contents do — and ONE writer,
 `publish_weights_status`, puts it in the database. That writer is started below the seed, and it
 sends a write again until one lands — giving up, and saying so, after 900 refusals with no fetch
 running — because a virgin database has no `global_property` table until
@@ -9329,7 +9330,8 @@ both fetches below the seed and update the row with one atomic statement per ent
 it records an outcome leaves `fetching:` standing; the publisher does not look for that
 shape. → `EntrypointRetrievalWiringTest.aWeightsFetchStillRunningReadsAsFetchingUntilItsOutcomeReplacesIt`,
 `.aWeightsFetchThatCannotResolveIsRecordedWithItsArtifactAndCode`,
-`.theWeightsOutcomeIsRecordedOnceTheDatabaseTakesItRatherThanWhenItWasFirstSent`;
+`.theWeightsOutcomeIsRecordedOnceTheDatabaseTakesItRatherThanWhenItWasFirstSent`,
+`.aStartThatCouldNotRecordItsWeightsFetchesPublishesNoVerdictOnThem`;
 `ModelDownloadPinningGuardTest.theWeightsStatusIsPublishedOnlyByOneWriterStartedAfterTheDemoSeed`.
 
 **And on those same two branches the container log's LAST line said the opposite, which review round

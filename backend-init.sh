@@ -150,7 +150,7 @@ _download_llm_file() {
   _target=$2
   _label=$3
   if fetch_and_verify "$_id" "$_target" "$_label"; then
-    record_weights_state "$_id" ''
+    record_weights_state "$_id" "verified:$_id"
     echo "$_label ready: $_target"
   else
     # $? is the condition's status here. Which message is honest depends on it, and the library's
@@ -209,9 +209,11 @@ fetch_llm_in_background() {
   _download_llm_file "$artifact_id" "$target" "$label" &
 }
 
-# What each weights fetch came to, for chartsearchai.models.weightsStatus (#467): one file per
-# artifact under WEIGHTS_STATE_DIR, holding `fetching:<id>`, `refused:<id>:<code>`, or nothing once
-# it verified. The fetches only RECORD here; publish_weights_status, started below the demo seed, is
+# What each weights fetch came to, for chartsearchai.models.weightsStatus (#467): one empty file per
+# artifact under WEIGHTS_STATE_DIR, whose NAME is its entry — `fetching:<id>`, `refused:<id>:<code>`
+# or `verified:<id>`. The name rather than the contents, because the likeliest way a ~5GB fetch fails
+# is a full volume, and writing even a few bytes of contents there fails with it, leaving the entry
+# at `fetching:` for good; a rename needs no data blocks. The fetches only RECORD here; publish_weights_status, started below the demo seed, is
 # what puts it in the database. A subshell forked this early cannot do that itself: seed_sql and the
 # connection it needs are not defined until further down, and maybe_seed_demo_data then drops every
 # table and restores a snapshot of the chartsearchai properties taken before the drop — so a row
@@ -221,11 +223,17 @@ WEIGHTS_STATE_DIR="$LLM_DIR/.weights-status"
 rm -rf "$WEIGHTS_STATE_DIR"
 mkdir -p "$WEIGHTS_STATE_DIR"
 
-# record_weights_state <id> <entry> — written aside and renamed into place, so the publisher never
-# reads half an entry. An empty entry is what a verified artifact records.
+# record_weights_state <id> <entry> — renames the artifact's file to <entry>, which the publisher
+# sees as one name or the other and never as half of either; creates it where there is none yet.
 record_weights_state() {
-  printf '%s' "$2" > "$WEIGHTS_STATE_DIR/$1.tmp" && mv -f "$WEIGHTS_STATE_DIR/$1.tmp" "$WEIGHTS_STATE_DIR/$1" \
-    || echo "could not record the state of $1 for chartsearchai.models.weightsStatus." >&2
+  for _rws_file in "$WEIGHTS_STATE_DIR"/*":$1" "$WEIGHTS_STATE_DIR"/*":$1:"*; do
+    [ -e "$_rws_file" ] || continue
+    mv -f "$_rws_file" "$WEIGHTS_STATE_DIR/$2" && return 0
+    rm -f "$_rws_file"
+  done
+  : > "$WEIGHTS_STATE_DIR/$2" && return 0
+  echo "could not record $2 for chartsearchai.models.weightsStatus." >&2
+  return 1
 }
 
 # E4B is the default served model (config.xml defaults
@@ -914,24 +922,27 @@ publish_weights_status() {
   while :; do
     _ws_value='' _ws_running=no _ws_artifacts=0
     for _ws_file in "$WEIGHTS_STATE_DIR"/*; do
-      case $_ws_file in *.tmp) continue ;; esac
-      [ -f "$_ws_file" ] || continue
+      [ -e "$_ws_file" ] || continue
       _ws_artifacts=$((_ws_artifacts + 1))
-      _ws_entry=$(cat "$_ws_file") || continue
-      case $_ws_entry in fetching:*) _ws_running=yes ;; esac
-      if [ -n "$_ws_entry" ]; then
-        _ws_value="${_ws_value:+$_ws_value }$_ws_entry"
-      fi
+      _ws_entry=${_ws_file##*/}
+      case $_ws_entry in
+        verified:*) continue ;;
+        fetching:*) _ws_running=yes ;;
+      esac
+      _ws_value="${_ws_value:+$_ws_value }$_ws_entry"
     done
     # Every fetch records itself before it is forked, so an empty directory is a recording that
-    # failed, and publishing it would read as every artifact having verified.
+    # failed, and publishing it would read as every artifact having verified. A directory missing
+    # only SOME artifacts is not caught here, and publishes as if those had verified.
     if [ "$_ws_artifacts" -eq 0 ]; then
       echo "[weights-status] no weights fetch recorded its state, so chartsearchai.models.weightsStatus is not written." >&2
       return 1
     fi
     if [ "$_ws_landed" = no ] || [ "$_ws_value" != "$_ws_landed_value" ]; then
       _ws_sql=$(printf %s "$_ws_value" | sed "s/'/''/g")
-      if seed_sql "$DB_NAME" -e "INSERT INTO global_property (property,property_value,uuid) VALUES ('chartsearchai.models.weightsStatus','$_ws_sql',UUID()) ON DUPLICATE KEY UPDATE property_value='$_ws_sql';" >/dev/null 2>&1; then
+      # A connect timeout of its own, so a database address that black-holes costs each attempt
+      # seconds rather than the OS's TCP timeout, and the bound below stays of the order it says.
+      if seed_sql --connect-timeout=5 "$DB_NAME" -e "INSERT INTO global_property (property,property_value,uuid) VALUES ('chartsearchai.models.weightsStatus','$_ws_sql',UUID()) ON DUPLICATE KEY UPDATE property_value='$_ws_sql';" >/dev/null 2>&1; then
         _ws_landed=yes
         _ws_landed_value=$_ws_value
         _ws_idle_misses=0

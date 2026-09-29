@@ -503,7 +503,7 @@ public class ModelDownloadPinningGuardTest {
 			if (seed < 0 && line.startsWith("maybe_seed_demo_data") && !line.contains("()")) {
 				seed = i;
 			}
-			if (line.contains("chartsearchai.models.weightsStatus") && line.contains("global_property")) {
+			if (line.contains("chartsearchai.models.weightsStatus") && writesAGlobalProperty(lines, i)) {
 				writes++;
 				if (!writer.equals(enclosingFunction(lines, i))) {
 					violations.add("line " + (i + 1) + " writes chartsearchai.models.weightsStatus outside " + writer

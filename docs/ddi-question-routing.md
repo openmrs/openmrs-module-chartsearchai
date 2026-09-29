@@ -24,6 +24,8 @@ Companion documents:
   covers the design, and
   [ADR Decision 130](adr.md#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)
   covers why the routing is done by code rather than by a model.
+- [ddi-system-prompt-evaluation.md](ddi-system-prompt-evaluation.md) records why a dedicated DDI
+  system prompt made the answers worse.
 
 ---
 

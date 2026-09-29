@@ -229,13 +229,16 @@ mkdir -p "$WEIGHTS_STATE_DIR"
 # record_weights_state <id> <entry> — renames the artifact's file to <entry>, which is never seen as
 # half of either name; creates it where there is none yet. A scan that races the rename can list
 # the old name, the new one, both or neither; publish_weights_status reads neither as unrecorded.
+# The create is `true >`, never `: >`: a redirection that fails on a special builtin such as `:`
+# exits a non-interactive dash, the image's /bin/sh, so a state directory that could not be made
+# would end the start before OpenMRS does — a failed diagnostic has to be a failed command.
 record_weights_state() {
   for _rws_file in "$WEIGHTS_STATE_DIR"/*":$1" "$WEIGHTS_STATE_DIR"/*":$1:"*; do
     [ -e "$_rws_file" ] || continue
     mv -f "$_rws_file" "$WEIGHTS_STATE_DIR/$2" && return 0
     rm -f "$_rws_file"
   done
-  : > "$WEIGHTS_STATE_DIR/$2" && return 0
+  true > "$WEIGHTS_STATE_DIR/$2" && return 0
   echo "could not record $2 for chartsearchai.models.weightsStatus." >&2
   return 1
 }

@@ -9418,7 +9418,8 @@ that the manifest matches upstream. A wrong digest therefore fails closed but fa
 every deployment and every standalone build, on the first fetch — so the first release build after a
 pin move is the check, and it is the one step of this recipe a maintainer cannot skip.
 
-→ `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
+→ `ModelDownloadIntegrityTest` drives the library with `EntrypointSource.shell()` — dash where it is
+installed, the image's `/bin/sh` — against a loopback HTTP server that
 serves substituted bytes, which is the acceptance both findings state; its ledger cases are where
 "the embedder is verified before its path is published" now lives.
 `ModelDownloadPinningGuardTest` reads the source for what no behaviour of the library can show —

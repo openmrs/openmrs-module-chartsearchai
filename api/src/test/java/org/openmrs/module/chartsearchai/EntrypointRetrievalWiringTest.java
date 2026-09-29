@@ -211,7 +211,7 @@ public class EntrypointRetrievalWiringTest {
 
 	@BeforeEach
 	public void setUp() throws Exception {
-		assumeTrue(Files.isExecutable(Paths.get("/bin/sh")), "POSIX /bin/sh is required to drive the entrypoint");
+		assumeTrue(Files.isExecutable(Paths.get(EntrypointSource.shell())), "a POSIX shell is required to drive the entrypoint");
 		assertEquals(GATED_ARTIFACTS, gatedArtifacts(), "backend-init.sh's require_verified line names other"
 				+ " artifacts than the fixture manifest below carries, so these cases would drive a gate nothing"
 				+ " can satisfy");
@@ -1155,7 +1155,7 @@ public class EntrypointRetrievalWiringTest {
 	 * {@link Started#finish} is the end of all of it.
 	 */
 	private Started startTheWholeEntrypoint(Path manifestFile, Map<String, String> environment) throws Exception {
-		ProcessBuilder builder = new ProcessBuilder("/bin/sh", theWholeEntrypointRewrittenToRunHere().toString());
+		ProcessBuilder builder = new ProcessBuilder(EntrypointSource.shell(), theWholeEntrypointRewrittenToRunHere().toString());
 		builder.environment().put("PATH", stubs + ":" + builder.environment().get("PATH"));
 		builder.environment().put("MODEL_MANIFEST_FILE", manifestFile.toString());
 		builder.environment().put("MARIADB_STAND_IN_STORE", store.toString());
@@ -1332,7 +1332,7 @@ public class EntrypointRetrievalWiringTest {
 		Path driver = work.resolve("drive-" + System.nanoTime() + ".sh");
 		Files.write(driver, (String.join("\n", script) + "\n").getBytes(StandardCharsets.UTF_8));
 
-		ProcessBuilder builder = new ProcessBuilder("/bin/sh", driver.toString());
+		ProcessBuilder builder = new ProcessBuilder(EntrypointSource.shell(), driver.toString());
 		builder.environment().put("MODEL_MANIFEST_FILE", manifest.toString());
 		builder.environment().put("MARIADB_STAND_IN_STORE", store.toString());
 		builder.environment().put("MARIADB_STAND_IN_LOG", statements.toString());

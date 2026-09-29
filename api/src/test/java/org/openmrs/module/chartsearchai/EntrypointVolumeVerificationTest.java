@@ -97,7 +97,7 @@ public class EntrypointVolumeVerificationTest {
 
 	@BeforeEach
 	public void setUp() throws Exception {
-		assumeTrue(Files.isExecutable(Paths.get("/bin/sh")), "POSIX /bin/sh is required to drive the entrypoint");
+		assumeTrue(Files.isExecutable(Paths.get(EntrypointSource.shell())), "a POSIX shell is required to drive the entrypoint");
 		assertEquals(RECORDED_BYTES.length, UNRECORDED_BYTES.length, "the two fixtures differ in LENGTH, so the"
 				+ " size branch would refuse the unrecorded one and these cases would not be about the digest");
 		weightsDir = Files.createDirectories(work.resolve("openmrs/data/chartsearchai"));
@@ -214,7 +214,7 @@ public class EntrypointVolumeVerificationTest {
 		Path driver = work.resolve("drive-" + System.nanoTime() + ".sh");
 		Files.write(driver, (String.join("\n", script) + "\n").getBytes(StandardCharsets.UTF_8));
 
-		ProcessBuilder builder = new ProcessBuilder("/bin/sh", driver.toString());
+		ProcessBuilder builder = new ProcessBuilder(EntrypointSource.shell(), driver.toString());
 		builder.environment().put("MODEL_MANIFEST_FILE", manifest.toString());
 		builder.redirectErrorStream(true);
 		Process process = builder.start();

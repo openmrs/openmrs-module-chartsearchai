@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -20,7 +21,7 @@ import java.util.regex.Pattern;
  * Reads {@code backend-init.sh} for the suites that drive or check it — {@link
  * EntrypointRetrievalWiringTest} and {@link EntrypointVolumeVerificationTest}, which paste its own
  * functions into a harness and run them, and {@link ModelDownloadPinningGuardTest}, which reads its
- * source.
+ * source — and names the shell those harnesses and {@link ModelDownloadIntegrityTest} run under.
  *
  * <p><b>One reader, for the reason {@link ModelManifest} is one.</b> Both of the readings here have
  * a silent failure mode: a harness that pasted half a function would fail in a way that looks like a
@@ -37,6 +38,22 @@ public final class EntrypointSource {
 	public static final String ENTRYPOINT = "backend-init.sh";
 
 	private static final Pattern FUNCTION_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+	/**
+	 * The shell a harness runs the entrypoint, or the library it sources, under: {@code /bin/dash}
+	 * where it is executable, else {@code /bin/sh}.
+	 *
+	 * <p><b>Dash because it is the image's shell.</b> The backend image is built on
+	 * {@code eclipse-temurin}, an Ubuntu base whose {@code /bin/sh} is dash, and the entrypoint's
+	 * {@code #!/bin/sh} runs under it. Where a harness ran {@code /bin/sh} it ran bash on macOS, so a
+	 * construct only dash treats as fatal passed there and failed on CI: a redirection that fails on a
+	 * special builtin such as {@code :} exits a non-interactive dash (#467, round 3). {@code /bin/sh}
+	 * is the fallback for a host with no dash, which on macOS is bash again, so a green run there does
+	 * not speak for the image.
+	 */
+	public static String shell() {
+		return Files.isExecutable(Paths.get("/bin/dash")) ? "/bin/dash" : "/bin/sh";
+	}
 
 	public static Path path() {
 		return ModuleSourceRoot.repoRoot().resolve(ENTRYPOINT);

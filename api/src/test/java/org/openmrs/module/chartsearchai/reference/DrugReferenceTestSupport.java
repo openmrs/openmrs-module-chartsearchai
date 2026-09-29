@@ -440,6 +440,20 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * {@link #injectedAllergyFindingChart} over a dataset in the module's own JSON schema, parsed by the
+	 * real {@link JsonDrugReferenceSource#parse} — for a case whose premise is a hand-authored
+	 * contraindication rule and its NOTE (issue #560).
+	 *
+	 * @throws IllegalStateException when the arrangement raises no finding at all
+	 */
+	public static PatientChart injectedCuratedAllergyFindingChart(String fixtureResource, String question,
+			List<String> allergies) throws IOException {
+		return injectedOrThrow(curatedFixtureService(fixtureResource), oneRecordChart(),
+				ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null), question,
+				"allergies " + allergies);
+	}
+
+	/**
 	 * The whole chart the REAL pipeline produces for a question naming a drug CLASS the reference
 	 * data resolves no substance for (issue #354) — the DDInter excerpt and the shipped
 	 * cross-reactivity groups behind the real injector, so the {@code drug_class_note} mapping in it
@@ -561,6 +575,38 @@ public final class DrugReferenceTestSupport {
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		return injectedOrThrow(service, base, ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders),
 				question, "drugs " + activeDrugs);
+	}
+
+	/**
+	 * {@link #injectedFindingsOverWithRecordedAllergies(PatientChart, String, Set, Set, Set)} over
+	 * {@code service} rather than the excerpt — for a case whose premise is a finding the SHIPPED
+	 * knowledge base raises for a patient with recorded allergies (issue #560: her prednisone order
+	 * against her dexamethasone allergy, a cross-reactivity finding that carries no rating).
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding
+	 */
+	public static PatientChart injectedFindingsOverWithRecordedAllergies(DrugReferenceService service,
+			PatientChart base, String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			Set<String> allergies) {
+		return injectedOrThrow(service, base,
+				ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, null), question,
+				"drugs " + activeDrugs + " and allergies " + allergies);
+	}
+
+	/**
+	 * The chart the real injector produces over {@code service} for a patient on one structured active
+	 * order per display ({@link #rawContextNaming}'s orders) who also has recorded {@code allergies} —
+	 * for a case needing an arm that reads the orders' structure (the condition-mediated tier) and an
+	 * allergy finding in one chart (issue #560).
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding
+	 */
+	public static PatientChart injectedFindingsOverOrdersWithRecordedAllergies(DrugReferenceService service,
+			PatientChart base, String question, Set<String> allergies, String... orderDisplays) {
+		PatientClinicalContext naming = rawContextNaming(60, null, orderDisplays);
+		return injectedOrThrow(service, base, ctx(60, null, naming.getActiveDrugNames(), null, allergies, null,
+				naming.getActiveDrugOrders()), question, "orders " + naming.getActiveDrugNames() + " and allergies "
+				+ allergies);
 	}
 
 	/**
@@ -1837,7 +1883,7 @@ public final class DrugReferenceTestSupport {
 						+ "using this record is about a record that names it: " + text);
 		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
 				order.getUuid() + "-" + index, null, text, null, 0, orderActive, stopDate, null, null, null,
-				null, null, null, null, null, null, null);
+				null, null, null, null, null, null, null, null);
 	}
 
 	/**

@@ -681,7 +681,7 @@ public class DrugReferenceInjector {
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
 					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null, null,
-					null, null, Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
+					null, null, null, Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -710,7 +710,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -761,11 +761,14 @@ public class DrugReferenceInjector {
 			// And, since issue #515, whether the clause this record ends in withholds, and the rows of the
 			// substance it is about — both off the finding in hand, the one place either is written. And,
 			// since issue #555, the rows each order it names was resolved to, in the order it names them;
-			// and since issue #553 when each partner it names that has not started starts.
+			// and since issue #553 when each partner it names that has not started starts. And, since issue
+			// #560, whether it carries no rating of its own — which its record says, in FINDING_NO_SEVERITY
+			// or a condition-mediated detail's own last clause.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
-					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
+					withholds(strengthClause(finding)), Boolean.valueOf(carriesNoRating(finding)),
+					rowIds(finding.subjectRows()),
 					finding.namedPartners(), SafetyWarning.orderNamesOf(finding), partnerRowIds(finding),
 					finding.partnerScheduledStarts(),
 					chartRecordNumbers(finding, findingRecords)));
@@ -2435,11 +2438,23 @@ public class DrugReferenceInjector {
 	 * its own — every contraindication, a class-only relationship, an authored unrated rule, the
 	 * several-orders finding, the finding that her orders share a substance. Not a FOLDED chip, whose
 	 * severity is its rule's. Not a condition-mediated finding, whose detail already ends by saying it has
-	 * no severity of its own ({@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}).
+	 * no severity of its own ({@code DrugSafetyValidator.CONDITION_MEDIATED_PROVENANCE}) and which names
+	 * each partner WITH its rating.
 	 */
 	private static boolean statesNoSeverity(SafetyWarning finding) {
-		return finding.getSeverity() == null
-				&& !SafetyWarning.TYPE_CONDITION_MEDIATED.equals(finding.getType());
+		return carriesNoRating(finding) && !SafetyWarning.TYPE_CONDITION_MEDIATED.equals(finding.getType());
+	}
+
+	/**
+	 * Whether {@code finding} carries no rating of its own — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, the writer of
+	 * {@code RecordMapping.getFindingUnrated()}. Every such record says so: {@link #statesNoSeverity}
+	 * appends {@link #FINDING_NO_SEVERITY}, and a condition-mediated finding's detail already ends by saying
+	 * it has no severity of its own. A FOLDED chip's severity is its rule's, so it carries the rule's rating
+	 * and none where the rule is unrated.
+	 */
+	private static boolean carriesNoRating(SafetyWarning finding) {
+		return finding.getSeverity() == null;
 	}
 
 	/**

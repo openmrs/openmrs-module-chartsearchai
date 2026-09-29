@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #560 — not shipped data",
+  "description": "An operator dataset whose self-named allergy rule carries a note stating a rating word ('major'). The contraindication it raises carries no rating of its own, so its record states 'No severity is rated for this finding.', and the note's own words are in that record too. An answer reproducing the note has attached no rating the finding lacks, so unfoundedFindingSeverities must not report it. No entry carries ATC codes, so no class comparison can chip.",
+  "entries": [
+    {
+      "id": "carbamazepine",
+      "name": "Carbamazepine",
+      "aliases": ["carbamazepine"],
+      "contraindications": [
+        { "type": "allergy", "token": "carbamazepine", "note": "risk of a major hypersensitivity reaction" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

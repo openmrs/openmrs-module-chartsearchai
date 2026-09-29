@@ -113,6 +113,9 @@ import org.springframework.stereotype.Service;
  * answer is published as {@code unfaithfullyRenderedCitations}; and
  * {@link SafetyFindingSeverityFidelityCheck} for a cited safety finding whose RATING the answer
  * states nowhere (the same issue, round three), published as {@code unstatedFindingSeverities}; and
+ * {@link UnfoundedFindingSeverityCheck} for its inverse, a rating the answer attaches, in the sentence
+ * citing it, to a safety finding that carries none (issue #560), published as
+ * {@code unfoundedFindingSeverities}; and
  * {@link DosingCeilingFidelityCheck} for an answer that quoted one of a cited record's dosing
  * ceilings while leaving a STRICTER one from that same record unstated (issue #276), published as
  * {@code unstatedDosingCeilings}; and {@link InteractionClaimPairFidelityCheck} for a cited safety

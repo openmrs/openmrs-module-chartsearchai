@@ -1958,6 +1958,20 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * {@code UnfoundedFindingSeverityCheck} decides which findings a SENTENCE cites by asking the same
+	 * reading, of that sentence — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>. Its
+	 * behavioural cases hold what the reading RETURNS; this holds that the check does not decode the
+	 * sentence's markers itself, which would re-derive the #305 filter and the resolution's admission.
+	 */
+	@Test
+	public void theUnfoundedFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck() throws IOException {
+		assertTakesItsCitedReadingFromTheExtentCheck("UnfoundedFindingSeverityCheck.java", true,
+				"this key reads a sentence's markers its own way and can accuse a finding the answer "
+						+ "never cited, or one the module attached.");
+	}
+
+	/**
 	 * {@code FindingPartnerCoverageCheck} decides which findings' orders ADR Decision 100 appends, and
 	 * which findings {@code findingPartners} counts, by asking
 	 * {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} — issue

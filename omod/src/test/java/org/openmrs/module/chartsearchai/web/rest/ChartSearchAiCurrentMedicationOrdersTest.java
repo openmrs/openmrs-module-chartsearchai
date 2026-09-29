@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,8 +45,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Advil order, so README told a client to resolve {@code drug} against her orders itself. That the real
  * validator stamps every order the chip covers is {@code CurrentMedicationOrdersTest} and
  * {@code AllergyQuestionConflictingOrderContextTest} in the api module; this class is the half they cannot
- * see — that the controller publishes it, as two fields, on the blocking {@code /search} response and the
- * SSE {@code done} event, and to an XML client too; {@code /chartalerts} is
+ * see — that the controller publishes it on the blocking {@code /search} response and the SSE {@code done}
+ * event, as two fields in JSON, and in the XML shape README states; {@code /chartalerts} is
  * {@code ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid}.
  */
 public class ChartSearchAiCurrentMedicationOrdersTest {
@@ -150,6 +151,22 @@ public class ChartSearchAiCurrentMedicationOrdersTest {
 
 		orders = new PatientClinicalContext.ActiveDrugOrder[0];
 		XmlPayloads.assertMarshals(searchPayload(), "a chip with no stamped order");
+	}
+
+	@Test
+	public void anXmlClientReceivesEachOrderUnderTheClassNamedElementAndNoUuidElementWhereItIsUnknown()
+			throws Exception {
+		// README's XML contract for the key: an element named after the module's class, as for
+		// chartOrderBridges, and — where the order's uuid is unknown — no orderUuid element at all.
+		orders = new PatientClinicalContext.ActiveDrugOrder[] {
+				SafetyWarningFixtures.activeOrder(null, "Nurofen 200mg") };
+
+		String xml = XmlPayloads.marshal(searchPayload(), "a chip naming an order with no uuid");
+
+		assertTrue(xml.contains("<org.openmrs.module.chartsearchai.reference.SafetyWarning_-CurrentMedicationOrder>"),
+				"was: " + xml);
+		assertTrue(xml.contains("<orderDisplay>Nurofen 200mg</orderDisplay>"), "was: " + xml);
+		assertFalse(xml.contains("orderUuid"), "was: " + xml);
 	}
 
 	/** Jackson reads the entry class's GETTERS and XStream its FIELDS, so every field needs a public getter of

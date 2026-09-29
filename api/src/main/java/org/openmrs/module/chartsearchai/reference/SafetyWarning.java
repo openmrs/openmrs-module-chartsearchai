@@ -1219,7 +1219,8 @@ public class SafetyWarning {
 	 * This warning, carrying {@code orders} as this patient's own active orders a CONTRAINDICATION about a
 	 * medication she already takes is about — see {@link #currentMedicationOrders()} — and {@code displays}
 	 * as the ones of those a sentence may print — see {@link #currentOrderDisplays()}. Package-private:
-	 * written only by {@code DrugSafetyValidator.ContraindicationChips}, off the orders
+	 * written only by {@code DrugSafetyValidator.currentMedicationOrdersOn}, which production reaches from
+	 * {@code DrugSafetyValidator.ContraindicationChips} alone, off the orders
 	 * {@code addActiveOrderContraindications} resolved the chip's substance from. Changes nothing this
 	 * warning prints.
 	 */

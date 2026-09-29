@@ -69,6 +69,8 @@ public class ChartSearchAiChartAlertsTest {
 
 	private static final String BUPIVACAINE_ORDER = "Marcaine 0.5% injection";
 
+	private static final String BUPIVACAINE_ORDER_UUID = "uuid-marcaine";
+
 	/**
 	 * The standing findings a client receives. Drawn from issue #280's own reproduction — patient
 	 * {@code a7090f70}, an active Lidocaine order and a recorded Lidocaine allergy — plus the
@@ -90,7 +92,7 @@ public class ChartSearchAiChartAlertsTest {
 				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.recordedAllergenContraindication(
 						"Bupivacaine", "Bupivacaine is in the same cross-reactivity group (amide local anaesthetics) as "
 								+ "the patient's allergy to Lidocaine — possible cross-reactivity", true),
-						SafetyWarningFixtures.activeOrder("uuid-marcaine", BUPIVACAINE_ORDER)));
+						SafetyWarningFixtures.activeOrder(BUPIVACAINE_ORDER_UUID, BUPIVACAINE_ORDER)));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -203,12 +205,15 @@ public class ChartSearchAiChartAlertsTest {
 	@Test
 	@SuppressWarnings("unchecked")
 	public void aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid() {
-		Map<String, Object> alert = alertsOf(okBody(RestControllerContext.PATIENT_UUID)).get(0);
+		List<Map<String, Object>> alerts = alertsOf(okBody(RestControllerContext.PATIENT_UUID));
 
-		List<SafetyWarning.CurrentMedicationOrder> named =
-				(List<SafetyWarning.CurrentMedicationOrder>) alert.get("currentMedicationOrders");
+		assertEquals(2, alerts.size(), "precondition: both fixture alerts, was: " + alerts);
 		assertEquals(Arrays.asList(new SafetyWarning.CurrentMedicationOrder(LIDOCAINE_ORDER, LIDOCAINE_ORDER_UUID)),
-				named, "was: " + alert);
+				(List<SafetyWarning.CurrentMedicationOrder>) alerts.get(0).get("currentMedicationOrders"),
+				"was: " + alerts.get(0));
+		assertEquals(Arrays.asList(new SafetyWarning.CurrentMedicationOrder(BUPIVACAINE_ORDER, BUPIVACAINE_ORDER_UUID)),
+				(List<SafetyWarning.CurrentMedicationOrder>) alerts.get(1).get("currentMedicationOrders"),
+				"was: " + alerts.get(1));
 	}
 
 	@Test

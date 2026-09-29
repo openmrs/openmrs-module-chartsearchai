@@ -22,8 +22,9 @@ import javax.xml.transform.stream.StreamResult;
 import org.springframework.oxm.xstream.XStreamMarshaller;
 
 /**
- * Whether a {@code /search} payload survives the converter an XML client gets — the one shared
- * assertion for it.
+ * What an XML client receives of a {@code /search} payload — whether it survives the converter an XML
+ * client gets, the one shared assertion for that, and the XML it marshals to — plus the field/getter
+ * guard for a value class that reaches that client, which is the same client's question.
  *
  * <p><b>The measurement lives at {@code ChartSearchAiRestController.serializeSafetyWarnings}</b>,
  * beside the publish site a maintainer would be editing when they need it. In outline:
@@ -52,10 +53,19 @@ final class XmlPayloads {
 	 *            only that some request would 500
 	 */
 	static void assertMarshals(Map<String, Object> payload, String what) throws Exception {
+		marshal(payload, what);
+	}
+
+	/**
+	 * @return {@code payload} as the XML an XML client receives, failing as {@link #assertMarshals} does
+	 *         where it does not marshal
+	 */
+	static String marshal(Map<String, Object> payload, String what) throws Exception {
 		XStreamMarshaller marshaller = new XStreamMarshaller();
 		marshaller.afterPropertiesSet();
+		StringWriter xml = new StringWriter();
 		try {
-			marshaller.marshal(payload, new StreamResult(new StringWriter()));
+			marshaller.marshal(payload, new StreamResult(xml));
 		}
 		catch (Exception e) {
 			throw new AssertionError("the /search payload must marshal to XML for " + what
@@ -63,6 +73,7 @@ final class XmlPayloads {
 					+ "Accept: application/xml, and it cannot marshal Collections' immutable wrappers "
 					+ "(issue #347). Publish a copy, not the accessor's list. Cause: " + e, e);
 		}
+		return xml.toString();
 	}
 
 	/**

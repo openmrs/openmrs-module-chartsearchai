@@ -9391,10 +9391,10 @@ public class DrugSafetyValidator {
 		List<SafetyWarning.CurrentMedicationOrder> published = new ArrayList<SafetyWarning.CurrentMedicationOrder>();
 		Set<String> displays = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
-			published.add(new SafetyWarning.CurrentMedicationOrder(
-					order.getDisplay() == null ? null : order.getDisplay().trim(), order.getUuid()));
+			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
+			published.add(new SafetyWarning.CurrentMedicationOrder(display, order.getUuid()));
 			if (displayNamesADrug(order)) {
-				displays.add(order.getDisplay().trim());
+				displays.add(display);
 			}
 		}
 		return chip.withCurrentMedicationOrders(published, displays);

@@ -12131,9 +12131,9 @@ listing `{ orderDisplay, orderUuid }` for EVERY active order any row of the chip
   its uuid, so the `displayNamesADrug` filter Decision 124 applies stays on the SENTENCE projection
   (`SafetyWarning.currentOrderDisplays()`) and off the wire: a codes-only order is listed under its
   stand-in display, because labelling an order that has no other name is what the display is for
-  (`ActiveDrugOrder.hasKnownName()`), while a sentence must not print it as a name. De-duplication moved
-  from the display to the order, so two prescriptions under one display are two entries on the wire and
-  one name in the sentence.
+  (`ActiveDrugOrder.hasKnownName()`), while a sentence must not print it as a name. The wire list is not
+  de-duplicated and the sentence projection still is, by display, so two prescriptions under one display
+  are two entries on the wire and one name in the sentence.
 - **`/chartalerts` carries it** through the shared serializer, and README's "resolve it from the `drug`
   field" sentence is replaced by a pointer to it.
 
@@ -12153,8 +12153,9 @@ listing `{ orderDisplay, orderUuid }` for EVERY active order any row of the chip
 - The key-writing rule has no instruction bullet: the drug-safety instruction file had no size budget
   left, so it lives in the accessor's javadoc and here.
 
-Pinned by `CurrentMedicationOrdersTest` (every order, shared displays, a codes-only order, a proposal's
-`[]`, and the statement's text unchanged), `AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
+Pinned by `CurrentMedicationOrdersTest` (every order, shared displays, a codes-only order, a second
+substance's own list, a proposal's `[]`, the drug-in-play residue's `[]`, and the statement's text
+unchanged), `AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
 (the real `OrderService` order under a brand display), and on the wire by
 `ChartSearchAiCurrentMedicationOrdersTest`, `ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid`
 and `ChartSearchAiSafetyWarningSeverityWireTest`'s chip 15.

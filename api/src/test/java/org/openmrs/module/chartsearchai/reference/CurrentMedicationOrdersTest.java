@@ -57,6 +57,11 @@ public class CurrentMedicationOrdersTest {
 	private static final PatientClinicalContext.ActiveDrugOrder METFORMIN =
 			DrugReferenceTestSupport.activeOrder("uuid-metformin", "Metformin 500mg", "metformin");
 
+	/** An order of a second substance her records also contraindicate, whose chip must list it and none of
+	 *  her ibuprofen orders. */
+	private static final PatientClinicalContext.ActiveDrugOrder AMOXIL =
+			DrugReferenceTestSupport.activeOrder("uuid-amoxil", "Amoxil 500mg", "amoxil");
+
 	private static DrugSafetyValidator curatedValidator() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
@@ -81,14 +86,25 @@ public class CurrentMedicationOrdersTest {
 
 	@Test
 	public void aChipAboutHerOwnPrescriptionNamesEveryOrderItCoversWithItsUuid() {
-		List<SafetyWarning> alerts = standingAlerts(fourIbuprofenOrdersAndAnAllergy());
+		List<SafetyWarning> alerts = standingAlerts(DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("advil 400mg", "nurofen 200mg", "metformin 500mg", "amoxil 500mg"),
+				DrugReferenceTestSupport.set("M01AE01"), DrugReferenceTestSupport.set("ibuprofen", "amoxicillin"),
+				null, Arrays.asList(ADVIL, METFORMIN, NUROFEN_MORNING, AMOXIL, CODED_ONLY, NUROFEN_EVENING)));
 
-		assertFalse(alerts.isEmpty(), "precondition: her ibuprofen allergy raises a standing alert");
+		int amoxicillin = 0;
+		int ibuprofen = 0;
 		for (SafetyWarning alert : alerts) {
+			assertTrue(alert.isAboutACurrentMedication(), "precondition: raised from her own orders: " + alert);
+			if ("Amoxicillin".equals(alert.getDrug())) {
+				amoxicillin++;
+				assertEquals(Collections.singletonList(order(AMOXIL)), alert.currentMedicationOrders(),
+						"a chip lists the orders of its own substance only: " + alert);
+				continue;
+			}
+			ibuprofen++;
 			assertEquals("Ibuprofen", alert.getDrug(),
 					"precondition: the chip names the substance, which none of her orders' displays spells: "
 							+ alert);
-			assertTrue(alert.isAboutACurrentMedication(), "precondition: raised from her own orders: " + alert);
 			assertEquals(Arrays.asList(order(ADVIL), order(NUROFEN_MORNING), order(CODED_ONLY),
 					order(NUROFEN_EVENING)), alert.currentMedicationOrders(),
 					"every one of her orders the chip is about, in her chart's order, each by its display and "
@@ -96,13 +112,16 @@ public class CurrentMedicationOrdersTest {
 							+ "its code is listed by the uuid a client can link on, and her metformin is not "
 							+ "listed: " + alert);
 		}
+		assertTrue(ibuprofen > 0 && amoxicillin > 0,
+				"precondition: both of her allergies raise a standing alert, were: " + alerts);
 	}
 
 	@Test
 	public void aChipAboutADrugTheQuestionProposesNamesNoOrder() {
-		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null, null, null,
-				DrugReferenceTestSupport.set("ibuprofen"), null,
-				Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList());
+		// She has an order, of another substance, so an empty list is the arm's answer and not the chart's.
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("metformin 500mg"), null, DrugReferenceTestSupport.set("ibuprofen"),
+				null, Collections.singletonList(METFORMIN));
 
 		List<SafetyWarning> chips = DrugReferenceTestSupport.contraindications(
 				curatedValidator().validate("", "Can I give her ibuprofen?", chart));
@@ -112,6 +131,30 @@ public class CurrentMedicationOrdersTest {
 			assertFalse(chip.isAboutACurrentMedication(), "precondition: a proposal, not her medication: " + chip);
 			assertEquals(Collections.emptyList(), chip.currentMedicationOrders(),
 					"a chip no order of hers is behind names none: " + chip);
+		}
+	}
+
+	/**
+	 * The residue {@link SafetyWarning#currentMedicationOrders()} names: a drug the question puts in play that
+	 * her own orders establish she takes is a finding about her medication (issue #402), and it is the
+	 * drug-in-play arm's, which stamps no order — so its chip says {@code aboutACurrentMedication} and lists
+	 * nothing. Pinned so the javadoc's, README's and ADR Decision 125's statement of it is read off a run.
+	 */
+	@Test
+	public void aDrugInPlayChipAboutHerOwnOrderListsNoOrder() {
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("advil 400mg"), null, DrugReferenceTestSupport.set("ibuprofen"), null,
+				Collections.singletonList(ADVIL));
+
+		List<SafetyWarning> chips = DrugReferenceTestSupport.contraindications(
+				curatedValidator().validate("", "Can I give her ibuprofen?", chart));
+
+		assertFalse(chips.isEmpty(), "precondition: her allergy raises a chip about the drug the question names");
+		for (SafetyWarning chip : chips) {
+			assertTrue(chip.isAboutACurrentMedication(),
+					"precondition: her Advil order establishes she takes ibuprofen (#402): " + chip);
+			assertEquals(Collections.emptyList(), chip.currentMedicationOrders(),
+					"the drug-in-play arm stamps no order, which is the documented residue: " + chip);
 		}
 	}
 

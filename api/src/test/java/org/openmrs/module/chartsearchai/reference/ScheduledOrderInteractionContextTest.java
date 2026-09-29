@@ -295,4 +295,74 @@ public class ScheduledOrderInteractionContextTest extends BaseModuleContextSensi
 		assertTrue(scheduled && active, "precondition: the mechanism is stated about both orders, chips were: "
 				+ DrugReferenceTestSupport.details(chips));
 	}
+
+	@Test
+	public void aContraindicationAboutHerScheduledOrderSaysItHasNotStartedWithItsDate() {
+		// Review round 1 of PR #559: the active-order contraindication arm keeps the current-medication
+		// referent (ADR Decision 125), so the chip itself must say the order has not started — and so must
+		// the drug-in-play arm's, on a question listing the drug as one she is on.
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
+		for (String question : new String[] { "Are there any drug interactions among her current medications?",
+				"Her current medications are nevirapine and rifampicin. Any interactions?" }) {
+			List<SafetyWarning> chips = chips(question);
+			SafetyWarning chip = null;
+			for (SafetyWarning candidate : chips) {
+				if (SafetyWarning.TYPE_CONTRAINDICATION.equals(candidate.getType())
+						&& namesRifampicin(candidate.getDrug())) {
+					assertTrue(chip == null, "precondition: one contraindication about Rifampicin, were: "
+							+ DrugReferenceTestSupport.details(chips));
+					chip = candidate;
+				}
+			}
+			assertTrue(chip != null, question + " — precondition: a contraindication about Rifampicin, chips were: "
+					+ DrugReferenceTestSupport.details(chips));
+			assertTrue(chip.isAboutACurrentMedication(), question + " — the referent stays her medication's: "
+					+ chip.getDetail());
+			assertTrue(chip.getDetail().endsWith(" Her order for Rifampicin (rifampin) has not started: it is "
+					+ STARTS + "."), question + " — the chip says the order has not started, with its date: "
+					+ chip.getDetail());
+		}
+	}
+
+	@Test
+	public void aQuestionListingHerScheduledDrugAsCurrentKeepsItsReferentAndStatesItsDate() {
+		// Review round 1 of PR #559: a question that LISTS the drug proposes nothing about it, so the
+		// withholding clause would be ADR Decision 72's defect. The ticket's third row, and a listing
+		// question that proposes another drug.
+		for (String question : new String[] { "Her current medications are nevirapine and rifampicin. Any interactions?",
+				"She is on nevirapine and rifampicin. Can I give her amlodipine?" }) {
+			List<SafetyWarning> chips = chips(question);
+			SafetyWarning chip = null;
+			for (SafetyWarning candidate : chips) {
+				if (namesRifampicin(candidate.getDrug()) && candidate.getDetail().contains("Nevirapine")) {
+					assertTrue(chip == null, "precondition: one chip about Rifampicin naming Nevirapine, were: "
+							+ DrugReferenceTestSupport.details(chips));
+					chip = candidate;
+				}
+			}
+			assertTrue(chip != null, question + " — precondition: a chip about Rifampicin naming Nevirapine, chips were: "
+					+ DrugReferenceTestSupport.details(chips));
+			assertTrue(chip.isAboutACurrentMedication(), question + " — a listed drug is not a proposal: "
+					+ chip.getDetail());
+			assertTrue(chip.getDetail().startsWith("Rifampicin (rifampin), " + STARTS
+					+ ", interacts with active order Nevirapine"), question
+					+ " — the subject is named as scheduled, with its date: " + chip.getDetail());
+		}
+	}
+
+	@Test
+	public void aListingQuestionProposingHerScheduledDrugStatesTheProposal() {
+		// The other value of the listing exemption: the drug the question PROPOSES keeps the proposal.
+		List<SafetyWarning> chips = chips("She is on nevirapine. Can I give her rifampicin?");
+
+		boolean any = false;
+		for (SafetyWarning chip : chips) {
+			if (namesRifampicin(chip.getDrug())) {
+				any = true;
+				assertFalse(chip.isAboutACurrentMedication(),
+						"the question proposes her not-started Rifampicin: " + chip.getDetail());
+			}
+		}
+		assertTrue(any, "precondition: a finding about Rifampicin, chips were: " + DrugReferenceTestSupport.details(chips));
+	}
 }

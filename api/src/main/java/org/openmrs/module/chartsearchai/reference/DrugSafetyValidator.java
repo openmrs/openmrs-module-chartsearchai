@@ -1029,6 +1029,12 @@ public class DrugSafetyValidator {
 			// here and EndedOrders states its own referent on the chip (issue #472).
 			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
 			if (warnContra) {
+				// Her medication, but held only as orders that have not started (issue #553): the chip says so.
+				List<DrugReference> herRows = resolvedRows.get(ref.substanceGroupKey());
+				if (herOrder && herRows != null) {
+					contraindications.recordScheduledStart(ref.substanceGroupKey(),
+							scheduledStartOf(herRows, context.getActiveDrugOrders(), bridgedOrders));
+				}
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
 				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier,
@@ -2694,6 +2700,7 @@ public class DrugSafetyValidator {
 		Set<Object> asked = new HashSet<Object>();
 		Set<Object> current = new HashSet<Object>();
 		Set<Object> listed = null;
+		Set<Object> proposed = null;
 		for (DrugReference ref : inPlay) {
 			Object substance = ref.substanceGroupKey();
 			// A substance her orders do not resolve is not hers, and asking the costlier questions below of
@@ -2710,11 +2717,18 @@ public class DrugSafetyValidator {
 			List<PatientClinicalContext.ActiveDrugOrder> carriers = ordersEstablishing(substance, rows, context,
 				orderEntries, bridgedOrders, coMedications);
 			// Orders that establish it but none of which has STARTED do not make it a medication she is
-			// already taking (issue #553): she holds it as an order scheduled to start, and the question
-			// names it, so a finding about it keeps the proposal referent. The order-driven arms keep theirs,
-			// having no proposal to refuse (ADR Decision 125).
+			// already taking (issue #553): where the question PROPOSES it, a finding about it keeps the
+			// proposal referent, which is true of a drug not yet given. Where it proposes nothing about it —
+			// a question listing it as one she is on — the withholding clause would be ADR Decision 72's
+			// defect, so it keeps the current-medication referent, as the order-driven arms do, and the
+			// chip states its start date instead (ADR Decision 125).
 			if (!carriers.isEmpty() && noneHasStarted(carriers)) {
-				continue;
+				if (proposed == null) {
+					proposed = proposedByTheQuestion(question, questionDrugs);
+				}
+				if (proposed.contains(substance)) {
+					continue;
+				}
 			}
 			// The flattened sets, for a context that carries no order to attribute them to (issue #118's
 			// fallback): the same two legs over the names and codes that context does carry.
@@ -2737,6 +2751,31 @@ public class DrugSafetyValidator {
 			current.add(substance);
 		}
 		return current;
+	}
+
+	/**
+	 * The substances of {@code questionDrugs} the question PROPOSES giving (issue #553, review round 1 of
+	 * PR #559): every one of them where {@code DrugReferenceInjector.questionProposes} admits the question,
+	 * the grammar issue #469 admits a proposal by; else, where the question lists drugs before a proposal
+	 * ({@code DrugReferenceInjector.listedBeforeTheProposal}), those it does not list; else none. Fail-closed
+	 * as both readings are, so a proposal phrased outside their grammar reads as none.
+	 */
+	private static Set<Object> proposedByTheQuestion(String question, Set<DrugReference> questionDrugs) {
+		Set<Object> proposed = new HashSet<Object>();
+		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
+		boolean all = DrugReferenceInjector.questionProposes(question, drugs);
+		List<DrugReference> listed = all ? Collections.<DrugReference> emptyList()
+				: DrugReferenceInjector.listedBeforeTheProposal(question, drugs);
+		if (!all && listed.isEmpty()) {
+			return proposed;
+		}
+		for (DrugReference drug : drugs) {
+			proposed.add(drug.substanceGroupKey());
+		}
+		for (DrugReference drug : listed) {
+			proposed.remove(drug.substanceGroupKey());
+		}
+		return proposed;
 	}
 
 	/**
@@ -3478,6 +3517,21 @@ public class DrugSafetyValidator {
 		}
 
 		/**
+		 * When each substance a current-medication chip is about is scheduled to start, for one she holds
+		 * only as orders that have not started (issue #553) — recorded by the two arms that state that
+		 * referent, and stated onto each such chip in {@link #add}, so a chip the ledger replaces by a
+		 * stronger one of the same substance says it too.
+		 */
+		private final Map<Object, Date> scheduledStarts = new HashMap<Object, Date>();
+
+		/** Records {@code start}, where it is not null, as when {@code substance}'s orders are scheduled to start. */
+		void recordScheduledStart(Object substance, Date start) {
+			if (start != null) {
+				scheduledStarts.put(substance, start);
+			}
+		}
+
+		/**
 		 * @return the row {@code row}'s substance is NAMED by in this response — {@link SubstanceSubjects},
 		 *         the same answer the interaction and dose arms get (issue #206).
 		 *
@@ -3520,6 +3574,12 @@ public class DrugSafetyValidator {
 			List<String> displays = currentOrderDisplays.get(subject.substanceGroupKey());
 			if (displays != null && chip.isAboutACurrentMedication()) {
 				chip = chip.withCurrentOrderDisplays(displays);
+			}
+			// The referent stays her medication's (ADR Decision 125), so the chip itself says the order has not
+			// started, with its date (review round 1 of PR #559).
+			Date start = scheduledStarts.get(subject.substanceGroupKey());
+			if (start != null && chip.isAboutACurrentMedication()) {
+				chip = chip.statingItsOrderHasNotStarted(start);
 			}
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
@@ -4496,6 +4556,10 @@ public class DrugSafetyValidator {
 			return 0;
 		}
 		DrugReference ref = subjects.subjectOf(rows.get(0));
+		// Where the drug in play is her medication but she holds it only as orders that have not started
+		// — a question listing it as one she is on (issue #553, currentMedicationsInPlay) — each rule chip
+		// names it as scheduled, with its date, as the screening arm names such a subject.
+		Date subjectStart = herOrder ? scheduledStartOf(rows, context.getActiveDrugOrders(), bridgedOrders) : null;
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
 				bestRulePerPartner(rows, context, severityFloor, orderEntries));
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
@@ -4606,12 +4670,13 @@ public class DrugSafetyValidator {
 				// to say about is named the way a partner it did have something to say about is. Null
 				// where the ladder reached no co-medication, and then this is the narrow overload's
 				// answer — partnerLabel, which is also the grouping key.
-				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges, herOrder, null, partnerStart)
+				chip = reconciled == null
+						? interactionWarning(ref, rule.rule, bridges, herOrder, subjectStart, partnerStart)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
-							null, bridges, herOrder, null, partnerStart);
+							null, bridges, herOrder, subjectStart, partnerStart);
 			} else {
 				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence, bridges, herOrder, null, partnerStart);
+					fold.sentence, bridges, herOrder, subjectStart, partnerStart);
 			}
 			// The displays of the orders that walk matched, on the chip before anything else reads it —
 			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514).
@@ -4639,7 +4704,7 @@ public class DrugSafetyValidator {
 		// exactly the case where the two diverge, so reading the merged list's size here would move a
 		// published completeness figure without a single pair having moved.
 		int relatedPairs = ruleChips.size();
-		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements, herOrder);
+		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements, herOrder, subjectStart);
 		Collections.sort(stated, FINDING_STRENGTH_DESCENDING);
 		// The referent is stated here, on the chips this arm hands over, and not before the collapse or
 		// the stated-chip ledger: it cannot change which chips exist (issue #472, see EndedOrders).
@@ -4739,11 +4804,14 @@ public class DrugSafetyValidator {
 	 *
 	 * @param herOrder the drug in play's referent, which every member already states — a merged chip
 	 *         must not state another (issue #402)
+	 * @param subjectStart the start date every member names its subject by, where that subject has not
+	 *         started ({@code addInteractionWarnings}; issue #553) — one subject, so one date, which the merged
+	 *         chip states as its members did
 	 * @return the chips to state, in the order they were collected; a group of one is its own original
 	 *         chip object, so a response with nothing to collapse is unchanged
 	 */
 	private static List<SafetyWarning> collapseSharedMechanisms(DrugReference ref,
-			List<MechanismStatement> statements, boolean herOrder) {
+			List<MechanismStatement> statements, boolean herOrder, Date subjectStart) {
 		Map<String, List<MechanismStatement>> groups = new LinkedHashMap<String, List<MechanismStatement>>();
 		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
 		for (MechanismStatement statement : statements) {
@@ -4809,7 +4877,7 @@ public class DrugSafetyValidator {
 			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
 			// No member names a not-started order (collapseKey), so the merged chip names active orders only.
 			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null,
-				bridges, herOrder, partners, null, null).withMatchedOrderNames(matchedNames));
+				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames));
 		}
 		return out;
 	}
@@ -7638,9 +7706,10 @@ public class DrugSafetyValidator {
 	 * @param namedPartners the active orders this chip names, where it names several
 	 *        ({@link #collapseSharedMechanisms}); null leaves it the one {@code partnerName}, which is
 	 *        what every ordinary chip states
-	 * @param subjectStart {@link #scheduledStartOf} the SUBJECT's own orders, for the arm whose subject
-	 *        is one of her orders; null where it has started, and on the arms whose subject is a drug in
-	 *        play (issue #553)
+	 * @param subjectStart {@link #scheduledStartOf} the SUBJECT's own orders, where the chip states the
+	 *        subject as her medication — the screening arm's, and the drug-in-play arm's where
+	 *        {@link #currentMedicationsInPlay} kept that referent; null where it has started, and on every
+	 *        chip about a proposal (issue #553)
 	 * @param partnerStart {@link #scheduledStartOf} the orders that witnessed the partner: non-null names
 	 *        it as a {@link #SCHEDULED_ORDER_INTERACTION_PHRASE scheduled order} with its start date, and
 	 *        never with {@link #ACTIVE_ORDER_INTERACTION_PHRASE} (issue #553)
@@ -7657,7 +7726,7 @@ public class DrugSafetyValidator {
 		// the conditions under which the ladder's name may displace this one are stated, along with
 		// what remains of #121's invariant once it does.
 		// An order that has not started is named as scheduled, with its date, on whichever side of the
-		// pair it is (issue #553) — the subject only in the screening arm, whose subject is an order.
+		// pair it is (issue #553) — the subject only where the chip states it as her medication.
 		// Two statements rather than one ternary, so the active phrase is still read by concatenation at
 		// exactly one line (ActiveOrderInteractionPhraseTest).
 		String subject = subjectStart == null ? ref.displayLabel()
@@ -10692,11 +10761,14 @@ public class DrugSafetyValidator {
 			// sibling-row cases pin it.
 			// Not narrowed to an order that has STARTED (issue #553): this arm, like the screening arm, has no
 			// proposal to refuse, so the proposal clause would be #348's defect. The order's start date is
-			// what currentOrderDisplays prints beside it instead (ADR Decision 125).
+			// stated on the chip instead (recordScheduledStart), and printed beside the order by
+			// currentOrderDisplays (ADR Decision 125).
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			if (currentMedication) {
 				chips.recordCurrentOrders(ref.substanceGroupKey(),
 						currentOrderDisplays(ref, orderEntries, context, bridged));
+				chips.recordScheduledStart(ref.substanceGroupKey(),
+						scheduledStartOf(orderEntries, ref, context.getActiveDrugOrders(), bridged));
 			}
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response

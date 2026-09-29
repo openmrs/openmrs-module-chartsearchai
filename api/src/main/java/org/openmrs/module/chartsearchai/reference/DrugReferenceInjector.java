@@ -2562,10 +2562,11 @@ public class DrugReferenceInjector {
 	/**
 	 * Whether {@code question} asks whether to GIVE the drug it names — {@code
 	 * QueryScopeRouter.asksWhetherToGiveADrug} over the question's words with its own names marked. One
-	 * spelling for its two callers, which must not disagree: {@link #answersFromFindings} admits a
+	 * spelling for its callers, which must not disagree: {@link #answersFromFindings} admits a
 	 * proposal by it (issue #469), and {@code DrugSafetyValidator}'s ended-order holder keeps a proposed
 	 * drug a proposal by it (issue #472), so a question the module answers from its findings is one
-	 * whose drug is never re-referred.
+	 * whose drug is never re-referred — and that validator's {@code proposedByTheQuestion} keeps a drug
+	 * she holds only as orders that have not started a proposal by it (issue #553).
 	 */
 	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
 		return !questionDrugs.isEmpty()

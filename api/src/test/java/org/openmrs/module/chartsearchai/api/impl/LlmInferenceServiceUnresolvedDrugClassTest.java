@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,8 +21,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
@@ -34,6 +38,7 @@ import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #354's statement travelling from the chart the model was given to the answer the REST layer
@@ -52,10 +57,22 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * Here the subject is the CARRYING — the step #178 and #229 each record as their own root cause,
  * where the number existed inside the pipeline and nothing brought it out.
  */
-public class LlmInferenceServiceUnresolvedDrugClassTest {
+public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContextSensitiveTest {
 
 	/** The issue's headline question, verbatim. */
 	private static final String CLASS_QUESTION = "Can I start this patient on an oral contraceptive?";
+
+	/**
+	 * The answers these cases carry the statement on are the MODEL's. The resolved-substance control
+	 * asks a drug-safety question over a Major-interaction chart, which since issue #562 the module
+	 * answers itself by default (ADR Decision 131), so it is stated off here, before any chart is
+	 * injected, because that is where it is read.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	private static Patient patient() {
 		Patient p = new Patient();
@@ -163,6 +180,7 @@ public class LlmInferenceServiceUnresolvedDrugClassTest {
 
 		ChartAnswer answer = serviceOver(injected).search(patient(), "is it safe to give clarithromycin?");
 
+		assertFalse(answer.isAnsweredByTheModule(), "the premise: the MODEL wrote this answer");
 		assertNull(answer.getUnresolvedDrugClass());
 	}
 

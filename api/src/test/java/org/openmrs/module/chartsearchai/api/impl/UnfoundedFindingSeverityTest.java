@@ -22,8 +22,10 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.Level;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
@@ -40,6 +42,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>: an
@@ -62,7 +65,7 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * rating the injector wrote — never by the stamp the check reads, so a stamp written on the wrong record
  * cannot locate its own evidence.
  */
-public class UnfoundedFindingSeverityTest {
+public class UnfoundedFindingSeverityTest extends BaseModuleContextSensitiveTest {
 
 	/** The ticket's two questions. */
 	private static final String CAN_I_GIVE = "Can I give her prednisone?";
@@ -77,6 +80,17 @@ public class UnfoundedFindingSeverityTest {
 	/** One service over the shipped knowledge base for the whole class: loading it is the expensive
 	 *  part, and every arrangement below reads it without writing to it. */
 	private static final DrugReferenceService SHIPPED = DrugReferenceTestSupport.shippedServiceWithGroups();
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	@Test
 	public void theTicketsOwnAnswerIsReported() {

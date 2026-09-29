@@ -27,6 +27,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
@@ -41,6 +42,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #337: the model reproduces a deterministic safety finding's mechanism and then writes its
@@ -80,7 +82,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * engine; the chart builder, the injector and the validator are stubbed too, as in the sibling
  * suite, so the one variable under test is the answer.
  */
-public class ReferenceProseFidelityTest {
+public class ReferenceProseFidelityTest extends BaseModuleContextSensitiveTest {
 
 	/** A Major interaction whose mechanism is five sentences long — the shape the defect needs.
 	 *  {@code safetyFindingIn} takes the FIRST injected finding and asserts nothing about how many
@@ -170,6 +172,11 @@ public class ReferenceProseFidelityTest {
 
 	@BeforeEach
 	public void setUp() {
+		// The answers these cases judge are the MODEL's: since issue #562 the module answers a withheld
+		// proposal, or a screen that related a pair, itself wherever the drug-reference layer is on (ADR
+		// Decision 131). Set first, because the property is read when a chart is injected.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 		chart = DrugReferenceTestSupport.injectedSafetyFindingChart(QUESTION, ACTIVE_DRUG, ACTIVE_ATC);
 		finding = DrugReferenceTestSupport.safetyFindingIn(chart);
 		reference = DrugReferenceTestSupport.injectedReference(chart);

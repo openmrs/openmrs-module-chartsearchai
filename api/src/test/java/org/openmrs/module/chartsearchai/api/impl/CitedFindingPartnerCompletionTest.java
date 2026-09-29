@@ -25,8 +25,10 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingPartnerCoverage;
@@ -45,6 +47,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * The orders the module appends to an answer, and the {@code findingPartners} count beside them, are
@@ -66,7 +69,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * Every order name an answer carries is read off the chips or the records, except the spacing case's,
  * whose two displays are spelled here and asserted against the chip before the answer is built.
  */
-public class CitedFindingPartnerCompletionTest {
+public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiveTest {
 
 	/** What tells the merged finding's record and chip from the other one. */
 	private static final String CORTICOSTEROID_MECHANISM = DrugReferenceTestSupport.SHARED_MECHANISM_TEXT;
@@ -74,6 +77,17 @@ public class CitedFindingPartnerCompletionTest {
 	/** What tells issue #477's finding — a drug already carried by several of her orders — from the
 	 *  interaction findings beside it. */
 	private static final String ALREADY_IN_ORDERS = "is already in active orders";
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	@Test
 	public void theOrdersOfTheCitedFindingTheAnswerLeftUnnamedAreNamedByTheModuleItself()

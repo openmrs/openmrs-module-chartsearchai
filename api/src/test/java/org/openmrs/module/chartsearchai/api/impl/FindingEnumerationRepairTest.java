@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
@@ -40,6 +41,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #398. {@code SafetyFindingCitationExtentCheck} made the shortfall MEASURABLE
@@ -73,7 +75,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * {@code eval/drift-metric/capture_probe_safety.sh}'s, read beside {@code unstatedFindingSeverities}
  * and the verdict-lead cell, which are the two columns Decision 84 records regressions in.
  */
-public class FindingEnumerationRepairTest {
+public class FindingEnumerationRepairTest extends BaseModuleContextSensitiveTest {
 
 	/** One question that puts one drug in play against four of the patient's active orders, so the
 	 *  real screen raises several findings about one subject — the arrangement the measured corpus
@@ -90,6 +92,11 @@ public class FindingEnumerationRepairTest {
 
 	@BeforeEach
 	public void setUp() {
+		// The answers these cases judge are the MODEL's: since issue #562 the module answers a withheld
+		// proposal, or a screen that related a pair, itself wherever the drug-reference layer is on (ADR
+		// Decision 131). Set first, because the property is read when a chart is injected.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 		chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), QUESTION,
 				setOf(PARTNERS), setOf(PARTNER_ATC));
 		findings = new ArrayList<Integer>();

@@ -24,8 +24,10 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.Level;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
@@ -45,6 +47,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * An answer stating <em>"X interacts with active order Y"</em> is held to the findings that relate X
@@ -65,7 +68,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * stubbed: answer prose is not reproducible on a live engine, and it is the input these cases vary.
  * Every record number an answer cites is read off the chart, never assumed.
  */
-public class InteractionClaimPairFidelityTest {
+public class InteractionClaimPairFidelityTest extends BaseModuleContextSensitiveTest {
 
 	/** The ticket's question shape: her medications listed, then a new drug asked about — which puts
 	 *  findings about several SUBJECTS in the prompt (#513). */
@@ -89,6 +92,17 @@ public class InteractionClaimPairFidelityTest {
 	private static final String TICKET_QUESTION = "The patient is currently on Lamivudine / zidovudine, Nevirapine, "
 			+ "Stavudine, Isoniazid / pyrazinamide / rifampin and Trimethoprim and sulfamethoxazole, is it safe to give "
 			+ "metformin?";
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	@Test
 	public void aFindingAboutAnotherDrugCitedForTheClaimIsReportedAsMisattributed() {

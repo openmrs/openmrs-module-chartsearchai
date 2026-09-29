@@ -26,6 +26,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims;
@@ -43,6 +44,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #377: an answer sentence reproducing this module's own finding — <em>"X interacts with
@@ -72,7 +74,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * prose is not reproducible on a live engine, and the answer is the one variable this check is
  * about.
  */
-public class ActiveOrderCitationFidelityTest {
+public class ActiveOrderCitationFidelityTest extends BaseModuleContextSensitiveTest {
 
 	/** The ticket's own question, on the ticket's own drug. */
 	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
@@ -116,6 +118,11 @@ public class ActiveOrderCitationFidelityTest {
 
 	@BeforeEach
 	public void setUp() {
+		// The answers these cases judge are the MODEL's: since issue #562 the module answers a withheld
+		// proposal, or a screen that related a pair, itself wherever the drug-reference layer is on (ADR
+		// Decision 131). Set first, because the property is read when a chart is injected.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 		chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), QUESTION,
 				setOf(PARTNERS), setOf(PARTNER_ATC));
 		assertTrue(findingsStatingThePhrase().size() >= 3,

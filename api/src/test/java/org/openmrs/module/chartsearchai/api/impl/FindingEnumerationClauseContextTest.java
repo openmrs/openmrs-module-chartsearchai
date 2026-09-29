@@ -22,8 +22,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -37,6 +39,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * The #397 clause reaches the prompt of a chart the real injector gave several safety findings ABOUT
@@ -67,12 +70,23 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * assert the flag the CALL SITES hand the provider, in both directions, which is a different
  * mutation: a literal at a call site leaves the predicate itself untouched.
  */
-public class FindingEnumerationClauseContextTest {
+public class FindingEnumerationClauseContextTest extends BaseModuleContextSensitiveTest {
 
 	/** One question that puts one drug in play against four of the patient's active orders, so the
 	 *  real screen raises several findings about one subject — the arrangement every case here needs
 	 *  and the one each asserts as its own premise off the injected chart. */
 	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	private static Set<String> setOf(String... values) {
 		// LinkedHashSet and not a HashSet: the premise assertions below count the findings one
@@ -649,7 +663,7 @@ public class FindingEnumerationClauseContextTest {
 		}
 
 		// The preview is a fullChart-mode feature and disengages in queryScoped, which is the
-		// shipped default and what the unstubbed resolver would return with no Context — so without
+		// shipped default and what the unstubbed resolver would return with no chartMode set — so without
 		// this the preview case would skip the pass it is about and pass on one recorded call.
 		@Override
 		protected boolean resolveQueryScopedMode() {

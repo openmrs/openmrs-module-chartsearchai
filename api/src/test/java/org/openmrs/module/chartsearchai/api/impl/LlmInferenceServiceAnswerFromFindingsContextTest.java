@@ -24,7 +24,9 @@ import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.openmrs.GlobalProperty;
 import org.openmrs.Patient;
+import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
@@ -505,12 +507,40 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
 
-		assertEquals(1, provider.calls, "the property ships off and changes nothing while it is");
+		assertEquals(1, provider.calls, "an install that turns the property off keeps the model's answer");
 		assertTrue(answer.getAnswer().startsWith(RecordingProvider.ANSWER),
 				"the model's own answer, which ADR Decision 100 may complete but never replaces: "
 						+ answer.getAnswer());
 		assertFalse(answer.isAnsweredByTheModule());
 		assertNotNull(answer.getFindingCitationExtent(), "the checks judge the model's prose as before");
+	}
+
+	/**
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/562">#562</a>: the
+	 * property ships ON, since the gate ADR Decision 108 names has been run (Decision 131). An install that
+	 * never wrote the property reads the constant's fallback, so this asks the real {@code search} with no
+	 * property row at all. {@code GlobalPropertyDefaultsTest} holds that fallback to what {@code config.xml}
+	 * writes into a new install.
+	 */
+	@Test
+	public void anInstallThatNeverSetThePropertyAnswersAWithheldProposalFromTheFindings() {
+		AdministrationService administration = Context.getAdministrationService();
+		GlobalProperty row = administration
+				.getGlobalPropertyObject(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS);
+		if (row != null) {
+			administration.purgeGlobalProperty(row);
+		}
+		assertNull(administration.getGlobalPropertyObject(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS),
+				"precondition: no property row, so the shipped default decides");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
+
+		assertEquals(0, provider.calls,
+				"with the property never set, a withheld proposal is answered from the module's findings");
+		assertTrue(answer.isAnsweredByTheModule(), "and says no model wrote the answer");
+		assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING),
+				"with the withholding call first, was: " + answer.getAnswer());
 	}
 
 	/** Questions the module must NOT answer for the model, each for its own reason — the predicate is

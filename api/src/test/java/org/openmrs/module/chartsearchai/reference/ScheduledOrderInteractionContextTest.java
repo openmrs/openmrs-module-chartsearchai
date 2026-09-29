@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -210,13 +211,22 @@ public class ScheduledOrderInteractionContextTest extends BaseModuleContextSensi
 		List<SafetyWarning> chips = chips("Can I give her lamivudine?");
 
 		boolean classSentence = false;
+		boolean ordersNamed = false;
 		for (SafetyWarning chip : chips) {
+			if (chip.statesOrdersSharingASubstance()) {
+				// Issue #477's finding names each ORDER, and one of the two has not started (review round 3
+				// of PR #559): it names both, each as what it is.
+				assertEquals("Stavudine is in active order Stavudine 30mg and scheduled order Stavudine ("
+						+ STARTS + ") — possible duplicate therapy", chip.getDetail());
+				ordersNamed = true;
+				continue;
+			}
 			assertFalse(chip.getDetail().contains("scheduled order Stavudine"),
 					"a co-medication a started order carries is not a scheduled one: " + chip.getDetail());
 			classSentence |= chip.getDetail().contains(" as active order Stavudine");
 		}
-		assertTrue(classSentence, "precondition: the class sentence names Stavudine, chips were: "
-				+ DrugReferenceTestSupport.details(chips));
+		assertTrue(classSentence && ordersNamed, "precondition: the class sentence and the duplicate-therapy "
+				+ "finding name Stavudine, chips were: " + DrugReferenceTestSupport.details(chips));
 	}
 
 	@Test
@@ -364,5 +374,63 @@ public class ScheduledOrderInteractionContextTest extends BaseModuleContextSensi
 			}
 		}
 		assertTrue(any, "precondition: a finding about Rifampicin, chips were: " + DrugReferenceTestSupport.details(chips));
+	}
+
+	/** The one duplicate-therapy chip (issue #477) among {@code chips}, or an assertion error listing all. */
+	private static SafetyWarning duplicateTherapyChip(List<SafetyWarning> chips) {
+		SafetyWarning found = null;
+		for (SafetyWarning chip : chips) {
+			if (chip.getDetail().endsWith(" — possible duplicate therapy") && namesRifampicin(chip.getDrug())) {
+				assertTrue(found == null, "precondition: one duplicate-therapy chip, were: "
+						+ DrugReferenceTestSupport.details(chips));
+				found = chip;
+			}
+		}
+		assertTrue(found != null, "precondition: a duplicate-therapy chip, chips were: "
+				+ DrugReferenceTestSupport.details(chips));
+		return found;
+	}
+
+	@Test
+	public void aDuplicateTherapyFindingNamesHerScheduledOrderAsScheduledWithItsDate() {
+		// Review round 3 of PR #559: a started Rifampicin order beside the scheduled one raises issue #477's
+		// finding on the screen, on a question about another drug and on one about Rifampicin itself.
+		executeDataSet("StartedRifampicinOrderTestData.xml");
+		String orders = "active order Rifampicin 300mg and scheduled order Rifampicin (" + STARTS + ")"
+				+ " — possible duplicate therapy";
+		for (String question : new String[] { "Are there any drug interactions among her current medications?",
+				"Can I give her amlodipine?" }) {
+			List<SafetyWarning> chips = chips(question);
+			assertEquals("Rifampicin (rifampin) is in " + orders, duplicateTherapyChip(chips).getDetail(), question);
+		}
+		assertEquals("Rifampicin (rifampin) is already in " + orders,
+				duplicateTherapyChip(chips("Can I give her rifampicin?")).getDetail());
+	}
+
+	@Test
+	public void aDuplicateTherapyFindingAboutTwoScheduledOrdersCallsNeitherActiveNorAlreadyHers() {
+		// The other value of the split above: no carrier has started, so no "active order" and no "already".
+		executeDataSet("ScheduledRifampicinOrderTestData.xml");
+		String orders = "scheduled orders Rifampicin (" + STARTS + ") and Rifampicin 300mg (" + STARTS + ")"
+				+ " — possible duplicate therapy";
+		for (String question : new String[] { "Are there any drug interactions among her current medications?",
+				"Can I give her rifampicin?" }) {
+			List<SafetyWarning> chips = chips(question);
+			assertEquals("Rifampicin (rifampin) is in " + orders, duplicateTherapyChip(chips).getDetail(), question);
+		}
+	}
+
+	@Test
+	public void aScheduledOrderWithNoReadableNameIsStillNamedAsScheduled() {
+		// Review round 3 of PR #559: an order the builder can identify only by its ATC codes takes
+		// namedByCodesOnly's rung, which must carry the start date as the named rung does.
+		DrugReferenceTestSupport.mapConceptToAtc(9554, "J04AB02");
+		DrugReferenceTestSupport.makeOrderNameless(9554, 9554);
+		List<SafetyWarning> chips = chips("Can I give her amlodipine?");
+
+		SafetyWarning chip = chipAbout(chips, "Amlodipine");
+		assertTrue(chip.getDetail().startsWith("Amlodipine interacts with scheduled order Rifampicin (rifampin), "
+				+ STARTS + " — "), "the chip names the order as scheduled, with its start date: " + chip.getDetail());
+		assertNoChipCallsRifampicinActive(chips);
 	}
 }

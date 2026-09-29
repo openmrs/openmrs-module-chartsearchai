@@ -12138,8 +12138,11 @@ month would be a safety loss — and fix the wording.
   at each of them.
 - **The order stays on every list an arm screens.** Where a chip names it, it is a *scheduled order* with its
   date (`DrugSafetyValidator.SCHEDULED_ORDER_INTERACTION_PHRASE`), in the rule chip, the class sentence and
-  the sentence `FindingPartnerCoverageCheck` appends; the stand-in record for an order the chart has no
-  record of reads `Scheduled drug order: …` with the same status.
+  the sentence `FindingPartnerCoverageCheck` appends; the duplicate-therapy sentence naming several of her
+  orders (#477) names each carrier that has not started after the started ones — *"X is in active order A
+  and scheduled order B (scheduled to start <date>)"* — and says "is in" rather than "is already in" where
+  none has started (`DrugSafetyValidator.ordersNamed`; found by review round 3 of PR #559); the stand-in
+  record for an order the chart has no record of reads `Scheduled drug order: …` with the same status.
 - **A question proposing the drug treats it as a proposal.** Where a question PROPOSES a drug she holds only
   as orders that have not started, the drug-in-play arm states the proposal referent rather than Decision
   123's current-medication one (`currentMedicationsInPlay`, via `proposedByTheQuestion`), so *"Can I give her
@@ -12182,16 +12185,16 @@ month would be a safety loss — and fix the wording.
   so its chip keeps "active order" even where that order has not started.
 - The answer-side recognisers (`ActiveOrderCitationFidelityCheck`, `InteractionClaimPairFidelityCheck`) key on
   `ACTIVE_ORDER_NOUN`, so a claim an answer recites as "scheduled order" is outside what they examine.
-- The duplicate-therapy sentence naming several of her orders ("active orders A and B"), the
-  condition-mediated arm (off by default) and `FINDING_CHART_ORDER_LEAD` ("…from this patient's own active
+- The condition-mediated arm (off by default) and `FINDING_CHART_ORDER_LEAD` ("…from this patient's own active
   orders", true in core's sense) are unchanged.
 - No wire key carries the start date; an interaction chip's `detail` states it. A client reading the order
   itself by `resourceUuid` reads it from the chart.
-- A pair of two not-started orders, a contraindication about a not-started order, and a drug-in-play finding
-  about one a question lists still state the current-medication clause ("a medication this patient is already
+- A pair of two not-started orders, a pair the dataset relates from its not-started side alone (the visiting
+  order states a pair from its started side only where that side's own rules reach it), a contraindication
+  about a not-started order, and a drug-in-play finding about one a question lists still state the current-medication clause ("a medication this patient is already
   taking") and publish `aboutACurrentMedication: true`; their details carry the start date. On the drug-in-play
-  arm only the rule chips do: its class-only, several-orders, condition-mediated and dose chips about such a
-  drug do not.
+  arm only the rule chips and the several-orders chip do: its class-only, condition-mediated and dose chips
+  about such a drug do not.
 - On a chart holding a scheduled order, a screened pair whose subject is scheduled-only sorts behind its
   equally rated pairs, so where the `maxPairChips` cap cuts inside that rating it is withheld before them.
 - `LlmInferenceService`'s enumeration-repair instruction asks the model to name "the active order it is about"

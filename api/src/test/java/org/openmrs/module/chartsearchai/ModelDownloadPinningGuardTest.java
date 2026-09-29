@@ -139,6 +139,11 @@ public class ModelDownloadPinningGuardTest {
 			// deliberately not a path — ADR Decision 106's amendment, whose second premise is that
 			// nobody on the deployment can read a container log.
 			"chartsearchai.models.embedderStatus",
+			// The weights fetches' outcome, `fetching:<id>` / `refused:<id>:<code>` entries and never
+			// a path (#467). A property of its own so it cannot be mistaken for the embedder's, and
+			// written by publish_weights_status alone —
+			// theWeightsStatusIsPublishedOnlyByOneWriterStartedAfterTheDemoSeed.
+			"chartsearchai.models.weightsStatus",
 			// The demo seed's own bookkeeping and the CPU breadcrumb.
 			"chartsearchai.demo.seedStatus", "chartsearchai.demo.seededDataset", "chartsearchai.demo.cpuInfo");
 
@@ -467,6 +472,64 @@ public class ModelDownloadPinningGuardTest {
 		assertTrue(lastEmbedderFetch >= 0, "backend-init.sh no longer fetches the embedder; this guard read nothing");
 		assertTrue(lastEmbedderFetch < wiring, "the embedder is verified at line " + (lastEmbedderFetch + 1)
 				+ ", after the global properties are written at line " + (wiring + 1));
+	}
+
+	/**
+	 * <b>Where the weights' outcome is published from, read as source POSITION</b> — the same
+	 * weaker question {@link #theEmbedderIsVerifiedBeforeAnythingWritesItsPathIntoAGlobalProperty}
+	 * asks, with its premise asserted the same way. {@code maybe_seed_demo_data} drops every table
+	 * and restores a snapshot of the {@code chartsearchai%} properties it took BEFORE the drop, so a
+	 * value written while it runs is wiped or overwritten with an older one. The weights are forked
+	 * before the seed, so what records their outcome must not be: one function writes the property,
+	 * and it is started by a top-level statement below the seed's own call (#467).
+	 *
+	 * <p><b>The residue.</b> Top level is read as column 0 outside every function, which is how this
+	 * file writes its top-level statements; a call at column 0 inside an {@code if} would satisfy it.
+	 * What the published value says is {@code EntrypointRetrievalWiringTest}'s question, driven.
+	 */
+	@Test
+	public void theWeightsStatusIsPublishedOnlyByOneWriterStartedAfterTheDemoSeed() throws IOException {
+		List<String> lines = Files.readAllLines(repo("backend-init.sh"), StandardCharsets.UTF_8);
+		String writer = "publish_weights_status";
+		List<String> violations = new ArrayList<String>();
+		int seed = -1;
+		List<Integer> starts = new ArrayList<Integer>();
+		int writes = 0;
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			if (line.trim().startsWith("#")) {
+				continue;
+			}
+			if (seed < 0 && line.startsWith("maybe_seed_demo_data") && !line.contains("()")) {
+				seed = i;
+			}
+			if (line.contains("chartsearchai.models.weightsStatus") && writesAGlobalProperty(lines, i)) {
+				writes++;
+				if (!writer.equals(enclosingFunction(lines, i))) {
+					violations.add("line " + (i + 1) + " writes chartsearchai.models.weightsStatus outside " + writer
+							+ "(), so a second writer can race it or run inside the seed's window");
+				}
+			}
+			if (line.trim().startsWith(writer) && !line.contains("()")) {
+				starts.add(i);
+				if (!line.startsWith(writer) || enclosingFunction(lines, i) != null) {
+					violations.add("line " + (i + 1) + " starts " + writer + " below the top level, so where it is"
+							+ " written is not when it runs");
+				}
+			}
+		}
+		assertTrue(seed >= 0, "backend-init.sh no longer calls maybe_seed_demo_data; this guard read nothing");
+		assertEquals(1, writes, "backend-init.sh does not write chartsearchai.models.weightsStatus at exactly one"
+				+ " site, so this guard is not reading the writer it is about");
+		assertFalse(starts.isEmpty(), "backend-init.sh never starts " + writer + ", so the weights' outcome is"
+				+ " recorded nowhere");
+		for (int start : starts) {
+			if (start < seed) {
+				violations.add("line " + (start + 1) + " starts " + writer + " above the demo seed at line " + (seed + 1)
+						+ ", whose drop and snapshot restore would wipe or overwrite what it writes");
+			}
+		}
+		assertEquals(List.of(), violations, "the weights' status can be written where the seed undoes it");
 	}
 
 	/**

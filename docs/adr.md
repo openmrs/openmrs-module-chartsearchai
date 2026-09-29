@@ -9347,6 +9347,47 @@ database can write one either, and `exec /openmrs/startup.sh` replaces the shell
 that `startup.sh` then waits for comes back. What is owed is that README says where the channel holds,
 and `.theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt` pins the behaviour it describes.
 
+**The weights get a channel of their own** ([#467](https://github.com/openmrs/openmrs-module-chartsearchai/issues/467)).
+The second premise applies to them unchanged, and #466 ran for a day with no weights file and a 500
+as the only readable symptom, because their verdict was an `echo` from a background subshell.
+`MODEL_MANIFEST_REFUSED` still cannot carry it, for the reason the library records, so the
+entrypoint publishes `chartsearchai.models.weightsStatus`: one entry per artifact, `fetching:<id>`
+while its fetch runs, `refused:<id>:<code>` with the library's code once it failed, `unrecorded:<id>`
+for an artifact whose state was not recorded, and nothing once it verified. It is a property of its
+own so it cannot be read as the embedder's, and it carries no
+path. The maintainer's decision on the issue has the fetch subshell write the row. What ships is one
+step removed, and the reason is where that subshell is forked: above `seed_sql` and the connection it
+needs, and above `maybe_seed_demo_data`, whose drop and snapshot restore would wipe or roll back
+anything written while it runs. So each subshell records its own state as the name of a file — a rename, which needs no data
+blocks where written contents do — and ONE writer,
+`publish_weights_status`, puts it in the database. That writer is started below the seed, and it
+sends a write again until one lands — giving up, and saying so, after 900 refusals with no fetch
+running — because a virgin database has no `global_property` table until
+OpenMRS creates it. Nothing serves REST before `startup.sh`, so publishing from there costs
+nothing a deployment can see. The alternative was considered and not taken: move
+both fetches below the seed and update the row with one atomic statement per entry. It delays an
+~8GB download by the length of the seed on every seed start. A subshell killed by a signal before
+it records an outcome leaves `fetching:` standing; the publisher does not look for that
+shape. Because a verified artifact is the one that says nothing, the publisher composes from the
+artifacts the start forked a fetch for — `WEIGHTS_ARTIFACTS`, set in the start's own shell and
+inherited by the publisher's fork — rather than from what the directory lists, so an artifact with no
+file reads as `unrecorded:` and never as verified: a record that failed, or a scan that missed a file
+mid-rename. That replaced an exit rule timed to cover the second (it ended only on the second idle
+scan in a row); a value naming an unrecorded artifact is instead written only once a second scan in a
+row reads it too, so one scan's miss mid-rename is not published. Measured 2026-09-29 under `dash` by
+extracting the function from the file, against a renamer toggling between two refused names, with
+the scan's misses induced by an existence check on each listed name: without the expected set, 16 of
+3000 trials ended publishing the refused artifact as verified, and 0 of 3000 with it; without the
+hold-back, 18 of 3000 ended publishing it as `unrecorded:`, and 0 of 3000 with it. The hold-back is
+that timing window and no test holds it open: removing it leaves `EntrypointRetrievalWiringTest`
+green. An `unrecorded:` entry that lands with no fetch running ends the publisher, so a fetch whose
+first record failed and whose last one succeeds can go unpublished. → `EntrypointRetrievalWiringTest.aWeightsFetchStillRunningReadsAsFetchingUntilItsOutcomeReplacesIt`,
+`.aWeightsFetchThatCannotResolveIsRecordedWithItsArtifactAndCode`,
+`.theWeightsOutcomeIsRecordedOnceTheDatabaseTakesItRatherThanWhenItWasFirstSent`,
+`.aStartThatCouldNotRecordItsWeightsFetchesPublishesNoVerdictOnThem`,
+`.anArtifactWhoseRecordedStateIsLostIsPublishedAsUnrecordedRatherThanAsVerified`;
+`ModelDownloadPinningGuardTest.theWeightsStatusIsPublishedOnlyByOneWriterStartedAfterTheDemoSeed`.
+
 **And on those same two branches the container log's LAST line said the opposite, which review round
 6 found.** `configure_retrieval_gps` ends by printing the three rows it read back, and a `gp_value`
 that failed answers the empty string — the answer a blanked row gives too — so the line read
@@ -9416,7 +9457,8 @@ that the manifest matches upstream. A wrong digest therefore fails closed but fa
 every deployment and every standalone build, on the first fetch — so the first release build after a
 pin move is the check, and it is the one step of this recipe a maintainer cannot skip.
 
-→ `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
+→ `ModelDownloadIntegrityTest` drives the library with `EntrypointSource.shell()` — dash where it is
+installed, the image's `/bin/sh` — against a loopback HTTP server that
 serves substituted bytes, which is the acceptance both findings state; its ledger cases are where
 "the embedder is verified before its path is published" now lives.
 `ModelDownloadPinningGuardTest` reads the source for what no behaviour of the library can show —

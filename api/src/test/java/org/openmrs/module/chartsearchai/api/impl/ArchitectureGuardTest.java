@@ -1091,6 +1091,9 @@ public class ArchitectureGuardTest {
 	 * than left to build the same string out of {@code getHostString()}, which would hide a real
 	 * bypass written that way from every file at once. The cost of the exemption is that a
 	 * hand-built local-server URL written in THAT file is invisible here.
+	 * {@code EntrypointRetrievalWiringTest} is excluded for the same reason and at the same cost: its
+	 * weights-status case (#467) stands up the same kind of origin and hands its URL to the whole
+	 * entrypoint through a manifest fixture.
 	 */
 	@Test
 	public void theLocalServerAddressIsSpelledInOnePlace() throws IOException {
@@ -1099,7 +1102,7 @@ public class ArchitectureGuardTest {
 				Pattern.compile("\"http://127\\.0\\.0\\.1:"),
 				// No production exclusion: LlamaServerEndpoint builds its URLs from LOOPBACK_HOST
 				// and spells this literal nowhere, so excluding it would only weaken the scan.
-				"ArchitectureGuardTest.java|ModelDownloadIntegrityTest.java",
+				"ArchitectureGuardTest.java|ModelDownloadIntegrityTest.java|EntrypointRetrievalWiringTest.java",
 				"Should take the URL from LlamaServerEndpoint (completionsUrl/healthUrl/"
 						+ "propsUrl/slotUrl) instead of spelling the loopback address"));
 	}

@@ -35,7 +35,8 @@ deterministic knowledge base has ALREADY looked up the interactions …"*. It th
   with "What to monitor / do".
 
 The prompt was installed through the `chartsearchai.llm.systemPrompt` global property in place of
-`LlmProvider.DEFAULT_SYSTEM_PROMPT`.
+`LlmProvider.DEFAULT_SYSTEM_PROMPT`. Its full text is on its own page:
+[ddi-system-prompt-evaluated.md](ddi-system-prompt-evaluated.md).
 
 ---
 

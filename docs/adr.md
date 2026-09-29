@@ -11102,7 +11102,7 @@ module held the difference on `SafetyWarning.isAboutACurrentMedication()`. On th
 it in the injected record, which reaches a client only if the model cites it, and the issue's first answer
 cited neither of the two findings it carried (`findingCitations` `{"carried":2,"cited":0}`); a
 contraindication line of an answer the module composes itself states it (Decision 113), a path that
-ships off.
+shipped off then and ships on since [Decision 131](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run).
 [Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)
 rests on the premise that every finding is published in `safetyWarnings`, and the chip did not carry
 the referent.
@@ -11176,7 +11176,8 @@ left out, whose record the model had read ending *"This finding is a reason to w
 without the list, the same patient, drug and model refused X on that Major. Nothing on the response said
 the chart held no order for the listed drugs, and no key compared the lead with the findings about the drug
 it gives. The composed answer ([Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them))
-takes one asked substance, ships off, and was left alone.
+takes one asked substance, shipped off then and ships on since
+[Decision 131](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run), and was left alone.
 
 ### The decision
 

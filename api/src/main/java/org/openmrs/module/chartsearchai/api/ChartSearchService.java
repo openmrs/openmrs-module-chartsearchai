@@ -916,7 +916,8 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>What it asserts.</b> That a sentence of the answer cites this finding, that the finding's
 	 * record states it carries no severity ({@code RecordMapping.getFindingUnrated()}), and that the
-	 * same sentence states {@link #getRating()} while no other finding it cites carries that rating.
+	 * same sentence states {@link #getRating()} while no finding it cites, this one included, states that
+	 * rating in its own record.
 	 * Never that the finding is wrong, and never that the rating belongs to some other record the
 	 * sentence cites: a sentence can state a rating for a reason this check cannot see.
 	 *
@@ -1631,8 +1632,8 @@ public interface ChartSearchService {
 		 * stock install, where {@code chartsearchai.drugReference.enabled} is off and no finding exists.
 		 * {@code UnfoundedFindingSeverityCheck} enumerates what the check cannot see.
 		 *
-		 * @return one entry per distinct (citation, rating) pair, in the order the answer's sentences
-		 *         state them; null where no measurement was made
+		 * @return one entry per distinct (citation, rating) pair, in sentence order and, within one
+		 *         sentence, in citation then vocabulary order; null where no measurement was made
 		 */
 		public List<UnfoundedFindingSeverity> getUnfoundedFindingSeverities() {
 			return unfoundedFindingSeverities;

@@ -12144,7 +12144,12 @@ The issue's owner decided the three open questions on the issue, and this implem
 - **The unit is the sentence** citing an unrated finding, split by `ChartSearchAiUtils.SENTENCE_BOUNDARY`.
   The sibling's whole-answer unit cannot serve the inverse question, because "Major" elsewhere is exactly
   the false report. A rating word in that sentence is reported only where no other finding the sentence
-  cites carries that rating (`getFindingSeverity()`), which keeps the #554 fourth run's case silent.
+  cites states that rating in its own record, which keeps the #554 fourth run's case silent — and the
+  unrated finding's own record is asked too, so a word an operator's note put there is not reported. The record
+  and not `getFindingSeverity()`: a condition-mediated finding has no rating field and its detail states
+  each drug-disease rating, and a rated finding's record states its rating wherever that field is set.
+  Reading the record can only exempt, which is the direction the check must fail in. (The first version
+  read the field, and a Phase 2 review of this change found the condition-mediated case it missed.)
   Which findings a sentence cites is `SafetyFindingCitationExtentCheck.citedFindingIndexes`, asked of the
   sentence — [Decision 97](#decision-97-the-accusation-that-a-finding-lost-its-rating-counts-cited-the-way-the-published-count-does)'s
   one reading, so the #305 filter and the resolution's admission come with it.
@@ -12177,7 +12182,7 @@ names each partner with its own rating.
 - *"Unknown severity"* on an unrated finding, which Decision 123 measured, is not reported:
   `statableRating` declines `unknown`, and reading it would report correct prose ("its severity is
   unknown").
-- A sentence citing the unrated finding beside a finding that carries the rating is silent even where the
+- A sentence citing the unrated finding beside a finding whose record states the rating is silent even where the
   rating was attached to the unrated one — the enumeration sentence
   [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response) refuted
   sentence scoping with. The exemption buys the #554 fourth run's silence, and this is what it costs.
@@ -12186,8 +12191,7 @@ names each partner with its own rating.
 - A rating the sentence owes to a co-cited record that is NOT a finding is reported — a `drug_reference`
   record lists its partners with their ratings. The owner's decision exempts a rating another FINDING
   carries.
-- A rating word negated (*"not Major"*) or used in ordinary English (*"a minor rash"*) is reported, and so is
-  one an operator dataset's note put inside the unrated record's own text.
+- A rating word negated (*"not Major"*) or used in ordinary English (*"a minor rash"*) is reported.
 
 ### Live gate
 
@@ -12197,6 +12201,7 @@ clarithromycin control are this branch's. *"Can I give her prednisone?"* on #554
 
 Pinned by `UnfoundedFindingSeverityTest`, over the shipped knowledge base through the real `injectRecords`
 and `search`/`searchStreaming` — mutate the stamp, the sentence unit, the per-sentence citation reading, the
-co-cited exemption or the vocabulary and read which case reddens — by `FindingUnratedStampTest` for the
-stamp, by `ArchitectureGuardTest.theUnfoundedFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck`
+co-cited exemption or the vocabulary and read which case reddens — by
+`UnfoundedFindingSeverityDerivedTierContextTest` for the condition-mediated finding, by
+`FindingUnratedStampTest` for the stamp, by `ArchitectureGuardTest.theUnfoundedFindingSeverityCheckTakesItsCitedReadingFromTheExtentCheck`
 for the reading, and by `ChartSearchAiUnfoundedFindingSeverityTest` for the wire.

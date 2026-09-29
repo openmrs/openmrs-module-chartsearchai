@@ -578,6 +578,26 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The chart the real injector produces over {@code service} for a patient on one structured active
+	 * order per display ({@link #rawContextNaming}'s orders) who also has recorded {@code allergies} —
+	 * for a case needing an arm that reads the orders' structure (the condition-mediated tier) and an
+	 * allergy finding in one chart (issue #560).
+	 *
+	 * @throws IllegalStateException when the arrangement injects no finding
+	 */
+	public static PatientChart injectedFindingsOverOrdersWithRecordedAllergies(DrugReferenceService service,
+			PatientChart base, String question, Set<String> allergies, String... orderDisplays) {
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		Set<String> names = new LinkedHashSet<String>();
+		for (String display : orderDisplays) {
+			orders.add(activeOrder("order-" + display, display, display));
+			names.add(display);
+		}
+		return injectedOrThrow(service, base, ctx(60, null, names, null, allergies, null, orders), question,
+				"orders " + names + " and allergies " + allergies);
+	}
+
+	/**
 	 * {@link #chipsOverAnswer(String, String, Set, Set, List)} over {@code service} rather than the
 	 * excerpt — the chips for the patient
 	 * {@link #injectedFindingsOver(DrugReferenceService, PatientChart, String, Set, Set, List)} injects

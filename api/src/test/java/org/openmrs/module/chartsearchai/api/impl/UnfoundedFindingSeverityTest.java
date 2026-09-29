@@ -372,7 +372,7 @@ public class UnfoundedFindingSeverityTest {
 	}
 
 	/** The patient's own drug orders as chart records, rendered by the REAL serializer. */
-	private static PatientChart chartOf(String... orders) {
+	static PatientChart chartOf(String... orders) {
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>();
 		int n = 1;
 		for (String order : orders) {
@@ -386,14 +386,14 @@ public class UnfoundedFindingSeverityTest {
 		return new LinkedHashSet<String>(Arrays.asList(values));
 	}
 
-	private static Patient patient() {
+	static Patient patient() {
 		Patient p = new Patient();
 		p.setPatientId(1);
 		p.setUuid("uuid-1");
 		return p;
 	}
 
-	private static LlmInferenceService serviceOver(PatientChart chart, String answer) {
+	static LlmInferenceService serviceOver(PatientChart chart, String answer) {
 		return serviceOver(chart, answer, Collections.<Integer> emptyList());
 	}
 

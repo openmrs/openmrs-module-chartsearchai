@@ -1199,8 +1199,12 @@ public class DrugSafetyValidator {
 
 		private final String word;
 
+		/** {@link #word} folded once, so {@link #severityRank} — on every rule's path — allocates nothing for it. */
+		private final String folded;
+
 		RecognisedSeverity(String word) {
 			this.word = word;
+			this.folded = word.toLowerCase(Locale.ROOT);
 		}
 	}
 
@@ -1219,7 +1223,7 @@ public class DrugSafetyValidator {
 		}
 		String folded = severity.trim().toLowerCase(Locale.ROOT);
 		for (RecognisedSeverity recognised : RecognisedSeverity.values()) {
-			if (recognised.word.toLowerCase(Locale.ROOT).equals(folded)) {
+			if (recognised.folded.equals(folded)) {
 				return recognised.ordinal();
 			}
 		}

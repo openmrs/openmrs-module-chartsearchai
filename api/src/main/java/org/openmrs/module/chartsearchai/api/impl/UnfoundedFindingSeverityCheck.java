@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -50,9 +49,9 @@ import org.slf4j.LoggerFactory;
  * <p><b>The unit is the SENTENCE citing the unrated finding</b>, split by
  * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, as the issue's owner decided. The sibling's whole-answer
  * unit cannot work here, because "Major" elsewhere in the answer is exactly the false report. A rating
- * word in that sentence is reported only where no OTHER finding the sentence cites carries that rating
- * ({@link RecordMapping#getFindingSeverity()}), which keeps silent a rating quoted from another finding's
- * detail beside it — PR #554's fourth run.
+ * word in that sentence is reported only where no finding the sentence cites, the unrated one included,
+ * states that rating in its own record ({@code aCitedFindingStates} says why the record and not the rating
+ * field), which keeps silent a rating quoted from another finding's detail beside it — PR #554's fourth run.
  *
  * <p><b>Which findings a sentence cites is {@link SafetyFindingCitationExtentCheck#citedFindingIndexes}</b>,
  * asked of the sentence: the ONE reading of that question (issue #409), with the #305 filter and the
@@ -69,9 +68,9 @@ import org.slf4j.LoggerFactory;
  *   <li>"Unknown severity" attached to an unrated finding — ADR Decision 123 measured that shape too.
  *       {@code statableRating} declines {@code unknown}, and reading it would report correct prose such
  *       as "its severity is unknown";</li>
- *   <li>a rating attached to the unrated finding in a sentence that also cites a finding carrying that
- *       rating — the enumeration sentence ADR Decision 76 refuted sentence scoping with. The exemption
- *       is what buys the #554 fourth run's silence, and this is its cost;</li>
+ *   <li>a rating attached to the unrated finding in a sentence that also cites a finding whose record
+ *       states that rating — the enumeration sentence ADR Decision 76 refuted sentence scoping with. The
+ *       exemption is what buys the #554 fourth run's silence, and this is its cost;</li>
  *   <li>a marker placed after its sentence's terminator ("…a Major finding. [354]"), which the
  *       splitter puts in the next sentence: the finding's own sentence is then silent, and the next
  *       one's rating, if any, is attached to it;</li>
@@ -79,8 +78,7 @@ import org.slf4j.LoggerFactory;
  *       record lists its interactions with their ratings — IS reported. The owner's decision exempts a
  *       rating another FINDING carries;</li>
  *   <li>a rating word used otherwise — negated ("not Major"), or in ordinary English ("a minor
- *       rash") — is reported, and so is one an operator dataset's note put inside the unrated record's
- *       own text.</li>
+ *       rash") — is reported.</li>
  * </ul>
  *
  * <p>It reports the CITATION and the rating word, never a word of the answer or of a record — both
@@ -124,14 +122,16 @@ final class UnfoundedFindingSeverityCheck {
 			// The GATE as well as the lookup: on the shipped default no finding is injected, and a chart
 			// carrying none that is unrated returns here before the answer is read.
 			Set<Integer> unrated = new HashSet<Integer>();
-			Map<Integer, String> ratings = new HashMap<Integer, String>();
+			// Every finding's record text, for the exemption below: the stamp is non-null on a finding and
+			// on nothing else.
+			Map<Integer, String> findingTexts = new HashMap<Integer, String>();
 			for (RecordMapping mapping : mappings) {
-				if (Boolean.TRUE.equals(mapping.getFindingUnrated())) {
-					unrated.add(Integer.valueOf(mapping.getIndex()));
-				}
-				else if (mapping.getFindingSeverity() != null) {
-					ratings.put(Integer.valueOf(mapping.getIndex()),
-							mapping.getFindingSeverity().toLowerCase(Locale.ROOT));
+				Boolean findingUnrated = mapping.getFindingUnrated();
+				if (findingUnrated != null) {
+					findingTexts.put(Integer.valueOf(mapping.getIndex()), mapping.getText());
+					if (findingUnrated.booleanValue()) {
+						unrated.add(Integer.valueOf(mapping.getIndex()));
+					}
 				}
 			}
 			if (unrated.isEmpty()) {
@@ -144,7 +144,7 @@ final class UnfoundedFindingSeverityCheck {
 					// Reachable — a line holding only spaces between two newlines splits to one — and the
 					// shared reading answers a blank text with the whole resolution. BEHAVIOURALLY NEUTRAL,
 					// measured: a blank piece states no rating word, so removing this skip reports nothing
-					// more and the suite stays green. It keeps that reading from being asked a question
+					// more and no case reddens. It keeps that reading from being asked a question
 					// whose answer is "every finding" for a piece that cites none.
 					continue;
 				}
@@ -154,17 +154,9 @@ final class UnfoundedFindingSeverityCheck {
 					if (!unrated.contains(citation)) {
 						continue;
 					}
-					// An unrated finding is never in `ratings`, so this is the OTHER cited findings' ratings.
-					Set<String> carriedByAnother = new HashSet<String>();
-					for (Integer other : citedHere) {
-						String rating = ratings.get(other);
-						if (rating != null) {
-							carriedByAnother.add(rating);
-						}
-					}
 					for (String rating : vocabulary) {
-						if (!carriedByAnother.contains(rating.toLowerCase(Locale.ROOT))
-								&& ChartSearchAiUtils.statesWord(sentence, rating)) {
+						if (ChartSearchAiUtils.statesWord(sentence, rating)
+								&& !aCitedFindingStates(rating, citedHere, findingTexts)) {
 							seen.add(new UnfoundedFindingSeverity(citation.intValue(), rating));
 						}
 					}
@@ -185,5 +177,26 @@ final class UnfoundedFindingSeverityCheck {
 					e.toString());
 			return null;
 		}
+	}
+
+	/**
+	 * Whether a finding cited in the sentence states {@code rating} in its own record — the exemption
+	 * the issue's owner decided, "no other finding cited in the same sentence carries that rating", read
+	 * off the records the model was given. The record and not {@link RecordMapping#getFindingSeverity()}:
+	 * a condition-mediated finding has no rating field and its detail states each drug-disease rating
+	 * ("Metformin is rated Major in Acidosis, Lactic"), and a rated finding's record states its rating
+	 * wherever that field is set ({@code DrugReferenceInjector.ratingThisRecordStates}). The unrated
+	 * finding's OWN record is asked too, so a word an operator dataset's note put inside it is not
+	 * reported either. Reading a record can only EXEMPT — a mechanism's own "major bleeding" silences a
+	 * report, never raises one — which is the direction this check must fail in.
+	 */
+	private static boolean aCitedFindingStates(String rating, Set<Integer> citedHere,
+			Map<Integer, String> findingTexts) {
+		for (Integer finding : citedHere) {
+			if (ChartSearchAiUtils.statesWord(findingTexts.get(finding), rating)) {
+				return true;
+			}
+		}
+		return false;
 	}
 }

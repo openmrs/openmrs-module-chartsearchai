@@ -15,8 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -44,8 +42,9 @@ public class FindingUnratedStampTest {
 	public void theStampSaysWhatTheRecordSaysOnEveryRecordOfTheChart() {
 		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOverWithRecordedAllergies(
 				DrugReferenceTestSupport.shippedServiceWithGroups(), baseChart(),
-				"Can I give her prednisone?", set("Prednisone Co 5mg", "Clarithromycin 500mg"),
-				set("H02AB07", "J01FA09"), set("dexamethasone", "hydrocortisone"));
+				"Can I give her prednisone?", DrugReferenceTestSupport.set("Prednisone Co 5mg", "Clarithromycin 500mg"),
+				DrugReferenceTestSupport.set("H02AB07", "J01FA09"),
+				DrugReferenceTestSupport.set("dexamethasone", "hydrocortisone"));
 		int unrated = 0;
 		int rated = 0;
 		for (RecordMapping mapping : chart.getMappings()) {
@@ -75,9 +74,5 @@ public class FindingUnratedStampTest {
 				new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "order-uuid-2",
 						"Clarithromycin 500mg tablet, 1 daily", null)),
 				Collections.<String> emptySet());
-	}
-
-	private static Set<String> set(String... values) {
-		return new LinkedHashSet<String>(Arrays.asList(values));
 	}
 }

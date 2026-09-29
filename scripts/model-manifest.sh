@@ -47,7 +47,9 @@ MODEL_MANIFEST_VERIFIED=''
 #
 # fetch_and_verify does not write it. The weights go through that one in background subshells, whose
 # variables reach no parent shell, so an entry there would be recorded for the embedder and lost for
-# the weights — one name answering for two behaviours.
+# the weights — one name answering for two behaviours. The weights' outcome has a channel of its own
+# instead: backend-init.sh records it per artifact from those subshells and publishes it as
+# chartsearchai.models.weightsStatus (#467).
 MODEL_MANIFEST_REFUSED=''
 
 # Exit codes fetch_and_verify_url contracts with its callers, which branch on them to say something

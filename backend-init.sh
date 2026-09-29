@@ -150,6 +150,7 @@ _download_llm_file() {
   _target=$2
   _label=$3
   if fetch_and_verify "$_id" "$_target" "$_label"; then
+    record_weights_state "$_id" ''
     echo "$_label ready: $_target"
   else
     # $? is the condition's status here. Which message is honest depends on it, and the library's
@@ -159,6 +160,9 @@ _download_llm_file() {
     # was on the volume is gone and no verified replacement took its place — so it may not fall into 3's wording,
     # which promises the opposite, nor into the catch-all's, which says the file is still there.
     _code=$?
+    # The artifact id and the library's code, never the path: the line below is for the container
+    # log, and this is for the deployment nobody can open a shell on.
+    record_weights_state "$_id" "refused:$_id:$_code"
     case $_code in
       1|2) echo "$_label was refused and deleted; restart the backend container to fetch it again from the start." >&2 ;;
       3)   if [ -f "$_target.partial" ]; then
@@ -198,7 +202,30 @@ fetch_llm_in_background() {
   # decision and the library logs it, so testing the file's state here as well would be a second
   # copy of that logic whose only job is to guess the first one's answer.
   echo "Providing $label (${size_hint}) in background${availability_note}..."
+  # Recorded here, in the start's own shell and before the fork, so the artifact is in the state
+  # directory before anything can read it — a fetch that has not reached its first line yet still
+  # reads as fetching rather than as absent, which is what a verified artifact reads as.
+  record_weights_state "$artifact_id" "fetching:$artifact_id"
   _download_llm_file "$artifact_id" "$target" "$label" &
+}
+
+# What each weights fetch came to, for chartsearchai.models.weightsStatus (#467): one file per
+# artifact under WEIGHTS_STATE_DIR, holding `fetching:<id>`, `refused:<id>:<code>`, or nothing once
+# it verified. The fetches only RECORD here; publish_weights_status, started below the demo seed, is
+# what puts it in the database. A subshell forked this early cannot do that itself: seed_sql and the
+# connection it needs are not defined until further down, and maybe_seed_demo_data then drops every
+# table and restores a snapshot of the chartsearchai properties taken before the drop — so a row
+# written from here would be wiped, or overwritten with an older start's value. Reset once per
+# start, before anything is forked, so what is in it is this start's.
+WEIGHTS_STATE_DIR="$LLM_DIR/.weights-status"
+rm -rf "$WEIGHTS_STATE_DIR"
+mkdir -p "$WEIGHTS_STATE_DIR"
+
+# record_weights_state <id> <entry> — written aside and renamed into place, so the publisher never
+# reads half an entry. An empty entry is what a verified artifact records.
+record_weights_state() {
+  printf '%s' "$2" > "$WEIGHTS_STATE_DIR/$1.tmp" && mv -f "$WEIGHTS_STATE_DIR/$1.tmp" "$WEIGHTS_STATE_DIR/$1" \
+    || echo "could not record the state of $1 for chartsearchai.models.weightsStatus." >&2
 }
 
 # E4B is the default served model (config.xml defaults
@@ -855,5 +882,74 @@ record_cpu_breadcrumb() {
     || echo "[cpu-breadcrumb] could not write GP (DB unreachable?); continuing."
 }
 record_cpu_breadcrumb || true
+
+# ---- the weights fetches' outcome, readable over REST ----------------------
+# GET /ws/rest/v1/systemsetting?q=chartsearchai.models.weightsStatus (#467). The weights are fetched
+# in background subshells, so their verdict reaches neither MODEL_MANIFEST_REFUSED nor
+# chartsearchai.models.embedderStatus, and on a deployment nobody can open a shell on an echo from a
+# subshell reaches no one — #466 ran for a day with no model file and the only symptom a 500.
+#
+# The value is one entry per artifact, space-separated: `fetching:<id>` while its fetch runs,
+# `refused:<id>:<code>` with the library's exit code once it failed, and nothing once it verified,
+# so a start whose weights all verified leaves the row present and empty. It carries ids and codes
+# and never a path, the rule the embedder's status keeps.
+#
+# The ONE writer, so the two fetches never read-modify-write one row against each other. Started
+# below the demo seed, so nothing it writes is dropped or overwritten by the seed's snapshot
+# restore — ModelDownloadPinningGuardTest.theWeightsStatusIsPublishedOnlyByOneWriterStartedAfterTheDemoSeed.
+# That costs nothing a deployment can see, because nothing serves REST until startup.sh below.
+#
+# It polls the state directory and writes whenever what it reads differs from the last value that
+# LANDED, reading each statement's status: a virgin database has no global_property table until
+# OpenMRS creates it, so an outcome recorded before then is sent again until it is taken rather
+# than counted the first time it was sent. It ends once no fetch is running and the value has
+# landed; with nothing running and the database still refusing, it gives up after 900 refused
+# writes two seconds apart — at least half an hour, the order of the backend's health
+# start_period — and says so.
+publish_weights_status() {
+  command -v mariadb >/dev/null 2>&1 || { echo "[weights-status] mariadb client absent; chartsearchai.models.weightsStatus is not recorded."; return 0; }
+  _ws_landed=no
+  _ws_landed_value=''
+  _ws_idle_misses=0
+  while :; do
+    _ws_value='' _ws_running=no _ws_artifacts=0
+    for _ws_file in "$WEIGHTS_STATE_DIR"/*; do
+      case $_ws_file in *.tmp) continue ;; esac
+      [ -f "$_ws_file" ] || continue
+      _ws_artifacts=$((_ws_artifacts + 1))
+      _ws_entry=$(cat "$_ws_file") || continue
+      case $_ws_entry in fetching:*) _ws_running=yes ;; esac
+      if [ -n "$_ws_entry" ]; then
+        _ws_value="${_ws_value:+$_ws_value }$_ws_entry"
+      fi
+    done
+    # Every fetch records itself before it is forked, so an empty directory is a recording that
+    # failed, and publishing it would read as every artifact having verified.
+    if [ "$_ws_artifacts" -eq 0 ]; then
+      echo "[weights-status] no weights fetch recorded its state, so chartsearchai.models.weightsStatus is not written." >&2
+      return 1
+    fi
+    if [ "$_ws_landed" = no ] || [ "$_ws_value" != "$_ws_landed_value" ]; then
+      _ws_sql=$(printf %s "$_ws_value" | sed "s/'/''/g")
+      if seed_sql "$DB_NAME" -e "INSERT INTO global_property (property,property_value,uuid) VALUES ('chartsearchai.models.weightsStatus','$_ws_sql',UUID()) ON DUPLICATE KEY UPDATE property_value='$_ws_sql';" >/dev/null 2>&1; then
+        _ws_landed=yes
+        _ws_landed_value=$_ws_value
+        _ws_idle_misses=0
+      else
+        _ws_landed=no
+        [ "$_ws_running" = yes ] || _ws_idle_misses=$((_ws_idle_misses + 1))
+      fi
+    fi
+    if [ "$_ws_running" = no ]; then
+      [ "$_ws_landed" = yes ] && return 0
+      if [ "$_ws_idle_misses" -ge 900 ]; then
+        echo "[weights-status] the database refused chartsearchai.models.weightsStatus 900 times with no fetch running; giving up on: ${_ws_value:-every weights artifact verified}" >&2
+        return 1
+      fi
+    fi
+    sleep 2
+  done
+}
+publish_weights_status &
 
 exec /openmrs/startup.sh

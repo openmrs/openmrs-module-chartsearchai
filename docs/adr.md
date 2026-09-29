@@ -9308,6 +9308,30 @@ database can write one either, and `exec /openmrs/startup.sh` replaces the shell
 that `startup.sh` then waits for comes back. What is owed is that README says where the channel holds,
 and `.theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt` pins the behaviour it describes.
 
+**The weights get a channel of their own** ([#467](https://github.com/openmrs/openmrs-module-chartsearchai/issues/467)).
+The second premise applies to them unchanged, and #466 ran for a day with no weights file and a 500
+as the only readable symptom, because their verdict was an `echo` from a background subshell.
+`MODEL_MANIFEST_REFUSED` still cannot carry it, for the reason the library records, so the
+entrypoint publishes `chartsearchai.models.weightsStatus`: one entry per artifact, `fetching:<id>`
+while its fetch runs, `refused:<id>:<code>` with the library's code once it failed, and nothing once
+it verified. It is a property of its own so it cannot be read as the embedder's, and it carries no
+path. The maintainer's decision on the issue has the fetch subshell write the row. What ships is one
+step removed, and the reason is where that subshell is forked: above `seed_sql` and the connection it
+needs, and above `maybe_seed_demo_data`, whose drop and snapshot restore would wipe or roll back
+anything written while it runs. So each subshell records its own state in a file and ONE writer,
+`publish_weights_status`, puts it in the database. That writer is started below the seed, and it
+sends a write again until one lands — giving up, and saying so, after 900 refusals with no fetch
+running — because a virgin database has no `global_property` table until
+OpenMRS creates it. Nothing serves REST before `startup.sh`, so publishing from there costs
+nothing a deployment can see. The alternative was considered and not taken: move
+both fetches below the seed and update the row with one atomic statement per entry. It delays an
+~8GB download by the length of the seed on every seed start. A subshell killed by a signal before
+it records an outcome leaves `fetching:` standing; the publisher does not look for that
+shape. → `EntrypointRetrievalWiringTest.aWeightsFetchStillRunningReadsAsFetchingUntilItsOutcomeReplacesIt`,
+`.aWeightsFetchThatCannotResolveIsRecordedWithItsArtifactAndCode`,
+`.theWeightsOutcomeIsRecordedOnceTheDatabaseTakesItRatherThanWhenItWasFirstSent`;
+`ModelDownloadPinningGuardTest.theWeightsStatusIsPublishedOnlyByOneWriterStartedAfterTheDemoSeed`.
+
 **And on those same two branches the container log's LAST line said the opposite, which review round
 6 found.** `configure_retrieval_gps` ends by printing the three rows it read back, and a `gp_value`
 that failed answers the empty string — the answer a blanked row gives too — so the line read

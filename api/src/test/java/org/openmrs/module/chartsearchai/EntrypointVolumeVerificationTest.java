@@ -48,18 +48,19 @@ import org.junit.jupiter.api.io.TempDir;
  * what the entrypoint DOES: the library is the real one, the bytes on the volume are real bytes, and
  * the question is whether they get hashed.
  *
- * <p><b>It runs the entrypoint's own functions and its own call, not a retelling of them.</b> Both
+ * <p><b>It runs the entrypoint's own functions and its own call, not a retelling of them.</b> The
  * functions below are taken verbatim out of {@code backend-init.sh} by name through {@link
  * EntrypointSource}, the fetches are the entrypoint's own {@code fetch_llm_in_background} calls
  * pasted as written, and the library is {@code scripts/model-manifest.sh} itself. The test supplies
- * only {@code LLM_DIR}, a fixture manifest, and the bytes on the volume.
+ * only {@code LLM_DIR}, the directory the fetches record their state in for the weights' status
+ * (#467), a fixture manifest, and the bytes on the volume.
  *
  * <p><b>The residue, named rather than claimed away.</b> This reaches the LLM weights, whose fetch
  * the entrypoint wraps in a function it can paste. The embedder's two fetches are top-level
  * statements with no function to extract, so that half is
  * {@code ModelDownloadPinningGuardTest.everyArtifactTheEntrypointProvisionsIsFetchedUnconditionally}
  * — a source channel, and one that reads nesting rather than behaviour. Nor does this run the
- * entrypoint end to end: it cannot see a skip written anywhere but inside the two functions it
+ * entrypoint end to end: it cannot see a skip written anywhere but inside the functions it
  * pastes.
  */
 public class EntrypointVolumeVerificationTest {
@@ -69,8 +70,8 @@ public class EntrypointVolumeVerificationTest {
 	 * harness. Listing them is what makes the harness's dependency on the entrypoint explicit: a
 	 * function that stops existing under this name stops the run with a message naming it.
 	 */
-	private static final List<String> WEIGHTS_FETCH_FUNCTIONS = List.of("_download_llm_file",
-			"fetch_llm_in_background");
+	private static final List<String> WEIGHTS_FETCH_FUNCTIONS = List.of("record_weights_state",
+			"_download_llm_file", "fetch_llm_in_background");
 
 	/** The entrypoint's own per-model fetch. Its calls are what these cases run. */
 	private static final String FETCH_CALL = "fetch_llm_in_background";
@@ -130,6 +131,8 @@ public class EntrypointVolumeVerificationTest {
 			// verification came off the volume rather than off a transfer.
 			assertFalse(run.output.contains("Downloading " + call.label), "the file on the volume was re-downloaded"
 					+ " rather than hashed where it lay\n" + run);
+			assertEquals("", weightsState(call.artifact), "a verified artifact left an entry for the weights'"
+					+ " status, which says nothing for one that verified (#467)\n" + run);
 		}
 	}
 
@@ -159,7 +162,21 @@ public class EntrypointVolumeVerificationTest {
 			assertTrue(run.output.contains(call.label + " was refused and deleted, and the pinned revision could"
 					+ " not then be reached to replace it"), "the operator is not told the volume no longer holds a"
 							+ " copy of this file\n" + run);
+			assertEquals("refused:" + call.artifact + ":6", weightsState(call.artifact), "the refusal is not"
+					+ " recorded as its artifact and the library's code for the weights' status (#467)\n" + run);
 		}
+	}
+
+	/** Where the fetches record their state for the weights' status; the entrypoint's WEIGHTS_STATE_DIR. */
+	private Path stateDir() {
+		return work.resolve("weights-state");
+	}
+
+	/** What a fetch recorded for {@code artifact}, or a failure where it recorded nothing at all. */
+	private String weightsState(String artifact) throws IOException {
+		Path state = stateDir().resolve(artifact);
+		assertTrue(Files.isRegularFile(state), "nothing was recorded for " + artifact + " at " + state);
+		return new String(Files.readAllBytes(state), StandardCharsets.UTF_8);
 	}
 
 	// ---- driving the entrypoint's own weights fetch ---------------------------------------------
@@ -173,6 +190,8 @@ public class EntrypointVolumeVerificationTest {
 		List<String> script = new ArrayList<String>();
 		script.add(". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'");
 		script.add("LLM_DIR='" + weightsDir + "'");
+		script.add("WEIGHTS_STATE_DIR='" + stateDir() + "'");
+		script.add("mkdir -p \"$WEIGHTS_STATE_DIR\"");
 		List<String> lines = EntrypointSource.lines();
 		for (String function : WEIGHTS_FETCH_FUNCTIONS) {
 			script.add(EntrypointSource.functionText(lines, function));

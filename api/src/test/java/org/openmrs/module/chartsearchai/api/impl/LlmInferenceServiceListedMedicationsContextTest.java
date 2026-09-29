@@ -83,7 +83,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 	public void setUp() {
 		// The answers most cases here judge are the MODEL's: since issue #562 the module answers a withheld
 		// proposal, or a screen that related a pair, itself wherever the drug-reference layer is on (ADR
-		// Decision 131). The cases about the module's own answer turn the property back on themselves.
+		// Decision 131). The case about the module's own answer turns the property back on itself.
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
 		executeDataSet(RIFAMPICIN_ORDER);

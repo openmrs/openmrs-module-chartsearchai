@@ -169,7 +169,7 @@ def cell(label, question, entailment, floor):
         "question": question,
         "answer": (body.get("answer") or "").strip(),
         # Read strictly, because the README says the key is always present: since #562 a withheld
-        # proposal (the "safety" probe's shape) is answered by the module where the drug-reference
+        # proposal (the "safety" probe's shape) can be answered by the module where the drug-reference
         # layer is on, no grounding runs, and the record below then reads NOT CITED with no model
         # involved. This is what tells that cell apart.
         "answered_by_the_module": body["answeredByTheModule"],

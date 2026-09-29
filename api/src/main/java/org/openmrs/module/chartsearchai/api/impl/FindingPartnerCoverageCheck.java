@@ -68,9 +68,10 @@ import org.slf4j.LoggerFactory;
  * between the knowledge base's label a finding prints (<em>Rifampicin (rifampin)</em>) and the name an
  * answer writes (<em>Rifampicin</em>), measured putting the same false sentence into 6 of 22 answers on
  * that issue's patient. Only an interaction rule chip's partners carry rows ({@link #statedPartners});
- * every other spelling difference is unstated. Containment has a residue in the other direction too:
- * an order whose name sits inside a longer one the answer wrote ({@code Lamivudine} inside {@code Lamivudine / zidovudine}) reads as
- * stated. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
+ * every other spelling difference reads as unstated. Containment has a residue in the other direction
+ * too: an order whose name sits inside a longer one the answer wrote ({@code Lamivudine} inside
+ * {@code Lamivudine / zidovudine}) reads as stated, and so, through the prose rule, does a partner named
+ * by an alias the reference data files under two substances. It says nothing about whether the answer's claim ABOUT a partner is right — that is {@code ReferenceProseFidelityCheck}'s question — only whether the
  * partner was named at all. An ordinary finding names one order and is measured like the rest, while
  * the merged finding and, since issue #477, the finding that a drug is already in several of her
  * orders and the finding that several of her orders share a substance are where a list can be
@@ -264,11 +265,11 @@ public final class FindingPartnerCoverageCheck {
 	 * own. That is what reads <em>"Rifampicin"</em> as naming the partner a finding prints by the knowledge
 	 * base's label <em>"Rifampicin (rifampin)"</em>.
 	 *
-	 * <p><b>Only an interaction RULE chip's partner carries rows</b> ({@code SafetyWarning.rowsOfPartner}),
-	 * one partner per substance. The findings that name several of her orders of ONE substance — issue
-	 * #477's two — carry none, so an answer writing that substance's name, which is the question drug's,
-	 * does not state which of those orders it meant, and each is stated only by its printed name: the
-	 * residue there runs toward reporting, the direction this class's javadoc states.
+	 * <p><b>Only an interaction RULE chip's partner carries rows</b> ({@code SafetyWarning.rowsOfPartner}).
+	 * The findings that name several of her orders of ONE substance — issue #477's two — carry none: an
+	 * answer writing that substance's name has not said which of those orders it meant, so each is stated
+	 * only by its printed name, and the residue there runs toward reporting, the direction this class's
+	 * javadoc states.
 	 */
 	private static Set<String> statedPartners(String answer, List<RecordMapping> findings,
 			DrugSafetyValidator validator) {

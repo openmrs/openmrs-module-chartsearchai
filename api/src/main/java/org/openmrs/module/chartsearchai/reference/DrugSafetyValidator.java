@@ -4783,8 +4783,15 @@ public class DrugSafetyValidator {
 				}
 				matchedNames.addAll(member.chip.matchedOrderNames());
 				for (Map.Entry<String, List<DrugReference>> rows : member.chip.partnerRows().entrySet()) {
-					if (!partnerRows.containsKey(rows.getKey())) {
-						partnerRows.put(rows.getKey(), rows.getValue());
+					List<DrugReference> union = partnerRows.get(rows.getKey());
+					if (union == null) {
+						union = new ArrayList<DrugReference>();
+						partnerRows.put(rows.getKey(), union);
+					}
+					for (DrugReference row : rows.getValue()) {
+						if (!union.contains(row)) {
+							union.add(row);
+						}
 					}
 				}
 				if (member.bridges != null) {

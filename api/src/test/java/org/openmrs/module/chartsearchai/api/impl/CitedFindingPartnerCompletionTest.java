@@ -618,17 +618,8 @@ public class CitedFindingPartnerCompletionTest {
 	 *  {@code structuredCitations} as its structured citations array. */
 	private static LlmInferenceService service(PatientChart chart, List<SafetyWarning> chips,
 			String modelAnswer, List<Integer> structuredCitations) {
-		return service(chart, new DrugSafetyValidator() {
-
-			// The overload production calls: mappings-carrying (issue #105) and sink-carrying (issue
-			// #336). Stubbing a shorter one would leave this stub inert.
-			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
-					List<PatientChartSerializer.RecordMapping> mappings,
-					PairChipExtent.Sink pairExtentSink) {
-				return chips;
-			}
-		}, modelAnswer, structuredCitations);
+		return service(chart, DrugReferenceTestSupport.validatorRaising(null, chips), modelAnswer,
+				structuredCitations);
 	}
 
 	/** {@link #service(PatientChart, List, String, List)} with {@code validator} as the post-answer pass. */

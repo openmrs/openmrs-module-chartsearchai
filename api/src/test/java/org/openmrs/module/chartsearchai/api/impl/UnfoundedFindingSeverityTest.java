@@ -196,13 +196,7 @@ public class UnfoundedFindingSeverityTest {
 						"chartsearchai-test/drug-reference-rated-note-omits-its-rating.json"),
 				DrugReferenceTestSupport.oneRecordChart(), question, setOf("ibuprofen"), "Warfarin");
 		int allergy = unratedFindingNaming(chart, "Ibuprofen");
-		int interaction = -1;
-		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
-			if (finding.getText().contains("moderate doses")) {
-				interaction = finding.getIndex();
-			}
-		}
-		assertTrue(interaction > 0, "precondition: the interaction finding reached the prompt: " + chart.getText());
+		int interaction = findingWhoseText(chart, "moderate doses");
 		assertEquals(null, DrugReferenceTestSupport.findingAt(chart, interaction).getFindingSeverity(),
 				"precondition: its record does not state its Major rating, so the field is null");
 		assertEquals(Boolean.FALSE, DrugReferenceTestSupport.findingAt(chart, interaction).getFindingUnrated(),
@@ -418,6 +412,16 @@ public class UnfoundedFindingSeverityTest {
 			}
 		}
 		throw new IllegalStateException("no unrated finding naming " + allergen + ": " + chart.getText());
+	}
+
+	/** The injected finding whose record states {@code needle}, the first in chart order. */
+	static int findingWhoseText(PatientChart chart, String needle) {
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+			if (finding.getText().contains(needle)) {
+				return finding.getIndex();
+			}
+		}
+		throw new IllegalStateException("no injected finding stating '" + needle + "': " + chart.getText());
 	}
 
 	private static int ratedFinding(PatientChart chart, String rating) {

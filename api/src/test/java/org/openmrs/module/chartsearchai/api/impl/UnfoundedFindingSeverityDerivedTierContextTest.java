@@ -24,7 +24,6 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnfoundedFindingSeverity;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -52,8 +51,8 @@ public class UnfoundedFindingSeverityDerivedTierContextTest extends BaseModuleCo
 	@Test
 	public void aRatingTheCoCitedConditionMediatedFindingStatesIsNotReported() {
 		PatientChart chart = chart();
-		int unrated = findingWhoseText(chart, "No severity is rated for this finding.");
-		int derived = findingWhoseText(chart, "is rated Major in");
+		int unrated = UnfoundedFindingSeverityTest.findingWhoseText(chart, "No severity is rated for this finding.");
+		int derived = UnfoundedFindingSeverityTest.findingWhoseText(chart, "is rated Major in");
 		assertNull(DrugReferenceTestSupport.findingAt(chart, derived).getFindingSeverity(),
 				"precondition: the condition-mediated finding carries no rating of its own");
 		LlmInferenceService service = UnfoundedFindingSeverityTest.serviceOver(chart,
@@ -67,8 +66,8 @@ public class UnfoundedFindingSeverityDerivedTierContextTest extends BaseModuleCo
 	@Test
 	public void aRatingNeitherCitedFindingStatesIsStillReported() {
 		PatientChart chart = chart();
-		int unrated = findingWhoseText(chart, "No severity is rated for this finding.");
-		int derived = findingWhoseText(chart, "is rated Major in");
+		int unrated = UnfoundedFindingSeverityTest.findingWhoseText(chart, "No severity is rated for this finding.");
+		int derived = UnfoundedFindingSeverityTest.findingWhoseText(chart, "is rated Major in");
 		LlmInferenceService service = UnfoundedFindingSeverityTest.serviceOver(chart,
 				"Her metformin allergy is a Moderate finding beside the lactic acidosis link [" + derived + "] ["
 						+ unrated + "].");
@@ -82,7 +81,7 @@ public class UnfoundedFindingSeverityDerivedTierContextTest extends BaseModuleCo
 	@Test
 	public void aRatingAttachedToTheConditionMediatedFindingAloneIsReportedUnlessItsRecordStatesIt() {
 		PatientChart chart = chart();
-		int derived = findingWhoseText(chart, "is rated Major in");
+		int derived = UnfoundedFindingSeverityTest.findingWhoseText(chart, "is rated Major in");
 		LlmInferenceService moderate = UnfoundedFindingSeverityTest.serviceOver(chart,
 				"The lactic acidosis link with her stavudine and lamivudine is a Moderate finding [" + derived + "].");
 		assertEquals(Collections.singletonList(new UnfoundedFindingSeverity(derived, "Moderate")),
@@ -100,7 +99,7 @@ public class UnfoundedFindingSeverityDerivedTierContextTest extends BaseModuleCo
 		// Its detail says it has no severity of its own, though it does not get the no-severity sentence the
 		// other unrated findings do (ConditionMediatedFindingTest.theInjectedRecordSaysItHasNoSeverityOnce).
 		PatientChart chart = chart();
-		int derived = findingWhoseText(chart, "is rated Major in");
+		int derived = UnfoundedFindingSeverityTest.findingWhoseText(chart, "is rated Major in");
 		assertTrue(DrugReferenceTestSupport.findingAt(chart, derived).getText().contains("no severity of its own"),
 				"precondition: its record says so");
 		assertEquals(Boolean.TRUE, DrugReferenceTestSupport.findingAt(chart, derived).getFindingUnrated());
@@ -113,14 +112,5 @@ public class UnfoundedFindingSeverityDerivedTierContextTest extends BaseModuleCo
 				DrugReferenceTestSupport.shippedServiceWithGroups(),
 				UnfoundedFindingSeverityTest.chartOf("Stavudine 30mg capsule", "Lamivudine 150mg tablet"), QUESTION,
 				new LinkedHashSet<String>(Arrays.asList("metformin")), "Stavudine", "Lamivudine");
-	}
-
-	private static int findingWhoseText(PatientChart chart, String needle) {
-		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
-			if (finding.getText().contains(needle)) {
-				return finding.getIndex();
-			}
-		}
-		throw new IllegalStateException("no injected finding stating '" + needle + "': " + chart.getText());
 	}
 }

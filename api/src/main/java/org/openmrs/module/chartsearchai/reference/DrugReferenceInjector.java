@@ -2433,7 +2433,8 @@ public class DrugReferenceInjector {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/560">#560</a>, the writer of
 	 * {@code RecordMapping.getFindingUnrated()}. Every such record says so: {@link #statesNoSeverity}
 	 * appends {@link #FINDING_NO_SEVERITY}, and a condition-mediated finding's detail already ends by saying
-	 * it has no severity of its own. A FOLDED chip's severity is its rule's, so it carries one.
+	 * it has no severity of its own. A FOLDED chip's severity is its rule's, so it carries the rule's rating
+	 * and none where the rule is unrated.
 	 */
 	private static boolean carriesNoRating(SafetyWarning finding) {
 		return finding.getSeverity() == null;

@@ -12204,7 +12204,8 @@ The issue's gate names two live cells and a control. *"Is prednisone safe for he
 clarithromycin control are this branch's. *"Can I give her prednisone?"* on #554's head is not: that code is
 #554's, and the issue says #554's unmet row is read against this key once both land.
 
-Pinned by `UnfoundedFindingSeverityTest`, over the shipped knowledge base through the real `injectRecords`
+Pinned by `UnfoundedFindingSeverityTest`, over the shipped knowledge base and two hand-authored operator
+fixtures through the real `injectRecords`
 and `search`/`searchStreaming` — mutate the stamp, the sentence unit, the per-sentence citation reading, the
 co-cited exemption or the vocabulary and read which case reddens — by
 `UnfoundedFindingSeverityDerivedTierContextTest` for the condition-mediated finding, by

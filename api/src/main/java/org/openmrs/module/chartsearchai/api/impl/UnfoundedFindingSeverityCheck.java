@@ -51,8 +51,8 @@ import org.slf4j.LoggerFactory;
  * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, as the issue's owner decided. The sibling's whole-answer
  * unit cannot work here, because "Major" elsewhere in the answer is exactly the false report. A rating
  * word in that sentence is reported only where no finding the sentence cites, the unrated one included,
- * carries that rating ({@code aCitedFindingCarries} says what carrying is for a finding with a rating
- * field and for one without), which keeps silent a rating quoted from another finding's detail beside it
+ * carries that rating ({@code aCitedFindingCarries} says what carrying is for a finding carrying a rating
+ * and for one carrying none), which keeps silent a rating quoted from another finding's detail beside it
  * — PR #554's fourth run.
  *
  * <p><b>Which findings a sentence cites is {@link SafetyFindingCitationExtentCheck#citedFindingIndexes}</b>,

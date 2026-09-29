@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #553: a drug order scheduled to start in the future, beside one that has started, for patient 7
+  of the standard test dataset (whose own active order is order 111, ASPIRIN, concept 88).
+
+  ORDER 9553 — Nevirapine, ROUTINE, activated 2008: in force.
+  ORDER 9554 — Rifampicin, urgency ON_SCHEDULED_DATE, activated 2008, scheduled_date 2099-01-01. Core's
+  Order.isActive() answers TRUE for it (it reads dateActivated and never scheduledDate), and so does the
+  SQL getActiveOrders; Order.isStarted() answers FALSE, and getEffectiveStartDate() is the scheduled date.
+  Noon rather than midnight, so the date the module spells in UTC is 2099-01-01 in any test time zone.
+
+  The verbatim slice the tests load (ddi-listed-medications-proposal.json) relates Rifampicin to
+  Nevirapine, to Amlodipine and to Fluconazole. Concepts, names and drugs are supplied because the
+  standard dataset carries neither drug. The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<concept concept_id="9553" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9553aaaa-0000-4000-8000-00000009553a" />
+	<concept concept_id="9554" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9554aaaa-0000-4000-8000-00000009554a" />
+	<concept_name concept_name_id="9553" concept_id="9553" name="Nevirapine"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9553bbbb-0000-4000-8000-00000009553a" />
+	<concept_name concept_name_id="9554" concept_id="9554" name="Rifampicin"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9554bbbb-0000-4000-8000-00000009554a" />
+	<drug drug_id="9553" concept_id="9553" name="Nevirapine" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9553cccc-0000-4000-8000-00000009553a" />
+	<drug drug_id="9554" concept_id="9554" name="Rifampicin" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9554cccc-0000-4000-8000-00000009554a" />
+	<orders order_id="9553" order_type_id="1" order_number="ORD-9553" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9553" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9553dddd-0000-4000-8000-00000009553a"
+	        care_setting="1" encounter_id="3" />
+	<orders order_id="9554" order_type_id="1" order_number="ORD-9554" urgency="ON_SCHEDULED_DATE"
+	        scheduled_date="2099-01-01 12:00:00.0"
+	        order_action="NEW" concept_id="9554" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9554dddd-0000-4000-8000-00000009554a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9553" drug_inventory_id="9553" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<drug_order order_id="9554" drug_inventory_id="9554" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

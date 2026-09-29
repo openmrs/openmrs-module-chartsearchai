@@ -129,6 +129,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 121: The "Drug reference" record-type sentence is unchanged, and the three rewordings measured for it are inconclusive rather than refuted](#decision-121-the-drug-reference-record-type-sentence-is-unchanged-and-the-three-rewordings-measured-for-it-are-inconclusive-rather-than-refuted)
 - [Decision 122: Every record of the whole chart carries its own date](#decision-122-every-record-of-the-whole-chart-carries-its-own-date)
 - [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
+- [Decision 126: An order that has not started is screened, and stated as scheduled with its date](#decision-126-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -12259,3 +12260,112 @@ not the resolving one, and the statement's text unchanged),
 (a drug-in-play chip names her order and is not stated), and on the wire by
 `ChartSearchAiCurrentMedicationOrdersTest`, `ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid`
 and `ChartSearchAiSafetyWarningSeverityWireTest`'s chip 15.
+
+## Decision 126: An order that has not started is screened, and stated as scheduled with its date
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#553](https://github.com/openmrs/openmrs-module-chartsearchai/issues/553).
+
+### Context
+
+A drug order scheduled to start in the future (`urgency` `ON_SCHEDULED_DATE`, `scheduledDate` ahead) was
+screened as an active order the patient is already taking. On a 3.7.1 standalone, a patient with a
+started Nevirapine order and a Rifampicin order scheduled a month out got *"Nevirapine interacts with active
+order Rifampicin (rifampin)"* (Major) on a screening question, *"Dabigatran etexilate interacts with active
+order Rifampicin"* on a proposal, and an answer saying she "is taking Nevirapine and Rifampicin". The chart
+record said `. Order status: in force`. Core's `Order.isActive()` checks voided, the `DISCONTINUE` action,
+`dateActivated`, discontinuation and expiry, and never `scheduledDate`; `Order.isStarted()` is the check that
+reads the effective start date. The module takes "active" from `isActive()` (the chart mark) and from the SQL
+`getActiveOrders` (the safety context), which agree on this.
+
+The owner's ruling on the ticket: keep screening it — dropping a Major interaction with a drug due next
+month would be a safety loss — and fix the wording.
+
+### Decision
+
+- **Started is core's `Order.isStarted()`, and the date is `getEffectiveStartDate()`**, read in the two
+  places each read already happens and nowhere else: `QueryStoreChartBuilder.readingOf` for the chart, and
+  `PatientClinicalContextBuilder` for `ActiveDrugOrder.getScheduledStart()`.
+- **The chart record says so.** Such an order's `orderActive` is `null` — it is neither in force (`TRUE`) nor
+  this patient's order out of force (`FALSE`, which the system prompt teaches as ended) — and
+  `SerializedRecord.orderStartDate` states the date; the line renders
+  `. Order status: scheduled to start <yyyy-MM-dd>` (`PatientChartSerializer.scheduledOrderStatus`). Every
+  production reader of `RecordMapping.getOrderActive()` tests `FALSE` alone, so `null` reads as "not ended"
+  at each of them.
+- **The order stays on every list an arm screens.** Where a chip names it, it is a *scheduled order* with its
+  date (`DrugSafetyValidator.SCHEDULED_ORDER_INTERACTION_PHRASE`), in the rule chip, the class sentence and
+  the sentence `FindingPartnerCoverageCheck` appends; the duplicate-therapy sentence naming several of her
+  orders (#477) names each carrier that has not started after the started ones — *"X is in active order A
+  and scheduled order B (scheduled to start <date>)"* — and says "is in" rather than "is already in" where
+  none has started (`DrugSafetyValidator.ordersNamed`; found by review round 3 of PR #559). The appended
+  sentence reads each partner's own date, off `RecordMapping.getFindingPartnerScheduledStarts()`, which both
+  duplicate-therapy findings write as well as the rule chip — one date per finding named every partner of
+  such a finding "active order" (review round 4 of PR #559); a display a started order also carries stays
+  "active order". The stand-in
+  record for an order the chart has no record of reads `Scheduled drug order: …` with the same status.
+- **A question proposing the drug treats it as a proposal.** Where a question PROPOSES a drug she holds only
+  as orders that have not started, the drug-in-play arm states the proposal referent rather than Decision
+  123's current-medication one (`currentMedicationsInPlay`, via `proposedByTheQuestion`), so *"Can I give her
+  rifampicin?"* about her scheduled Rifampicin states the proposal call — true of a drug not yet given. A
+  question that proposes nothing about it — one LISTING it as a drug she is on (*"Her current medications are
+  nevirapine and rifampicin. Any interactions?"*, *"She is on nevirapine and rifampicin. Can I give her
+  amlodipine?"*) — keeps the current-medication referent, since the withholding clause there is Decision 72's
+  defect; each rule chip then names its subject as scheduled, with its date, as the screening arm does. Found
+  by review round 1 of PR #559, which measured the flip on both questions.
+- **The order-driven arms keep the current-medication referent.** The screening arm and the active-order
+  contraindication arm have no proposal to refuse, and the proposal clause there is Decision 72's defect: a
+  module-composed screening answer opened *"No — … a reason to withhold Rifampicin"*, found by review of this
+  change. So the start date goes into the words instead: the screening arm visits a substance she holds only
+  as not-started orders LAST (`startedSubjectsFirst`), so a pair with a started side is stated from it, and
+  the contraindication arm's *"Currently prescribed: …"* line prints a not-started order with its start date.
+  A contraindication chip about a substance she holds only as such orders ends its `detail` with *"Her order
+  for X has not started: it is scheduled to start <date>."* (`SafetyWarning.statingItsOrderHasNotStarted`,
+  stamped by `ContraindicationChips.add`), from either arm that states the current-medication referent — the
+  ruling asks the chip to say it, and review round 1 of PR #559 found it did not. A module-composed answer
+  leaves Decision 113's referent sentence off such a chip's line (`SafetyWarning.orderScheduledStart()`, set
+  by the same step): that sentence said she is already taking the drug, one sentence after the detail says
+  her order has not started, and the detail's own sentence already says the order is hers. Found by review
+  round 2 of PR #559; `LlmInferenceServiceScheduledOrderContextTest`.
+- **Whether a side has started is one decision**, `DrugSafetyValidator.scheduledStartOf`: the earliest start
+  among the orders the arm's own `resolvesFromAny` matched, or none where any of them has started.
+
+### Rejected
+
+- **Exclude a not-started order from the active set** (`!isStarted()`). A safety loss the owner ruled out.
+- **Require a started order for the referent at EVERY arm.** Taken first, and it reopened Decision 72 on
+  the order-driven arms, as above.
+- **Leave the drug-in-play referent alone too.** Its question names the drug, so the proposal call is the
+  true one there, and the current-medication clause would say she takes a drug she has not started.
+- **A third referent column for a scheduled order**, beside Decision 110's ended one. It needs a prompt
+  branch per class and an interleaved A/B; the proposal clause is already true of the drug.
+
+### Residues
+
+- A partner the dataset carries no entry for, keyed on its rule's label (#155/#290), has no rows to resolve,
+  so its chip keeps "active order" even where that order has not started.
+- The answer-side recognisers (`ActiveOrderCitationFidelityCheck`, `InteractionClaimPairFidelityCheck`) key on
+  `ACTIVE_ORDER_NOUN`, so a claim an answer recites as "scheduled order" is outside what they examine.
+- The condition-mediated arm (off by default) and `FINDING_CHART_ORDER_LEAD` ("…from this patient's own active
+  orders", true in core's sense) are unchanged.
+- No wire key carries the start date; an interaction chip's `detail` states it. A client reading the order
+  itself by `resourceUuid` reads it from the chart.
+- A pair of two not-started orders, a pair the dataset relates from its not-started side alone (the visiting
+  order states a pair from its started side only where that side's own rules reach it), a contraindication
+  about a not-started order, and a drug-in-play finding about one a question lists still state the current-medication clause ("a medication this patient is already
+  taking") and publish `aboutACurrentMedication: true`; their details carry the start date. On the drug-in-play
+  arm only the rule chips and the several-orders chip do: its class-only, condition-mediated and dose chips
+  about such a drug do not.
+- On a chart holding a scheduled order, a screened pair whose subject is scheduled-only sorts behind its
+  equally rated pairs, so where the `maxPairChips` cap cuts inside that rating it is withheld before them.
+- `LlmInferenceService`'s enumeration-repair instruction asks the model to name "the active order it is about"
+  for each finding; it is prompt text and was not re-measured here.
+- What the model writes in its own prose is pinned by no test here.
+- The date is spelled by `DateFormatUtil.formatDate`, which converts to UTC, as every date this module
+  publishes is. A scheduled date stored as local midnight on a server east of UTC reads one day early — a
+  Nairobi-zoned run of `DrugOrderCurrencyMarkTest` over a midnight fixture printed 2098-12-31 for 2099-01-01
+  (review round 1 of PR #559). The fixtures use noon for that reason; the convention is older than this change.
+
+Pinned by `DrugOrderCurrencyMarkTest.aScheduledOrderIsNeitherInForceNorEndedAndItsRecordSaysWhenItStarts`,
+`ScheduledOrderInteractionContextTest` and `LlmInferenceServiceScheduledOrderContextTest`, each over
+`ScheduledDrugOrderTestData.xml` read by the real builders; `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace`
+now selects the rung carrying both dates.

@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -1003,6 +1004,9 @@ public class PatientClinicalContext {
 		 *  gets displaced on a chip (issue #290, {@code OrderPartner.nameByOrder}). */
 		private final boolean nameKnown;
 
+		/** @see #getScheduledStart() */
+		private final Date scheduledStart;
+
 		/** An order whose concept carries no ATC map — the majority in practice: only 85 of the 616
 		 *  Drug-class concepts in the 3.7.1 reference demo dictionary carry one (measured 2026-08-04,
 		 *  the same count {@code DrugReferenceService.findForActiveOrders} cites) — so the code-carrying
@@ -1070,8 +1074,17 @@ public class PatientClinicalContext {
 		 */
 		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
 				Set<String> administrationTerms, String conceptUuid) {
+			return namedByCodesOnly(uuid, display, atcCodes, administrationTerms, conceptUuid, null);
+		}
+
+		/**
+		 * As {@link #namedByCodesOnly(String, String, Set, Set, String)}, for an order that has not
+		 * started ({@link #getScheduledStart()}, issue #553).
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
+				Set<String> administrationTerms, String conceptUuid, Date scheduledStart) {
 			return new ActiveDrugOrder(uuid, display, null, atcCodes, administrationTerms, false,
-					conceptUuid);
+					conceptUuid, scheduledStart);
 		}
 
 		/**
@@ -1082,8 +1095,17 @@ public class PatientClinicalContext {
 		 */
 		static ActiveDrugOrder named(String uuid, String display, Set<String> names,
 				Set<String> atcCodes, Set<String> administrationTerms, String conceptUuid) {
+			return named(uuid, display, names, atcCodes, administrationTerms, conceptUuid, null);
+		}
+
+		/**
+		 * As {@link #named(String, String, Set, Set, Set, String)}, for an order that has not started
+		 * ({@link #getScheduledStart()}, issue #553).
+		 */
+		static ActiveDrugOrder named(String uuid, String display, Set<String> names,
+				Set<String> atcCodes, Set<String> administrationTerms, String conceptUuid, Date scheduledStart) {
 			return new ActiveDrugOrder(uuid, display, names, atcCodes, administrationTerms, true,
-					conceptUuid);
+					conceptUuid, scheduledStart);
 		}
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
@@ -1093,6 +1115,12 @@ public class PatientClinicalContext {
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
 				Set<String> administrationTerms, boolean nameKnown, String conceptUuid) {
+			this(uuid, display, names, atcCodes, administrationTerms, nameKnown, conceptUuid, null);
+		}
+
+		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms, boolean nameKnown, String conceptUuid, Date scheduledStart) {
+			this.scheduledStart = scheduledStart;
 			this.conceptUuid = conceptUuid;
 			this.nameKnown = nameKnown;
 			this.administrationTerms = lower(administrationTerms);
@@ -1190,6 +1218,32 @@ public class PatientClinicalContext {
 		 */
 		public Set<String> getAdministrationTerms() {
 			return administrationTerms;
+		}
+
+		/**
+		 * @return when this order is scheduled to start, for an order that has NOT started, or
+		 *         {@code null} for one that has (issue #553). Core's {@code Order.isActive()} — and the
+		 *         {@code getActiveOrders} read this list comes from — call an order active from its
+		 *         {@code dateActivated} alone, so an order due to start next month is on this list; core's
+		 *         {@code Order.isStarted()} is what says it has not started, and its
+		 *         {@code getEffectiveStartDate()} is the date. Written in one place,
+		 *         {@link PatientClinicalContextBuilder}, off those two calls and never off
+		 *         {@code scheduledDate}.
+		 *
+		 *         <p>Such an order is still SCREENED — it stays on every list an arm reads, so no finding
+		 *         about it is lost — but a finding names it as a scheduled order rather than an active one,
+		 *         and a finding about it as a drug in play does not state it as a medication she is already
+		 *         taking. {@code docs/adr.md} Decision 126 names what the order-driven arms still state and
+		 *         the residue the wording does not reach.
+		 */
+		public Date getScheduledStart() {
+			return scheduledStart;
+		}
+
+		/** @return whether this order has started, which is every order {@link #getScheduledStart()}
+		 *          states no date for */
+		public boolean hasStarted() {
+			return scheduledStart == null;
 		}
 
 		/**

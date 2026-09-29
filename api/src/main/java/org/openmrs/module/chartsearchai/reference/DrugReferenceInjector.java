@@ -30,6 +30,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -680,7 +681,7 @@ public class DrugReferenceInjector {
 			// here, where the order is still in hand, because the grading pass sees only the mapping.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER,
 					order.getUuid(), null, rendered, null, 0, null, null, null, null, null, null, null, null, null,
-					null, Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
+					null, null, Boolean.valueOf(DrugSafetyValidator.displayNamesADrug(order))));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -709,7 +710,7 @@ public class DrugReferenceInjector {
 			// asserts rather than where its stamp lives.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE,
 					ref.getId(), null, rendered.text, rendered.source, rendered.withheldInteractions,
-					null, null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
+					null, null, null, null, null, null, null, null, null, null, rendered.dosingCeilings, null));
 			text.append("[").append(index).append("] ").append(rendered.text).append("\n");
 			index++;
 		}
@@ -759,12 +760,14 @@ public class DrugReferenceInjector {
 			// marker reaches this record, never the chip.
 			// And, since issue #515, whether the clause this record ends in withholds, and the rows of the
 			// substance it is about — both off the finding in hand, the one place either is written. And,
-			// since issue #555, the rows each order it names was resolved to, in the order it names them.
+			// since issue #555, the rows each order it names was resolved to, in the order it names them;
+			// and since issue #553 when each partner it names that has not started starts.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
 					null, 0, null, null, ratingThisRecordStates(finding, rendered),
 					withholds(strengthClause(finding)), rowIds(finding.subjectRows()),
 					finding.namedPartners(), SafetyWarning.orderNamesOf(finding), partnerRowIds(finding),
+					finding.partnerScheduledStarts(),
 					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -1621,8 +1624,9 @@ public class DrugReferenceInjector {
 	 * A real {@code drug_order} record carries {@code PatientChartSerializer}'s order-status field
 	 * WHERE THE MODULE COULD ESTABLISH IT — the field is absent on every null case that accessor
 	 * enumerates, including a failed order read, which drops it from every record on the chart. So
-	 * the two line shapes are not reliably distinguished by the field; this line simply never
-	 * carries one, because it stands in for an order the chart has no record of. The
+	 * the two line shapes are not reliably distinguished by the field; this line carries none for an
+	 * order that has started, because it stands in for an order the chart has no record of (for one
+	 * that has not, see the #553 paragraph below). The
 	 * #118 reconciliation means it routinely sits BESIDE an ended record naming the same drug — that
 	 * is what {@code AuthoritativeEndedOrderSubstantiationTest} arranges — and #315's prompt rule
 	 * fires on the ended record's field, and this line has no field for it to fire on. That is not
@@ -1633,8 +1637,20 @@ public class DrugReferenceInjector {
 	 * refute the failure mode, not enough to call it impossible). Recorded because the next person to
 	 * change either the field or this line's shape needs to know they are load-bearing together; ADR
 	 * Decision 47 carries it as a residue rather than a guarantee.
+	 *
+	 * <p><strong>Since issue #553 an order that has not started renders otherwise</strong>:
+	 * {@code "Scheduled drug order: <display>. Order status: scheduled to start <date>."}, the status a
+	 * real record of it carries ({@code PatientChartSerializer.scheduledOrderStatus}), so the stand-in does
+	 * not call a drug due to start next month an active one. The display is still the only drug name the
+	 * line carries, so {@code RecordMapping.orderDrugNamed} is decided as before.
 	 */
 	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
+		// An order that has not started is not an active drug order in any sense a clinician reads (issue
+		// #553): it says what it is, and states the status its own chart record would carry.
+		if (!order.hasStarted()) {
+			return "Scheduled drug order: " + order.getDisplay()
+					+ PatientChartSerializer.scheduledOrderStatus(order.getScheduledStart()) + ".";
+		}
 		return "Active drug order: " + order.getDisplay() + ".";
 	}
 
@@ -2548,10 +2564,11 @@ public class DrugReferenceInjector {
 	/**
 	 * Whether {@code question} asks whether to GIVE the drug it names — {@code
 	 * QueryScopeRouter.asksWhetherToGiveADrug} over the question's words with its own names marked. One
-	 * spelling for its two callers, which must not disagree: {@link #answersFromFindings} admits a
+	 * spelling for its callers, which must not disagree: {@link #answersFromFindings} admits a
 	 * proposal by it (issue #469), and {@code DrugSafetyValidator}'s ended-order holder keeps a proposed
 	 * drug a proposal by it (issue #472), so a question the module answers from its findings is one
-	 * whose drug is never re-referred.
+	 * whose drug is never re-referred — and that validator's {@code proposedByTheQuestion} keeps a drug
+	 * she holds only as orders that have not started a proposal by it (issue #553).
 	 */
 	static boolean questionProposes(String question, List<DrugReference> questionDrugs) {
 		return !questionDrugs.isEmpty()
@@ -2717,7 +2734,10 @@ public class DrugReferenceInjector {
 	 * <p><b>A contraindication about a medication she already takes carries its referent</b>, {@link
 	 * #COMPOSED_CURRENT_MEDICATION_REFERENT}, after its body: the strength clause stays out, and it
 	 * was the only words of such a record saying she takes the drug (ADR Decision 113). Not an
-	 * interaction's line, whose detail already names the partner as her active order.
+	 * interaction's line, whose detail already names the partner as her active order. Nor a line whose
+	 * chip says her order for the drug has not started ({@code SafetyWarning.orderScheduledStart()},
+	 * issue #553): that sentence already says the order is hers, and the referent would say she is taking
+	 * a drug she has not started.
 	 *
 	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
 	 * medications — a screen — opens with that finding: a lead saying which of two medications to
@@ -2749,7 +2769,8 @@ public class DrugReferenceInjector {
 		for (Integer i : order) {
 			SafetyWarning finding = findings.get(i);
 			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
-					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
+					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+					&& finding.orderScheduledStart() == null;
 			lines.add(findingBody(finding, orderRecordNumbers, true)
 					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 					+ " [" + numbers.get(i) + "]");

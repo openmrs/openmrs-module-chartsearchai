@@ -25,6 +25,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingPartnerCov
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,7 +93,8 @@ public final class FindingPartnerCoverageCheck {
 	/**
 	 * The active orders the findings {@code answer} cited name that it does not — in the order the
 	 * injector wrote those findings and each names its orders, each once however many cited findings
-	 * cover it; empty where the answer cited no finding.
+	 * cover it, and each in the words {@link #partnerWords} names it with; empty where the answer cited
+	 * no finding.
 	 *
 	 * <p><b>It shares its population and its comparison with {@link #measure}</b> — {@code citedFindings}
 	 * and {@link #statedPartners} — so an order is stated to both or to neither; {@code measure} counts in a
@@ -115,7 +117,7 @@ public final class FindingPartnerCoverageCheck {
 			for (String partner : finding.getFindingPartners()) {
 				String key = comparable(partner);
 				if (!stated.contains(key) && listed.add(key)) {
-					unstated.add(partner);
+					unstated.add(partnerWords(partner, finding.getFindingPartnerScheduledStarts().get(partner)));
 				}
 			}
 		}
@@ -157,6 +159,21 @@ public final class FindingPartnerCoverageCheck {
 		return withNamed(answer, unstatedPartners(answer, cited, mappings, validator));
 	}
 
+	/**
+	 * The words an unstated partner is named with: {@code "active order X"}, or, for a partner its
+	 * finding's stamp says has not started (issue #553, {@code RecordMapping.getFindingPartnerScheduledStarts()}),
+	 * {@code "scheduled order X (scheduled to start <date>)"} — the date in brackets, so in a list of several
+	 * it cannot be read as the next item's. A partner name carrying a bracket of its own ("Rifampicin
+	 * (rifampin)") then reads with two, which is accepted as the price of that. Worded from the stamp,
+	 * because these are the module's own words; a partner no stamp reaches keeps "active order" (ADR
+	 * Decision 126's residues).
+	 */
+	private static String partnerWords(String partner, String scheduledStart) {
+		return scheduledStart == null ? DrugSafetyValidator.ACTIVE_ORDER_NOUN + " " + partner
+				: DrugSafetyValidator.SCHEDULED_ORDER_NOUN + " " + partner + " ("
+						+ PatientChartSerializer.SCHEDULED_TO_START_WORDS + scheduledStart + ")";
+	}
+
 	private static String withNamed(String answer, List<String> unstated) {
 		if (unstated == null || unstated.isEmpty()) {
 			return answer;
@@ -169,7 +186,7 @@ public final class FindingPartnerCoverageCheck {
 			if (i > 0) {
 				sb.append(i == unstated.size() - 1 ? " and " : ", ");
 			}
-			sb.append(DrugSafetyValidator.ACTIVE_ORDER_NOUN).append(" ").append(unstated.get(i));
+			sb.append(unstated.get(i));
 		}
 		sb.append(".");
 		return sb.toString();

@@ -53,14 +53,21 @@ public class SerializedRecord {
 	 * {@code TRUE} when it is in the patient's active-order set, {@code FALSE} when the module read
 	 * that set and this record's order was not in it, and {@code null} when the module cannot say.
 	 *
-	 * <p>{@code null} is the answer for four different situations and they are deliberately not
-	 * distinguished here, because a consumer must treat them alike: the record is not a drug order;
+	 * <p>{@code null} is the answer for five different situations and they are deliberately not
+	 * distinguished by this field, because a consumer of it must treat them alike (the fifth is told
+	 * apart by {@link #orderStartDate}, not here): the record is not a drug order;
 	 * the order read failed; the record's order could not be attributed to this patient at all; or
 	 * that one order could not be evaluated, because {@code Order.isActive()} throws on a row whose
 	 * stop date is after its auto-expire date. What they have in common is the only thing that
 	 * matters — nothing is known, so nothing may be asserted. A chart the module could not read is not
 	 * a chart of stopped prescriptions, and neither is one order it could not evaluate a stopped
 	 * prescription.
+	 *
+	 * <p>The fifth is an order that has not STARTED (issue #553): {@code Order.isActive()} answers true
+	 * for an order scheduled to start in the future, because it reads {@code dateActivated} and never
+	 * {@code scheduledDate}, while core's {@code Order.isStarted()} answers false. Such an order is not in
+	 * force and has not ended, so neither {@code TRUE} nor {@code FALSE} is true of it. What the module
+	 * does know about it is stated by {@link #orderStartDate}, never by this field.
 	 *
 	 * <p>Set only by {@code QueryStoreChartBuilder.toSerializedRecords}, which is the single funnel
 	 * every chart passes through and the only place the authoritative read happens (issue #317).
@@ -114,6 +121,19 @@ public class SerializedRecord {
 	 */
 	private final Date orderStopDate;
 
+	/**
+	 * When the {@code Order} this record was serialized from is scheduled to start, for an order that
+	 * has not started yet — core's {@code Order.getEffectiveStartDate()}, decided by
+	 * {@code Order.isStarted()} and never re-derived from {@code scheduledDate} here — or {@code null}
+	 * (issue #553).
+	 *
+	 * <p><strong>Non-null implies {@link #orderActive} is {@code null}</strong>: the order is neither in
+	 * force nor ended, and this field is what the module states of its currency. Set only by
+	 * {@code QueryStoreChartBuilder.toSerializedRecords}, beside {@link #orderActive} and off the same
+	 * one authoritative order read.
+	 */
+	private final Date orderStartDate;
+
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date) {
 		this(resourceType, resourceUuid, text, date, Collections.<String>emptyList());
 	}
@@ -129,26 +149,29 @@ public class SerializedRecord {
 	}
 
 	/**
-	 * The order-currency rung. Defaults {@link #orderStopDate} to {@code null} — the module states no
-	 * stop date — which is the right default for every record that is not a drug order and for every
-	 * caller that has not read the patient's orders.
+	 * The order-currency rung. Defaults {@link #orderStopDate} and {@link #orderStartDate} to
+	 * {@code null} — the module states no stop date and no scheduled start — which is the right default
+	 * for every record that is not a drug order and for every caller that has not read the patient's
+	 * orders.
 	 */
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
 			List<String> categoryHints, String obsGroupUuid, String obsGroupConceptName,
 			Boolean orderActive) {
 		this(resourceType, resourceUuid, text, date, categoryHints, obsGroupUuid, obsGroupConceptName,
-				orderActive, null);
+				orderActive, null, null);
 	}
 
 	/**
-	 * Full constructor, including both halves of the order read. The shorter constructors default
-	 * them to {@code null} — "the module cannot say" and "the module states no stop date" — which is
-	 * the right default for every record that is not a drug order and for every caller that has not
-	 * read the patient's orders.
+	 * Full constructor, including every part of the order read, and the only one taking either date:
+	 * both are written by {@code QueryStoreChartBuilder.toSerializedRecords} alone, which
+	 * {@code ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace} holds of this rung. The shorter constructors default
+	 * them to {@code null} — "the module cannot say", "the module states no stop date" and "the module
+	 * states no scheduled start" — which is the right default for every record that is not a drug
+	 * order and for every caller that has not read the patient's orders.
 	 */
 	public SerializedRecord(String resourceType, String resourceUuid, String text, Date date,
 			List<String> categoryHints, String obsGroupUuid, String obsGroupConceptName,
-			Boolean orderActive, Date orderStopDate) {
+			Boolean orderActive, Date orderStopDate, Date orderStartDate) {
 		this.resourceType = resourceType;
 		this.resourceUuid = resourceUuid;
 		this.text = text;
@@ -159,6 +182,7 @@ public class SerializedRecord {
 		this.obsGroupConceptName = obsGroupConceptName;
 		this.orderActive = orderActive;
 		this.orderStopDate = orderStopDate;
+		this.orderStartDate = orderStartDate;
 	}
 
 	public String getResourceType() {
@@ -219,5 +243,13 @@ public class SerializedRecord {
 	 */
 	public Date getOrderStopDate() {
 		return orderStopDate;
+	}
+
+	/**
+	 * @return when this record's order is scheduled to start, for an order that has not started, or
+	 *         {@code null}. See {@link #orderStartDate}.
+	 */
+	public Date getOrderStartDate() {
+		return orderStartDate;
 	}
 }

@@ -546,14 +546,16 @@ public class UnfoundedFindingSeverityTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return new LlmResponse(answer, citations);
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords) {
+				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return new LlmResponse(answer, citations);
 		}
 	}

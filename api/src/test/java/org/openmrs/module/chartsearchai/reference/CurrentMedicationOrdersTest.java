@@ -15,7 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -136,26 +138,74 @@ public class CurrentMedicationOrdersTest {
 	}
 
 	/**
-	 * The residue {@link SafetyWarning#currentMedicationOrders()} names: a drug the question puts in play that
-	 * her own orders establish she takes is a finding about her medication (issue #402), and it is the
-	 * drug-in-play arm's, which stamps no order — so its chip says {@code aboutACurrentMedication} and lists
-	 * nothing. Pinned so the javadoc's, README's and ADR Decision 125's statement of it is read off a run.
+	 * A drug the question puts in play that her own orders establish she takes is a finding about her medication
+	 * (issue #402), raised by the drug-in-play arm rather than by the check of her prescriptions against her
+	 * records — and it is the same chip #552 describes, so it names her order too: asked by the substance, and
+	 * asked by the brand her order carries.
 	 */
 	@Test
-	public void aDrugInPlayChipAboutHerOwnOrderListsNoOrder() {
+	public void aDrugInPlayChipAboutHerOwnOrderListsIt() {
 		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("advil 400mg"), null, DrugReferenceTestSupport.set("ibuprofen"), null,
-				Collections.singletonList(ADVIL));
+				DrugReferenceTestSupport.set("advil 400mg", "metformin 500mg"), null,
+				DrugReferenceTestSupport.set("ibuprofen"), null, Arrays.asList(METFORMIN, ADVIL));
+
+		for (String question : Arrays.asList("Can I give her ibuprofen?", "Is her Advil safe given her allergies?")) {
+			List<SafetyWarning> chips = DrugReferenceTestSupport.contraindications(
+					curatedValidator().validate("", question, chart));
+
+			assertFalse(chips.isEmpty(), "precondition: her allergy raises a chip about the drug " + question);
+			for (SafetyWarning chip : chips) {
+				assertTrue(chip.isAboutACurrentMedication(),
+						"precondition: her Advil order establishes she takes ibuprofen (#402), " + question + ": " + chip);
+				assertEquals(Collections.singletonList(order(ADVIL)), chip.currentMedicationOrders(),
+						"the chip names the order it is about, and not her metformin, " + question + ": " + chip);
+			}
+		}
+	}
+
+	/**
+	 * Which of her orders a drug-in-play chip lists is which of them ESTABLISH she takes its substance — the
+	 * orders its {@code aboutACurrentMedication} was decided on (ADR Decision 123) — and not every order her
+	 * resolution reaches it through. The shipped knowledge base files the brand {@code Nexium} under
+	 * Omeprazole and Esomeprazole, so her {@code Nexium 40mg} order resolves to omeprazole without naming it
+	 * ({@code DrugInPlayHerOwnOrderReferentTest}); her {@code Omeprazole 20mg} order is what makes an
+	 * omeprazole chip about her medication, and it is the one the chip names.
+	 */
+	@Test
+	public void aDrugInPlayChipListsTheOrdersThatEstablishSheTakesItAndNotOneThatMerelyResolvesToIt() {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext.ActiveDrugOrder omeprazole =
+				DrugReferenceTestSupport.activeOrder("uuid-omeprazole", "Omeprazole 20mg", "omeprazole 20mg");
+		PatientClinicalContext.ActiveDrugOrder nexium =
+				DrugReferenceTestSupport.activeOrder("uuid-nexium", "Nexium 40mg", "nexium 40mg");
+		PatientClinicalContext chart = service.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("nexium 40mg", "omeprazole 20mg"), null,
+				DrugReferenceTestSupport.set("omeprazole"), null, Arrays.asList(nexium, omeprazole)));
+		String question = "Can I give her omeprazole?";
+		Set<Object> asked = new HashSet<Object>();
+		for (DrugReference entry : service.findImpliedByQuery(question)) {
+			asked.add(entry.substanceGroupKey());
+		}
+		Set<Object> nexiumReadings = new HashSet<Object>();
+		for (DrugReference entry : service.findImpliedByDrugName("Nexium 40mg")) {
+			nexiumReadings.add(entry.substanceGroupKey());
+		}
+		assertTrue(!asked.isEmpty() && nexiumReadings.containsAll(asked),
+				"precondition: her Nexium order resolves to the omeprazole the question names: asked " + asked
+						+ ", Nexium " + nexiumReadings);
 
 		List<SafetyWarning> chips = DrugReferenceTestSupport.contraindications(
-				curatedValidator().validate("", "Can I give her ibuprofen?", chart));
+				DrugReferenceTestSupport.validator(service).validate("", question, chart));
 
-		assertFalse(chips.isEmpty(), "precondition: her allergy raises a chip about the drug the question names");
+		assertFalse(chips.isEmpty(), "precondition: her omeprazole allergy raises a chip");
 		for (SafetyWarning chip : chips) {
 			assertTrue(chip.isAboutACurrentMedication(),
-					"precondition: her Advil order establishes she takes ibuprofen (#402): " + chip);
-			assertEquals(Collections.emptyList(), chip.currentMedicationOrders(),
-					"the drug-in-play arm stamps no order, which is the documented residue: " + chip);
+					"precondition: her Omeprazole order establishes she takes it: " + chip);
+			assertEquals(Collections.singletonList(new SafetyWarning.CurrentMedicationOrder("Omeprazole 20mg",
+					"uuid-omeprazole")), chip.currentMedicationOrders(),
+					"the order that establishes she takes it, and not the Nexium order that only resolves to it: "
+							+ chip);
 		}
 	}
 

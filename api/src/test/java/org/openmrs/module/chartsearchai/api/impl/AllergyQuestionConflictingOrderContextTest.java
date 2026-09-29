@@ -156,17 +156,23 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	}
 
 	@Test
-	public void aFindingNoOrderWasResolvedForKeepsEveryFindingAsAChip() throws IOException {
+	public void aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip() throws IOException {
 		// The question names her allergen, which puts the drug in play: its finding is the drug-in-play
-		// arm's, which resolves no order, so the answer cannot name one and states nothing at all.
+		// arm's, a drug the question put in play, which ADR Decision 124 keeps a chip. Since issue #552 that
+		// chip names her order on the wire, so the statement's gate is not "no order is known".
 		String question = "Is she allergic to aspirin?";
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, question);
+		String orderUuid = Context.getOrderService().getOrder(111).getUuid();
 
 		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the question raised a finding, chips "
 				+ "were: " + answer.getSafetyWarnings());
-		assertEquals(MODEL_ANSWER, answer.getAnswer(), "a finding the answer cannot name an order for is not stated");
-		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			assertFalse(chip.isStatedInTheAnswer(), "and no chip says it is, was: " + chip);
+		SafetyWarning chip = theAspirinChip(answer);
+		assertEquals(Collections.singletonList(new SafetyWarning.CurrentMedicationOrder(ORDER_DISPLAY, orderUuid)),
+				chip.currentMedicationOrders(), "the chip names the order it is about, as every current-medication "
+						+ "contraindication chip does");
+		assertEquals(MODEL_ANSWER, answer.getAnswer(), "a finding of a drug the question named is not stated");
+		for (SafetyWarning each : answer.getSafetyWarnings()) {
+			assertFalse(each.isStatedInTheAnswer(), "and no chip says it is, was: " + each);
 		}
 	}
 

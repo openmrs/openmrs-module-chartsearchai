@@ -12120,13 +12120,25 @@ orders once, in `addActiveOrderContraindications`, for its own statement, and ke
 ### Decision
 
 A new chip key, `currentMedicationOrders` (`SafetyWarning.currentMedicationOrders()`), always present,
-listing `{ orderDisplay, orderUuid }` for EVERY active order any row of the chip's substance
-`resolvesFromAny`, in her chart's order (#552). `chartOrderBridges` keeps its meaning.
+listing `{ orderDisplay, orderUuid }`, in her chart's order, for EVERY active order a contraindication
+chip about a medication she already takes is about (#552). `chartOrderBridges` keeps its meaning.
 
 - **One resolution, stamped where the chip is raised.** `addActiveOrderContraindications` records the
   ORDERS per substance and `ContraindicationChips.add` stamps both the published list and Decision 124's
   printable projection off them, so the two cannot disagree about which orders a chip is about. The
-  serializer copies the list and re-derives nothing.
+  serializer copies the list and re-derives nothing. Its orders are every one any row of the chip's
+  substance `resolvesFromAny`.
+- **Both arms that state the referent.** The drug-in-play arm marks a contraindication
+  `aboutACurrentMedication` too, wherever her orders establish its substance (#402, Decision 123), and the
+  owner's ruling was every current-medication contraindication chip. So `validate` records, off
+  `currentMedicationsInPlay`, the orders that ESTABLISH each such substance (`ordersEstablishing`) — the
+  orders its referent was decided on, not every order resolving to it: her *Nexium 40mg* resolves to
+  omeprazole without naming it and is not listed on an omeprazole chip beside her *Omeprazole 20mg*. The
+  ledger stamps them onto the wire list ALONE. Decision 124's statement stays the active-order arm's,
+  since a drug the question put in play is a chip of another kind there; stamping the sentence
+  projection too makes *"Is she allergic to aspirin?"* state her order, which
+  `AllergyQuestionConflictingOrderContextTest.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
+  reddens on.
 - **Every order, not every printable display.** The owner's ruling was every order the chip covers, with
   its uuid, so the `displayNamesADrug` filter Decision 124 applies stays on the SENTENCE projection
   (`SafetyWarning.currentOrderDisplays()`) and off the wire: a codes-only order is listed under its
@@ -12147,15 +12159,17 @@ listing `{ orderDisplay, orderUuid }` for EVERY active order any row of the chip
 
 ### Residues
 
-- A drug-in-play contraindication its arm marks `aboutACurrentMedication` (#402, Decision 123) carries
-  `[]`: that arm's orders are not stamped. `[]` is never a claim that no order is behind a chip.
-- A context carrying no per-order list (#118's flattened fallback) has no order to name.
-- The key-writing rule has no instruction bullet: the drug-safety instruction file had no size budget
-  left, so it lives in the accessor's javadoc and here.
+- A chip of another type carries `[]`, the interaction and dose chips the drug-in-play arm marks
+  `aboutACurrentMedication` included. `[]` is never a claim that no order is behind a chip.
+- A context carrying no per-order list (#118's flattened fallback) has no order to name, from either arm.
+- The two arms list by different tests, `resolvesFromAny` and `ordersEstablishing`, because each lists
+  the orders its own referent was decided on.
 
 Pinned by `CurrentMedicationOrdersTest` (every order, shared displays, a codes-only order, a second
-substance's own list, a proposal's `[]`, the drug-in-play residue's `[]`, and the statement's text
-unchanged), `AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
-(the real `OrderService` order under a brand display), and on the wire by
+substance's own list, a proposal's `[]`, a drug-in-play chip's order asked by substance and by brand, the
+establishing order and not the resolving one, and the statement's text unchanged),
+`AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
+(the real `OrderService` order under a brand display) and `.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
+(a drug-in-play chip names her order and is not stated), and on the wire by
 `ChartSearchAiCurrentMedicationOrdersTest`, `ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid`
 and `ChartSearchAiSafetyWarningSeverityWireTest`'s chip 15.

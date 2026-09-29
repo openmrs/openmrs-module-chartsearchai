@@ -995,9 +995,13 @@ public class DrugSafetyValidator {
 		// takes, less any a question may be proposing in a presentation she does not take
 		// (currentMedicationsInPlay). Asked only of a substance orderEntries holds, the one resolution this
 		// pass already holds, so the referent can narrow what the other consumers of her orders read and
-		// never widen it. A per-call local, for issue #172's reason.
-		Set<Object> herOrderSubstances = currentMedicationsInPlay(inPlay, questionDrugs, question, orderEntries,
-				context, bridgedOrders, coMedications);
+		// never widen it. A per-call local, for issue #172's reason. Each carries the orders that establish
+		// it, which the ledger stamps onto the arm's current-medication contraindication chips (issue #552).
+		Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> herOrderSubstances = currentMedicationsInPlay(
+				inPlay, questionDrugs, question, orderEntries, context, bridgedOrders, coMedications);
+		for (Map.Entry<Object, List<PatientClinicalContext.ActiveDrugOrder>> hers : herOrderSubstances.entrySet()) {
+			contraindications.recordInPlayOrders(hers.getKey(), hers.getValue());
+		}
 
 		for (DrugReference ref : inPlay) {
 			// Whether this drug in play is a medication she is already taking, and so what every finding
@@ -1011,7 +1015,7 @@ public class DrugSafetyValidator {
 			// take, keep the proposal (currentMedicationsInPlay).
 			// An ended order is not in orderEntries, so a drug her chart holds only as one keeps the proposal
 			// here and EndedOrders states its own referent on the chip (issue #472).
-			boolean herOrder = herOrderSubstances.contains(ref.substanceGroupKey());
+			boolean herOrder = herOrderSubstances.containsKey(ref.substanceGroupKey());
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
@@ -2645,6 +2649,11 @@ public class DrugSafetyValidator {
 	 * is not asked. Every other drug in play keeps the proposal referent. A per-pass value and never a field,
 	 * for issue #172's reason.
 	 *
+	 * <p>Each substance maps to the orders that establish it ({@link #ordersEstablishing}), in chart order —
+	 * the orders its referent was decided on, and so the ones its contraindication chips name
+	 * ({@link SafetyWarning#currentMedicationOrders()}, issue #552), and not every order that merely
+	 * resolves to it. Empty where only the flattened sets of a context carrying no order establish it.
+	 *
 	 * <p><b>Established, and not merely resolved</b> (review round 3 of PR #544). {@code orderEntries} is
 	 * {@link DrugReferenceService#findForActiveOrders}' answer, additive by design because it is a CANDIDATE
 	 * set: a screen that leaves out one of her drugs leaves out its warnings. Along three legs it holds
@@ -2671,12 +2680,14 @@ public class DrugSafetyValidator {
 	 * {@code DrugReferenceInjector.listedBeforeTheProposal}, the reading {@link #listedWithNoActiveOrder}
 	 * takes, asked only for a drug the gate would keep a proposal.
 	 */
-	private static Set<Object> currentMedicationsInPlay(Set<DrugReference> inPlay,
-			Set<DrugReference> questionDrugs, String question, List<DrugReference> orderEntries,
-			PatientClinicalContext context, BridgedOrders bridgedOrders, CoMedications coMedications) {
+	private static Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> currentMedicationsInPlay(
+			Set<DrugReference> inPlay, Set<DrugReference> questionDrugs, String question,
+			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridgedOrders,
+			CoMedications coMedications) {
 		Set<Object> resolved = substancesOf(orderEntries);
 		Set<Object> asked = new HashSet<Object>();
-		Set<Object> current = new HashSet<Object>();
+		Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> current =
+				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
 		Set<Object> listed = null;
 		for (DrugReference ref : inPlay) {
 			Object substance = ref.substanceGroupKey();
@@ -2711,7 +2722,7 @@ public class DrugSafetyValidator {
 					continue;
 				}
 			}
-			current.add(substance);
+			current.put(substance, carriers);
 		}
 		return current;
 	}
@@ -3443,6 +3454,17 @@ public class DrugSafetyValidator {
 		private final Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> currentOrders =
 				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
 
+		/**
+		 * Her own active orders that establish she takes each substance the drug-in-play arm states the
+		 * current-medication referent for, keyed as above — recorded by {@code validate} off
+		 * {@link #currentMedicationsInPlay} before that arm raises a chip, and stamped in {@link #add} onto
+		 * the WIRE list alone ({@link SafetyWarning#currentMedicationOrders()}, issue #552): Decision 124's
+		 * statement is the active-order arm's, and a drug the question names is outside it. Disjoint from
+		 * {@link #currentOrders}, which the active-order arm records only for a substance no drug in play is of.
+		 */
+		private final Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> inPlayOrders =
+				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
+
 		ContraindicationChips(List<SafetyWarning> warnings, SubstanceSubjects subjects,
 				EndedOrders endedOrders) {
 			this.warnings = warnings;
@@ -3453,6 +3475,12 @@ public class DrugSafetyValidator {
 		/** Records {@code orders} as the orders {@code substance}'s current-medication chips are about. */
 		void recordCurrentOrders(Object substance, List<PatientClinicalContext.ActiveDrugOrder> orders) {
 			currentOrders.put(substance, orders);
+		}
+
+		/** Records {@code orders} as the orders the drug-in-play arm's current-medication chips of
+		 *  {@code substance} are about — see {@link #inPlayOrders}. */
+		void recordInPlayOrders(Object substance, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			inPlayOrders.put(substance, orders);
 		}
 
 		/**
@@ -3495,9 +3523,15 @@ public class DrugSafetyValidator {
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
 				boolean namesTheFinding) {
-			List<PatientClinicalContext.ActiveDrugOrder> orders = currentOrders.get(subject.substanceGroupKey());
-			if (orders != null && chip.isAboutACurrentMedication()) {
-				chip = currentMedicationOrdersOn(chip, orders);
+			if (chip.isAboutACurrentMedication()) {
+				List<PatientClinicalContext.ActiveDrugOrder> orders = currentOrders.get(subject.substanceGroupKey());
+				List<PatientClinicalContext.ActiveDrugOrder> inPlay = inPlayOrders.get(subject.substanceGroupKey());
+				if (orders != null) {
+					chip = currentMedicationOrdersOn(chip, orders);
+				}
+				else if (inPlay != null) {
+					chip = currentMedicationOrdersOn(chip, inPlay, false);
+				}
 			}
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
@@ -9388,12 +9422,22 @@ public class DrugSafetyValidator {
 	 */
 	static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return currentMedicationOrdersOn(chip, orders, true);
+	}
+
+	/**
+	 * As above; {@code printable} false stamps the wire list alone and leaves
+	 * {@link SafetyWarning#currentOrderDisplays()} empty — the drug-in-play arm's stamp
+	 * ({@code ContraindicationChips.inPlayOrders}), whose chips Decision 124's statement does not print.
+	 */
+	private static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
+			List<PatientClinicalContext.ActiveDrugOrder> orders, boolean printable) {
 		List<SafetyWarning.CurrentMedicationOrder> published = new ArrayList<SafetyWarning.CurrentMedicationOrder>();
 		Set<String> displays = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
 			published.add(new SafetyWarning.CurrentMedicationOrder(display, order.getUuid()));
-			if (displayNamesADrug(order)) {
+			if (printable && displayNamesADrug(order)) {
 				displays.add(display);
 			}
 		}

@@ -1220,9 +1220,8 @@ public class SafetyWarning {
 	 * medication she already takes is about — see {@link #currentMedicationOrders()} — and {@code displays}
 	 * as the ones of those a sentence may print — see {@link #currentOrderDisplays()}. Package-private:
 	 * written only by {@code DrugSafetyValidator.currentMedicationOrdersOn}, which production reaches from
-	 * {@code DrugSafetyValidator.ContraindicationChips} alone, off the orders
-	 * {@code addActiveOrderContraindications} resolved the chip's substance from. Changes nothing this
-	 * warning prints.
+	 * {@code DrugSafetyValidator.ContraindicationChips} alone, off the orders either contraindication arm
+	 * recorded for the chip's substance. Changes nothing this warning prints.
 	 */
 	SafetyWarning withCurrentMedicationOrders(List<CurrentMedicationOrder> orders, Collection<String> displays) {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
@@ -1240,14 +1239,16 @@ public class SafetyWarning {
 	 * could disagree with this one (#151). Published VERBATIM as each chip's {@code currentMedicationOrders}
 	 * wire key, so this accessor's name IS the key.
 	 *
-	 * <p>Set only on a contraindication raised by {@code addActiveOrderContraindications} about a medication
-	 * she already takes: every order any row of its substance {@code resolvesFromAny}, stamped once where the
-	 * ledger adds the chip ({@code DrugSafetyValidator.ContraindicationChips}), so a chip that replaces another
-	 * of its substance carries them too. Never re-derived at a consumer. An order known only by its codes is
-	 * listed by the stand-in display {@link PatientClinicalContext.ActiveDrugOrder#getDisplay()} gives it,
-	 * which is not a name. <b>Empty is not a claim that no order is behind the finding</b>: it is the answer
-	 * on every chip of another arm, including a drug-in-play contraindication its own arm marks
-	 * {@link #isAboutACurrentMedication()} (issue #402), whose orders that arm does not stamp.
+	 * <p>Set on a contraindication about a medication she already takes, by either arm that raises one, and
+	 * stamped once where the ledger adds the chip ({@code DrugSafetyValidator.ContraindicationChips}), so a
+	 * chip that replaces another of its substance carries them too: for {@code addActiveOrderContraindications},
+	 * every order any row of its substance {@code resolvesFromAny}; for the drug-in-play arm (issue #402), the
+	 * orders that ESTABLISH she takes it ({@code DrugSafetyValidator.currentMedicationsInPlay}), the ones its
+	 * {@link #isAboutACurrentMedication()} was decided on. Never re-derived at a consumer. An order known only
+	 * by its codes is listed by the stand-in display {@link PatientClinicalContext.ActiveDrugOrder#getDisplay()}
+	 * gives it, which is not a name. <b>Empty is not a claim that no order is behind the finding</b>: it
+	 * is, among others, the answer on every chip of another type, and on a contraindication over a context
+	 * carrying no per-order list (issue #118's flattened fallback), which has no order to name.
 	 */
 	public List<CurrentMedicationOrder> currentMedicationOrders() {
 		return currentMedicationOrders;

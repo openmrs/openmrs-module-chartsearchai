@@ -9696,8 +9696,9 @@ child's environment — so
 ## Decision 108: A drug-safety question the module resolved itself is answered from its own findings, and the model is not asked to restate them
 
 **Status: Accepted** (September 2026) — implemented behind `chartsearchai.drugSafety.answerFromFindings`,
-shipping OFF, issue [#469](https://github.com/openmrs/openmrs-module-chartsearchai/issues/469). The gate
-the issue names has not been run; see the last section. Its bound on the module's prose is amended by
+issue [#469](https://github.com/openmrs/openmrs-module-chartsearchai/issues/469). It shipped OFF until the
+gate the issue names was run; it ships ON since
+[Decision 131](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run), which records that run. Its bound on the module's prose is amended by
 [Decision 113](#decision-113-the-sentence-under-a-module-composed-no-is-a-finding-that-licensed-it-and-a-contraindication-about-her-own-medication-says-so).
 
 ### Context
@@ -9881,7 +9882,8 @@ chance of the two disagreeing.
 
 ### What gates turning it on
 
-The gate the issue names, not run in this change: the probe-safety corpus
+The gate the issue names, not run in this change and since run by
+[Decision 131](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run): the probe-safety corpus
 (`eval/drift-metric/score_probe_safety.py`, including its abstention controls) and the thirty-nine cells
 of the issue's three comments, both arms on one build, with only this property between them. On the ON
 arm every module-answered cell publishes `findingCitations` and `unstatedFindingSeverities` as `null`;
@@ -12872,3 +12874,128 @@ positives it buys", the same trade
 calls the one this area is least allowed to make.
 
 → `DrugSafetyScreeningPhrasingCorpusTest`, `QueryScopeRouterTest`.
+
+## Decision 131: answerFromFindings ships on, because Decision 108's gate was run
+
+**Status: Accepted** (September 2026). Issue
+[#562](https://github.com/openmrs/openmrs-module-chartsearchai/issues/562). It amends
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them),
+which shipped `chartsearchai.drugSafety.answerFromFindings` off only because its gate had not been run.
+
+### The gate, as run
+
+Both arms ran on one build, with only this property between them. The prompt GP was null and the
+answer-cache TTL was 0. The rig was pool slot 8084: a RefApp 3.7.1 standalone running Gemma 4 E4B locally,
+in `fullChart` mode, with stock GPs. The pass rules were written before each capture.
+
+Two runs:
+- **2026-09-29, `main` @ bdcd8305** (api jar `ed598339…`). The issue body reports this one.
+- **2026-09-30, this change's own head** (api jar `caef63e4…`). The figures below are from this run.
+
+**The probe-safety corpus** (`capture_probe_safety.sh`, its 20 default cells; `score_probe_safety.py` OFF ON):
+- **17 of the 20 answers are byte-identical.** The module answers the other 3 (Agnes warfarin, Mary
+  clarithromycin, Mary erythromycin), and each keeps the same "No".
+- **Every A/B column ties:**
+  - over the 7 ANSWER cells, verdict-led 6 and 6;
+  - over the 13 ABSTAIN cells, abstention held 10 and 10;
+  - 0 and 0 verdicts the records do not license;
+  - 0 and 0 severities that no chip carries.
+- **The pre-registered pass rule was "exit 0", and it was not met.** The scorer exits 3 on two `!!`
+  lines, and both appear identically in both arms:
+  - `agnes__safety-aspirin` carries #554's unrated chip "… is already in active order Aspirin 81mg —
+    adding it would duplicate that order". The scorer reads that as a rule chip with no readable
+    rating, which is a gap between the scorer and #554 (1d8cb58b), not this change.
+  - `joshua__safety-aspirin` is model-answered and states 1 of its 2 findings (#397).
+  
+  The property reaches neither cause, since both are in the arm it does not change. So the rule
+  was not met, and nothing here claims otherwise. On the bdcd8305 run, a third `!!` line had
+  Betty's five cells labelled from chips alone, because her two route-less fixture orders made
+  the REST order list fail. Before the head run those orders were given a route (Subcutaneous), so
+  her cells are scored on their real labels. That is the 10-and-10 abstention above, where the
+  mislabelled run read 9 and 9.
+
+**#469's thirty-nine cells.** 36 of them ran on slot 8084. Priya Severity's two cells and Kamwara's screen
+need patients that only the :8081 rig carries, so those three ran there as a supplement, both arms, on that
+rig's own build:
+- **The model answers 28 of the 36, and all 28 are byte-identical across the arms.**
+- **The module answers 8.** None of the 8 cites fewer `safety_finding` records or states fewer
+  severity words than the OFF arm. Sarah Taylor's screen goes from 2 cited findings to 20, and from
+  no rating to ten. The bdcd8305 run classified the 36 the same way.
+- **The :8081 supplement** (api jar `c6cf23c6…`):
+  - Priya's warfarin and erythromycin proposals are module-answered and keep their "No", with 3
+    findings and 3 ratings each in both arms.
+  - Kamwara's screen related nothing, so the model answers it, identically in both arms.
+
+**The 17 cells of the 2026-09-25 DDI corpus**, both arms, run for regression:
+- **The module answers 9 of the 17.** None of the 9 cites fewer findings or ratings than OFF.
+- **The model answers 8, and 7 of those are byte-identical.** The eighth, P338 ("Can I give her
+  hydrocortisone?"), diverged from its 582nd character. The pre-registered byte-identity rule is
+  therefore broken on that cell.
+- **The property was not the cause.** A discriminator asked P338 seven times, alternating the
+  property, and got one answer every time, matching the ON capture. What differed between the
+  two captures was the preceding request:
+  - in the OFF arm, P338 followed a model call (P379);
+  - in the ON arm, P379 was module-answered and skipped the model.
+  
+  So a model-answered cell's wording can depend on what the model served just before it. Two
+  arms that route different cells to the model are therefore not byte-comparable on every
+  model-answered cell, and an A/A run in one order does not reveal that.
+
+### What the arm was read for
+
+Decision 108 names two things to read beyond the scorer:
+- whether a withholding lead reaches a question whose answer is yes;
+- which questions the shapes refuse that #469's cells expected answered.
+
+- **No withholding lead reaches a question whose answer is yes.** Every ON answer that opens "No"
+  is a proposal of a drug she is not taking, with a Major interaction. The corpus has 3 such cells
+  (P1a, P379 and P337) and #469 has 2 (D1 and M2), plus Priya's 2 on :8081.
+- **Four screens lose a refusal lead** they had with the property off:
+  - Barbara: "No — the patient should not take Acetylsalicylic acid (aspirin) …"
+  - Michael: "No — Zolvimix should be changed"
+  - Helen, asked twice in two phrasings: "No — Methotrexate should be changed …"
+  
+  Each now opens with the finding itself.
+- **The questions the shapes refuse are the kinds Decision 108 lists as keeping the call:**
+  - proposals whose findings are only cautions, or that raised none;
+  - drugs she already takes;
+  - the "is she taking anything she is allergic to" questions;
+  - phrasings outside both grammars;
+  - screens that related no pair of her orders.
+
+### Decision
+
+- **The shipped default is `true`** (`ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS`,
+  `config.xml`). `GlobalPropertyDefaultsTest` holds those two to one value.
+- **No migration.** An install whose row for the property already stores `false` keeps it. OpenMRS writes a
+  module's default into `global_property` when the module first starts, and the row's `date_changed` and
+  `changed_by` stay null whether or not an operator later wrote the value. So the module cannot tell an
+  untouched default from an operator's choice, and it does not switch the drug-safety answer path for an
+  operator who may have chosen off. `config.xml` and the README say how to turn it on there.
+- **Tests whose subject is a model-written answer now say so.** Thirteen test classes judged model prose on
+  questions the module now answers, and read the old default by never setting the property. Each now sets
+  it to `false` in a `@BeforeEach`. Eleven of them were contextless, and a contextless case cannot set a
+  property: without a context every property reads its default. Those eleven became context-sensitive,
+  following `InteractionFindingChartOrderBridgeTest`'s precedent for `citeOrderRecords`. No assertion
+  changed.
+
+### What turning it on makes visible
+
+- **Only where the drug-reference layer is on.** `chartsearchai.drugReference.enabled` still ships
+  off, and the module composes an answer only from findings that layer raised. So a stock install
+  answers exactly as before.
+- **A screen no longer opens "Yes".** It opens with its strongest finding, which is Decision 108's own
+  design: "a screen's answer has no lead".
+- **A client that renders the chips beside the answer now shows each finding twice** on a
+  module-written answer. The answer states every chip's detail word for word, and the README already
+  tells a client to render one. The reference client, `openmrs-esm-chartsearchai`, draws the chips
+  in full (the README's `findingsRenderedByClient` row says so). A GitHub code search of that
+  repository on 2026-09-30 found `answeredByTheModule` only in a test fixture. That is the client's
+  half of this change, not this module's.
+- **A composed answer quotes a finding's partner name exactly as the chip does.** Where the knowledge base
+  names the partner wrongly, the wrong name now reaches the answer as well. #476 is the case: Sarah Taylor's
+  warfarin finding says "active order sulfamethazine" for her co-trimoxazole order. The model's answer
+  used to relabel it silently; the composed answer does not.
+
+→ `LlmInferenceServiceAnswerFromFindingsContextTest.anInstallThatNeverSetThePropertyAnswersAWithheldProposalFromTheFindings`,
+`GlobalPropertyDefaultsTest.theAnswerFromFindingsSwitchShipsTheDefaultItsConstantAsserts`.

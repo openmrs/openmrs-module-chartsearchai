@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
@@ -40,6 +41,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #398. {@code SafetyFindingCitationExtentCheck} made the shortfall MEASURABLE
@@ -73,7 +75,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * {@code eval/drift-metric/capture_probe_safety.sh}'s, read beside {@code unstatedFindingSeverities}
  * and the verdict-lead cell, which are the two columns Decision 84 records regressions in.
  */
-public class FindingEnumerationRepairTest {
+public class FindingEnumerationRepairTest extends BaseModuleContextSensitiveTest {
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	/** One question that puts one drug in play against four of the patient's active orders, so the
 	 *  real screen raises several findings about one subject — the arrangement the measured corpus

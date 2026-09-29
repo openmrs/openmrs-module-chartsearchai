@@ -20,8 +20,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.impl.LlmEngine.ReferenceRecords;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -36,6 +38,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * The clause telling the model that a drug the question proposes is already in the patient's own active
@@ -48,7 +51,18 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * list; this pins that production hands the provider the list the injector stamped, and reads it off the
  * chart AFTER injection — the strategy serves a chart carrying no stamp.
  */
-public class AlreadyOrderedDrugClauseContextTest {
+public class AlreadyOrderedDrugClauseContextTest extends BaseModuleContextSensitiveTest {
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	private static final String PREDNISONE_ORDER = "Prednisone Co 5mg";
 

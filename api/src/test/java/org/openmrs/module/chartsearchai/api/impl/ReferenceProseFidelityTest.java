@@ -27,6 +27,7 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
@@ -41,6 +42,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #337: the model reproduces a deterministic safety finding's mechanism and then writes its
@@ -80,7 +82,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * engine; the chart builder, the injector and the validator are stubbed too, as in the sibling
  * suite, so the one variable under test is the answer.
  */
-public class ReferenceProseFidelityTest {
+public class ReferenceProseFidelityTest extends BaseModuleContextSensitiveTest {
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	/** A Major interaction whose mechanism is five sentences long — the shape the defect needs.
 	 *  {@code safetyFindingIn} takes the FIRST injected finding and asserts nothing about how many

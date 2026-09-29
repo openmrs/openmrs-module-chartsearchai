@@ -19,8 +19,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.impl.LlmEngine.ReferenceRecords;
@@ -34,6 +36,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Whether the chart a prompt is built from carries the module's reference records reaches the
@@ -49,7 +52,18 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * sends for each value is {@code LocalLlmEngineTest}'s, and that it forwards the value at all is
  * {@code ArchitectureGuardTest.theLocalEngineSendsEachCallsReferenceRecordsToTheBodyBuilder}'s.
  */
-public class ReferenceRecordsReachTheEngineTest {
+public class ReferenceRecordsReachTheEngineTest extends BaseModuleContextSensitiveTest {
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
 

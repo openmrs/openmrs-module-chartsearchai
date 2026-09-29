@@ -90,6 +90,19 @@ public class GlobalPropertyDefaultsTest {
 				"the derived tier is off until an install asks for it");
 	}
 
+	/**
+	 * The module-composed answer's switch (issue #562, ADR Decision 131), for the same reason again: the api
+	 * suite reads the constant, an install runs {@code config.xml}'s value, and flipping one of them alone
+	 * would ship a default nothing in the build exercised.
+	 */
+	@Test
+	public void theAnswerFromFindingsSwitchShipsTheDefaultItsConstantAsserts() throws Exception {
+		assertEquals(String.valueOf(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS),
+				declaredDefaults().get(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS),
+				"a drug-safety question the module resolved is answered from its findings unless an install "
+						+ "turns it off");
+	}
+
 	/** @return every {@code <property>} in {@code config.xml} that declares a {@code <defaultValue>}. */
 	private static Map<String, String> declaredDefaults() throws Exception {
 		Map<String, String> defaults = new LinkedHashMap<String, String>();

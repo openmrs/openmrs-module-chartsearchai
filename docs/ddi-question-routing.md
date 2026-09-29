@@ -160,9 +160,10 @@ gated by `isInteractionScreening`.
 
 ---
 
-## Step 4 (optional) — Answering without the model
+## Step 4 — Answering without the model
 
-With `chartsearchai.drugSafety.answerFromFindings` set to `true` (default `false`), some questions
+With `chartsearchai.drugSafety.answerFromFindings` at its default of `true` (on since issue #562,
+[ADR Decision 131](adr.md#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)), some questions
 are answered by the module itself, and the model is never asked to restate the findings (issue
 #469, [ADR Decision 108](adr.md#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)).
 A question qualifies only when it matches one of two small fixed grammars in `QueryScopeRouter`:
@@ -192,8 +193,9 @@ documented where it is decided; this section links to those places rather than r
 
 1. **It writes the answer.** The pre-answer findings are injected as citable `safety_finding`
    records, alongside the `drug_reference` records for the drugs involved. The model turns them into
-   prose and chooses what to cite. With `chartsearchai.drugSafety.answerFromFindings` at its default
-   of `false`, every DDI answer is written by the model. See
+   prose and chooses what to cite. With `chartsearchai.drugSafety.answerFromFindings` set to
+   `false`, every DDI answer is written by the model; at its default of `true`, the questions Step 4
+   describes are answered by the module instead. See
    [ADR Decision 23](adr.md#decision-23-drug-reference-injection--post-answer-drug-safety-validation).
 2. **It can state interactions the checks did not raise.** A `drug_reference` record carries the
    drug's reference text, interactions included. Injection exists so the model can ground those

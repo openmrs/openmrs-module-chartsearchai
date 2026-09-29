@@ -22,8 +22,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -37,6 +39,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * The #397 clause reaches the prompt of a chart the real injector gave several safety findings ABOUT
@@ -67,7 +70,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  * assert the flag the CALL SITES hand the provider, in both directions, which is a different
  * mutation: a literal at a call site leaves the predicate itself untouched.
  */
-public class FindingEnumerationClauseContextTest {
+public class FindingEnumerationClauseContextTest extends BaseModuleContextSensitiveTest {
+
+	/**
+	 * The answers these cases judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped default.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
 
 	/** One question that puts one drug in play against four of the patient's active orders, so the
 	 *  real screen raises several findings about one subject — the arrangement every case here needs

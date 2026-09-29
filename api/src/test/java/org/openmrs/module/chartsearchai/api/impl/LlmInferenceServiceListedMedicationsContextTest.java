@@ -59,6 +59,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
  */
 public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleContextSensitiveTest {
 
+	/**
+	 * The answers most cases here judge are the MODEL's, and since issue #562 a proposal the module
+	 * withholds, or a screen that related a pair, is answered by the module wherever the drug-reference
+	 * layer is on (ADR Decision 131). So that is stated here rather than inherited from a shipped
+	 * default; the cases about the module's own answer turn the property back on themselves.
+	 */
+	@BeforeEach
+	public void theModelWritesTheAnswer() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "false");
+	}
+
 	private static final String RIFAMPICIN_ORDER = "ListedMedicationsRifampicinOrderTestData.xml";
 
 	private static final String SLICE = "chartsearchai-test/ddi-listed-medications-proposal.json";

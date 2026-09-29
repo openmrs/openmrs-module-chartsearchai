@@ -12172,14 +12172,15 @@ month would be a safety loss — and fix the wording.
 - The duplicate-therapy sentence naming several of her orders ("active orders A and B"), the
   condition-mediated arm (off by default) and `FINDING_CHART_ORDER_LEAD` ("…from this patient's own active
   orders", true in core's sense) are unchanged.
-- No wire key carries the start date; the chip's `detail` states it. A client reading the order itself by
-  `resourceUuid` reads it from the chart.
+- No wire key carries the start date; an interaction chip's `detail` states it. A client reading the order
+  itself by `resourceUuid` reads it from the chart.
 - A pair of two not-started orders, and a contraindication about a not-started order, still state the
   current-medication clause ("a medication this patient is already taking") and publish
   `aboutACurrentMedication: true`. The pair's detail carries both start dates; the contraindication's does
-  not, and its date is in the chart record and, on an allergy-only question, the "Currently prescribed" line.
+  not, and its date is in the chart record and in the "Currently prescribed" line wherever
+  `ConflictingOrderStatement` states that line.
 - On a chart holding a scheduled order, a screened pair whose subject is scheduled-only sorts behind its
-  equally rated pairs, so it is the one the `maxPairChips` cap withholds inside that rating.
+  equally rated pairs, so where the `maxPairChips` cap cuts inside that rating it is withheld before them.
 - `LlmInferenceService`'s enumeration-repair instruction asks the model to name "the active order it is about"
   for each finding; it is prompt text and was not re-measured here.
 - What the model writes in its own prose is pinned by no test here.

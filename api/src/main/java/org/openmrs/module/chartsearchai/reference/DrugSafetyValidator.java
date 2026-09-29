@@ -8788,7 +8788,7 @@ public class DrugSafetyValidator {
 		// from the scheduled one. What does move, on such a chart only, is WHICH chip the maxPairChips cap
 		// keeps inside one rating — the sort below is stable, so a pair with a scheduled-only subject now
 		// trails its equals. On a chart with no such order the visiting order is untouched.
-		for (DrugReference ref : startedSubjectsFirst(orderDrugs, context, bridgedOrders)) {
+		for (DrugReference ref : startedSubjectsFirst(orderDrugs, substances, context, bridgedOrders)) {
 			List<DrugReference> substance = substances.remove(ref.substanceGroupKey());
 			if (substance == null) {
 				continue;
@@ -9487,10 +9487,11 @@ public class DrugSafetyValidator {
 	/**
 	 * {@code orderDrugs} with every row of a substance she holds ONLY as orders that have not started
 	 * moved behind the rest, each part in its own order — the screening arm's visiting order (issue
-	 * #553). The list itself where no order of hers is scheduled.
+	 * #553). The list itself where no order of hers is scheduled. {@code substances} is the arm's own
+	 * grouping of {@code orderDrugs}, read before its drain begins.
 	 */
 	private static List<DrugReference> startedSubjectsFirst(List<DrugReference> orderDrugs,
-			PatientClinicalContext context, BridgedOrders bridged) {
+			Map<Object, List<DrugReference>> substances, PatientClinicalContext context, BridgedOrders bridged) {
 		if (!anyHasNotStarted(context.getActiveDrugOrders())) {
 			return orderDrugs;
 		}
@@ -9502,7 +9503,8 @@ public class DrugSafetyValidator {
 		for (DrugReference ref : orderDrugs) {
 			Boolean late = scheduledOnly.get(ref.substanceGroupKey());
 			if (late == null) {
-				late = Boolean.valueOf(scheduledStartOf(orderDrugs, ref, context.getActiveDrugOrders(), bridged) != null);
+				late = Boolean.valueOf(scheduledStartOf(substances.get(ref.substanceGroupKey()),
+					context.getActiveDrugOrders(), bridged) != null);
 				scheduledOnly.put(ref.substanceGroupKey(), late);
 			}
 			(late.booleanValue() ? scheduled : started).add(ref);

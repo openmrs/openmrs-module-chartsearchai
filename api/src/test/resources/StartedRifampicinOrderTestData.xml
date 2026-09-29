@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #553, loaded beside ScheduledDrugOrderTestData.xml: a STARTED Rifampicin 300mg order for patient 7,
+  on the scheduled Rifampicin order's own concept (9554). Two of her orders whose displays name Rifampicin,
+  one of which has not started, raise issue #477's duplicate-therapy finding. The encounter is order 111's own.
+-->
+<dataset>
+	<drug drug_id="9561" concept_id="9554" name="Rifampicin 300mg" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9561cccc-0000-4000-8000-00000009561a" />
+	<orders order_id="9561" order_type_id="1" order_number="ORD-9561" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9554" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9561dddd-0000-4000-8000-00000009561a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9561" drug_inventory_id="9561" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 
 import org.openmrs.Concept;
 import org.openmrs.ConceptSet;
+import org.openmrs.Order;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -1282,6 +1283,18 @@ public class ChartSearchAiUtils {
 	 *          predicate shared by the drug-reference parse boundaries and renderers. */
 	public static boolean isBlank(String value) {
 		return value == null || value.trim().isEmpty();
+	}
+
+	/**
+	 * @return when {@code order} is scheduled to start, for an order that has NOT started — core's
+	 *         {@code Order.getEffectiveStartDate()}, where core's {@code Order.isStarted()} answers false —
+	 *         or {@code null} for one that has (issue #553). The one spelling of that decision, read by the
+	 *         chart's order read ({@code QueryStoreChartBuilder}) and the safety layer's
+	 *         ({@code PatientClinicalContextBuilder}), so the chart line and the chips cannot decide it two
+	 *         ways; never a reading of {@code scheduledDate} here.
+	 */
+	public static Date scheduledStartOf(Order order) {
+		return order.isStarted() ? null : order.getEffectiveStartDate();
 	}
 
 	/**

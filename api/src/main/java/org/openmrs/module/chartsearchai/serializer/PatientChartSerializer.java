@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -132,7 +134,8 @@ public class PatientChartSerializer {
 	 *
 	 * <p>Three things it says on purpose. It reports {@code Order.isActive()} and nothing more — the
 	 * module's own authoritative predicate, and the same question the drug-safety layer asks of the
-	 * same data. Not, however, through the same call: the safety layer screens on
+	 * same data — except for an order that has not started, which since issue #553 carries
+	 * {@link #SCHEDULED_ORDER_LABEL} instead of either value. Not, however, through the same call: the safety layer screens on
 	 * {@code getActiveOrders}, which evaluates the predicate in SQL. They agree on every leg checked
 	 * and differ where {@code Order.isActive()} throws and the SQL answers, which
 	 * {@code QueryStoreChartBuilder.readingOf} handles per order — so "the chart and the chips cannot
@@ -174,6 +177,38 @@ public class PatientChartSerializer {
 
 	/** The negative half of {@link #ACTIVE_ORDER_LABEL}; see there for the wording's reasons. */
 	public static final String INACTIVE_ORDER_LABEL = ". Order status: not in force";
+
+	/** The words ahead of a not-started order's date, which a safety finding naming it shares with
+	 *  {@link #SCHEDULED_ORDER_LABEL} — see {@link #scheduledToStart} — and which
+	 *  {@code FindingPartnerCoverageCheck} puts before a date a finding carries already spelled. */
+	public static final String SCHEDULED_TO_START_WORDS = "scheduled to start ";
+
+	/**
+	 * The order-status field for an order that has not STARTED, ahead of its date (issue #553). The same
+	 * field in the same idiom as {@link #ACTIVE_ORDER_LABEL}, so it is read as that record's status, and
+	 * neither of that label's two values: "in force" is false of an order due to start next month, and
+	 * "not in force" is the value the system prompt teaches as ended. Spelled through
+	 * {@link #scheduledOrderStatus} and nowhere else.
+	 */
+	public static final String SCHEDULED_ORDER_LABEL = ". Order status: " + SCHEDULED_TO_START_WORDS;
+
+	/**
+	 * @return {@link #SCHEDULED_ORDER_LABEL} and the date — the ONE spelling of a not-started order's
+	 *         status, read by the chart line here and by the stand-in record {@code DrugReferenceInjector}
+	 *         writes for an order the chart has no record of
+	 */
+	public static String scheduledOrderStatus(Date startDate) {
+		return SCHEDULED_ORDER_LABEL + DateFormatUtil.formatDate(startDate);
+	}
+
+	/**
+	 * @return {@code "scheduled to start <date>"}, the date spelled as every date this module publishes
+	 *         ({@code DateFormatUtil.formatDate}) — the words the chart line's status field and a safety
+	 *         finding naming a not-started order share (issue #553), so the two cannot come apart
+	 */
+	public static String scheduledToStart(Date startDate) {
+		return SCHEDULED_TO_START_WORDS + DateFormatUtil.formatDate(startDate);
+	}
 
 	/**
 	 * Serialize a pre-filtered list of records into numbered text lines.
@@ -378,7 +413,8 @@ public class PatientChartSerializer {
 
 	/**
 	 * The order-currency label for a record ({@link #ACTIVE_ORDER_LABEL} /
-	 * {@link #INACTIVE_ORDER_LABEL}), or {@code ""} when the module cannot say.
+	 * {@link #INACTIVE_ORDER_LABEL}, or {@link #scheduledOrderStatus} for an order that has not started),
+	 * or {@code ""} when the module cannot say.
 	 *
 	 * <p>Silence is the whole guard, and it is why this reads a three-valued answer rather than a
 	 * boolean. Several unrelated situations arrive here as {@code null} — enumerated once, on
@@ -391,6 +427,11 @@ public class PatientChartSerializer {
 	 * along: a chart the module could not read is not a chart that records nothing.
 	 */
 	private static String orderCurrencyLabel(SerializedRecord record) {
+		// An order that has not started carries no order-active mark, and says so rather than nothing
+		// (issue #553) — SerializedRecord.orderStartDate.
+		if (record != null && record.getOrderStartDate() != null) {
+			return scheduledOrderStatus(record.getOrderStartDate());
+		}
 		if (record == null || record.getOrderActive() == null) {
 			return "";
 		}
@@ -884,6 +925,21 @@ public class PatientChartSerializer {
 		private final List<String> findingBridgeNames;
 
 		/**
+		 * The ids of the reference rows each of an injected {@code safety_finding}'s
+		 * {@link #findingPartners} was resolved to where its chip was decided — {@code SafetyWarning.rowsOfPartner}
+		 * of each, INDEX-ALIGNED with {@link #findingPartners}, an empty entry for a partner no row was
+		 * resolved for (issue #555). Empty on every other record. Written in exactly ONE place,
+		 * {@code DrugReferenceInjector}'s finding mapping, beside {@link #findingPartners} and for its
+		 * reason; ids rather than rows for {@link #findingSubjectRows}' reason.
+		 *
+		 * <p>Read by {@code FindingPartnerCoverageCheck}, through {@code DrugSafetyValidator.namesThePartner}:
+		 * an answer writing the name of one of those rows, as the prose rule reads a drug name, is naming
+		 * the partner, where the finding prints it by a label the answer does not copy
+		 * ({@code Rifampicin (rifampin)}).
+		 */
+		private final List<List<String>> findingPartnerRows;
+
+		/**
 		 * The numbers of the chart records this record was DERIVED from, empty where it was not
 		 * derived from any — the provenance of a record this module injected, and the form a consumer
 		 * reads rather than parsing it out of {@link #getText()} (issue #305).
@@ -908,7 +964,9 @@ public class PatientChartSerializer {
 		 * <p><b>The record and the display are one string by construction, which is what makes this a
 		 * fact about the RECORD and not only about the order.</b>
 		 * {@code DrugReferenceInjector.renderActiveOrder} is {@code "Active drug order: " +
-		 * order.getDisplay() + "."}, so the display is the whole of what the record says the drug is.
+		 * order.getDisplay() + "."} — or, for an order that has not started (issue #553),
+		 * {@code "Scheduled drug order: " + display} followed by its scheduled status, which names no drug —
+		 * so the display is the whole of what the record says the drug is.
 		 * A richer rendering would leave the stamp {@code FALSE} for a record that had since gained a
 		 * name — withholding a verdict it could then give, which is the fail-safe direction — so
 		 * whoever changes that method re-decides this stamp with it.
@@ -918,6 +976,17 @@ public class PatientChartSerializer {
 		 * is exactly that case and is graded as before.
 		 */
 		private final Boolean orderDrugNamed;
+
+		/**
+		 * For an injected {@code safety_finding}, each order among {@link #findingPartners} that has not
+		 * started, keyed by that partner's name, mapped to when it is scheduled to start — spelled
+		 * {@code yyyy-MM-dd}, off the finding in hand ({@code SafetyWarning.partnerScheduledStarts}) — and
+		 * empty on every other record (issue #553). Per partner, because one finding may name a started
+		 * order and a scheduled one (issue #477's duplicate therapy). Metadata beside the record and not a
+		 * reading of its text, for the reason {@link #findingPartners} is: {@code FindingPartnerCoverageCheck}
+		 * names each such partner as a scheduled order, never as an active one.
+		 */
+		private final Map<String, String> findingPartnerScheduledStarts;
 
 		/**
 		 * The daily dosing ceilings an injected {@code drug_reference} record's own text states for
@@ -1027,13 +1096,14 @@ public class PatientChartSerializer {
 		 * each said "the full one is below" and were each overtaken by the next issue, this one
 		 * included, which is why every rung names the widest by the parameter only it takes rather than
 		 * by a count that the next insertion falsifies. Since issue #516 it defaults
-		 * {@link #findingPartners} to empty as well, and since issue #514 {@link #findingBridgeNames}.
+		 * {@link #findingPartners} to empty as well, since issue #514 {@link #findingBridgeNames}, and since
+		 * issue #555 {@link #findingPartnerRows}.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
-					orderStopDate, findingSeverity, null, null, null, null, null);
+					orderStopDate, findingSeverity, null, null, null, null, null, null, null);
 		}
 
 		/**
@@ -1052,15 +1122,18 @@ public class PatientChartSerializer {
 		 * {@link #findingSeverity}, and so does the widest rung — for the tail constraint the widest
 		 * constructor's javadoc states: this rung keeps its list tail and the widest its list-then-Boolean
 		 * one. The finding-rating rung above defaults it to empty. Since issue #514
-		 * {@link #findingBridgeNames} follows it in both rungs, for the same constraint.
+		 * {@link #findingBridgeNames} follows it in both rungs, for the same constraint, and since issue
+		 * #553 {@link #findingPartnerScheduledStarts} follows that.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom) {
+				List<String> findingPartners, List<String> findingBridgeNames,
+				List<List<String>> findingPartnerRows, Map<String, String> findingPartnerScheduledStarts,
+				List<Integer> derivedFrom) {
 			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
 					orderStopDate, findingSeverity, findingWithholds, findingSubjectRows, findingPartners,
-					findingBridgeNames, derivedFrom, null, null);
+					findingBridgeNames, findingPartnerRows, findingPartnerScheduledStarts, derivedFrom, null, null);
 		}
 
 		/**
@@ -1089,13 +1162,20 @@ public class PatientChartSerializer {
 		 * <p><b>Issue #516 answered it the same way again</b>, inserting {@link #findingPartners} after
 		 * {@link #findingSeverity} in this rung and in the provenance rung, which leaves every tail as it
 		 * was — and issue #515 once more, with {@link #findingWithholds} and {@link #findingSubjectRows}
-		 * before it, and issue #514 with {@link #findingBridgeNames} after it, in both.
+		 * before it, issue #514 with {@link #findingBridgeNames} after it, issue #555 with
+		 * {@link #findingPartnerRows} after that, and issue #553 with {@link #findingPartnerScheduledStarts}
+		 * after that, in both.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive, Date orderStopDate,
 				String findingSeverity, Boolean findingWithholds, List<String> findingSubjectRows,
-				List<String> findingPartners, List<String> findingBridgeNames, List<Integer> derivedFrom,
-				List<String> dosingCeilings, Boolean orderDrugNamed) {
+				List<String> findingPartners, List<String> findingBridgeNames,
+				List<List<String>> findingPartnerRows, Map<String, String> findingPartnerScheduledStarts,
+				List<Integer> derivedFrom, List<String> dosingCeilings, Boolean orderDrugNamed) {
+			// Copied and wrapped, and never null, for the reason derivedFrom below is.
+			this.findingPartnerScheduledStarts = findingPartnerScheduledStarts == null
+					|| findingPartnerScheduledStarts.isEmpty() ? Collections.<String, String> emptyMap()
+					: Collections.unmodifiableMap(new LinkedHashMap<String, String>(findingPartnerScheduledStarts));
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -1119,6 +1199,16 @@ public class PatientChartSerializer {
 			this.findingBridgeNames = findingBridgeNames == null || findingBridgeNames.isEmpty()
 					? Collections.<String> emptyList()
 					: Collections.unmodifiableList(new ArrayList<String>(findingBridgeNames));
+			// Index-aligned with findingPartners, so padded or cut to its size here rather than trusted to
+			// be: each entry copied and wrapped, and never null, for the same reason.
+			List<List<String>> partnerRows = new ArrayList<List<String>>(this.findingPartners.size());
+			for (int i = 0; i < this.findingPartners.size(); i++) {
+				List<String> rows = findingPartnerRows == null || i >= findingPartnerRows.size() ? null
+						: findingPartnerRows.get(i);
+				partnerRows.add(rows == null || rows.isEmpty() ? Collections.<String> emptyList()
+						: Collections.unmodifiableList(new ArrayList<String>(rows)));
+			}
+			this.findingPartnerRows = Collections.unmodifiableList(partnerRows);
 			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
 			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
 			// reader branches on absence — empty is the honest answer wherever nothing was resolved.
@@ -1277,6 +1367,11 @@ public class PatientChartSerializer {
 			return orderDrugNamed;
 		}
 
+		/** @return see {@link #findingPartnerScheduledStarts}; never null, and empty on every other record */
+		public Map<String, String> getFindingPartnerScheduledStarts() {
+			return findingPartnerScheduledStarts;
+		}
+
 		/**
 		 * @return the daily dosing ceilings this record's own text states for the patient it was
 		 *         built for, STRICTEST FIRST and distinct, each spelled as the record spells it
@@ -1332,6 +1427,15 @@ public class PatientChartSerializer {
 		 */
 		public List<String> getFindingBridgeNames() {
 			return findingBridgeNames;
+		}
+
+		/**
+		 * @return the row ids each of {@link #getFindingPartners()} was resolved to — see
+		 *         {@link #findingPartnerRows} — never null, the same size as {@link #getFindingPartners()},
+		 *         and an empty entry for a partner no row was resolved for
+		 */
+		public List<List<String>> getFindingPartnerRows() {
+			return findingPartnerRows;
 		}
 	}
 }

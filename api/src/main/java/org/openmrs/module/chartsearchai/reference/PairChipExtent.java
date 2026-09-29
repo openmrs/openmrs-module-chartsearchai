@@ -9,6 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * How many drug pairs one question's interaction check found, and how many of them it reported —
  * the statement a bounded safety list owes about its own bounds (issue
@@ -192,9 +196,13 @@ public final class PairChipExtent {
 
 	private final int reported;
 
-	private PairChipExtent(int found, int reported) {
+	private final List<BelowFloorPair> belowFloor;
+
+	private PairChipExtent(int found, int reported, List<BelowFloorPair> belowFloor) {
 		this.found = found;
 		this.reported = reported;
+		this.belowFloor = belowFloor == null ? null
+				: Collections.unmodifiableList(new ArrayList<BelowFloorPair>(belowFloor));
 	}
 
 	/**
@@ -203,7 +211,12 @@ public final class PairChipExtent {
 	 *        pairwise arm, and equal to {@code found} from the uncapped drug-in-play arm
 	 */
 	static PairChipExtent of(int found, int reported) {
-		return new PairChipExtent(found, reported);
+		return new PairChipExtent(found, reported, null);
+	}
+
+	/** An extent that also states {@link #getBelowFloor()} — the drug-in-play arm's alone. */
+	static PairChipExtent of(int found, int reported, List<BelowFloorPair> belowFloor) {
+		return new PairChipExtent(found, reported, belowFloor);
 	}
 
 	/** How many above-floor rule pairs the interaction check found, before {@code maxPairChips()}
@@ -224,9 +237,58 @@ public final class PairChipExtent {
 		return reported;
 	}
 
+	/**
+	 * The pairs the check that stated this extent related between a drug the question put in play and
+	 * one of this patient's active or scheduled orders, whose rules the severity floor kept out of the
+	 * chips and out of {@link #getFound()} — one per partner, its most severe sub-floor row, and none for
+	 * a partner a rule above the floor already chips. ADR Decision 127: "Is it safe to start her on
+	 * clarithromycin?" related four of her orders, all rated {@code Unknown}, and published
+	 * {@code found: 0} beside an answer listing them as the drug's general interactions.
+	 *
+	 * <p>Three-valued like the extent itself. {@code null} is no measurement: only the DRUG-IN-PLAY arm
+	 * states this, so an extent a pairwise arm stated carries none. {@code []} is a measurement of none,
+	 * and never a certificate that nothing below the floor relates her orders to anything else.
+	 */
+	public List<BelowFloorPair> getBelowFloor() {
+		return belowFloor;
+	}
+
+	/** Counts only, and never a partner's name: a partner is one of her medications (ADR Decision 102). */
 	@Override
 	public String toString() {
-		return "PairChipExtent[found=" + found + ", reported=" + reported + "]";
+		return "PairChipExtent[found=" + found + ", reported=" + reported
+				+ (belowFloor == null ? "" : ", belowFloor=" + belowFloor.size()) + "]";
+	}
+
+	/** One pair of {@link #getBelowFloor()}: the drug in play by the name its chips use, the partner by
+	 *  {@code DrugSafetyValidator.partnerLabel} — the name the injected record prints it by where no
+	 *  chip reconciled one — and the source's own rating, verbatim. */
+	public static final class BelowFloorPair {
+
+		private final String drug;
+
+		private final String partner;
+
+		private final String severity;
+
+		public BelowFloorPair(String drug, String partner, String severity) {
+			this.drug = drug;
+			this.partner = partner;
+			this.severity = severity;
+		}
+
+		public String getDrug() {
+			return drug;
+		}
+
+		public String getPartner() {
+			return partner;
+		}
+
+		/** The source's rating, or null for a row that carries none. */
+		public String getSeverity() {
+			return severity;
+		}
 	}
 
 	/**
@@ -265,6 +327,13 @@ public final class PairChipExtent {
 		 */
 		public void record(int found, int reported) {
 			stated = PairChipExtent.of(found, reported);
+		}
+
+		/** {@link #record(int, int)} plus {@link PairChipExtent#getBelowFloor()} — what
+		 *  {@code recordPairExtent} writes, so that statement reaches the caller rather than being dropped
+		 *  by a rebuild from the two counts. {@code null} states no such measurement. */
+		public void record(int found, int reported, List<BelowFloorPair> belowFloor) {
+			stated = PairChipExtent.of(found, reported, belowFloor);
 		}
 
 		/**

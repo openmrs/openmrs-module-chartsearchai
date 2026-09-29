@@ -13,8 +13,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
@@ -143,11 +146,23 @@ public class SafetyWarning {
 	/** @see #currentOrderDisplays() */
 	private final List<String> currentOrderDisplays;
 
+	/** @see #currentMedicationOrders() */
+	private final List<CurrentMedicationOrder> currentMedicationOrders;
+
 	/** @see #isStatedInTheAnswer() */
 	private final boolean statedInTheAnswer;
 
 	/** @see #alreadyOrdered() */
 	private final PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered;
+
+	/** @see #partnerScheduledStarts() */
+	private final Map<String, String> partnerScheduledStarts;
+
+	/** @see #orderScheduledStart() */
+	private final String orderScheduledStart;
+
+	/** @see #rowsOfPartner(String) */
+	private final Map<String, List<DrugReference>> partnerRows;
 
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
@@ -334,7 +349,7 @@ public class SafetyWarning {
 			boolean aboutACurrentMedication, PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders, false,
-				null, null, false, null, null, null, false, alreadyOrdered);
+				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered);
 	}
 
 	/**
@@ -422,7 +437,7 @@ public class SafetyWarning {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, false, null);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, null, false, null, null, null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -433,9 +448,32 @@ public class SafetyWarning {
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
 			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
-			Collection<String> currentOrderDisplays, boolean statedInTheAnswer,
+			List<CurrentMedicationOrder> currentMedicationOrders, Collection<String> currentOrderDisplays,
+			boolean statedInTheAnswer, Map<String, List<DrugReference>> partnerRows,
+			Map<String, String> partnerScheduledStarts, String orderScheduledStart,
 			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
 		this.alreadyOrdered = alreadyOrdered;
+		// Copied and wrapped for the reason chartOrderBridges is; never null.
+		this.partnerScheduledStarts = partnerScheduledStarts == null || partnerScheduledStarts.isEmpty()
+				? Collections.<String, String> emptyMap()
+				: Collections.unmodifiableMap(new LinkedHashMap<String, String>(partnerScheduledStarts));
+		this.orderScheduledStart = orderScheduledStart;
+		// Copied and wrapped for the reason chartOrderBridges is; never null. Not de-duplicated: the stamp's
+		// one writer lists each order once, and two prescriptions under one display are two entries.
+		this.currentMedicationOrders = currentMedicationOrders == null || currentMedicationOrders.isEmpty()
+				? Collections.<CurrentMedicationOrder> emptyList()
+				: Collections.unmodifiableList(new ArrayList<CurrentMedicationOrder>(currentMedicationOrders));
+		// Copied and wrapped for the reason chartOrderBridges is, each partner's list too; never null.
+		Map<String, List<DrugReference>> rowsByPartner = new LinkedHashMap<String, List<DrugReference>>();
+		if (partnerRows != null) {
+			for (Map.Entry<String, List<DrugReference>> partner : partnerRows.entrySet()) {
+				if (partner.getKey() != null && partner.getValue() != null && !partner.getValue().isEmpty()) {
+					rowsByPartner.put(partner.getKey(),
+							Collections.unmodifiableList(new ArrayList<DrugReference>(partner.getValue())));
+				}
+			}
+		}
+		this.partnerRows = Collections.unmodifiableMap(rowsByPartner);
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.currentOrderDisplays = currentOrderDisplays == null || currentOrderDisplays.isEmpty()
 				? Collections.<String> emptyList()
@@ -567,7 +605,8 @@ public class SafetyWarning {
 	 * that covers no order. It is the structural answer to "which of her orders is this chip about",
 	 * and the reason nothing downstream recovers that by matching a phrase in prose.
 	 *
-	 * <p><b>Empty is the chip types that name no active order</b>: a contraindication, an overdose,
+	 * <p><b>Empty is the chip types that list no order here</b>: a contraindication (which, where it lists them,
+	 * lists the orders it is about in {@link #currentMedicationOrders()} instead), an overdose,
 	 * and the class-only interaction chip, whose partner is a class rather than an order. So empty is
 	 * "outside this population", never "covers no order" — and it must not be summed across a response
 	 * expecting a partner total, which is {@code interactionPairs}' question over a different
@@ -1126,8 +1165,9 @@ public class SafetyWarning {
 	 * answer of every arm named above as answering false, whatever her chart holds — for a drug in play
 	 * her orders do not resolve to, which includes a prescription recorded under a name the reference
 	 * data does not carry, for one every order of which is coded only as a locally applied presentation
-	 * of a drug the data also files outside those groups, and for the question-pair arm's findings — and
-	 * of every chip built through a public constructor. This is the
+	 * of a drug the data also files outside those groups, and for one she holds only as orders that have
+	 * not started where the question proposes it (issue #553), and for the question-pair arm's findings —
+	 * and of every chip built through a public constructor. This is the
 	 * one home of that list; {@code README.md} carries it for a client,
 	 * with how to render {@code true}.
 	 */
@@ -1172,7 +1212,8 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, false, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
-				matchedOrderNames, subjectRows, currentOrderDisplays, statedInTheAnswer, alreadyOrdered);
+				matchedOrderNames, subjectRows, currentMedicationOrders, currentOrderDisplays, statedInTheAnswer,
+				partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered);
 	}
 
 	/**
@@ -1186,8 +1227,8 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentOrderDisplays, statedInTheAnswer,
-				alreadyOrdered);
+				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentMedicationOrders, currentOrderDisplays,
+				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1220,18 +1261,42 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * This warning, carrying {@code displays} as the displays of this patient's own active orders a
-	 * CONTRAINDICATION about a medication she already takes is about — see {@link #currentOrderDisplays()}.
-	 * Package-private: written only by {@code DrugSafetyValidator.ContraindicationChips}, off the orders
-	 * {@code addActiveOrderContraindications} resolved the chip's substance from. Changes nothing this
-	 * warning prints or publishes.
+	 * This warning, carrying {@code orders} as this patient's own active orders a CONTRAINDICATION about a
+	 * medication she already takes is about — see {@link #currentMedicationOrders()} — and {@code displays}
+	 * as the ones of those a sentence may print — see {@link #currentOrderDisplays()}. Package-private:
+	 * written only by {@code DrugSafetyValidator.currentMedicationOrdersOn}, which production reaches from
+	 * {@code DrugSafetyValidator.ContraindicationChips} alone, off the orders either contraindication arm
+	 * recorded for the chip's substance. Changes nothing this warning prints.
 	 */
-	SafetyWarning withCurrentOrderDisplays(Collection<String> displays) {
+	SafetyWarning withCurrentMedicationOrders(List<CurrentMedicationOrder> orders, Collection<String> displays) {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, displays, statedInTheAnswer,
-				alreadyOrdered);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, orders, displays,
+				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered);
+	}
+
+	/**
+	 * Every one of this patient's own active orders this finding is about, in her chart's order, by its
+	 * display and its uuid (issue #552) — so her <em>Advil 400mg</em> is named on a chip whose
+	 * {@link #getDrug()} is the substance <em>Ibuprofen</em> the module resolved it to, and a client can
+	 * link to the order without resolving {@code drug} against her orders itself, a second resolution that
+	 * could disagree with this one (#151). Published VERBATIM as each chip's {@code currentMedicationOrders}
+	 * wire key, so this accessor's name IS the key.
+	 *
+	 * <p>Set on a contraindication about a medication she already takes, by either arm that raises one, and
+	 * stamped once where the ledger adds the chip ({@code DrugSafetyValidator.ContraindicationChips}), so a
+	 * chip that replaces another of its substance carries them too: for {@code addActiveOrderContraindications},
+	 * every order any row of its substance {@code resolvesFromAny}; for the drug-in-play arm (issue #402), the
+	 * orders that ESTABLISH she takes it ({@code DrugSafetyValidator.currentMedicationsInPlay}), the ones its
+	 * {@link #isAboutACurrentMedication()} was decided on. Never re-derived at a consumer. An order known only
+	 * by its codes is listed by the stand-in display {@link PatientClinicalContext.ActiveDrugOrder#getDisplay()}
+	 * gives it, which is not a name. <b>Empty is not a claim that no order is behind the finding</b>: it
+	 * is, among others, the answer on every chip of another type, and on a contraindication over a context
+	 * carrying no per-order list (issue #118's flattened fallback), which has no order to name.
+	 */
+	public List<CurrentMedicationOrder> currentMedicationOrders() {
+		return currentMedicationOrders;
 	}
 
 	/**
@@ -1239,12 +1304,82 @@ public class SafetyWarning {
 	 * them (<em>"Advil 400mg"</em>, where {@link #getDrug()} is the substance <em>"Ibuprofen"</em> the module
 	 * resolved it to). Set only on a contraindication raised by {@code addActiveOrderContraindications}
 	 * about a medication she already takes, from the orders any row of its substance
-	 * {@code resolvesFromAny}, and only an order whose display {@code displayNamesADrug}. Empty everywhere
-	 * else, and empty there too where no such order has a printable display — so empty is never a claim
-	 * that no order is behind the finding. Not published: {@link ConflictingOrderStatement} is its reader.
+	 * {@code resolvesFromAny}, and only an order whose display {@code displayNamesADrug} — the orders of
+	 * {@link #currentMedicationOrders()} a sentence may print. Empty everywhere else, and empty there too
+	 * where no such order has a printable display — so empty is never a claim that no order is behind the
+	 * finding. Not published: {@link ConflictingOrderStatement} is its reader.
 	 */
 	List<String> currentOrderDisplays() {
 		return currentOrderDisplays;
+	}
+
+	/**
+	 * This warning, stating that each order {@code starts} keys, among those it names as its partners
+	 * ({@link #namedPartners()}), has not started and is scheduled to start on the date it maps to (issue
+	 * #553). Package-private: written by {@code DrugSafetyValidator.interactionWarning}, from the same
+	 * answer that worded the detail's "scheduled order", and by issue #477's two duplicate-therapy
+	 * findings, from the carriers whose displays they name — so a finding and its detail cannot disagree.
+	 * Changes nothing this warning prints.
+	 */
+	SafetyWarning withPartnerScheduledStarts(Map<String, Date> starts) {
+		if ((starts == null || starts.isEmpty()) && partnerScheduledStarts.isEmpty()) {
+			return this;
+		}
+		Map<String, String> spelled = new LinkedHashMap<String, String>();
+		if (starts != null) {
+			for (Map.Entry<String, Date> start : starts.entrySet()) {
+				spelled.put(start.getKey(), DateFormatUtil.formatDate(start.getValue()));
+			}
+		}
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, partnerRows, spelled, orderScheduledStart, alreadyOrdered);
+	}
+
+	/**
+	 * For each partner this chip names ({@link #namedPartners()}) that has not started, keyed by that
+	 * name, when it is scheduled to start, spelled as {@code DateFormatUtil.formatDate} spells every date
+	 * this module publishes; a partner that has started is not a key, and a chip naming no such partner
+	 * maps nothing (issue #553). Never null. {@code DrugSafetyValidator.collapseSharedMechanisms} reads it
+	 * to keep such a chip out of a merge. Package-private and not a getter, so it reaches no wire;
+	 * {@code DrugReferenceInjector} carries it onto the finding's record for {@code FindingPartnerCoverageCheck}.
+	 */
+	Map<String, String> partnerScheduledStarts() {
+		return partnerScheduledStarts;
+	}
+
+	/**
+	 * When the order this CONTRAINDICATION is about is scheduled to start, spelled as
+	 * {@link #partnerScheduledStarts()} does — set by {@link #statingItsOrderHasNotStarted} alone, in the
+	 * step that writes the detail's "has not started" sentence, and {@code null} on every chip that step
+	 * did not build (issue #553, review round 2 of PR #559). Package-private and not a getter, so it
+	 * reaches no wire: {@code DrugReferenceInjector.composeFromFindings} reads it to leave out the
+	 * referent that says she is already taking the drug, a sentence the detail's own "has not started"
+	 * contradicts.
+	 */
+	String orderScheduledStart() {
+		return orderScheduledStart;
+	}
+
+	/**
+	 * This contraindication about a medication she already takes, its detail ending with the sentence that
+	 * the order it is about has not started and is scheduled to start on {@code start} (issue #553, review
+	 * round 1 of PR #559) — in the words {@code PatientChartSerializer.scheduledToStart} gives the order's
+	 * own chart record. Package-private: written only by {@code DrugSafetyValidator.ContraindicationChips},
+	 * for a substance she holds only as orders that have not started. Changes the detail and {@link
+	 * #orderScheduledStart()}, and nothing else.
+	 */
+	SafetyWarning statingItsOrderHasNotStarted(Date start) {
+		String stated = DrugSafetyValidator.endSentence(detail.trim()) + " Her order for " + drug
+				+ " has not started: it is " + PatientChartSerializer.scheduledToStart(start) + ".";
+		return new SafetyWarning(type, drug, stated, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts,
+				DateFormatUtil.formatDate(start), alreadyOrdered);
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
@@ -1253,8 +1388,8 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentOrderDisplays,
-				true, alreadyOrdered);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, true, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered);
 	}
 
 	/**
@@ -1284,8 +1419,8 @@ public class SafetyWarning {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentOrderDisplays,
-				statedInTheAnswer, alreadyOrdered);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered);
 	}
 
 	/**
@@ -1301,6 +1436,51 @@ public class SafetyWarning {
 	 */
 	List<DrugReference> subjectRows() {
 		return subjectRows;
+	}
+
+	/**
+	 * This warning, carrying {@code rows} as the reference rows each of its {@link #namedPartners()} was
+	 * resolved to where the chip was decided — see {@link #rowsOfPartner}. Package-private: written by
+	 * {@code DrugSafetyValidator} at the chip sites that hold the partner's ENTRIES — both active-order
+	 * arms' rule chips, and {@code conditionMediatedWarning} — and unioned across the members of a merged
+	 * chip by {@code collapseSharedMechanisms}. Changes nothing this warning prints or publishes.
+	 */
+	SafetyWarning withPartnerRows(Map<String, List<DrugReference>> rows) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, rows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered);
+	}
+
+	/**
+	 * The reference rows the partner {@code partner} — one of {@link #namedPartners()}, as printed — was
+	 * resolved to where this chip was decided (issue #555), so that a check of the answer
+	 * can ask whether the PROSE writes the name of one of those rows —
+	 * {@code DrugSafetyValidator.namesThePartner}, which reads a row's {@link DrugReference#getName()} and
+	 * never its other names, since those include everyday words — rather than only containment of the
+	 * printed name: a finding printing her order by the knowledge base's label
+	 * <em>"Rifampicin (rifampin)"</em> is named by an answer writing <em>"Rifampicin"</em>, which no
+	 * containment of the label can see. {@code DrugReferenceInjector} carries it onto the finding's
+	 * record, as each row's id, beside {@code RecordMapping.getFindingPartners()}. The rows of ONE
+	 * substance on an interaction rule chip; on a merged chip, and on a {@link #conditionMediated} chip
+	 * whose name for a prescription stands for several of its substances, the union of theirs, so an answer
+	 * writing the name of any one of those rows states that partner.
+	 *
+	 * <p>Empty, never null, for a partner no {@link #withPartnerRows} site resolved to an entry — the
+	 * orders {@link #substanceInSeveralActiveOrders} and {@link #ordersSharingASubstance} name among them,
+	 * and a rule whose partner the dataset identifies by no entry. Such a partner is stated only where the
+	 * answer contains its printed name. Package-private and not a getter, so it reaches no wire.
+	 */
+	List<DrugReference> rowsOfPartner(String partner) {
+		List<DrugReference> rows = partnerRows.get(partner);
+		return rows == null ? Collections.<DrugReference> emptyList() : rows;
+	}
+
+	/** @return every partner's rows as {@link #withPartnerRows} took them, never null — for a merged chip
+	 *          to union its members' */
+	Map<String, List<DrugReference>> partnerRows() {
+		return partnerRows;
 	}
 
 	/**
@@ -1529,6 +1709,59 @@ public class SafetyWarning {
 		@Override
 		public String toString() {
 			return substance + " from " + orderDisplay;
+		}
+	}
+
+	/**
+	 * One of this patient's own active orders a finding is about — an entry of
+	 * {@link SafetyWarning#currentMedicationOrders()} (issue #552). The two fields are NAMED for their
+	 * getters for {@link ChartOrderBridge}'s reason: Jackson reads the getters and XStream the fields, and
+	 * the key names are a README contract. {@code orderDisplay} is the name {@code chartOrderBridges}' own
+	 * entries give the same string.
+	 */
+	public static final class CurrentMedicationOrder {
+
+		private final String orderDisplay;
+
+		private final String orderUuid;
+
+		/** Either argument may be null: an order's uuid is null where the module could not read it
+		 *  ({@link PatientClinicalContext.ActiveDrugOrder#getUuid()}), and the order is listed regardless. */
+		public CurrentMedicationOrder(String orderDisplay, String orderUuid) {
+			this.orderDisplay = orderDisplay;
+			this.orderUuid = orderUuid;
+		}
+
+		/** @return the order as her chart displays it — {@link PatientClinicalContext.ActiveDrugOrder#getDisplay()} */
+		public String getOrderDisplay() {
+			return orderDisplay;
+		}
+
+		/** @return the {@code Order} uuid, or null where it is unknown */
+		public String getOrderUuid() {
+			return orderUuid;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof CurrentMedicationOrder)) {
+				return false;
+			}
+			CurrentMedicationOrder that = (CurrentMedicationOrder) other;
+			return Objects.equals(orderDisplay, that.orderDisplay) && Objects.equals(orderUuid, that.orderUuid);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(orderDisplay, orderUuid);
+		}
+
+		@Override
+		public String toString() {
+			return orderDisplay + " (" + orderUuid + ")";
 		}
 	}
 

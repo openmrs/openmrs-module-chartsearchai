@@ -330,7 +330,7 @@ public final class QueryScopeRouter {
 	 * the question proposes is already in her orders only where this admits the question, so a phrasing
 	 * it misses withholds that fact — which is how <em>"Is it safe to add prednisone for her?"</em> went
 	 * untold until its shape was admitted. A miss there costs the statement, never a refusal. ADR Decision
-	 * 125.
+	 * 129.
 	 */
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);

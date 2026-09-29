@@ -130,7 +130,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 122: Every record of the whole chart carries its own date](#decision-122-every-record-of-the-whole-chart-carries-its-own-date)
 - [Decision 123: A drug in play that is one of her own orders is stated as her medication, at every site](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site)
 - [Decision 124: An allergy question states her conflicting orders in the answer](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer)
-- [Decision 125: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-125-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
+- [Decision 126: An order that has not started is screened, and stated as scheduled with its date](#decision-126-an-order-that-has-not-started-is-screened-and-stated-as-scheduled-with-its-date)
+- [Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -7789,6 +7790,45 @@ data leak. So:
   helper both methods and the sentence's dedup share: an answer writing *Isoniazid /
   pyrazinamide/rifampin* was told that order was "not named above".
 
+**Amended by [#555](https://github.com/openmrs/openmrs-module-chartsearchai/issues/555): an order is
+also stated where the prose names its DRUG.** A finding can name her order by the knowledge base's label
+for the row it resolved to — *Rifampicin (rifampin)* for her *Rifampicin* — and no answer writes the
+label, so containment of it read *"interacts with active order Rifampicin"* as leaving the order out:
+the issue measured the false *"not named above: active order Rifampicin (rifampin)"* in 6 of 22 answers
+on its patient. So:
+
+- A partner is stated where the answer contains its printed name as before, or where
+  `DrugSafetyValidator.namesThePartner` says the prose writes the NAME of a row the chip resolved that
+  partner to — a span `DrugReference.namedOccurrences`, the prose rule's own, reports, covering that
+  row's `getName()`. Both methods read one decision,
+  `FindingPartnerCoverageCheck.statedPartners`. The rows travel structurally, `SafetyWarning.rowsOfPartner`
+  onto `RecordMapping.getFindingPartnerRows()` as ids, written in the injector's finding mapping beside
+  `getFindingPartners()`; never re-resolved from the printed label, which is #151's shape.
+- **Stripping the label's parenthetical was proposed and rejected** before any code: a substring of a
+  stem is a fourth answer to "does this prose name this drug" beside `matchesText` (reference
+  `CLAUDE.md`, *Matching a drug name*), and PR #478's round two already replaced a substring test of
+  such a label with the prose rule (`DrugSafetyValidator.namesTheEndedOrderDrug`).
+- **The row's name, never every name of it** (PR #556, review round 3). The first version credited
+  any of the row's names, as `matchesText` reads them, and the knowledge base files everyday words
+  among those: *Lactic acid* (DDInter1015) carries *lactate* as its rxnorm name, which is also the lab
+  monitored for lactic acidosis, the condition a condition-mediated finding naming her Lactic acid
+  order is about. *"… linked to lactic acidosis [4]. Monitor her lactate."* then read as naming that
+  order: nothing appended, and `findingPartners` stated as complete, silently —
+  `ConditionMediatedFindingPartnerCompletionContextTest.theConditionsMonitoringLabIsNotHerOrderEvenWhereTheKnowledgeBaseFilesItAsThatDrugsSynonym`.
+  The label's head is the row's name, so #555's *Rifampicin* is still credited; its parenthetical is
+  another name, so *"rifampin"* alone reads as unstated, toward reporting —
+  `CitedFindingPartnerCompletionTest.anOrderTheAnswerNamedOnlyByAnotherNameOfItsRowIsStillListed`.
+- Rows are written where a chip holds its partners' entries — both active-order arms' rule chips, a
+  merged chip the union of its members', and the condition-mediated finding (Decision 111), whose
+  orders are printed by the same labels (*Lactic acid (lactate)*;
+  `ConditionMediatedFindingPartnerCompletionContextTest`). Issue #477's two findings name several of
+  her orders of ONE substance, whose name is what an answer writing about that drug writes, so they
+  carry none and each of their orders is stated only by its display: the residue there stays toward
+  reporting, `CitedFindingPartnerCompletionTest.ordersOfOneSubstanceAreNotStatedByThatSubstancesName`.
+  The residue toward silence: a row whose name is itself an everyday word (*Iron*, *Oxygen*, whose
+  labels are that word alone, so containment credited them before #555 too), and a condition-mediated
+  partner whose one printed name stands for several substances, stated by the name of any of them.
+
 **Spec changed deliberately, by the product owner (issue #516, decision 4).**
 `SharedMechanismChipCollapseTest.theOrdersAnAnswerLeavesUnnamedAreNamedByTheModuleItself` required
 every chip's orders in an answer carrying no citation marker — the case this amendment decides gets
@@ -9310,6 +9350,47 @@ database can write one either, and `exec /openmrs/startup.sh` replaces the shell
 that `startup.sh` then waits for comes back. What is owed is that README says where the channel holds,
 and `.theDiagnosisStaysTheLastStartsWhereThisStartCouldNotWriteIt` pins the behaviour it describes.
 
+**The weights get a channel of their own** ([#467](https://github.com/openmrs/openmrs-module-chartsearchai/issues/467)).
+The second premise applies to them unchanged, and #466 ran for a day with no weights file and a 500
+as the only readable symptom, because their verdict was an `echo` from a background subshell.
+`MODEL_MANIFEST_REFUSED` still cannot carry it, for the reason the library records, so the
+entrypoint publishes `chartsearchai.models.weightsStatus`: one entry per artifact, `fetching:<id>`
+while its fetch runs, `refused:<id>:<code>` with the library's code once it failed, `unrecorded:<id>`
+for an artifact whose state was not recorded, and nothing once it verified. It is a property of its
+own so it cannot be read as the embedder's, and it carries no
+path. The maintainer's decision on the issue has the fetch subshell write the row. What ships is one
+step removed, and the reason is where that subshell is forked: above `seed_sql` and the connection it
+needs, and above `maybe_seed_demo_data`, whose drop and snapshot restore would wipe or roll back
+anything written while it runs. So each subshell records its own state as the name of a file — a rename, which needs no data
+blocks where written contents do — and ONE writer,
+`publish_weights_status`, puts it in the database. That writer is started below the seed, and it
+sends a write again until one lands — giving up, and saying so, after 900 refusals with no fetch
+running — because a virgin database has no `global_property` table until
+OpenMRS creates it. Nothing serves REST before `startup.sh`, so publishing from there costs
+nothing a deployment can see. The alternative was considered and not taken: move
+both fetches below the seed and update the row with one atomic statement per entry. It delays an
+~8GB download by the length of the seed on every seed start. A subshell killed by a signal before
+it records an outcome leaves `fetching:` standing; the publisher does not look for that
+shape. Because a verified artifact is the one that says nothing, the publisher composes from the
+artifacts the start forked a fetch for — `WEIGHTS_ARTIFACTS`, set in the start's own shell and
+inherited by the publisher's fork — rather than from what the directory lists, so an artifact with no
+file reads as `unrecorded:` and never as verified: a record that failed, or a scan that missed a file
+mid-rename. That replaced an exit rule timed to cover the second (it ended only on the second idle
+scan in a row); a value naming an unrecorded artifact is instead written only once a second scan in a
+row reads it too, so one scan's miss mid-rename is not published. Measured 2026-09-29 under `dash` by
+extracting the function from the file, against a renamer toggling between two refused names, with
+the scan's misses induced by an existence check on each listed name: without the expected set, 16 of
+3000 trials ended publishing the refused artifact as verified, and 0 of 3000 with it; without the
+hold-back, 18 of 3000 ended publishing it as `unrecorded:`, and 0 of 3000 with it. The hold-back is
+that timing window and no test holds it open: removing it leaves `EntrypointRetrievalWiringTest`
+green. An `unrecorded:` entry that lands with no fetch running ends the publisher, so a fetch whose
+first record failed and whose last one succeeds can go unpublished. → `EntrypointRetrievalWiringTest.aWeightsFetchStillRunningReadsAsFetchingUntilItsOutcomeReplacesIt`,
+`.aWeightsFetchThatCannotResolveIsRecordedWithItsArtifactAndCode`,
+`.theWeightsOutcomeIsRecordedOnceTheDatabaseTakesItRatherThanWhenItWasFirstSent`,
+`.aStartThatCouldNotRecordItsWeightsFetchesPublishesNoVerdictOnThem`,
+`.anArtifactWhoseRecordedStateIsLostIsPublishedAsUnrecordedRatherThanAsVerified`;
+`ModelDownloadPinningGuardTest.theWeightsStatusIsPublishedOnlyByOneWriterStartedAfterTheDemoSeed`.
+
 **And on those same two branches the container log's LAST line said the opposite, which review round
 6 found.** `configure_retrieval_gps` ends by printing the three rows it read back, and a `gp_value`
 that failed answers the empty string — the answer a blanked row gives too — so the line read
@@ -9379,7 +9460,8 @@ that the manifest matches upstream. A wrong digest therefore fails closed but fa
 every deployment and every standalone build, on the first fetch — so the first release build after a
 pin move is the check, and it is the one step of this recipe a maintainer cannot skip.
 
-→ `ModelDownloadIntegrityTest` drives the library with `/bin/sh` against a loopback HTTP server that
+→ `ModelDownloadIntegrityTest` drives the library with `EntrypointSource.shell()` — dash where it is
+installed, the image's `/bin/sh` — against a loopback HTTP server that
 serves substituted bytes, which is the acceptance both findings state; its ledger cases are where
 "the embedder is verified before its path is published" now lives.
 `ModelDownloadPinningGuardTest` reads the source for what no behaviour of the library can show —
@@ -10552,7 +10634,7 @@ them.
 **Status: Accepted** (September 2026) — implemented, issue
 [#477](https://github.com/openmrs/openmrs-module-chartsearchai/issues/477), which it does not close. Its
 *"One order states nothing"* holds, since
-[Decision 125](#decision-125-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question),
+[Decision 129](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question),
 only for a question that does not propose the drug. Its *"Its referent is its arm's, a proposal"* bullet is superseded by
 [Decision 123](#decision-123-a-drug-in-play-that-is-one-of-her-own-orders-is-stated-as-her-medication-at-every-site):
 the finding still states its arm's referent, and that referent is now the current-medication one where
@@ -12080,7 +12162,7 @@ drops a `true` chip from the box, and with no chip left in it the coverage note'
   already holds (#151) — keeping only a display `displayNamesADrug`. `ContraindicationChips.add` stamps
   them onto each current-medication chip, so a chip the ledger replaces keeps them. Unpublished
   (`SafetyWarning.currentOrderDisplays()`): the statement is its reader, and publishing the order on the
-  chip is #552's question.
+  chip is #552's question — Decision 125 publishes it.
 - **The detail is quoted, never paraphrased**, so the statement claims exactly what the finding does, at
   no strength of its own, and cannot say *"she is taking Ibuprofen"* of an *Advil* order — README's rule
   for rendering `aboutACurrentMedication`.
@@ -12109,7 +12191,248 @@ order stamp reddens its own case under mutation — and, for the key, by
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`,
 whose chip 14 is the only `true`.
 
-## Decision 125: A question proposing a drug one of her own orders carries is told so, as a finding and after the question
+## Decision 125: A contraindication chip about her own prescription names every order it is about
+
+### Context
+
+A contraindication chip raised from one of the patient's own active orders said THAT it was about one
+of them (`aboutACurrentMedication`, #527) and not WHICH. Where the order's name is the chip's `drug`
+the clinician can still find it; where it is not, an *Advil 400mg* order behind an `Ibuprofen` chip,
+nothing on the wire linked the two, and README told a client to resolve `drug` against her orders
+itself — a second resolution that can disagree with the module's (#151). `chartOrderBridges` does not
+cover it: only the interaction and condition-mediated arms build it, and it is empty wherever the
+order's own names reach the substance, which is the common case. Decision 124 had already resolved the
+orders once, in `addActiveOrderContraindications`, for its own statement, and kept them unpublished.
+
+### Decision
+
+A new chip key, `currentMedicationOrders` (`SafetyWarning.currentMedicationOrders()`), always present,
+listing `{ orderDisplay, orderUuid }`, in her chart's order, for EVERY active order a contraindication
+chip about a medication she already takes is about (#552). `chartOrderBridges` keeps its meaning.
+
+- **One resolution, stamped where the chip is raised.** `addActiveOrderContraindications` records the
+  ORDERS per substance and `ContraindicationChips.add` stamps both the published list and Decision 124's
+  printable projection off them, so the two cannot disagree about which orders a chip is about. The
+  serializer copies the list and re-derives nothing. Its orders are every one any row of the chip's
+  substance `resolvesFromAny`.
+- **Both arms that state the referent.** The drug-in-play arm marks a contraindication
+  `aboutACurrentMedication` too, wherever her orders establish its substance (#402, Decision 123), and the
+  owner's ruling was every current-medication contraindication chip. So `validate` records, off
+  `currentMedicationsInPlay`, the orders that ESTABLISH each such substance (`ordersEstablishing`) — the
+  orders its referent was decided on, not every order resolving to it: on a chip this arm raises, her
+  *Nexium 40mg*, which resolves to omeprazole without naming it, is not listed beside her
+  *Omeprazole 20mg*. The ledger stamps them onto the wire list ALONE. Decision 124's statement stays the
+  active-order arm's, since a drug the question put in play is a chip of another kind there; stamping the sentence
+  projection too makes *"Is she allergic to aspirin?"* state her order, which
+  `AllergyQuestionConflictingOrderContextTest.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
+  reddens on.
+- **Every order, not every printable display.** The owner's ruling was every order the chip covers, with
+  its uuid, so the `displayNamesADrug` filter Decision 124 applies stays on the SENTENCE projection
+  (`SafetyWarning.currentOrderDisplays()`) and off the wire: a codes-only order is listed under its
+  stand-in display, because labelling an order that has no other name is what the display is for
+  (`ActiveDrugOrder.hasKnownName()`), while a sentence must not print it as a name. The wire list is not
+  de-duplicated and the sentence projection still is, by display, so two prescriptions under one display
+  are two entries on the wire and one name in the sentence.
+- **`/chartalerts` carries it** through the shared serializer, and README's "resolve it from the `drug`
+  field" sentence is replaced by a pointer to it.
+
+### Rejected
+
+- **Widen `chartOrderBridges`.** Its readers, the prompt clause included, depend on it meaning "where the
+  names differ"; the ticket's own first open question, settled by the owner.
+- **Keep the display filter on the wire.** It publishes
+  `aboutACurrentMedication: true` beside `[]` for a codes-only order whose uuid the module holds, which is
+  #552's own defect for that population.
+
+### Residues
+
+- A chip of another type carries `[]`, the interaction and dose chips the drug-in-play arm marks
+  `aboutACurrentMedication` included. `[]` is never a claim that no order is behind a chip.
+- A context carrying no per-order list (#118's flattened fallback) has no order to name, from either arm.
+- The two arms list by different tests, `resolvesFromAny` and `ordersEstablishing`, because each lists
+  the orders its own referent was decided on. So one chip, of the same type, drug and detail, can list
+  different orders by which arm raised it: over the shipped data, with orders *Nexium 40mg* and
+  *Omeprazole 20mg* and an omeprazole allergy, the Omeprazole identity chip lists both on `/chartalerts`
+  and on *"Does she have any allergies?"*, and *Omeprazole 20mg* alone on *"Can I give her omeprazole?"*
+  (measured 2026-09-29 at b30fca1e by a throwaway test driving `standingChartAlerts` and `validate`).
+
+Pinned by `CurrentMedicationOrdersTest` (every order, shared displays, a codes-only order, a second
+substance's own list, a proposal's `[]` with no order of its substance and with one her orders establish
+on a sibling row, a drug-in-play chip's order asked by substance and by brand, the establishing order and
+not the resolving one, and the statement's text unchanged),
+`AllergyQuestionConflictingOrderContextTest.search_theChipNamesTheBrandedOrderItIsAboutByDisplayAndUuid`
+(the real `OrderService` order under a brand display) and `.aFindingOfADrugTheQuestionNamesKeepsEveryFindingAsAChip`
+(a drug-in-play chip names her order and is not stated), and on the wire by
+`ChartSearchAiCurrentMedicationOrdersTest`, `ChartSearchAiChartAlertsTest.aStandingAlertNamesTheOrderItIsAboutByDisplayAndUuid`
+and `ChartSearchAiSafetyWarningSeverityWireTest`'s chip 15.
+
+## Decision 126: An order that has not started is screened, and stated as scheduled with its date
+
+**Status: Accepted** (September 2026) — implemented, issue
+[#553](https://github.com/openmrs/openmrs-module-chartsearchai/issues/553).
+
+### Context
+
+A drug order scheduled to start in the future (`urgency` `ON_SCHEDULED_DATE`, `scheduledDate` ahead) was
+screened as an active order the patient is already taking. On a 3.7.1 standalone, a patient with a
+started Nevirapine order and a Rifampicin order scheduled a month out got *"Nevirapine interacts with active
+order Rifampicin (rifampin)"* (Major) on a screening question, *"Dabigatran etexilate interacts with active
+order Rifampicin"* on a proposal, and an answer saying she "is taking Nevirapine and Rifampicin". The chart
+record said `. Order status: in force`. Core's `Order.isActive()` checks voided, the `DISCONTINUE` action,
+`dateActivated`, discontinuation and expiry, and never `scheduledDate`; `Order.isStarted()` is the check that
+reads the effective start date. The module takes "active" from `isActive()` (the chart mark) and from the SQL
+`getActiveOrders` (the safety context), which agree on this.
+
+The owner's ruling on the ticket: keep screening it — dropping a Major interaction with a drug due next
+month would be a safety loss — and fix the wording.
+
+### Decision
+
+- **Started is core's `Order.isStarted()`, and the date is `getEffectiveStartDate()`**, read in the two
+  places each read already happens and nowhere else: `QueryStoreChartBuilder.readingOf` for the chart, and
+  `PatientClinicalContextBuilder` for `ActiveDrugOrder.getScheduledStart()`.
+- **The chart record says so.** Such an order's `orderActive` is `null` — it is neither in force (`TRUE`) nor
+  this patient's order out of force (`FALSE`, which the system prompt teaches as ended) — and
+  `SerializedRecord.orderStartDate` states the date; the line renders
+  `. Order status: scheduled to start <yyyy-MM-dd>` (`PatientChartSerializer.scheduledOrderStatus`). Every
+  production reader of `RecordMapping.getOrderActive()` tests `FALSE` alone, so `null` reads as "not ended"
+  at each of them.
+- **The order stays on every list an arm screens.** Where a chip names it, it is a *scheduled order* with its
+  date (`DrugSafetyValidator.SCHEDULED_ORDER_INTERACTION_PHRASE`), in the rule chip, the class sentence and
+  the sentence `FindingPartnerCoverageCheck` appends; the duplicate-therapy sentence naming several of her
+  orders (#477) names each carrier that has not started after the started ones — *"X is in active order A
+  and scheduled order B (scheduled to start <date>)"* — and says "is in" rather than "is already in" where
+  none has started (`DrugSafetyValidator.ordersNamed`; found by review round 3 of PR #559). The appended
+  sentence reads each partner's own date, off `RecordMapping.getFindingPartnerScheduledStarts()`, which both
+  duplicate-therapy findings write as well as the rule chip — one date per finding named every partner of
+  such a finding "active order" (review round 4 of PR #559); a display a started order also carries stays
+  "active order". The stand-in
+  record for an order the chart has no record of reads `Scheduled drug order: …` with the same status.
+- **A question proposing the drug treats it as a proposal.** Where a question PROPOSES a drug she holds only
+  as orders that have not started, the drug-in-play arm states the proposal referent rather than Decision
+  123's current-medication one (`currentMedicationsInPlay`, via `proposedByTheQuestion`), so *"Can I give her
+  rifampicin?"* about her scheduled Rifampicin states the proposal call — true of a drug not yet given. A
+  question that proposes nothing about it — one LISTING it as a drug she is on (*"Her current medications are
+  nevirapine and rifampicin. Any interactions?"*, *"She is on nevirapine and rifampicin. Can I give her
+  amlodipine?"*) — keeps the current-medication referent, since the withholding clause there is Decision 72's
+  defect; each rule chip then names its subject as scheduled, with its date, as the screening arm does. Found
+  by review round 1 of PR #559, which measured the flip on both questions.
+- **The order-driven arms keep the current-medication referent.** The screening arm and the active-order
+  contraindication arm have no proposal to refuse, and the proposal clause there is Decision 72's defect: a
+  module-composed screening answer opened *"No — … a reason to withhold Rifampicin"*, found by review of this
+  change. So the start date goes into the words instead: the screening arm visits a substance she holds only
+  as not-started orders LAST (`startedSubjectsFirst`), so a pair with a started side is stated from it, and
+  the contraindication arm's *"Currently prescribed: …"* line prints a not-started order with its start date.
+  A contraindication chip about a substance she holds only as such orders ends its `detail` with *"Her order
+  for X has not started: it is scheduled to start <date>."* (`SafetyWarning.statingItsOrderHasNotStarted`,
+  stamped by `ContraindicationChips.add`), from either arm that states the current-medication referent — the
+  ruling asks the chip to say it, and review round 1 of PR #559 found it did not. A module-composed answer
+  leaves Decision 113's referent sentence off such a chip's line (`SafetyWarning.orderScheduledStart()`, set
+  by the same step): that sentence said she is already taking the drug, one sentence after the detail says
+  her order has not started, and the detail's own sentence already says the order is hers. Found by review
+  round 2 of PR #559; `LlmInferenceServiceScheduledOrderContextTest`.
+- **Whether a side has started is one decision**, `DrugSafetyValidator.scheduledStartOf`: the earliest start
+  among the orders the arm's own `resolvesFromAny` matched, or none where any of them has started.
+
+### Rejected
+
+- **Exclude a not-started order from the active set** (`!isStarted()`). A safety loss the owner ruled out.
+- **Require a started order for the referent at EVERY arm.** Taken first, and it reopened Decision 72 on
+  the order-driven arms, as above.
+- **Leave the drug-in-play referent alone too.** Its question names the drug, so the proposal call is the
+  true one there, and the current-medication clause would say she takes a drug she has not started.
+- **A third referent column for a scheduled order**, beside Decision 110's ended one. It needs a prompt
+  branch per class and an interleaved A/B; the proposal clause is already true of the drug.
+
+### Residues
+
+- A partner the dataset carries no entry for, keyed on its rule's label (#155/#290), has no rows to resolve,
+  so its chip keeps "active order" even where that order has not started.
+- The answer-side recognisers (`ActiveOrderCitationFidelityCheck`, `InteractionClaimPairFidelityCheck`) key on
+  `ACTIVE_ORDER_NOUN`, so a claim an answer recites as "scheduled order" is outside what they examine.
+- The condition-mediated arm (off by default) and `FINDING_CHART_ORDER_LEAD` ("…from this patient's own active
+  orders", true in core's sense) are unchanged.
+- No wire key carries the start date; an interaction chip's `detail` states it. A client reading the order
+  itself by `resourceUuid` reads it from the chart.
+- A pair of two not-started orders, a pair the dataset relates from its not-started side alone (the visiting
+  order states a pair from its started side only where that side's own rules reach it), a contraindication
+  about a not-started order, and a drug-in-play finding about one a question lists still state the current-medication clause ("a medication this patient is already
+  taking") and publish `aboutACurrentMedication: true`; their details carry the start date. On the drug-in-play
+  arm only the rule chips and the several-orders chip do: its class-only, condition-mediated and dose chips
+  about such a drug do not.
+- On a chart holding a scheduled order, a screened pair whose subject is scheduled-only sorts behind its
+  equally rated pairs, so where the `maxPairChips` cap cuts inside that rating it is withheld before them.
+- `LlmInferenceService`'s enumeration-repair instruction asks the model to name "the active order it is about"
+  for each finding; it is prompt text and was not re-measured here.
+- What the model writes in its own prose is pinned by no test here.
+- The date is spelled by `DateFormatUtil.formatDate`, which converts to UTC, as every date this module
+  publishes is. A scheduled date stored as local midnight on a server east of UTC reads one day early — a
+  Nairobi-zoned run of `DrugOrderCurrencyMarkTest` over a midnight fixture printed 2098-12-31 for 2099-01-01
+  (review round 1 of PR #559). The fixtures use noon for that reason; the convention is older than this change.
+
+Pinned by `DrugOrderCurrencyMarkTest.aScheduledOrderIsNeitherInForceNorEndedAndItsRecordSaysWhenItStarts`,
+`ScheduledOrderInteractionContextTest` and `LlmInferenceServiceScheduledOrderContextTest`, each over
+`ScheduledDrugOrderTestData.xml` read by the real builders; `ArchitectureGuardTest.theOrderStopDateStampIsWrittenInOnePlace`
+now selects the rung carrying both dates.
+
+## Decision 127: The drug-in-play check names her orders it relates only below the severity floor
+
+**Status: Accepted** (September 2026) — implemented, no issue (reported and ruled in session on the 3.7.1
+standalone).
+
+### Context
+
+*"Is it safe to start her on clarithromycin?"*, asked of a patient whose active drug orders include Lidocaine,
+Metoclopramide, Neomycin and Tiotropium, came back on `main` @ `945b89e0` as *"The records address
+Clarithromycin and list the following interactions: lidocaine (Unknown severity interaction [45]),
+metoclopramide (Unknown [45]), neomycin (Unknown [45]), tiotropium (Unknown [45]), and ivosidenib (Major
+[45])."*, with `safetyWarnings: []` and `interactionPairs: { "found": 0, "reported": 0 }`. Four of the five
+drugs listed are hers and nothing on the response said so. DDInter rates all four `Unknown` (checked in the
+loaded `ddi-knowledge-base.json`); `DrugSafetyValidator.severityRank` ranks that 0 against the shipped
+`minor` floor's 1, so `bestRulePerPartner` drops each before asking whether she is on the partner, and the
+drug-in-play check's `of(0, 0)` is true of what it counts and silent on the four it related.
+
+### Decision
+
+`PairChipExtent` gains `getBelowFloor()` — published inside `interactionPairs` as `belowFloor` — and the
+drug-in-play arm states it beside its count, over the same population (the question's substances):
+`DrugSafetyValidator.belowFloorPairs`, the complement of `bestRulePerPartner` over the same rows. The same
+her-order question (`hasActiveDrug`), the same partner key (`SubjectRule.partnerKey`), the floor test negated,
+one pair per partner at its most severe sub-floor row, and none for a partner the grouping keeps, since an
+above-floor rule already chips it. `Sink.record(found, reported, belowFloor)` carries it through
+`recordPairExtent`, the sink's one production writer, so it reaches every surface `interactionPairs` does.
+
+**No chip, no floor change, no prompt change.** The statement is deterministic and on the wire; the answer's
+prose is untouched. The reference frontend draws it beside the answer.
+
+### Alternatives
+
+**Say it in the injected record** — a section after `Interactions:` naming which listed partners are hers
+(*"Of these, drugs this patient has an active or scheduled order for: lidocaine; metoclopramide; neomycin;
+tiotropium."*). Built, pinned through the real `injectRecords`, and **refuted live** on the reported cell:
+with the record 355 characters instead of 239 and nothing else in the prompt moved (audit rows 12999 and
+13000), the answer became *"The records do not address the safety of starting Clarithromycin."* with no
+citation, twice; restoring the build restored the original answer (row 13001). The system prompt calls a
+`Drug reference` record "clinical reference data, not this patient's data" and routes a safety question no
+record addresses to that one-sentence abstention; a reference record asserting her orders reads as the first
+rule broken and lands in the second. Not re-proposed without an A/B against null arms.
+
+**Chip the sub-floor pairs.** Declined on #84's own grounds, with no new evidence of the kind it asks for.
+
+**Widen `found`.** Declined: `found` is defined above the floor on three arms, and a client already reads it
+so; a second population added into one integer is the ratio `PairChipExtent` forbids.
+
+### Residue
+
+- **Only the drug-in-play arm measures it.** An extent a pairwise arm stated carries `belowFloor: null`, so a
+  two-drug question or a screen says nothing below the floor.
+- **The answer's prose still lists her orders as the drug's general interactions**; the statement sits beside
+  it, not in it.
+
+Pinned by `BelowFloorOrderInteractionsTest` (the shipped knowledge base for the reported drugs; the pinned
+excerpt and `drug-reference-partner-rated-and-unrated-rows.json` for the shapes) through the real `validate`
+and its sink, and `ChartSearchAiInteractionPairExtentTest` for the wire.
+## Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question
 
 **Status: Accepted** (September 2026) — implemented, issue
 [#548](https://github.com/openmrs/openmrs-module-chartsearchai/issues/548), the lead criterion

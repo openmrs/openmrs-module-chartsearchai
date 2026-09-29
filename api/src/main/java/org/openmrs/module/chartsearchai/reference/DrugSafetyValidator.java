@@ -202,6 +202,21 @@ public class DrugSafetyValidator {
 	 */
 	public static final String ACTIVE_ORDER_NOUN = lastTwoWordsOf(ACTIVE_ORDER_INTERACTION_PHRASE);
 
+	/**
+	 * What an interaction chip puts between its subject and the order it names where that order has NOT
+	 * started (issue #553): core calls an order scheduled for next month active, and "active order"
+	 * reads as a medication she is already taking. Followed by the order's name and
+	 * {@code PatientChartSerializer.scheduledToStart}, the words the order's own chart record states.
+	 *
+	 * <p>No answer-side recogniser keys on it: {@code ActiveOrderCitationFidelityCheck} and
+	 * {@code InteractionClaimPairFidelityCheck} read {@link #ACTIVE_ORDER_NOUN}, so a claim an answer
+	 * recites in this phrasing is outside what they examine.
+	 */
+	public static final String SCHEDULED_ORDER_INTERACTION_PHRASE = " interacts with scheduled order ";
+
+	/** {@link #SCHEDULED_ORDER_INTERACTION_PHRASE}'s noun, for a site that names such an order alone. */
+	public static final String SCHEDULED_ORDER_NOUN = lastTwoWordsOf(SCHEDULED_ORDER_INTERACTION_PHRASE);
+
 	/** @return the final two whitespace-delimited words of {@code phrase}, untrimmed of nothing else */
 	private static String lastTwoWordsOf(String phrase) {
 		String[] words = phrase.trim().split("\\s+");
@@ -990,15 +1005,22 @@ public class DrugSafetyValidator {
 		}
 		boolean questionDrugScreened = false;
 		int questionDrugPairs = 0;
+		// What the same screen related below the floor (ADR Decision 127), stated beside the count and
+		// over the same population: the question's substances, never the answer's.
+		List<PairChipExtent.BelowFloorPair> questionDrugBelowFloor = new ArrayList<PairChipExtent.BelowFloorPair>();
 
 		// The substances in play the drug-in-play arm states the CURRENT-medication referent for, asked
 		// per drug in play below (issue #402, ADR Decision 123): those her active orders establish she
 		// takes, less any a question may be proposing in a presentation she does not take
 		// (currentMedicationsInPlay). Asked only of a substance orderEntries holds, the one resolution this
 		// pass already holds, so the referent can narrow what the other consumers of her orders read and
-		// never widen it. A per-call local, for issue #172's reason.
+		// never widen it. A per-call local, for issue #172's reason. Each carries the orders that establish
+		// it, which the ledger stamps onto the arm's current-medication contraindication chips (issue #552).
 		Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> herOrderSubstances = currentMedicationsInPlay(
 				inPlay, questionDrugs, question, orderEntries, context, bridgedOrders, coMedications);
+		for (Map.Entry<Object, List<PatientClinicalContext.ActiveDrugOrder>> hers : herOrderSubstances.entrySet()) {
+			contraindications.recordInPlayOrders(hers.getKey(), hers.getValue());
+		}
 		// Whether the question PROPOSES the drug it resolved (issue #548): read off the question alone, so
 		// both passes of a request agree, and ahead of the loop because it is about the whole question.
 		boolean proposes = DrugReferenceInjector.questionProposes(question,
@@ -1026,6 +1048,12 @@ public class DrugSafetyValidator {
 							? herOrderSubstances.get(ref.substanceGroupKey())
 							: null;
 			if (warnContra) {
+				// Her medication, but held only as orders that have not started (issue #553): the chip says so.
+				List<DrugReference> herRows = resolvedRows.get(ref.substanceGroupKey());
+				if (herOrder && herRows != null) {
+					contraindications.recordScheduledStart(ref.substanceGroupKey(),
+							scheduledStartOf(herRows, context.getActiveDrugOrders(), bridgedOrders));
+				}
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
 				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier,
@@ -1062,6 +1090,8 @@ public class DrugSafetyValidator {
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
 					questionDrugPairs += related;
+					questionDrugBelowFloor.addAll(belowFloorPairs(rows, subjects, context, severityFloor,
+						orderEntries));
 				}
 			}
 			if (dosePending.remove(substance)) {
@@ -1186,7 +1216,7 @@ public class DrugSafetyValidator {
 		// addActiveOrderPairInteractions, which states of(0, 0) on the same chart because the clinician
 		// asked it for a screen and "no pairs" is a direct answer to that; ADR Decision 65 carries it.
 		if (pairExtent == null && questionDrugScreened && hasActiveMedicationRecords(context)) {
-			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs);
+			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs, questionDrugBelowFloor);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -1601,7 +1631,7 @@ public class DrugSafetyValidator {
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {
-			sink.record(extent.getFound(), extent.getReported());
+			sink.record(extent.getFound(), extent.getReported(), extent.getBelowFloor());
 		}
 	}
 
@@ -2129,6 +2159,48 @@ public class DrugSafetyValidator {
 		for (DrugReference row : drugReferenceService.getAll()) {
 			if (ids.contains(row.getId()) && lead.substances.contains(row.substanceGroupKey())) {
 				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether {@code prose} names one of the reference rows {@code partnerRowIds} identify BY THAT ROW'S
+	 * NAME — {@code RecordMapping.getFindingPartnerRows()} for ONE partner of a finding, the rows the chip
+	 * that named it resolved it to (issue #555). So an answer writing <em>"Rifampicin"</em> names the partner
+	 * a finding prints <em>"Rifampicin (rifampin)"</em>. {@code false} where no row carries one of the ids or
+	 * no dataset is wired.
+	 *
+	 * <p><b>The row's {@link DrugReference#getName()}, never its other names</b> (PR #556, review round 3).
+	 * The knowledge base files everyday words among a row's names: <em>Lactic acid</em>'s rxnorm name is
+	 * <em>lactate</em>, also the lab a clinician monitors for lactic acidosis, the condition a
+	 * condition-mediated finding naming her Lactic acid order is about. Crediting every name read <em>"Monitor
+	 * her lactate"</em> as naming that order. Where the prose names a row is
+	 * {@link DrugReference#namedOccurrences}, the prose rule's own spans. A span counts only where the text it
+	 * covers is the row's name, both in {@link DrugReference#foldedLower} form, so nothing here decides
+	 * whether the prose names a drug. It only decides by WHICH name.
+	 *
+	 * <p>Its residues. Toward reporting: a partner the prose names only by another name of its row — the
+	 * label's own parenthetical (<em>rifampin</em>) included — reads as unstated. Toward silence: a row's
+	 * name that is itself an everyday word (<em>Iron</em>, <em>Oxygen</em>) is credited from the prose
+	 * naming that word, and an order the module resolved to several substances is credited by the name of any
+	 * of them.
+	 */
+	public boolean namesThePartner(String prose, List<String> partnerRowIds) {
+		if (prose == null || partnerRowIds == null || partnerRowIds.isEmpty() || drugReferenceService == null) {
+			return false;
+		}
+		Set<String> ids = new HashSet<String>(partnerRowIds);
+		String folded = DrugReference.foldedLower(prose);
+		for (DrugReference row : drugReferenceService.getAll()) {
+			if (!ids.contains(row.getId()) || row.getName() == null) {
+				continue;
+			}
+			String name = DrugReference.foldedLower(row.getName().trim());
+			for (DrugReference.NamedOccurrence occurrence : row.namedOccurrences(folded, 0)) {
+				if (folded.substring(occurrence.getStart(), occurrence.getEnd()).equals(name)) {
+					return true;
+				}
 			}
 		}
 		return false;
@@ -2667,6 +2739,11 @@ public class DrugSafetyValidator {
 	 * is not asked. Every other drug in play keeps the proposal referent. A per-pass value and never a field,
 	 * for issue #172's reason.
 	 *
+	 * <p>Each substance maps to the orders that establish it ({@link #ordersEstablishing}), in chart order —
+	 * the orders its referent was decided on, and so the ones its contraindication chips name
+	 * ({@link SafetyWarning#currentMedicationOrders()}, issue #552), and not every order that merely
+	 * resolves to it. Empty where only the flattened sets of a context carrying no order establish it.
+	 *
 	 * <p><b>Established, and not merely resolved</b> (review round 3 of PR #544). {@code orderEntries} is
 	 * {@link DrugReferenceService#findForActiveOrders}' answer, additive by design because it is a CANDIDATE
 	 * set: a screen that leaves out one of her drugs leaves out its warnings. Along three legs it holds
@@ -2702,6 +2779,7 @@ public class DrugSafetyValidator {
 		Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> current =
 				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
 		Set<Object> listed = null;
+		Set<Object> proposed = null;
 		for (DrugReference ref : inPlay) {
 			Object substance = ref.substanceGroupKey();
 			// A substance her orders do not resolve is not hers, and asking the costlier questions below of
@@ -2717,6 +2795,20 @@ public class DrugSafetyValidator {
 			}
 			List<PatientClinicalContext.ActiveDrugOrder> carriers = ordersEstablishing(substance, rows, context,
 				orderEntries, bridgedOrders, coMedications);
+			// Orders that establish it but none of which has STARTED do not make it a medication she is
+			// already taking (issue #553): where the question PROPOSES it, a finding about it keeps the
+			// proposal referent, which is true of a drug not yet given. Where it proposes nothing about it —
+			// a question listing it as one she is on — the withholding clause would be ADR Decision 72's
+			// defect, so it keeps the current-medication referent, as the order-driven arms do, and the
+			// chip states its start date instead (ADR Decision 126).
+			if (!carriers.isEmpty() && noneHasStarted(carriers)) {
+				if (proposed == null) {
+					proposed = proposedByTheQuestion(question, questionDrugs);
+				}
+				if (proposed.contains(substance)) {
+					continue;
+				}
+			}
 			// The flattened sets, for a context that carries no order to attribute them to (issue #118's
 			// fallback): the same two legs over the names and codes that context does carry.
 			if (carriers.isEmpty() && !establishes(context.getActiveDrugNames(), context.getActiveDrugAtcCodes(),
@@ -2738,6 +2830,31 @@ public class DrugSafetyValidator {
 			current.put(substance, carriers);
 		}
 		return current;
+	}
+
+	/**
+	 * The substances of {@code questionDrugs} the question PROPOSES giving (issue #553, review round 1 of
+	 * PR #559): every one of them where {@code DrugReferenceInjector.questionProposes} admits the question,
+	 * the grammar issue #469 admits a proposal by; else, where the question lists drugs before a proposal
+	 * ({@code DrugReferenceInjector.listedBeforeTheProposal}), those it does not list; else none. Fail-closed
+	 * as both readings are, so a proposal phrased outside their grammar reads as none.
+	 */
+	private static Set<Object> proposedByTheQuestion(String question, Set<DrugReference> questionDrugs) {
+		Set<Object> proposed = new HashSet<Object>();
+		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
+		boolean all = DrugReferenceInjector.questionProposes(question, drugs);
+		List<DrugReference> listed = all ? Collections.<DrugReference> emptyList()
+				: DrugReferenceInjector.listedBeforeTheProposal(question, drugs);
+		if (!all && listed.isEmpty()) {
+			return proposed;
+		}
+		for (DrugReference drug : drugs) {
+			proposed.add(drug.substanceGroupKey());
+		}
+		for (DrugReference drug : listed) {
+			proposed.remove(drug.substanceGroupKey());
+		}
+		return proposed;
 	}
 
 	/**
@@ -3121,8 +3238,8 @@ public class DrugSafetyValidator {
 		 * {@code chip} stated as about {@code subject}'s substance, by every row this pass resolved of it
 		 * ({@link SafetyWarning#subjectRows()}, issue #515), and nothing else: the one reading of which rows
 		 * are a drug in play's, for {@link #stamp} and for the one drug-in-play finding that must not take
-		 * the ended-order referent, {@code alreadyInSeveralOrders}', whose sentence says active orders carry
-		 * the drug.
+		 * the ended-order referent, {@code alreadyInSeveralOrders}', whose sentence says orders of hers that
+		 * have not ended carry the drug.
 		 */
 		SafetyWarning aboutTheSubject(DrugReference subject, SafetyWarning chip) {
 			List<DrugReference> ofTheSubject = subjectRows.get(subject.substanceGroupKey());
@@ -3459,12 +3576,24 @@ public class DrugSafetyValidator {
 		private final EndedOrders endedOrders;
 
 		/**
-		 * The displays of her own active orders each substance the active-order arm screens was resolved from,
-		 * keyed on {@code substanceGroupKey} — recorded by {@link #addActiveOrderContraindications} before it
-		 * raises that substance's chips, and stamped onto each of them in {@link #add}, so a chip the ledger
+		 * Her own active orders each substance the active-order arm screens was resolved from, keyed on
+		 * {@code substanceGroupKey} — recorded by {@link #addActiveOrderContraindications} before it raises
+		 * that substance's chips, and stamped onto each of them in {@link #add}, so a chip the ledger
 		 * replaces by a stronger one of the same substance carries them too.
 		 */
-		private final Map<Object, List<String>> currentOrderDisplays = new HashMap<Object, List<String>>();
+		private final Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> currentOrders =
+				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
+
+		/**
+		 * Her own active orders that establish she takes each substance the drug-in-play arm states the
+		 * current-medication referent for, keyed as above — recorded by {@code validate} off
+		 * {@link #currentMedicationsInPlay} before that arm raises a chip, and stamped in {@link #add} onto
+		 * the WIRE list alone ({@link SafetyWarning#currentMedicationOrders()}, issue #552): Decision 124's
+		 * statement is the active-order arm's, and a drug the question names is outside it. Disjoint from
+		 * {@link #currentOrders}, which the active-order arm records only for a substance no drug in play is of.
+		 */
+		private final Map<Object, List<PatientClinicalContext.ActiveDrugOrder>> inPlayOrders =
+				new HashMap<Object, List<PatientClinicalContext.ActiveDrugOrder>>();
 
 		ContraindicationChips(List<SafetyWarning> warnings, SubstanceSubjects subjects,
 				EndedOrders endedOrders) {
@@ -3473,9 +3602,30 @@ public class DrugSafetyValidator {
 			this.endedOrders = endedOrders;
 		}
 
-		/** Records {@code displays} as the orders {@code substance}'s current-medication chips are about. */
-		void recordCurrentOrders(Object substance, List<String> displays) {
-			currentOrderDisplays.put(substance, displays);
+		/** Records {@code orders} as the orders {@code substance}'s current-medication chips are about. */
+		void recordCurrentOrders(Object substance, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			currentOrders.put(substance, orders);
+		}
+
+		/** Records {@code orders} as the orders the drug-in-play arm's current-medication chips of
+		 *  {@code substance} are about — see {@link #inPlayOrders}. */
+		void recordInPlayOrders(Object substance, List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			inPlayOrders.put(substance, orders);
+		}
+
+		/**
+		 * When each substance a current-medication chip is about is scheduled to start, for one she holds
+		 * only as orders that have not started (issue #553) — recorded by the two arms that state that
+		 * referent, and stated onto each such chip in {@link #add}, so a chip the ledger replaces by a
+		 * stronger one of the same substance says it too.
+		 */
+		private final Map<Object, Date> scheduledStarts = new HashMap<Object, Date>();
+
+		/** Records {@code start}, where it is not null, as when {@code substance}'s orders are scheduled to start. */
+		void recordScheduledStart(Object substance, Date start) {
+			if (start != null) {
+				scheduledStarts.put(substance, start);
+			}
 		}
 
 		/**
@@ -3518,9 +3668,21 @@ public class DrugSafetyValidator {
 		 */
 		void add(DrugReference subject, Object finding, int relationship, SafetyWarning chip,
 				boolean namesTheFinding) {
-			List<String> displays = currentOrderDisplays.get(subject.substanceGroupKey());
-			if (displays != null && chip.isAboutACurrentMedication()) {
-				chip = chip.withCurrentOrderDisplays(displays);
+			if (chip.isAboutACurrentMedication()) {
+				List<PatientClinicalContext.ActiveDrugOrder> orders = currentOrders.get(subject.substanceGroupKey());
+				List<PatientClinicalContext.ActiveDrugOrder> inPlay = inPlayOrders.get(subject.substanceGroupKey());
+				if (orders != null) {
+					chip = currentMedicationOrdersOn(chip, orders);
+				}
+				else if (inPlay != null) {
+					chip = currentMedicationOrdersOn(chip, inPlay, false);
+				}
+			}
+			// The referent stays her medication's (ADR Decision 126), so the chip itself says the order has not
+			// started, with its date (review round 1 of PR #559).
+			Date start = scheduledStarts.get(subject.substanceGroupKey());
+			if (start != null && chip.isAboutACurrentMedication()) {
+				chip = chip.statingItsOrderHasNotStarted(start);
 			}
 			// substanceGroupKey: the substance this row stands for, else the row itself — the same key the
 			// interaction arms' subject side groups on (issue #162), shared so the two arms cannot come to
@@ -4500,6 +4662,10 @@ public class DrugSafetyValidator {
 			return 0;
 		}
 		DrugReference ref = subjects.subjectOf(rows.get(0));
+		// Where the drug in play is her medication but she holds it only as orders that have not started
+		// — a question listing it as one she is on (issue #553, currentMedicationsInPlay) — each rule chip
+		// names it as scheduled, with its date, as the screening arm names such a subject.
+		Date subjectStart = herOrder ? scheduledStartOf(rows, context.getActiveDrugOrders(), bridgedOrders) : null;
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
 				bestRulePerPartner(rows, context, severityFloor, orderEntries));
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
@@ -4528,7 +4694,8 @@ public class DrugSafetyValidator {
 				// No rule to reconcile with, so the ladder's own name is the only one there is —
 				// but WHICH ROW of the substance it is the display of is still this response's
 				// question and not the ladder's, which is what classPartnerName re-decides.
-				classOnly.add(hit.getValue().sentence(ref, classPartnerName(hit.getKey(), subjects)));
+				classOnly.add(hit.getValue().sentence(ref, classPartnerName(hit.getKey(), subjects),
+					hit.getKey().scheduledStart()));
 			} else if (!folded.containsKey(rule)) {
 				// One name for the two sentences about to share a detail — see reconciledPartnerName.
 				// Both are worded from it here rather than each arm wording its own, which is what let
@@ -4538,11 +4705,15 @@ public class DrugSafetyValidator {
 				// question start to drift.
 				ReconciledPartner reconciled = reconciledPartnerName(hit.getKey(), rule.rule, subjects,
 					coMedications);
+				// Whether the rule's partner has started is decided ONCE, here, and travels with the fold, so
+				// the rule half and the class half of one chip cannot name one order two ways (issue #553).
+				Date partnerStart = scheduledStartOf(orderEntries, rule.partner, context.getActiveDrugOrders(),
+					bridgedOrders);
 				folded.put(rule, new FoldedClassSentence(
 						reconciled != null ? reconciled.chipName : partnerLabel(rule.rule),
 						reconciled != null ? reconciled.noteName : null,
 						hit.getValue().sentence(ref, reconciled != null ? reconciled.chipName
-								: classPartnerName(hit.getKey(), subjects))));
+								: classPartnerName(hit.getKey(), subjects), partnerStart), partnerStart));
 			}
 			// else: a SECOND co-medication that the same rule is about. The relationship is already
 			// stated on that chip; emitting it again, standalone or appended, would put one pair's
@@ -4594,6 +4765,10 @@ public class DrugSafetyValidator {
 			List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(rows, ref, rule.partner,
 				partnerName, context, context.getActiveDrugOrders(), orderEntries, bridgedOrders, subjects,
 				matchedNames);
+			// Whether the order this chip names as its partner has started (issue #553): over the whole
+			// order list, the witnesses this arm lets name the partner (see the bridge above).
+			Date partnerStart = fold != null ? fold.partnerStart
+					: scheduledStartOf(orderEntries, rule.partner, context.getActiveDrugOrders(), bridgedOrders);
 			SafetyWarning chip;
 			if (fold == null) {
 				// No class sentence to fold, and since issue #339 that no longer decides what the order
@@ -4601,16 +4776,20 @@ public class DrugSafetyValidator {
 				// to say about is named the way a partner it did have something to say about is. Null
 				// where the ladder reached no co-medication, and then this is the narrow overload's
 				// answer — partnerLabel, which is also the grouping key.
-				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges, herOrder)
+				chip = reconciled == null
+						? interactionWarning(ref, rule.rule, bridges, herOrder, subjectStart, partnerStart)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
-							null, bridges, herOrder);
+							null, bridges, herOrder, subjectStart, partnerStart);
 			} else {
 				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence, bridges, herOrder);
+					fold.sentence, bridges, herOrder, subjectStart, partnerStart);
 			}
 			// The displays of the orders that walk matched, on the chip before anything else reads it —
-			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514).
-			chip = chip.withMatchedOrderNames(matchedNames);
+			// names of the finding for InteractionClaimPairFidelityCheck, printed nowhere (#514). And the
+			// rows of the partner entry this chip names by partnerName, the rows chartOrderBridges took
+			// for it, so a check of the answer asks the prose rule of them (#555).
+			chip = chip.withMatchedOrderNames(matchedNames).withPartnerRows(
+					Collections.singletonMap(partnerName, rowsOfSubstance(orderEntries, rule.partner)));
 			// Emitted only if it says something this pass has not already said. Two rules about ONE
 			// prescription are two chips — bestRulePerPartner keys them on the partner ENTRY and keeps
 			// them apart deliberately — but since issue #339 named both after that prescription, two
@@ -4634,7 +4813,7 @@ public class DrugSafetyValidator {
 		// exactly the case where the two diverge, so reading the merged list's size here would move a
 		// published completeness figure without a single pair having moved.
 		int relatedPairs = ruleChips.size();
-		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements, herOrder);
+		List<SafetyWarning> stated = collapseSharedMechanisms(ref, statements, herOrder, subjectStart);
 		Collections.sort(stated, FINDING_STRENGTH_DESCENDING);
 		// The referent is stated here, on the chips this arm hands over, and not before the collapse or
 		// the stated-chip ledger: it cannot change which chips exist (issue #472, see EndedOrders).
@@ -4644,9 +4823,9 @@ public class DrugSafetyValidator {
 		// After the rule chips and outside their sort: unrated, it would otherwise head the list above
 		// the rated findings a clinician asked about, the reason the class-only chips below trail too
 		// (see FINDING_STRENGTH_DESCENDING). Not a pair, so not in relatedPairs (issue #477). Not
-		// stamped as about an ended order: its sentence says active orders carry the drug. Its subject
-		// rows are stated as every other chip of this arm's are (issue #515), or no check of the answer
-		// can tell which drug it is about.
+		// stamped as about an ended order: its sentence says orders of hers that have not ended carry the
+		// drug. Its subject rows are stated as every other chip of this arm's are (issue #515), or no check
+		// of the answer can tell which drug it is about.
 		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications, herOrder, proposedHerOwn);
 		if (alreadyTaken != null) {
 			warnings.add(endedOrders.aboutTheSubject(ref, alreadyTaken));
@@ -4703,7 +4882,9 @@ public class DrugSafetyValidator {
 		 *  collapse can move a rating. */
 		private String collapseKey() {
 			String note = rule.getNote();
-			if (folded || note == null || note.isEmpty()) {
+			// A chip naming an order that has not started is never merged (issue #553): the merged chip
+			// renders ONE phrase for every partner it names.
+			if (folded || note == null || note.isEmpty() || !chip.partnerScheduledStarts().isEmpty()) {
 				return null;
 			}
 			return (rule.getSeverity() == null ? "" : rule.getSeverity()) + "\u0000" + note;
@@ -4731,11 +4912,14 @@ public class DrugSafetyValidator {
 	 *
 	 * @param herOrder the drug in play's referent, which every member already states — a merged chip
 	 *         must not state another (issue #402)
+	 * @param subjectStart the start date every member names its subject by, where that subject has not
+	 *         started ({@code addInteractionWarnings}; issue #553) — one subject, so one date, which the merged
+	 *         chip states as its members did
 	 * @return the chips to state, in the order they were collected; a group of one is its own original
 	 *         chip object, so a response with nothing to collapse is unchanged
 	 */
 	private static List<SafetyWarning> collapseSharedMechanisms(DrugReference ref,
-			List<MechanismStatement> statements, boolean herOrder) {
+			List<MechanismStatement> statements, boolean herOrder, Date subjectStart) {
 		Map<String, List<MechanismStatement>> groups = new LinkedHashMap<String, List<MechanismStatement>>();
 		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
 		for (MechanismStatement statement : statements) {
@@ -4774,11 +4958,15 @@ public class DrugSafetyValidator {
 					new ArrayList<SafetyWarning.ChartOrderBridge>();
 			Set<String> seenBridges = new HashSet<String>();
 			Set<String> matchedNames = new LinkedHashSet<String>();
+			Map<String, List<DrugReference>> partnerRows = new LinkedHashMap<String, List<DrugReference>>();
 			for (MechanismStatement member : group) {
 				if (!partners.contains(member.partnerName)) {
 					partners.add(member.partnerName);
 				}
 				matchedNames.addAll(member.chip.matchedOrderNames());
+				for (Map.Entry<String, List<DrugReference>> rows : member.chip.partnerRows().entrySet()) {
+					unionPartnerRows(partnerRows, rows.getKey(), rows.getValue());
+				}
 				if (member.bridges != null) {
 					for (SafetyWarning.ChartOrderBridge bridge : member.bridges) {
 						if (seenBridges.add(bridge.toString())) {
@@ -4799,8 +4987,9 @@ public class DrugSafetyValidator {
 			// The one render site, told BOTH what to print and which orders it is naming — so the list
 			// travels structurally and nothing downstream recovers it by parsing the string this just
 			// wrote it into (the two-resolutions-that-agree shape issue #151 forbids).
+			// No member names a not-started order (collapseKey), so the merged chip names active orders only.
 			out.add(interactionWarning(ref, group.get(0).rule, joinPartners(partners), null, null,
-				bridges, herOrder, partners).withMatchedOrderNames(matchedNames));
+				bridges, herOrder, partners, subjectStart, null).withMatchedOrderNames(matchedNames).withPartnerRows(partnerRows));
 		}
 		return out;
 	}
@@ -4882,7 +5071,9 @@ public class DrugSafetyValidator {
 	 *     #554). Where the order is a combination it says adding it would duplicate the drug that order
 	 *     carries ({@link #consequenceOfAdding}, review round 3).</li>
 	 * </ul>
-	 * ADR Decision 125.
+	 * ADR Decision 129.
+	 *
+	 * <p>Where none of the carriers has started it says "is in" rather than "is already in" (issue #553).
 	 *
 	 * @param proposedHerOwn where the question proposes this drug in play and it is hers, the orders of hers
 	 *        that establish it; null otherwise
@@ -4909,7 +5100,7 @@ public class DrugSafetyValidator {
 		}
 		Map<String, Integer> ordersByDisplay = ordersByDisplay(carriers);
 		PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered = proposedHerOwn != null
-				? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(), orderLabels(ordersByDisplay),
+				? new PatientChartSerializer.AlreadyOrderedDrug(ref.displayLabel(), orderLabels(ordersByDisplay, null),
 					carriers.size(), consequenceOfAdding(ref.displayLabel(), carriers.size(),
 						anOrderMayCarryAnotherSubstance(carriers, ref.substanceGroupKey(), coMedications)))
 				: null;
@@ -4917,9 +5108,33 @@ public class DrugSafetyValidator {
 		// SafetyWarning.restsOnTheProposalAlone's condition, which is why its strength is a caution.
 		boolean proposalAlone = alreadyOrdered != null && alreadyOrdered.getOrderCount() == 1;
 		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
-			ref.displayLabel() + " is already in " + ordersNamed(ordersByDisplay)
+			ref.displayLabel() + (noneHasStarted(carriers) ? " is in " : " is already in ") + ordersNamed(carriers)
 					+ (proposalAlone ? " — " + alreadyOrdered.getConsequence() : " — possible duplicate therapy"),
-			new ArrayList<String>(ordersByDisplay.keySet()), herOrder, alreadyOrdered);
+			new ArrayList<String>(ordersByDisplay.keySet()), herOrder, alreadyOrdered)
+				.withPartnerScheduledStarts(notStartedByDisplay(carriers));
+	}
+
+	/**
+	 * Each display of {@code carriers} no carrier of which has started, with the earliest start among
+	 * them — the partners issue #477's two findings name that {@code FindingPartnerCoverageCheck} must
+	 * name as scheduled, never as active (issue #553). A display one started order carries is left out:
+	 * that order is in force.
+	 */
+	private static Map<String, Date> notStartedByDisplay(List<PatientClinicalContext.ActiveDrugOrder> carriers) {
+		Map<String, Date> starts = new LinkedHashMap<String, Date>();
+		Set<String> started = new HashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : carriers) {
+			if (order.hasStarted()) {
+				started.add(order.getDisplay());
+			} else {
+				Date earliest = starts.get(order.getDisplay());
+				if (earliest == null || order.getScheduledStart().before(earliest)) {
+					starts.put(order.getDisplay(), order.getScheduledStart());
+				}
+			}
+		}
+		starts.keySet().removeAll(started);
+		return starts;
 	}
 
 	/**
@@ -5000,24 +5215,62 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * "active orders A and B", a display several orders carry followed by their count — or "active order
-	 * A" for the one order a proposal names (issue #548). The count says "orders" and never
-	 * {@link #ACTIVE_ORDER_NOUN}: {@code ActiveOrderCitationFidelityCheck} counts one claim per occurrence
-	 * of that noun, so a second one would split the sentence into two claims.
+	 * "active orders A and B", a display several orders carry followed by their count. The count says
+	 * "orders" and never {@link #ACTIVE_ORDER_NOUN}: {@code ActiveOrderCitationFidelityCheck} counts one
+	 * claim per occurrence of that noun, so a second one would split the sentence into two claims.
+	 *
+	 * <p>A carrier that has not started is named after the started ones, under {@link #SCHEDULED_ORDER_NOUN}
+	 * with its start date — "active order A and scheduled order B (scheduled to start 2099-01-01)" — so the
+	 * finding does not call it an order she is taking (issue #553). A display several such orders carry is
+	 * dated by the earliest of them.
 	 */
-	private static String ordersNamed(Map<String, Integer> ordersByDisplay) {
-		List<String> labels = orderLabels(ordersByDisplay);
-		boolean oneOrder = ordersByDisplay.size() == 1 && ordersByDisplay.values().iterator().next() == 1;
-		return ACTIVE_ORDER_NOUN + (oneOrder ? " " : "s ") + joinPartners(labels);
+	private static String ordersNamed(List<PatientClinicalContext.ActiveDrugOrder> carriers) {
+		List<PatientClinicalContext.ActiveDrugOrder> started = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		Map<String, Date> startByDisplay = new HashMap<String, Date>();
+		List<PatientClinicalContext.ActiveDrugOrder> scheduled = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : carriers) {
+			if (order.hasStarted()) {
+				started.add(order);
+			} else {
+				scheduled.add(order);
+				Date earliest = startByDisplay.get(order.getDisplay());
+				if (earliest == null || order.getScheduledStart().before(earliest)) {
+					startByDisplay.put(order.getDisplay(), order.getScheduledStart());
+				}
+			}
+		}
+		String named = started.isEmpty() ? "" : ordersNamed(ACTIVE_ORDER_NOUN, ordersByDisplay(started), null);
+		if (scheduled.isEmpty()) {
+			return named;
+		}
+		return (named.isEmpty() ? "" : named + (ordersByDisplay(started).size() > 1 ? ", and " : " and "))
+				+ ordersNamed(SCHEDULED_ORDER_NOUN, ordersByDisplay(scheduled), startByDisplay);
+	}
+
+	/** {@code noun} and each display once, with its count and, from {@code startByDisplay}, its start date. */
+	private static String ordersNamed(String noun, Map<String, Integer> ordersByDisplay, Map<String, Date> startByDisplay) {
+		List<String> labels = orderLabels(ordersByDisplay, startByDisplay);
+		int orders = 0;
+		for (int count : ordersByDisplay.values()) {
+			orders += count;
+		}
+		return noun + (orders > 1 ? "s " : " ") + joinPartners(labels);
 	}
 
 	/** Each display of {@code ordersByDisplay} once, followed by the count of orders carrying it where that
-	 *  is more than one — the labels {@link #ordersNamed} joins, and the ones issue #548's clause names. */
-	private static List<String> orderLabels(Map<String, Integer> ordersByDisplay) {
+	 *  is more than one and, from {@code startByDisplay} where it is given, its start date — the labels
+	 *  {@link #ordersNamed} joins, and the ones issue #548's clause names. */
+	private static List<String> orderLabels(Map<String, Integer> ordersByDisplay, Map<String, Date> startByDisplay) {
 		List<String> labels = new ArrayList<String>(ordersByDisplay.size());
 		for (Map.Entry<String, Integer> display : ordersByDisplay.entrySet()) {
-			labels.add(display.getValue() == 1 ? display.getKey()
-					: display.getKey() + " (" + display.getValue() + " orders)");
+			List<String> notes = new ArrayList<String>(2);
+			if (display.getValue() > 1) {
+				notes.add(display.getValue() + " orders");
+			}
+			if (startByDisplay != null) {
+				notes.add(PatientChartSerializer.scheduledToStart(startByDisplay.get(display.getKey())));
+			}
+			labels.add(notes.isEmpty() ? display.getKey() : display.getKey() + " (" + String.join(", ", notes) + ")");
 		}
 		return labels;
 	}
@@ -5100,9 +5353,10 @@ public class DrugSafetyValidator {
 			Map<String, Integer> ordersByDisplay = ordersByDisplay(set.getKey());
 			String named = joinPartners(substances);
 			warnings.add(at++, SafetyWarning.ordersSharingASubstance(named,
-				named + (substances.size() == 1 ? " is in " : " are in ") + ordersNamed(ordersByDisplay)
+				named + (substances.size() == 1 ? " is in " : " are in ") + ordersNamed(set.getKey())
 						+ " — possible duplicate therapy",
-				new ArrayList<String>(ordersByDisplay.keySet())).aboutSubstance(sharedRows.get(set.getKey())));
+				new ArrayList<String>(ordersByDisplay.keySet())).aboutSubstance(sharedRows.get(set.getKey()))
+					.withPartnerScheduledStarts(notStartedByDisplay(set.getKey())));
 		}
 	}
 
@@ -6758,6 +7012,52 @@ public class DrugSafetyValidator {
 	 *        {@link #activeOrderEntryFor} identifies the partner drug a rule points at; an empty list
 	 *        falls the grouping back to the label alone
 	 */
+	/**
+	 * @return the pairs between the substance {@code rows} are and this patient's active or scheduled
+	 *         orders whose rules the severity floor filtered — {@link PairChipExtent#getBelowFloor()}'s
+	 *         population, one per partner. The complement of {@link #bestRulePerPartner} over the same
+	 *         rows: the same her-order question ({@code hasActiveDrug}), the same partner key
+	 *         ({@link SubjectRule#partnerKey}, so two names of one order are one pair), with the floor
+	 *         test negated — and a partner that grouping keeps is skipped, because an above-floor rule
+	 *         already chips it and a second, weaker statement about that pair would contradict the chip.
+	 *         Where one partner carries several sub-floor rows the most severe is stated.
+	 */
+	static List<PairChipExtent.BelowFloorPair> belowFloorPairs(List<DrugReference> rows,
+			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
+			List<DrugReference> orderEntries) {
+		if (context == null || rows.isEmpty()) {
+			return Collections.emptyList();
+		}
+		Set<Object> chipped = new HashSet<Object>();
+		for (SubjectRule rule : bestRulePerPartner(rows, context, severityFloor, orderEntries)) {
+			chipped.add(rule.partnerKey());
+		}
+		String drug = subjects.subjectOf(rows.get(0)).displayLabel();
+		Map<Object, DrugReference.Interaction> worst = new LinkedHashMap<Object, DrugReference.Interaction>();
+		for (DrugReference ref : rows) {
+			for (DrugReference.Interaction i : ref.getInteractions()) {
+				if (clearsSeverityFloor(i, severityFloor) || partnerLabel(i) == null
+						|| !context.hasActiveDrug(i.getToken(), i.getAtc())) {
+					continue;
+				}
+				Object key = new SubjectRule(ref, i, activeOrderEntryFor(orderEntries, ref, i)).partnerKey();
+				if (chipped.contains(key)) {
+					continue;
+				}
+				DrugReference.Interaction incumbent = worst.get(key);
+				if (incumbent == null || severityRank(i.getSeverity()) > severityRank(incumbent.getSeverity())) {
+					worst.put(key, i);
+				}
+			}
+		}
+		List<PairChipExtent.BelowFloorPair> pairs = new ArrayList<PairChipExtent.BelowFloorPair>();
+		for (DrugReference.Interaction i : worst.values()) {
+			pairs.add(new PairChipExtent.BelowFloorPair(drug, partnerLabel(i),
+					ChartSearchAiUtils.firstNonBlank(i.getSeverity())));
+		}
+		return pairs;
+	}
+
 	private static Collection<SubjectRule> bestRulePerPartner(List<DrugReference> subjects,
 			PatientClinicalContext context, int severityFloor, List<DrugReference> orderEntries) {
 		// Keys are either the partner DrugReference (object identity — the class defines no equals, and
@@ -7722,13 +8022,14 @@ public class DrugSafetyValidator {
 	 * {@link SafetyWarning#carriesUnratedRelationship()}.
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
-			List<SafetyWarning.ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
+			List<SafetyWarning.ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Date subjectStart, Date partnerStart) {
 		return interactionWarning(ref, i, partnerLabel(i), null, null, chartOrderBridges,
-			aboutACurrentMedication);
+			aboutACurrentMedication, subjectStart, partnerStart);
 	}
 
 	/**
-	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction, List, boolean)},
+	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction, List, boolean, Date, Date)},
 	 * additionally naming the partner by {@link #reconciledPartnerName}'s answer, and — where the class
 	 * arm had a finding about that SAME active order — folding its sentence into this one chip (issue
 	 * #88).
@@ -7755,20 +8056,27 @@ public class DrugSafetyValidator {
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
 			String partnerName, String partnerNoteName, String alsoSameClass,
 			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
-			boolean aboutACurrentMedication) {
+			boolean aboutACurrentMedication, Date subjectStart, Date partnerStart) {
 		return interactionWarning(ref, i, partnerName, partnerNoteName, alsoSameClass, chartOrderBridges,
-			aboutACurrentMedication, null);
+			aboutACurrentMedication, null, subjectStart, partnerStart);
 	}
 
 	/**
 	 * @param namedPartners the active orders this chip names, where it names several
 	 *        ({@link #collapseSharedMechanisms}); null leaves it the one {@code partnerName}, which is
 	 *        what every ordinary chip states
+	 * @param subjectStart {@link #scheduledStartOf} the SUBJECT's own orders, where the chip states the
+	 *        subject as her medication — the screening arm's, and the drug-in-play arm's where
+	 *        {@link #currentMedicationsInPlay} kept that referent; null where it has started, and on every
+	 *        chip about a proposal (issue #553)
+	 * @param partnerStart {@link #scheduledStartOf} the orders that witnessed the partner: non-null names
+	 *        it as a {@link #SCHEDULED_ORDER_INTERACTION_PHRASE scheduled order} with its start date, and
+	 *        never with {@link #ACTIVE_ORDER_INTERACTION_PHRASE} (issue #553)
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
 			String partnerName, String partnerNoteName, String alsoSameClass,
 			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
-			boolean aboutACurrentMedication, List<String> namedPartners) {
+			boolean aboutACurrentMedication, List<String> namedPartners, Date subjectStart, Date partnerStart) {
 		// partnerName is partnerLabel(i) only where reconciledPartnerName did not answer — it is the
 		// label bestRulePerPartner GROUPS on where the dataset identifies no partner entry, and there
 		// #121's grouping is only correct while the key IS the label the chip says. Every other chip
@@ -7776,7 +8084,19 @@ public class DrugSafetyValidator {
 		// (issue #292) and two chips of one response cannot either (issue #339). That method is where
 		// the conditions under which the ladder's name may displace this one are stated, along with
 		// what remains of #121's invariant once it does.
-		String detail = ref.displayLabel() + ACTIVE_ORDER_INTERACTION_PHRASE + partnerName;
+		// An order that has not started is named as scheduled, with its date, on whichever side of the
+		// pair it is (issue #553) — the subject only where the chip states it as her medication.
+		// Two statements rather than one ternary, so the active phrase is still read by concatenation at
+		// exactly one line (ActiveOrderInteractionPhraseTest).
+		String subject = subjectStart == null ? ref.displayLabel()
+				: ref.displayLabel() + ", " + PatientChartSerializer.scheduledToStart(subjectStart) + ",";
+		String detail;
+		if (partnerStart == null) {
+			detail = subject + ACTIVE_ORDER_INTERACTION_PHRASE + partnerName;
+		} else {
+			detail = subject + SCHEDULED_ORDER_INTERACTION_PHRASE + partnerName + ", "
+					+ PatientChartSerializer.scheduledToStart(partnerStart);
+		}
 		if (i.getNote() != null && !i.getNote().isEmpty()) {
 			detail += " — " + i.getNote();
 		}
@@ -7799,7 +8119,9 @@ public class DrugSafetyValidator {
 		return SafetyWarning.interaction(ref.displayLabel(), detail, i.getSeverity(),
 				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName,
 				chartOrderBridges, aboutACurrentMedication,
-				namedPartners == null ? Collections.singletonList(partnerName) : namedPartners);
+				namedPartners == null ? Collections.singletonList(partnerName) : namedPartners)
+				.withPartnerScheduledStarts(partnerStart == null ? null
+						: Collections.singletonMap(partnerName, partnerStart));
 	}
 
 	/**
@@ -8003,11 +8325,15 @@ public class DrugSafetyValidator {
 		List<SafetyWarning.ChartOrderBridge> bridges = new ArrayList<SafetyWarning.ChartOrderBridge>();
 		Set<String> seenBridges = new HashSet<String>();
 		Set<String> matchedNames = new LinkedHashSet<String>();
+		// Each printed name -> the rows of every substance printed under it, what a check of the answer
+		// asks the prose rule of (issue #555) — the rows the rule-chip sites hand withPartnerRows too.
+		Map<String, List<DrugReference>> rowsByName = new LinkedHashMap<String, List<DrugReference>>();
 		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> link : links.entrySet()) {
 			DrugReference partnerRow = partners.get(link.getKey()).get(0);
 			String name = conditionMediatedPartnerName(partnerRow, subjects, coMedications);
 			linksByName.computeIfAbsent(name, k -> new ArrayList<DrugReference.ConditionMediatedRisk>())
 					.add(link.getValue());
+			unionPartnerRows(rowsByName, name, partners.get(link.getKey()));
 			for (SafetyWarning.ChartOrderBridge bridge : chartOrderBridges(rows, subject, partnerRow, name,
 					context, context.getActiveDrugOrders(), orderEntries, bridgedOrders, subjects, matchedNames)) {
 				if (seenBridges.add(bridge.toString())) {
@@ -8022,6 +8348,7 @@ public class DrugSafetyValidator {
 		for (Map.Entry<Object, DrugReference.ConditionMediatedRisk> member : coMembers.entrySet()) {
 			DrugReference memberRow = partners.get(member.getKey()).get(0);
 			String name = conditionMediatedPartnerName(memberRow, subjects, coMedications);
+			unionPartnerRows(rowsByName, name, partners.get(member.getKey()));
 			if (linksByName.containsKey(name)) {
 				continue;
 			}
@@ -8095,7 +8422,23 @@ public class DrugSafetyValidator {
 					+ " (DDInter drug-disease). " + CONDITION_MEDIATED_PROVENANCE;
 		}
 		return SafetyWarning.conditionMediated(subject.displayLabel(), detail, bridges, names, herOrder)
-				.withMatchedOrderNames(matchedNames);
+				.withMatchedOrderNames(matchedNames).withPartnerRows(rowsByName);
+	}
+
+	/**
+	 * Adds {@code rows} to the rows {@code byPartner} holds for the printed partner {@code name}, each row
+	 * once — the {@code SafetyWarning.withPartnerRows} map a chip naming one partner for several
+	 * substances builds: a merged chip over its members' ({@link #collapseSharedMechanisms}), and a
+	 * condition-mediated chip over the substances its ladder prints under one name.
+	 */
+	private static void unionPartnerRows(Map<String, List<DrugReference>> byPartner, String name,
+			List<DrugReference> rows) {
+		List<DrugReference> union = byPartner.computeIfAbsent(name, k -> new ArrayList<DrugReference>());
+		for (DrugReference row : rows) {
+			if (!union.contains(row)) {
+				union.add(row);
+			}
+		}
 	}
 
 	/**
@@ -8888,7 +9231,14 @@ public class DrugSafetyValidator {
 		// same drain-once-per-substance idiom validate() uses for the drug-in-play and dose arms, which
 		// since issue #206 drains a key set beside a shared row map rather than a map of its own.
 		Map<Object, List<DrugReference>> substances = substanceRows(orderDrugs);
-		for (DrugReference ref : orderDrugs) {
+		// A substance she holds only as orders that have not started is visited LAST (issue #553), so a
+		// pair of a started and a scheduled order is stated from the started side — whose
+		// current-medication clause below is true of it — and names the other as a scheduled order. The
+		// pair key is unordered, so no pair is lost: one the started side does not relate is still reached
+		// from the scheduled one. What does move, on such a chart only, is WHICH chip the maxPairChips cap
+		// keeps inside one rating — the sort below is stable, so a pair with a scheduled-only subject now
+		// trails its equals. On a chart with no such order the visiting order is untouched.
+		for (DrugReference ref : startedSubjectsFirst(orderDrugs, substances, context, bridgedOrders)) {
 			List<DrugReference> substance = substances.remove(ref.substanceGroupKey());
 			if (substance == null) {
 				continue;
@@ -8904,6 +9254,9 @@ public class DrugSafetyValidator {
 			// every order, which is the term chartOrderBridges' own cost measurement identifies.
 			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses =
 					ordersOtherThan(substance, context, bridgedOrders);
+			// Whether the subject has STARTED (issue #553), over every order as the bridge asks it — per
+			// SUBSTANCE, beside the witnesses it mirrors, rather than once per pair.
+			Date subjectStart = scheduledStartOf(substance, context.getActiveDrugOrders(), bridgedOrders);
 			// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
 			// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
 			// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
@@ -9010,14 +9363,24 @@ public class DrugSafetyValidator {
 				List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
 					partner, chipPartnerName, context, partnerWitnesses, orderDrugs, bridgedOrders, subjects,
 					matchedNames);
-				// TRUE, and this is the ONE arm of the three that says so: both of this pair's drugs are
-				// the patient's own prescriptions, so the finding licenses a call about her current
+				// Whether the partner has STARTED (issue #553), over the witnesses this arm kept. A side known
+				// only through orders that have not started is named as scheduled, with its date.
+				Date partnerStart = scheduledStartOf(orderDrugs, partner, partnerWitnesses, bridgedOrders);
+				// TRUE, and this is one of the two ORDER-DRIVEN arms that say so: both of this pair's drugs
+				// are the patient's own prescriptions, so the finding licenses a call about her current
 				// therapy and never a refusal of a proposal nobody made (issue #348). Established here
-				// rather than derived downstream — see SafetyWarning.isAboutACurrentMedication.
+				// rather than derived downstream — see SafetyWarning.isAboutACurrentMedication. Still TRUE
+				// where the subject has not started (issue #553): the proposal clause on a question that
+				// proposed nothing is #348's own defect, and it opened a module-composed screening answer
+				// with "No —". The subject's start date is in the detail instead. The visiting order above
+				// gives such a subject to a pair of two not-started orders, and to a pair the started side's
+				// rules do not relate (ADR Decision 126).
 				SafetyWarning chip = (reconciled == null
-						? interactionWarning(subject, i, bridges, true)
+						? interactionWarning(subject, i, bridges, true, subjectStart, partnerStart)
 						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
-							bridges, true)).withMatchedOrderNames(matchedNames);
+							bridges, true, subjectStart, partnerStart)).withMatchedOrderNames(matchedNames)
+						.withPartnerRows(Collections.singletonMap(chipPartnerName,
+								rowsOfSubstance(orderDrugs, partner)));
 				// Before the candidate is collected rather than after the cap, so the extent this arm
 				// states counts what a clinician can tell apart: a restatement is not a pair that was
 				// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —
@@ -9515,15 +9878,124 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return the displays of this patient's own active orders {@code ref}'s substance was resolved from,
-	 *         each once and in her chart's order: every order ANY row of that substance among
-	 *         {@code orderEntries} {@link #resolvesFromAny resolves from} — the order-driven arms' own test,
-	 *         asked over {@code findForActiveOrders}' answer the caller already holds (issue #151) — and whose
-	 *         display {@link #displayNamesADrug names a drug}, since a display that is not a name has nothing
-	 *         to print. For {@link SafetyWarning#currentOrderDisplays()} alone.
+	 * When the substance {@code rows} are the rows of is scheduled to start, where she holds it ONLY as
+	 * orders that have not started — the earliest of their dates — or {@code null}: where any order
+	 * carrying it has started, she is taking it; and where none of {@code orders} carries it, there is no
+	 * order to say anything of (issue #553).
+	 *
+	 * <p>Asked through {@link #resolvesFromAny}, the arms' own test of which orders a substance came
+	 * from, so it is asked of exactly the orders the arm matched and never of a second resolution. Whether
+	 * an order has started is {@link PatientClinicalContext.ActiveDrugOrder#hasStarted()}, core's
+	 * {@code Order.isStarted()}. A pass over a chart none of whose orders is scheduled resolves nothing.
+	 *
+	 * <p>Residue: a partner the dataset carries no entry for, keyed on its rule's label (#155/#290), has no
+	 * rows to resolve, so it answers {@code null} and keeps "active order" even where the order that label
+	 * matched has not started.
 	 */
-	private static List<String> currentOrderDisplays(DrugReference ref, List<DrugReference> orderEntries,
-			PatientClinicalContext context, BridgedOrders bridged) {
+	private static Date scheduledStartOf(List<DrugReference> rows,
+			List<PatientClinicalContext.ActiveDrugOrder> orders, BridgedOrders bridged) {
+		if (rows.isEmpty() || !anyHasNotStarted(orders)) {
+			return null;
+		}
+		List<PatientClinicalContext.ActiveDrugOrder> carrying = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			if (resolvesFromAny(rows, order, bridged)) {
+				carrying.add(order);
+			}
+		}
+		return earliestStartWhereNoneHasStarted(carrying);
+	}
+
+	/**
+	 * As {@link #scheduledStartOf(List, List, BridgedOrders)} for the substance {@code row} is a row of
+	 * among {@code entries}, resolving those rows only where one of {@code orders} has not started — the
+	 * form a per-chip call site takes, so a chart with no scheduled order builds no row list for it.
+	 */
+	private static Date scheduledStartOf(List<DrugReference> entries, DrugReference row,
+			List<PatientClinicalContext.ActiveDrugOrder> orders, BridgedOrders bridged) {
+		if (row == null || !anyHasNotStarted(orders)) {
+			return null;
+		}
+		return scheduledStartOf(rowsOfSubstance(entries, row), orders, bridged);
+	}
+
+	/**
+	 * @return the earliest scheduled start among {@code orders}, where none of them has started; else
+	 *         {@code null} — for an empty collection, and wherever one of them has started (issue #553).
+	 *         The one fold {@link #scheduledStartOf} and {@link OrderPartner#scheduledStart()} share.
+	 */
+	private static Date earliestStartWhereNoneHasStarted(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
+		Date earliest = null;
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			if (order.hasStarted()) {
+				return null;
+			}
+			if (earliest == null || order.getScheduledStart().before(earliest)) {
+				earliest = order.getScheduledStart();
+			}
+		}
+		return earliest;
+	}
+
+	/**
+	 * {@code orderDrugs} with every row of a substance she holds ONLY as orders that have not started
+	 * moved behind the rest, each part in its own order — the screening arm's visiting order (issue
+	 * #553). The list itself where no order of hers is scheduled. {@code substances} is the arm's own
+	 * grouping of {@code orderDrugs}, read before its drain begins.
+	 */
+	private static List<DrugReference> startedSubjectsFirst(List<DrugReference> orderDrugs,
+			Map<Object, List<DrugReference>> substances, PatientClinicalContext context, BridgedOrders bridged) {
+		if (!anyHasNotStarted(context.getActiveDrugOrders())) {
+			return orderDrugs;
+		}
+		List<DrugReference> started = new ArrayList<DrugReference>();
+		List<DrugReference> scheduled = new ArrayList<DrugReference>();
+		// Decided once per SUBSTANCE, the unit the arm drains on, and never once per row of it. A per-call
+		// local, for issue #172's reason.
+		Map<Object, Boolean> scheduledOnly = new HashMap<Object, Boolean>();
+		for (DrugReference ref : orderDrugs) {
+			Boolean late = scheduledOnly.get(ref.substanceGroupKey());
+			if (late == null) {
+				late = Boolean.valueOf(scheduledStartOf(substances.get(ref.substanceGroupKey()),
+					context.getActiveDrugOrders(), bridged) != null);
+				scheduledOnly.put(ref.substanceGroupKey(), late);
+			}
+			(late.booleanValue() ? scheduled : started).add(ref);
+		}
+		started.addAll(scheduled);
+		return started;
+	}
+
+	/** @return whether any of {@code orders} has not started — see {@link #scheduledStartOf} */
+	private static boolean anyHasNotStarted(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			if (!order.hasStarted()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** @return whether none of {@code orders} has started, which a non-empty list of only scheduled orders
+	 *          answers true — see {@link #scheduledStartOf} */
+	private static boolean noneHasStarted(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			if (order.hasStarted()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * @return this patient's own active orders {@code ref}'s substance was resolved from, in her chart's
+	 *         order: every order ANY row of that substance among {@code orderEntries}
+	 *         {@link #resolvesFromAny resolves from} — the order-driven arms' own test, asked over
+	 *         {@code findForActiveOrders}' answer the caller already holds (issue #151). For
+	 *         {@link #currentMedicationOrdersOn} alone.
+	 */
+	private static List<PatientClinicalContext.ActiveDrugOrder> currentOrders(DrugReference ref,
+			List<DrugReference> orderEntries, PatientClinicalContext context, BridgedOrders bridged) {
 		Object substance = ref.substanceGroupKey();
 		List<DrugReference> rows = new ArrayList<DrugReference>();
 		for (DrugReference entry : orderEntries) {
@@ -9531,13 +10003,50 @@ public class DrugSafetyValidator {
 				rows.add(entry);
 			}
 		}
-		Set<String> displays = new LinkedHashSet<String>();
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (displayNamesADrug(order) && resolvesFromAny(rows, order, bridged)) {
-				displays.add(order.getDisplay().trim());
+			if (order != null && resolvesFromAny(rows, order, bridged)) {
+				orders.add(order);
 			}
 		}
-		return new ArrayList<String>(displays);
+		return orders;
+	}
+
+	/**
+	 * @return {@code chip} stamped with {@code orders}: every one of them, by display and uuid, as
+	 *         {@link SafetyWarning#currentMedicationOrders()} (issue #552); and, as
+	 *         {@link SafetyWarning#currentOrderDisplays()}, the displays of those whose display
+	 *         {@link #displayNamesADrug names a drug}, each once — a display that is not a name has nothing
+	 *         for a sentence to print, while the wire lists the order regardless, since labelling an order
+	 *         with no other name is what its display is for. Package-private so the omod wire fixtures stamp a
+	 *         chip through this one method rather than a copy of it.
+	 */
+	static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return currentMedicationOrdersOn(chip, orders, true);
+	}
+
+	/**
+	 * As above; {@code printable} false stamps the wire list alone and leaves
+	 * {@link SafetyWarning#currentOrderDisplays()} empty — the drug-in-play arm's stamp
+	 * ({@code ContraindicationChips.inPlayOrders}), whose chips Decision 124's statement does not print.
+	 */
+	private static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
+			List<PatientClinicalContext.ActiveDrugOrder> orders, boolean printable) {
+		List<SafetyWarning.CurrentMedicationOrder> published = new ArrayList<SafetyWarning.CurrentMedicationOrder>();
+		Set<String> displays = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
+			published.add(new SafetyWarning.CurrentMedicationOrder(display, order.getUuid()));
+			if (printable && displayNamesADrug(order)) {
+				// An order that has not started is printed with its start date, so "Currently prescribed"
+				// does not read as a drug she is taking (issue #553). The wire list above keeps the order's
+				// own display: its start is not a name.
+				displays.add(order.hasStarted() ? display
+						: display + " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart()) + ")");
+			}
+		}
+		return chip.withCurrentMedicationOrders(published, displays);
 	}
 
 	/** @return true when ANY row of the subject's substance matches one name — the group form of
@@ -10666,10 +11175,16 @@ public class DrugSafetyValidator {
 			// decides which survives one key. That is a known residue and not a rationale: ADR Decision
 			// 123 records it, and it is kept only because CurrentMedicationFindingStrengthTest's
 			// sibling-row cases pin it.
+			// Not narrowed to an order that has STARTED (issue #553): this arm, like the screening arm, has no
+			// proposal to refuse, so the proposal clause would be #348's defect. The order's start date is
+			// stated on the chip instead (recordScheduledStart), and printed beside the order by
+			// currentMedicationOrdersOn (ADR Decision 126).
 			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			if (currentMedication) {
 				chips.recordCurrentOrders(ref.substanceGroupKey(),
-						currentOrderDisplays(ref, orderEntries, context, bridged));
+						currentOrders(ref, orderEntries, context, bridged));
+				chips.recordScheduledStart(ref.substanceGroupKey(),
+						scheduledStartOf(orderEntries, ref, context.getActiveDrugOrders(), bridged));
 			}
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response
@@ -10976,9 +11491,14 @@ public class DrugSafetyValidator {
 		 *        names the substance by, so the two arms cannot elect different rows of one
 		 *        prescription. On the ORDER rung the prescription's own display stands, which is what
 		 *        this sentence needs — it is the only name true of every code the partner holds. */
-		String sentence(DrugReference subject, String partnerName) {
-			return subject.displayLabel() + " is in the same " + shared + " as active order "
-					+ partnerName + " — " + consequence;
+		String sentence(DrugReference subject, String partnerName, Date partnerStart) {
+			// An order that has not started is named as scheduled, with its date, as the rule chip names it
+			// (issue #553).
+			return subject.displayLabel() + " is in the same " + shared + " as "
+					+ (partnerStart == null ? "active order " + partnerName
+							: SCHEDULED_ORDER_NOUN + " " + partnerName + ", "
+									+ PatientChartSerializer.scheduledToStart(partnerStart))
+					+ " — " + consequence;
 		}
 	}
 
@@ -11004,10 +11524,15 @@ public class DrugSafetyValidator {
 
 		private final String sentence;
 
-		FoldedClassSentence(String partnerName, String partnerNoteName, String sentence) {
+		/** When the partner is scheduled to start, for one that has not started — {@link #scheduledStartOf},
+		 *  decided once for both halves of the chip (issue #553). */
+		private final Date partnerStart;
+
+		FoldedClassSentence(String partnerName, String partnerNoteName, String sentence, Date partnerStart) {
 			this.partnerName = partnerName;
 			this.partnerNoteName = partnerNoteName;
 			this.sentence = sentence;
+			this.partnerStart = partnerStart;
 		}
 	}
 
@@ -11139,6 +11664,23 @@ public class DrugSafetyValidator {
 		 * reason that leg is scoped out.
 		 */
 		private boolean codesFromDataset;
+
+		/**
+		 * The active orders this co-medication was read off — every order carrying one of its codes on
+		 * the code walk, and the order whose name reached it on the name leg — for
+		 * {@link #scheduledStart()} alone (issue #553). It names nothing and silences nothing.
+		 */
+		private final Set<PatientClinicalContext.ActiveDrugOrder> carriers =
+				new LinkedHashSet<PatientClinicalContext.ActiveDrugOrder>();
+
+		/**
+		 * @return when this co-medication is scheduled to start, where every order it was read off has not
+		 *         started — the earliest of their dates — else {@code null} (issue #553): for the class
+		 *         arm's own sentence, whose partner is this co-medication rather than a rule's entry
+		 */
+		private Date scheduledStart() {
+			return earliestStartWhereNoneHasStarted(carriers);
+		}
 
 		/**
 		 * The substances this co-medication is known to contain, as
@@ -12098,6 +12640,7 @@ public class DrugSafetyValidator {
 				}
 			}
 			partner.codes.add(orderCode);
+			partner.carriers.addAll(ordersCarrying(orderCode, context));
 		}
 		addPartnersForUnmappedOrders(byIdentity, context, rowsByOrderName, impliedByName);
 		return new ArrayList<OrderPartner>(byIdentity.values());
@@ -12299,10 +12842,17 @@ public class DrugSafetyValidator {
 			Set<Object> indistinguishable = substancesTheOrderNameDoesNotName(order.getNames(), rowsBySubstance);
 			for (Map.Entry<Object, List<DrugReference>> named : rowsBySubstance.entrySet()) {
 				if (alreadyACoMedication(byIdentity, named.getKey())) {
+					// Still one of the orders it was read off, where the partner is keyed on this substance,
+					// so a started order reaching it by name keeps it an active order (issue #553).
+					OrderPartner existing = byIdentity.get(named.getKey());
+					if (existing != null) {
+						existing.carriers.add(order);
+					}
 					continue;
 				}
 				DrugReference row = interactionSubject(named.getValue(), order.getNames());
 				OrderPartner partner = new OrderPartner(row);
+				partner.carriers.add(order);
 				// The dataset's codes for the SUBSTANCE, narrowed to the presentations the chart
 				// records (issue #234). Unnarrowed they cover every route the substance is marketed as,
 				// and sharedClass prefers the systemic subgroup among them, so a topical order was named

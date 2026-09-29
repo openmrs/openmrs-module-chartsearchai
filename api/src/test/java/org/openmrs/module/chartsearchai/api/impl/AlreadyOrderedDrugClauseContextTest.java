@@ -86,7 +86,7 @@ public class AlreadyOrderedDrugClauseContextTest {
 					new LinkedHashSet<String>(Arrays.asList(display))),
 			new PatientClinicalContext.ActiveDrugOrder("order-warfarin", "Warfarin 5mg",
 					new LinkedHashSet<String>(Arrays.asList("Warfarin 5mg"))));
-		return DrugReferenceTestSupport.injectedFindingsOver(service, baseChart(display), question,
+		return DrugReferenceTestSupport.injectedFindingsOverDataset(service, baseChart(display), question,
 			new LinkedHashSet<String>(Arrays.asList(display, "Warfarin 5mg")),
 			Collections.<String> emptySet(), orders);
 	}

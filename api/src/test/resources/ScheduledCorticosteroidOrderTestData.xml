@@ -1,0 +1,41 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #553: two corticosteroid orders for patient 7 of the standard test dataset — Prednisone, started,
+  and Methylprednisolone, urgency ON_SCHEDULED_DATE with scheduled_date 2099-01-01 (noon, for the reason
+  ScheduledDrugOrderTestData.xml gives). The slice the test loads (ddi-shared-mechanism-partners.json) files
+  aspirin's interaction with both under ONE mechanism and rating, which is the arrangement whose chips
+  collapseSharedMechanisms merges. The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<concept concept_id="9556" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9556aaaa-0000-4000-8000-00000009556a" />
+	<concept_name concept_name_id="9556" concept_id="9556" name="Prednisone 5mg"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9556bbbb-0000-4000-8000-00000009556a" />
+	<drug drug_id="9556" concept_id="9556" name="Prednisone 5mg" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9556cccc-0000-4000-8000-00000009556a" />
+	<concept concept_id="9557" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9557aaaa-0000-4000-8000-00000009557a" />
+	<concept_name concept_name_id="9557" concept_id="9557" name="Methylprednisolone 4mg"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9557bbbb-0000-4000-8000-00000009557a" />
+	<drug drug_id="9557" concept_id="9557" name="Methylprednisolone 4mg" combination="false"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9557cccc-0000-4000-8000-00000009557a" />
+	<orders order_id="9556" order_type_id="1" order_number="ORD-9556" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9556" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9556dddd-0000-4000-8000-00000009556a"
+	        care_setting="1" encounter_id="3" />
+	<orders order_id="9557" order_type_id="1" order_number="ORD-9557" urgency="ON_SCHEDULED_DATE"
+	        scheduled_date="2099-01-01 12:00:00.0"
+	        order_action="NEW" concept_id="9557" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9557dddd-0000-4000-8000-00000009557a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9556" drug_inventory_id="9556" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+	<drug_order order_id="9557" drug_inventory_id="9557" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

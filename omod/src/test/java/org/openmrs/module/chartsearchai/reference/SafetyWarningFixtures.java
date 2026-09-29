@@ -9,21 +9,24 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
 /**
  * Builds a {@link SafetyWarning} through a factory or method {@code SafetyWarning} keeps
- * package-private, for an omod test that cannot reach one from
+ * package-private — or, for the order stamp, {@code DrugSafetyValidator.currentMedicationOrdersOn}, which
+ * issue #552 made package-private for this class — for an omod test that cannot reach one from
  * {@code org.openmrs.module.chartsearchai.web.rest}.
  *
  * <p><b>Why it exists, and why it is not a widening of production API.</b> The chip-serialization
  * guards live in {@code web.rest}, and the facts these shapes carry are set only through
- * {@code SafetyWarning}'s package-private factories and methods. This class is declared in
- * {@code SafetyWarning}'s OWN package under {@code omod/src/test}, so it reaches them with no
- * production change at all — a split package across two artifacts being legal on a plain classpath,
- * which is what surefire gives these tests.
+ * {@code SafetyWarning}'s package-private factories and methods, and the order stamp through
+ * {@code DrugSafetyValidator.currentMedicationOrdersOn}. This class is declared in their OWN package under
+ * {@code omod/src/test}, so it reaches them with no production change beyond that one package-private
+ * visibility — a split package across two artifacts being legal on a plain classpath, which is what
+ * surefire gives these tests.
  *
  * <p><b>The point is that the chip is one PRODUCTION built.</b> Two alternatives were available — a
  * new public factory taking the flag, and an anonymous subclass overriding the accessor — and both are
@@ -132,5 +135,20 @@ public final class SafetyWarningFixtures {
 	 */
 	public static SafetyWarning statedInTheAnswer(SafetyWarning chip) {
 		return chip.asStatedInTheAnswer();
+	}
+
+	/**
+	 * {@code chip} stamped with {@code orders} as the active orders it is about — through
+	 * {@code DrugSafetyValidator.currentMedicationOrdersOn}, the one stamp the validator writes (issue #552),
+	 * so the chip publishes a {@code currentMedicationOrders} production could.
+	 */
+	public static SafetyWarning aboutCurrentOrders(SafetyWarning chip, PatientClinicalContext.ActiveDrugOrder... orders) {
+		return DrugSafetyValidator.currentMedicationOrdersOn(chip, Arrays.asList(orders));
+	}
+
+	/** One of her active orders as {@code PatientClinicalContextBuilder} builds a named one: the Order uuid
+	 *  and the display, which is also its one name. */
+	public static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display) {
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, Collections.singleton(display));
 	}
 }

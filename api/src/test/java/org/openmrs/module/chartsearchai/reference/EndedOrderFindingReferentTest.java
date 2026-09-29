@@ -373,7 +373,7 @@ public class EndedOrderFindingReferentTest extends BaseModuleContextSensitiveTes
 
 	/**
 	 * The same, in the drug-then-patient order issue #548 admitted to the proposal grammar (ADR Decision
-	 * 125): <em>"Is it safe to add clarithromycin for her?"</em> proposes the drug too, so the ended-order
+	 * 129): <em>"Is it safe to add clarithromycin for her?"</em> proposes the drug too, so the ended-order
 	 * holder keeps it a proposal. Before that widening it fitted no shape and took the ended-order call.
 	 */
 	@Test

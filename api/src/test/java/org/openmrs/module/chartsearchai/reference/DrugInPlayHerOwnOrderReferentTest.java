@@ -131,7 +131,7 @@ public class DrugInPlayHerOwnOrderReferentTest {
 		// Beside issue #548's finding that the drug proposed is already in her order, which states the one
 		// referent every finding about the drug states — asserted here, since it is set aside. Recognised by
 		// its sentence because this reads the injected records, which carry no flag. One order, so the
-		// caution in that column: only the proposal would duplicate it (ADR Decision 125).
+		// caution in that column: only the proposal would duplicate it (ADR Decision 129).
 		List<String> findings = new ArrayList<String>();
 		for (String finding : findings(service, context, question)) {
 			if (finding.contains(" is already in active order ")) {
@@ -1061,7 +1061,7 @@ public class DrugInPlayHerOwnOrderReferentTest {
 
 	/**
 	 * The same listing, with a proposal clause in the drug-then-patient order issue #548 admitted to the
-	 * proposal grammar (ADR Decision 125): <em>"… is it safe to add amoxicillin for her?"</em> is a proposal
+	 * proposal grammar (ADR Decision 129): <em>"… is it safe to add amoxicillin for her?"</em> is a proposal
 	 * clause too, so the drugs before it are LISTED and her gel diclofenac keeps the current-medication
 	 * call. Before that widening the question listed nothing, and the gel was held to the presentation gate.
 	 */

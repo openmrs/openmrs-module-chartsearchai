@@ -24,6 +24,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -655,7 +656,8 @@ class QueryStoreChartBuilder {
 					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_UUID),
 					metadataString(doc, QueryStoreConstants.FIELD_OBS_GROUP_CONCEPT_NAME),
 					orderCurrency.forRecord(doc.getResourceType(), doc.getResourceUuid()),
-					orderCurrency.stopDateForRecord(doc.getResourceType(), doc.getResourceUuid())));
+					orderCurrency.stopDateForRecord(doc.getResourceType(), doc.getResourceUuid()),
+					orderCurrency.startDateForRecord(doc.getResourceType(), doc.getResourceUuid())));
 		}
 		return out;
 	}
@@ -681,12 +683,16 @@ class QueryStoreChartBuilder {
 	 * must never stand in for "could not read", which is why {@link #UNREAD} is its own state rather
 	 * than an empty set. {@code PatientClinicalContext.contraindicationRecordsRead()} is the same
 	 * distinction one layer along.
+	 *
+	 * <p>Since issue #553 a second map sits beside the two sets and the stop dates: the orders {@code Order.isActive()} calls
+	 * active that have not started, which are in the all-orders set and NOT in the active one, so neither
+	 * mark reaches them — see {@link #scheduledStartsByOrderUuid}.
 	 */
 	private static final class OrderCurrency {
 
 		/** The reading that answers nothing about anything, and the only one a failed read produces. */
 		private static final OrderCurrency UNREAD = new OrderCurrency(null, null,
-				Collections.<String, Date>emptyMap());
+				Collections.<String, Date>emptyMap(), Collections.<String, Date>emptyMap());
 
 		private final Set<String> activeOrderUuids;
 
@@ -704,11 +710,21 @@ class QueryStoreChartBuilder {
 		 */
 		private final Map<String, Date> stopDatesByOrderUuid;
 
+		/**
+		 * When each of this patient's orders that has not STARTED is scheduled to start — core's
+		 * {@code Order.getEffectiveStartDate()}, for an order {@code Order.isActive()} calls active and
+		 * {@code Order.isStarted()} says has not started, keyed by order uuid (issue #553). Such an order
+		 * is in {@link #allOrderUuids} and deliberately NOT in {@link #activeOrderUuids}: it is not in
+		 * force yet, so it must not be marked so.
+		 */
+		private final Map<String, Date> scheduledStartsByOrderUuid;
+
 		private OrderCurrency(Set<String> activeOrderUuids, Set<String> allOrderUuids,
-				Map<String, Date> stopDatesByOrderUuid) {
+				Map<String, Date> stopDatesByOrderUuid, Map<String, Date> scheduledStartsByOrderUuid) {
 			this.activeOrderUuids = activeOrderUuids;
 			this.allOrderUuids = allOrderUuids;
 			this.stopDatesByOrderUuid = stopDatesByOrderUuid;
+			this.scheduledStartsByOrderUuid = scheduledStartsByOrderUuid;
 		}
 
 		static OrderCurrency unread() {
@@ -716,14 +732,17 @@ class QueryStoreChartBuilder {
 		}
 
 		static OrderCurrency of(Set<String> activeOrderUuids, Set<String> allOrderUuids,
-				Map<String, Date> stopDatesByOrderUuid) {
-			return new OrderCurrency(activeOrderUuids, allOrderUuids, stopDatesByOrderUuid);
+				Map<String, Date> stopDatesByOrderUuid, Map<String, Date> scheduledStartsByOrderUuid) {
+			return new OrderCurrency(activeOrderUuids, allOrderUuids, stopDatesByOrderUuid,
+					scheduledStartsByOrderUuid);
 		}
 
 		/**
 		 * What this reading says about one chart record: {@code TRUE} in force, {@code FALSE} this
-		 * patient's order and not in force, {@code null} nothing known. The single place the answer is
-		 * decided, so the chart line and the grounding mapping cannot be given different ones.
+		 * patient's order and not in force, {@code null} nothing known — or, for an order that has not
+		 * started, nothing this field can say, since it is neither (issue #553; {@link #startDateForRecord}
+		 * states what is known of it). The single place the answer is decided, so the chart line and the
+		 * grounding mapping cannot be given different ones.
 		 */
 		Boolean forRecord(String resourceType, String resourceUuid) {
 			if (activeOrderUuids == null || resourceUuid == null
@@ -733,7 +752,23 @@ class QueryStoreChartBuilder {
 			if (activeOrderUuids.contains(resourceUuid)) {
 				return Boolean.TRUE;
 			}
+			if (scheduledStartsByOrderUuid.containsKey(resourceUuid)) {
+				return null;
+			}
 			return allOrderUuids.contains(resourceUuid) ? Boolean.FALSE : null;
+		}
+
+		/**
+		 * When the order behind one chart record is scheduled to start, for an order that has not started,
+		 * or {@code null} (issue #553). Type-scoped as {@link #forRecord} is, so a record that is not a
+		 * drug order can never carry one.
+		 */
+		Date startDateForRecord(String resourceType, String resourceUuid) {
+			if (activeOrderUuids == null || resourceUuid == null
+					|| !DRUG_ORDER_RESOURCE_TYPE.equals(resourceType)) {
+				return null;
+			}
+			return scheduledStartsByOrderUuid.get(resourceUuid);
 		}
 
 		/**
@@ -864,6 +899,7 @@ class QueryStoreChartBuilder {
 		Set<String> active = new HashSet<String>();
 		Set<String> known = new HashSet<String>();
 		Map<String, Date> stopDates = new HashMap<String, Date>();
+		Map<String, Date> scheduledStarts = new HashMap<String, Date>();
 		List<String> unevaluable = new ArrayList<String>();
 		for (Order order : allOrders == null ? Collections.<Order>emptyList() : allOrders) {
 			if (order == null || order.getUuid() == null) {
@@ -891,8 +927,15 @@ class QueryStoreChartBuilder {
 				// (aLiveDurationBasedPrescriptionStatesNoStopDateEvenThoughCorePublishesOne, kept on
 				// one line so a grep for it lands).
 				Date stopDate = order.getEffectiveStopDate();
+				// Whether an order core calls active has STARTED is core's own Order.isStarted() — its
+				// effective start date against now — and never a reading of scheduledDate here (issue
+				// #553). Held before the uuid is recorded as known, for the reason isActive() is.
+				Date scheduledStart = isActive ? ChartSearchAiUtils.scheduledStartOf(order) : null;
 				known.add(order.getUuid());
-				if (isActive) {
+				if (scheduledStart != null) {
+					scheduledStarts.put(order.getUuid(), scheduledStart);
+				}
+				else if (isActive) {
 					active.add(order.getUuid());
 				}
 				else if (stopDate != null) {
@@ -920,7 +963,7 @@ class QueryStoreChartBuilder {
 					+ "core neither validates nor refuses to save. Orders: {}",
 					unevaluable.size(), unevaluable);
 		}
-		return OrderCurrency.of(active, known, stopDates);
+		return OrderCurrency.of(active, known, stopDates, scheduledStarts);
 	}
 
 	/** Reads a metadata value as a trimmed String, or {@code null} when absent or blank.

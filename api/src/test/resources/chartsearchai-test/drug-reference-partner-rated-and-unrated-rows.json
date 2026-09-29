@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (ADR Decision 127): a curated entry filing ONE partner, warfarin, as two rows sharing its token — one Moderate, which clears the shipped minor floor and so raises a chip, and one Unknown, which does not — beside a second partner, fluconazole, rated Unknown alone. A partner a rule above the floor already chips must not also be stated as a pair below it, which only a partner carrying rows on both sides of the floor can pose. The shipped KB files one partner under one rating per substance row, so the curated source is how this shape is reached. Parsed by the real JsonDrugReferenceSource parser.",
+  "entries": [
+    {
+      "id": "voriconazole-curated",
+      "name": "Voriconazole",
+      "drugClass": "Triazole antifungal",
+      "aliases": [
+        "voriconazole"
+      ],
+      "atcCodes": [
+        "J02AC03"
+      ],
+      "interactions": [
+        {
+          "token": "warfarin",
+          "severity": "Moderate",
+          "note": "Moderate. Voriconazole inhibits the CYP450 isoenzymes that clear warfarin and raises its anticoagulant effect."
+        },
+        {
+          "token": "warfarin",
+          "severity": "Unknown",
+          "note": "Unknown severity interaction (Test fixture; no mechanism description on file)."
+        },
+        {
+          "token": "fluconazole",
+          "severity": "Unknown",
+          "note": "Unknown severity interaction (Test fixture; no mechanism description on file)."
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

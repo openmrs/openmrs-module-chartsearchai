@@ -1075,7 +1075,7 @@ public class LlmProvider {
 	 * question and any finding-prose clause, that each drug of {@code drugsAlreadyOrdered} is already in
 	 * the patient's active orders — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/548">#548</a>, ADR Decision
-	 * 125.
+	 * 129.
 	 *
 	 * @param drugsAlreadyOrdered the drugs the question proposes that her orders already carry, as
 	 *        {@code PatientChart.getDrugsAlreadyOrdered()} states them; null or empty for none
@@ -1192,7 +1192,7 @@ public class LlmProvider {
 			// whose rewording was measured not to move the lead. AFTER the finding-prose clause, so #397's
 			// measured layout — the question, a space, its clause — is unchanged where both fire. The bytes
 			// are pinned by LlmProviderUserMessageTest.theAlreadyOrderedClauseIsExactlyTheseBytes; ADR
-			// Decision 125 carries the gate and the measurement. Its last part scopes the drug's OTHER findings
+			// Decision 129 carries the gate and the measurement. Its last part scopes the drug's OTHER findings
 			// to the medication she is on (review round 2 of PR #554): given the adding frame alone, the model
 			// refused a second order of her aspirin on an interaction finding about her current aspirin. What
 			// adding it would duplicate is the stamp's own (AlreadyOrderedDrug.getConsequence), written beside the

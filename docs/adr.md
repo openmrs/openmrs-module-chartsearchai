@@ -12401,7 +12401,9 @@ remedy is deterministic.
 
 ### Decision
 
-The issue's owner decided the three open questions on the issue, and this implements them.
+The issue's owner decided the three open questions on the issue, and this implements them, with one
+departure named in the unit's bullet: the exemption asks the unrated finding being judged as well as the
+OTHER findings the owner's wording names.
 
 - **Report only.** The citation and the rating reach their own always-present `ChartAnswer` key, resolved
   once at the check's call site, as `unstatedFindingSeverities` is. `null` is no measurement; `[]` is a
@@ -12411,7 +12413,8 @@ The issue's owner decided the three open questions on the issue, and this implem
   The sibling's whole-answer unit cannot serve the inverse question, because "Major" elsewhere is exactly
   the false report. A rating word in that sentence is reported only where no finding the sentence cites
   carries that rating, which keeps the #554 fourth run's case silent. The unrated finding itself is one of
-  those asked, so a word an operator's note put in its record is not reported. A finding carrying a rating
+  those asked, so a word an operator's note put in its record is not reported — past the owner's "no other
+  finding cited in the same sentence", and paid for by the Residues entry on a rating the judged finding's own record states. A finding carrying a rating
   (stamp `FALSE`) carries that rating and no other, read off `getFindingSeverity()`, so its mechanism's
   *"moderate inhibitors of CYP450 3A4"* on a rule rated Major exempts nothing. A finding carrying none
   (stamp `TRUE`) carries what its record states: a condition-mediated finding's detail states each
@@ -12455,6 +12458,14 @@ through its own record.
   rating was attached to the unrated one — the enumeration sentence
   [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response) refuted
   sentence scoping with. The exemption buys the #554 fourth run's silence, and this is what it costs.
+- A rating the judged finding's own record states, attached to that finding, is not reported. The
+  exemption asks the unrated finding itself, so correct prose reproducing its record (*"Metformin is rated
+  Major in lactic acidosis"*) is silent, and so is the defect in the same word: a condition-mediated
+  finding's record states each drug-disease rating, Major on the `major` derived tier, so *"Metformin has a
+  Major interaction with her stavudine and lamivudine [n]"* is not reported. An operator dataset's note
+  using a rating word in another sense (*"moderate to severe hepatic impairment"*) exempts that word for its
+  finding. Following the owner's "other" instead would report the correct prose; the word scan cannot tell
+  the two apart.
 - A marker after its sentence's terminator (*"…a Major finding. [354]"*) lands in the next sentence, so the
   finding's own sentence is silent and the next one's rating, if any, is attached to it.
 - A rating the sentence owes to a co-cited finding that carries it while its record does not state it — an

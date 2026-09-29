@@ -53,7 +53,9 @@ import org.slf4j.LoggerFactory;
  * word in that sentence is reported only where no finding the sentence cites, the unrated one included,
  * carries that rating ({@code aCitedFindingCarries} says what carrying is for a finding carrying a rating
  * and for one carrying none), which keeps silent a rating quoted from another finding's detail beside it
- * — PR #554's fourth run.
+ * — PR #554's fourth run. Asking the unrated one too goes past the owner's wording, "no OTHER finding
+ * cited in the same sentence", deliberately: its cost is the <em>What it cannot see</em> item on a
+ * rating the judged finding's OWN record states.
  *
  * <p><b>Which findings a sentence cites is {@link SafetyFindingCitationExtentCheck#citedFindingIndexes}</b>,
  * asked of the sentence: the ONE reading of that question (issue #409), with the #305 filter and the
@@ -73,6 +75,13 @@ import org.slf4j.LoggerFactory;
  *   <li>a rating attached to the unrated finding in a sentence that also cites a finding carrying that
  *       rating — the enumeration sentence ADR Decision 76 refuted sentence scoping with. The
  *       exemption is what buys the #554 fourth run's silence, and this is its cost;</li>
+ *   <li>a rating the judged finding's OWN record states, attached to that finding. The exemption asks the
+ *       unrated finding itself, so correct prose reproducing its record ("Metformin is rated Major in
+ *       lactic acidosis") stays silent, and so does the defect in the same word: a condition-mediated
+ *       finding's record states each drug-disease rating, which on the {@code major} derived tier is Major,
+ *       so "Metformin has a Major interaction with her stavudine and lamivudine [n]" is not reported; and an
+ *       operator dataset's note using a rating word in another sense ("moderate to severe hepatic
+ *       impairment") exempts that word for its finding;</li>
  *   <li>a marker placed after its sentence's terminator ("…a Major finding. [354]"), which the
  *       splitter puts in the next sentence: the finding's own sentence is then silent, and the next
  *       one's rating, if any, is attached to it;</li>
@@ -185,9 +194,10 @@ final class UnfoundedFindingSeverityCheck {
 
 	/**
 	 * Whether a finding cited in the sentence CARRIES {@code rating} — the exemption the issue's owner
-	 * decided, "no other finding cited in the same sentence carries that rating". Asked by the stamp, and
-	 * never by whether {@link RecordMapping#getFindingSeverity()} is null, which also answers for a rated
-	 * finding.
+	 * decided, "no other finding cited in the same sentence carries that rating", asked of the judged
+	 * finding as well as the others (the class javadoc's item on a rating the judged finding's OWN record
+	 * states is what that costs). Asked by the stamp, and never by whether
+	 * {@link RecordMapping#getFindingSeverity()} is null, which also answers for a rated finding.
 	 * <ul>
 	 *   <li>A finding carrying a rating ({@link RecordMapping#getFindingUnrated()} {@code FALSE}) carries
 	 *       that rating and no other — its {@code getFindingSeverity()}, and never its prose, whose

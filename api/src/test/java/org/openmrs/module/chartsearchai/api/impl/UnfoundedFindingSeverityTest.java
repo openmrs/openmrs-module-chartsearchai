@@ -167,6 +167,21 @@ public class UnfoundedFindingSeverityTest {
 	}
 
 	@Test
+	public void aRatingOnlyAFindingTheSentenceDoesNotCiteCarriesIsStillReported() {
+		// The exemption's SCOPE: the chart carries a Moderate interaction finding, and this sentence cites
+		// only the unrated one. A finding elsewhere in the chart carrying the rating lends it nothing, or
+		// every rating some uncited finding carries would go unreported.
+		PatientChart chart = sarahTaylor(CAN_I_GIVE, true);
+		int dexamethasone = unratedFindingNaming(chart, "Dexamethasone");
+		ratedFinding(chart, "Moderate"); // precondition: throws where the chart carries no Moderate finding
+		LlmInferenceService service = serviceOver(chart,
+				"Her dexamethasone allergy is a Moderate cross-reactivity [" + dexamethasone + "].");
+		assertEquals(Collections.singletonList(new UnfoundedFindingSeverity(dexamethasone, "Moderate")),
+				service.search(patient(), CAN_I_GIVE).getUnfoundedFindingSeverities(),
+				"the Moderate finding is in the chart and not cited in this sentence");
+	}
+
+	@Test
 	public void aRatingWordInARatedFindingsMechanismDoesNotCountAsTheRatingItCarries() {
 		// A rated finding carries its rating and no other: on the shipped knowledge base Clarithromycin's
 		// Major rule with Lumateperone says "strong or moderate inhibitors of CYP450 3A4", and that word is

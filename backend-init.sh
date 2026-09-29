@@ -911,10 +911,10 @@ record_cpu_breadcrumb || true
 # It polls the state directory and writes whenever what it reads differs from the last value that
 # LANDED, reading each statement's status: a virgin database has no global_property table until
 # OpenMRS creates it, so an outcome recorded before then is sent again until it is taken rather
-# than counted the first time it was sent. It ends once no fetch is running and the value has
-# landed; with nothing running and the database still refusing, it gives up after 900 refused
-# writes two seconds apart — at least half an hour, the order of the backend's health
-# start_period — and says so.
+# than counted the first time it was sent. It ends on the second idle scan in a row that reads the
+# value that landed, for the reason given where the loop checks it; with nothing running and the
+# database still refusing, it gives up after 900 refused writes two seconds apart — at least half
+# an hour, the order of the backend's health start_period — and says so.
 publish_weights_status() {
   command -v mariadb >/dev/null 2>&1 || { echo "[weights-status] mariadb client absent; chartsearchai.models.weightsStatus is not recorded."; return 0; }
   _ws_landed=no

@@ -7788,9 +7788,9 @@ data leak. So:
   pyrazinamide/rifampin* was told that order was "not named above".
 
 **Amended by [#555](https://github.com/openmrs/openmrs-module-chartsearchai/issues/555): an order is
-also stated where the prose names its DRUG.** A finding names her order by the knowledge base's label
-where the order resolved to a row — *Rifampicin (rifampin)* for her *Rifampicin* — and no answer writes
-the label, so containment of it read *"interacts with active order Rifampicin"* as leaving the order out:
+also stated where the prose names its DRUG.** A finding can name her order by the knowledge base's label
+for the row it resolved to — *Rifampicin (rifampin)* for her *Rifampicin* — and no answer writes the
+label, so containment of it read *"interacts with active order Rifampicin"* as leaving the order out:
 the issue measured the false *"not named above: active order Rifampicin (rifampin)"* in 6 of 22 answers
 on its patient. So:
 

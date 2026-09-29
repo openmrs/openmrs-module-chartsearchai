@@ -279,12 +279,8 @@ public final class FindingPartnerCoverageCheck {
 			List<String> partners = finding.getFindingPartners();
 			List<List<String>> partnerRows = finding.getFindingPartnerRows();
 			for (int i = 0; i < partners.size(); i++) {
-				Set<String> rows = rowsByPartner.get(comparable(partners.get(i)));
-				if (rows == null) {
-					rows = new LinkedHashSet<String>();
-					rowsByPartner.put(comparable(partners.get(i)), rows);
-				}
-				rows.addAll(partnerRows.get(i));
+				rowsByPartner.computeIfAbsent(comparable(partners.get(i)), k -> new LinkedHashSet<String>())
+						.addAll(partnerRows.get(i));
 			}
 		}
 		String haystack = comparable(answer);

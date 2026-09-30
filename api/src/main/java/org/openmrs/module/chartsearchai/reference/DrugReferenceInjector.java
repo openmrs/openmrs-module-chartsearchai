@@ -2021,9 +2021,9 @@ public class DrugReferenceInjector {
 	 * rule clears the severity floor raises a chip whatever row carries it (the chips read every row off
 	 * {@code getAll()}, and since issue #162 they read the substance's rows as one subject), and since
 	 * issue #110 that chip is injected as its own citable safety-finding record carrying the rule's
-	 * mechanism note verbatim. What the sibling rows lose there is the {@code Interactions:} tail — the
-	 * section {@code render} already truncates to one compact representative whenever a relevant partner
-	 * is promoted.
+	 * mechanism note verbatim. What the sibling rows lose there is the dataset tail — which
+	 * {@code render} already reduces to one compact representative, in its own section under
+	 * {@link #DATASET_TAIL_LEAD} (issue #564), whenever a relevant partner is promoted.
 	 *
 	 * <p>For the ORDER-driven leg no chip stands behind it, and that is worth stating rather than being
 	 * covered by the sentence above. That leg needs {@link #relatedToAny}, hence a question that named a

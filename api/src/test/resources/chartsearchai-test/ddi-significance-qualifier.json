@@ -1,0 +1,116 @@
+{
+  "metadata": {
+    "note": "Verbatim DDInter 2.0 slice for ADR Decision 136, taken unedited from the shipped KB in the shipped file's own order: the rows for Rifampicin and Melatonin (shipped indices 160 and 657), every shipped interaction row between the two, and the mechanisms those rows name. The Minor pair's mechanism ends 'The clinical significance is unknown.', the qualifier #566 option 3 is about.",
+    "source": {
+      "name": "DDInter 2.0",
+      "url": "https://ddinter2.scbdd.com/",
+      "tables": "drug-drug interactions; drug-disease interactions",
+      "normalization": "RxNorm (NLM)",
+      "bridge": "CIEL v2026-07-20"
+    }
+  },
+  "mechanisms": {
+    "-1": {
+      "text": null,
+      "categories": []
+    },
+    "3985": {
+      "text": "Concomitant administration of CYP450 1A2 inducers may decrease the serum concentration of melatonin. The clinical significance is unknown.",
+      "categories": [
+        "metabolism"
+      ]
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1142",
+      "name": "Melatonin",
+      "rxcui": "6711",
+      "rxnorm_name": "melatonin",
+      "drugbank_id": "DB01065",
+      "atc": [
+        "N05CH01"
+      ],
+      "brand_names": [
+        "Melatonex",
+        "Restone",
+        "Somnicin"
+      ],
+      "ciel": [
+        {
+          "code": "103276",
+          "uuid": "103276AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / melatonin"
+        },
+        {
+          "code": "104084",
+          "uuid": "104084AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Calcium phosphate / melatonin"
+        },
+        {
+          "code": "105029",
+          "uuid": "105029AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Melatonin / vitamin B6"
+        },
+        {
+          "code": "79527",
+          "uuid": "79527AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Melatonin"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1590",
+      "name": "Rifampicin",
+      "rxcui": "9384",
+      "rxnorm_name": "rifampin",
+      "drugbank_id": "DB01045",
+      "atc": [
+        "J04AB02"
+      ],
+      "brand_names": [
+        "Rifadin"
+      ],
+      "ciel": [
+        {
+          "code": "104943",
+          "uuid": "104943AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Isoniazid / rifampin"
+        },
+        {
+          "code": "1131",
+          "uuid": "1131AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Rifampicin isoniazid pyrazinamide and ethambutol"
+        },
+        {
+          "code": "1194",
+          "uuid": "1194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Rifampicin and isoniazid"
+        },
+        {
+          "code": "159851",
+          "uuid": "159851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Rifampicin isoniazid and ethambutol"
+        },
+        {
+          "code": "767",
+          "uuid": "767AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Rifampicin"
+        },
+        {
+          "code": "768",
+          "uuid": "768AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Isoniazid / pyrazinamide / rifampin"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1142",
+      "DDInter1590",
+      "Minor",
+      "3985"
+    ]
+  ]
+}

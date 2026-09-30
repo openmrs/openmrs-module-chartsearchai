@@ -1888,6 +1888,9 @@ public class ChartSearchAiRestController {
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
 		target.put("unstatedFindingSeverities",
 			serializeUnstatedFindingSeverities(answer.getUnstatedFindingSeverities()));
+		// ADR Decision 136: the cited findings whose unknown-significance qualifier the answer drops.
+		List<Integer> qualifiers = answer.getUnstatedSignificanceQualifiers();
+		target.put("unstatedSignificanceQualifiers", qualifiers == null ? null : new ArrayList<Integer>(qualifiers));
 		target.put("unstatedDosingCeilings",
 			serializeUnstatedDosingCeilings(answer.getUnstatedDosingCeilings()));
 		target.put("orderStopDates", serializeOrderStopDates(answer.getOrderStopDates()));

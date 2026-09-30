@@ -139,6 +139,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 133: A question-pair finding names the drug the question proposes as its subject](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject)
 - [Decision 134: Two drug-first proposal shapes are admitted, because the gate was run](#decision-134-two-drug-first-proposal-shapes-are-admitted-because-the-gate-was-run)
 - [Decision 135: An answer saying an order has ended where no record does is reported](#decision-135-an-answer-saying-an-order-has-ended-where-no-record-does-is-reported)
+- [Decision 136: An answer dropping a cited finding's unknown-significance qualifier is reported](#decision-136-an-answer-dropping-a-cited-findings-unknown-significance-qualifier-is-reported)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13250,3 +13251,44 @@ Pinned by `LlmInferenceServiceListedMedicationsContextTest.anEndedOrderNoRecordS
 `.theClaimIsAboutTheDrugNamedNearestBeforeIt`, `.anAnswerClaimingNoEndedOrderReportsNone`,
 `.theModulesOwnEndedOrderSentenceIsNotReadAsAClaim` and
 `.searchStreaming_reportsTheClaimOnTheEarlyDoneAndTheFinalAnswer`.
+
+## Decision 136: An answer dropping a cited finding's unknown-significance qualifier is reported
+
+**Status: Accepted** (October 2026) — implemented, issue
+[#566](https://github.com/openmrs/openmrs-module-chartsearchai/issues/566) option 3.
+
+### Context
+
+Asked *"Is aspirin safe for her?"* (the 3.7.1 standalone, patient `763e6e5f-c489-4bab-8a55-c379f085dd1c`), the
+answer reproduced the aspirin/metoclopramide finding's detail and dropped its last sentence, *"The clinical
+significance of this interaction is unknown."* The finding's record and chip carry it; no fidelity check reported
+its absence, `ReferenceProseFidelityCheck` reading divergence inside a reproduced sentence and not a sentence left
+out. Of the shipped DDInter dataset's 8234 mechanism texts, 277 carry a "clinical significance" sentence, on 2191
+of its 295184 interaction rows (1298 Minor, 769 Moderate, 124 Major) — a substring count over the shipped file,
+2026-10-01, rows counted by the mechanism id they name. They come in several wordings: *"is unknown"* (the most
+common), *"has not been established"*, *"is not known"*, *"remains unknown"*, and one, *"is unlikely to be of
+clinical significance"*, that states a significance.
+
+### The decision
+
+- **Reported, not repaired**: `ChartAnswer.getUnstatedSignificanceQualifiers()`, the `unstatedSignificanceQualifiers`
+  key — the cited findings' citation indexes; `null` no measurement, `[]` a measurement of none.
+- **The cited findings are `SafetyFindingCitationExtentCheck.citedFindingIndexes`**, the one reading of them.
+- **A qualifier is `SignificanceQualifierCheck.UNKNOWN_SIGNIFICANCE`**: "clinical significance" followed in its
+  sentence by *unknown*, *not known*, *not established*, *uncertain* or *unclear* — asked of the finding's record
+  and of the answer alike, so the two cannot be read by different rules.
+- **Resolved after the handoff**, beside `unstatedFindingSeverities`, so the early `done` states `null`. No prompt
+  change and no rewrite of the answer.
+
+### Residues
+
+- **One qualifier anywhere in the answer covers every cited finding**, so an answer qualifying one finding and
+  dropping another's reports neither — the conservative direction for a report.
+- **A qualifier the answer paraphrases outside the pattern** (*"its importance is unclear"*) is read as dropped.
+- **Only `safety_finding` records**: a qualifier in an injected `drug_reference` note the answer recites is not
+  read.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aCitedFindingWhoseQualifierTheAnswerDropsIsReported`,
+`.anAnswerStatingTheQualifierReportsNothing`, `.anUncitedFindingIsNotReported` and
+`.aCitedFindingWithNoQualifierIsNotReported`, over a verbatim rifampicin/melatonin slice of the shipped dataset;
+the wire by `ChartSearchAiUnstatedSignificanceQualifiersTest`.

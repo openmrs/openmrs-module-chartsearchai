@@ -624,6 +624,21 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 	}
 
 	/** A recorder standing in for the model: answers {@code answer} and keeps the prompt's records. */
+	/** {@code answer} with each {@code {finding:Drug}} replaced by the number the prompt gave the one finding
+	 *  about {@code Drug}, so a scripted answer can cite a record whose number the injector assigns. */
+	private static String withFindingNumbers(String answer, String prompt) {
+		Matcher placeholder = Pattern.compile("\\{finding:([^}]+)\\}").matcher(answer);
+		StringBuffer out = new StringBuffer();
+		while (placeholder.find()) {
+			Matcher line = Pattern.compile("(?m)^\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX
+					+ placeholder.group(1) + ": ")).matcher(prompt);
+			assertTrue(line.find(), "precondition: the prompt carries a finding about " + placeholder.group(1));
+			placeholder.appendReplacement(out, line.group(1));
+		}
+		placeholder.appendTail(out);
+		return out.toString();
+	}
+
 	private static final class Recorder extends LlmProvider {
 
 		private final String answer;
@@ -641,7 +656,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			prompt = numberedRecords;
-			return new LlmResponse(answer, Collections.singletonList(Integer.valueOf(1)));
+			return new LlmResponse(withFindingNumbers(answer, numberedRecords), Collections.singletonList(Integer.valueOf(1)));
 		}
 
 		@Override
@@ -649,7 +664,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
-			tokenConsumer.accept(answer);
+			tokenConsumer.accept(withFindingNumbers(answer, numberedRecords));
 			return search(numberedRecords, focusIndices, question, enumerateFindings, referenceRecords,
 					drugsAlreadyOrdered);
 		}
@@ -788,5 +803,62 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		assertTrue(answer.getAnswer().contains("no longer in force"),
 				"precondition: the module appended its ended-order sentence, was: " + answer.getAnswer());
 		assertEquals(Collections.emptyList(), answer.getUnsupportedEndedOrderClaims());
+	}
+
+	/** Rifampicin and melatonin verbatim from the shipped KB: their Minor pair ends "The clinical significance is
+	 *  unknown." */
+	private static final String QUALIFIER_SLICE = "chartsearchai-test/ddi-significance-qualifier.json";
+
+	private ChartAnswer melatoninAnswer(String modelAnswer) throws IOException {
+		return serviceAnswering(DrugReferenceTestSupport.ddiFixtureService(QUALIFIER_SLICE), modelAnswer, obs())
+				.service.search(patient, "Can I give her melatonin?");
+	}
+
+	/**
+	 * An answer citing a finding whose record says its clinical significance is unknown, and saying nothing of the
+	 * kind itself, is reported by that citation (ADR Decision 136, issue #566 option 3): the finding about melatonin
+	 * against her rifampicin order ends "The clinical significance is unknown.", which a caution lead drops.
+	 */
+	@Test
+	public void aCitedFindingWhoseQualifierTheAnswerDropsIsReported() throws IOException {
+		ChartAnswer answer = melatoninAnswer("Melatonin can be given, with one caution: it interacts with active "
+				+ "order Rifampicin, a Minor problem [{finding:Melatonin}].");
+
+		assertEquals(1, answer.getUnstatedSignificanceQualifiers().size(), "was: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("[" + answer.getUnstatedSignificanceQualifiers().get(0) + "]"),
+				"the entry is the citation the answer made");
+	}
+
+	/** An answer stating the qualifier, in the finding's words or its own, reports nothing. */
+	@Test
+	public void anAnswerStatingTheQualifierReportsNothing() throws IOException {
+		for (String qualifier : new String[] { "The clinical significance is unknown.",
+				"Its clinical significance is not known.", "The clinical significance of this has not been established.",
+				"Its clinical significance remains unknown." }) {
+			ChartAnswer answer = melatoninAnswer("Melatonin can be given, with one caution: it interacts with active "
+					+ "order Rifampicin, a Minor problem [{finding:Melatonin}]. " + qualifier);
+
+			assertEquals(Collections.emptyList(), answer.getUnstatedSignificanceQualifiers(), qualifier);
+		}
+	}
+
+	/** A finding the answer does not cite is not the answer's to qualify. */
+	@Test
+	public void anUncitedFindingIsNotReported() throws IOException {
+		ChartAnswer answer = melatoninAnswer("Melatonin can be given.");
+
+		assertEquals(Collections.emptyList(), answer.getUnstatedSignificanceQualifiers());
+	}
+
+	/** A cited finding whose record carries no qualifier owes the answer none. */
+	@Test
+	public void aCitedFindingWithNoQualifierIsNotReported() throws IOException {
+		Recorder recorder = serviceAnswering("No — Amlodipine should not be given: it interacts with active order "
+				+ "Rifampicin, a Major problem [{finding:Amlodipine}].", obs());
+		ChartAnswer answer = recorder.service.search(patient, "Can I give her amlodipine?");
+
+		assertTrue(recorder.prompt.contains(DrugReferenceInjector.FINDING_PREFIX + "Amlodipine: "),
+				"precondition: the prompt carries the finding");
+		assertEquals(Collections.emptyList(), answer.getUnstatedSignificanceQualifiers());
 	}
 }

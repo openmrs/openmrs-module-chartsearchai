@@ -53,6 +53,8 @@ public class InjectedInteractionRelevanceOrderTest {
 
 	private static final String METFORMIN_QUESTION = "is it safe to give metformin?";
 
+	private static final String TAIL = DrugReferenceTestSupport.DATASET_TAIL_LEAD_IN_SECTION;
+
 	/**
 	 * The excerpt's Metformin x Fluconazole row is {@code Unknown} with mechanism id {@code -1}, i.e.
 	 * no mechanism text — the shape the ticket is about — and the entry's own partner order puts it
@@ -142,11 +144,12 @@ public class InjectedInteractionRelevanceOrderTest {
 		assertTrue(interactions.contains("vitamin k antagonists"),
 				"and keeps the mechanism prose the budget override exists for: " + interactions);
 		assertTrue(interactions.contains("; " + SUB_FLOOR_PARTNER
-				+ " (unknown severity interaction (ddinter 2.0; no mechanism description on file).); "),
+				+ " (unknown severity interaction (ddinter 2.0; no mechanism description on file).)." + TAIL),
 				"the filtered partner follows it with what the source actually says about the pair — a "
 						+ "rating and an admission that no mechanism is on file: " + interactions);
-		assertTrue(interactions.endsWith("; lisinopril (moderate)."),
-				"and the dataset tail keeps its own representative behind both: " + interactions);
+		assertTrue(interactions.endsWith(")." + TAIL + "lisinopril (moderate)."),
+				"and the dataset tail keeps its own representative behind both, under its own lead "
+						+ "(issue #564): " + interactions);
 	}
 
 	@Test
@@ -166,7 +169,7 @@ public class InjectedInteractionRelevanceOrderTest {
 
 		assertTrue(interactions.contains(
 				"; sertraline (unknown severity interaction (ddinter 2.0; no mechanism description on "
-						+ "file).); " + SUB_FLOOR_PARTNER + " (unknown); "),
+						+ "file).); " + SUB_FLOOR_PARTNER + " (unknown)." + TAIL),
 				"the first filtered partner states the shared sentence and the next is named with its "
 						+ "rating alone: " + interactions);
 		assertEquals(1, interactions.split("no mechanism description on file", -1).length - 1,
@@ -210,10 +213,11 @@ public class InjectedInteractionRelevanceOrderTest {
 				"Metformin");
 
 		assertEquals("interactions: sertraline (unknown severity interaction (ddinter 2.0; no mechanism "
-				+ "description on file).); " + SUB_FLOOR_PARTNER + " (unknown); lisinopril (moderate).",
+				+ "description on file).); " + SUB_FLOOR_PARTNER + " (unknown)." + TAIL
+				+ "lisinopril (moderate).",
 				interactions,
 				"her two partners once each, the source's sentence once, and one representative of "
-						+ "everything else: " + interactions);
+						+ "everything else under its own lead (issue #564): " + interactions);
 	}
 
 	@Test

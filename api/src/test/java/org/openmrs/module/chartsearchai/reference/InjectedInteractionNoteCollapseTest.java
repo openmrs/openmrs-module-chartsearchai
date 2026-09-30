@@ -194,7 +194,10 @@ public class InjectedInteractionNoteCollapseTest {
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Dexamethasone 4mg"), null, null, null));
 
-		assertEquals(421, record.getText().length(),
+		// 421 until issue #564 moved the dataset tail's one representative out of the Interactions: list
+		// into its own section: its "; " separator became the list's closing "." plus that lead.
+		assertEquals(421 - "; ".length() + ".".length() + DrugReferenceInjector.DATASET_TAIL_LEAD.length(),
+				record.getText().length(),
 				"the injected record's character cost must fall to the collapsed rendering: "
 						+ record.getText());
 	}
@@ -402,7 +405,7 @@ public class InjectedInteractionNoteCollapseTest {
 				+ "reversible. Chronic use of NSAIDs alone may be associated with renal toxicities, "
 				+ "including elevations in serum creatinine and BUN, tubular necrosis, glomerulitis, "
 				+ "renal papillary necrosis, acute interstitial nephritis, nephrotic syndrome, and "
-				+ "renal failure.); metformin (Moderate).",
+				+ "renal failure.)." + DrugReferenceInjector.DATASET_TAIL_LEAD + "metformin (Moderate).",
 				record.getText(),
 				"a single-partner entry's record must be byte-identical: " + record.getText());
 		assertEquals(13, record.getWithheldInteractions(),

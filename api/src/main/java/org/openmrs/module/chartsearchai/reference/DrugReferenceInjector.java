@@ -278,7 +278,9 @@ public class DrugReferenceInjector {
 	 * {@code Interactions: lamivudine (Unknown severity interaction (DDInter 2.0; no mechanism
 	 * description on file).); nevirapine (Unknown); stavudine (Unknown); ketoconazole (Moderate).} The
 	 * same question about Lisinopril gives 213 characters, {@code withheldInteractions} 728, and
-	 * {@code ketoconazole (Major)} in the same slot. Both outputs are BYTE-IDENTICAL on
+	 * {@code ketoconazole (Major)} in the same slot (since issue #564 that slot renders after
+	 * {@link #DATASET_TAIL_LEAD} rather than inside the list; ADR Decision 132). Both outputs are
+	 * BYTE-IDENTICAL on
 	 * {@code origin/main} at {@code 85da86fb} and on this head.
 	 *
 	 * <p>So on that chart the three ARVs are the CHART-NAMED segment issue #357 added, {@code tailStart}
@@ -334,6 +336,28 @@ public class DrugReferenceInjector {
 	 *  and for the same reason. */
 	static final String UNCORROBORATED_READING_LEAD =
 			" Matched in this patient's chart but not corroborated as a record of this drug: ";
+
+	/** The lead of the dataset tail's own section (issue #564), rendered only where the record ALSO
+	 *  shows something patient-specific — where nothing is, the tail is the whole record and there is
+	 *  nothing of hers to keep it apart from, so {@code render}'s other branch leaves it in
+	 *  {@code Interactions:}.
+	 *
+	 *  <p>Until #564 the one representative was the last item of the SAME list as her own partners,
+	 *  with the same punctuation, and the model read the list whole: captured live on the 3.7.1
+	 *  standalone, a patient whose active orders include lidocaine, metoclopramide, neomycin and
+	 *  tiotropium, asked whether to start clarithromycin, was answered with all five of
+	 *  {@code Interactions: lidocaine (Unknown …); metoclopramide (Unknown); neomycin (Unknown);
+	 *  tiotropium (Unknown); ivosidenib (Major).} as "the following interactions", so the answer's only
+	 *  rated interaction was a Major with a drug she does not take.
+	 *
+	 *  <p>It states what the MODULE established — {@code namesActiveDrug} is false for every rule in the
+	 *  tail — and never that she is not on the drug: the match can miss a prescription it cannot read,
+	 *  and {@link #UNCORROBORATED_READING_LEAD}'s javadoc records why a categorical about the chart was
+	 *  dropped from that lead.
+	 *  "Other interactions" rather than a noun for the partner, because the slot can hold an
+	 *  operator-authored rule with no token and no ATC, which renders as a paragraph naming no drug.
+	 *  ADR Decision 132. */
+	static final String DATASET_TAIL_LEAD = " Other interactions, not matched to this patient's active medications: ";
 
 	/** querystore's resource type for a drug-order document (its {@code DrugOrderRecordSerializer}
 	 *  contract), which the chart carries through unchanged. The type the active-order
@@ -1997,9 +2021,9 @@ public class DrugReferenceInjector {
 	 * rule clears the severity floor raises a chip whatever row carries it (the chips read every row off
 	 * {@code getAll()}, and since issue #162 they read the substance's rows as one subject), and since
 	 * issue #110 that chip is injected as its own citable safety-finding record carrying the rule's
-	 * mechanism note verbatim. What the sibling rows lose there is the {@code Interactions:} tail — the
-	 * section {@code render} already truncates to one compact representative whenever a relevant partner
-	 * is promoted.
+	 * mechanism note verbatim. What the sibling rows lose there is the dataset tail — which
+	 * {@code render} already reduces to one compact representative, in its own section under
+	 * {@link #DATASET_TAIL_LEAD} (issue #564), whenever a relevant partner is promoted.
 	 *
 	 * <p>For the ORDER-driven leg no chip stands behind it, and that is worth stating rather than being
 	 * covered by the sentence above. That leg needs {@link #relatedToAny}, hence a question that named a
@@ -3527,8 +3551,9 @@ public class DrugReferenceInjector {
 			// the word "record".
 			//
 			// CONDITIONAL, and not because one rule would be untidy: with anything patient-specific
-			// shown, render() names ONE tail representative, and which partner that is is pinned in
-			// three places
+			// shown, render() names ONE tail representative — in its own section under DATASET_TAIL_LEAD
+			// since issue #564, which moved WHERE it renders and not which partner it is — and which
+			// partner that is is pinned in three places
 			// (DrugReferenceInjectorTest.promotingThePatientsPartnerStillRendersSomeOfTheDatasetTail,
 			// InjectedInteractionNoteCollapseTest.aSinglePartnerRecordIsUnchanged byte for byte, and
 			// DrugSafetyValidatorEchoScopingTest's premise that a non-patient partner is recitable out
@@ -4553,7 +4578,10 @@ public class DrugReferenceInjector {
 			// offered is a paragraph of mangled clinical prose a clinician may be shown.
 			//
 			// So: with anything patient-specific already shown, exactly one representative, in the
-			// compact "name (Severity)" form — with one operator-authored exception, since
+			// compact "name (Severity)" form, and in its OWN section under DATASET_TAIL_LEAD rather than
+			// as the last item of the list her partners are in (issue #564, whose capture shows the
+			// model reading that list whole and reporting the stranger as one of her interactions) —
+			// with one operator-authored exception, since
 			// InteractionNote keeps the full text for a rule carrying no token and no ATC (there is no
 			// name to shorten to), so such a row can still land a full paragraph in this slot. That
 			// stays inside this segment's own one-note overshoot; it just is not always ~20 chars.
@@ -4599,12 +4627,15 @@ public class DrugReferenceInjector {
 					shown.add(n);
 					used += n.length() + 2;
 				}
-			} else if (tailStart < ordered.size()) {
-				shown.add(ordered.get(tailStart).compact);
 			}
-
 			appendSection(sb, " Interactions: ", shown);
 			withheld = ordered.size() - shown.size();
+
+			if (!interactions.nothingPatientSpecific() && tailStart < ordered.size()) {
+				appendSection(sb, DATASET_TAIL_LEAD,
+						Collections.singletonList(ordered.get(tailStart).compact));
+				withheld--;
+			}
 		}
 
 		// The dataset attribution and the withheld count leave with the RenderedReference instead of

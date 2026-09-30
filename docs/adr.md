@@ -135,6 +135,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 129: A question proposing a drug one of her own orders carries is told so, as a finding and after the question](#decision-129-a-question-proposing-a-drug-one-of-her-own-orders-carries-is-told-so-as-a-finding-and-after-the-question)
 - [Decision 130: Whether a question reaches the drug-interaction checks is decided by code, not by a model](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)
 - [Decision 131: answerFromFindings ships on, because Decision 108's gate was run](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)
+- [Decision 132: The dataset tail's representative renders under its own lead, not as the last item of her list](#decision-132-the-dataset-tails-representative-renders-under-its-own-lead-not-as-the-last-item-of-her-list)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -4655,6 +4656,7 @@ First-full-rest-compact states the source's sentence once and then states which 
 
 - **What is left to [#355](https://github.com/openmrs/openmrs-module-chartsearchai/issues/355) is the case where the chart names NO partner at all**, and the split moved during this change, so state it rather than assume it. That issue's title is the full-note budget loop spending mechanism paragraphs on alphabetically-adjacent strangers. This decision takes the arrangements where the patient HAS a partner the entry is filed against out of that loop entirely — they now render under their own rule and the loop is not reached — which is a consequence of giving the middle segment a rendering rule, not a fix aimed at #355. A patient with no overlap at all still gets the loop, unchanged, and that is the case #355 is about. **#355 has since closed it**, on this decision's own `tailStart == 0` condition and in its vocabulary: that arm no longer runs a full-note budget loop but names up to `DrugReferenceInjector.MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC` partners in the compact `name (Severity)` form, most severe first. The reasoning, the live reproduction and the measured cap bound live on that constant's javadoc rather than here. The alternative weighed above keeps the full-note loop for the arrangement where `promotedCount == 0` but the middle segment is not empty, which is `tailStart > 0` and so is not the arm #355 changed; it stands as this decision left it. The two decisions meet in one method, so a change to either should read the other.
 - **The dataset tail's single representative is now keyed on "anything patient-specific was shown" rather than on the promoted count**, and that was a defect before it was a decision. With the promoted count alone, a record whose only chart-named partner was floor-filtered spent the tail's one slot on that partner — so the breadth guarantee `DrugReferenceInjectorTest.promotingThePatientsPartnerStillRendersSomeOfTheDatasetTail` exists to hold became unreachable for exactly the patients it was written for, while that test stayed green because its own arrangement has an empty middle segment. Found by review, not by this change's own tests.
+- **Where that representative RENDERS was re-decided by [Decision 132](#decision-132-the-dataset-tails-representative-renders-under-its-own-lead-not-as-the-last-item-of-her-list)** (#564): which partner it is, and that there is one, stand as decided here; it no longer sits in the same `Interactions:` list as her own partners.
 - **The two patient-specific segments consult no budget, so the record's overshoot is the patient's own partner count.** That is what "never invisible" means and segment 1 has always made the trade; this decision extends it to a second segment. Measured through the real `injectRecords` over the shipped knowledge base, a synthetic patient on all 310 of Metformin's `Unknown`-rated partners renders 7560 characters and names every one of her 310 — but the record's own `withheldInteractions` field, a count of Metformin's 666 collapsed partners and not of her subset of them, still reads 355 (the strangers this segment does not enumerate), against 452 characters and `withheldInteractions` 664 at the merge base, where the record named almost none of her 310 at all. Realistic charts are bounded by their own order count rather than by the knowledge base's breadth, so what a polypharmacy chart actually pays is tens of compact notes; and the cost is per RECORD, so a response injecting several of them pays it several times — the dimension ADR Decision 57 already records as uncapped, now with a second term in it. `MAX_INTERACTION_RENDER_CHARS` bounds the general material and nothing else.
 - **Whether the model then uses what the record now carries is not settled by any test here.** Every case runs the deterministic path — the real `injectRecords` over the pinned excerpt and over the shipped knowledge base — and the ticket's first two criteria are about the ANSWER. The record is the evidence; #337's own measurement history and the module's memory of mechanism text being paraphrased on a real chart are why that gap is named rather than closed by assertion.
 - **A record whose lead names a partner no chip stands behind is now reachable**, wherever nothing clears the floor. The promoted SET still corresponds exactly to the drug-in-play chips; what no longer follows from that correspondence is a claim about the record's first sentence. `orderedInteractionNotes`' own javadoc says so where it used to say the stronger thing.
@@ -13014,3 +13016,89 @@ Decision 108 names two things to read beyond the scorer:
 
 → `LlmInferenceServiceAnswerFromFindingsContextTest.anInstallThatNeverSetThePropertyAnswersAWithheldProposalFromTheFindings`,
 `GlobalPropertyDefaultsTest.theAnswerFromFindingsSwitchShipsTheDefaultItsConstantAsserts`.
+
+## Decision 132: The dataset tail's representative renders under its own lead, not as the last item of her list
+
+**Status: Accepted** (September 2026). Issue
+[#564](https://github.com/openmrs/openmrs-module-chartsearchai/issues/564). It amends where
+[Decision 66](#decision-66-a-partner-the-chart-names-leads-the-injected-records-dataset-tail-whatever-the-source-rates-it)'s
+dataset-tail representative renders, and nothing else about it.
+
+### Context
+
+Decision 66 keeps ONE dataset-tail partner in a record that shows anything patient-specific, for breadth,
+and records that "whether the model then uses what the record now carries is not settled by any test
+here". #564 is that measurement. On the 3.7.1 standalone at `main` @ `e9189c77`, local Gemma 4 E4B, a
+patient whose active drug orders were botulinum toxin type A, lidocaine, neomycin, metoclopramide
+(outpatient) and tiotropium (inpatient) asked *"Is it safe to start her on clarithromycin?"* The
+prompt capture (loopback engine, calibrated against the audit row's `reference_slice_chars` = 239)
+showed the record as
+
+`Interactions: lidocaine (Unknown severity interaction (DDInter 2.0; no mechanism description on file).); metoclopramide (Unknown); neomycin (Unknown); tiotropium (Unknown); ivosidenib (Major).`
+
+The answer listed all five as "the following interactions". So its only rated interaction was a Major
+with a drug she does not take. It raised no chip, and `belowFloor` named her four drugs and not
+ivosidenib, so nothing on the wire marked that item as different from the rest.
+
+The representative is whichever partner comes first in dataset order. `SEVERITY_DESCENDING` sorts the
+tail only inside `nothingPatientSpecific()`. That it was a Major here is an accident of the data. The
+issue's first wording ("most severe first") was wrong.
+
+### Decision
+
+`render` puts the representative in its own section, after `Interactions:`, under
+`DrugReferenceInjector.DATASET_TAIL_LEAD`: *"Other interactions, not matched to this patient's active
+medications:"*. The partition `renderTier` already computes is now visible in the text. Only the
+branch where something patient-specific is shown changes. Where nothing is, the tail is the whole
+record, there is nothing of hers to confuse it with, and `Interactions:` is unchanged.
+
+- **The lead says what the module established**, `namesActiveDrug` false. It never says she is not on
+  the drug: the match can miss a prescription it cannot read, and `UNCORROBORATED_READING_LEAD`'s
+  javadoc records why a categorical about the chart was dropped from that lead.
+- **It says "Other interactions" rather than naming the partner**, because the slot can hold an
+  operator-authored rule with no token and no ATC, which renders as a paragraph naming no drug.
+- **`withheldInteractions` is unchanged**, because the representative is still rendered.
+
+**Measured on a build of this change**, same rig, question and patient. The live api jar hashed the
+same as that build's (`037c8a78…`).
+- **The capture** shows `…tiotropium (Unknown). Other interactions, not matched to this patient's active
+  medications: ivosidenib (Major).` The audit row's `reference_slice_chars` is 309, which is the old 239
+  minus `"; "`, plus `"."` and the lead.
+- **Two local-model runs** (audit 13056, 13057) returned byte-identical answers:
+  *"Clarithromycin has unknown severity interactions with the following medications currently ordered:
+  Tiotropium [45], Lidocaine [45], Neomycin [45], and Metoclopramide [45]."*
+- **Neither answer names ivosidenib**, and `unfaithfullyRenderedCitations` is `[]` on both.
+
+The pass rule was written before the runs: no tail partner presented as one of her interactions.
+
+### Tests whose expected text moved
+
+This is a spec change, recorded the way Decision 66 recorded its own. Every case below pinned the
+representative as the last item of the combined list, or pinned the list's separator after her last
+partner. Each keeps an exact or positional assertion, now of the new text:
+- `InjectedInteractionRelevanceOrderTest`: `.withNothingPromotedTheWholeSectionIsHerPartnersAndOneRepresentative`,
+  `.allThreeSegmentsRenderWhenThePatientHasAPartnerInEach`, `.severalFilteredPartnersStateTheSharedSentenceOnceAndThenJustTheirNames`.
+- `InjectedInteractionRelevanceOrderContextTest`: `.aRaisedFloorMovesAPartnerFromThePromotedSegmentToTheHeadOfTheTail`,
+  `.theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity`, `.anOrderDrivenRecordIsTieredLikeAnyOther`.
+- `InjectedInteractionNoteCollapseTest`: `.aSinglePartnerRecordIsUnchanged` (byte for byte) and
+  `.collapsingTheRowsShortensTheRecordTheModelReads` (its length, now derived as 421 minus the separator
+  plus the lead).
+- `DrugReferenceInjectorTest.aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug`.
+
+`DatasetTailSectionTest` pins the lead's literal words and the ticket's regimen on the shipped
+knowledge base. The breadth guarantee (`DrugReferenceInjectorTest.promotingThePatientsPartnerStillRendersSomeOfTheDatasetTail`)
+and the recitability premise of `DrugSafetyValidatorEchoScopingTest` are untouched, because the partner
+is still in the record.
+
+### Alternatives
+
+**Drop the tail when her partners are represented**, the ticket's other option. Declined, because it
+re-decides Decision 66's breadth and the echo-scoping premise, and the evidence is against the MIXING,
+not against breadth. On the one cell measured above, the separate lead was enough.
+
+### Residue
+
+- **The `nothingPatientSpecific()` branch is unlabelled.** A record there names up to
+  `MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC` strangers under `Interactions:`, with none of hers
+  beside them. Whether the model states those as hers was not measured here.
+- **The measurement is one cell on one model.** A second phrasing or patient was not run.

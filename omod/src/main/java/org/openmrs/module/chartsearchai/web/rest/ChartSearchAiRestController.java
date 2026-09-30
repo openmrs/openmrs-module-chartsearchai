@@ -1711,6 +1711,10 @@ public class ChartSearchAiRestController {
 			// client need not render it a second time beside an allergy list. SafetyWarning.isStatedInTheAnswer()
 			// says what false does not say.
 			map.put("statedInTheAnswer", warning.isStatedInTheAnswer());
+			// Whether the chip is about another of her medications than the drug the response is about, so a
+			// client can set it beside the answer rather than among its findings. false is no claim the chip
+			// is about that drug: SafetyWarning.isAboutAnotherOfHerMedications() says why.
+			map.put("aboutAnotherOfHerMedications", warning.isAboutAnotherOfHerMedications());
 			out.add(map);
 		}
 		return out;

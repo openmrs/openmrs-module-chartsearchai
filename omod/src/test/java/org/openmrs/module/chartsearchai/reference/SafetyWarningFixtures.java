@@ -138,6 +138,15 @@ public final class SafetyWarningFixtures {
 	}
 
 	/**
+	 * {@code chip} as {@code DrugSafetyValidator.ContraindicationChips} stamps it beside a drug the response is
+	 * about — through {@code SafetyWarning.asAboutAnotherOfHerMedications}, that ledger's own step, so the chip
+	 * is one the module really publishes {@code aboutAnotherOfHerMedications: true} for.
+	 */
+	public static SafetyWarning aboutAnotherOfHerMedications(SafetyWarning chip) {
+		return chip.asAboutAnotherOfHerMedications();
+	}
+
+	/**
 	 * {@code chip} stamped with {@code orders} as the active orders it is about — through
 	 * {@code DrugSafetyValidator.currentMedicationOrdersOn}, the one stamp the validator writes (issue #552),
 	 * so the chip publishes a {@code currentMedicationOrders} production could.

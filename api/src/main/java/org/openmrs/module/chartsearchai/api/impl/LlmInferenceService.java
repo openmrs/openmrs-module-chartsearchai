@@ -26,6 +26,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.ConflictingOrderStatement;
+import org.openmrs.module.chartsearchai.reference.ModuleAnswerStatement;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
@@ -939,8 +940,10 @@ public class LlmInferenceService implements ChartSearchService {
 		String composed = chart.getModuleAnswer();
 		List<RecordMapping> mappings = chart.getMappings();
 		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
-		List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate("", question, patient,
-				mappings, pairExtent);
+		// Every chip whose finding the composed text states is published as stated, so a client does not
+		// repeat it in full beneath the answer that just said it — asked of the module's own text.
+		List<SafetyWarning> safetyWarnings = ModuleAnswerStatement.markStated(composed,
+				drugSafetyValidator.validate("", question, patient, mappings, pairExtent));
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is

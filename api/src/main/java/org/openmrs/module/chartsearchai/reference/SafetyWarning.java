@@ -1383,7 +1383,7 @@ public class SafetyWarning {
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
-	 *  Package-private: {@link ConflictingOrderStatement} is its only caller. */
+	 *  Package-private: {@link ConflictingOrderStatement} and {@link ModuleAnswerStatement} call it. */
 	SafetyWarning asStatedInTheAnswer() {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
@@ -1393,9 +1393,10 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * Whether the module has stated this finding in the ANSWER itself, naming the order it is about and
-	 * then this chip's own {@link #getDetail()} verbatim — {@link ConflictingOrderStatement}, on a question
-	 * asking only for the patient's allergies. Published VERBATIM as each chip's {@code statedInTheAnswer}
+	 * Whether the module has stated this finding in the ANSWER itself, carrying this chip's own
+	 * {@link #getDetail()} verbatim — {@link ConflictingOrderStatement}, which names the order it is about
+	 * on a question asking only for the patient's allergies, and {@link ModuleAnswerStatement}, for an
+	 * answer the module composed from its own findings. Published VERBATIM as each chip's {@code statedInTheAnswer}
 	 * wire key, so this accessor's name IS the key. The chip is published either way: {@code true} tells a
 	 * client the clinician has already read this finding in the answer, so rendering it again beside a list
 	 * the clinician asked for repeats it. {@code false} says nothing about the answer's prose, which may

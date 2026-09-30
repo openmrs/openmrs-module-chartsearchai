@@ -216,6 +216,54 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertNotNull(answer.getPairChipExtent(), "and so is the pair extent");
 	}
 
+	/**
+	 * A chip whose finding the composed answer states is published as stated, so a client does not
+	 * draw it a second time in full beneath the answer that just said it. Live on the 3.7.1 standalone,
+	 * "Does she have any drug interactions I should know about?" came back composed from five findings,
+	 * each line its chip's own detail, and all five chips beside it still published
+	 * {@code statedInTheAnswer: false}.
+	 */
+	@Test
+	public void everyChipTheComposedAnswerStatesIsPublishedAsStated() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
+
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
+		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertTrue(answer.getAnswer().contains(chip.getDetail()), "precondition: the answer states " + chip.getDetail());
+			assertTrue(chip.isStatedInTheAnswer(), "a chip the composed answer states is published as stated: "
+					+ chip.getDetail());
+		}
+	}
+
+	@Test
+	public void searchStreaming_publishesTheChipsTheComposedAnswerStatesAsStatedToo() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).searchStreaming(patient, PROPOSAL, text -> { },
+				reasoning -> { }, citations -> { }, early -> { });
+
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
+		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertTrue(chip.isStatedInTheAnswer(), "the streaming path marks them alike: " + chip.getDetail());
+		}
+	}
+
+	/** The control: where the model writes the answer, nothing marks a chip stated on this path. */
+	@Test
+	public void aChipBesideTheModelsAnswerIsNotMarkedStated() {
+		answerFromFindings(false);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
+
+		assertFalse(answer.isAnsweredByTheModule(), "precondition: the model wrote this answer");
+		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertFalse(chip.isStatedInTheAnswer(), "the model's answer states none of them: " + chip.getDetail());
+		}
+	}
+
 	/** Every shape of proposal the grammar admits, each answered with the withholding call — delete a
 	 *  shape and its question here goes to the model. */
 	@Test

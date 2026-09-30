@@ -3648,9 +3648,24 @@ public class DrugSafetyValidator {
 			this.endedOrders = endedOrders;
 		}
 
+		/**
+		 * The substances of {@link #currentOrders} whose chips are about ANOTHER of her medications than the
+		 * drug the response is about ({@link SafetyWarning#isAboutAnotherOfHerMedications()}) — recorded by
+		 * {@link #addActiveOrderContraindications} beside those orders, on a pass that put a drug in play,
+		 * and stamped in {@link #add} with them, so a chip the ledger replaces by a stronger one of the same
+		 * substance says it too.
+		 */
+		private final Set<Object> otherMedications = new HashSet<Object>();
+
 		/** Records {@code orders} as the orders {@code substance}'s current-medication chips are about. */
 		void recordCurrentOrders(Object substance, List<PatientClinicalContext.ActiveDrugOrder> orders) {
 			currentOrders.put(substance, orders);
+		}
+
+		/** Records {@code substance}'s current-medication chips as about another of her medications — see
+		 *  {@link #otherMedications}. */
+		void recordOtherMedication(Object substance) {
+			otherMedications.add(substance);
 		}
 
 		/** Records {@code orders} as the orders the drug-in-play arm's current-medication chips of
@@ -3719,6 +3734,9 @@ public class DrugSafetyValidator {
 				List<PatientClinicalContext.ActiveDrugOrder> inPlay = inPlayOrders.get(subject.substanceGroupKey());
 				if (orders != null) {
 					chip = currentMedicationOrdersOn(chip, orders);
+					if (otherMedications.contains(subject.substanceGroupKey())) {
+						chip = chip.asAboutAnotherOfHerMedications();
+					}
 				}
 				else if (inPlay != null) {
 					chip = currentMedicationOrdersOn(chip, inPlay, false);
@@ -11251,6 +11269,12 @@ public class DrugSafetyValidator {
 			if (currentMedication) {
 				chips.recordCurrentOrders(ref.substanceGroupKey(),
 						currentOrders(ref, orderEntries, context, bridged));
+				// Beside a drug the response is about, a finding about this one is about another of her
+				// medications; with none in play — a standing alert, a question about her own medication
+				// list — it is the subject itself.
+				if (!inPlay.isEmpty()) {
+					chips.recordOtherMedication(ref.substanceGroupKey());
+				}
 				chips.recordScheduledStart(ref.substanceGroupKey(),
 						scheduledStartOf(orderEntries, ref, context.getActiveDrugOrders(), bridged));
 			}

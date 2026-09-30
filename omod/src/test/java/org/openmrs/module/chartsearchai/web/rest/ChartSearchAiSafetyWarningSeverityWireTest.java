@@ -278,7 +278,14 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				SafetyWarningFixtures.aboutCurrentOrders(SafetyWarningFixtures.recordedAllergenContraindication(
 						"Ibuprofen", "The patient has a recorded allergy to Ibuprofen.", true),
 						SafetyWarningFixtures.activeOrder("uuid-advil", "Advil 400mg"),
-						SafetyWarningFixtures.activeOrder(null, "Nurofen 200mg")));
+						SafetyWarningFixtures.activeOrder(null, "Nurofen 200mg")),
+				// Chip 16: a current-medication chip beside a question about another drug — the only chip here
+				// answering SafetyWarning.isAboutAnotherOfHerMedications() true, so a put hardcoded to `false`
+				// disagrees with it. Mutate the put and read this class's failure.
+				SafetyWarningFixtures.aboutAnotherOfHerMedications(SafetyWarningFixtures.aboutCurrentOrders(
+						SafetyWarningFixtures.recordedAllergenContraindication("Lidocaine",
+								"The patient has a recorded allergy to Lidocaine.", true),
+						SafetyWarningFixtures.activeOrder("uuid-lidocaine", "Lidocaine"))));
 	}
 
 	private ChartSearchAiRestController controller;

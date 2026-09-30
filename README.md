@@ -474,6 +474,8 @@ Render the two groups distinctly: a `reference` entry is a pointer into a drug k
 
 A client must still not treat the `reference`-group types differently from each other. The grounding field can no longer be got wrong, but the badge, the label and the navigation target can be: keying any of them on `resourceType` gives `safety_finding` whatever the default branch happens to be, which is how this was found. The same is true of `drug_class_note`, and it has one property the other two do not: it points at no record at all — not a knowledge-base entry, not a chip — so its `resourceUuid` names the class rather than a row, and there is nothing for a navigation target to open.
 
+**A `safety_finding`'s `resourceUuid` is `<type>:<drug>`**: the `type` and `drug` of the `safetyWarnings` chip it records, joined by a colon (`interaction:Clarithromycin`, `contraindication:Lidocaine`). A client may join a finding's citation to its chip by that key. **Several findings of one type about one drug share one key**, so where two chips carry it, a citation of that key cannot say which of them it is: treat it as ambiguous and do not pick one. The format is pinned by `SafetyFindingResourceUuidContractTest`.
+
 Each reference also carries `source`, `withheldInteractions`, `attachedByTheModule` and `attachedFor`, the citation's metadata:
 
 | field | Meaning |

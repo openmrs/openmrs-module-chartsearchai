@@ -1469,8 +1469,9 @@ public class SafetyWarning {
 	/**
 	 * Every reference row of the substance this finding is about, as the arm that raised it named that
 	 * substance — issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a> —
-	 * and, for a question-pair finding, of its partner's substance too: that arm elects which of the two
-	 * drugs is the subject by the dataset's order, never the question's, so the finding is about both. For
+	 * and, for a question-pair finding, of its partner's substance too: that arm's subject is the drug the
+	 * question proposes only where it proposes one of the two, and the dataset's order otherwise (ADR
+	 * Decision 133), so the finding is about both. For
 	 * {@link #ordersSharingASubstance(String, String, List)}' finding, of every substance it names.
 	 * Empty on a chip {@link #aboutSubstance} was never asked of, never null. Package-private and not a getter, so it
 	 * reaches no wire: {@code DrugReferenceInjector} carries it onto the finding's record, as each row's id,

@@ -136,6 +136,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 130: Whether a question reaches the drug-interaction checks is decided by code, not by a model](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)
 - [Decision 131: answerFromFindings ships on, because Decision 108's gate was run](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)
 - [Decision 132: The dataset tail's representative renders under its own lead, not as the last item of her list](#decision-132-the-dataset-tails-representative-renders-under-its-own-lead-not-as-the-last-item-of-her-list)
+- [Decision 133: A question-pair finding names the drug the question proposes as its subject](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -11204,9 +11205,12 @@ takes one asked substance, shipped off then and ships on since
   (`alreadyInSeveralOrders`), whose sentence says active orders carry the drug and so takes no ended-order
   referent; `addOrdersSharingASubstance` states every substance its finding names, so that finding is
   reported beside a lead on any of them — and, for a question-pair
-  finding, of its partner's substance too (`EndedOrders.stampPair`), because that arm elects which of the
+  finding, of its partner's substance too (`EndedOrders.stampPair`), because that arm elected which of the
   two drugs is the subject by the dataset's order and never the question's, so reading the subject alone
-  made the report depend on which of the two the question happened to list. Its clause stays the
+  made the report depend on which of the two the question happened to list. (Since
+  [Decision 133](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject)
+  the subject is the proposed drug where the question proposes one of the two; the partner reading still
+  matters for a lead on the listed drug.) Its clause stays the
   subject's — `stampPair` keeps the ended-order referent on the subject, since "withhold it" names it — so
   an entry reported for the partner is a reason to withhold the OTHER drug of the pair, and README's
   `cautionLedOverWithholding` section tells a client so, with the rifampicin/amlodipine record. A record is about the lead's
@@ -13106,3 +13110,45 @@ not against breadth. On the one cell measured above, the separate lead was enoug
   `MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC` strangers under `Interactions:`, with none of hers
   beside them. Whether the model states those as hers was not measured here.
 - **The measurement is one cell on one model.** A second phrasing or patient was not run.
+
+## Decision 133: A question-pair finding names the drug the question proposes as its subject
+
+**Status: Accepted** (September 2026) — implemented, no issue.
+
+### Context
+
+Asked *"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Rifampicin?"* of
+a chart holding none of the three (the 3.7.1 standalone, patient `763e6e5f-c489-4bab-8a55-c379f085dd1c`),
+the question-pair arm's Major finding read, in the prompt, *"Nevirapine interacts with Rifampicin (rifampin),
+also named in the question — Major. … This finding is a reason to withhold it."* The arm broke the subject
+tie by the dataset's order, and DDInter writes every pair into both drugs' entries, so both sides always
+carry the rule and the tie always applied. The clause's "it" is the subject, so the record told the model to
+withhold nevirapine, the drug the question says she is on, and said nothing about rifampicin. The live answer
+opened *"Nevirapine's order is no longer in force, but it interacts with Rifampicin (rifampin) — Major."*,
+gave rifampicin no verdict, and stated an ended order no record carries.
+
+### The decision
+
+- **Where the question proposes exactly one drug of the pair, that drug is the subject** — the tie break in
+  `DrugSafetyValidator.collectQuestionPairInteraction`, over `proposedByTheQuestion`, the one reading of which
+  drugs a question proposes. Only a TIE moves: a side carrying no rule still cannot own the sentence, and a
+  question proposing both drugs or neither keeps the dataset's order.
+- **Except where the other drug is one her chart holds only as an ended order**
+  (`EndedOrders.holdsAsEnded`): `stampPair` states Decision 110's referent on the subject alone, and *"a
+  reason against giving it should it be proposed again"* about the ended drug is what its record supports,
+  where "withhold" the proposed drug on the strength of an ended order is not. The ended drug is the subject in
+  both directions of the dataset's order.
+- **No prompt text changes.** The record's wording is unchanged; only which drug heads it moves.
+
+### Residues
+
+- **The model can still state an ended order no record carries.** The system prompt's ended-order sentence
+  is what that answer misapplied; this decision removes the contradiction that preceded it on this question,
+  and does not change the prompt.
+- **A lead on the LISTED drug** still meets a finding headed by the proposed one, which is why
+  `cautionLedOverWithholding` keeps reading both of a pair finding's drugs (Decision 119).
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aQuestionPairFindingNamesTheDrugTheQuestionProposesAsItsSubject`,
+`.aQuestionPairFindingProposingBothDrugsKeepsTheDatasetsOrder`,
+`.aQuestionPairFindingWhoseListedDrugHasEndedKeepsItsEndedOrderReading` and
+`.aQuestionPairMajorIsReportedWhicheverOfItsTwoDrugsTheLeadGives`.

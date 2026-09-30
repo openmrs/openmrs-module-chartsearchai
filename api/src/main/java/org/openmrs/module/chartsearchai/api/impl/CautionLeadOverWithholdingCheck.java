@@ -50,9 +50,10 @@ import org.slf4j.LoggerFactory;
  *       drug's findings cannot report even where the anchor admits the lead (ADR Decision 119);</li>
  *   <li>a drug only the ANSWER put in play, which has chips and no record;</li>
  *   <li>a finding whose SUBJECT is another drug and whose partner is the lead's — except a question-pair
- *       finding, which states both of its drugs' rows, because that arm elects its subject by the
- *       dataset's order and never the question's. Its clause stays the subject's, so an entry reported for
- *       the partner is a reason to withhold the OTHER drug of the pair;</li>
+ *       finding, which states both of its drugs' rows, because that arm's subject is the drug the question
+ *       proposes only where it proposes one of the two, and the dataset's order otherwise (ADR Decision
+ *       133). Its clause stays the subject's, so an entry reported for the partner is a reason to withhold
+ *       the OTHER drug of the pair;</li>
  *   <li>a pair finding the screening arm (the order-driven INTERACTION arm) raised, which states no
  *       subject rows. An order-driven contraindication does state them, through the step every
  *       contraindication passes, as do the drug-in-play arm's duplicate-therapy finding, by its drug in

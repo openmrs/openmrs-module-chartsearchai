@@ -152,6 +152,20 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				+ " stands beside the answer, chips were: " + answer.getSafetyWarnings());
 	}
 
+	/** The one chip about {@code drug} rated {@code severity} whose detail names {@code partner}. */
+	private static SafetyWarning chip(ChartAnswer answer, String drug, String partner, String severity) {
+		List<SafetyWarning> found = new ArrayList<SafetyWarning>();
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			if (drug.equals(chip.getDrug()) && severity.equals(chip.getSeverity())
+					&& chip.getDetail().toLowerCase().contains(partner)) {
+				found.add(chip);
+			}
+		}
+		assertEquals(1, found.size(), "precondition: one " + severity + " chip about " + drug + " naming " + partner
+				+ ", chips were: " + answer.getSafetyWarnings());
+		return found.get(0);
+	}
+
 	private static void assertReported(List<CautionLedOverWithholding> reported, int... citations) {
 		assertNotNull(reported, "the check ran, so it states a measurement");
 		List<String> got = new ArrayList<String>();
@@ -443,25 +457,86 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 
 	/**
 	 * A question-pair finding is about BOTH drugs of its pair, so it is reported whichever of the two the
-	 * lead gives. The arm names one of them the finding's subject by the dataset's own order, not the
-	 * question's — Rifampicin here, listed as current or proposed alike — so reading the subject alone made
-	 * the report depend on which drug the question happened to list. Patient 6 holds no active order, so the
-	 * Major pair is the question's own and no order-driven arm takes it.
+	 * lead gives. The arm names the drug the question proposes as the finding's subject (ADR Decision 133)
+	 * and the other as its partner, so reading the subject alone would make the report depend on which drug
+	 * the question happened to list. Patient 6 holds no active order, so the Major pair is the question's
+	 * own and no order-driven arm takes it.
 	 */
 	@Test
 	public void aQuestionPairMajorIsReportedWhicheverOfItsTwoDrugsTheLeadGives() throws IOException {
 		Patient noOrders = Context.getPatientService().getPatient(6);
 		for (String[] cell : new String[][] {
-				{ "The patient is currently on Rifampicin, is it safe to give Amlodipine?", "Amlodipine" },
-				{ "The patient is currently on Amlodipine, is it safe to give Rifampicin?", "Rifampicin" } }) {
+				{ "The patient is currently on Rifampicin, is it safe to give Amlodipine?", "Amlodipine",
+						"Amlodipine", "rifampicin (rifampin)" },
+				{ "The patient is currently on Amlodipine, is it safe to give Rifampicin?", "Rifampicin",
+						"Rifampicin (rifampin)", "amlodipine" },
+				{ "The patient is currently on Amlodipine, is it safe to give Rifampicin?", "Amlodipine",
+						"Rifampicin (rifampin)", "amlodipine" } }) {
 			String lead = cell[1] + " can be given, with one caution: it may interact with the other drug.";
 			Recorder recorder = serviceAnswering(lead, obs());
 			ChartAnswer answer = recorder.service.search(noOrders, cell[0]);
 
 			assertReported(answer.getCautionLedOverWithholding(),
-					findingNumber(recorder.prompt, "Rifampicin (rifampin)",
-							"amlodipine, also named in the question"));
+					findingNumber(recorder.prompt, cell[2], cell[3] + ", also named in the question"));
 		}
+	}
+
+	/**
+	 * A question-pair finding between a drug the question LISTS and the one it PROPOSES names the proposed
+	 * drug as its subject, so the clause's "withhold it" names the drug the clinician asked about. Named by
+	 * the dataset's order instead, the Major rifampicin/nevirapine finding read "Nevirapine interacts with
+	 * Rifampicin … This finding is a reason to withhold it." on a question saying she is on nevirapine, and
+	 * the live answer gave rifampicin no verdict and said nevirapine's order had ended, which no record said.
+	 */
+	@Test
+	public void aQuestionPairFindingNamesTheDrugTheQuestionProposesAsItsSubject() throws IOException {
+		Patient noOrders = Context.getPatientService().getPatient(6);
+		for (String[] cell : new String[][] {
+				{ "The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Rifampicin?",
+						"Rifampicin (rifampin)", "nevirapine" },
+				{ "The patient is currently on Rifampicin, is it safe to give Nevirapine?", "Nevirapine",
+						"rifampicin (rifampin)" } }) {
+			Recorder recorder = serviceAnswering("No.", obs());
+			ChartAnswer answer = recorder.service.search(noOrders, cell[0]);
+
+			findingNumber(recorder.prompt, cell[1], cell[2] + ", also named in the question");
+			assertTrue(chip(answer, cell[1], cell[2] + ", also named in the question", "Major").getDetail()
+					.startsWith(cell[1] + " interacts with "), cell[0]);
+		}
+	}
+
+	/**
+	 * Where the listed drug is one her chart holds only as an ended order, the finding keeps it as its subject
+	 * and states issue #472's ended-order clause about it — a reason against giving it should it be proposed
+	 * again — rather than naming the proposed drug and a reason to withhold that one on the strength of an
+	 * order that has ended.
+	 */
+	@Test
+	public void aQuestionPairFindingWhoseListedDrugHasEndedKeepsItsEndedOrderReading() throws IOException {
+		// Both directions of the dataset's order: nevirapine is listed first there, rifampicin second.
+		for (String[] cell : new String[][] {
+				{ "Nevirapine 200mg", "The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to "
+						+ "give Rifampicin?", "Nevirapine", "rifampicin (rifampin)" },
+				{ "Rifampicin 600mg", "The patient is currently on Rifampicin, is it safe to give Nevirapine?",
+						"Rifampicin (rifampin)", "nevirapine" } }) {
+			Recorder recorder = serviceAnswering("No.", obs(),
+					DrugReferenceTestSupport.drugOrderRecord(2, cell[0], Boolean.FALSE, null));
+			recorder.service.search(Context.getPatientService().getPatient(6), cell[1]);
+
+			findingNumber(recorder.prompt, cell[2], cell[3] + ", also named in the question",
+					DrugReferenceInjector.STRENGTH_WITHHOLD_ENDED_ORDER);
+		}
+	}
+
+	/** Where the question proposes both drugs, or neither, the dataset's order still breaks the tie. */
+	@Test
+	public void aQuestionPairFindingProposingBothDrugsKeepsTheDatasetsOrder() throws IOException {
+		Recorder recorder = serviceAnswering("No.", obs());
+		ChartAnswer answer = recorder.service.search(Context.getPatientService().getPatient(6),
+				"Can rifampicin and nevirapine be given together?");
+
+		findingNumber(recorder.prompt, "Nevirapine", "rifampicin (rifampin), also named in the question");
+		chip(answer, "Nevirapine", "rifampicin (rifampin), also named in the question", "Major");
 	}
 
 	/**

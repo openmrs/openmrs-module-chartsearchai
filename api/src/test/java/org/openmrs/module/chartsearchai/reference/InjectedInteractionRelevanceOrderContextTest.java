@@ -32,6 +32,8 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleContextSensitiveTest {
 
+	private static final String TAIL = DrugReferenceTestSupport.DATASET_TAIL_LEAD_IN_SECTION;
+
 	@Test
 	public void aRaisedFloorMovesAPartnerFromThePromotedSegmentToTheHeadOfTheTail() {
 		// Both of these partners are drugs the chart records, and at the shipped floor both are
@@ -60,12 +62,12 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 		assertTrue(interactions.startsWith("interactions: metformin (moderate. limited data"),
 				"the raised floor promotes neither, so the first partner the chart names leads the tail "
 						+ "with its own note: " + interactions);
-		assertTrue(interactions.contains("; ibuprofen (moderate); "),
+		assertTrue(interactions.contains("; ibuprofen (moderate)." + TAIL),
 				"and the second is named with the rating alone — the mechanism paragraph promotion "
 						+ "would have kept is what the raised floor gives up: " + interactions);
-		assertTrue(interactions.endsWith("; methotrexate (moderate)."),
-				"while the dataset tail still states breadth with its own representative: "
-						+ interactions);
+		assertTrue(interactions.endsWith(TAIL + "methotrexate (moderate)."),
+				"while the dataset tail still states breadth with its own representative, under its "
+						+ "own lead (issue #564): " + interactions);
 	}
 
 	@Test
@@ -92,7 +94,8 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 				DrugReferenceTestSupport.referenceMappingNaming(chart, "Lisinopril"));
 
 		assertEquals("interactions: sertraline (unknown severity interaction (ddinter 2.0; no mechanism "
-				+ "description on file).); digoxin (moderate); metformin (moderate).", interactions,
+				+ "description on file).); digoxin (moderate)." + TAIL + "metformin (moderate).",
+				interactions,
 				"the segment the floor filtered keeps the entry's own partner order, and the note that "
 						+ "carries the source's sentence is the one that order puts first: " + interactions);
 	}
@@ -127,7 +130,7 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 		assertTrue(interactions.contains("lisinopril (moderate. "),
 				"the first partner of the filtered segment carries its note, on a record no question "
 						+ "asked for: " + interactions);
-		assertTrue(interactions.contains("sertraline (moderate);"),
+		assertTrue(interactions.contains("sertraline (moderate)." + TAIL),
 				"and the second is named with its rating alone — the same rule an in-play record's "
 						+ "filtered segment follows: " + interactions);
 	}

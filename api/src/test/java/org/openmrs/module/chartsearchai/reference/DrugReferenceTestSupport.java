@@ -27,6 +27,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.openmrs.Allergen;
@@ -1663,6 +1665,32 @@ public final class DrugReferenceTestSupport {
 		int start = text.indexOf("Interactions:");
 		assertTrue(start >= 0, "precondition: the record must render an Interactions section: " + text);
 		return text.substring(start).toLowerCase(Locale.ROOT);
+	}
+
+	/** {@link DrugReferenceInjector#DATASET_TAIL_LEAD} as {@link #interactionsSectionOf} returns it —
+	 *  lowercased, because that helper lowercases (issue #564). The literal words are pinned once, by
+	 *  {@code DatasetTailSectionTest.theLeadIsTheWordsAModelReads}. */
+	static final String DATASET_TAIL_LEAD_IN_SECTION =
+			DrugReferenceInjector.DATASET_TAIL_LEAD.toLowerCase(Locale.ROOT);
+
+	/** A note's head: the partner name before its opening parenthesis, at the list's start or after
+	 *  {@code "; "} — see {@link #noteHeads}. */
+	private static final Pattern NOTE_HEAD = Pattern.compile("(?:^|; )([^;()]+) \\(");
+
+	/**
+	 * @return the partner name heading each note of {@code list}, in order — {@link #noteAt}'s rule
+	 *         asked of every note at once, for a case that must say which partners a list names and
+	 *         nothing else (issue #564). Anchored at the list's start or a {@code "; "}, and never a
+	 *         split on {@code "; "}: the source's own no-mechanism sentence carries one inside its
+	 *         parentheses, which is why {@link #sectionItems} cannot answer this.
+	 */
+	static List<String> noteHeads(String list) {
+		List<String> heads = new ArrayList<String>();
+		Matcher head = NOTE_HEAD.matcher(list);
+		while (head.find()) {
+			heads.add(head.group(1));
+		}
+		return heads;
 	}
 
 	/**

@@ -424,7 +424,8 @@ public class DrugReferenceInjectorTest {
 				"the promoted segment is the above-floor rule's, and it keeps its mechanism prose: "
 						+ section);
 		assertTrue(section.contains("; warfarin (unknown severity interaction (ddinter 2.0; no "
-				+ "mechanism description on file).); amiodarone (unknown); "),
+				+ "mechanism description on file).); amiodarone (unknown)."
+				+ DrugReferenceTestSupport.DATASET_TAIL_LEAD_IN_SECTION),
 				"the two sub-floor rules follow it stating the source's sentence ONCE and then just a "
 						+ "name and a rating — neither of them promoted, and no mechanism invented for "
 						+ "a pair the source describes as nothing: " + section);

@@ -273,7 +273,15 @@ public final class QueryScopeRouter {
 			// "Is ibuprofen safe for her?", "Is ibuprofen appropriate for this patient?"
 			"is " + D + " (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?(?: now| today)?",
 			// "Would ibuprofen be appropriate for her?"
-			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?");
+			"(?:would|will) " + D + " be (?:safe|ok|okay|appropriate)(?: for " + PATIENT + ")?",
+			// "Is ibuprofen safe to add?", "Is ibuprofen safe to give her?" — the drug before "safe to", the
+			// fourth shape's word order with the third's verbs (ADR Decision 134). No purpose, no second drug.
+			"is " + D + " (?:safe|ok|okay|appropriate) to (?:give|start|prescribe|administer|add|use)(?: (?:to |for )?"
+					+ PATIENT + ")?(?: now| today)?",
+			// "Can ibuprofen be started?", "Can ibuprofen be given to her?" — the drug as the passive subject
+			// (ADR Decision 134). Only verbs of giving: "be stopped" or "be avoided" would read a "No" backwards.
+			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|started|prescribed|administered|added)(?: (?:to|for) "
+					+ PATIENT + ")?(?: now| today)?");
 
 	/**
 	 * The question shapes a request to screen the patient's OWN medications against each other may

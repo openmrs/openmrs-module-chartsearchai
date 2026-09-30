@@ -273,7 +273,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Can this patient take ibuprofen?", "Is it safe to give her ibuprofen?",
 				"Would ibuprofen be appropriate for her?", "Can I give ibuprofen to her?",
 				// The patient after the drug in the "is it safe to" shape (issue #548).
-				"Is it safe to give ibuprofen for her?" }) {
+				"Is it safe to give ibuprofen for her?",
+				// The drug before "safe to", and the drug as the passive subject (ADR Decision 134).
+				"Is ibuprofen safe to add?", "Is ibuprofen safe to give her?", "Is ibuprofen okay to start?",
+				"Can ibuprofen be started?", "Can ibuprofen be given to her?", "Should ibuprofen be added now?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question);
@@ -627,6 +630,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			// a condition or a purpose the findings may not address
 			"Is ibuprofen safe for her kidneys?",
 			"Can I give her ibuprofen for her knee pain?",
+			// the same two, and a second drug, in the drug-first shapes (ADR Decision 134)
+			"Is ibuprofen safe to give for her knee pain?",
+			"Can ibuprofen be given for her knee pain?",
+			"Is ibuprofen safe to add to omeprazole?",
+			"Can ibuprofen be given with omeprazole?",
+			// inverse polarity in the passive: a "No" lead would answer it backwards
+			"Should ibuprofen be stopped?",
+			"Can ibuprofen be avoided?",
 		};
 		for (String question : questions) {
 			RecordingProvider provider = new RecordingProvider();

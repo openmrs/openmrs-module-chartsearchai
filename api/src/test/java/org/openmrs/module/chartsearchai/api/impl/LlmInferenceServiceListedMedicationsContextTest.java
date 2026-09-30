@@ -495,7 +495,12 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				{ "The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Rifampicin?",
 						"Rifampicin (rifampin)", "nevirapine" },
 				{ "The patient is currently on Rifampicin, is it safe to give Nevirapine?", "Nevirapine",
-						"rifampicin (rifampin)" } }) {
+						"rifampicin (rifampin)" },
+				// The drug-first proposal shapes (ADR Decision 134).
+				{ "Patient takes Lamivudine, Nevirapine, Stavudine. Is Rifampicin safe to add?",
+						"Rifampicin (rifampin)", "nevirapine" },
+				{ "The patient is currently on Lamivudine, Nevirapine, Stavudine, can rifampicin be started?",
+						"Rifampicin (rifampin)", "nevirapine" } }) {
 			Recorder recorder = serviceAnswering("No.", obs());
 			ChartAnswer answer = recorder.service.search(noOrders, cell[0]);
 

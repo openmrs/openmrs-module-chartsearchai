@@ -137,6 +137,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 131: answerFromFindings ships on, because Decision 108's gate was run](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)
 - [Decision 132: The dataset tail's representative renders under its own lead, not as the last item of her list](#decision-132-the-dataset-tails-representative-renders-under-its-own-lead-not-as-the-last-item-of-her-list)
 - [Decision 133: A question-pair finding names the drug the question proposes as its subject](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject)
+- [Decision 134: Two drug-first proposal shapes are admitted, because the gate was run](#decision-134-two-drug-first-proposal-shapes-are-admitted-because-the-gate-was-run)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13152,3 +13153,54 @@ Pinned by `LlmInferenceServiceListedMedicationsContextTest.aQuestionPairFindingN
 `.aQuestionPairFindingProposingBothDrugsKeepsTheDatasetsOrder`,
 `.aQuestionPairFindingWhoseListedDrugHasEndedKeepsItsEndedOrderReading` and
 `.aQuestionPairMajorIsReportedWhicheverOfItsTwoDrugsTheLeadGives`.
+
+## Decision 134: Two drug-first proposal shapes are admitted, because the gate was run
+
+**Status: Accepted** (September 2026) — implemented, no issue. It widens
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)'s
+closed grammar, `QueryScopeRouter.PROPOSAL_SHAPES`, by two shapes.
+
+### Context
+
+After [Decision 133](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject),
+two of four paraphrases of *"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give
+Rifampicin?"* still headed their Major finding with nevirapine, because the grammar did not read them as
+proposing rifampicin: *"Patient takes Lamivudine, Nevirapine, Stavudine. Is Rifampicin safe to add?"* and
+*"…, can rifampicin be started?"*. The first also got no *"The chart holds no active order for …"* sentence,
+since Decision 119's list reading needs a proposal clause to separate the list from.
+
+### The decision
+
+- **`is D safe|ok|okay|appropriate to give|start|prescribe|administer|add|use [(to|for) PATIENT] [now|today]`**
+  — the drug before "safe to": the fourth shape's word order with the third's verbs.
+- **`can|could|may|should D be [safely] given|started|prescribed|administered|added [(to|for) PATIENT] [now|today]`**
+  — the drug as the passive subject. Only verbs of giving: *"Should ibuprofen be stopped?"* or *"Can ibuprofen
+  be avoided?"* would read a "No" backwards, and both stay with the model.
+- A purpose, a condition or a second drug in either shape stays with the model, as in every other shape.
+
+### The gate, as run
+
+Pass rule written before any capture. Both arms on one build base, the 3.7.1 standalone at :8081 (Gemma 4 E4B
+local, bundled DDInter, prompt GP null, cache TTL 0, `answerFromFindings` as shipped): **A** `main` @ b9fd93d3,
+**B** A plus the two shapes. The 20 default `capture_probe_safety.sh` cells in each of two new phrasings,
+`Is {drug} safe to add?` and `Can {drug} be started?`, and the four rifampicin paraphrases. The default phrasing
+was not re-run: B only adds shapes, so every question A admits B admits.
+
+- **32 of the 40 corpus cells are byte-identical.** The other 8, in each phrasing:
+  - Agnes warfarin, Mary clarithromycin, Mary erythromycin: answered by the module in B, each a "No" over a
+    Major interaction, where A's model answer was also a "No" — the three Decision 131 recorded as
+    module-answered in the default phrasing.
+  - Agnes aspirin: A *"The records do not address the safety of adding Aspirin."*; B states her Aspirin 81mg
+    order and that adding aspirin would duplicate it (Decision 129's statement, reaching these phrasings).
+- **`score_probe_safety.py A B`, per phrasing:** verdict-led 5/5 and 6/6 over 7 ANSWER cells, abstention held 8
+  and 8 over 13, verdicts the records do not license 0 and 0, severities no chip carries 0 and 0. It exits 3 on
+  `!!` lines: Betty's five cells labelled from chips alone (her patient context failed, both arms);
+  `joshua__safety-aspirin` citing 1 of 2 findings (P1) and leaving one rating unstated (P2), identical in both
+  arms (#397); and in B only, agnes aspirin's #554 chip with no readable rating, the scorer gap Decision 131
+  records, reached here because B admits the question as a proposal.
+- **The paraphrases:** B heads the Major finding with Rifampicin on all four, each answer *"No — Rifampicin
+  should not be …"*, and paraphrase 2 now ends with the listed-drug sentence.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aSuitabilityQuestionIsAnsweredFromTheFindingsToo` and
+`.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`, and
+`LlmInferenceServiceListedMedicationsContextTest.aQuestionPairFindingNamesTheDrugTheQuestionProposesAsItsSubject`.

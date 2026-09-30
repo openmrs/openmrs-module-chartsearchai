@@ -10,6 +10,8 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -146,6 +148,35 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 				assertFalse(reference.isAttachedByTheModule(), reference.getResourceType()
 						+ " [" + reference.getIndex() + "] was cited by the model, so it must not claim "
 						+ "otherwise");
+			}
+		}
+	}
+
+	/**
+	 * The record the module attached names the finding it was attached FOR, so a client can say "the
+	 * record behind [N]" rather than only that the module put it there — a clinician does not read
+	 * "added by the module" as anything they can act on. The finding's number is the one the answer
+	 * cited, read off the answer's own references, and never assumed.
+	 */
+	@Test
+	public void aRecordTheModuleAttachedNamesTheFindingItWasAttachedFor() {
+		ChartAnswer answer = serviceUnderTest(new CitesTheFindingAlone()).search(patient, QUESTION);
+
+		RecordReference finding = null;
+		for (RecordReference reference : answer.getReferences()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(reference.getResourceType())) {
+				assertNull(finding, "precondition: the answer cites one finding");
+				finding = reference;
+			}
+		}
+		assertNotNull(finding, "precondition: the answer cites the finding");
+		assertEquals(Collections.singletonList(Integer.valueOf(finding.getIndex())),
+				referenceAt(answer, ALLERGY_RECORD).getAttachedFor(),
+				"the attached allergy record names the finding it is the chart evidence of");
+		for (RecordReference reference : answer.getReferences()) {
+			if (reference.getIndex() != ALLERGY_RECORD) {
+				assertEquals(Collections.emptyList(), reference.getAttachedFor(), reference.getResourceType()
+						+ " [" + reference.getIndex() + "] was cited by the model, so it was attached for nothing");
 			}
 		}
 	}

@@ -1289,6 +1289,9 @@ public class LlmInferenceService implements ChartSearchService {
 		// and, over the real injector, →
 		// LlmInferenceServiceFindingProvenanceContextTest.aFindingTheModelDidNotCiteBringsNoChartRecordIntoTheReferences
 		Set<Integer> attached = new LinkedHashSet<Integer>();
+		// Which cited finding(s) each attached record was attached FOR, recorded where the attachment is
+		// decided rather than reconstructed later, so a client can name the finding a record backs.
+		Map<Integer, List<Integer>> attachedFor = new HashMap<Integer, List<Integer>>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);
 			if (mapping == null) {
@@ -1308,6 +1311,14 @@ public class LlmInferenceService implements ChartSearchService {
 				// bookkeeping and not something the model claimed.
 				if (!seen.contains(derived) && indexMap.containsKey(derived)) {
 					attached.add(derived);
+					List<Integer> findings = attachedFor.get(derived);
+					if (findings == null) {
+						findings = new ArrayList<Integer>();
+						attachedFor.put(derived, findings);
+					}
+					if (!findings.contains(index)) {
+						findings.add(index);
+					}
 				}
 			}
 		}
@@ -1322,7 +1333,7 @@ public class LlmInferenceService implements ChartSearchService {
 				// the citation chip, so the record has nothing about itself for the model to recite.
 				references.add(new RecordReference(index, mapping.getResourceType(),
 						mapping.getResourceUuid(), mapping.getDate(), null, mapping.getSource(),
-						mapping.getWithheldInteractions(), attached.contains(index)));
+						mapping.getWithheldInteractions(), attached.contains(index), attachedFor.get(index)));
 			} else {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}

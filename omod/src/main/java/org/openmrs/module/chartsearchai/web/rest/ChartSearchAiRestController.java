@@ -1896,6 +1896,9 @@ public class ChartSearchAiRestController {
 				serializeInteractionClaimPairs(answer.getInteractionClaimPairs()));
 		target.put("chartReadForSafety", answer.getChartReadForSafety());
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+		// The dose-ceiling arm's verdict, in the same vocabulary (ChartAnswer.getDoseCeilingCoverage).
+		DrugReferenceLoad.Coverage doseCeilingCoverage = answer.getDoseCeilingCoverage();
+		target.put("doseCeilingCoverage", doseCeilingCoverage == null ? null : doseCeilingCoverage.wireToken());
 		// Issue #469: whether any model wrote this answer. Beside the keys it explains — where it is
 		// true, the checks of a model's prose above state null because there was no such prose —
 		// and on every surface they reach, the early done included. ChartAnswer.isAnsweredByTheModule

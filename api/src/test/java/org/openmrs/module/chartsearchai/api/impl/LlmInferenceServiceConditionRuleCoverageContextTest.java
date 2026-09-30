@@ -165,6 +165,50 @@ public class LlmInferenceServiceConditionRuleCoverageContextTest extends BaseMod
 						+ "not be what triggers a load on an install that does not use the feature");
 	}
 
+	/**
+	 * The DOSE-CEILING arm's verdict travels the same way: the only screen here that reads the
+	 * patient's AGE is the dose ceiling's age band, so a client that wants to say "not checked against
+	 * her age" needs this statement, and the shipped DDInter default publishes no ceiling at all.
+	 */
+	@Test
+	public void search_statesThatThisInstallsScreenHadNoDoseCeilingToAsk() {
+		setDrugReferenceEnabled(true);
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+		assertTrue(status.isLoaded() && !status.isInert(), "the premise: the shipped dataset really loaded");
+
+		ChartAnswer answer = serviceUnderTest().search(patient(), QUESTION);
+
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT, answer.getDoseCeilingCoverage(),
+				"the shipped DDInter default publishes no dose ceiling, so nothing behind this answer "
+						+ "read the patient's age, and the answer has to be able to say so");
+	}
+
+	@Test
+	public void searchStreaming_statesTheDoseCeilingCoverageOnTheUngroundedAnswerToo() {
+		setDrugReferenceEnabled(true);
+		final List<DrugReferenceLoad.Coverage> ungrounded = new ArrayList<DrugReferenceLoad.Coverage>();
+
+		ChartAnswer answer = serviceUnderTest().searchStreaming(patient(), QUESTION,
+			token -> { }, reasoning -> { }, citations -> { },
+			early -> ungrounded.add(early.getDoseCeilingCoverage()));
+
+		assertEquals(1, ungrounded.size(), "the early-done consumer must have fired");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT, ungrounded.get(0),
+				"the early done event is emitted from this answer, so the statement has to be on it");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT, answer.getDoseCeilingCoverage(),
+				"and on the answer the classic shape emits");
+	}
+
+	@Test
+	public void search_statesThatNobodyLookedForADoseCeilingWhereTheFeatureIsOff() {
+		setDrugReferenceEnabled(false);
+
+		ChartAnswer answer = serviceUnderTest().search(patient(), QUESTION);
+
+		assertEquals(DrugReferenceLoad.Coverage.UNLOADED, answer.getDoseCeilingCoverage(),
+				"nothing was read, so nothing is known about the arm");
+	}
+
 	/** Exposes the seams, and keeps warmup out of a test about a statement. */
 	private static final class TestableService extends LlmInferenceService {
 

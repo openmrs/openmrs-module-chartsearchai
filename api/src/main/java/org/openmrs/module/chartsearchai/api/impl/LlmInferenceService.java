@@ -151,6 +151,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// tell a screen that cannot fire from one that asked and found nothing.
 			DrugReferenceLoad.Coverage conditionRuleCoverage =
 					drugSafetyValidator.conditionRuleCoverage();
+			// Beside it and for the same reason: the dose ceiling is the one screen that reads her AGE,
+			// and a client can say "not checked against her age" only where the answer says it had none.
+			DrugReferenceLoad.Coverage doseCeilingCoverage = drugSafetyValidator.doseCeilingCoverage();
 			// And whether this chart's prompt asks the model for one line per safety finding (issue
 			// #397). After inject() deliberately, as searchMode, referenceSlice and
 			// unresolvedDrugClass above are — and this one means NOTHING anywhere else:
@@ -169,7 +172,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// the model is not asked to restate them. One method for both paths, so they cannot differ.
 			if (answersFromTheModule(chart)) {
 				ChartAnswer answer = answerFromTheModule(patient, question, chart, searchMode,
-						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage,
+						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage, doseCeilingCoverage,
 						token -> { }, refs -> { }, ungrounded -> { });
 				outcome = "ok";
 				return answer;
@@ -330,7 +333,7 @@ public class LlmInferenceService implements ChartSearchService {
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
-					unfoundedFindingSeverities);
+					unfoundedFindingSeverities, doseCeilingCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -646,6 +649,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// before the model is called, so there is no reason for that event to carry less.
 			DrugReferenceLoad.Coverage conditionRuleCoverage =
 					drugSafetyValidator.conditionRuleCoverage();
+			// Beside it and for the same reason: the dose ceiling is the one screen that reads her AGE,
+			// and a client can say "not checked against her age" only where the answer says it had none.
+			DrugReferenceLoad.Coverage doseCeilingCoverage = drugSafetyValidator.doseCeilingCoverage();
 			// The finding-enumeration flag too, off the same post-inject chart and for the reason
 			// search() gives at the same position (issue #397): DrugReferenceInjector is the sole
 			// producer of `safety_finding` mappings, so a read hoisted above the inject() line above
@@ -663,7 +669,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// model answer here for it to be a preview of.
 			if (answersFromTheModule(chart)) {
 				ChartAnswer answer = answerFromTheModule(patient, question, chart, searchMode,
-						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage,
+						referenceSlice, unresolvedDrugClass, chartRead.stated(), conditionRuleCoverage, doseCeilingCoverage,
 						tokenConsumer, citationsConsumer, ungroundedAnswerConsumer);
 				outcome = "ok";
 				return answer;
@@ -754,7 +760,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
-					cautionLedOverWithholding, null));
+					cautionLedOverWithholding, null, doseCeilingCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -879,7 +885,7 @@ public class LlmInferenceService implements ChartSearchService {
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
-					unfoundedFindingSeverities);
+					unfoundedFindingSeverities, doseCeilingCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -934,7 +940,8 @@ public class LlmInferenceService implements ChartSearchService {
 	private ChartAnswer answerFromTheModule(Patient patient, String question, PatientChart chart,
 			String searchMode, ChartSearchAiUtils.ReferenceSlice referenceSlice,
 			String unresolvedDrugClass, Boolean chartReadForSafety,
-			DrugReferenceLoad.Coverage conditionRuleCoverage, Consumer<String> tokenConsumer,
+			DrugReferenceLoad.Coverage conditionRuleCoverage, DrugReferenceLoad.Coverage doseCeilingCoverage,
+			Consumer<String> tokenConsumer,
 			Consumer<List<RecordReference>> citationsConsumer,
 			Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 		String composed = chart.getModuleAnswer();
@@ -966,10 +973,11 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
-				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null);
+				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
+				doseCeilingCoverage);
 	}
 
 	/**

@@ -218,6 +218,10 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.CautionLedOverWithholding> cautionLedOverWithholding =
 					CautionLeadOverWithholdingCheck.report(patient, response.getAnswer(), chart.getMappings(),
 							drugSafetyValidator);
+			// ADR Decision 135: an order the answer says has ended where no record does. Of the model's answer
+			// before anything is appended, so the module's own ended-order sentence is never read as one.
+			List<String> unsupportedEndedOrderClaims = EndedOrderClaimCheck.report(patient, response.getAnswer(),
+					chart.getMappings(), drugSafetyValidator);
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			// The prose check's own answer, carried rather than re-derived (issue #337 round two): a
@@ -333,7 +337,7 @@ public class LlmInferenceService implements ChartSearchService {
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
-					unfoundedFindingSeverities, doseCeilingCoverage);
+					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims);
 			outcome = "ok";
 			return answer;
 		}
@@ -735,6 +739,9 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.CautionLedOverWithholding> cautionLedOverWithholding =
 					CautionLeadOverWithholdingCheck.report(patient, response.getAnswer(), chart.getMappings(),
 							drugSafetyValidator);
+			// ADR Decision 135, resolved once and handed to both answers, for the reason the line above is.
+			List<String> unsupportedEndedOrderClaims = EndedOrderClaimCheck.report(patient, response.getAnswer(),
+					chart.getMappings(), drugSafetyValidator);
 
 			// Resolved ONCE for this method and handed to BOTH answers it produces, the ungrounded one
 			// below included (issue #315). It is a projection over the answer's own markers and its
@@ -760,7 +767,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
-					cautionLedOverWithholding, null, doseCeilingCoverage));
+					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -885,7 +892,7 @@ public class LlmInferenceService implements ChartSearchService {
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
-					unfoundedFindingSeverities, doseCeilingCoverage);
+					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims);
 			outcome = "ok";
 			return answer;
 		}
@@ -973,11 +980,11 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
-				doseCeilingCoverage);
+				doseCeilingCoverage, null);
 	}
 
 	/**

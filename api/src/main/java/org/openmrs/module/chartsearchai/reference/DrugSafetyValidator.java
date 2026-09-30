@@ -2051,6 +2051,80 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The drugs {@code answer} says have an order that is {@code phrase} — {@code EndedOrderStatement}'s
+	 * {@code "no longer in force"} — where no chart record in {@code mappings} marks an order of that drug as
+	 * not in force (ADR Decision 135). A claim the prompt gave the model no record for: the answer to
+	 * <em>"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Rifampicin?"</em>
+	 * said <em>"Nevirapine's order is no longer in force"</em> of a chart holding no nevirapine order at all.
+	 *
+	 * <p>Each sentence ({@code ChartSearchAiUtils.SENTENCE_BOUNDARY}) carrying the phrase is read by the rule
+	 * {@link #isAboutTheEndedOrderDrug} reads it by (issue #482): the drugs are the entries
+	 * {@link DrugReferenceService#findImpliedByQuery} puts in play, grouped by substance, and a phrase is about
+	 * the substance {@link #nearestIsOwn} names nearest to it — so <em>"Nevirapine's order is no longer in force,
+	 * but it interacts with Rifampicin"</em> is a claim about nevirapine alone. A record supports the claim where
+	 * the chart builder's stamp calls it NOT in force and it names a row of the substance, the reading
+	 * {@link EndedOrders} takes; a record in force, or one the module cannot say of, supports nothing, since only
+	 * a record stamped not in force renders the status the claim repeats. Each drug is named once, as its
+	 * {@link DrugReference#canonicalRow} displays it, in the order the answer first claims it.
+	 *
+	 * @return the drugs, possibly empty; {@code null} where no dataset is wired, which names no drug at all
+	 */
+	public List<String> endedOrderClaimsNoRecordStates(String answer, String phrase, List<RecordMapping> mappings) {
+		if (drugReferenceService == null) {
+			return null;
+		}
+		List<String> claimed = new ArrayList<String>();
+		if (ChartSearchAiUtils.isBlank(answer) || ChartSearchAiUtils.isBlank(phrase)) {
+			return claimed;
+		}
+		String foldedPhrase = DrugReference.foldedLower(phrase);
+		List<RecordMapping> ended = new ArrayList<RecordMapping>();
+		EndedOrders.partitionOrderRecords(mappings, ended, new ArrayList<RecordMapping>());
+		List<String> endedTexts = EndedOrders.lowered(ended);
+		for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(answer)) {
+			String folded = DrugReference.foldedLower(sentence);
+			if (!folded.contains(foldedPhrase)) {
+				continue;
+			}
+			Map<Object, List<DrugReference>> bySubstance = new LinkedHashMap<Object, List<DrugReference>>();
+			for (DrugReference ref : drugReferenceService.findImpliedByQuery(sentence)) {
+				List<DrugReference> rows = bySubstance.get(ref.substanceGroupKey());
+				if (rows == null) {
+					rows = new ArrayList<DrugReference>();
+					bySubstance.put(ref.substanceGroupKey(), rows);
+				}
+				rows.add(ref);
+			}
+			for (Map.Entry<Object, List<DrugReference>> substance : bySubstance.entrySet()) {
+				List<DrugReference> rows = substance.getValue();
+				List<DrugReference.NamedOccurrence> own = namedOccurrences(folded, 0, rows);
+				if (own.isEmpty()) {
+					continue;
+				}
+				List<DrugReference.NamedOccurrence> others = new ArrayList<DrugReference.NamedOccurrence>();
+				for (Map.Entry<Object, List<DrugReference>> other : bySubstance.entrySet()) {
+					if (!other.getKey().equals(substance.getKey())) {
+						others.addAll(namedOccurrences(folded, 0, other.getValue()));
+					}
+				}
+				boolean aboutIt = false;
+				for (int at = folded.indexOf(foldedPhrase); at >= 0 && !aboutIt;
+						at = folded.indexOf(foldedPhrase, at + 1)) {
+					aboutIt = nearestIsOwn(folded, at, at + foldedPhrase.length(), own, others);
+				}
+				if (!aboutIt || EndedOrders.namesAnyRow(endedTexts, rows)) {
+					continue;
+				}
+				String name = DrugReference.canonicalRow(rows).displayLabel();
+				if (!claimed.contains(name)) {
+					claimed.add(name);
+				}
+			}
+		}
+		return claimed;
+	}
+
+	/**
 	 * What joins two drug names into one combination name for {@link #isAboutTheEndedOrderDrug}: a hyphen
 	 * (ASCII, U+2010 or U+2011) with nothing around it, or a slash or plus sign with optional whitespace.
 	 * A spaced hyphen is left out because it is also written as a dash between clauses, and "and" and a

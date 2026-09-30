@@ -696,4 +696,97 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 			return false;
 		}
 	}
+
+	/** The rifampicin list question, verbatim from the live answer that invented an ended nevirapine order. */
+	private static final String RIFAMPICIN_LIST_QUESTION = "The patient is currently on Lamivudine, Nevirapine, "
+			+ "Stavudine, is it safe to give Rifampicin?";
+
+	private static final String INVENTED_ENDED_ORDER = "Nevirapine's order is no longer in force, but it interacts "
+			+ "with Rifampicin (rifampin) — Major. Coadministration with rifampin may substantially decrease the plasma "
+			+ "concentrations of nevirapine [51].";
+
+	/**
+	 * An answer saying a drug's order is no longer in force, where no record the prompt carried marks an order of
+	 * that drug as not in force, is reported (ADR Decision 135): the live answer to the rifampicin list question
+	 * said nevirapine's order had ended, of a chart holding no nevirapine order at all, and every other check
+	 * came back clean beside it.
+	 */
+	@Test
+	public void anEndedOrderNoRecordStatesIsReportedByTheDrugItNames() throws IOException {
+		ChartAnswer answer = serviceAnswering(INVENTED_ENDED_ORDER, obs()).service.search(
+				Context.getPatientService().getPatient(6), RIFAMPICIN_LIST_QUESTION);
+
+		assertEquals(Collections.singletonList("Nevirapine"), answer.getUnsupportedEndedOrderClaims(),
+				"the claim is about nevirapine, the drug named before it, and not the rifampicin after it");
+	}
+
+	/** The streaming path reports it on the early done, which is what a streaming client reads first, and the final. */
+	@Test
+	public void searchStreaming_reportsTheClaimOnTheEarlyDoneAndTheFinalAnswer() throws IOException {
+		final List<ChartAnswer> early = new ArrayList<ChartAnswer>();
+		ChartAnswer answer = serviceAnswering(INVENTED_ENDED_ORDER, obs()).service.searchStreaming(
+				Context.getPatientService().getPatient(6), RIFAMPICIN_LIST_QUESTION, token -> { }, reasoning -> { },
+				citations -> { }, early::add);
+
+		assertEquals(1, early.size(), "precondition: the early done fired");
+		assertEquals(Collections.singletonList("Nevirapine"), answer.getUnsupportedEndedOrderClaims());
+		assertEquals(Collections.singletonList("Nevirapine"), early.get(0).getUnsupportedEndedOrderClaims());
+	}
+
+	/** An order a record marks as not in force supports the claim, so nothing is reported. */
+	@Test
+	public void anEndedOrderARecordStatesIsNotReported() throws IOException {
+		ChartAnswer answer = serviceAnswering(INVENTED_ENDED_ORDER, obs(),
+				DrugReferenceTestSupport.drugOrderRecord(2, "Nevirapine 200mg", Boolean.FALSE, null)).service.search(
+						Context.getPatientService().getPatient(6), RIFAMPICIN_LIST_QUESTION);
+
+		assertEquals(Collections.emptyList(), answer.getUnsupportedEndedOrderClaims());
+	}
+
+	/** A record naming the drug whose order is IN FORCE, or whose state the module cannot say, supports nothing. */
+	@Test
+	public void aRecordThatDoesNotMarkTheOrderEndedDoesNotSupportTheClaim() throws IOException {
+		for (Boolean active : new Boolean[] { Boolean.TRUE, null }) {
+			ChartAnswer answer = serviceAnswering(INVENTED_ENDED_ORDER, obs(),
+					DrugReferenceTestSupport.drugOrderRecord(2, "Nevirapine 200mg", active, null)).service.search(
+							Context.getPatientService().getPatient(6), RIFAMPICIN_LIST_QUESTION);
+
+			assertEquals(Collections.singletonList("Nevirapine"), answer.getUnsupportedEndedOrderClaims(),
+					"orderActive " + active);
+		}
+	}
+
+	/** The claim's drug is the one named nearest before the phrase in its sentence, whichever order they come in. */
+	@Test
+	public void theClaimIsAboutTheDrugNamedNearestBeforeIt() throws IOException {
+		ChartAnswer answer = serviceAnswering("No — Rifampicin interacts with Nevirapine, whose order is no longer in "
+				+ "force [51].", obs()).service.search(Context.getPatientService().getPatient(6),
+						RIFAMPICIN_LIST_QUESTION);
+
+		assertEquals(Collections.singletonList("Nevirapine"), answer.getUnsupportedEndedOrderClaims());
+	}
+
+	/** An answer claiming no ended order reports none — a measurement of none, not an absent one. */
+	@Test
+	public void anAnswerClaimingNoEndedOrderReportsNone() throws IOException {
+		ChartAnswer answer = serviceAnswering("No — Rifampicin should not be given [51].", obs()).service.search(
+				Context.getPatientService().getPatient(6), RIFAMPICIN_LIST_QUESTION);
+
+		assertEquals(Collections.emptyList(), answer.getUnsupportedEndedOrderClaims());
+	}
+
+	/**
+	 * The module's OWN ended-order sentence (ADR Decision 110), appended after the model's answer, is not the model's
+	 * claim and is never read as one; the case where it is appended carries the record it states.
+	 */
+	@Test
+	public void theModulesOwnEndedOrderSentenceIsNotReadAsAClaim() throws IOException {
+		ChartAnswer answer = serviceAnswering("No — Rifampicin should not be given [51].", obs(),
+				DrugReferenceTestSupport.drugOrderRecord(2, "Nevirapine 200mg", Boolean.FALSE, null)).service.search(
+						Context.getPatientService().getPatient(6), RIFAMPICIN_LIST_QUESTION);
+
+		assertTrue(answer.getAnswer().contains("no longer in force"),
+				"precondition: the module appended its ended-order sentence, was: " + answer.getAnswer());
+		assertEquals(Collections.emptyList(), answer.getUnsupportedEndedOrderClaims());
+	}
 }

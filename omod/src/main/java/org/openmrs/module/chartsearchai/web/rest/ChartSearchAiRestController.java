@@ -1903,6 +1903,11 @@ public class ChartSearchAiRestController {
 		// The dose-ceiling arm's verdict, in the same vocabulary (ChartAnswer.getDoseCeilingCoverage).
 		DrugReferenceLoad.Coverage doseCeilingCoverage = answer.getDoseCeilingCoverage();
 		target.put("doseCeilingCoverage", doseCeilingCoverage == null ? null : doseCeilingCoverage.wireToken());
+		// ADR Decision 135: the drugs the answer says have an ended order no record states. Copied out of the
+		// unmodifiable list for the XML-marshalling reason chartOrderBridges is; null survives as null.
+		List<String> unsupportedEndedOrderClaims = answer.getUnsupportedEndedOrderClaims();
+		target.put("unsupportedEndedOrderClaims", unsupportedEndedOrderClaims == null ? null
+				: new ArrayList<String>(unsupportedEndedOrderClaims));
 		// Issue #469: whether any model wrote this answer. Beside the keys it explains — where it is
 		// true, the checks of a model's prose above state null because there was no such prose —
 		// and on every surface they reach, the early done included. ChartAnswer.isAnsweredByTheModule

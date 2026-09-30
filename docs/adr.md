@@ -138,6 +138,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 132: The dataset tail's representative renders under its own lead, not as the last item of her list](#decision-132-the-dataset-tails-representative-renders-under-its-own-lead-not-as-the-last-item-of-her-list)
 - [Decision 133: A question-pair finding names the drug the question proposes as its subject](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject)
 - [Decision 134: Two drug-first proposal shapes are admitted, because the gate was run](#decision-134-two-drug-first-proposal-shapes-are-admitted-because-the-gate-was-run)
+- [Decision 135: An answer saying an order has ended where no record does is reported](#decision-135-an-answer-saying-an-order-has-ended-where-no-record-does-is-reported)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13204,3 +13205,48 @@ was not re-run: B only adds shapes, so every question A admits B admits.
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aSuitabilityQuestionIsAnsweredFromTheFindingsToo` and
 `.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`, and
 `LlmInferenceServiceListedMedicationsContextTest.aQuestionPairFindingNamesTheDrugTheQuestionProposesAsItsSubject`.
+
+## Decision 135: An answer saying an order has ended where no record does is reported
+
+**Status: Accepted** (September 2026) — implemented, no issue.
+
+### Context
+
+Asked *"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Rifampicin?"* of a
+chart holding no nevirapine order (the 3.7.1 standalone, patient `763e6e5f-c489-4bab-8a55-c379f085dd1c`), the
+answer on `main` @ 8a5b6433 opened *"Nevirapine's order is no longer in force, but it interacts with Rifampicin
+(rifampin) — Major."* in five runs of five, byte-identical. No record the prompt carried marked a nevirapine
+order as not in force, no chip carried the ended-order referent, and every measurement key the response
+publishes came back clean. The system prompt tells the model to say an order is no longer in force whenever it
+names a drug from a record carrying *". Order status: not in force"*, and the answer said it with no such record.
+[Decision 133](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject) removed
+the contradiction that preceded it on that question; nothing detected the claim itself.
+
+### The decision
+
+- **Reported, not repaired**: `ChartAnswer.getUnsupportedEndedOrderClaims()`, published as the
+  `unsupportedEndedOrderClaims` key — the drugs, `null` where not measured, `[]` a measurement of none.
+- **One reading, the module's own**: `DrugSafetyValidator.endedOrderClaimsNoRecordStates`, over
+  `EndedOrderStatement.NO_LONGER_IN_FORCE`, the words the module uses for an ended order. Per sentence
+  (`ChartSearchAiUtils.SENTENCE_BOUNDARY`), the claim is about the substance named nearest to the phrase, by
+  `nearestIsOwn` — the rule `isAboutTheEndedOrderDrug` reads the module's own sentence by (issue #482) — over the
+  entries `findImpliedByQuery` puts in play. A record supports it where the chart builder's stamp calls it not in
+  force and it names a row of the substance (`EndedOrders.partitionOrderRecords`, `namesAnyRow`).
+- **The model's answer only**: `EndedOrderClaimCheck` runs on the answer before anything is appended, in `search`
+  and in `searchStreaming` before the early `done`; a module-composed answer states `null`.
+- **No prompt change and no rewrite of the answer.**
+
+### Residues
+
+- **The phrase is the module's**: *"was stopped"*, *"has ended"* or *"discontinued"* state the same claim unread,
+  so `[]` is not a certificate.
+- **The attribution is #482's**, with its residues (ADR Decision 110): a pronoun reaching back past a nearer drug,
+  and a drug listed before another in one subject.
+- **"No record" means none in what the model read**: a query-scoped chart need not carry an ended order she did
+  have, and the claim is then reported although it is true of her record.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.anEndedOrderNoRecordStatesIsReportedByTheDrugItNames`,
+`.anEndedOrderARecordStatesIsNotReported`, `.aRecordThatDoesNotMarkTheOrderEndedDoesNotSupportTheClaim`,
+`.theClaimIsAboutTheDrugNamedNearestBeforeIt`, `.anAnswerClaimingNoEndedOrderReportsNone`,
+`.theModulesOwnEndedOrderSentenceIsNotReadAsAClaim` and
+`.searchStreaming_reportsTheClaimOnTheEarlyDoneAndTheFinalAnswer`.

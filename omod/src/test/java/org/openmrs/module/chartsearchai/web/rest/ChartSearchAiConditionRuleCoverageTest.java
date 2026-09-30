@@ -69,9 +69,13 @@ public class ChartSearchAiConditionRuleCoverageTest {
 	/** The verdict the stub service states; set per case before the handler runs. */
 	private DrugReferenceLoad.Coverage stated;
 
+	/** The dose-ceiling verdict the stub's answer states. */
+	private DrugReferenceLoad.Coverage doseStated;
+
 	@BeforeEach
 	public void setUp() {
 		stated = DrugReferenceLoad.Coverage.ABSENT;
+		doseStated = DrugReferenceLoad.Coverage.ABSENT;
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new CoverageStubService());
@@ -188,6 +192,29 @@ public class ChartSearchAiConditionRuleCoverageTest {
 	}
 
 	/**
+	 * The dose-ceiling arm's verdict is published beside it, spelled the same way, on the blocking
+	 * response and on both terminal events, and as a present {@code null} where nothing is stated.
+	 */
+	@Test
+	public void theDoseCeilingCoverageIsPublishedBesideIt() throws Exception {
+		assertEquals("absent", searchPayload().get("doseCeilingCoverage"), "the blocking response");
+		doseStated = null;
+		Map<String, Object> none = searchPayload();
+		assertTrue(none.containsKey("doseCeilingCoverage"), "the key is present where nothing is stated: " + none);
+		assertEquals(null, none.get("doseCeilingCoverage"));
+		doseStated = DrugReferenceLoad.Coverage.PUBLISHED;
+		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
+		assertEquals("published", eventData("done").get("doseCeilingCoverage").asText(), "the early done");
+		assertEquals("published", eventData("grounded").get("doseCeilingCoverage").asText(), "the grounded event");
+	}
+
+	@Test
+	public void theDoseCeilingKeyIsWrittenInExactlyOnePlace() throws Exception {
+		assertEquals(1, ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
+				"\"doseCeilingCoverage\""), "the doseCeilingCoverage key must be spelled in exactly one place");
+	}
+
+	/**
 	 * The whole payload still marshals for a client asking for XML. A bare token cannot trip the
 	 * failure {@code chartOrderBridges} did — {@code XStreamMarshaller} refuses
 	 * {@code java.util.Collections}' immutable wrappers, not strings — and this case is what makes
@@ -263,7 +290,7 @@ public class ChartSearchAiConditionRuleCoverageTest {
 			return new ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-					null, null, null, stated, null, null, false, null, null, null);
+					null, null, null, stated, null, null, false, null, null, null, doseStated);
 		}
 
 		@Override

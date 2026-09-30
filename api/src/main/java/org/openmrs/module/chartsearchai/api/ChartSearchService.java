@@ -1102,7 +1102,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null);
 		}
 
 		/**
@@ -1141,7 +1141,9 @@ public interface ChartSearchService {
 				boolean answeredByTheModule,
 				InteractionClaimPairs interactionClaimPairs,
 				List<CautionLedOverWithholding> cautionLedOverWithholding,
-				List<UnfoundedFindingSeverity> unfoundedFindingSeverities) {
+				List<UnfoundedFindingSeverity> unfoundedFindingSeverities,
+				DrugReferenceLoad.Coverage doseCeilingCoverage) {
+			this.doseCeilingCoverage = doseCeilingCoverage;
 			// Null survives as null, the rule the measurement lists here share (issue #560).
 			this.unfoundedFindingSeverities = unfoundedFindingSeverities == null ? null
 					: java.util.Collections.unmodifiableList(
@@ -1926,6 +1928,23 @@ public interface ChartSearchService {
 		 */
 		public DrugReferenceLoad.Coverage getConditionRuleCoverage() {
 			return conditionRuleCoverage;
+		}
+
+		/** @see #getDoseCeilingCoverage() */
+		private final DrugReferenceLoad.Coverage doseCeilingCoverage;
+
+		/**
+		 * @return whether this install's dataset publishes a DOSE CEILING the overdose check could compare an
+		 *         answer's dose against — {@code DrugSafetyValidator.doseCeilingCoverage()}, resolved once per
+		 *         answer beside {@link #getConditionRuleCoverage()} and published as the
+		 *         {@code doseCeilingCoverage} key in the same three-valued vocabulary. Dose ceilings are
+		 *         age-banded, and they are the only thing this module reads the patient's AGE against, so
+		 *         {@code absent} or {@code unloaded} is what licenses a client to say her age was not
+		 *         checked. It says what the DATASET publishes and never that a dose was checked, and
+		 *         {@code null} is no statement.
+		 */
+		public DrugReferenceLoad.Coverage getDoseCeilingCoverage() {
+			return doseCeilingCoverage;
 		}
 
 		/**

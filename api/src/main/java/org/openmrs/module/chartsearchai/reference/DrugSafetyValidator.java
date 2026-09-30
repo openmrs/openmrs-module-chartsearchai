@@ -4371,6 +4371,28 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * @return the dose-ceiling arm's verdict on the loaded dataset — whether it publishes an age-banded
+	 *         dose ceiling for the overdose check to compare a stated dose against — read off the same load
+	 *         status as {@link #conditionRuleCoverage()} and for the same reasons, and {@code null} where
+	 *         that status cannot be read. Published on every answer as {@code doseCeilingCoverage}; see
+	 *         {@code ChartAnswer.getDoseCeilingCoverage()} for what it licenses a client to say.
+	 */
+	public DrugReferenceLoad.Coverage doseCeilingCoverage() {
+		try {
+			if (drugReferenceService == null) {
+				return null;
+			}
+			return drugReferenceService.getLoadStatus().coverageOf(DrugReferenceLoad.Arm.DOSE_CEILINGS);
+		}
+		catch (RuntimeException e) {
+			log.warn("Could not read the drug-reference load status; the dose-ceiling coverage statement "
+					+ "is withheld rather than guessed", e);
+			return null;
+		}
+	}
+
+
+	/**
 	 * @return whether {@code c} is a rule this module can put to the patient's chart AT ALL — a
 	 *         recognised {@code type} carrying a token there is something to look for. Distinguishing
 	 *         that from "asked and the chart says no" is what a NEGATIVE claim needs and a chip does not:

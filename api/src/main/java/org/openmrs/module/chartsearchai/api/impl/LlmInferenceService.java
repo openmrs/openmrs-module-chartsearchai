@@ -256,6 +256,10 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnfoundedFindingSeverity> unfoundedFindingSeverities =
 					UnfoundedFindingSeverityCheck.reportUnfoundedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// ADR Decision 136: a cited finding's unknown-significance qualifier the answer drops. Carried for the
+			// reason its neighbours are, and null on the early done for the same reason.
+			List<Integer> unstatedSignificanceQualifiers = SignificanceQualifierCheck.report(patient,
+					response.getAnswer(), cited, chart.getMappings());
 			// And the fifth (issue #395): the findings the prompt carried, counted against the ones
 			// the answer cited. ChartSearchService.ChartAnswer.getFindingCitationExtent() is
 			// canonical for what that measures and for the gap it was published to fill.
@@ -337,7 +341,8 @@ public class LlmInferenceService implements ChartSearchService {
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
-					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims);
+					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
+					unstatedSignificanceQualifiers);
 			outcome = "ok";
 			return answer;
 		}
@@ -767,7 +772,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
-					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims));
+					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -821,6 +826,10 @@ public class LlmInferenceService implements ChartSearchService {
 			List<ChartSearchService.UnfoundedFindingSeverity> unfoundedFindingSeverities =
 					UnfoundedFindingSeverityCheck.reportUnfoundedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// ADR Decision 136: a cited finding's unknown-significance qualifier the answer drops. Carried for the
+			// reason its neighbours are, and null on the early done for the same reason.
+			List<Integer> unstatedSignificanceQualifiers = SignificanceQualifierCheck.report(patient,
+					response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #395): the check runs here, after the user-visible handoff. It is two
 			// walks, one decode of the answer's markers and a set
@@ -892,7 +901,8 @@ public class LlmInferenceService implements ChartSearchService {
 					activeOrderClaims,
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
-					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims);
+					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
+					unstatedSignificanceQualifiers);
 			outcome = "ok";
 			return answer;
 		}
@@ -980,11 +990,11 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
-				doseCeilingCoverage, null);
+				doseCeilingCoverage, null, null);
 	}
 
 	/**

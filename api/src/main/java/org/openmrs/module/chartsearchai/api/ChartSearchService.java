@@ -1102,7 +1102,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null);
 		}
 
 		/**
@@ -1143,7 +1143,11 @@ public interface ChartSearchService {
 				List<CautionLedOverWithholding> cautionLedOverWithholding,
 				List<UnfoundedFindingSeverity> unfoundedFindingSeverities,
 				DrugReferenceLoad.Coverage doseCeilingCoverage,
-				List<String> unsupportedEndedOrderClaims) {
+				List<String> unsupportedEndedOrderClaims,
+				List<Integer> unstatedSignificanceQualifiers) {
+			// Null survives as null, the rule every list above shares (ADR Decision 136).
+			this.unstatedSignificanceQualifiers = unstatedSignificanceQualifiers == null ? null
+					: java.util.Collections.unmodifiableList(new java.util.ArrayList<Integer>(unstatedSignificanceQualifiers));
 			this.doseCeilingCoverage = doseCeilingCoverage;
 			// Null survives as null, the rule every list above shares (ADR Decision 135).
 			this.unsupportedEndedOrderClaims = unsupportedEndedOrderClaims == null ? null
@@ -1939,6 +1943,23 @@ public interface ChartSearchService {
 
 		/** @see #getUnsupportedEndedOrderClaims() */
 		private final List<String> unsupportedEndedOrderClaims;
+
+		/** @see #getUnstatedSignificanceQualifiers() */
+		private final List<Integer> unstatedSignificanceQualifiers;
+
+		/**
+		 * @return the citation indexes, ascending, of the safety findings the answer cites whose record says the
+		 *         interaction's clinical significance is unknown, where the answer says nothing of the kind — ADR
+		 *         Decision 136, by {@code SignificanceQualifierCheck}, published as the
+		 *         {@code unstatedSignificanceQualifiers} key. {@code []} is a measurement of none and not a
+		 *         certificate: one qualifier anywhere in the answer is read as covering every cited finding.
+		 *         {@code null} is no measurement, which is the early {@code done} (the check runs after the
+		 *         handoff), every answer the module composed itself, and every answer where the check could not
+		 *         run.
+		 */
+		public List<Integer> getUnstatedSignificanceQualifiers() {
+			return unstatedSignificanceQualifiers;
+		}
 
 		/**
 		 * @return the drugs the MODEL's answer says have an order that is no longer in force where no chart record

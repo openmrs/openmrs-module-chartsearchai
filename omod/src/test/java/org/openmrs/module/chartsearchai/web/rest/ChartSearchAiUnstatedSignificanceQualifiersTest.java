@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -33,20 +34,18 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Whether any model wrote the answer reaches the wire as {@code answeredByTheModule} — issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. What it
- * means is canonical at {@code ChartSearchService.ChartAnswer.isAnsweredByTheModule()}, and that the
- * orchestration sets it is pinned one layer down by {@code LlmInferenceServiceAnswerFromFindingsContextTest}.
- * Here the subject is the wire: every surface, both values, and one write.
+ * The {@code unstatedSignificanceQualifiers} key (ADR Decision 136): the cited findings whose unknown-significance
+ * qualifier the answer drops, published as the module stated them, with {@code []} and {@code null} kept apart.
  */
-public class ChartSearchAiAnsweredByTheModuleTest {
+public class ChartSearchAiUnstatedSignificanceQualifiersTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
-	private static final String QUESTION = "Can I give her ibuprofen?";
+	private static final String QUESTION = "The patient is currently on Lamivudine, Nevirapine, Stavudine, is it "
+			+ "safe to give Rifampicin?";
 
-	private static final String COMPOSED = "No — this module's drug-safety check found a reason to withhold "
-			+ "Ibuprofen.";
+	private static final String MODEL_ANSWER = "Nevirapine's order is no longer in force, but it interacts with "
+			+ "Rifampicin (rifampin) — Major.";
 
 	private ChartSearchAiRestController controller;
 
@@ -54,14 +53,15 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	private boolean byTheModule;
+	/** What the module states per case. */
+	private List<Integer> stated;
 
 	@BeforeEach
 	public void setUp() {
-		byTheModule = true;
+		stated = Collections.unmodifiableList(Arrays.asList(46, 51));
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
-		controller.setChartSearchService(new ComposedAnswerStubService());
+		controller.setChartSearchService(new QualifierStubService());
 		controller.setPatientAccessCheck((user, patient) -> true);
 		out = new ByteArrayOutputStream();
 		openmrsContext.install();
@@ -73,10 +73,10 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 	}
 
 	private ChartSearchService.ChartAnswer answer() {
-		return new ChartSearchService.ChartAnswer(COMPOSED,
+		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
-				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-				null, null, null, null, null, null, byTheModule, null, null, null, null, null, null);
+				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, false, null, null, null, null, null, stated);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -89,46 +89,48 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 	}
 
 	@Test
-	public void theSearchResponseStatesBothValues() {
-		assertEquals(Boolean.TRUE, searchPayload().get("answeredByTheModule"));
-		byTheModule = false;
-		Map<String, Object> modelWritten = searchPayload();
-		assertTrue(modelWritten.containsKey("answeredByTheModule"),
-				"the key is present on every answer, so a client reads one field unconditionally");
-		assertEquals(Boolean.FALSE, modelWritten.get("answeredByTheModule"));
+	public void theSearchResponseNamesEachCitationInOrder() {
+		assertEquals(Arrays.asList(46, 51), searchPayload().get("unstatedSignificanceQualifiers"));
 	}
 
 	@Test
-	public void theEarlyDoneAndTheGroundedEventStateItToo() throws Exception {
+	public void anEmptyStatementAndNoStatementAreDifferentOnTheWire() {
+		stated = Collections.emptyList();
+		assertEquals(Collections.emptyList(), searchPayload().get("unstatedSignificanceQualifiers"),
+				"a check that ran and found nothing states an empty list, not null");
+
+		stated = null;
+		Map<String, Object> none = searchPayload();
+		assertTrue(none.containsKey("unstatedSignificanceQualifiers"),
+				"the key must be present even where the module states nothing: " + none);
+		assertEquals(null, none.get("unstatedSignificanceQualifiers"),
+				"no measurement is null, and must not be flattened to an empty list");
+	}
+
+	@Test
+	public void theEarlyDoneCarriesItToo() throws Exception {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
 
 		JsonNode done = SseEvents.dataOfType(out, "done", MAPPER);
-		assertTrue(done.get("answeredByTheModule").asBoolean(),
-				"the early done is what a streaming user sees, and the flag is known as soon as the chart is built");
-		assertTrue(SseEvents.dataOfType(out, "grounded", MAPPER).get("answeredByTheModule").asBoolean());
-	}
-
-	@Test
-	public void theClassicDoneEventStatesIt() throws Exception {
-		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), false);
-
-		assertTrue(SseEvents.dataOfType(out, "done", MAPPER).get("answeredByTheModule").asBoolean());
+		assertEquals(2, done.get("unstatedSignificanceQualifiers").size());
+		assertEquals(46, done.get("unstatedSignificanceQualifiers").get(0).asInt());
 	}
 
 	@Test
 	public void theWholePayloadStillMarshalsForAnXmlClient() throws Exception {
-		XmlPayloads.assertMarshals(searchPayload(), "a composed answer");
+		XmlPayloads.assertMarshals(searchPayload(), "a stated list of citations");
+		stated = null;
+		XmlPayloads.assertMarshals(searchPayload(), "no measurement at all");
 	}
 
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {
-		int keys = ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
-				"\"answeredByTheModule\"");
-		assertEquals(1, keys, "answeredByTheModule must be written in exactly one place, beside the keys "
-				+ "it explains. Found " + keys + " writes of it.");
+		assertEquals(1, ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
+				"\"unstatedSignificanceQualifiers\""), "the key must be written in exactly one place");
 	}
 
-	private class ComposedAnswerStubService implements ChartSearchService {
+	/** An answer stating the claim on both the classic and the async shapes, as production's does. */
+	private class QualifierStubService implements ChartSearchService {
 
 		@Override
 		public ChartAnswer search(Patient patient, String question) {
@@ -136,17 +138,15 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 		}
 
 		@Override
-		public ChartAnswer searchStreaming(Patient patient, String question,
-				Consumer<String> tokenConsumer) {
+		public ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer) {
 			return searchStreaming(patient, question, tokenConsumer, r -> { }, c -> { }, a -> { });
 		}
 
 		@Override
-		public ChartAnswer searchStreaming(Patient patient, String question,
-				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				Consumer<List<RecordReference>> citationsConsumer,
+		public ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+				Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer,
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
-			tokenConsumer.accept(COMPOSED);
+			tokenConsumer.accept(MODEL_ANSWER);
 			citationsConsumer.accept(answer().getReferences());
 			ungroundedAnswerConsumer.accept(answer());
 			return answer();

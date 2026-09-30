@@ -285,7 +285,13 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				SafetyWarningFixtures.aboutAnotherOfHerMedications(SafetyWarningFixtures.aboutCurrentOrders(
 						SafetyWarningFixtures.recordedAllergenContraindication("Lidocaine",
 								"The patient has a recorded allergy to Lidocaine.", true),
-						SafetyWarningFixtures.activeOrder("uuid-lidocaine", "Lidocaine"))));
+						SafetyWarningFixtures.activeOrder("uuid-lidocaine", "Lidocaine"))),
+				// Chip 17: a question-pair finding resting on a drug the question lists and her chart does not hold
+				// (ADR Decision 133) — the only chip here with a non-empty listedDrugsNotOnHerChart, so a put
+				// dropping or reshaping the list disagrees with it. Mutate the put and read this class's failure.
+				SafetyWarningFixtures.restingOnListedDrugs(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
+						"Nevirapine", "Nevirapine interacts with Amlodipine, also named in the question — Moderate.",
+						"Moderate"), "Nevirapine"));
 	}
 
 	private ChartSearchAiRestController controller;

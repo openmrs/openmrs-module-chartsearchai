@@ -147,6 +147,15 @@ public final class SafetyWarningFixtures {
 	}
 
 	/**
+	 * {@code chip} as {@code DrugSafetyValidator.EndedOrders} stamps it where it rests on drugs the question lists
+	 * and her chart holds no active order for — through {@code SafetyWarning.restingOnListedDrugs}, that step's
+	 * own writer, so the chip publishes a {@code listedDrugsNotOnHerChart} production could.
+	 */
+	public static SafetyWarning restingOnListedDrugs(SafetyWarning chip, String... names) {
+		return chip.restingOnListedDrugs(Arrays.asList(names));
+	}
+
+	/**
 	 * {@code chip} stamped with {@code orders} as the active orders it is about — through
 	 * {@code DrugSafetyValidator.currentMedicationOrdersOn}, the one stamp the validator writes (issue #552),
 	 * so the chip publishes a {@code currentMedicationOrders} production could.

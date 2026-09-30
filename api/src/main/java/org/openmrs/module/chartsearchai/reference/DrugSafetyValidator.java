@@ -897,21 +897,26 @@ public class DrugSafetyValidator {
 		// the question-driven findings are built: the contraindication ledger below,
 		// addInteractionWarnings and addQuestionPairInteractions. A per-pass local, for issue #172's
 		// reason. See EndedOrders.
+		// The drugs the question lists that her chart holds no active order for (issue #515) — off this
+		// pass's own resolution of her orders and its one naming of each substance, so the sentence names a
+		// drug as the chips do. Asked on EVERY pass, once: the pass that states the sentence states these
+		// names, and every pass stamps each chip resting on one of them with it (ADR Decision 133), so the
+		// sentence and the chips cannot disagree. See listedWithNoActiveOrder.
+		// In its own try: an informational statement must never take the pass's findings down with it.
+		Map<Object, String> listedNotOnHerChart;
+		try {
+			listedNotOnHerChart = listedWithNoActiveOrder(question, questionDrugs, resolvedRows, orderEntries,
+					mappings, bridgedOrders, context, subjects);
+		}
+		catch (RuntimeException e) {
+			log.warn("Listed-drug statement failed; stating none — the findings are unaffected", e);
+			listedNotOnHerChart = Collections.emptyMap();
+		}
 		EndedOrders endedOrders = EndedOrders.of(inPlay, questionDrugs, question, resolvedRows, orderEntries,
-				mappings, bridgedOrders, context);
+				mappings, bridgedOrders, context, listedNotOnHerChart);
 		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects, endedOrders);
-		// And, on the pass that states it, the drugs the question lists that her chart holds no active order
-		// for (issue #515) — off this pass's own resolution of her orders and its one naming of each
-		// substance, so the sentence names a drug as the chips do. See listedWithNoActiveOrder.
-		// In its own try: an informational sentence must never take the pass's findings down with it.
 		if (listedSink != null) {
-			try {
-				listedSink.state(listedWithNoActiveOrder(question, questionDrugs, resolvedRows, orderEntries,
-						mappings, bridgedOrders, context, subjects));
-			}
-			catch (RuntimeException e) {
-				log.warn("Listed-drug statement failed; stating none — the findings are unaffected", e);
-			}
+			listedSink.state(new ArrayList<String>(listedNotOnHerChart.values()));
 		}
 
 		// Which substances may still owe the interaction arm and the dose arm their one call — "may",
@@ -3138,17 +3143,26 @@ public class DrugSafetyValidator {
 		 */
 		private final Map<Object, List<DrugReference>> subjectRows;
 
+		/**
+		 * The drugs the question lists that her chart holds no active order for, each substance group key to
+		 * its name — {@link DrugSafetyValidator#listedWithNoActiveOrder}'s one answer for the pass, stamped on
+		 * each chip resting on one of them ({@link SafetyWarning#listedDrugsNotOnHerChart()}, ADR Decision 133).
+		 * Here because {@link #stamp} is the step every question-driven chip passes through.
+		 */
+		private final Map<Object, String> listed;
+
 		private EndedOrders(Map<Object, Date> substances, Map<Object, List<DrugReference>> rows,
-				Map<Object, List<DrugReference>> subjectRows) {
+				Map<Object, List<DrugReference>> subjectRows, Map<Object, String> listed) {
 			this.substances = substances;
 			this.rows = rows;
 			this.subjectRows = subjectRows;
+			this.listed = listed;
 		}
 
-		/** A pass holding no substance as ended, which still states each chip's subject rows. */
-		private static EndedOrders none(Map<Object, List<DrugReference>> subjectRows) {
+		/** A pass holding no substance as ended, which still states each chip's subject rows and listed drugs. */
+		private static EndedOrders none(Map<Object, List<DrugReference>> subjectRows, Map<Object, String> listed) {
 			return new EndedOrders(Collections.<Object, Date> emptyMap(),
-					Collections.<Object, List<DrugReference>> emptyMap(), subjectRows);
+					Collections.<Object, List<DrugReference>> emptyMap(), subjectRows, listed);
 		}
 
 		/**
@@ -3163,12 +3177,14 @@ public class DrugSafetyValidator {
 		 * @param bridgedOrders the pass's own bridged-concept holder, handed to
 		 *        {@link #everyActiveOrderResolves} rather than resolved a second time (issue #353)
 		 * @param context her clinical context
+		 * @param listed {@link DrugSafetyValidator#listedWithNoActiveOrder}'s answer for this pass
 		 */
 		static EndedOrders of(Set<DrugReference> inPlay, Set<DrugReference> questionDrugs, String question,
 				Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
-				List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context) {
+				List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context,
+				Map<Object, String> listed) {
 			if (context == null || mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
-				return none(resolvedRows);
+				return none(resolvedRows, listed);
 			}
 			// ENDED is the chart builder's stamp saying FALSE — never re-derived, and never a type name,
 			// the stamp being FALSE only for a drug-order record. Everything else a drug-order record can
@@ -3177,7 +3193,7 @@ public class DrugSafetyValidator {
 			List<RecordMapping> notEnded = new ArrayList<RecordMapping>();
 			partitionOrderRecords(mappings, ended, notEnded);
 			if (ended.isEmpty()) {
-				return none(resolvedRows);
+				return none(resolvedRows, listed);
 			}
 			List<String> endedTexts = lowered(ended);
 			List<String> notEndedTexts = lowered(notEnded);
@@ -3222,9 +3238,9 @@ public class DrugSafetyValidator {
 			// The costlier question last, and only where there is a candidate to ask it for.
 			if (substances.isEmpty() || !context.activeDrugOrdersRead()
 					|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
-				return none(resolvedRows);
+				return none(resolvedRows, listed);
 			}
-			return new EndedOrders(substances, substanceRows, resolvedRows);
+			return new EndedOrders(substances, substanceRows, resolvedRows, listed);
 		}
 
 		/**
@@ -3275,9 +3291,22 @@ public class DrugSafetyValidator {
 		SafetyWarning stamp(DrugReference subject, SafetyWarning chip) {
 			Object substance = subject.substanceGroupKey();
 			SafetyWarning stated = aboutTheSubject(subject, chip);
+			stated = restingOnListed(stated, subject);
 			return substances.containsKey(substance)
 					? stated.asAboutAnEndedOrder(substances.get(substance), rows.get(substance))
 					: stated;
+		}
+
+		/** {@code chip} stated as resting on {@code drug} too, where the question lists it and her chart holds
+		 *  no active order for it — added after any the chip already names, never replacing them. */
+		private SafetyWarning restingOnListed(SafetyWarning chip, DrugReference drug) {
+			String name = listed.get(drug.substanceGroupKey());
+			if (name == null) {
+				return chip;
+			}
+			List<String> names = new ArrayList<String>(chip.listedDrugsNotOnHerChart());
+			names.add(name);
+			return chip.restingOnListedDrugs(names);
 		}
 
 		/**
@@ -3297,7 +3326,7 @@ public class DrugSafetyValidator {
 		 *  it names, its subject being the dataset's order of the two (issue #515). Its ended-order referent
 		 *  stays the subject's: "withhold it" names the subject. */
 		SafetyWarning stampPair(DrugReference subject, DrugReference partner, SafetyWarning chip) {
-			SafetyWarning stated = stamp(subject, chip);
+			SafetyWarning stated = restingOnListed(stamp(subject, chip), partner);
 			List<DrugReference> ofThePartner = subjectRows.get(partner.substanceGroupKey());
 			List<DrugReference> both = new ArrayList<DrugReference>(stated.subjectRows());
 			both.addAll(ofThePartner != null ? ofThePartner : Collections.singletonList(partner));
@@ -3307,8 +3336,8 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The drugs {@code question} lists before the drug it proposes that the patient's chart holds no active
-	 * order for, each named as this pass names its substance ({@link SubstanceSubjects#subjectOf}), in the
-	 * order the question lists them — issue
+	 * order for, each substance group key to its name as this pass names it ({@link SubstanceSubjects#subjectOf}),
+	 * in the order the question lists them — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>, ADR Decision 119.
 	 * Empty wherever the module cannot say it.
 	 *
@@ -3323,7 +3352,7 @@ public class DrugSafetyValidator {
 	 * she takes it (ADR Decision 110 measured how rarely a combination NAME does that, and names the brand
 	 * that does).
 	 */
-	private static List<String> listedWithNoActiveOrder(String question, Set<DrugReference> questionDrugs,
+	private static Map<Object, String> listedWithNoActiveOrder(String question, Set<DrugReference> questionDrugs,
 			Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
 			List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context,
 			SubstanceSubjects subjects) {
@@ -3331,14 +3360,14 @@ public class DrugSafetyValidator {
 				new ArrayList<DrugReference>(questionDrugs));
 		if (listed.isEmpty() || context == null || !context.activeDrugOrdersRead()
 				|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
-			return Collections.emptyList();
+			return Collections.emptyMap();
 		}
 		Set<Object> active = substancesOf(orderEntries);
 		List<RecordMapping> orderRecords = new ArrayList<RecordMapping>();
 		EndedOrders.partitionOrderRecords(mappings, orderRecords, orderRecords);
 		List<String> orderTexts = EndedOrders.lowered(orderRecords);
 		Set<Object> seen = new HashSet<Object>();
-		List<String> names = new ArrayList<String>();
+		Map<Object, String> names = new LinkedHashMap<Object, String>();
 		for (DrugReference ref : listed) {
 			Object substance = ref.substanceGroupKey();
 			if (!seen.add(substance) || active.contains(substance)) {
@@ -3348,7 +3377,7 @@ public class DrugSafetyValidator {
 			if (EndedOrders.namesAnyRow(orderTexts, rows != null ? rows : Collections.singletonList(ref))) {
 				continue;
 			}
-			names.add(subjects.subjectOf(ref).displayLabel());
+			names.put(substance, subjects.subjectOf(ref).displayLabel());
 		}
 		return names;
 	}

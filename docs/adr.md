@@ -136,6 +136,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 130: Whether a question reaches the drug-interaction checks is decided by code, not by a model](#decision-130-whether-a-question-reaches-the-drug-interaction-checks-is-decided-by-code-not-by-a-model)
 - [Decision 131: answerFromFindings ships on, because Decision 108's gate was run](#decision-131-answerfromfindings-ships-on-because-decision-108s-gate-was-run)
 - [Decision 132: The dataset tail's representative renders under its own lead, not as the last item of her list](#decision-132-the-dataset-tails-representative-renders-under-its-own-lead-not-as-the-last-item-of-her-list)
+- [Decision 133: A finding resting on a drug the question lists and her chart does not hold names it](#decision-133-a-finding-resting-on-a-drug-the-question-lists-and-her-chart-does-not-hold-names-it)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -11219,6 +11220,9 @@ takes one asked substance, shipped off then and ships on since
   sentence it needs no chip. Decided inside the pre-answer
   `validate` pass (`DrugSafetyValidator.listedWithNoActiveOrder`), which already holds her orders
   resolved and the pass's one naming of each substance, and stamped on the chart the injector builds.
+  Each chip resting on one of those drugs names it since
+  [Decision 133](#decision-133-a-finding-resting-on-a-drug-the-question-lists-and-her-chart-does-not-hold-names-it),
+  off the same computation.
   The listed drugs are `DrugReferenceInjector.listedBeforeTheProposal`'s: the question drugs named before
   the trailing clause `QueryScopeRouter.asksWhetherToGiveADrug` admits, never the drug that clause
   proposes, and nothing where no such clause separates them. The gates are `EndedOrders`': her active
@@ -13106,3 +13110,54 @@ not against breadth. On the one cell measured above, the separate lead was enoug
   `MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC` strangers under `Interactions:`, with none of hers
   beside them. Whether the model states those as hers was not measured here.
 - **The measurement is one cell on one model.** A second phrasing or patient was not run.
+
+## Decision 133: A finding resting on a drug the question lists and her chart does not hold names it
+
+**Status: Accepted** (September 2026) — implemented, no issue.
+
+### Context
+
+Asked *"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Amlodipine?"* of
+a chart holding none of the three (the 3.7.1 standalone, patient `763e6e5f-c489-4bab-8a55-c379f085dd1c`,
+question id 13170), the answer opened *"Amlodipine can be given, with one caution: coadministration with
+nevirapine may decrease the plasma concentrations … a Moderate problem [50]."* and ended with
+[Decision 119](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)'s *"The chart holds
+no active order for Lamivudine, Nevirapine or Stavudine."* The Moderate finding is true only if she is on
+nevirapine, which only the question says, and nothing on its chip, or on the second chip about nevirapine
+against her lidocaine order, said so. A client drawing the chips beside the answer had no way to mark them
+as conditional on the question's list.
+
+### The decision
+
+- **Each chip carries the listed drugs it rests on**, as `SafetyWarning.listedDrugsNotOnHerChart()`, published
+  VERBATIM as the chip's `listedDrugsNotOnHerChart` key.
+- **The drugs are Decision 119's, from one computation.** `DrugSafetyValidator.listedWithNoActiveOrder` now
+  answers each substance group key to its name and runs once on every `validate` pass, in its own try; the
+  pass that states the sentence states its names, and every pass hands the map to `EndedOrders`, so the
+  sentence and the chips cannot name different drugs.
+- **Stamped where every question-driven chip already passes**: `EndedOrders.stamp` for a chip's subject, and
+  `stampPair` for a question-pair finding's partner too, since that arm makes whichever drug the dataset lists
+  first the subject.
+- **No prompt text changes and no clause changes**, as in Decision 119: the record the model reads is
+  untouched, so this moves no answer.
+
+### Alternatives
+
+- **A provenance clause on the finding record**, so the model states the caution conditionally. Not taken:
+  it is prompt-facing, Decision 119 chose the deterministic module-owned form for this question shape, and the
+  prompt-facing changes measured against these cells have each moved answers they were not aimed at (#566's
+  option 1 A/B, recorded on that issue on 2026-09-30).
+- **Leading the answer with the appended sentence.** Not taken: `cautionLedOverWithholding` and the probe
+  scorer read the answer's lead.
+
+### Residues
+
+- **The answer's own wording is unchanged**, so the caution still leads and the sentence still trails. The
+  key lets a client mark the chip; it does not make the prose conditional.
+- **The gates are Decision 119's**, so a drug the module cannot rule out she takes — orders not read in full,
+  or one that resolved to nothing — names nothing, and the chip reads as before.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aChipRestingOnAListedDrugHerChartDoesNotHoldNamesIt`,
+`.aQuestionPairChipWhosePartnerIsTheListedDrugNamesIt`, `.aChipAboutAListedDrugSheHoldsAnActiveOrderForNamesNothing`
+and `.aChipAboutAListedDrugADrugOrderRecordNamesNamesNothing`; the wire by
+`ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`.

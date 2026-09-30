@@ -1715,6 +1715,11 @@ public class ChartSearchAiRestController {
 			// client can set it beside the answer rather than among its findings. false is no claim the chip
 			// is about that drug: SafetyWarning.isAboutAnotherOfHerMedications() says why.
 			map.put("aboutAnotherOfHerMedications", warning.isAboutAnotherOfHerMedications());
+			// ADR Decision 133: the drugs the question lists as hers, with no active order on her chart, that
+			// this finding rests on. Copied out of the unmodifiable list for the XML-marshalling reason
+			// chartOrderBridges is. Empty is no claim her chart holds them: SafetyWarning.listedDrugsNotOnHerChart()
+			// says why.
+			map.put("listedDrugsNotOnHerChart", new ArrayList<String>(warning.listedDrugsNotOnHerChart()));
 			out.add(map);
 		}
 		return out;

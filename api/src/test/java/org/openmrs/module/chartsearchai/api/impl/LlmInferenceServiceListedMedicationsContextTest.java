@@ -152,6 +152,20 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				+ " stands beside the answer, chips were: " + answer.getSafetyWarnings());
 	}
 
+	/** The one chip about {@code drug} rated {@code severity} whose detail names {@code partner}. */
+	private static SafetyWarning chip(ChartAnswer answer, String drug, String partner, String severity) {
+		List<SafetyWarning> found = new ArrayList<SafetyWarning>();
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			if (drug.equals(chip.getDrug()) && severity.equals(chip.getSeverity())
+					&& chip.getDetail().toLowerCase().contains(partner)) {
+				found.add(chip);
+			}
+		}
+		assertEquals(1, found.size(), "precondition: one " + severity + " chip about " + drug + " naming " + partner
+				+ ", chips were: " + answer.getSafetyWarnings());
+		return found.get(0);
+	}
+
 	private static void assertReported(List<CautionLedOverWithholding> reported, int... citations) {
 		assertNotNull(reported, "the check ran, so it states a measurement");
 		List<String> got = new ArrayList<String>();
@@ -614,6 +628,72 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		@Override
 		boolean usePreFilter() {
 			return false;
+		}
+	}
+
+	/**
+	 * A finding about a drug the question lists as hers and her chart holds no active order for rests on the
+	 * question's list, and its chip names that drug: the Moderate nevirapine/amlodipine finding is true only
+	 * if she is on nevirapine, which only the question says. The finding about the proposed drug against the
+	 * order she does hold rests on nothing the question listed.
+	 */
+	@Test
+	public void aChipRestingOnAListedDrugHerChartDoesNotHoldNamesIt() throws IOException {
+		ChartAnswer answer = serviceAnswering(AMLODIPINE_CAUTION_LEAD, obs()).service.search(patient,
+				AMLODIPINE_QUESTION);
+
+		assertEquals(Collections.singletonList("Nevirapine"),
+				chip(answer, "Nevirapine", "amlodipine", "Moderate").listedDrugsNotOnHerChart(),
+				"the question-pair finding between the listed nevirapine and the proposed amlodipine");
+		assertEquals(Collections.singletonList("Nevirapine"),
+				chip(answer, "Nevirapine", "rifamp", "Major").listedDrugsNotOnHerChart(),
+				"the listed nevirapine screened against the rifampicin order she does hold");
+		assertEquals(Collections.emptyList(),
+				chip(answer, "Amlodipine", "rifamp", "Major").listedDrugsNotOnHerChart(),
+				"the proposed amlodipine against her own rifampicin order rests on nothing the question listed");
+	}
+
+	/**
+	 * A question-pair finding rests on its PARTNER too: that arm makes whichever drug the dataset lists first
+	 * its subject, so asked the other way round the listed amlodipine is the nevirapine chip's partner.
+	 */
+	@Test
+	public void aQuestionPairChipWhosePartnerIsTheListedDrugNamesIt() throws IOException {
+		ChartAnswer answer = serviceAnswering("Nevirapine can be given, with one caution.", obs()).service.search(
+				patient, "The patient is currently on Amlodipine, is it safe to give Nevirapine?");
+
+		assertEquals(Collections.singletonList("Amlodipine"),
+				chip(answer, "Nevirapine", "amlodipine", "Moderate").listedDrugsNotOnHerChart(),
+				"the proposed nevirapine is the subject and the listed amlodipine its partner");
+	}
+
+	/** A listed drug an active order of hers resolves to is on her chart, so no chip names it. */
+	@Test
+	public void aChipAboutAListedDrugSheHoldsAnActiveOrderForNamesNothing() throws IOException {
+		ChartAnswer answer = serviceAnswering(AMLODIPINE_CAUTION_LEAD, obs()).service.search(patient,
+				"The patient is currently on Rifampicin, Nevirapine, Stavudine, is it safe to give Amlodipine?");
+
+		assertEquals(Collections.emptyList(),
+				chip(answer, "Amlodipine", "rifamp", "Major").listedDrugsNotOnHerChart(),
+				"her rifampicin is on her chart, so the list adds nothing to this finding");
+		assertEquals(Collections.singletonList("Nevirapine"),
+				chip(answer, "Nevirapine", "amlodipine", "Moderate").listedDrugsNotOnHerChart());
+	}
+
+	/**
+	 * A listed drug a drug-order record names — here one no longer in force, issue #472's referent — is not a
+	 * drug her chart holds nothing of, exactly as the appended sentence reads it, so its chips name nothing.
+	 */
+	@Test
+	public void aChipAboutAListedDrugADrugOrderRecordNamesNamesNothing() throws IOException {
+		ChartAnswer answer = serviceAnswering(AMLODIPINE_CAUTION_LEAD, obs(),
+			DrugReferenceTestSupport.drugOrderRecord(2, "Nevirapine 200mg", Boolean.FALSE, null)).service.search(
+				patient, AMLODIPINE_QUESTION);
+
+		assertTrue(answer.getAnswer().endsWith(" The chart holds no active order for Lamivudine or Stavudine."),
+				"precondition: the listed sentence no longer names nevirapine, was: " + answer.getAnswer());
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertEquals(Collections.emptyList(), chip.listedDrugsNotOnHerChart(), "was: " + chip);
 		}
 	}
 }

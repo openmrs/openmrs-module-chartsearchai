@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.function.Consumer;
@@ -1985,6 +1987,9 @@ public interface ChartSearchService {
 		 *  {@link #isAttachedByTheModule()} (issue #305). */
 		private final boolean attachedByTheModule;
 
+		/** The cited findings this citation was attached FOR — see {@link #getAttachedFor()}. */
+		private final List<Integer> attachedFor;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this(index, resourceType, resourceUuid, date, null);
 		}
@@ -2010,6 +2015,16 @@ public interface ChartSearchService {
 		 */
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
 				String source, int withheldInteractions, boolean attachedByTheModule) {
+			this(index, resourceType, resourceUuid, date, grounded, source, withheldInteractions,
+					attachedByTheModule, Collections.<Integer> emptyList());
+		}
+
+		/**
+		 * Full constructor, additionally saying which cited findings the module attached this citation
+		 * for — see {@link #getAttachedFor()}. Every shorter constructor answers the empty list.
+		 */
+		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
+				String source, int withheldInteractions, boolean attachedByTheModule, List<Integer> attachedFor) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -2018,6 +2033,8 @@ public interface ChartSearchService {
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
 			this.attachedByTheModule = attachedByTheModule;
+			this.attachedFor = attachedFor == null || attachedFor.isEmpty() ? Collections.<Integer> emptyList()
+					: Collections.unmodifiableList(new ArrayList<Integer>(attachedFor));
 		}
 
 		public int getIndex() {
@@ -2124,6 +2141,21 @@ public interface ChartSearchService {
 		}
 
 		/**
+		 * @return the citation indexes of the findings the answer cited that this record was attached
+		 *         FOR — each a {@code safety_finding} whose
+		 *         {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping#getDerivedFrom()}
+		 *         names this record, in the order the answer's citations were read. Empty for every
+		 *         citation the model emitted, and so whenever {@link #isAttachedByTheModule()} is false.
+		 *
+		 *         <p>It is what lets a client say what the attached record IS to the answer — "the
+		 *         record behind [46]" — rather than who attached it, which a clinician cannot act on.
+		 *         Several entries where one record backs several cited findings.
+		 */
+		public List<Integer> getAttachedFor() {
+			return attachedFor;
+		}
+
+		/**
 		 * @return a copy of this reference carrying the given grounding verdict
 		 *
 		 *         <p>Every other field travels with it, {@link #isAttachedByTheModule()} included.
@@ -2139,7 +2171,7 @@ public interface ChartSearchService {
 		 */
 		public RecordReference withGrounded(Boolean verdict) {
 			return new RecordReference(index, resourceType, resourceUuid, date, verdict, source,
-					withheldInteractions, attachedByTheModule);
+					withheldInteractions, attachedByTheModule, attachedFor);
 		}
 	}
 }

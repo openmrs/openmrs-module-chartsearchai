@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -172,6 +173,51 @@ public class ChartSearchAiFindingProvenanceTest {
 				"the trailing grounded event must publish the attribution as well");
 	}
 
+	/** Each reference's {@code index:attachedFor}, in emitted order, the key's presence asserted first. */
+	private List<String> attachedForOf(String eventType) throws Exception {
+		List<String> out = new ArrayList<String>();
+		for (JsonNode ref : referencesOf(eventType)) {
+			JsonNode attachedFor = ref.get("attachedFor");
+			assertNotNull(attachedFor, "no attachedFor key on reference [" + ref.get("index") + "] of '"
+					+ eventType + "': " + ref);
+			assertTrue(attachedFor.isArray(), "attachedFor must be an array, was: " + attachedFor);
+			out.add(ref.get("index").asInt() + ":" + attachedFor);
+		}
+		return out;
+	}
+
+	/**
+	 * Which finding each attached citation is the chart evidence OF, so a client can label the chip
+	 * "source of [75]" — which a clinician can act on — rather than "added by the module", which says
+	 * something about the software. On every SSE event that carries references.
+	 */
+	@Test
+	public void everyEvent_namesTheFindingAnAttachedCitationBacks() throws Exception {
+		controller.streamAnswer(out, RestControllerContext.patient(), "can I give ibuprofen?",
+				RestControllerContext.user(), true);
+
+		List<String> expected = Arrays.asList(ATTACHED + ":[" + CITED_FINDING + "]", CITED_FINDING + ":[]");
+		assertEquals(expected, attachedForOf("done"), "done");
+		assertEquals(expected, attachedForOf("references"), "the early references event");
+		assertEquals(expected, attachedForOf("grounded"), "the trailing grounded event");
+	}
+
+	@Test
+	public void searchResponse_namesTheFindingAnAttachedCitationBacks() {
+		ResponseEntity<Object> response = controller.search(
+				RestControllerContext.searchBody("can I give ibuprofen?"));
+		@SuppressWarnings("unchecked")
+		List<Map<String, Object>> refs = (List<Map<String, Object>>) ((Map<String, Object>) response.getBody())
+				.get("references");
+		List<String> attachedFor = new ArrayList<String>();
+		for (Map<String, Object> ref : refs) {
+			assertTrue(ref.containsKey("attachedFor"), "reference [" + ref.get("index") + "] carries no attachedFor key: " + ref);
+			attachedFor.add(ref.get("index") + ":" + ref.get("attachedFor"));
+		}
+		assertEquals(Arrays.asList(ATTACHED + ":[" + CITED_FINDING + "]", CITED_FINDING + ":[]"), attachedFor,
+				"the blocking response names it as the SSE events do");
+	}
+
 	/**
 	 * The BLOCKING {@code /search} response, which is a separate handler from the SSE path and the one
 	 * a non-streaming client reads. {@code serializeReferences} is shared between them, and its javadoc
@@ -211,7 +257,7 @@ public class ChartSearchAiFindingProvenanceTest {
 						+ CITED_FINDING + "].",
 				Arrays.asList(
 						new ChartSearchService.RecordReference(ATTACHED, "allergy", "u12", null, null,
-								null, 0, true),
+								null, 0, true, Collections.singletonList(Integer.valueOf(CITED_FINDING))),
 						new ChartSearchService.RecordReference(CITED_FINDING, "safety_finding",
 								"contraindication:Ibuprofen", null, null)));
 	}

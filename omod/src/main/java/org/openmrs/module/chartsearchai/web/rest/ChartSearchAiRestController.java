@@ -1461,6 +1461,9 @@ public class ChartSearchAiRestController {
 			// — one home, which README's client section restates for a client author and nothing
 			// else should. Do not restate it here.
 			refMap.put("attachedByTheModule", ref.isAttachedByTheModule());
+			// Which cited findings it was attached FOR, so a client can say what the record is to the
+			// answer — RecordReference.getAttachedFor is the one home for what it means.
+			refMap.put("attachedFor", ref.getAttachedFor());
 			refs.add(refMap);
 		}
 		return refs;

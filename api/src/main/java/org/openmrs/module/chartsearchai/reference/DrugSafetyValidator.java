@@ -1136,7 +1136,7 @@ public class DrugSafetyValidator {
 		PairChipExtent pairExtent = null;
 		if (warnInteractions) {
 			pairExtent = addQuestionPairInteractions(warnings, questionDrugs, subjects, context,
-					severityFloor, endedOrders);
+					severityFloor, endedOrders, proposedByTheQuestion(question, questionDrugs));
 		}
 		// Interaction screening (issue #113). A question that asks to be SCREENED names no drug, so
 		// neither question-driven arm above has an anchor and the whole feature stayed silent for the
@@ -3269,6 +3269,11 @@ public class DrugSafetyValidator {
 			return false;
 		}
 
+		/** Whether this pass holds {@code drug}'s substance as recorded only in ended orders. */
+		boolean holdsAsEnded(DrugReference drug) {
+			return substances.containsKey(drug.substanceGroupKey());
+		}
+
 		/** {@code chip} {@link #aboutTheSubject stated as about} {@code subject}'s substance, and as about an
 		 *  ended order, with the date its order stopped, where that substance is one this pass holds as
 		 *  ended. */
@@ -3294,8 +3299,9 @@ public class DrugSafetyValidator {
 
 		/** {@code chip}, a question-pair finding, {@link #stamp stamped} for its {@code subject} and then
 		 *  stated as about {@code partner}'s substance too — the one arm whose finding is about both drugs
-		 *  it names, its subject being the dataset's order of the two (issue #515). Its ended-order referent
-		 *  stays the subject's: "withhold it" names the subject. */
+		 *  it names, its subject being the drug the question proposes where it proposes one of the two and
+		 *  the dataset's order otherwise (issue #515, ADR Decision 133). Its ended-order referent stays the
+		 *  subject's: "withhold it" names the subject. */
 		SafetyWarning stampPair(DrugReference subject, DrugReference partner, SafetyWarning chip) {
 			SafetyWarning stated = stamp(subject, chip);
 			List<DrugReference> ofThePartner = subjectRows.get(partner.substanceGroupKey());
@@ -7378,7 +7384,7 @@ public class DrugSafetyValidator {
 	 */
 	private PairChipExtent addQuestionPairInteractions(List<SafetyWarning> warnings,
 			Set<DrugReference> questionDrugs, SubstanceSubjects subjects, PatientClinicalContext context,
-			int severityFloor, EndedOrders endedOrders) {
+			int severityFloor, EndedOrders endedOrders, Set<Object> proposed) {
 		if (questionDrugs.size() < 2) {
 			// The arm did not run: one drug is not a pair, so there is no candidate list to state the
 			// extent of. Null, never a zero — see PairChipExtent for what the two say differently. It is
@@ -7415,7 +7421,7 @@ public class DrugSafetyValidator {
 		for (int i = 0; i < drugs.size() - 1; i++) {
 			for (int j = i + 1; j < drugs.size(); j++) {
 				collectQuestionPairInteraction(candidates, chartOwned, drugs.get(i), drugs.get(j), names,
-						subjects, context, rules);
+						subjects, context, rules, proposed, endedOrders);
 			}
 		}
 		List<PairFinding> found = new ArrayList<PairFinding>();
@@ -7481,9 +7487,10 @@ public class DrugSafetyValidator {
 			// sort and the cap, which it cannot move (issue #472, see EndedOrders). A question naming
 			// two drugs her chart holds only as ended orders proposed neither, and "withhold it" had
 			// no referent there either.
-			// And about BOTH drugs of the pair (issue #515): which one is the subject is the dataset's
-			// order, never the question's, so a check asking which findings are about a drug must find
-			// this one from either side.
+			// And about BOTH drugs of the pair (issue #515): which one is the subject is the question's
+			// proposal only where it proposes one of the two, and the dataset's order otherwise (ADR
+			// Decision 133), so a check asking which findings are about a drug must find this one from
+			// either side.
 			warnings.add(endedOrders.stampPair(finding.row, finding.partnerRow, finding.warning));
 		}
 		return PairChipExtent.of(found.size(), shown);
@@ -7546,7 +7553,7 @@ public class DrugSafetyValidator {
 	private void collectQuestionPairInteraction(Map<List<String>, PairFinding> candidates,
 			Set<List<String>> chartOwned, DrugReference first, DrugReference second,
 			Map<DrugReference, String> names, SubstanceSubjects subjects,
-			PatientClinicalContext context, AboveFloorRules rules) {
+			PatientClinicalContext context, AboveFloorRules rules, Set<Object> proposed, EndedOrders endedOrders) {
 		List<DrugReference.Interaction> forward = rules.aboveFloorRulesAgainst(first, second);
 		List<DrugReference.Interaction> reverse = rules.aboveFloorRulesAgainst(second, first);
 		if (forward.isEmpty() && reverse.isEmpty()) {
@@ -7573,7 +7580,27 @@ public class DrugSafetyValidator {
 		// the subject, its entry sitting at index 1055 against dexamethasone's 1744. Stable either way,
 		// which is what the chip needs; a rule that followed the question's word order would need the
 		// drug's offset in the question, which neither the prose scan nor the ranking above it reports.
+		//
+		// EXCEPT where the question proposes exactly one drug of the pair (ADR Decision 133): the strength
+		// clause's "withhold it" names the SUBJECT, so a subject elected by dataset order told the model to
+		// withhold the drug the question says she is on — "Nevirapine interacts with Rifampicin … This
+		// finding is a reason to withhold it." on "…currently on … Nevirapine …, is it safe to give
+		// Rifampicin?" — and the answer gave rifampicin no verdict. Only a tie moves: a side that carries
+		// no rule still cannot own the sentence. proposedByTheQuestion is the one reading of which drugs a
+		// question proposes; where it proposes both or neither the dataset's order stands. And so it does
+		// where the other drug is one her chart holds only as an ENDED order: stampPair states issue #472's
+		// referent on the subject alone, and "a reason against giving it should it be proposed again" about
+		// that drug is the reading its ended order supports, where "withhold" the proposed drug is not.
 		boolean fromFirst = !forward.isEmpty();
+		if (!forward.isEmpty() && !reverse.isEmpty()) {
+			boolean firstProposed = proposed.contains(first.substanceGroupKey());
+			boolean secondProposed = proposed.contains(second.substanceGroupKey());
+			if (secondProposed && !firstProposed && !endedOrders.holdsAsEnded(first)) {
+				fromFirst = false;
+			} else if (firstProposed && !secondProposed && endedOrders.holdsAsEnded(second)) {
+				fromFirst = false;
+			}
+		}
 		// The ROW decides which side owns the sentence and which rule it carries; the SUBSTANCE
 		// decides what the sentence calls the two drugs (issue #174). Naming the row asserted a
 		// preparation the question never mentioned — "Lidocaine interacts with Chloroprocaine

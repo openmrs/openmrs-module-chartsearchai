@@ -1102,7 +1102,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null, null);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null);
 		}
 
 		/**
@@ -1142,8 +1142,12 @@ public interface ChartSearchService {
 				InteractionClaimPairs interactionClaimPairs,
 				List<CautionLedOverWithholding> cautionLedOverWithholding,
 				List<UnfoundedFindingSeverity> unfoundedFindingSeverities,
-				DrugReferenceLoad.Coverage doseCeilingCoverage) {
+				DrugReferenceLoad.Coverage doseCeilingCoverage,
+				List<String> unsupportedEndedOrderClaims) {
 			this.doseCeilingCoverage = doseCeilingCoverage;
+			// Null survives as null, the rule every list above shares (ADR Decision 135).
+			this.unsupportedEndedOrderClaims = unsupportedEndedOrderClaims == null ? null
+					: java.util.Collections.unmodifiableList(new java.util.ArrayList<String>(unsupportedEndedOrderClaims));
 			// Null survives as null, the rule the measurement lists here share (issue #560).
 			this.unfoundedFindingSeverities = unfoundedFindingSeverities == null ? null
 					: java.util.Collections.unmodifiableList(
@@ -1932,6 +1936,23 @@ public interface ChartSearchService {
 
 		/** @see #getDoseCeilingCoverage() */
 		private final DrugReferenceLoad.Coverage doseCeilingCoverage;
+
+		/** @see #getUnsupportedEndedOrderClaims() */
+		private final List<String> unsupportedEndedOrderClaims;
+
+		/**
+		 * @return the drugs the MODEL's answer says have an order that is no longer in force where no chart record
+		 *         the prompt carried marks an order of that drug as not in force — ADR Decision 135, by
+		 *         {@code EndedOrderClaimCheck}, published as the {@code unsupportedEndedOrderClaims} key. Each named
+		 *         once, in the order the answer first claims it. It says the claim has no record behind it in what
+		 *         the model read, never that the order is in force: the chart the module built need not carry every
+		 *         order she had. {@code []} is a measurement of none and not a certificate the answer's other
+		 *         statements about orders are founded; {@code null} is no measurement, which is every answer the
+		 *         module composed itself and every answer where the check could not run.
+		 */
+		public List<String> getUnsupportedEndedOrderClaims() {
+			return unsupportedEndedOrderClaims;
+		}
 
 		/**
 		 * @return whether this install's dataset publishes a DOSE CEILING the overdose check could compare an

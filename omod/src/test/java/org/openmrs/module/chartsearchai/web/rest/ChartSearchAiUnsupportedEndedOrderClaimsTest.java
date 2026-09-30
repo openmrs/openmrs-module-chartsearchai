@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -27,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
-import org.openmrs.module.chartsearchai.api.ChartSearchService.CautionLedOverWithholding;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,22 +34,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * The withholding findings about the drug an answer's caution lead gives reach the wire as
- * {@code cautionLedOverWithholding} (issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/515">#515</a>), on the blocking
- * response and on the early {@code done} alike, since production resolves them before that handoff.
- * Which findings they are is decided one layer down and pinned there, by
- * {@code LlmInferenceServiceListedMedicationsContextTest}; the stub here only reproduces its shapes.
+ * The {@code unsupportedEndedOrderClaims} key (ADR Decision 135): the drugs an answer says have an order that is no
+ * longer in force where no record the model read does, published as the module stated them, on the search response
+ * and the early {@code done}, with {@code []} and {@code null} kept apart.
  */
-public class ChartSearchAiCautionLedOverWithholdingTest {
+public class ChartSearchAiUnsupportedEndedOrderClaimsTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private static final String QUESTION = "The patient is currently on Lamivudine, Nevirapine, Stavudine, is it "
-			+ "safe to give Amlodipine?";
+			+ "safe to give Rifampicin?";
 
-	private static final String MODEL_ANSWER = "Amlodipine can be given, with one caution: coadministration with "
-			+ "nevirapine may decrease the plasma concentrations of amlodipine.";
+	private static final String MODEL_ANSWER = "Nevirapine's order is no longer in force, but it interacts with "
+			+ "Rifampicin (rifampin) — Major.";
 
 	private ChartSearchAiRestController controller;
 
@@ -59,17 +54,15 @@ public class ChartSearchAiCautionLedOverWithholdingTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	/** What the module states per case. The two entries differ in both fields, and the second states no
-	 *  rating, as an unrated authored rule's record does. */
-	private List<CautionLedOverWithholding> stated;
+	/** What the module states per case. */
+	private List<String> stated;
 
 	@BeforeEach
 	public void setUp() {
-		stated = Collections.unmodifiableList(Arrays.asList(new CautionLedOverWithholding(9, "Major"),
-				new CautionLedOverWithholding(12, null)));
+		stated = Collections.unmodifiableList(Arrays.asList("Nevirapine", "Stavudine"));
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
-		controller.setChartSearchService(new CautionLeadAnswerStubService());
+		controller.setChartSearchService(new EndedOrderClaimStubService());
 		controller.setPatientAccessCheck((user, patient) -> true);
 		out = new ByteArrayOutputStream();
 		openmrsContext.install();
@@ -84,7 +77,7 @@ public class ChartSearchAiCautionLedOverWithholdingTest {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
-				null, null, null, null, null, null, null, false, null, stated, null, null, null);
+				null, null, null, null, null, null, null, false, null, null, null, null, stated);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -97,25 +90,21 @@ public class ChartSearchAiCautionLedOverWithholdingTest {
 	}
 
 	@Test
-	public void theSearchResponseNamesEachFindingWithItsRating() {
-		Map<String, Object> payload = searchPayload();
-
-		assertEquals(Arrays.asList(entry(9, "Major"), entry(12, null)), payload.get("cautionLedOverWithholding"),
-				"each entry is the finding's citation and the rating its record states: " + payload);
+	public void theSearchResponseNamesEachDrugInOrder() {
+		assertEquals(Arrays.asList("Nevirapine", "Stavudine"), searchPayload().get("unsupportedEndedOrderClaims"));
 	}
 
 	@Test
 	public void anEmptyStatementAndNoStatementAreDifferentOnTheWire() {
 		stated = Collections.emptyList();
-		Map<String, Object> empty = searchPayload();
-		assertEquals(Collections.emptyList(), empty.get("cautionLedOverWithholding"),
+		assertEquals(Collections.emptyList(), searchPayload().get("unsupportedEndedOrderClaims"),
 				"a check that ran and found nothing states an empty list, not null");
 
 		stated = null;
 		Map<String, Object> none = searchPayload();
-		assertTrue(none.containsKey("cautionLedOverWithholding"),
+		assertTrue(none.containsKey("unsupportedEndedOrderClaims"),
 				"the key must be present even where the module states nothing: " + none);
-		assertEquals(null, none.get("cautionLedOverWithholding"),
+		assertEquals(null, none.get("unsupportedEndedOrderClaims"),
 				"no measurement is null, and must not be flattened to an empty list");
 	}
 
@@ -124,43 +113,25 @@ public class ChartSearchAiCautionLedOverWithholdingTest {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
 
 		JsonNode done = SseEvents.dataOfType(out, "done", MAPPER);
-		assertEquals(2, done.get("cautionLedOverWithholding").size(),
-				"resolved before the handoff, so the early done carries the measurement");
-		assertEquals(9, done.get("cautionLedOverWithholding").get(0).get("citation").asInt());
-		assertEquals("Major", done.get("cautionLedOverWithholding").get(0).get("rating").asText());
-		assertTrue(done.get("cautionLedOverWithholding").get(1).get("rating").isNull(),
-				"and the second entry's absent rating stays absent");
+		assertEquals(2, done.get("unsupportedEndedOrderClaims").size());
+		assertEquals("Nevirapine", done.get("unsupportedEndedOrderClaims").get(0).asText());
 	}
 
 	@Test
 	public void theWholePayloadStillMarshalsForAnXmlClient() throws Exception {
-		XmlPayloads.assertMarshals(searchPayload(), "a stated set of findings");
-		stated = Collections.emptyList();
-		XmlPayloads.assertMarshals(searchPayload(), "a measurement of none");
+		XmlPayloads.assertMarshals(searchPayload(), "a stated list of drugs");
 		stated = null;
 		XmlPayloads.assertMarshals(searchPayload(), "no measurement at all");
 	}
 
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {
-		String source = ChartSearchAiStreamingTest.controllerSource();
-
-		assertEquals(1, ChartSearchAiStreamingTest.occurrences(source, "\"cautionLedOverWithholding\""),
-				"the cautionLedOverWithholding key must be written in exactly one place, beside the module's other "
-						+ "statements (issue #515)");
+		assertEquals(1, ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
+				"\"unsupportedEndedOrderClaims\""), "the key must be written in exactly one place");
 	}
 
-	/** The wire shape of one entry, spelled out as a map so a renamed key reddens. */
-	private static Map<String, Object> entry(int citation, String rating) {
-		Map<String, Object> expected = new LinkedHashMap<String, Object>();
-		expected.put("citation", Integer.valueOf(citation));
-		expected.put("rating", rating);
-		return expected;
-	}
-
-	/** An answer whose caution lead stands beside withholding findings, on both the classic and the async
-	 *  shapes; the early answer carries the same statement, as production's does. */
-	private class CautionLeadAnswerStubService implements ChartSearchService {
+	/** An answer stating the claim on both the classic and the async shapes, as production's does. */
+	private class EndedOrderClaimStubService implements ChartSearchService {
 
 		@Override
 		public ChartAnswer search(Patient patient, String question) {

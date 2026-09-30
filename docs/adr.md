@@ -12414,7 +12414,11 @@ above-floor rule already chips it. `Sink.record(found, reported, belowFloor)` ca
 `recordPairExtent`, the sink's one production writer, so it reaches every surface `interactionPairs` does.
 
 **No chip, no floor change, no prompt change.** The statement is deterministic and on the wire; the answer's
-prose is untouched. The reference frontend draws it beside the answer.
+prose is untouched. The reference frontend drew it beside the answer until
+[`openmrs-esm-chartsearchai#34`](https://github.com/openmrs/openmrs-esm-chartsearchai/pull/34) removed the line:
+every such pair is a DDInter `Unknown` row with no mechanism text, so it gave a clinician nothing to act on, and
+its wording ("the drug reference rates these below the warning threshold") read as a rating the source never
+gave. The key is unchanged and still on the wire.
 
 ### Alternatives
 

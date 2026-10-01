@@ -285,7 +285,12 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				SafetyWarningFixtures.aboutAnotherOfHerMedications(SafetyWarningFixtures.aboutCurrentOrders(
 						SafetyWarningFixtures.recordedAllergenContraindication("Lidocaine",
 								"The patient has a recorded allergy to Lidocaine.", true),
-						SafetyWarningFixtures.activeOrder("uuid-lidocaine", "Lidocaine"))));
+						SafetyWarningFixtures.activeOrder("uuid-lidocaine", "Lidocaine"))),
+				// Chip 17: the listed nevirapine against her lidocaine order, on a question proposing fluconazole
+				// (ADR Decision 137) — the only chip here answering isAboutADrugOtherThanTheOneProposed() true, so a
+				// put hardcoded to `false` disagrees with it. Mutate the put and read this class's failure.
+				SafetyWarningFixtures.aboutADrugOtherThanTheOneProposed(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
+						"Nevirapine", "Nevirapine interacts with active order Lidocaine — Minor.", "Minor")));
 	}
 
 	private ChartSearchAiRestController controller;

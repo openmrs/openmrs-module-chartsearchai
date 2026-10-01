@@ -897,8 +897,11 @@ public class DrugSafetyValidator {
 		// the question-driven findings are built: the contraindication ledger below,
 		// addInteractionWarnings and addQuestionPairInteractions. A per-pass local, for issue #172's
 		// reason. See EndedOrders.
+		// The substances the question PROPOSES — one reading per pass, for the question-pair arm's subject (ADR
+		// Decision 133) and for each chip's "about a drug other than the one proposed" (ADR Decision 137).
+		Set<Object> proposed = proposedByTheQuestion(question, questionDrugs);
 		EndedOrders endedOrders = EndedOrders.of(inPlay, questionDrugs, question, resolvedRows, orderEntries,
-				mappings, bridgedOrders, context);
+				mappings, bridgedOrders, context, proposed);
 		ContraindicationChips contraindications = new ContraindicationChips(warnings, subjects, endedOrders);
 		// And, on the pass that states it, the drugs the question lists that her chart holds no active order
 		// for (issue #515) — off this pass's own resolution of her orders and its one naming of each
@@ -1136,7 +1139,7 @@ public class DrugSafetyValidator {
 		PairChipExtent pairExtent = null;
 		if (warnInteractions) {
 			pairExtent = addQuestionPairInteractions(warnings, questionDrugs, subjects, context,
-					severityFloor, endedOrders, proposedByTheQuestion(question, questionDrugs));
+					severityFloor, endedOrders, proposed);
 		}
 		// Interaction screening (issue #113). A question that asks to be SCREENED names no drug, so
 		// neither question-driven arm above has an anchor and the whole feature stayed silent for the
@@ -3212,17 +3215,26 @@ public class DrugSafetyValidator {
 		 */
 		private final Map<Object, List<DrugReference>> subjectRows;
 
+		/**
+		 * The substances the question proposes, {@link DrugSafetyValidator#proposedByTheQuestion}'s one answer for
+		 * the pass, from which each chip states whether it is about a drug other than the one proposed
+		 * ({@link SafetyWarning#isAboutADrugOtherThanTheOneProposed()}, ADR Decision 137). Empty where the question
+		 * proposes none, which states the flag on no chip.
+		 */
+		private final Set<Object> proposed;
+
 		private EndedOrders(Map<Object, Date> substances, Map<Object, List<DrugReference>> rows,
-				Map<Object, List<DrugReference>> subjectRows) {
+				Map<Object, List<DrugReference>> subjectRows, Set<Object> proposed) {
 			this.substances = substances;
 			this.rows = rows;
 			this.subjectRows = subjectRows;
+			this.proposed = proposed;
 		}
 
-		/** A pass holding no substance as ended, which still states each chip's subject rows. */
-		private static EndedOrders none(Map<Object, List<DrugReference>> subjectRows) {
+		/** A pass holding no substance as ended, which still states each chip's subject rows and proposal. */
+		private static EndedOrders none(Map<Object, List<DrugReference>> subjectRows, Set<Object> proposed) {
 			return new EndedOrders(Collections.<Object, Date> emptyMap(),
-					Collections.<Object, List<DrugReference>> emptyMap(), subjectRows);
+					Collections.<Object, List<DrugReference>> emptyMap(), subjectRows, proposed);
 		}
 
 		/**
@@ -3237,12 +3249,14 @@ public class DrugSafetyValidator {
 		 * @param bridgedOrders the pass's own bridged-concept holder, handed to
 		 *        {@link #everyActiveOrderResolves} rather than resolved a second time (issue #353)
 		 * @param context her clinical context
+		 * @param proposed {@link DrugSafetyValidator#proposedByTheQuestion}'s answer for this pass
 		 */
 		static EndedOrders of(Set<DrugReference> inPlay, Set<DrugReference> questionDrugs, String question,
 				Map<Object, List<DrugReference>> resolvedRows, List<DrugReference> orderEntries,
-				List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context) {
+				List<RecordMapping> mappings, BridgedOrders bridgedOrders, PatientClinicalContext context,
+				Set<Object> proposed) {
 			if (context == null || mappings == null || mappings.isEmpty() || inPlay.isEmpty()) {
-				return none(resolvedRows);
+				return none(resolvedRows, proposed);
 			}
 			// ENDED is the chart builder's stamp saying FALSE — never re-derived, and never a type name,
 			// the stamp being FALSE only for a drug-order record. Everything else a drug-order record can
@@ -3251,7 +3265,7 @@ public class DrugSafetyValidator {
 			List<RecordMapping> notEnded = new ArrayList<RecordMapping>();
 			partitionOrderRecords(mappings, ended, notEnded);
 			if (ended.isEmpty()) {
-				return none(resolvedRows);
+				return none(resolvedRows, proposed);
 			}
 			List<String> endedTexts = lowered(ended);
 			List<String> notEndedTexts = lowered(notEnded);
@@ -3260,8 +3274,8 @@ public class DrugSafetyValidator {
 			// referent, which is exactly what the ended-order clause exists to supply where it has none.
 			// The admission grammar is issue #469's, over the same marking of the question's own names.
 			if (DrugReferenceInjector.questionProposes(question, new ArrayList<DrugReference>(questionDrugs))) {
-				for (DrugReference proposed : questionDrugs) {
-					active.add(proposed.substanceGroupKey());
+				for (DrugReference proposal : questionDrugs) {
+					active.add(proposal.substanceGroupKey());
 				}
 			}
 			Map<Object, Date> substances = new LinkedHashMap<Object, Date>();
@@ -3296,9 +3310,9 @@ public class DrugSafetyValidator {
 			// The costlier question last, and only where there is a candidate to ask it for.
 			if (substances.isEmpty() || !context.activeDrugOrdersRead()
 					|| !everyActiveOrderResolves(context, orderEntries, bridgedOrders)) {
-				return none(resolvedRows);
+				return none(resolvedRows, proposed);
 			}
-			return new EndedOrders(substances, substanceRows, resolvedRows);
+			return new EndedOrders(substances, substanceRows, resolvedRows, proposed);
 		}
 
 		/**
@@ -3368,7 +3382,12 @@ public class DrugSafetyValidator {
 		 */
 		SafetyWarning aboutTheSubject(DrugReference subject, SafetyWarning chip) {
 			List<DrugReference> ofTheSubject = subjectRows.get(subject.substanceGroupKey());
-			return chip.aboutSubstance(ofTheSubject != null ? ofTheSubject : Collections.singletonList(subject));
+			SafetyWarning stated = chip.aboutSubstance(
+					ofTheSubject != null ? ofTheSubject : Collections.singletonList(subject));
+			// About a drug other than the one proposed where the question proposes one and this is not of it
+			// (ADR Decision 137); stampPair clears it for a pair whose partner is proposed.
+			return stated.withAboutADrugOtherThanTheOneProposed(
+					!proposed.isEmpty() && !proposed.contains(subject.substanceGroupKey()));
 		}
 
 		/** {@code chip}, a question-pair finding, {@link #stamp stamped} for its {@code subject} and then
@@ -3378,6 +3397,11 @@ public class DrugSafetyValidator {
 		 *  subject's: "withhold it" names the subject. */
 		SafetyWarning stampPair(DrugReference subject, DrugReference partner, SafetyWarning chip) {
 			SafetyWarning stated = stamp(subject, chip);
+			// A pair finding is about the proposed drug where EITHER of its drugs is proposed: an ended listed drug
+			// can head a pair whose partner is the proposal (ADR Decision 133).
+			if (proposed.contains(partner.substanceGroupKey())) {
+				stated = stated.withAboutADrugOtherThanTheOneProposed(false);
+			}
 			List<DrugReference> ofThePartner = subjectRows.get(partner.substanceGroupKey());
 			List<DrugReference> both = new ArrayList<DrugReference>(stated.subjectRows());
 			both.addAll(ofThePartner != null ? ofThePartner : Collections.singletonList(partner));

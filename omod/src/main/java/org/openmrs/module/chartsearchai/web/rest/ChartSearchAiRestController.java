@@ -1715,6 +1715,9 @@ public class ChartSearchAiRestController {
 			// client can set it beside the answer rather than among its findings. false is no claim the chip
 			// is about that drug: SafetyWarning.isAboutAnotherOfHerMedications() says why.
 			map.put("aboutAnotherOfHerMedications", warning.isAboutAnotherOfHerMedications());
+			// ADR Decision 137: whether the chip is about a drug other than the one the question proposes. false is
+			// no claim it is about that drug: SafetyWarning.isAboutADrugOtherThanTheOneProposed() says why.
+			map.put("aboutADrugOtherThanTheOneProposed", warning.isAboutADrugOtherThanTheOneProposed());
 			out.add(map);
 		}
 		return out;

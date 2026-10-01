@@ -34,6 +34,26 @@ public class RemoteLlmEngineTest {
 	private final RemoteLlmEngine engine = new RemoteLlmEngine();
 
 	@Test
+	public void errorResponse_withContextOverflow_throwsChartTooLarge_notGenericApiException() {
+		// Explicit-overflow parity with LocalLlmEngine (roadmap G11): llama-server's
+		// exceed_context_size_error 400 must surface as chart_too_large through the provider,
+		// never as a generic provider_failure — the remote engine is the shared-engine parity
+		// configuration, so a silent generic error would hide every scoped-slice overflow.
+		org.openmrs.module.chartsearchai.api.ChartTooLargeException overflow =
+				org.junit.jupiter.api.Assertions.assertThrows(
+						org.openmrs.module.chartsearchai.api.ChartTooLargeException.class,
+						() -> RemoteLlmEngine.throwForErrorResponse(400,
+								"{\"error\":{\"type\":\"exceed_context_size_error\",\"message\":\"...\"}}"));
+		assertTrue(overflow.getMessage().contains("context window"),
+				"the operator remediation must name the context window; got " + overflow.getMessage());
+
+		org.junit.jupiter.api.Assertions.assertThrows(org.openmrs.api.APIException.class,
+				() -> RemoteLlmEngine.throwForErrorResponse(400, "{\"error\":\"bad request\"}"));
+		org.junit.jupiter.api.Assertions.assertThrows(org.openmrs.api.APIException.class,
+				() -> RemoteLlmEngine.throwForErrorResponse(503, ""));
+	}
+
+	@Test
 	public void buildRequestBody_shouldContainModelAndMessages() throws IOException {
 		String body = engine.buildRequestBody("system prompt", "user message", "gpt-4o", false);
 		JsonNode root = MAPPER.readTree(body);

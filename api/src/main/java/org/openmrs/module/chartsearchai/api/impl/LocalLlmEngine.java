@@ -49,6 +49,7 @@ import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -387,6 +388,14 @@ public class LocalLlmEngine implements LlmEngine {
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
 			final ReferenceRecords referenceRecords) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer,
+				cacheScope, cacheSeed, referenceRecords, CancellationSignal.NONE);
+	}
+
+	@Override
+	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			final ReferenceRecords referenceRecords, CancellationSignal cancellation) {
 		ensureServerRunning();
 
 		startFromSavedPrefix(systemPrompt, timeoutSeconds, cacheScope, cacheSeed);
@@ -414,8 +423,15 @@ public class LocalLlmEngine implements LlmEngine {
 				throw new APIException("Local llama-server returned HTTP " + response.statusCode());
 			}
 
-			InferenceResult result = LlmResponseParser.parseStreamingResponse(
-					response.body(), tokenConsumer, log);
+			InputStream responseBody = response.body();
+			cancellation.bindCloseable(responseBody);
+			InferenceResult result;
+			try {
+				result = LlmResponseParser.parseStreamingResponse(responseBody, tokenConsumer, log);
+			}
+			finally {
+				cancellation.unbindCloseable(responseBody);
+			}
 
 			resetIdleTimer();
 			return result;

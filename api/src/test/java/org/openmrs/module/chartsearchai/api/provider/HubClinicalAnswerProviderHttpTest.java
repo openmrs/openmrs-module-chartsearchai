@@ -106,6 +106,29 @@ public class HubClinicalAnswerProviderHttpTest extends BaseModuleContextSensitiv
 	}
 
 	@Test
+	public void endOfStreamAfterCheckedAnswerSettlesItsOptionalTail() throws Exception {
+		String payload = "{\"answer\":\"Retained answer.\",\"originalAnswer\":\"Inspectable draft.\","
+				+ "\"answerValidation\":{\"status\":\"checked\"},"
+				+ "\"inDepth\":{\"status\":\"pending\",\"answer\":\"Partial detail.\"},\"references\":[]}";
+		List<TurnEvent> events = new ArrayList<>();
+		TurnResult result = executeOverHttp("event: answer_done\ndata: " + payload + "\n\n"
+				+ "event: answer_validation\ndata: " + payload + "\n\n"
+				+ "event: indepth_pending\ndata: " + payload + "\n\n", events);
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertEquals("hub_stream_incomplete", result.getProblemCode());
+		assertNull(result.getAnswer());
+		Map<String, Object> answer = events.stream()
+				.filter(event -> event.getType() == TurnEventType.INDEPTH_ERROR)
+				.findFirst().orElseThrow(AssertionError::new).getAnswer().getPayload();
+		assertEquals("Retained answer.", answer.get("answer"));
+		assertEquals("Inspectable draft.", answer.get("originalAnswer"));
+		assertEquals("checked", ((Map<?, ?>) answer.get("answerValidation")).get("status"));
+		assertEquals("failed", ((Map<?, ?>) answer.get("inDepth")).get("status"));
+		assertEquals("Partial detail.", ((Map<?, ?>) answer.get("inDepth")).get("answer"));
+		assertEquals(TurnEventType.TURN_ERROR, events.get(events.size() - 1).getType());
+	}
+
+	@Test
 	public void aPlainHttpAnswerWithoutOptionalCapabilitiesStillCompletes() throws Exception {
 		List<TurnEvent> events = new ArrayList<>();
 		TurnResult result = executeOverHttp("event: done\ndata: {\"answer\":\"Plain answer.\","

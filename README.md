@@ -948,3 +948,16 @@ Gemma 4 is licensed under the [Apache 2.0 License](https://www.apache.org/licens
 Gemma 3 and Gemma 3n are licensed under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms), Copyright (C) Google LLC. All Rights Reserved.
 
 Llama 3.3 is licensed under the [Llama 3.2 Community License](https://www.llama.com/llama3_2/license/), Copyright (C) Meta Platforms, Inc. All Rights Reserved.
+
+## Safety-check execution status
+
+`DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
+or `unavailable` status, and limitation codes from one invocation. An empty warning
+list alone does not show that a check ran. Status reflects available reference data,
+patient-context reads, medication mappings, enabled checks and dose information.
+It does not certify that a medication is safe.
+
+This Java API is the safety-status foundation for provider integration. Existing
+warning callers and standing chart alerts retain their interfaces. Publishing the
+status on provider answers and rendering it in the frontend belong to the subsequent
+integration contributions.

@@ -290,33 +290,20 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void thePublicEntryPointHandsItsCallersSinkToThePassThatFillsIt() {
-		// The one link the cases above cannot see: they drive the clinical-context arity, while
-		// production goes through validate(answer, question, Patient, mappings, sink). Mutating that
-		// delegation to pass null instead left api and omod entirely green (measured), so the feature
-		// was joined end to end nowhere — the silent, one-directional shape issue #151 records.
+		// Exercise the public patient entry and inspect the caller's actual result, not an internal overload.
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
-		final List<PairChipExtent.Sink> handedDown = new ArrayList<PairChipExtent.Sink>();
-		DrugSafetyValidator spy = new DrugSafetyValidator() {
-
-			@Override
-			List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
-					List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
-					PairChipExtent.Sink pairExtentSink) {
-				handedDown.add(pairExtentSink);
-				return super.validate(answer, question, rawContext, mappings, resolvedOrderEntries,
-						pairExtentSink);
-			}
-		};
-		spy.setDrugReferenceService(DrugReferenceTestSupport.ddinterService());
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "minor");
+		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService());
 		PairChipExtent.Sink sink = new PairChipExtent.Sink();
 
-		spy.validate("", POLYPHARMACY_QUESTION, Context.getPatientService().getPatient(7), null, sink);
-
-		assertEquals(1, handedDown.size(), "the public entry point must reach the pass exactly once");
-		assertSame(sink, handedDown.get(0),
-				"and must hand it the CALLER'S sink: a pass given a sink of its own, or none, fills "
-						+ "nothing the caller can read, and no chip or count assertion can see that");
+		List<SafetyWarning> warnings = validator.validate("", "Do simvastatin and warfarin interact?",
+				Context.getPatientService().getPatient(7), null, sink);
+		assertFalse(warnings.isEmpty());
+		assertNotNull(sink.stated(), "the caller must receive the measurement produced by the actual pass");
+		assertEquals(1, sink.stated().getFound());
+		assertEquals(1, sink.stated().getReported());
 	}
 
 	@Test

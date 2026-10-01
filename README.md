@@ -994,3 +994,16 @@ checks event order and advertised capabilities. `TurnCancellation` closes bound
 resources, and `TurnPreemptionRegistry` cancels the previous turn when another
 starts in the same conversation. Their existing tests include the shared
 `api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
+
+## Safety-check execution status
+
+`DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
+or `unavailable` status, and limitation codes from one invocation. An empty warning
+list alone does not show that a check ran. Status reflects available reference data,
+patient-context reads, medication mappings, enabled checks and dose information.
+It does not certify that a medication is safe.
+
+This Java API is the safety-status foundation for provider integration. Existing
+warning callers and standing chart alerts retain their interfaces. Publishing the
+status on provider answers and rendering it in the frontend belong to the subsequent
+integration contributions.

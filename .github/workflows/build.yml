@@ -36,19 +36,19 @@ jobs:
   build:
     # Opted out of the daily schedule — see the `schedule:` comment above. This one publishes a
     # SNAPSHOT from main, so a daily run would deploy an unchanged artifact every day.
-    # This PR uses paired-build below until QueryStore #68 supplies its declared API.
-    if: ${{ github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.head_ref != 'codex/context-budget') }}
+    # The context and bundled-provider extractions use paired-build below until QueryStore #68 supplies its declared API.
+    if: ${{ github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.head_ref != 'codex/context-budget' && github.head_ref != 'codex/bundled-provider') }}
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     secrets:
       MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
       MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_API_KEY }}
 
-  # This context-consumer PR consumes QueryStore API additions that are under review in the paired
+  # The context-consumer PR and its bundled-provider dependent consume QueryStore API additions under review in the paired
   # QueryStore PR. Build that exact public source first so this PR proves the combined source set
   # without requiring an upstream merge or an unpublished Maven snapshot. Normal OpenMRS builds
   # continue to use the shared workflow above.
   paired-build:
-    if: github.event_name == 'pull_request' && github.head_ref == 'codex/context-budget'
+    if: github.event_name == 'pull_request' && (github.head_ref == 'codex/context-budget' || github.head_ref == 'codex/bundled-provider')
     name: Paired build with Java ${{ matrix.java }}
     runs-on: ubuntu-latest
     permissions:
@@ -196,8 +196,8 @@ jobs:
   # broke you, which is the actual defect here.
   build-against-querystore-head:
     # QueryStore main lacks this PR's declared API; paired-build tests #68 instead.
-    # Retain the main-compatibility check for every other PR and the scheduled run.
-    if: ${{ github.event_name != 'pull_request' || github.head_ref != 'codex/context-budget' }}
+    # Retain the main-compatibility check for other PRs and the scheduled run.
+    if: ${{ github.event_name != 'pull_request' || (github.head_ref != 'codex/context-budget' && github.head_ref != 'codex/bundled-provider') }}
     name: build against querystore HEAD (not a required check)
     runs-on: ubuntu-latest
     # Least privilege, declared here and not on the neighbouring jobs because the exposure is this

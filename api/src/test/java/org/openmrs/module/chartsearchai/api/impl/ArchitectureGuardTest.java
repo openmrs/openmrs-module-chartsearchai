@@ -978,7 +978,7 @@ public class ArchitectureGuardTest {
 						+ "\t\t\tint timeoutSeconds, final ReferenceRecords referenceRecords)",
 				"public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,\n"
 						+ "\t\t\tint timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, "
-						+ "String cacheSeed,\n\t\t\tfinal ReferenceRecords referenceRecords)")) {
+						+ "String cacheSeed,\n\t\t\tfinal ReferenceRecords referenceRecords, CancellationSignal cancellation)")) {
 			String body = methodBodyWithoutLiterals(source, signature);
 			assertTrue(body != null && !body.isEmpty(),
 					"could not slice the body of " + signature + " out of LocalLlmEngine.java — if its"

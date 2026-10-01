@@ -1018,7 +1018,9 @@ later grounding results, retains already-completed answers when cancellation
 interrupts later work, and reports context-budget and provider failures explicitly.
 Cancellation reaches the engine response stream and the executing thread. Current
 upstream prompt-selection arguments, reference handling and clinical disclosures
-remain in the inference pipeline.
+remain in the inference pipeline. Model-bound requests check the complete injected
+prompt against the input budget before any model pass. Answers composed directly
+from module findings remain available without model tokenization or inference.
 
 `ClinicalAnswerProviderRegistry` exposes configured providers and their actual
 availability. A fresh installation enables bundled inference only; missing or

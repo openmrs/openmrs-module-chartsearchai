@@ -13423,6 +13423,30 @@ Fluconazole list question.
   her lidocaine order as *"Metoclopramide [6]"*. The list question stayed model-answered and byte-identical.
   Clarithromycin, whose pairs are all Unknown and below the floor, raised no finding and stayed with the model.
 
+- **Round 3 passed**, the same two builds over 20 cells on the DDI rig's patients (Kamwara, Amina and the four Dora
+  fixtures, each reindexed before its arm ran). Every chip matched main, and the list question was byte-identical. The
+  seven cells main already composed gained only the record of each order their lines name — her cotrimoxazole order
+  on both of Amina's lines, and the scheduled rifampicin order on the Dora scheduled patient. The ten newly composed
+  cells (amlodipine twice, fluconazole, levonorgestrel, isoniazid and trimethoprim on Kamwara; fluconazole and
+  amlodipine on the Dora voided and expired patients) each carry the lead, cite their one finding once, and use no
+  "can be given" and no "No". Metformin and ibuprofen on Kamwara stayed with the model. The pass rule's word list
+  included "safe", which the lead's own *"drug-safety"* contains; read as a word, no answer uses it.
+- **What it costs, read by hand and not scored**: the module's answer carries the finding's whole paragraph where the
+  model's was one sentence with a verdict, so a clinician reads more and is given no call — on Kamwara's trimethoprim
+  question, a pharmacokinetic study paragraph in place of *"Trimethoprim can be given, with one caution: … a Minor
+  problem"*.
+
+### Not pinned
+
+The two subject-row conditions of `cautionsOnlyAbout` are defensive. A throwaway probe through the real injector over
+the shipped knowledge base, with derived findings on — 30 arrangements of five order lists and nine proposals — found
+no finding stating a caution clause without subject rows of the drug proposed, and deleting either condition leaves
+the api suite green. The interaction requirement is pinned only by
+`ConditionMediatedFindingPartnerCompletionContextTest`, whose chain-only questions it keeps with the model. With
+derived findings on, a proposal whose findings are an interaction caution and a chain is composed with both lines
+(zidovudine over her warfarin and simvastatin, in that probe), so the chain's measured precision
+([Decision 111](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)) reaches the module's own answer.
+
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseFindingsAreAllCautionsIsAnsweredFromThemWithoutAClearance`
 and `.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
 

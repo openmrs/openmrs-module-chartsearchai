@@ -2673,6 +2673,12 @@ public class DrugReferenceInjector {
 	 * contraindication, a withholding interaction, a current-medication or ended-order referent) or about
 	 * another drug keeps the model call, so the composed answer's lead, which counts its lines as cautions about
 	 * that drug, is true of every line under it.
+	 *
+	 * <p><b>The two subject-row conditions are defensive and nothing pins them</b>: no finding a single-drug
+	 * proposal raises today states a caution clause without subject rows of the drug proposed, so deleting
+	 * either leaves the suite green (ADR Decision 140 records the probe). The caution clause and the
+	 * interaction requirement are pinned — the second by the condition-mediated cases, whose chains alone
+	 * would otherwise be composed.
 	 */
 	private static boolean cautionsOnlyAbout(Set<Object> asked, List<SafetyWarning> findings) {
 		if (findings.isEmpty()) {

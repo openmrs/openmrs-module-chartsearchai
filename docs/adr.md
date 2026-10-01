@@ -143,6 +143,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 137: A chip about a drug other than the one proposed says so](#decision-137-a-chip-about-a-drug-other-than-the-one-proposed-says-so)
 - [Decision 138: Each chip names the record number of its own finding](#decision-138-each-chip-names-the-record-number-of-its-own-finding)
 - [Decision 140: A proposal whose findings are all cautions about the drug is answered with the cautions found](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)
+- [Decision 142: A proposal related to her orders only below the severity floor is answered with those rows](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13468,4 +13469,57 @@ into the module's own answer.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseFindingsAreAllCautionsIsAnsweredFromThemWithoutAClearance`
 and `.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
+
+## Decision 142: A proposal related to her orders only below the severity floor is answered with those rows
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found).
+
+### Context
+
+Patient Susan `763e6e5f`'s clarithromycin relates to four of her orders only through DDInter rows rated Unknown, which
+the severity floor keeps out of the findings: no finding, `interactionPairs.belowFloor` naming the four. The model
+answered *"can i give her clarithromycin?"* with *"No — Clarithromycin should not be given due to interactions with
+current medications: lidocaine (Unknown severity interaction) [45], …"* — a refusal nothing the module found licenses,
+identical on `main` — and *"Should i give her clarithromycin?"* with no verdict. Which records each answer cited also
+decided which chips were raised beside it: the second cited her lidocaine and tiotropium orders, so her recorded
+allergies to both were chips; the first cited neither.
+
+### The decision
+
+- **Such a proposal is answered by the module with the rows**: `DrugReferenceInjector.composeFromBelowFloor`, over the
+  extent the pre-answer pass states (`PairChipExtent.getBelowFloor()`), where no finding was raised at all. A lead
+  counting the pairs by their rating — *"4 interactions of unknown severity for Clarithromycin:"*, or *"N lower-rated
+  interactions for X:"* where an install's floor leaves a rated row below it — then one line per pair: the drug,
+  `DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE`, her order by its own display, the rating, citing the drug's
+  reference record and her order's record.
+- **Her order is the one the partner was matched against**, by the walk an interaction chip's matched order names come
+  from (`chartOrderBridges`), recorded on the pair (`BelowFloorPair.herOrders()`) and never published.
+- **It states the rows and nothing else**: not that the drug can be given, not that nothing else relates it, and not
+  that the rows carry no mechanism — DDInter's Unknown tier carries none, an operator's data may.
+- **Fail-closed**: one drug, proposed by the question's grammar and not one she takes; every pair rated, on orders that
+  have all started, each with a record `orderRecordNumbers` can cite; the drug's reference record in the chart.
+- **The chips are then the same however the question is worded**: the answer cites her orders' records, and the chips
+  pass reads its markers ([Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)).
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-01: the PR head of Decision 140 (`compose-caution-answers`
+@ 104c3498) against this branch, over the 46-cell corpus and ten more cells — five phrasings of the clarithromycin
+proposal on Susan, a question naming clarithromycin without proposing it, and paracetamol, erythromycin and
+azithromycin proposals on Susan, Kamwara and the Dora control. **It passed.** Eighteen cells moved, each a single-drug
+proposal with no finding and only below-floor pairs, each line one of those pairs citing the drug's record and her
+order's. The model answers they replace included eight *"… can be given"* clearances and two refusals — the reported
+*"No — Clarithromycin should not be given"* and Joshua's *"No — Warfarin should not be given"* over one Unknown row
+against his lisinopril. The five clarithromycin phrasings now give one answer and one pair of chips — her recorded
+lidocaine and tiotropium allergies, which three of the five model answers did not raise. No chip was lost, the
+non-proposal question stayed with the model, and every other cell was byte-identical.
+
+### Not pinned
+
+The refusal of a pair whose order has no citable record: deleting it leaves the suite green, no fixture building an
+order whose record `orderRecordNumbers` declines.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
+`.aBelowFloorAnswerDoesNotDependOnHowTheProposalIsWorded`, `.aPairBelowARaisedFloorIsStatedWithItsOwnRating`,
+`.aBelowFloorQuestionThatProposesNothingStillAsksTheModel` and `.aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel`.
 

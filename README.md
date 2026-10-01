@@ -946,11 +946,11 @@ See [docs/adr.md](docs/adr.md) for architectural decisions and design rationale.
 
 ## Provider integration contract
 
-The `api.provider` package defines a shared contract for the bundled answering
-pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
-turn requests and results, ordered events, and cancellation. The contract is the
-foundation for provider integration; concrete adapters implement it. The running
-search endpoints are not yet routed through this contract.
+The `api.provider` package defines the shared conversation contract for bundled
+inference and an optional Med Agent Hub relay: explicit provider identity and
+capabilities, turn requests/results, ordered events and cancellation. The
+conversation endpoints use this contract; the existing search endpoints continue
+to use the bundled pipeline.
 
 `AnswerEnvelope` preserves the complete provider payload while exposing the answer
 text needed for display, conversation replay and audit. `TurnLifecycleValidator`
@@ -958,6 +958,81 @@ checks event order and advertised capabilities. `TurnCancellation` closes bound
 resources, and `TurnPreemptionRegistry` cancels the previous turn when another
 starts in the same conversation. Their existing tests include the shared
 `api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
+
+## Safety-check execution status
+
+`DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
+or `unavailable` status, and limitation codes from one invocation. An empty warning
+list alone does not show that a check ran. Status reflects available reference data,
+patient-context reads, medication mappings, enabled checks and dose information.
+It does not certify that a medication is safe. It covers only drugs recognized by
+the loaded reference data: an unrecognized drug is not checked, and an answer
+naming one beside a recognized drug can still report `checked`.
+
+Limitation codes state the cause: `source_data_partially_invalid` and
+`cross_reactivity_data_partially_invalid` identify degraded reference files;
+`checks_partially_disabled` identifies configuration; `no_applicable_check` means
+this answer triggered no applicable check. `condition_rules_unavailable`,
+`interaction_reference_unavailable` and `no_actionable_dose_reference` describe
+missing usable rules. `dose_not_assessable` means the answer supplied no dose and
+schedule that could be assessed; `weight_unavailable` means a weight-based check
+lacked the patient's weight. Neither code claims missing allergy or condition data.
+
+Completed bundled answers now carry this status and its limitation codes through
+`ChartAnswer` and the provider envelope, including answers composed from module
+findings. Early answers state that the check is unavailable until its result is
+attached. Existing warning callers and standing chart alerts retain their
+interfaces. Search and conversation answer payloads publish the same safety status
+and clinical limitations through the shared controller serializer.
+
+## Bundled provider integration
+
+Administrators enable providers with `chartsearchai.providers.enabled`, a comma-separated
+list of ids (default `bundled`), and select the initial provider with
+`chartsearchai.providers.default` (default `bundled`). Switching providers starts a new
+conversation; it does not change the provider recorded on existing conversations.
+
+`BundledClinicalAnswerProvider` adapts the existing caching router and local/remote
+inference pipeline to the shared turn lifecycle. It emits the initial answer before
+later grounding results, retains already-completed answers when cancellation
+interrupts later work, and reports context-budget and provider failures explicitly.
+Cancellation reaches the engine response stream and the executing thread. Current
+upstream prompt-selection arguments, reference handling and clinical disclosures
+remain in the inference pipeline. Model-bound requests check the complete injected
+prompt against the input budget before any model pass. Answers composed directly
+from module findings remain available without model tokenization or inference.
+
+`ClinicalAnswerProviderRegistry` exposes configured providers and their actual
+availability. A fresh installation enables bundled inference only; missing or
+unready implementations remain visible with a reason, and a requested provider is
+never silently replaced. This contribution provides the bundled implementation and
+registry. The conversation endpoints expose discovery and execute the selected
+provider without cross-provider fallback. Combined frontend/model acceptance
+remains separate from local component checks.
+
+### Conversation persistence
+
+`ConversationService` stores conversation headers and ordered turns for the
+current OpenMRS user and patient. Reusing a conversation requires the same provider
+and mode; switching either, or explicitly starting a new conversation, closes the
+previous header. Each completed turn retains its full provider payload and copies
+provider, mode, conversation and request attribution into the audit record. The audit
+search mode and reference-slice measurements come from the bundled answer itself;
+relayed answers without these measurements record unknown mode and null counts.
+If an optional tail fails after a checked answer was shown, the audit retains that
+answer and its accounting.
+
+Checked or edited answers can be reused for a follow-up while In-Depth is still
+running. Failed and needs-review answers remain inspectable in storage but are
+excluded from replay. Audit retention clears the turn's audit link without deleting
+the conversation answer. The migration and Hibernate mappings are included here.
+The history endpoint restores the stored answer envelope and terminal metadata.
+
+`chartsearchai.chat.retentionDays` controls the daily cleanup of conversation
+content, independently of `chartsearchai.auditLogRetentionDays`. Both default to
+90 days; setting either to 0 disables only that cleanup. Turns expire from their
+completion time, or their start time if unfinished. Old empty conversations are
+then removed; independently retained audit rows remain.
 
 ## Local token counting
 
@@ -1006,81 +1081,6 @@ The opt-in check starts and stops its own server on port 18095 (override with
 `-Dchartsearchai.test.tokenCount.port`), compares the count with inference usage,
 and verifies idle-unload scheduling. It does not use a running OpenMRS installation.
 
-## Safety-check execution status
-
-`DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
-or `unavailable` status, and limitation codes from one invocation. An empty warning
-list alone does not show that a check ran. Status reflects available reference data,
-patient-context reads, medication mappings, enabled checks and dose information.
-It does not certify that a medication is safe. It covers only drugs recognized by
-the loaded reference data: an unrecognized drug is not checked, and an answer
-naming one beside a recognized drug can still report `checked`.
-
-Limitation codes state the cause: `source_data_partially_invalid` and
-`cross_reactivity_data_partially_invalid` identify degraded reference files;
-`checks_partially_disabled` identifies configuration; `no_applicable_check` means
-this answer triggered no applicable check. `condition_rules_unavailable`,
-`interaction_reference_unavailable` and `no_actionable_dose_reference` describe
-missing usable rules. `dose_not_assessable` means the answer supplied no dose and
-schedule that could be assessed; `weight_unavailable` means a weight-based check
-lacked the patient's weight. Neither code claims missing allergy or condition data.
-
-Completed bundled answers now carry this status and its limitation codes through
-`ChartAnswer` and the provider envelope, including answers composed from module
-findings. Early answers state that the check is unavailable until its result is
-attached. Existing warning callers and standing chart alerts retain their
-interfaces. REST publication and frontend display belong to the endpoint and
-presentation contributions.
-
-## Bundled provider integration
-
-Administrators enable providers with `chartsearchai.providers.enabled`, a comma-separated
-list of ids (default `bundled`), and select the initial provider with
-`chartsearchai.providers.default` (default `bundled`). Switching providers starts a new
-conversation; it does not change the provider recorded on existing conversations.
-
-`BundledClinicalAnswerProvider` adapts the existing caching router and local/remote
-inference pipeline to the shared turn lifecycle. It emits the initial answer before
-later grounding results, retains already-completed answers when cancellation
-interrupts later work, and reports context-budget and provider failures explicitly.
-Cancellation reaches the engine response stream and the executing thread. Current
-upstream prompt-selection arguments, reference handling and clinical disclosures
-remain in the inference pipeline. Model-bound requests check the complete injected
-prompt against the input budget before any model pass. Answers composed directly
-from module findings remain available without model tokenization or inference.
-
-`ClinicalAnswerProviderRegistry` exposes configured providers and their actual
-availability. A fresh installation enables bundled inference only; missing or
-unready implementations remain visible with a reason, and a requested provider is
-never silently replaced. This contribution provides the bundled implementation and
-registry; provider discovery and conversation HTTP endpoints are separate changes.
-The approved streaming toggle and optional-model capability behavior still require
-coordination with those endpoints and the frontend; this extraction does not claim
-that acceptance.
-
-### Conversation persistence
-
-`ConversationService` stores conversation headers and ordered turns for the
-current OpenMRS user and patient. Reusing a conversation requires the same provider
-and mode; switching either, or explicitly starting a new conversation, closes the
-previous header. Each completed turn retains its full provider payload and copies
-provider, mode, conversation and request attribution into the audit record. The audit
-search mode and reference-slice measurements come from the bundled answer itself;
-relayed answers without these measurements record unknown mode and null counts.
-If an optional tail fails after a checked answer was shown, the audit retains that
-answer and its accounting.
-
-Checked or edited answers can be reused for a follow-up while In-Depth is still
-running. Failed and needs-review answers remain inspectable in storage but are
-excluded from replay. Audit retention clears the turn's audit link without deleting
-the conversation answer. The migration and Hibernate mappings are included here;
-REST history endpoints and provider execution wiring are separate contributions.
-
-`chartsearchai.chat.retentionDays` controls the daily cleanup of conversation
-content, independently of `chartsearchai.auditLogRetentionDays`. Both default to
-90 days; setting either to 0 disables only that cleanup. Turns expire from their
-completion time, or their start time if unfinished. Old empty conversations are
-then removed; independently retained audit rows remain.
 
 ### Med Agent Hub adapter
 
@@ -1104,9 +1104,41 @@ provider unavailable. The optional Bearer token belongs in the runtime property
 `chartsearchai.hub.apikey`, never in a global property. `HubProfileService` relays
 profile metadata from `/v1/models` on the same configured Hub.
 
-This adapter is an integration building block. Provider selection, conversation
-storage and REST endpoint wiring are separate contributions; configuring it alone
-does not route the existing search endpoint through the Hub.
+The conversation endpoint can select this adapter explicitly. The existing search
+endpoints remain bundled; enabling Hub does not silently redirect them.
+
+### Conversation endpoints
+
+All paths below are under `/ws/rest/v1/chartsearchai`. Requests require the query
+privilege; patient-specific requests also require access to the selected patient. Conversations belong to the current
+OpenMRS user and keep the provider/mode that produced their turns.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/providers` | Configured providers, capabilities, availability and default |
+| GET | `/models` | Hub product-profile metadata from the configured Hub |
+| GET | `/chat?patient=<uuid>&session=<optional uuid>` | Recorded history; omitted session restores the user's latest active conversation |
+| POST | `/chat/new` | Close the current conversation and open a fresh one |
+| POST | `/chat/stream` | Execute and persist one provider-neutral turn with canonical lifecycle events |
+
+New-chat requests carry `patient` and an optional explicit `provider`/`mode`. Chat
+requests also carry `question`, optional `session` and, for Hub, the required
+`profile`. An omitted mode uses the selected provider's configured mode. A provider
+switch starts a new conversation. Unavailable selections fail explicitly.
+
+The stream publishes a complete answer even when a provider supplies no incremental
+tokens. Optional review, evidence and In-Depth events stay separate from that answer.
+A client can disable incremental display while retaining the same provider/profile
+and conversation transport. Missing optional events do not assert successful checks.
+A later question preempts unfinished work for the same conversation. Terminal
+completion is sent after persistence and includes the audit identifier for feedback.
+The existing `/feedback` request continues to use `questionId`.
+
+A response disconnect or unexpected execution failure settles an already started
+turn as an error in stored history. Checked answers, original drafts and partial
+In-Depth content remain inspectable after an interrupted optional stage; unfinished
+In-Depth work is marked failed. Incomplete turns are not replayed as completed
+conversation context.
 
 ## License
 

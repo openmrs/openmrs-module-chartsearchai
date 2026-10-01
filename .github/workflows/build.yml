@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, "codex/**" ]
   workflow_dispatch:
   # For build-against-querystore-head ONLY. An upstream break can land on a day when nothing in
   # this repository changes, and neither push nor pull_request would notice it until the next

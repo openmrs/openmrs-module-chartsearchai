@@ -948,3 +948,16 @@ Gemma 4 is licensed under the [Apache 2.0 License](https://www.apache.org/licens
 Gemma 3 and Gemma 3n are licensed under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms), Copyright (C) Google LLC. All Rights Reserved.
 
 Llama 3.3 is licensed under the [Llama 3.2 Community License](https://www.llama.com/llama3_2/license/), Copyright (C) Meta Platforms, Inc. All Rights Reserved.
+
+## Local token counting
+
+`TokenCounter` and `LocalLlamaTokenCounter` provide the local engine's exact token
+counts for chart-context budgeting. Plain text uses llama-server's `/tokenize`
+endpoint; assembled system/user messages use `/v1/chat/completions/input_tokens`
+so the model's chat template is included. Both requests use the same authenticated,
+non-proxied client as inference.
+
+Counting is available for the local engine only. Remote endpoints are not assumed
+to provide a tokenizer, and this interface does not estimate their counts. These
+methods are the foundation for the context-budget contribution; they do not yet
+change which chart records are selected or enforce a new input limit.

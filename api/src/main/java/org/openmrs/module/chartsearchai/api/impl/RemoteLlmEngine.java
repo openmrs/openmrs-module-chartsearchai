@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -123,7 +124,7 @@ public class RemoteLlmEngine implements LlmEngine {
 			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
 			ReferenceRecords referenceRecords) {
 		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer, cacheScope,
-				cacheSeed);
+				cacheSeed, referenceRecords, CancellationSignal.NONE);
 	}
 
 	@Override
@@ -150,11 +151,9 @@ public class RemoteLlmEngine implements LlmEngine {
 					HttpResponse.BodyHandlers.ofInputStream());
 
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				logErrorBody(response.statusCode(), readTruncatedErrorBody(response.body()));
-				throw new APIException("Remote LLM API returned HTTP " + response.statusCode()
-						+ ". Check the endpoint URL and model name in the "
-						+ "chartsearchai.llm.remote.* global properties, and the API key "
-						+ "in openmrs-runtime.properties.");
+				String body = readTruncatedErrorBody(response.body());
+				logErrorBody(response.statusCode(), body);
+				throwForErrorResponse(response.statusCode(), body);
 			}
 
 			return parseResponse(readBoundedBody(response.body()));
@@ -174,6 +173,14 @@ public class RemoteLlmEngine implements LlmEngine {
 	@Override
 	public InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer,
+				null, null, ReferenceRecords.ABSENT, CancellationSignal.NONE);
+	}
+
+	@Override
+	public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			ReferenceRecords referenceRecords, CancellationSignal cancellation) {
 		String endpointUrl = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL);
 		String apiKey = getOptionalRuntimeProperty(ChartSearchAiConstants.RP_LLM_REMOTE_API_KEY);
 		String modelName = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME);
@@ -195,11 +202,12 @@ public class RemoteLlmEngine implements LlmEngine {
 					HttpResponse.BodyHandlers.ofInputStream());
 
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				logErrorBody(response.statusCode(), readTruncatedErrorBody(response.body()));
-				throw new APIException("Remote LLM API returned HTTP " + response.statusCode());
+				String body = readTruncatedErrorBody(response.body());
+				logErrorBody(response.statusCode(), body);
+				throwForErrorResponse(response.statusCode(), body);
 			}
 
-			return parseStreamingResponse(response.body(), tokenConsumer);
+			return parseStreamingResponse(response.body(), tokenConsumer, cancellation);
 		}
 		catch (BoundedResponseStream.ResponseTooLargeException e) {
 			throw oversized(e);
@@ -211,6 +219,55 @@ public class RemoteLlmEngine implements LlmEngine {
 			Thread.currentThread().interrupt();
 			throw new APIException("Remote LLM API call was interrupted", e);
 		}
+	}
+
+	/** Reachability probe for the operator-configured remote engine, sharing its proxy-aware client. */
+	public boolean endpointReachable(String endpointUrl) {
+		try {
+			HttpRequest request = HttpRequest.newBuilder().uri(URI.create(endpointUrl))
+					.timeout(Duration.ofSeconds(2)).GET().build();
+			HttpResponse<Void> response = getHttpClient().send(request, HttpResponse.BodyHandlers.discarding());
+			return response.statusCode() < 500;
+		}
+		catch (IOException | IllegalArgumentException e) {
+			return false;
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return false;
+		}
+	}
+
+	private InferenceResult parseStreamingResponse(InputStream inputStream,
+			Consumer<String> tokenConsumer, CancellationSignal cancellation) throws IOException {
+		cancellation.bindCloseable(inputStream);
+		try {
+			return parseStreamingResponse(inputStream, tokenConsumer);
+		}
+		finally {
+			cancellation.unbindCloseable(inputStream);
+		}
+	}
+
+	/**
+	 * Translates a non-2xx remote response into the honest exception: a llama-server
+	 * context-overflow 400 becomes {@link org.openmrs.module.chartsearchai.api.ChartTooLargeException}
+	 * (the provider maps it to {@code chart_too_large}) — explicit-overflow parity with
+	 * {@link LocalLlmEngine}, so an oversized chart or slice is never disguised as a generic
+	 * provider failure. Everything else stays an {@link APIException} with the operator
+	 * remediation for the remote GPs.
+	 */
+	static void throwForErrorResponse(int statusCode, String body) {
+		if (statusCode == 400 && LlmResponseParser.isContextOverflowError(body)) {
+			throw new org.openmrs.module.chartsearchai.api.ChartTooLargeException(
+					"Patient chart exceeds the remote model's context window. Reduce the chart "
+							+ "(query-scoped mode) or serve the model with a "
+							+ "larger context.");
+		}
+		throw new APIException("Remote LLM API returned HTTP " + statusCode
+				+ ". Check the endpoint URL and model name in the "
+				+ "chartsearchai.llm.remote.* global properties, and the API key "
+				+ "in openmrs-runtime.properties.");
 	}
 
 	@Override

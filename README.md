@@ -1003,10 +1003,31 @@ list alone does not show that a check ran. Status reflects available reference d
 patient-context reads, medication mappings, enabled checks and dose information.
 It does not certify that a medication is safe.
 
-This Java API is the safety-status foundation for provider integration. Existing
-warning callers and standing chart alerts retain their interfaces. Publishing the
-status on provider answers and rendering it in the frontend belong to the subsequent
-integration contributions.
+Completed bundled answers now carry this status and its limitation codes through
+`ChartAnswer` and the provider envelope, including answers composed from module
+findings. Early answers state that the check is unavailable until its result is
+attached. Existing warning callers and standing chart alerts retain their
+interfaces. REST publication and frontend display belong to the endpoint and
+presentation contributions.
+
+## Bundled provider integration
+
+`BundledClinicalAnswerProvider` adapts the existing caching router and local/remote
+inference pipeline to the shared turn lifecycle. It emits the initial answer before
+later grounding results, retains already-completed answers when cancellation
+interrupts later work, and reports context-budget and provider failures explicitly.
+Cancellation reaches the engine response stream and the executing thread. Current
+upstream prompt-selection arguments, reference handling and clinical disclosures
+remain in the inference pipeline.
+
+`ClinicalAnswerProviderRegistry` exposes configured providers and their actual
+availability. A fresh installation enables bundled inference only; missing or
+unready implementations remain visible with a reason, and a requested provider is
+never silently replaced. This contribution provides the bundled implementation and
+registry; provider discovery and conversation HTTP endpoints are separate changes.
+The approved streaming toggle and optional-model capability behavior still require
+coordination with those endpoints and the frontend; this extraction does not claim
+that acceptance.
 
 ### Conversation persistence
 

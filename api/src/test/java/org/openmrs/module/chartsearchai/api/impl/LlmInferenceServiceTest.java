@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.apache.logging.log4j.Level;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
@@ -37,6 +39,114 @@ public class LlmInferenceServiceTest {
 
 	private static String uuid(int i) {
 		return TestDatasetHelper.uuidForIndex(i);
+	}
+
+	@Test
+	public void finalPromptBudgetIncludesInjectedReferenceMaterialAndQuestion() {
+		LlmInferenceService service = new LlmInferenceService();
+		List<String> measured = new ArrayList<>();
+		service.setTokenCounter(new TokenCounter() {
+
+			@Override
+			public boolean isAvailable() {
+				return true;
+			}
+
+			@Override
+			public int count(String text) {
+				return 0;
+			}
+
+			@Override
+			public int countPrompt(String numberedRecords, String question) {
+				return 0;
+			}
+
+			@Override
+			public int countPrompt(String numberedRecords, List<Integer> focusIndices,
+					String question) {
+				measured.add(numberedRecords);
+				measured.add(focusIndices.toString());
+				measured.add(question);
+				return 101;
+			}
+
+			@Override
+			public int inputBudget() {
+				return 100;
+			}
+		});
+		PatientChart chart = new PatientChart("[1] Drug reference: WHO-ATC",
+				Collections.singletonList(new RecordMapping(1, "drug-reference", uuid(1), null)),
+				Arrays.asList(1, 3));
+
+		assertThrows(ChartTooLargeException.class,
+				() -> service.ensurePromptFits(chart, "Can these medicines interact?"));
+		assertEquals("[1] Drug reference: WHO-ATC", measured.get(0));
+		assertEquals("[1, 3]", measured.get(1));
+		assertEquals("Can these medicines interact?", measured.get(2));
+	}
+
+	@Test
+	public void blockingSearchRejectsAnInjectedPromptBeforeCallingTheLlm() {
+		LlmInferenceService service = serviceWhoseInjectedPromptCounts(101, 100);
+
+		assertThrows(ChartTooLargeException.class,
+				() -> service.search(new Patient(), "Can these medicines interact?"));
+	}
+
+	@Test
+	public void streamingSearchRejectsAnInjectedPromptBeforeCallingTheLlm() {
+		LlmInferenceService service = serviceWhoseInjectedPromptCounts(101, 100);
+
+		assertThrows(ChartTooLargeException.class,
+				() -> service.searchStreaming(new Patient(), "Can these medicines interact?", token -> { }));
+	}
+
+	private static LlmInferenceService serviceWhoseInjectedPromptCounts(int promptTokens, int budget) {
+		PatientChart base = new PatientChart("[1] Medication order",
+				Collections.singletonList(new RecordMapping(1, "drug_order", uuid(1), null)));
+		PatientChart injected = new PatientChart("[1] Medication order\n[2] Drug reference: WHO-ATC",
+				Arrays.asList(new RecordMapping(1, "drug_order", uuid(1), null),
+						new RecordMapping(2, "drug_reference", uuid(2), null)));
+		LlmInferenceService service = new LlmInferenceService();
+		service.setChartBuildingStrategy(new ChartBuildingStrategy() {
+			@Override
+			PatientChart buildChart(Patient patient, String question) {
+				return base;
+			}
+		});
+		service.setDrugReferenceInjector(new org.openmrs.module.chartsearchai.reference.DrugReferenceInjector() {
+			@Override
+			public PatientChart inject(PatientChart chart, Patient patient, String question,
+					org.openmrs.module.chartsearchai.reference.ChartReadStatus chartRead) {
+				return injected;
+			}
+		});
+		service.setTokenCounter(new TokenCounter() {
+			@Override public boolean isAvailable() { return true; }
+			@Override public int count(String text) { return 0; }
+			@Override public int countPrompt(String numberedRecords, String question) { return promptTokens; }
+			@Override public int inputBudget() { return budget; }
+		});
+		service.setLlmProvider(new LlmProvider() {
+			@Override
+			public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
+					boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+					List<org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
+				throw new AssertionError("LLM must not run after prompt-budget failure");
+			}
+
+			@Override
+			public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+					String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+					String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+					List<org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered,
+					org.openmrs.module.chartsearchai.api.provider.CancellationSignal cancellation) {
+				throw new AssertionError("LLM must not run after prompt-budget failure");
+			}
+		});
+		return service;
 	}
 
 	@Test
@@ -487,15 +597,15 @@ public class LlmInferenceServiceTest {
 		});
 		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
 
-			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
-			// and sink-carrying since issue #336. Stubbing the four-argument one instead leaves this
-			// stub INERT — production would not reach it — which is why it names both parameters.
+			// Intercept the status-carrying entry point with mappings and pair extent intact.
+			// This fixture supplies warnings without measuring patient-context coverage.
 			@Override
-			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
+			public SafetyCheckResult validateWithStatus(
 					String answer, String question, org.openmrs.Patient patient,
 					java.util.List<RecordMapping> mappings,
 					org.openmrs.module.chartsearchai.reference.PairChipExtent.Sink pairExtentSink) {
-				return java.util.Collections.emptyList();
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, java.util.Collections.emptyList(),
+						java.util.Collections.singletonList("patient_context_unavailable"));
 			}
 		});
 		service.setChartBuildingStrategy(new ChartBuildingStrategy() {

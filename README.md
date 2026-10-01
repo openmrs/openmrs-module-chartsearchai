@@ -963,3 +963,17 @@ checks event order and advertised capabilities. `TurnCancellation` closes bound
 resources, and `TurnPreemptionRegistry` cancels the previous turn when another
 starts in the same conversation. Their existing tests include the shared
 `api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
+
+### Conversation persistence
+
+`ConversationService` stores conversation headers and ordered turns for the
+current OpenMRS user and patient. Reusing a conversation requires the same provider
+and mode; switching either, or explicitly starting a new conversation, closes the
+previous header. Each completed turn retains its full provider payload and copies
+provider, mode, conversation and request attribution into the audit record.
+
+Checked or edited answers can be reused for a follow-up while In-Depth is still
+running. Failed and needs-review answers remain inspectable in storage but are
+excluded from replay. Audit retention clears the turn's audit link without deleting
+the conversation answer. The migration and Hibernate mappings are included here;
+REST history endpoints and provider execution wiring are separate contributions.

@@ -370,14 +370,14 @@ public class FindingPartnerLogDisclosureTest {
 		});
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {
 
-			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
-			// and sink-carrying since issue #336. Stubbing a shorter one instead leaves this stub
-			// INERT — production would not reach it — which is why this names both parameters.
+			// Intercept the status-carrying entry point with mappings and pair extent intact.
+			// This fixture supplies warnings without measuring patient-context coverage.
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
 					List<PatientChartSerializer.RecordMapping> mappings,
 					PairChipExtent.Sink pairExtentSink) {
-				return chips;
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, chips,
+						java.util.Collections.singletonList("patient_context_unavailable"));
 			}
 		});
 		return created;

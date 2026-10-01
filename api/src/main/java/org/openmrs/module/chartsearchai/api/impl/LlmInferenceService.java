@@ -24,6 +24,8 @@ import java.util.function.Consumer;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
@@ -79,6 +81,9 @@ public class LlmInferenceService implements ChartSearchService {
 	@Autowired
 	private DrugSafetyValidator drugSafetyValidator;
 
+	@Autowired
+	private TokenCounter tokenCounter;
+
 	/** Test seam: production wires {@link CitationGroundingVerifier} via {@link Autowired}. */
 	void setCitationGroundingVerifier(CitationGroundingVerifier citationGroundingVerifier) {
 		this.citationGroundingVerifier = citationGroundingVerifier;
@@ -92,6 +97,11 @@ public class LlmInferenceService implements ChartSearchService {
 	/** Test seam: production wires {@link DrugSafetyValidator} via {@link Autowired}. */
 	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
 		this.drugSafetyValidator = drugSafetyValidator;
+	}
+
+	/** Test seam: production wires the engine-specific exact counter via Spring. */
+	void setTokenCounter(TokenCounter tokenCounter) {
+		this.tokenCounter = tokenCounter;
 	}
 
 	/** Test seam: production wires {@link LlmProvider} via {@link Autowired}.
@@ -179,6 +189,9 @@ public class LlmInferenceService implements ChartSearchService {
 				outcome = "ok";
 				return answer;
 			}
+
+			// Deterministic answers need no model prompt; check before any model pass.
+			ensurePromptFits(chart, question);
 
 			long llmStart = System.currentTimeMillis();
 			// The drugs the question proposes that her orders already carry (issue #548), off the
@@ -301,8 +314,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
 			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings(), pairExtent);
+			DrugSafetyValidator.SafetyCheckResult safetyResult = drugSafetyValidator.validateWithStatus(
+					response.getAnswer(), question, patient, chart.getMappings(), pairExtent);
+			List<SafetyWarning> safetyWarnings = safetyResult.getWarnings();
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
 			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
 			// (issue #516) — `cited`, off the injected records, and never the chips above, which include
@@ -350,7 +364,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+					unstatedSignificanceQualifiers, safetyResult.getStatus(), safetyResult.getIssues(),
+					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty());
 			outcome = "ok";
 			return answer;
@@ -626,6 +641,16 @@ public class LlmInferenceService implements ChartSearchService {
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			Consumer<List<RecordReference>> citationsConsumer,
 			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer, CancellationSignal.NONE);
+	}
+
+	@Override
+	public ChartAnswer searchStreaming(Patient patient, String question,
+			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
 		// LOG FORMAT — stable contract: same field set as search() with op=searchStreaming
 		// in the log tag, plus previewMs (progressive-reasoning preview pass) and groundMs (Tier-2
 		// grounding, timed separately so the tail is visible). Streaming is the path the frontend
@@ -699,6 +724,9 @@ public class LlmInferenceService implements ChartSearchService {
 				return answer;
 			}
 
+			// Deterministic answers need no model prompt; check before any model pass.
+			ensurePromptFits(chart, question);
+
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
 			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the
 			// gate is off. Runs after the full chart is built so the patient's querystore index is
@@ -716,7 +744,7 @@ public class LlmInferenceService implements ChartSearchService {
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
 					reasoningConsumer, kvCacheScope, uninjectedRecords, enumerateFindings, referenceRecords,
-					chart.getDrugsAlreadyOrdered());
+					chart.getDrugsAlreadyOrdered(), cancellation);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -789,6 +817,7 @@ public class LlmInferenceService implements ChartSearchService {
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
 					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null,
+					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(),
 					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty()));
 
@@ -877,8 +906,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
 			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
-			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings(), pairExtent);
+			DrugSafetyValidator.SafetyCheckResult safetyResult = drugSafetyValidator.validateWithStatus(
+					response.getAnswer(), question, patient, chart.getMappings(), pairExtent);
+			List<SafetyWarning> safetyWarnings = safetyResult.getWarnings();
 			// MEASURED on the model's own prose, so the key reports what the MODEL stated; the answer is
 			// COMPLETED below, so what a client is handed names every order the findings it CITES cover
 			// (issue #516) — `cited`, off the injected records, and never the chips above, which include
@@ -926,7 +956,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+					unstatedSignificanceQualifiers, safetyResult.getStatus(), safetyResult.getIssues(),
+					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
 							chart.getProposalOwnOrderFindingLines()), !chart.getHistoryQuestionDrugRows().isEmpty());
 			outcome = "ok";
 			return answer;
@@ -995,10 +1026,10 @@ public class LlmInferenceService implements ChartSearchService {
 		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 		// Every chip whose finding the composed text states is published as stated, so a client does not
 		// repeat it in full beneath the answer that just said it — asked of the module's own text.
+		DrugSafetyValidator.SafetyCheckResult safetyResult = drugSafetyValidator.validateWithStatus(
+				findingLineMarkersOf(composed, mappings), question, patient, mappings, pairExtent);
 		List<SafetyWarning> safetyWarnings = aboutTheDrugAsked(DrugReferenceInjector.withFindingCitations(
-				ModuleAnswerStatement.markStated(composed,
-						drugSafetyValidator.validate(findingLineMarkersOf(composed, mappings), question, patient, mappings,
-								pairExtent)),
+				ModuleAnswerStatement.markStated(composed, safetyResult.getWarnings()),
 				mappings), chart);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
@@ -1022,11 +1053,31 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty()));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null,
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null,
+				!chart.getHistoryQuestionDrugRows().isEmpty()));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
-				doseCeilingCoverage, null, null, null, !chart.getHistoryQuestionDrugRows().isEmpty());
+				doseCeilingCoverage, null, null, safetyResult.getStatus(), safetyResult.getIssues(), null,
+				!chart.getHistoryQuestionDrugRows().isEmpty());
+	}
+
+	/**
+	 * Final exact preflight after all deterministic chart and knowledge-reference injection. The
+	 * selector budgets its chart view earlier, but only this layer can measure the complete prompt
+	 * that will reach the model.
+	 */
+	void ensurePromptFits(PatientChart chart, String question) {
+		if (tokenCounter == null || !tokenCounter.isAvailable()) {
+			return;
+		}
+		int inputTokens = tokenCounter.countPrompt(chartTextOrPlaceholder(chart),
+				chart.getFocusIndices(), question);
+		if (inputTokens > tokenCounter.inputBudget()) {
+			throw new ChartTooLargeException("The complete chart, reference material, and question "
+					+ "exceed the configured model input budget.");
+		}
 	}
 
 	/**

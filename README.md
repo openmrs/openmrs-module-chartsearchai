@@ -986,6 +986,18 @@ The opt-in check starts and stops its own server on port 18095 (override with
 `-Dchartsearchai.test.tokenCount.port`), compares the count with inference usage,
 and verifies idle-unload scheduling. It does not use a running OpenMRS installation.
 
+## Safety-check execution status
+
+`DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
+or `unavailable` status, and limitation codes from one invocation. An empty warning
+list alone does not show that a check ran. Status reflects available reference data,
+patient-context reads, medication mappings, enabled checks and dose information.
+It does not certify that a medication is safe.
+
+This Java API is the safety-status foundation for provider integration. Existing
+warning callers and standing chart alerts retain their interfaces. Publishing the
+status on provider answers and rendering it in the frontend belong to the subsequent
+integration contributions.
 
 ## License
 

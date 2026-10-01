@@ -126,13 +126,16 @@ final class PatientClinicalContextBuilder {
 		// once they are folded (issue #413). Independent, so a pass that hits both records both.
 		boolean activeDrugOrderReadCompleted = true;
 		boolean activeDrugOrderUnaccountedFor = false;
+		boolean activeDrugIdentitiesComplete = true;
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
 					continue;
 				}
 				DrugOrder drugOrder = (DrugOrder) order;
+				int accountedOrders = activeOrders.size();
 				activeDrugOrderUnaccountedFor |= addDrugOrder(drugOrder, "Active", drugNames, atcCodes, activeOrders);
+				activeDrugIdentitiesComplete &= activeOrders.size() > accountedOrders;
 			}
 		}
 		catch (RuntimeException e) {
@@ -201,7 +204,7 @@ final class PatientClinicalContextBuilder {
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
 				activeOrders, null, contraindicationRecordsRead, activeDrugOrderReadCompleted,
-				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords);
+				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords, activeDrugIdentitiesComplete);
 	}
 
 	/**

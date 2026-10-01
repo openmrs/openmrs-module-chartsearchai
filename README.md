@@ -979,3 +979,18 @@ published-snapshot build and upstream-HEAD compatibility check are replaced for
 `codex/context-budget` only, because neither supplies the required API yet. Remove
 that branch-specific substitution after QueryStore #68 merges and publishes the
 API, and rerun the ordinary checks before merging this contribution.
+
+## Provider integration contract
+
+The `api.provider` package defines a shared contract for the bundled answering
+pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
+turn requests and results, ordered events, and cancellation. This package is the
+foundation for provider integration; it does not yet change the running search
+endpoints or enable a Hub connection.
+
+`AnswerEnvelope` preserves the complete provider payload while exposing the answer
+text needed for display, conversation replay and audit. `TurnLifecycleValidator`
+checks event order and advertised capabilities. `TurnCancellation` closes bound
+resources, and `TurnPreemptionRegistry` cancels the previous turn when another
+starts in the same conversation. Their existing tests include the shared
+`api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.

@@ -290,7 +290,11 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				// (ADR Decision 137) — the only chip here answering isAboutADrugOtherThanTheOneProposed() true, so a
 				// put hardcoded to `false` disagrees with it. Mutate the put and read this class's failure.
 				SafetyWarningFixtures.aboutADrugOtherThanTheOneProposed(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
-						"Nevirapine", "Nevirapine interacts with active order Lidocaine — Minor.", "Minor")));
+						"Nevirapine", "Nevirapine interacts with active order Lidocaine — Minor.", "Minor")),
+				// Chip 18: a chip naming its finding's record number (ADR Decision 138) — the only non-null
+				// getFindingCitation() here, so a put dropping it disagrees. Mutate the put and read this class's failure.
+				SafetyWarningFixtures.withFindingCitation(new SafetyWarning(SafetyWarning.TYPE_INTERACTION,
+						"Fluconazole", "Fluconazole interacts with active order Lidocaine — Moderate.", "Moderate"), 50));
 	}
 
 	private ChartSearchAiRestController controller;

@@ -154,6 +154,11 @@ public final class SafetyWarningFixtures {
 		return chip.withAboutADrugOtherThanTheOneProposed(true);
 	}
 
+	/** {@code chip} naming {@code citation} as its finding's record number, through the field's own writer. */
+	public static SafetyWarning withFindingCitation(SafetyWarning chip, int citation) {
+		return chip.withFindingCitation(Integer.valueOf(citation));
+	}
+
 	/**
 	 * {@code chip} stamped with {@code orders} as the active orders it is about — through
 	 * {@code DrugSafetyValidator.currentMedicationOrdersOn}, the one stamp the validator writes (issue #552),

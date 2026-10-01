@@ -137,7 +137,6 @@ public class LlmInferenceService implements ChartSearchService {
 			// canonical for the three answers and for why that pass rather than validate's.
 			ChartReadStatus chartRead = new ChartReadStatus();
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
-			ensurePromptFits(chart, question);
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
@@ -188,6 +187,9 @@ public class LlmInferenceService implements ChartSearchService {
 				outcome = "ok";
 				return answer;
 			}
+
+			// Deterministic answers need no model prompt; check before any model pass.
+			ensurePromptFits(chart, question);
 
 			long llmStart = System.currentTimeMillis();
 			// The drugs the question proposes that her orders already carry (issue #548), off the
@@ -660,7 +662,6 @@ public class LlmInferenceService implements ChartSearchService {
 			// canonical for the three answers and for why that pass rather than validate's.
 			ChartReadStatus chartRead = new ChartReadStatus();
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
-			ensurePromptFits(chart, question);
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
 			// each of them derived separately is two audit-write sites that can disagree — which is
@@ -707,6 +708,9 @@ public class LlmInferenceService implements ChartSearchService {
 				outcome = "ok";
 				return answer;
 			}
+
+			// Deterministic answers need no model prompt; check before any model pass.
+			ensurePromptFits(chart, question);
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
 			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the

@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.APIException;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
@@ -205,9 +207,49 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 		server.createContext("/one-byte-over-the-budget",
 				exchange -> respondWithCompletionOf(exchange, STATED_RESPONSE_BUDGET + 1));
 		server.createContext("/short-error", this::shortError);
+		server.createContext("/context-overflow", exchange -> respondError(exchange, 400,
+				"{\"error\":{\"type\":\"exceed_context_size_error\",\"message\":\"...\"}}"));
+		server.createContext("/bad-request", exchange -> respondError(exchange, 400, "{\"error\":\"bad request\"}"));
+		server.createContext("/unavailable", exchange -> respondError(exchange, 503, ""));
 		server.start();
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME, "test-model");
+	}
+
+	@Test
+	public void contextOverflowIsReportedThroughBlockingAndStreamingHttpCalls() {
+		for (boolean streaming : new boolean[] { false, true }) {
+			pointEngineAt("/context-overflow");
+			ChartTooLargeException overflow = assertThrows(ChartTooLargeException.class,
+					() -> callEngine(streaming));
+			assertTrue(overflow.getMessage().contains("context window"), overflow.getMessage());
+			for (String path : new String[] { "/bad-request", "/unavailable" }) {
+				pointEngineAt(path);
+				APIException error = assertThrows(APIException.class, () -> callEngine(streaming));
+				assertFalse(ChartTooLargeException.class.isInstance(error), path);
+			}
+		}
+	}
+
+	private void callEngine(boolean streaming) {
+		if (streaming) {
+			engine.inferStreaming("system", "user", 30, token -> {
+				throw new AssertionError("An error response must not emit answer tokens");
+			});
+		} else {
+			engine.infer("system", "user", 30);
+		}
+	}
+
+	private void respondError(HttpExchange exchange, int status, String body) throws IOException {
+		try {
+			exchange.getRequestBody().readAllBytes();
+			byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+			exchange.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
+			exchange.getResponseBody().write(bytes);
+		} finally {
+			exchange.close();
+		}
 	}
 
 	@AfterEach

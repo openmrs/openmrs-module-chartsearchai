@@ -948,9 +948,9 @@ See [docs/adr.md](docs/adr.md) for architectural decisions and design rationale.
 
 The `api.provider` package defines a shared contract for the bundled answering
 pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
-turn requests and results, ordered events, and cancellation. This package is the
-foundation for provider integration; it does not yet change the running search
-endpoints or enable a Hub connection.
+turn requests and results, ordered events, and cancellation. The contract is the
+foundation for provider integration; concrete adapters implement it. The running
+search endpoints are not yet routed through this contract.
 
 `AnswerEnvelope` preserves the complete provider payload while exposing the answer
 text needed for display, conversation replay and audit. `TurnLifecycleValidator`
@@ -1081,6 +1081,27 @@ content, independently of `chartsearchai.auditLogRetentionDays`. Both default to
 90 days; setting either to 0 disables only that cleanup. Turns expire from their
 completion time, or their start time if unfinished. Old empty conversations are
 then removed; independently retained audit rows remain.
+
+### Med Agent Hub adapter
+
+`HubClinicalAnswerProvider` relays one configured product-profile request through
+`HttpHubStreamTransport`. It maps the staged Hub events onto the shared lifecycle
+and preserves the returned validation, temporal-check, evidence, safety and In-Depth
+payloads. There is no automatic fallback to bundled inference. Interrupted review
+or In-Depth stages after an answer has arrived are settled explicitly when the
+transport fails or is cancelled. Terminal Hub events close the response immediately.
+Hub response reads reuse the remote engine's byte ceilings, including bounded error
+bodies; they do not impose a whole-profile generation timeout.
+
+The adapter reads `chartsearchai.hub.endpointUrl` from OpenMRS global properties;
+it must name the Hub's `/v1/chat/completions` endpoint. An unset endpoint makes the
+provider unavailable. The optional Bearer token belongs in the runtime property
+`chartsearchai.hub.apikey`, never in a global property. `HubProfileService` relays
+profile metadata from `/v1/models` on the same configured Hub.
+
+This adapter is an integration building block. Provider selection, conversation
+storage and REST endpoint wiring are separate contributions; configuring it alone
+does not route the existing search endpoint through the Hub.
 
 ## License
 

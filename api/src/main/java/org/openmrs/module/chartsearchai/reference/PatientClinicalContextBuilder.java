@@ -124,6 +124,7 @@ final class PatientClinicalContextBuilder {
 		// once they are folded (issue #413). Independent, so a pass that hits both records both.
 		boolean activeDrugOrderReadCompleted = true;
 		boolean activeDrugOrderUnaccountedFor = false;
+		boolean activeDrugIdentitiesComplete = true;
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
@@ -238,29 +239,32 @@ final class PatientClinicalContextBuilder {
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
 							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
 							orderConceptUuid, scheduledStart));
-				} else if (coded.unreadable) {
-					// Neither rung, and the reason is a read this pass could not make. The skip itself
-					// is older than issue #413 and is untouched below; what #413 adds is a way INTO it,
-					// and saying the active orders were READ while one of them is missing because of a
-					// failed read is the confusion the stamp exists to prevent (#247) — on the standing
-					// surface it is a patient with a prescription certified as a screened empty chart.
-					// So the pass reports itself unread, which is what it did before this loop guarded
-					// the drug read; what #413 changed is that the orders BESIDE this one keep their
-					// place on the list.
-					//
-					// Gated on the FAILED read and never on the drop alone, and the difference is not
-					// cosmetic: an order that simply never had a name, a code or a coded drug is dropped
-					// here too, nothing having failed to read, and stamping the pass unread for it would
-					// hand a client screened:false — every chip on the chart withheld, including ones
-					// raised on other orders the module read perfectly. Measured through the real
-					// standingChartAlerts: one such order costs the whole alert list. That population is
-					// left exactly as it was, silently skipped, and its own certified-empty-screen
-					// residue is older than this issue and not closed here.
-					log.warn("Active drug order {} has no readable name and no ATC code because its coded "
-							+ "drug could not be read, so it is left off this patient's medication list "
-							+ "entirely and the active-order read is reported as incomplete rather than "
-							+ "clean.", drugOrder.getUuid());
-					activeDrugOrderUnaccountedFor = true;
+				} else {
+					activeDrugIdentitiesComplete = false;
+					if (coded.unreadable) {
+						// Neither rung, and the reason is a read this pass could not make. The skip itself
+						// is older than issue #413 and is untouched below; what #413 adds is a way INTO it,
+						// and saying the active orders were READ while one of them is missing because of a
+						// failed read is the confusion the stamp exists to prevent (#247) — on the standing
+						// surface it is a patient with a prescription certified as a screened empty chart.
+						// So the pass reports itself unread, which is what it did before this loop guarded
+						// the drug read; what #413 changed is that the orders BESIDE this one keep their
+						// place on the list.
+						//
+						// Gated on the FAILED read and never on the drop alone, and the difference is not
+						// cosmetic: an order that simply never had a name, a code or a coded drug is dropped
+						// here too, nothing having failed to read, and stamping the pass unread for it would
+						// hand a client screened:false — every chip on the chart withheld, including ones
+						// raised on other orders the module read perfectly. Measured through the real
+						// standingChartAlerts: one such order costs the whole alert list. That population is
+						// left exactly as it was, silently skipped, and its own certified-empty-screen
+						// residue is older than this issue and not closed here.
+						log.warn("Active drug order {} has no readable name and no ATC code because its coded "
+								+ "drug could not be read, so it is left off this patient's medication list "
+								+ "entirely and the active-order read is reported as incomplete rather than "
+								+ "clean.", drugOrder.getUuid());
+						activeDrugOrderUnaccountedFor = true;
+					}
 				}
 			}
 		}
@@ -330,7 +334,7 @@ final class PatientClinicalContextBuilder {
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
 				activeOrders, null, contraindicationRecordsRead, activeDrugOrderReadCompleted,
-				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords);
+				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords, activeDrugIdentitiesComplete);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

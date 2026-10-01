@@ -290,7 +290,7 @@ public class CoMedicationResolutionPerPassTest {
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
 					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
 					+ "\t\t\tPairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,\n"
-					+ "\t\t\tListedDrugsWithNoActiveOrder.Sink listedSink) {";
+					+ "\t\t\tListedDrugsWithNoActiveOrder.Sink listedSink, SafetyCoverage coverage) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 

@@ -976,3 +976,16 @@ Counting is available for the local engine only. Remote endpoints are not assume
 to provide a tokenizer, and this interface does not estimate their counts. These
 methods are the foundation for the context-budget contribution; they do not yet
 change which chart records are selected or enforce a new input limit.
+
+## Safety-check execution status
+
+`DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
+or `unavailable` status, and limitation codes from one invocation. An empty warning
+list alone does not show that a check ran. Status reflects available reference data,
+patient-context reads, medication mappings, enabled checks and dose information.
+It does not certify that a medication is safe.
+
+This Java API is the safety-status foundation for provider integration. Existing
+warning callers and standing chart alerts retain their interfaces. Publishing the
+status on provider answers and rendering it in the frontend belong to the subsequent
+integration contributions.

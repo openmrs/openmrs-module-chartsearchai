@@ -953,9 +953,9 @@ Llama 3.3 is licensed under the [Llama 3.2 Community License](https://www.llama.
 
 The `api.provider` package defines a shared contract for the bundled answering
 pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
-turn requests and results, ordered events, and cancellation. This package is the
-foundation for provider integration; it does not yet change the running search
-endpoints or enable a Hub connection.
+turn requests and results, ordered events, and cancellation. The contract is the
+foundation for provider integration; concrete adapters implement it. The running
+search endpoints are not yet routed through this contract.
 
 `AnswerEnvelope` preserves the complete provider payload while exposing the answer
 text needed for display, conversation replay and audit. `TurnLifecycleValidator`
@@ -963,3 +963,24 @@ checks event order and advertised capabilities. `TurnCancellation` closes bound
 resources, and `TurnPreemptionRegistry` cancels the previous turn when another
 starts in the same conversation. Their existing tests include the shared
 `api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
+
+### Med Agent Hub adapter
+
+`HubClinicalAnswerProvider` relays one configured product-profile request through
+`HttpHubStreamTransport`. It maps the staged Hub events onto the shared lifecycle
+and preserves the returned validation, temporal-check, evidence, safety and In-Depth
+payloads. There is no automatic fallback to bundled inference. Interrupted review
+or In-Depth stages after an answer has arrived are settled explicitly when the
+transport fails or is cancelled. Terminal Hub events close the response immediately.
+Hub response reads reuse the remote engine's byte ceilings, including bounded error
+bodies; they do not impose a whole-profile generation timeout.
+
+The adapter reads `chartsearchai.hub.endpointUrl` from OpenMRS global properties;
+it must name the Hub's `/v1/chat/completions` endpoint. An unset endpoint makes the
+provider unavailable. The optional Bearer token belongs in the runtime property
+`chartsearchai.hub.apikey`, never in a global property. `HubProfileService` relays
+profile metadata from `/v1/models` on the same configured Hub.
+
+This adapter is an integration building block. Provider selection, conversation
+storage and REST endpoint wiring are separate contributions; configuring it alone
+does not route the existing search endpoint through the Hub.

@@ -853,6 +853,18 @@ public class ChartSearchAiConstants {
 	 */
 	public static final String REFERENCE_GROUP_REFERENCE = "reference";
 
+	/**
+	 * Fixed med-agent-hub chat-completions endpoint used by {@code HubClinicalAnswerProvider}.
+	 * Must end with {@code /v1/chat/completions}. Empty/unset means the hub provider is not ready.
+	 */
+	public static final String GP_HUB_ENDPOINT_URL = "chartsearchai.hub.endpointUrl";
+
+	/**
+	 * Name of the runtime property holding the optional Hub Bearer token, not a credential value.
+	 * The token is read from OpenMRS runtime properties, never from a global property.
+	 */
+	public static final String RP_HUB_API_KEY = "chartsearchai.hub.apikey";
+
 	private ChartSearchAiConstants() {
 	}
 }

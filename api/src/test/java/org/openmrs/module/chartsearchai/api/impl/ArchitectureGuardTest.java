@@ -740,6 +740,8 @@ public class ArchitectureGuardTest {
 	 * {@link #noDirectGetEmbeddingPrefixCalls} uses. {@code RemoteLlmEngine} builds requests to the
 	 * operator's OWN configured endpoint, which this rule says nothing about, and
 	 * {@code LlmEndpointTestSupport} is the opt-in suites' client for a hand-started server.
+	 * {@code HubProfileService} and {@code HttpHubStreamTransport} address the configured remote
+	 * Hub, never the module's local subprocess; they use the Hub's own runtime-property key.
 	 */
 	@Test
 	public void everyLocalServerRequestCarriesTheModulesKey() throws IOException {
@@ -747,6 +749,7 @@ public class ArchitectureGuardTest {
 				localServerSources(),
 				Pattern.compile("HttpRequest\\s*\\.\\s*newBuilder\\s*\\("),
 				"LlamaServerEndpoint.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
+						+ "|HubProfileService.java|HttpHubStreamTransport.java"
 						+ "|ArchitectureGuardTest.java",
 				"Should build the request through LlamaServerEndpoint.request(), which attaches "
 						+ "the per-start key, instead of a bare HttpRequest.newBuilder()"));
@@ -1050,7 +1053,8 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>{@code RemoteLlmEngine} is excluded because its endpoint is the operator's own and is
 	 * MEANT to leave the host, and {@code LlmEndpointTestSupport} because it is the opt-in suites'
-	 * client for a server the tester started.
+	 * client for a server the tester started. {@code HubProfileService} and
+	 * {@code HttpHubStreamTransport} also address an operator-configured remote peer.
 	 */
 	@Test
 	public void onlyOneClientTalksToTheLocalServer() throws IOException {
@@ -1059,6 +1063,7 @@ public class ArchitectureGuardTest {
 		assertNoViolations(scanForPattern(
 				localServerSources(), construction,
 				"LocalLlmEngine.java|RemoteLlmEngine.java|LlmEndpointTestSupport.java"
+						+ "|HubProfileService.java|HttpHubStreamTransport.java"
 						+ "|ArchitectureGuardTest.java",
 				"Should reach the local server through LocalLlmEngine.getHttpClient(), which is "
 						+ "built with NO_PROXY, instead of constructing another HttpClient"));
@@ -1096,7 +1101,8 @@ public class ArchitectureGuardTest {
 	 * hand-built local-server URL written in THAT file is invisible here.
 	 * {@code EntrypointRetrievalWiringTest} is excluded for the same reason and at the same cost: its
 	 * weights-status case (#467) stands up the same kind of origin and hands its URL to the whole
-	 * entrypoint through a manifest fixture.
+	 * entrypoint through a manifest fixture. {@code HttpHubStreamTransportTest} similarly serves
+	 * a test Hub, not the local inference subprocess.
 	 */
 	@Test
 	public void theLocalServerAddressIsSpelledInOnePlace() throws IOException {
@@ -1105,7 +1111,8 @@ public class ArchitectureGuardTest {
 				Pattern.compile("\"http://127\\.0\\.0\\.1:"),
 				// No production exclusion: LlamaServerEndpoint builds its URLs from LOOPBACK_HOST
 				// and spells this literal nowhere, so excluding it would only weaken the scan.
-				"ArchitectureGuardTest.java|ModelDownloadIntegrityTest.java|EntrypointRetrievalWiringTest.java",
+				"ArchitectureGuardTest.java|ModelDownloadIntegrityTest.java|EntrypointRetrievalWiringTest.java"
+						+ "|HttpHubStreamTransportTest.java",
 				"Should take the URL from LlamaServerEndpoint (completionsUrl/healthUrl/"
 						+ "propsUrl/slotUrl) instead of spelling the loopback address"));
 	}
@@ -1253,7 +1260,7 @@ public class ArchitectureGuardTest {
 						+ "would scan nothing and report no violations — it fails instead");
 
 		Pattern unbounded = Pattern.compile("(?<!readBoundedBody\\()(?<!readTruncatedErrorBody\\()"
-				+ "(?<!parseStreamingResponse\\()response\\.body\\(\\)");
+				+ "(?<!parseStreamingResponse\\()(?<!newBoundedResponseStream\\()response\\.body\\(\\)");
 		List<String> violations = new ArrayList<>();
 		List<String> scanned = new ArrayList<>();
 		java.util.Map<String, String> dense = new java.util.LinkedHashMap<>();
@@ -1291,7 +1298,7 @@ public class ArchitectureGuardTest {
 			}
 			if (unbounded.matcher(source.getValue()).find()) {
 				violations.add(source.getKey() + " — a remote response body must be read through "
-						+ "readBoundedBody, parseStreamingResponse or readTruncatedErrorBody "
+						+ "readBoundedBody, parseStreamingResponse, readTruncatedErrorBody or BoundedResponseStream "
 						+ "(issue #446). If this peer is NOT an operator-configurable address, "
 						+ "exempt the file in this rule and say why, as LocalLlmEngine.java is.");
 			}

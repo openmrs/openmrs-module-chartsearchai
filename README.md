@@ -1053,6 +1053,8 @@ and preserves the returned validation, temporal-check, evidence, safety and In-D
 payloads. There is no automatic fallback to bundled inference. Interrupted review
 or In-Depth stages after an answer has arrived are settled explicitly when the
 transport fails, is cancelled, or ends normally without completing those stages.
+A stream ending without a terminal Hub event remains an explicit incomplete-stream
+error; interrupted optional-stage outcomes are emitted before that error.
 Terminal Hub events close the response immediately.
 Hub response reads reuse the remote engine's byte ceilings, including bounded error
 bodies; they do not impose a whole-profile generation timeout.

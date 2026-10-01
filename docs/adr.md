@@ -13379,12 +13379,22 @@ cited her lidocaine order as *"Metoclopramide [6]"*, and the significance qualif
 ### The decision
 
 - **A third shape is answered**: a proposal of one drug she is not taking, over a chart read in full, whose every
-  finding states the PROPOSAL caution clause about that drug alone and at least one of which is an interaction —
-  `DrugReferenceInjector.cautionsOnlyAbout`. Any finding stating another clause (a contraindication, a withholding
-  interaction, a current-medication or ended-order referent) or about another drug keeps the model call.
-- **The lead says what the check found, never a clearance or a negative**: `CAUTION_LEAD_OPENING` —
-  *"This module's drug-safety check found 2 cautions about Omeprazole:"* — then each finding's line, as Decision 108
-  composes it. Not "can be given", and not that nothing else was found.
+  finding is an INTERACTION stating the PROPOSAL caution clause about that drug alone —
+  `DrugReferenceInjector.cautionsOnlyAbout`. Any finding of another type (a contraindication, a condition-mediated
+  chain), stating another clause (a withholding interaction, a current-medication or ended-order referent) or about
+  another drug keeps the model call.
+- **The lead counts the cautions and names their kind, never a clearance or a negative**:
+  `DrugReferenceInjector.cautionLead` — *"2 interaction cautions for Omeprazole:"*. Not "can be given", not that
+  nothing else was found, and not where the answer came from: a first draft opened *"This module's drug-safety check
+  found …"*, which tells a clinician nothing they act on. "Interaction" carries the one part of it that does, the
+  scope.
+- **Each line is brief**: `DrugReferenceInjector.briefDetail` keeps the finding's first sentence — the drug, her
+  order and the rating — and every sentence saying the interaction's clinical significance is unknown, by
+  `ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE`, the one definition Decision 136's check reads too. *"Omeprazole interacts
+  with active order Warfarin — Moderate. [5] [3]"*. The mechanism prose stays on the chip, which the answer then no
+  longer states (`statedInTheAnswer: false`), so a client shows it beside the answer. A first draft printed the whole
+  paragraph, which on Kamwara's trimethoprim question was a pharmacokinetic study where the model had written one
+  sentence.
 - **Every composed line cites the chart record of each of her orders its finding was matched against**, by
   `orderRecordNumbers`' rule, whatever `chartsearchai.drugSafety.citeOrderRecords` says: that flag gates what a MODEL
   reads ([Decision 77](#decision-77-a-findings-chart-order-attribution-names-the-record-number-its-order-is)), and no
@@ -13435,17 +13445,26 @@ Fluconazole list question.
   model's was one sentence with a verdict, so a clinician reads more and is given no call — on Kamwara's trimethoprim
   question, a pharmacokinetic study paragraph in place of *"Trimethoprim can be given, with one caution: … a Minor
   problem"*.
+- **Round 4 passed** — the brief lines and the interaction lead above, over all 46 cells against the same `main`
+  captures. The model-answered cells, the composed "No" answers (full lines, plus their order markers) and the list
+  questions are as in round 3. Every newly composed answer is the lead and one line per finding, each line exactly its
+  chip's first detail sentence plus that detail's unknown-significance sentences, carrying the chip's rating:
+  *"1 interaction caution for Fluconazole: / Fluconazole interacts with active order Lidocaine — Moderate. [46] [6]"*;
+  Susan aspirin's line keeps *"The clinical significance of this interaction is unknown."* and Mary warfarin's its
+  *"has not been established, however, clinical monitoring … is recommended"*. Chips are main's, less the
+  pre-registered aspirin miscitation, and none is published as stated.
 
 ### Not pinned
 
 The two subject-row conditions of `cautionsOnlyAbout` are defensive. A throwaway probe through the real injector over
 the shipped knowledge base, with derived findings on — 30 arrangements of five order lists and nine proposals — found
 no finding stating a caution clause without subject rows of the drug proposed, and deleting either condition leaves
-the api suite green. The interaction requirement is pinned only by
-`ConditionMediatedFindingPartnerCompletionContextTest`, whose chain-only questions it keeps with the model. With
-derived findings on, a proposal whose findings are an interaction caution and a chain is composed with both lines
-(zidovudine over her warfarin and simvastatin, in that probe), so the chain's measured precision
-([Decision 111](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution)) reaches the module's own answer.
+the api suite green. The type requirement is pinned by
+`ConditionMediatedFindingPartnerCompletionContextTest`: its chain-only questions, and
+`.aProposalWhoseCautionsIncludeAChainIsStillAnsweredByTheModel` — zidovudine over her warfarin and simvastatin, an
+interaction caution beside a chain, which the round-3 build composed with both lines, putting the chain's measured
+precision ([Decision 111](#decision-111-drugs-linked-through-one-drug-disease-condition-are-stated-as-one-derived-finding-and-it-is-a-caution))
+into the module's own answer.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseFindingsAreAllCautionsIsAnsweredFromThemWithoutAClearance`
 and `.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.

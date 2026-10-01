@@ -531,6 +531,11 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 					drugs, atc, orders);
 		}
 
+		/** The chart the real injector wrote for {@link #question}. */
+		PatientChart chart() {
+			return chart;
+		}
+
 		/** The one injected finding naming exactly {@code partners}, failing on the chart where none does. */
 		RecordMapping findingNaming(List<String> partners) {
 			for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {

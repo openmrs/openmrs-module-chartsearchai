@@ -63,6 +63,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** The uuid of {@link #WARFARIN_ORDER}'s order, as that dataset spells it. */
 	private static final String WARFARIN_ORDER_UUID = "9469dddd-0000-4000-8000-00000009469a";
 
+	/** The uuid of patient 7's aspirin order in the standard test dataset. */
+	private static final String ASPIRIN_ORDER_UUID = "e1f95924-697a-11e3-bd76-0800271c1b75";
+
 	private static final String METFORMIN_ORDER = "AnswerFromFindingsMetforminOrderTestData.xml";
 
 	/** The ticket's own shape: a drug the patient is not on, proposed, related Major to her order. */
@@ -354,10 +357,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A proposed drug whose findings are all cautions about it is answered from them (ADR Decision 140): the
-	 * module states what its check found — a count of cautions, then each finding once, in its record's own
-	 * words, cited by its own number — and never "can be given", a clearance nothing here can establish.
-	 * Omeprazole relates Moderate to her warfarin and Minor to her aspirin.
+	 * A proposed drug whose findings are all interaction cautions about it is answered from them (ADR Decision
+	 * 140), briefly: a lead counting them, then one line per finding — its first sentence, which names her order
+	 * and the rating, and any sentence saying the interaction's clinical significance is unknown, cited by its
+	 * own number and her order's record. Never "can be given", a clearance nothing here can establish. The
+	 * mechanism prose stays on the chip, which the answer therefore no longer states. Omeprazole relates
+	 * Moderate to her warfarin and Minor to her aspirin, the second qualified.
 	 */
 	@Test
 	public void aProposalWhoseFindingsAreAllCautionsIsAnsweredFromThemWithoutAClearance() throws Exception {
@@ -385,16 +390,29 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "no model is asked");
 		assertTrue(answer.isAnsweredByTheModule());
-		assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.CAUTION_LEAD_OPENING + findings.size()
-				+ (findings.size() == 1 ? " caution about " : " cautions about ")),
-				"led by what the check found, was: " + answer.getAnswer());
-		for (Finding finding : findings) {
-			assertEquals(1, occurrences(answer.getAnswer(), "[" + finding.index + "]"),
-					"each finding cited once, was: " + answer.getAnswer());
+		assertEquals(2, findings.size(), "precondition: the two cautions, were: " + findings);
+		Finding warfarin = findings.get(0).text.contains("active order Warfarin") ? findings.get(0) : findings.get(1);
+		Finding aspirin = warfarin == findings.get(0) ? findings.get(1) : findings.get(0);
+		assertEquals("2 interaction cautions for Omeprazole:\n"
+				+ "Omeprazole interacts with active order Warfarin — Moderate. [" + warfarin.index + "] ["
+				+ recordOf(answer, WARFARIN_ORDER_UUID) + "]\n"
+				+ "Omeprazole interacts with active order Acetylsalicylic acid (aspirin) — Minor. The clinical "
+				+ "significance of this interaction is unknown. [" + aspirin.index + "] ["
+				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertFalse(chip.isStatedInTheAnswer(),
+					"the answer states no chip's detail in full, so each is shown beside it: " + chip);
 		}
-		assertFalse(answer.getAnswer().toLowerCase(java.util.Locale.ROOT).contains("can be given"),
-				"never a clearance, was: " + answer.getAnswer());
-		assertFalse(answer.getAnswer().startsWith("No"), "nor a refusal, was: " + answer.getAnswer());
+	}
+
+	/** The index of the answer's reference to the record of {@code orderUuid}, failing where there is none. */
+	private static int recordOf(ChartAnswer answer, String orderUuid) {
+		for (RecordReference reference : answer.getReferences()) {
+			if (orderUuid.equals(reference.getResourceUuid())) {
+				return reference.getIndex();
+			}
+		}
+		throw new AssertionError("no reference to order " + orderUuid + ": " + answer.getAnswer());
 	}
 
 	/**

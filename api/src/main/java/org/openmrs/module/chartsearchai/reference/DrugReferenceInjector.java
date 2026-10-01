@@ -2537,13 +2537,15 @@ public class DrugReferenceInjector {
 	public static final String WITHHOLD_LEAD_CLOSING = ".";
 
 	/**
-	 * How the module's own answer opens on a proposal whose findings are all cautions about the drug proposed
-	 * (ADR Decision 140), followed by the count and the drug: <em>"This module's drug-safety check found 2
-	 * cautions about Omeprazole:"</em>. It states what the check FOUND, which every finding positively says, and
-	 * never "can be given" — the clearance {@link #answersFromFindings}' javadoc refuses — nor that nothing else
-	 * was found, a negative nothing here can establish.
+	 * How the module's own answer opens on a proposal whose findings are all interaction cautions about the drug
+	 * proposed (ADR Decision 140): <em>"2 interaction cautions for Omeprazole:"</em> — the count, what kind of
+	 * finding they are, and the drug. Never "can be given" — the clearance {@link #answersFromFindings}' javadoc
+	 * refuses — nor that nothing else was found. "Interaction" is the scope the clinician needs: these are the
+	 * findings of an interaction check, not a review of whether the drug suits her.
 	 */
-	public static final String CAUTION_LEAD_OPENING = "This module's drug-safety check found ";
+	static String cautionLead(int count, String drug) {
+		return count + (count == 1 ? " interaction caution for " : " interaction cautions for ") + drug + ":";
+	}
 
 	/**
 	 * The markers of the chart records a composed line's finding is about — each active order its arm
@@ -2603,10 +2605,10 @@ public class DrugReferenceInjector {
 	 *     the proposal clause for a drug her orders resolve to without establishing she takes it, and for
 	 *     one a question may be proposing in a presentation she does not take; the model answers such a
 	 *     question, as it did before issue #402.</li>
- * <li>The same proposal where every finding is a CAUTION about that drug and at least one is an
- *     interaction ({@link #cautionsOnlyAbout}, ADR Decision 140), answered under {@link #CAUTION_LEAD_OPENING}
- *     with what the check found. That is not the clearance this method refuses: it never says the drug can
- *     be given, nor that nothing else was found.</li>
+ * <li>The same proposal where every finding is an interaction CAUTION about that drug
+ *     ({@link #cautionsOnlyAbout}, ADR Decision 140), answered under {@link #cautionLead} with each finding
+ *     briefly. That is not the clearance this method refuses: it never says the drug can be given, nor that
+ *     nothing else was found.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication
@@ -2661,32 +2663,31 @@ public class DrugReferenceInjector {
 				return true;
 			}
 		}
-		// Or every finding is a caution about the drug proposed (ADR Decision 140), answered with what the check
-		// found and never a clearance — see cautionsOnlyAbout.
+		// Or every finding is an interaction caution about the drug proposed (ADR Decision 140), answered with
+		// the cautions and never a clearance — see cautionsOnlyAbout.
 		return cautionsOnlyAbout(asked, findings);
 	}
 
 	/**
-	 * Whether {@code findings} are all PROPOSAL cautions about the substance {@code asked} names — each stating
-	 * {@link #STRENGTH_CAUTION}, each with subject rows of that substance alone — and at least one is an
-	 * INTERACTION (ADR Decision 140). Fail-closed both ways: any finding stating another clause (a
-	 * contraindication, a withholding interaction, a current-medication or ended-order referent) or about
-	 * another drug keeps the model call, so the composed answer's lead, which counts its lines as cautions about
-	 * that drug, is true of every line under it.
+	 * Whether {@code findings} are all PROPOSAL interaction cautions about the substance {@code asked} names —
+	 * each an INTERACTION stating {@link #STRENGTH_CAUTION}, each with subject rows of that substance alone (ADR
+	 * Decision 140). Fail-closed both ways: any finding of another type (a contraindication, a condition-mediated
+	 * chain), stating another clause (a withholding interaction, a current-medication or ended-order referent)
+	 * or about another drug keeps the model call, so {@link #cautionLead}, which counts its lines as
+	 * interaction cautions about that drug, is true of every line under it.
 	 *
 	 * <p><b>The two subject-row conditions are defensive and nothing pins them</b>: no finding a single-drug
 	 * proposal raises today states a caution clause without subject rows of the drug proposed, so deleting
-	 * either leaves the suite green (ADR Decision 140 records the probe). The caution clause and the
-	 * interaction requirement are pinned — the second by the condition-mediated cases, whose chains alone
-	 * would otherwise be composed.
+	 * either leaves the suite green (ADR Decision 140 records the probe). The type and the caution clause are
+	 * pinned — the type by the condition-mediated cases, whose chains would otherwise be composed.
 	 */
 	private static boolean cautionsOnlyAbout(Set<Object> asked, List<SafetyWarning> findings) {
 		if (findings.isEmpty()) {
 			return false;
 		}
-		boolean interaction = false;
 		for (SafetyWarning finding : findings) {
-			if (!STRENGTH_CAUTION.equals(strengthClause(finding)) || finding.subjectRows().isEmpty()) {
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					|| !STRENGTH_CAUTION.equals(strengthClause(finding)) || finding.subjectRows().isEmpty()) {
 				return false;
 			}
 			for (DrugReference row : finding.subjectRows()) {
@@ -2694,9 +2695,8 @@ public class DrugReferenceInjector {
 					return false;
 				}
 			}
-			interaction |= SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
 		}
-		return interaction;
+		return true;
 	}
 
 	/**
@@ -2935,13 +2935,17 @@ public class DrugReferenceInjector {
 				.thenComparingInt(i -> strengthRank(clauses[i]))
 				.thenComparingInt(i -> STRENGTH_WITHHOLD.equals(clauses[i]) && licensesTheModulesNo(findings.get(i))
 						? 0 : 1));
+		// A caution-only proposal (ADR Decision 140), which cautionsOnlyAbout admitted: brief lines under a lead
+		// counting them. Every other composed answer states each finding's whole body, as before.
+		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[order.get(0)]);
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {
 			SafetyWarning finding = findings.get(i);
 			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
 					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
 					&& finding.orderScheduledStart() == null;
-			String line = findingBody(finding, orderRecordNumbers, true)
+			String line = findingBody(finding, cautions ? briefDetail(finding.getDetail()) : finding.getDetail(),
+					orderRecordNumbers, true)
 					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 					+ " [" + numbers.get(i) + "]";
 			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
@@ -2949,11 +2953,10 @@ public class DrugReferenceInjector {
 		SafetyWarning first = findings.get(order.get(0));
 		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
 			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
-		} else if (proposal) {
-			// A caution-only proposal (ADR Decision 140): every line is a caution about this drug, which
-			// cautionsOnlyAbout admitted, so the count is the lines'.
-			lines.add(0, CAUTION_LEAD_OPENING + lines.size() + (lines.size() == 1 ? " caution about " : " cautions about ")
-					+ first.getDrug() + ":");
+		} else if (cautions) {
+			// Every line is an interaction caution about this drug, which cautionsOnlyAbout admitted, so the
+			// count is the lines'.
+			lines.add(0, cautionLead(lines.size(), first.getDrug()));
 		}
 		return String.join("\n", lines);
 	}
@@ -3030,6 +3033,13 @@ public class DrugReferenceInjector {
 	 */
 	private static String findingBody(SafetyWarning finding, Map<String, Integer> orderRecordNumbers,
 			boolean clauseFollows) {
+		return findingBody(finding, finding.getDetail(), orderRecordNumbers, clauseFollows);
+	}
+
+	/** {@link #findingBody(SafetyWarning, Map, boolean)} over {@code detailText} in place of the finding's whole
+	 *  detail — the composed caution answer's brief line ({@link #briefDetail}); every clause after it as there. */
+	private static String findingBody(SafetyWarning finding, String detailText, Map<String, Integer> orderRecordNumbers,
+			boolean clauseFollows) {
 		// Between the detail and the strength clause, so the clause stays SENTENCE-FINAL — which is
 		// where the prompt's own two format demonstrations put it, and what its graded-safety rule
 		// reads to decide how the answer opens. Provenance is about the evidence and belongs beside
@@ -3051,9 +3061,29 @@ public class DrugReferenceInjector {
 		// #402's residue (a)).
 		String noSeverity = statesNoSeverity(finding) ? FINDING_NO_SEVERITY : "";
 		String detail = !clauseFollows && provenance.isEmpty() && chartOrders.isEmpty() && noSeverity.isEmpty()
-				? finding.getDetail()
-				: DrugSafetyValidator.endSentence(finding.getDetail());
+				? detailText
+				: DrugSafetyValidator.endSentence(detailText);
 		return detail + chartOrders + provenance + noSeverity;
+	}
+
+	/**
+	 * A finding's detail, brief — the line a composed caution answer states (ADR Decision 140): its first
+	 * sentence, which names the drug, her order and, on the shipped knowledge base, the rating its note opens
+	 * with; then every later sentence saying the interaction's clinical significance is unknown
+	 * ({@link ChartSearchAiUtils#UNKNOWN_SIGNIFICANCE}, ADR Decision 136's own reading), so the qualifier is
+	 * never dropped. The mechanism prose is left to the chip, which carries the whole detail. Sentences are
+	 * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}'s. A folded class sentence cannot be cut here: a fold
+	 * withholds, so no caution answer carries one.
+	 */
+	static String briefDetail(String detail) {
+		String[] sentences = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(detail.trim());
+		StringBuilder brief = new StringBuilder(sentences[0]);
+		for (int i = 1; i < sentences.length; i++) {
+			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences[i]).find()) {
+				brief.append(' ').append(sentences[i]);
+			}
+		}
+		return brief.toString();
 	}
 
 	/**

@@ -971,7 +971,8 @@ starts in the same conversation. Their existing tests include the shared
 and preserves the returned validation, temporal-check, evidence, safety and In-Depth
 payloads. There is no automatic fallback to bundled inference. Interrupted review
 or In-Depth stages after an answer has arrived are settled explicitly when the
-transport fails or is cancelled. Terminal Hub events close the response immediately.
+transport fails, is cancelled, or ends normally without completing those stages.
+Terminal Hub events close the response immediately.
 Hub response reads reuse the remote engine's byte ceilings, including bounded error
 bodies; they do not impose a whole-profile generation timeout.
 

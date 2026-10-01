@@ -1101,8 +1101,8 @@ public class ArchitectureGuardTest {
 	 * hand-built local-server URL written in THAT file is invisible here.
 	 * {@code EntrypointRetrievalWiringTest} is excluded for the same reason and at the same cost: its
 	 * weights-status case (#467) stands up the same kind of origin and hands its URL to the whole
-	 * entrypoint through a manifest fixture. {@code HttpHubStreamTransportTest} similarly serves
-	 * a test Hub, not the local inference subprocess.
+	 * entrypoint through a manifest fixture. {@code HttpHubStreamTransportTest} and
+	 * {@code HubClinicalAnswerProviderHttpTest} similarly serve a test Hub, not the local inference subprocess.
 	 */
 	@Test
 	public void theLocalServerAddressIsSpelledInOnePlace() throws IOException {
@@ -1112,7 +1112,7 @@ public class ArchitectureGuardTest {
 				// No production exclusion: LlamaServerEndpoint builds its URLs from LOOPBACK_HOST
 				// and spells this literal nowhere, so excluding it would only weaken the scan.
 				"ArchitectureGuardTest.java|ModelDownloadIntegrityTest.java|EntrypointRetrievalWiringTest.java"
-						+ "|HttpHubStreamTransportTest.java",
+						+ "|HttpHubStreamTransportTest.java|HubClinicalAnswerProviderHttpTest.java",
 				"Should take the URL from LlamaServerEndpoint (completionsUrl/healthUrl/"
 						+ "propsUrl/slotUrl) instead of spelling the loopback address"));
 	}

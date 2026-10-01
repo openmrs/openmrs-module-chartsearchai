@@ -81,6 +81,7 @@ public class OtherMedicationChipTest {
 								+ chip);
 				assertFalse(chip.isAboutAnotherOfHerMedications(),
 						"the drug the question asks about is not ANOTHER medication, " + question + ": " + chip);
+				assertFalse(chip.isAboutADrugOtherThanTheOneProposed(), question + ": " + chip);
 			}
 		}
 	}

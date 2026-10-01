@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -860,5 +861,47 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		assertTrue(recorder.prompt.contains(DrugReferenceInjector.FINDING_PREFIX + "Amlodipine: "),
 				"precondition: the prompt carries the finding");
 		assertEquals(Collections.emptyList(), answer.getUnstatedSignificanceQualifiers());
+	}
+
+	/**
+	 * A chip whose subject is not the drug the question proposes says so (ADR Decision 137): asked about fluconazole,
+	 * the listed nevirapine screened against her rifampicin order is a finding about nevirapine, not fluconazole,
+	 * while the findings headed by fluconazole — against her order, and against the listed nevirapine — are about
+	 * the drug asked about.
+	 */
+	@Test
+	public void aChipAboutADrugOtherThanTheOneProposedSaysSo() throws IOException {
+		ChartAnswer answer = serviceAnswering("Fluconazole can be given, with one caution.", obs()).service.search(
+				patient, FLUCONAZOLE_QUESTION);
+
+		assertTrue(chip(answer, "Nevirapine", "rifamp", "Major").isAboutADrugOtherThanTheOneProposed(),
+				"the listed nevirapine against her rifampicin order is not about fluconazole");
+		assertFalse(chip(answer, "Fluconazole", "rifamp", "Major").isAboutADrugOtherThanTheOneProposed(),
+				"fluconazole against her own order is about the drug asked about");
+		assertFalse(chip(answer, "Fluconazole", "nevirapine", "Moderate").isAboutADrugOtherThanTheOneProposed(),
+				"the question-pair finding headed by fluconazole is about the drug asked about");
+	}
+
+	/** A pair finding headed by an ended listed drug is still about the proposed drug, which is its partner. */
+	@Test
+	public void aPairFindingWhosePartnerIsProposedIsAboutTheProposedDrug() throws IOException {
+		ChartAnswer answer = serviceAnswering("No.", obs(),
+				DrugReferenceTestSupport.drugOrderRecord(2, "Nevirapine 200mg", Boolean.FALSE, null)).service.search(
+						Context.getPatientService().getPatient(6), RIFAMPICIN_LIST_QUESTION);
+
+		assertFalse(chip(answer, "Nevirapine", "rifampicin (rifampin), also named in the question", "Major")
+				.isAboutADrugOtherThanTheOneProposed());
+	}
+
+	/** A question that proposes no drug has no drug for a chip to be other than, so no chip says so. */
+	@Test
+	public void aQuestionProposingNoDrugMarksNoChip() throws IOException {
+		ChartAnswer answer = serviceAnswering("Nevirapine interacts with her rifampicin.", obs()).service.search(
+				patient, "Does nevirapine interact with her medications?");
+
+		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: nevirapine against her rifampicin raises a chip");
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertFalse(chip.isAboutADrugOtherThanTheOneProposed(), "was: " + chip);
+		}
 	}
 }

@@ -140,6 +140,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 134: Two drug-first proposal shapes are admitted, because the gate was run](#decision-134-two-drug-first-proposal-shapes-are-admitted-because-the-gate-was-run)
 - [Decision 135: An answer saying an order has ended where no record does is reported](#decision-135-an-answer-saying-an-order-has-ended-where-no-record-does-is-reported)
 - [Decision 136: An answer dropping a cited finding's unknown-significance qualifier is reported](#decision-136-an-answer-dropping-a-cited-findings-unknown-significance-qualifier-is-reported)
+- [Decision 137: A chip about a drug other than the one proposed says so](#decision-137-a-chip-about-a-drug-other-than-the-one-proposed-says-so)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13292,3 +13293,39 @@ Pinned by `LlmInferenceServiceListedMedicationsContextTest.aCitedFindingWhoseQua
 `.anAnswerStatingTheQualifierReportsNothing`, `.anUncitedFindingIsNotReported` and
 `.aCitedFindingWithNoQualifierIsNotReported`, over a verbatim rifampicin/melatonin slice of the shipped dataset;
 the wire by `ChartSearchAiUnstatedSignificanceQualifiersTest`.
+
+## Decision 137: A chip about a drug other than the one proposed says so
+
+**Status: Accepted** (October 2026) — implemented, no issue.
+
+### Context
+
+Asked *"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Fluconazole?"* (the
+3.7.1 standalone, patient `763e6e5f-c489-4bab-8a55-c379f085dd1c`, question 13316), the module raised three
+findings and the answer cited two, both headed by fluconazole. The third, the listed nevirapine checked against her
+lidocaine order (Minor), is about nevirapine, and the safety box drew it level with the two about the drug asked
+about. `aboutAnotherOfHerMedications` (#571) cannot mark it: nevirapine is not one of her prescriptions.
+
+### The decision
+
+- **Each question-driven chip states whether its subject is of a drug the question proposes**:
+  `SafetyWarning.isAboutADrugOtherThanTheOneProposed()`, published verbatim as `aboutADrugOtherThanTheOneProposed`.
+  `true` where the question proposes a drug and the subject is not of it.
+- **One reading of "proposes"**: `proposedByTheQuestion`, computed once per `validate` pass and shared with the
+  question-pair arm's subject election ([Decision 133](#decision-133-a-question-pair-finding-names-the-drug-the-question-proposes-as-its-subject)).
+- **Stamped in `EndedOrders.aboutTheSubject`**, which every question-driven chip passes through, `stamp`'s callers and
+  the duplicate-therapy finding alike; **`stampPair` clears it where the pair's partner is proposed**, since an ended
+  listed drug can head a pair whose partner is the proposal.
+- No prompt change and no change to which chips exist. The reference frontend groups `true` chips behind a closed line.
+
+### Residues
+
+- **The proposal reading is fail-closed** (Decision 108's grammar), so a question proposing a drug in a phrasing it
+  does not admit marks no chip.
+- **Chips that bypass the stamp state `false`**: the screen of her orders against each other (it runs only where the
+  question names no drug) and the finding that several of her orders carry one substance.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aChipAboutADrugOtherThanTheOneProposedSaysSo`,
+`.aPairFindingWhosePartnerIsProposedIsAboutTheProposedDrug` and `.aQuestionProposingNoDrugMarksNoChip`, and
+`OtherMedicationChipTest.aChipAboutTheDrugTheQuestionNamesIsNotAboutAnotherMedicationEvenWhereSheTakesIt`; the wire by
+`ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`.

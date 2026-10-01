@@ -147,6 +147,14 @@ public final class SafetyWarningFixtures {
 	}
 
 	/**
+	 * {@code chip} as {@code DrugSafetyValidator.EndedOrders} states it where its subject is not the drug the question
+	 * proposes — through {@code SafetyWarning.withAboutADrugOtherThanTheOneProposed}, that step's own writer.
+	 */
+	public static SafetyWarning aboutADrugOtherThanTheOneProposed(SafetyWarning chip) {
+		return chip.withAboutADrugOtherThanTheOneProposed(true);
+	}
+
+	/**
 	 * {@code chip} stamped with {@code orders} as the active orders it is about — through
 	 * {@code DrugSafetyValidator.currentMedicationOrdersOn}, the one stamp the validator writes (issue #552),
 	 * so the chip publishes a {@code currentMedicationOrders} production could.

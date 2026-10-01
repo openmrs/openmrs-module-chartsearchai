@@ -158,6 +158,9 @@ public class SafetyWarning {
 	/** @see #isAboutAnotherOfHerMedications() */
 	private final boolean aboutAnotherOfHerMedications;
 
+	/** @see #isAboutADrugOtherThanTheOneProposed() */
+	private final boolean aboutADrugOtherThanTheOneProposed;
+
 	/** @see #partnerScheduledStarts() */
 	private final Map<String, String> partnerScheduledStarts;
 
@@ -352,7 +355,7 @@ public class SafetyWarning {
 			boolean aboutACurrentMedication, PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders, false,
-				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered, false);
+				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered, false, false);
 	}
 
 	/**
@@ -440,7 +443,7 @@ public class SafetyWarning {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, null, false, null, null, null, null, false);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, null, false, null, null, null, null, false, false);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -454,8 +457,10 @@ public class SafetyWarning {
 			List<CurrentMedicationOrder> currentMedicationOrders, Collection<String> currentOrderDisplays,
 			boolean statedInTheAnswer, Map<String, List<DrugReference>> partnerRows,
 			Map<String, String> partnerScheduledStarts, String orderScheduledStart,
-			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered, boolean aboutAnotherOfHerMedications) {
+			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered, boolean aboutAnotherOfHerMedications,
+			boolean aboutADrugOtherThanTheOneProposed) {
 		this.alreadyOrdered = alreadyOrdered;
+		this.aboutADrugOtherThanTheOneProposed = aboutADrugOtherThanTheOneProposed;
 		this.aboutAnotherOfHerMedications = aboutAnotherOfHerMedications;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.partnerScheduledStarts = partnerScheduledStarts == null || partnerScheduledStarts.isEmpty()
@@ -1217,7 +1222,8 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, true,
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
 				matchedOrderNames, subjectRows, currentMedicationOrders, currentOrderDisplays, statedInTheAnswer,
-				partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications);
+				partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/**
@@ -1232,7 +1238,8 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentMedicationOrders, currentOrderDisplays,
-				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications);
+				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1277,7 +1284,8 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, orders, displays,
-				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications);
+				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/**
@@ -1339,7 +1347,8 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
-				currentOrderDisplays, statedInTheAnswer, partnerRows, spelled, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications);
+				currentOrderDisplays, statedInTheAnswer, partnerRows, spelled, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/**
@@ -1383,7 +1392,8 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts,
-				DateFormatUtil.formatDate(start), alreadyOrdered, aboutAnotherOfHerMedications);
+				DateFormatUtil.formatDate(start), alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
@@ -1393,7 +1403,8 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
-				currentOrderDisplays, true, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications);
+				currentOrderDisplays, true, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/**
@@ -1422,7 +1433,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, true);
+				alreadyOrdered, true, aboutADrugOtherThanTheOneProposed);
 	}
 
 	/**
@@ -1449,6 +1460,39 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * This warning, stated as about a drug other than the one the question proposes, or not — see
+	 * {@link #isAboutADrugOtherThanTheOneProposed()}. Package-private: written only by
+	 * {@code DrugSafetyValidator.EndedOrders}, the step every question-driven chip passes through. Changes nothing
+	 * this warning prints.
+	 */
+	SafetyWarning withAboutADrugOtherThanTheOneProposed(boolean other) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
+				alreadyOrdered, aboutAnotherOfHerMedications, other);
+	}
+
+	/**
+	 * Whether this finding is about a drug OTHER than the one the question proposes (ADR Decision 137): the
+	 * question proposes a drug ({@code DrugSafetyValidator.proposedByTheQuestion}), and this finding's subject is not
+	 * of it — and, for a question-pair finding, neither is its partner. Asked <em>"The patient is currently on
+	 * Lamivudine, Nevirapine, Stavudine, is it safe to give Fluconazole?"</em>, the listed nevirapine screened
+	 * against her lidocaine order is a finding about nevirapine, beside two about fluconazole. Published VERBATIM
+	 * as each chip's {@code aboutADrugOtherThanTheOneProposed} wire key, so this accessor's name IS the key.
+	 *
+	 * <p>It differs from {@link #isAboutAnotherOfHerMedications()}, which says the subject is one of HER
+	 * prescriptions: a drug only the question lists is not, and a chip of hers on a question proposing nothing is
+	 * one of these false. <b>{@code false} is not a claim the chip is about the proposed drug</b>: it is the answer on
+	 * every chip of a question that proposes no drug, and on every chip the steps that bypass the stamp raise — the
+	 * screen of her orders against each other, and the finding that several of her orders carry one substance.
+	 */
+	public boolean isAboutADrugOtherThanTheOneProposed() {
+		return aboutADrugOtherThanTheOneProposed;
+	}
+
+	/**
 	 * This warning, stated as about the substance {@code rows} are every reference row of — the finding's
 	 * SUBJECT, decided where the arm named it (issue #515). Package-private: {@code EndedOrders.aboutTheSubject}
 	 * is its caller for a drug in play — through {@code EndedOrders.stamp}, the step every other question-driven
@@ -1463,7 +1507,8 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentMedicationOrders,
-				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications);
+				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/**
@@ -1494,7 +1539,8 @@ public class SafetyWarning {
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
-				currentOrderDisplays, statedInTheAnswer, rows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications);
+				currentOrderDisplays, statedInTheAnswer, rows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
+				aboutADrugOtherThanTheOneProposed);
 	}
 
 	/**

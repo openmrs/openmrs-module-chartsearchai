@@ -142,6 +142,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 136: An answer dropping a cited finding's unknown-significance qualifier is reported](#decision-136-an-answer-dropping-a-cited-findings-unknown-significance-qualifier-is-reported)
 - [Decision 137: A chip about a drug other than the one proposed says so](#decision-137-a-chip-about-a-drug-other-than-the-one-proposed-says-so)
 - [Decision 138: Each chip names the record number of its own finding](#decision-138-each-chip-names-the-record-number-of-its-own-finding)
+- [Decision 140: A proposal whose findings are all cautions about the drug is answered with the cautions found](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -10101,7 +10102,7 @@ rating below `major` is a caution.** Nothing else about the split moves:
 
 → `SafetyFindingSeverityStrengthTest.aModerateRatedInteractionIsACautionAndSaysItIsNotAReasonToWithholdTheDrug`,
 `CurrentMedicationFindingStrengthTest.aScreenedModeratePairOfHerOwnMedicationsStatesTheCurrentMedicationCaution`,
-`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel`,
+`LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseFindingsAreAllCautionsIsAnsweredFromThemWithoutAClearance` (since Decision 140, which reversed what that case pinned),
 `FoldedFindingStrengthTest.aModerateRuleFoldedWithAClassRelationshipStillStatesTheStrongerClaim`,
 `SafetyVerdictSeverityGradationTest.everyCurrentMedicationBranchAsksForTheFindingsSeverity`,
 `SafetyVerdictSeverityGradationTest.theTwoCurrentMedicationBranchesAreExactlyTheseWords`,
@@ -13361,3 +13362,67 @@ of the key was cited (openmrs-esm-chartsearchai#50).
 
 Pinned by `LlmInferenceServiceListedMedicationsContextTest.eachChipNamesTheRecordNumberOfItsOwnFinding`; the wire by
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`.
+
+## Decision 140: A proposal whose findings are all cautions about the drug is answered with the cautions found
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them).
+
+### Context
+
+Decision 108 answered a proposal from the module's findings only where an interaction rated a reason to withhold
+licensed a "No", and left a proposal whose findings are all cautions to the model, because the model's caution lead
+is *"X can be given, with one caution: …"* — a clearance the module cannot establish. The model's answer to those
+questions restated what the module had already found, and how it restated it varied: *"Is aspirin safe for her?"*
+cited her lidocaine order as *"Metoclopramide [6]"*, and the significance qualifier was dropped often enough to need
+[Decision 136](#decision-136-an-answer-dropping-a-cited-findings-unknown-significance-qualifier-is-reported)'s check.
+
+### The decision
+
+- **A third shape is answered**: a proposal of one drug she is not taking, over a chart read in full, whose every
+  finding states the PROPOSAL caution clause about that drug alone and at least one of which is an interaction —
+  `DrugReferenceInjector.cautionsOnlyAbout`. Any finding stating another clause (a contraindication, a withholding
+  interaction, a current-medication or ended-order referent) or about another drug keeps the model call.
+- **The lead says what the check found, never a clearance or a negative**: `CAUTION_LEAD_OPENING` —
+  *"This module's drug-safety check found 2 cautions about Omeprazole:"* — then each finding's line, as Decision 108
+  composes it. Not "can be given", and not that nothing else was found.
+- **Every composed line cites the chart record of each of her orders its finding was matched against**, by
+  `orderRecordNumbers`' rule, whatever `chartsearchai.drugSafety.citeOrderRecords` says: that flag gates what a MODEL
+  reads ([Decision 77](#decision-77-a-findings-chart-order-attribution-names-the-record-number-its-order-is)), and no
+  model reads this answer. This applies to Decision 108's two shapes too.
+- **The chips pass of a composed answer reads its MARKERS, never its prose** (`LlmInferenceService.markersOf`).
+  Decision 108 handed it the empty answer so the module's own wording could not scope the chips; the markers are not
+  wording, and a chart record an answer cites is subject matter on the model's path as well. Measured in round 1 of
+  this decision's gate below, with the empty answer the composed fluconazole answer lost *"The patient has a recorded
+  allergy to Lidocaine."* — her lidocaine order, which the fluconazole finding is about — that the model's answer,
+  citing that order, carries.
+
+### Residues
+
+- **A question listing her medications keeps the model's answer** ([Decision 119](#decision-119-a-question-that-lists-her-medications-is-held-to-her-chart)):
+  `answersFromFindings` admits one substance only.
+- **An order with no citable record cites nothing**, so a chip scoped by that order alone is absent beside the
+  composed answer; `orderRecordNumbers` names when a record is not citable.
+- **A chip the model's answer raised only by citing a record under another drug's name is not raised** — that is
+  the miscitation the composed answer does not make.
+
+### The gate
+
+Pre-registered, run on the :8081 RefApp 3.7.1 standalone with the local E4B engine and the shipped prompt, 2026-10-01:
+`main` @ d183c5bf against this branch over 26 cells — the 20 of `capture_probe_safety.sh` and six on patient Susan
+`763e6e5f`: five single-drug proposals (aspirin, clarithromycin, ibuprofen, metoclopramide, fluconazole) and the
+Fluconazole list question.
+
+- **Round 1 failed** — the branch without the two citation bullets above. It composed the three caution cells as
+  intended and changed nothing else, but its fluconazole answer lost the lidocaine-allergy chip main shows.
+- **Round 2 passed** — the branch as merged. The 19 cells the model answers in both arms are byte-identical,
+  answer and chips. The three cells main already composed (Agnes warfarin, Mary clarithromycin, Mary erythromycin)
+  gained one marker each and nothing else, each the record of the order its line names (aspirin, simvastatin,
+  simvastatin), with their chips unchanged. Three cells are newly composed — Mary warfarin, Susan aspirin, Susan
+  fluconazole — each under the caution lead, each finding cited once, with no "can be given" and no "No". Fluconazole
+  keeps the lidocaine-allergy chip. Aspirin's is gone, as pre-registered: main raised it only because its answer cited
+  her lidocaine order as *"Metoclopramide [6]"*. The list question stayed model-answered and byte-identical.
+  Clarithromycin, whose pairs are all Unknown and below the floor, raised no finding and stayed with the model.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseFindingsAreAllCautionsIsAnsweredFromThemWithoutAClearance`
+and `.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
+

@@ -17,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 
 import org.openmrs.Patient;
@@ -944,11 +945,15 @@ public class LlmInferenceService implements ChartSearchService {
 	 * as on the model's path: the references (inline markers, and the chart records a cited finding
 	 * derives from), {@code orderStopDates}, the chips and their pair extent.
 	 *
-	 * <p><b>The chips pass reads the question alone, as the pass that raised the findings did</b> —
-	 * {@code validate} is handed the EMPTY answer. The composed text names her own orders, and scoping
-	 * the order-driven contraindication arm by text the module itself just wrote would be circular:
-	 * the ticket's M8 and N5 cells are a model's answer raising a chip the question alone does not.
-	 * So the chips beside this answer are the findings it states. The partner completion (ADR Decision
+	 * <p><b>The chips pass reads the question and the composed answer's CITATIONS, never its prose</b> —
+	 * {@code validate} is handed the answer's markers alone ({@link #markersOf}). The composed text names
+	 * her own orders, and scoping the order-driven contraindication arm by text the module itself just
+	 * wrote would be circular: the ticket's M8 and N5 cells are a model's answer raising a chip the
+	 * question alone does not. The markers are a different input: each line cites the chart record of
+	 * the order its finding is about (ADR Decision 140), and a chart record an answer cites is subject
+	 * matter on the model's path too — so a contraindication of that order, her allergy to the drug she
+	 * is prescribed, stands beside this answer as it does beside a model's citing that order. A cited
+	 * finding record adds nothing there, being reference material. The partner completion (ADR Decision
 	 * 100) still runs over it, over the findings it cites — every one, by construction — and finds
 	 * nothing to add where the composed text names every order they cover.
 	 *
@@ -970,7 +975,8 @@ public class LlmInferenceService implements ChartSearchService {
 		// repeat it in full beneath the answer that just said it — asked of the module's own text.
 		List<SafetyWarning> safetyWarnings = DrugReferenceInjector.withFindingCitations(
 				ModuleAnswerStatement.markStated(composed,
-						drugSafetyValidator.validate("", question, patient, mappings, pairExtent)), mappings);
+						drugSafetyValidator.validate(markersOf(composed), question, patient, mappings, pairExtent)),
+				mappings);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is
@@ -998,6 +1004,16 @@ public class LlmInferenceService implements ChartSearchService {
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
 				doseCeilingCoverage, null, null);
+	}
+
+	/** {@code answer}'s inline citation markers alone, ascending and space-separated — what the chips pass
+	 *  reads of a composed answer (see {@link #answerFromTheModule}). */
+	private static String markersOf(String answer) {
+		StringBuilder markers = new StringBuilder();
+		for (Integer index : new TreeSet<Integer>(ChartSearchAiUtils.citedIndexes(answer))) {
+			markers.append(markers.length() == 0 ? "" : " ").append('[').append(index).append(']');
+		}
+		return markers.toString();
 	}
 
 	/**

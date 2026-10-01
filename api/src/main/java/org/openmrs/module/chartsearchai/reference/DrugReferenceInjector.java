@@ -886,7 +886,11 @@ public class DrugReferenceInjector {
 						context.chartReadForSafety()
 								&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
 										orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries))) {
-			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers, !questionDrugs.isEmpty());
+			// The records each line's orders ARE, cited by the line whatever citeOrderRecords says: that flag
+			// gates what the MODEL reads (ADR Decision 77), and no model reads this answer (ADR Decision 140).
+			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					!questionDrugs.isEmpty());
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -2533,6 +2537,40 @@ public class DrugReferenceInjector {
 	public static final String WITHHOLD_LEAD_CLOSING = ".";
 
 	/**
+	 * How the module's own answer opens on a proposal whose findings are all cautions about the drug proposed
+	 * (ADR Decision 140), followed by the count and the drug: <em>"This module's drug-safety check found 2
+	 * cautions about Omeprazole:"</em>. It states what the check FOUND, which every finding positively says, and
+	 * never "can be given" — the clearance {@link #answersFromFindings}' javadoc refuses — nor that nothing else
+	 * was found, a negative nothing here can establish.
+	 */
+	public static final String CAUTION_LEAD_OPENING = "This module's drug-safety check found ";
+
+	/**
+	 * The markers of the chart records a composed line's finding is about — each active order its arm
+	 * matched the finding's drugs against ({@code SafetyWarning.matchedOrderNames()}), by the number
+	 * {@link #orderRecordNumbers} resolved for that order's display, ascending, skipping a number the
+	 * line already cites (ADR Decision 140). A model's answer cites her order where it reports the
+	 * finding; this cites it for the module's, so the clinician reaches the prescription and the chips
+	 * pass, which is scoped by the chart records an answer cites, reads the same subject matter. An
+	 * order with no citable record cites nothing, as in {@link #chartOrderClause}.
+	 */
+	private static String orderRecordMarkers(SafetyWarning finding, Map<String, Integer> herOrderRecords,
+			Set<Integer> alreadyCited) {
+		Set<Integer> numbers = new TreeSet<Integer>();
+		for (String name : finding.matchedOrderNames()) {
+			Integer number = herOrderRecords.get(name == null ? null : name.trim());
+			if (number != null && !alreadyCited.contains(number)) {
+				numbers.add(number);
+			}
+		}
+		StringBuilder markers = new StringBuilder();
+		for (Integer number : numbers) {
+			markers.append(" [").append(number).append("]");
+		}
+		return markers.toString();
+	}
+
+	/**
 	 * Whether this injection's findings answer the question, so that no model need restate them —
 	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
 	 * Decision 108. Asked once per injection, off the resolutions this pass already holds.
@@ -2551,7 +2589,7 @@ public class DrugReferenceInjector {
 	 * in turn — a token inside a longer word ({@code opium} in {@code Tiotropium}, flagged uncorroborated),
 	 * a class token doing the same without the flag ({@code egg} in {@code Eggplant}), and a note reading
 	 * "dose adjustment required" under the lead's earlier wording, "should not be given". A contraindication a question also raised
-	 * is still stated as a line of the answer; it does not decide the answer. The shapes answered are two:
+	 * is still stated as a line of the answer; it does not decide the answer. The shapes answered are three:
 	 * <ul>
 	 * <li>A question PROPOSING one drug she is not already taking, admitted by
 	 *     {@code QueryScopeRouter.asksWhetherToGiveADrug} with the drug's own name marked, where an
@@ -2565,6 +2603,10 @@ public class DrugReferenceInjector {
 	 *     the proposal clause for a drug her orders resolve to without establishing she takes it, and for
 	 *     one a question may be proposing in a presentation she does not take; the model answers such a
 	 *     question, as it did before issue #402.</li>
+ * <li>The same proposal where every finding is a CAUTION about that drug and at least one is an
+ *     interaction ({@link #cautionsOnlyAbout}, ADR Decision 140), answered under {@link #CAUTION_LEAD_OPENING}
+ *     with what the check found. That is not the clearance this method refuses: it never says the drug can
+ *     be given, nor that nothing else was found.</li>
 	 * <li>A request to screen her own medications against each other, admitted by
 	 *     {@code QueryScopeRouter.asksOnlyToScreenHerMedications}, naming no drug the dataset resolved,
 	 *     where the screen related at least one pair: an INTERACTION finding, since a medication
@@ -2574,7 +2616,7 @@ public class DrugReferenceInjector {
 	 *     pair either.</li>
 	 * </ul>
 	 *
-	 * <p>Both need {@code chartRead}: the chart-read verdict this pass stamped, AND every active order
+	 * <p>All need {@code chartRead}: the chart-read verdict this pass stamped, AND every active order
 	 * resolved to an entry ({@code DrugSafetyValidator.everyActiveOrderResolves}). An order unread, or
 	 * read and written under a name the data does not carry (a warfarin brand it lacks), leaves "not
 	 * already taking" unanswerable — the module cannot tell her "Marevan" is the warfarin proposed — and
@@ -2619,7 +2661,36 @@ public class DrugReferenceInjector {
 				return true;
 			}
 		}
-		return false;
+		// Or every finding is a caution about the drug proposed (ADR Decision 140), answered with what the check
+		// found and never a clearance — see cautionsOnlyAbout.
+		return cautionsOnlyAbout(asked, findings);
+	}
+
+	/**
+	 * Whether {@code findings} are all PROPOSAL cautions about the substance {@code asked} names — each stating
+	 * {@link #STRENGTH_CAUTION}, each with subject rows of that substance alone — and at least one is an
+	 * INTERACTION (ADR Decision 140). Fail-closed both ways: any finding stating another clause (a
+	 * contraindication, a withholding interaction, a current-medication or ended-order referent) or about
+	 * another drug keeps the model call, so the composed answer's lead, which counts its lines as cautions about
+	 * that drug, is true of every line under it.
+	 */
+	private static boolean cautionsOnlyAbout(Set<Object> asked, List<SafetyWarning> findings) {
+		if (findings.isEmpty()) {
+			return false;
+		}
+		boolean interaction = false;
+		for (SafetyWarning finding : findings) {
+			if (!STRENGTH_CAUTION.equals(strengthClause(finding)) || finding.subjectRows().isEmpty()) {
+				return false;
+			}
+			for (DrugReference row : finding.subjectRows()) {
+				if (!asked.contains(row.substanceGroupKey())) {
+					return false;
+				}
+			}
+			interaction |= SafetyWarning.TYPE_INTERACTION.equals(finding.getType());
+		}
+		return interaction;
 	}
 
 	/**
@@ -2842,7 +2913,7 @@ public class DrugReferenceInjector {
 	 *         keeps the model call
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, boolean proposal) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -2864,13 +2935,19 @@ public class DrugReferenceInjector {
 			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
 					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
 					&& finding.orderScheduledStart() == null;
-			lines.add(findingBody(finding, orderRecordNumbers, true)
+			String line = findingBody(finding, orderRecordNumbers, true)
 					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
-					+ " [" + numbers.get(i) + "]");
+					+ " [" + numbers.get(i) + "]";
+			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
 		}
 		SafetyWarning first = findings.get(order.get(0));
 		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
 			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
+		} else if (proposal) {
+			// A caution-only proposal (ADR Decision 140): every line is a caution about this drug, which
+			// cautionsOnlyAbout admitted, so the count is the lines'.
+			lines.add(0, CAUTION_LEAD_OPENING + lines.size() + (lines.size() == 1 ? " caution about " : " cautions about ")
+					+ first.getDrug() + ":");
 		}
 		return String.join("\n", lines);
 	}

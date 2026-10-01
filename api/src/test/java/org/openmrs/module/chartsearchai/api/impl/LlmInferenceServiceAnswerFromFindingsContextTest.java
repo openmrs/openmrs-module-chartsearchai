@@ -29,7 +29,9 @@ import org.openmrs.Patient;
 import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
@@ -57,6 +59,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Alread
 public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModuleContextSensitiveTest {
 
 	private static final String WARFARIN_ORDER = "AnswerFromFindingsWarfarinOrderTestData.xml";
+
+	/** The uuid of {@link #WARFARIN_ORDER}'s order, as that dataset spells it. */
+	private static final String WARFARIN_ORDER_UUID = "9469dddd-0000-4000-8000-00000009469a";
 
 	private static final String METFORMIN_ORDER = "AnswerFromFindingsMetforminOrderTestData.xml";
 
@@ -151,6 +156,36 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				|| finding.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION);
 		return body + (current && isContraindication(answer, finding) ? CURRENT_MEDICATION_REFERENT : "")
 				+ " [" + finding.index + "]";
+	}
+
+	/**
+	 * {@code line} is the composed line for {@code finding} — {@link #expectedLine} — followed by nothing but
+	 * the markers of chart records the answer cites as its own, which are the records of the orders the
+	 * finding is about (ADR Decision 140; which record is pinned by
+	 * {@code .aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt}).
+	 */
+	private static void assertLineIs(ChartAnswer answer, Finding finding, String line, String message) {
+		String expected = expectedLine(answer, finding);
+		assertTrue(line.startsWith(expected), message + "\nexpected the line to open: " + expected + "\nwas: " + line);
+		Matcher markers = Pattern.compile(" \\[(\\d+)\\]").matcher(line.substring(expected.length()));
+		int end = 0;
+		while (markers.find() && markers.start() == end) {
+			end = markers.end();
+			assertTrue(chartRecordsCitedAsTheAnswersOwn(answer).contains(Integer.valueOf(markers.group(1))),
+					"a marker after the finding's own cites a chart record of the answer: " + line);
+		}
+		assertEquals(line.length() - expected.length(), end, "nothing but markers follows the finding's own: " + line);
+	}
+
+	private static List<Integer> chartRecordsCitedAsTheAnswersOwn(ChartAnswer answer) {
+		List<Integer> indexes = new ArrayList<Integer>();
+		for (RecordReference reference : answer.getReferences()) {
+			if (ChartSearchAiConstants.REFERENCE_GROUP_CHART.equals(ChartSearchAiUtils.referenceGroup(
+					reference.getResourceType())) && !reference.isAttachedByTheModule()) {
+				indexes.add(Integer.valueOf(reference.getIndex()));
+			}
+		}
+		return indexes;
 	}
 
 	private static boolean isContraindication(ChartAnswer answer, Finding finding) {
@@ -307,26 +342,25 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A proposed drug no INTERACTION withholds is answered by the model. Only cautioned, the module's
-	 * answer would have to be "can be given", a clearance nothing here can establish. Withheld only by
-	 * a contraindication — here her recorded allergy to the very drug — the "No" would rest on a curated
-	 * rule's token matched against her records' free text, which review found false three ways.
+	 * A proposed drug withheld only by a contraindication — here her recorded allergy to the very drug — is
+	 * answered by the model: the "No" would rest on a curated rule's token matched against her records' free
+	 * text, which review found false three ways, and a withholding clause beside the cautions leaves no
+	 * caution-only answer to compose either (ADR Decision 140).
 	 */
 	@Test
 	public void aProposalNoInteractionWithholdsStillAsksTheModel() {
-		assertTheModelIsAsked("Can I give her omeprazole?");
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Omeprazole");
 		assertTheModelIsAsked("Can I give her omeprazole?");
 	}
 
 	/**
-	 * A proposed drug whose strongest interaction the data rates Moderate is answered by the model:
-	 * Moderate is a caution (issue #471, ADR Decision 109), so no finding withholds the drug, and the
-	 * module's answer would have to be the clearance {@link #aProposalNoInteractionWithholdsStillAsksTheModel}
-	 * refuses. Omeprazole relates Moderate to her warfarin and Minor to her aspirin.
+	 * A proposed drug whose findings are all cautions about it is answered from them (ADR Decision 140): the
+	 * module states what its check found — a count of cautions, then each finding once, in its record's own
+	 * words, cited by its own number — and never "can be given", a clearance nothing here can establish.
+	 * Omeprazole relates Moderate to her warfarin and Minor to her aspirin.
 	 */
 	@Test
-	public void aProposalWhoseStrongestInteractionIsModerateStillAsksTheModel() throws Exception {
+	public void aProposalWhoseFindingsAreAllCautionsIsAnsweredFromThemWithoutAClearance() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		String question = "Can I give her omeprazole?";
 		// The finding the case is about must reach the prompt, as a caution, beside nothing that
@@ -345,7 +379,75 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(moderateWarfarinCaution,
 				"precondition: the Moderate warfarin finding reached the prompt as a caution, findings were: "
 						+ findings);
-		assertTheModelIsAsked(question);
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked");
+		assertTrue(answer.isAnsweredByTheModule());
+		assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.CAUTION_LEAD_OPENING + findings.size()
+				+ (findings.size() == 1 ? " caution about " : " cautions about ")),
+				"led by what the check found, was: " + answer.getAnswer());
+		for (Finding finding : findings) {
+			assertEquals(1, occurrences(answer.getAnswer(), "[" + finding.index + "]"),
+					"each finding cited once, was: " + answer.getAnswer());
+		}
+		assertFalse(answer.getAnswer().toLowerCase(java.util.Locale.ROOT).contains("can be given"),
+				"never a clearance, was: " + answer.getAnswer());
+		assertFalse(answer.getAnswer().startsWith("No"), "nor a refusal, was: " + answer.getAnswer());
+	}
+
+	/**
+	 * A composed line cites the chart record of the order its finding was matched against, as a model's
+	 * answer citing that order does, and the chips beside the composed answer are scoped by those
+	 * citations (ADR Decision 140): her warfarin order, which the omeprazole caution is about, conflicts
+	 * with her recorded warfarin allergy, and that chip is published beside the module's answer as it is
+	 * beside a model's that cites the order. Measured live before this rule: the chip beside the model's
+	 * fluconazole answer, absent beside the module's.
+	 */
+	@Test
+	public void aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Warfarin");
+		String question = "Can I give her omeprazole?";
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+		assertEquals(0, provider.calls, "precondition: the caution-only proposal is answered by the module");
+		String warfarinLine = null;
+		for (String line : answer.getAnswer().split("\n")) {
+			if (line.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "Warfarin")) {
+				warfarinLine = line;
+			}
+		}
+		assertNotNull(warfarinLine, "precondition: a line states the warfarin caution: " + answer.getAnswer());
+		Integer warfarinRecord = null;
+		for (RecordReference reference : answer.getReferences()) {
+			if (WARFARIN_ORDER_UUID.equals(reference.getResourceUuid())) {
+				warfarinRecord = Integer.valueOf(reference.getIndex());
+			}
+		}
+		assertNotNull(warfarinRecord, "her warfarin order's own record is a reference of the answer: "
+				+ answer.getAnswer());
+		assertTrue(warfarinLine.endsWith(" [" + warfarinRecord + "]")
+				&& chartRecordsCitedAsTheAnswersOwn(answer).contains(warfarinRecord),
+				"the warfarin line ends citing that record, as the answer's own: " + warfarinLine);
+		boolean allergyChip = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			allergyChip |= SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType())
+					&& chip.getDetail().contains("recorded allergy to Warfarin");
+		}
+		assertTrue(allergyChip, "her warfarin allergy against her warfarin order is a chip beside the answer, "
+				+ "chips were: " + answer.getSafetyWarnings());
+	}
+
+	private static int occurrences(String text, String needle) {
+		int n = 0;
+		for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) {
+			n++;
+		}
+		return n;
 	}
 
 	/**
@@ -414,7 +516,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the Major interaction still licenses the module's answer");
 		String[] lines = answer.getAnswer().split("\n");
 		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
-		assertEquals(expectedLine(answer, interaction), lines[1],
+		assertLineIs(answer, interaction, lines[1],
 				"the sentence under the \"No\" is the interaction that licensed it: " + answer.getAnswer());
 		assertTrue(answer.getAnswer().contains(expectedLine(answer, allergy)),
 				"and the allergy is still stated: " + answer.getAnswer());
@@ -452,7 +554,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the Major row licenses the module's answer");
 		String[] lines = answer.getAnswer().split("\n");
 		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
-		assertEquals(expectedLine(answer, major), lines[1],
+		assertLineIs(answer, major, lines[1],
 				"the sentence under the \"No\" is the rated interaction that licensed it: " + answer.getAnswer());
 		assertCarriesEveryFinding(answer, findings);
 	}
@@ -489,7 +591,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the Major row licenses the module's answer");
 		String[] lines = answer.getAnswer().split("\n");
 		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
-		assertEquals(expectedLine(answer, major), lines[1],
+		assertLineIs(answer, major, lines[1],
 				"the sentence under the \"No\" is the interaction whose rating licensed it: " + answer.getAnswer());
 		assertCarriesEveryFinding(answer, findings);
 	}
@@ -548,8 +650,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls);
 		String[] lines = answer.getAnswer().split("\n");
-		assertEquals(expectedLine(answer, findings.get(0)), lines[0], answer.getAnswer());
-		assertEquals(expectedLine(answer, findings.get(1)), lines[1], answer.getAnswer());
+		assertLineIs(answer, findings.get(0), lines[0], answer.getAnswer());
+		assertLineIs(answer, findings.get(1), lines[1], answer.getAnswer());
 	}
 
 	@Test

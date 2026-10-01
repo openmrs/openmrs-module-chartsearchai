@@ -2464,4 +2464,16 @@ public final class DrugReferenceTestSupport {
 						+ context.getActiveDrugOrders());
 		return context.getActiveDrugOrders().get(0);
 	}
+
+	/**
+	 * {@code chart} as the injector builds it with {@code chartsearchai.drugSafety.answerFromFindings} off: the
+	 * module composes no answer of its own ({@code PatientChart.getModuleAnswer()} {@code null}), so the MODEL
+	 * answers. For a plain JUnit case, which reads every global property at its default and cannot switch the
+	 * property off as a context case does; the cases judging checks over a model's answer to a question the module
+	 * now answers itself (ADR Decision 140) need it.
+	 */
+	public static PatientChart withTheModelAnswering(PatientChart chart) {
+		chart.markModuleAnswer(null);
+		return chart;
+	}
 }

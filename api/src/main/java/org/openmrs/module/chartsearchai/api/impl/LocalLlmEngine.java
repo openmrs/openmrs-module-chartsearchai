@@ -270,6 +270,87 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 	}
 
+	/**
+	 * Exact token count for {@code text} from this engine's own llama-server, via its
+	 * {@code /tokenize} endpoint (llama.cpp server API) — mirrors med-agent-hub's
+	 * {@code RouterTokenCounter.count()}, which likewise delegates counting to the real engine
+	 * rather than approximating in the application layer. Starts the server first if it is not
+	 * already running: a token-budget check only ever precedes a generation call that would need
+	 * the server running anyway, so this adds no new cold-start cost.
+	 */
+	synchronized int countTokens(String text) {
+		ensureServerRunning();
+		try {
+			return requestTokenCount(getHttpClient(), endpoint, text);
+		}
+		catch (IOException e) {
+			throw new APIException("Failed to call local llama-server /tokenize: " + e.getMessage(), e);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new APIException("Local llama-server /tokenize call was interrupted", e);
+		}
+	}
+
+	/** Exact prompt count after llama-server applies this model's chat template. */
+	synchronized int countChatInputTokens(String systemPrompt, String userMessage) {
+		ensureServerRunning();
+		try {
+			return requestChatInputTokenCount(getHttpClient(), endpoint, systemPrompt, userMessage);
+		}
+		catch (IOException e) {
+			throw new APIException("Failed to count local chat input tokens: " + e.getMessage(), e);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new APIException("Local chat input token count was interrupted", e);
+		}
+	}
+
+	/** Package-visible transport seam for llama.cpp's chat-template-aware count endpoint. */
+	static int requestChatInputTokenCount(HttpClient client, LlamaServerEndpoint endpoint, String systemPrompt,
+			String userMessage) throws IOException, InterruptedException {
+		ObjectNode body = MAPPER.createObjectNode();
+		body.set("messages", ChatMessages.systemAndUser(MAPPER, systemPrompt, userMessage));
+		HttpRequest request = endpoint.request(endpoint.inputTokensUrl(), Duration.ofSeconds(30))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
+						StandardCharsets.UTF_8))
+				.build();
+		HttpResponse<String> response = client.send(request,
+				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		if (response.statusCode() < 200 || response.statusCode() >= 300) {
+			throw new APIException("Local chat input token count returned HTTP "
+					+ response.statusCode());
+		}
+		JsonNode root = MAPPER.readTree(response.body());
+		JsonNode count = root.get("input_tokens");
+		if (count == null || !count.canConvertToInt() || count.asInt() < 0) {
+			throw new APIException("Local chat input token count returned malformed JSON");
+		}
+		return count.asInt();
+	}
+
+	/** Package-visible transport seam used to pin the llama.cpp tokenize contract in tests. */
+	static int requestTokenCount(HttpClient client, LlamaServerEndpoint endpoint, String text)
+			throws IOException, InterruptedException {
+		ObjectNode body = MAPPER.createObjectNode();
+		body.put("content", text == null ? "" : text);
+		body.put("add_special", false);
+		HttpRequest request = endpoint.request(endpoint.tokenizeUrl(), Duration.ofSeconds(30))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body),
+						StandardCharsets.UTF_8))
+				.build();
+		HttpResponse<String> response = client.send(request,
+				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		if (response.statusCode() < 200 || response.statusCode() >= 300) {
+			throw new APIException(
+					"Local llama-server /tokenize returned HTTP " + response.statusCode());
+		}
+		return LlmResponseParser.parseTokenizeResponse(response.body());
+	}
+
 	@Override
 	public synchronized InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {

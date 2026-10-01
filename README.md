@@ -959,6 +959,19 @@ resources, and `TurnPreemptionRegistry` cancels the previous turn when another
 starts in the same conversation. Their existing tests include the shared
 `api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
 
+## Local token counting
+
+`TokenCounter` and `LocalLlamaTokenCounter` provide the local engine's exact token
+counts for chart-context budgeting. Plain text uses llama-server's `/tokenize`
+endpoint; assembled system/user messages use `/v1/chat/completions/input_tokens`
+so the model's chat template is included. Both requests use the same authenticated,
+non-proxied client as inference.
+
+Counting is available for the local engine only. Remote endpoints are not assumed
+to provide a tokenizer, and this interface does not estimate their counts. These
+methods are the foundation for the context-budget contribution; they do not yet
+change which chart records are selected or enforce a new input limit.
+
 ## License
 
 This project is licensed under the [MPL 2.0](http://openmrs.org/license/).

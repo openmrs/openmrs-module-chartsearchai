@@ -66,7 +66,8 @@ public class RemoteLlmEngine implements LlmEngine {
 	 *
 	 * <p>The endpoint is an untrusted peer (issue #446) and {@code max_tokens} is advisory to it,
 	 * so this is the only thing that decides how much of the shared OpenMRS heap one answer can
-	 * occupy.</p>
+	 * occupy. Hub streaming and profile discovery reuse this ceiling so extraction does not
+	 * reintroduce unbounded remote reads.</p>
 	 *
 	 * <p><b>Two things it does not bound, named rather than left to be found.</b> Not TIME: a peer
 	 * trickling less than this still holds the clinician's thread for as long as it likes, because
@@ -82,7 +83,7 @@ public class RemoteLlmEngine implements LlmEngine {
 	 * bounded, none equal to the ceiling, and it is the MULTIPLE that is fixed here: before
 	 * this, the figure was the peer's to choose.</p>
 	 */
-	static final long MAX_RESPONSE_BYTES = (long) ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
+	public static final long MAX_RESPONSE_BYTES = (long) ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS
 			* BYTE_ALLOWANCE_PER_OUTPUT_TOKEN;
 
 	/**
@@ -94,9 +95,10 @@ public class RemoteLlmEngine implements LlmEngine {
 	 * common case, a short error body, loses nothing. Abandoning
 	 * an oversized error body with a size complaint would cost the status code and the
 	 * {@code chartsearchai.llm.remote.*} hint that go with it, which is the operator's only clue
-	 * that the endpoint URL or model name is wrong.
+	 * that the endpoint URL or model name is wrong. Hub error bodies use this same limit;
+	 * a truncated problem envelope falls back to its generic rejection code.
 	 */
-	static final int MAX_ERROR_BODY_BYTES = 8192;
+	public static final int MAX_ERROR_BODY_BYTES = 8192;
 
 	private HttpClient httpClient;
 

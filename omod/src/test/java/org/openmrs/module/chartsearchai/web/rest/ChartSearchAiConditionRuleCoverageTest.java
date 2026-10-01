@@ -69,6 +69,8 @@ public class ChartSearchAiConditionRuleCoverageTest {
 
 	/** The verdict the stub service states; set per case before the handler runs. */
 	private DrugReferenceLoad.Coverage stated;
+	private List<String> safetyIssues;
+	private ChartAnswer sharedAnswer;
 
 	/** The dose-ceiling verdict the stub's answer states. */
 	private DrugReferenceLoad.Coverage doseStated;
@@ -77,6 +79,8 @@ public class ChartSearchAiConditionRuleCoverageTest {
 	public void setUp() {
 		stated = DrugReferenceLoad.Coverage.ABSENT;
 		doseStated = DrugReferenceLoad.Coverage.ABSENT;
+		safetyIssues = Collections.emptyList();
+		sharedAnswer = null;
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new CoverageStubService());
@@ -229,6 +233,23 @@ public class ChartSearchAiConditionRuleCoverageTest {
 		XmlPayloads.assertMarshals(searchPayload(), "no statement at all");
 	}
 
+	/** Serialization only: the real validator's issue selection is tested in the API module. */
+	@Test
+	public void populatedSafetyIssuesReachJsonAndXmlWithoutExposingTheAnswersList() throws Exception {
+		safetyIssues = Collections.singletonList("mapping_incomplete");
+		sharedAnswer = new CoverageStubService().answer();
+		Map<String, Object> payload = searchPayload();
+		assertEquals("mapping_incomplete",
+				MAPPER.valueToTree(payload).at("/safetyCheck/issues/0").asText());
+		assertTrue(XmlPayloads.marshal(payload, "a populated safety issue list")
+				.contains("mapping_incomplete"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> check = (Map<String, Object>) payload.get("safetyCheck");
+		((List<?>) check.get("issues")).clear();
+		assertEquals("mapping_incomplete",
+				MAPPER.valueToTree(searchPayload()).at("/safetyCheck/issues/0").asText());
+	}
+
 	/**
 	 * The key is SPELLED in exactly one place, {@code putConditionRuleCoverage}.
 	 *
@@ -288,11 +309,14 @@ public class ChartSearchAiConditionRuleCoverageTest {
 		}
 
 		private ChartAnswer answer() {
+			if (sharedAnswer != null) {
+				return sharedAnswer;
+			}
 			return new ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
 					null, null, null, stated, null, null, false, null, null, null, doseStated, null, null,
-					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList());
+					"limited", safetyIssues);
 		}
 
 		@Override

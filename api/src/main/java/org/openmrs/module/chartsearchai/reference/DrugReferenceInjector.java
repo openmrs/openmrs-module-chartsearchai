@@ -2435,6 +2435,36 @@ public class DrugReferenceInjector {
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */
+	/**
+	 * {@code chips}, each naming the record number its own finding has in the prompt where exactly one injected
+	 * {@code safety_finding} record is it ({@link SafetyWarning#getFindingCitation()}, ADR Decision 138). A record is a
+	 * chip's where it carries the chip's {@code <type>:<drug>} key and opens with what {@link #renderFinding} writes
+	 * first — {@link #FINDING_PREFIX}, the drug and the finding's detail, from which every record is written. A chip
+	 * two records open alike, or none, names nothing, rather than a number that may be another finding's.
+	 */
+	public static List<SafetyWarning> withFindingCitations(List<SafetyWarning> chips, List<RecordMapping> mappings) {
+		if (chips == null || chips.isEmpty()) {
+			return chips;
+		}
+		List<RecordMapping> findings = ChartSearchAiUtils.safetyFindingMappings(mappings);
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>(chips.size());
+		for (SafetyWarning chip : chips) {
+			String key = ChartSearchAiUtils.resourceKey(chip.getType(), chip.getDrug());
+			String opening = FINDING_PREFIX + chip.getDrug() + ": " + chip.getDetail();
+			Integer match = null;
+			int matches = 0;
+			for (RecordMapping finding : findings) {
+				if (key.equals(finding.getResourceUuid()) && finding.getText() != null
+						&& finding.getText().startsWith(opening)) {
+					matches++;
+					match = Integer.valueOf(finding.getIndex());
+				}
+			}
+			out.add(matches == 1 ? chip.withFindingCitation(match) : chip);
+		}
+		return out;
+	}
+
 	static String renderFinding(SafetyWarning finding, Map<String, Integer> orderRecordNumbers) {
 		String strength = strengthClause(finding);
 		return FINDING_PREFIX + finding.getDrug() + ": "

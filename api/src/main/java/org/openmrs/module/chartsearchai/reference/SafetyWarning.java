@@ -161,6 +161,9 @@ public class SafetyWarning {
 	/** @see #isAboutADrugOtherThanTheOneProposed() */
 	private final boolean aboutADrugOtherThanTheOneProposed;
 
+	/** @see #getFindingCitation() */
+	private final Integer findingCitation;
+
 	/** @see #partnerScheduledStarts() */
 	private final Map<String, String> partnerScheduledStarts;
 
@@ -355,7 +358,7 @@ public class SafetyWarning {
 			boolean aboutACurrentMedication, PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders, false,
-				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered, false, false);
+				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered, false, false, null);
 	}
 
 	/**
@@ -443,7 +446,7 @@ public class SafetyWarning {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, null, false, null, null, null, null, false, false);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, null, false, null, null, null, null, false, false, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -458,8 +461,9 @@ public class SafetyWarning {
 			boolean statedInTheAnswer, Map<String, List<DrugReference>> partnerRows,
 			Map<String, String> partnerScheduledStarts, String orderScheduledStart,
 			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered, boolean aboutAnotherOfHerMedications,
-			boolean aboutADrugOtherThanTheOneProposed) {
+			boolean aboutADrugOtherThanTheOneProposed, Integer findingCitation) {
 		this.alreadyOrdered = alreadyOrdered;
+		this.findingCitation = findingCitation;
 		this.aboutADrugOtherThanTheOneProposed = aboutADrugOtherThanTheOneProposed;
 		this.aboutAnotherOfHerMedications = aboutAnotherOfHerMedications;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
@@ -1223,7 +1227,7 @@ public class SafetyWarning {
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
 				matchedOrderNames, subjectRows, currentMedicationOrders, currentOrderDisplays, statedInTheAnswer,
 				partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/**
@@ -1239,7 +1243,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentMedicationOrders, currentOrderDisplays,
 				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1285,7 +1289,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, orders, displays,
 				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/**
@@ -1348,7 +1352,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, spelled, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/**
@@ -1393,7 +1397,7 @@ public class SafetyWarning {
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts,
 				DateFormatUtil.formatDate(start), alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
@@ -1404,7 +1408,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, true, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/**
@@ -1433,7 +1437,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, true, aboutADrugOtherThanTheOneProposed);
+				alreadyOrdered, true, aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/**
@@ -1471,7 +1475,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, aboutAnotherOfHerMedications, other);
+				alreadyOrdered, aboutAnotherOfHerMedications, other, findingCitation);
 	}
 
 	/**
@@ -1493,6 +1497,38 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * This warning, naming {@code citation} as its finding's record number — see {@link #getFindingCitation()}.
+	 * Package-private: written only by {@code DrugReferenceInjector.withFindingCitations}. Changes nothing this warning
+	 * prints.
+	 */
+	SafetyWarning withFindingCitation(Integer citation) {
+		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
+				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
+				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
+				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, citation);
+	}
+
+	/**
+	 * The record number this finding has in the prompt — the {@code index} of the {@code safety_finding} record the
+	 * module injected for it, which an answer's {@code [n]} marker cites — or {@code null} where no single record is
+	 * it (ADR Decision 138). Published VERBATIM as each chip's {@code findingCitation} wire key, so this accessor's
+	 * name IS the key.
+	 *
+	 * <p>It travels because a finding's {@code resourceUuid} is {@code <type>:<drug>}, which several findings of one
+	 * type about one drug share: two fluconazole interactions are two records under one key, and nothing else on the
+	 * chip said which record was its own. Joined by {@code DrugReferenceInjector.withFindingCitations}, by the
+	 * record's own opening — the finding's prefix, drug and detail, which the record is written from — and only
+	 * where exactly one record opens that way. <b>{@code null} is not a claim the finding has no record</b>: it is
+	 * every chip a pass raised for a drug only the answer named, a chip whose words two records open with, and every
+	 * standing alert.
+	 */
+	public Integer getFindingCitation() {
+		return findingCitation;
+	}
+
+	/**
 	 * This warning, stated as about the substance {@code rows} are every reference row of — the finding's
 	 * SUBJECT, decided where the arm named it (issue #515). Package-private: {@code EndedOrders.aboutTheSubject}
 	 * is its caller for a drug in play — through {@code EndedOrders.stamp}, the step every other question-driven
@@ -1508,7 +1544,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/**
@@ -1540,7 +1576,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, rows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed);
+				aboutADrugOtherThanTheOneProposed, findingCitation);
 	}
 
 	/**

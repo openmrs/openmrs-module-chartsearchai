@@ -904,4 +904,27 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 			assertFalse(chip.isAboutADrugOtherThanTheOneProposed(), "was: " + chip);
 		}
 	}
+
+	/**
+	 * Each chip names the record number its own finding has in the prompt (ADR Decision 138), so a client can join a
+	 * chip to the citation that states it even where several findings share one {@code <type>:<drug>} key: the two
+	 * fluconazole findings, against her rifampicin order and against the listed nevirapine, share
+	 * {@code interaction:Fluconazole} and are two records.
+	 */
+	@Test
+	public void eachChipNamesTheRecordNumberOfItsOwnFinding() throws IOException {
+		Recorder recorder = serviceAnswering("Fluconazole can be given, with one caution.", obs());
+		ChartAnswer answer = recorder.service.search(patient, FLUCONAZOLE_QUESTION);
+
+		int againstRifampicin = findingNumber(recorder.prompt, "Fluconazole", "rifamp");
+		int againstNevirapine = findingNumber(recorder.prompt, "Fluconazole", "nevirapine",
+				DrugReferenceInjector.STRENGTH_CAUTION);
+		assertTrue(againstRifampicin != againstNevirapine, "precondition: two records");
+		assertEquals(Integer.valueOf(againstRifampicin),
+				chip(answer, "Fluconazole", "rifamp", "Major").getFindingCitation());
+		assertEquals(Integer.valueOf(againstNevirapine),
+				chip(answer, "Fluconazole", "nevirapine", "Moderate").getFindingCitation());
+		assertEquals(Integer.valueOf(findingNumber(recorder.prompt, "Nevirapine", "rifamp")),
+				chip(answer, "Nevirapine", "rifamp", "Major").getFindingCitation());
+	}
 }

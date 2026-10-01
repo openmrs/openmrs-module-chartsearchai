@@ -1718,6 +1718,9 @@ public class ChartSearchAiRestController {
 			// ADR Decision 137: whether the chip is about a drug other than the one the question proposes. false is
 			// no claim it is about that drug: SafetyWarning.isAboutADrugOtherThanTheOneProposed() says why.
 			map.put("aboutADrugOtherThanTheOneProposed", warning.isAboutADrugOtherThanTheOneProposed());
+			// ADR Decision 138: the record number this chip's own finding has in the prompt, or null where no single
+			// record is it. SafetyWarning.getFindingCitation() says what null does not say.
+			map.put("findingCitation", warning.getFindingCitation());
 			out.add(map);
 		}
 		return out;

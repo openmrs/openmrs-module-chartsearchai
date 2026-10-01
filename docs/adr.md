@@ -141,6 +141,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 135: An answer saying an order has ended where no record does is reported](#decision-135-an-answer-saying-an-order-has-ended-where-no-record-does-is-reported)
 - [Decision 136: An answer dropping a cited finding's unknown-significance qualifier is reported](#decision-136-an-answer-dropping-a-cited-findings-unknown-significance-qualifier-is-reported)
 - [Decision 137: A chip about a drug other than the one proposed says so](#decision-137-a-chip-about-a-drug-other-than-the-one-proposed-says-so)
+- [Decision 138: Each chip names the record number of its own finding](#decision-138-each-chip-names-the-record-number-of-its-own-finding)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13328,4 +13329,35 @@ about. `aboutAnotherOfHerMedications` (#571) cannot mark it: nevirapine is not o
 Pinned by `LlmInferenceServiceListedMedicationsContextTest.aChipAboutADrugOtherThanTheOneProposedSaysSo`,
 `.aPairFindingWhosePartnerIsProposedIsAboutTheProposedDrug` and `.aQuestionProposingNoDrugMarksNoChip`, and
 `OtherMedicationChipTest.aChipAboutTheDrugTheQuestionNamesIsNotAboutAnotherMedicationEvenWhereSheTakesIt`; the wire by
+`ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`.
+
+## Decision 138: Each chip names the record number of its own finding
+
+**Status: Accepted** (October 2026) — implemented, no issue.
+
+### Context
+
+A `safety_finding` record's `resourceUuid` is `<type>:<drug>`, which several findings of one type about one drug
+share. On *"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give Fluconazole?"* the two
+fluconazole findings, against her lidocaine order and against the listed nevirapine, are records [50] and [51] under
+one key `interaction:Fluconazole`, and nothing on either chip said which record was its own. The reference client
+therefore tagged both folded chips *See [50], [51] in the answer*, and folded a shared-key set only where every chip
+of the key was cited (openmrs-esm-chartsearchai#50).
+
+### The decision
+
+- **Each chip names its finding's record number**: `SafetyWarning.getFindingCitation()`, published verbatim as
+  `findingCitation`, `null` where no single record is it.
+- **Joined once, in the module, while the chart is in hand**: `DrugReferenceInjector.withFindingCitations`, at the
+  three places an answer's chips are finalised in `LlmInferenceService`. A record is a chip's where it carries the
+  chip's key and opens with what `renderFinding` writes first — `FINDING_PREFIX`, the drug and the finding's detail,
+  from which every record is written — and only where exactly one record opens that way.
+- No prompt change, no change to which chips or records exist.
+
+### Residues
+
+- **A chip two records open alike names nothing**, rather than a number that may be the other finding's.
+- **A chip raised only by the post-answer pass**, for a drug only the answer named, has no record and names nothing.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.eachChipNamesTheRecordNumberOfItsOwnFinding`; the wire by
 `ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire`.

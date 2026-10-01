@@ -332,7 +332,8 @@ public class LlmInferenceService implements ChartSearchService {
 			ConflictingOrderStatement.Stated conflicting =
 					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
 			completedAnswer = conflicting.getAnswer();
-			safetyWarnings = conflicting.getWarnings();
+			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
+			safetyWarnings = DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -892,7 +893,8 @@ public class LlmInferenceService implements ChartSearchService {
 			ConflictingOrderStatement.Stated conflicting =
 					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
 			completedAnswer = conflicting.getAnswer();
-			safetyWarnings = conflicting.getWarnings();
+			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
+			safetyWarnings = DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -966,8 +968,9 @@ public class LlmInferenceService implements ChartSearchService {
 		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 		// Every chip whose finding the composed text states is published as stated, so a client does not
 		// repeat it in full beneath the answer that just said it — asked of the module's own text.
-		List<SafetyWarning> safetyWarnings = ModuleAnswerStatement.markStated(composed,
-				drugSafetyValidator.validate("", question, patient, mappings, pairExtent));
+		List<SafetyWarning> safetyWarnings = DrugReferenceInjector.withFindingCitations(
+				ModuleAnswerStatement.markStated(composed,
+						drugSafetyValidator.validate("", question, patient, mappings, pairExtent)), mappings);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is

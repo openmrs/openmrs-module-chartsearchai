@@ -221,6 +221,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				doneSeen[0] = true;
 				return;
 			}
+			// A terminal event cannot leave optional work waiting for a callback that will never arrive.
+			answer = withInterruptedStages(answer);
 			AnswerEnvelope previous = latestAnswer.getAndSet(answer);
 			if (previous == null) {
 				events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE,
@@ -302,7 +304,7 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 	}
 
 	/**
-	 * Settles any validation or In-Depth stage interrupted after the fast answer arrived. The
+	 * Settles validation or In-Depth still unfinished when the turn ends. The
 	 * persisted record is the source of truth for every future reader (audit review, reload
 	 * hydration, or another UI), so it cannot retain a status that will never complete.
 	 */

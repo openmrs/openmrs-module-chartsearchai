@@ -68,6 +68,21 @@ public class HibernateChartSearchAiDAO implements ChartSearchAiDAO {
 
 	@Override
 	public int deleteAuditLogsBefore(Date before) {
+		// Conversation turns may outlive their audit rows. Null the FK by id first so purge works
+		// even when the database FK was created without ON DELETE SET NULL (e.g. Hibernate-managed
+		// test schemas). Liquibase still declares ON DELETE SET NULL for production DDL.
+		@SuppressWarnings("unchecked")
+		List<Integer> expiredAuditIds = sessionFactory.getCurrentSession()
+				.createQuery("select auditLogId from ChartSearchAuditLog where dateCreated < :before")
+				.setParameter("before", before)
+				.list();
+		if (!expiredAuditIds.isEmpty()) {
+			sessionFactory.getCurrentSession()
+					.createQuery("update ClinicalConversationTurn set auditLog = null "
+							+ "where auditLog.auditLogId in (:ids)")
+					.setParameterList("ids", expiredAuditIds)
+					.executeUpdate();
+		}
 		return sessionFactory.getCurrentSession()
 				.createQuery("delete from ChartSearchAuditLog where dateCreated < :before")
 				.setParameter("before", before)

@@ -157,6 +157,10 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 					TurnResult.error(PROVIDER_ID, request.getMode(), streamError.get()));
 		}
 		if (!doneSeen[0]) {
+			AnswerEnvelope current = latestAnswer.get();
+			if (current != null) {
+				emitInterruptedStageOutcomes(events, sequence, current, withInterruptedStages(current), emitted);
+			}
 			return failed(events, sequence, request.getMode(), PROBLEM_HUB_STREAM_INCOMPLETE);
 		}
 		AnswerEnvelope answer = latestAnswer.get();

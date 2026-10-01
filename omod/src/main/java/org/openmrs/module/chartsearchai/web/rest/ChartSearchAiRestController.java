@@ -1491,6 +1491,10 @@ public class ChartSearchAiRestController {
 			ProviderMode mode, String profileId, String conversationUuid) {
 		ClinicalConversation conversation = null;
 		TurnCancellation cancellation = null;
+		ClinicalConversationTurn startedTurn = null;
+		ProviderMode resolvedMode = mode;
+		boolean persisted = false;
+		long startNs = System.nanoTime();
 		try {
 			ClinicalAnswerProvider provider;
 			try {
@@ -1510,12 +1514,12 @@ public class ChartSearchAiRestController {
 				return;
 			}
 
-			ProviderMode resolvedMode = resolveProviderMode(provider, mode);
+			resolvedMode = resolveProviderMode(provider, mode);
 			conversation = resolveConversation(patient, providerId, resolvedMode, conversationUuid);
 			final ClinicalConversation activeConversation = conversation;
 			String requestId = UUID.randomUUID().toString();
-			ClinicalConversationTurn turn = conversationService.startTurn(activeConversation, requestId,
-					question);
+			startedTurn = conversationService.startTurn(activeConversation, requestId, question);
+			final ClinicalConversationTurn turn = startedTurn;
 			List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(activeConversation);
 			TurnRequest request = new TurnRequest(patient, question, activeConversation.getUuid(),
 					requestId, resolvedMode, profileId, prior);
@@ -1529,7 +1533,6 @@ public class ChartSearchAiRestController {
 			final java.util.concurrent.atomic.AtomicReference<TurnEvent> terminalEvent =
 					new java.util.concurrent.atomic.AtomicReference<>();
 
-			long startNs = System.nanoTime();
 			TurnResult result = provider
 					.execute(request,
 							event -> {
@@ -1557,12 +1560,26 @@ public class ChartSearchAiRestController {
 							cancellation)
 					.toCompletableFuture().get();
 			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
-			ClinicalConversationTurn persisted = conversationService.finishTurn(turn, withModuleStatements(result), responseTimeMs);
+			ClinicalConversationTurn completedTurn = conversationService.finishTurn(turn, withModuleStatements(result), responseTimeMs);
+			persisted = true;
 			if (!activeCancellation.isCancelled() && terminalEvent.get() != null) {
-				writeTurnEventOrThrow(out, withModuleStatements(terminalEvent.get()), activeConversation, persisted);
+				writeTurnEventOrThrow(out, withModuleStatements(terminalEvent.get()), activeConversation, completedTurn);
 			}
 		}
 		catch (Exception e) {
+			// A broken response can interrupt execute before it returns its terminal result.
+			// Settle the stored turn before abandoning the connection; do not persist twice.
+			if (startedTurn != null && !persisted) {
+				String problem = cancellation != null && cancellation.isCancelled()
+						|| e.getCause() instanceof IOException ? "cancelled" : "provider_failure";
+				try {
+					conversationService.finishTurn(startedTurn, TurnResult.error(providerId, resolvedMode, problem),
+							(System.nanoTime() - startNs) / 1_000_000L);
+				}
+				catch (RuntimeException persistenceError) {
+					log.error("Could not settle interrupted provider turn {}", startedTurn.getUuid(), persistenceError);
+				}
+			}
 			if (cancellation != null && cancellation.isCancelled()) {
 				return;
 			}
@@ -1666,9 +1683,10 @@ public class ChartSearchAiRestController {
 	private void writeTurnEvent(OutputStream out, TurnEvent event, ClinicalConversation conversation,
 			ClinicalConversationTurn turn) throws IOException {
 		TurnEventType type = event.getType();
-		if (type == TurnEventType.ANSWER_VALIDATION && event.getAnswer() != null) {
+		if ((type == TurnEventType.ANSWER_VALIDATION || type == TurnEventType.INDEPTH_ERROR)
+				&& event.getAnswer() != null) {
 			// The composer becomes available after review while In-Depth may still run. Persist only
-			// the already checked/edited envelope so a follow-up sees safe prior context immediately.
+			// the already checked/edited envelope, including its interrupted In-Depth outcome.
 			conversationService.recordCheckedAnswer(turn, event.getAnswer());
 		}
 		String wire = type.getWireName();

@@ -68,13 +68,13 @@ public class LlmInferenceServiceCitationWiringTest {
 				return chart;
 			}
 		});
-		// Production calls the mappings-carrying 4-arg overload (echo scoping, issue #105) —
-		// override THAT one; a 3-arg override would be dead code the real 4-arg body bypasses.
+		// Production calls the status-carrying overload, which also carries mappings and extent.
+		// Override that entry point; a narrower overload would not observe the production call.
 		recordingValidator = new RecordingValidator();
 		service.setDrugSafetyValidator(recordingValidator);
 	}
 
-	/** Recording seam over the production 4-arg overload: captures the mappings production
+	/** Recording seam over the production status-carrying overload: captures the mappings production
 	 *  hands the validator, then returns empty — the real body never runs (no OpenMRS context
 	 *  here would make it return empty anyway; recording keeps the assertion explicit rather
 	 *  than accidental). */
@@ -151,8 +151,8 @@ public class LlmInferenceServiceCitationWiringTest {
 
 	@Test
 	public void searchStreaming_shouldPassChartMappingsToTheSafetyValidator() {
-		// Twin on the PRIMARY production path (see class javadoc) — the streaming call site is
-		// where a silently-dropped mappings argument would actually reach users.
+		// The streaming call site also serves the bundled conversation provider; dropping
+		// mappings here would lose echo scoping on that supported path.
 		ChartAnswer answer = service.searchStreaming(patient(), "any infections?", token -> { });
 		assertEquals("limited", answer.getSafetyStatus());
 		assertEquals(java.util.Collections.singletonList("mapping_incomplete"), answer.getSafetyCheck().get("issues"));

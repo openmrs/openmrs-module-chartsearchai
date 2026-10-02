@@ -948,3 +948,18 @@ Gemma 4 is licensed under the [Apache 2.0 License](https://www.apache.org/licens
 Gemma 3 and Gemma 3n are licensed under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms), Copyright (C) Google LLC. All Rights Reserved.
 
 Llama 3.3 is licensed under the [Llama 3.2 Community License](https://www.llama.com/llama3_2/license/), Copyright (C) Meta Platforms, Inc. All Rights Reserved.
+
+## Provider integration contract
+
+The `api.provider` package defines a shared contract for the bundled answering
+pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
+turn requests and results, ordered events, and cancellation. This package is the
+foundation for provider integration; it does not yet change the running search
+endpoints or enable a Hub connection.
+
+`AnswerEnvelope` preserves the complete provider payload while exposing the answer
+text needed for display, conversation replay and audit. `TurnLifecycleValidator`
+checks event order and advertised capabilities. `TurnCancellation` closes bound
+resources, and `TurnPreemptionRegistry` cancels the previous turn when another
+starts in the same conversation. Their existing tests include the shared
+`api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.

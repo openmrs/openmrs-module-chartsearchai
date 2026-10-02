@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
@@ -30,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * interaction is unknown."</em>, and no fidelity check reported it.
  *
  * <p>The findings are the answer's CITED ones, {@link SafetyFindingCitationExtentCheck#citedFindingIndexes}, the one
- * reading of them. A qualifier is {@link #UNKNOWN_SIGNIFICANCE}. The answer states it where any of its text matches
+ * reading of them. A qualifier is {@link ChartSearchAiUtils#UNKNOWN_SIGNIFICANCE}. The answer states it where any of its text matches
  * that same pattern, anywhere: one statement is read as covering every cited finding, so an answer qualifying one
  * finding and dropping another's reports neither, the conservative direction for a report.
  */
@@ -38,14 +37,6 @@ final class SignificanceQualifierCheck {
 
 	private static final Logger log = LoggerFactory.getLogger(SignificanceQualifierCheck.class);
 
-	/**
-	 * "Clinical significance" followed, in the same sentence, by a word saying it is not known — the shapes the
-	 * shipped DDInter mechanisms use ("is unknown", "is not known", "has not been established", "remains
-	 * unknown"). Deliberately not "is unlikely to be of clinical significance", which states a significance.
-	 */
-	static final Pattern UNKNOWN_SIGNIFICANCE = Pattern.compile(
-			"clinical significance\\b[^.!?]*?\\b(?:unknown|not (?:been )?known|not (?:been )?established|uncertain|unclear)",
-			Pattern.CASE_INSENSITIVE);
 
 	private SignificanceQualifierCheck() {
 	}
@@ -58,13 +49,13 @@ final class SignificanceQualifierCheck {
 			List<RecordMapping> mappings) {
 		try {
 			List<Integer> unstated = new ArrayList<Integer>();
-			if (ChartSearchAiUtils.isBlank(answer) || UNKNOWN_SIGNIFICANCE.matcher(answer).find()) {
+			if (ChartSearchAiUtils.isBlank(answer) || ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(answer).find()) {
 				return unstated;
 			}
 			Set<Integer> citedFindings = SafetyFindingCitationExtentCheck.citedFindingIndexes(answer, cited, mappings);
 			for (RecordMapping finding : ChartSearchAiUtils.safetyFindingMappings(mappings)) {
 				if (citedFindings.contains(finding.getIndex()) && finding.getText() != null
-						&& UNKNOWN_SIGNIFICANCE.matcher(finding.getText()).find()) {
+						&& ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(finding.getText()).find()) {
 					unstated.add(finding.getIndex());
 				}
 			}

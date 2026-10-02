@@ -647,7 +647,8 @@ public class PatientChartSerializer {
 		}
 
 		/** Records the answer {@code DrugReferenceInjector} composed from its own findings — issue
-		 *  #469, and that class is the only caller. */
+		 *  #469, and that class is the only production caller. Test support clears it to stand for the property
+		 *  being off ({@code DrugReferenceTestSupport.withTheModelAnswering}). */
 		public void markModuleAnswer(String answer) {
 			this.moduleAnswer = answer;
 		}

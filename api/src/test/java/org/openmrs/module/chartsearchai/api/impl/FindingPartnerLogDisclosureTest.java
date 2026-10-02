@@ -140,7 +140,9 @@ public class FindingPartnerLogDisclosureTest {
 					"and the arranged answer names none of them, so the shortfall the WARN reports is "
 							+ "the whole list: " + partner);
 		}
-		injected = DrugReferenceTestSupport.sharedMechanismFindingsOver(chart());
+		// The arranged answers are the MODEL's: since ADR Decision 140 the module answers this caution-only proposal
+		// itself wherever the property is on, which a plain case cannot switch off.
+		injected = DrugReferenceTestSupport.withTheModelAnswering(DrugReferenceTestSupport.sharedMechanismFindingsOver(chart()));
 		service = newService();
 	}
 

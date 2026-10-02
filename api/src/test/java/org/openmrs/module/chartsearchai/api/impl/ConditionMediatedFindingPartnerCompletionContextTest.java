@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,6 +23,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.CitedFindingPartnerCompletionTest.OverShippedData;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
@@ -116,6 +118,33 @@ public class ConditionMediatedFindingPartnerCompletionContextTest extends BaseMo
 		assertEquals(modelAnswer + " Also covered by those findings and not named above: active order "
 				+ LACTIC_ACID_LABEL + ".", answer.getAnswer());
 		CitedFindingPartnerCompletionTest.assertCoverage(2, 1, answer);
+	}
+
+	/**
+	 * A proposal whose findings are an interaction caution AND a chain keeps the model's answer (ADR Decision 140):
+	 * the module's caution answer is led by a count of INTERACTION cautions, which a chain is not. Zidovudine over
+	 * her warfarin and simvastatin raises both.
+	 */
+	@Test
+	public void aProposalWhoseCautionsIncludeAChainIsStillAnsweredByTheModel() {
+		OverShippedData arrangement = new OverShippedData("Can I give her zidovudine?",
+				new String[][] { { "Warfarin", null }, { "Simvastatin", null } });
+		boolean chain = false;
+		boolean interaction = false;
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(arrangement.chart())) {
+			chain |= finding.getResourceUuid().startsWith("condition-mediated:");
+			interaction |= finding.getResourceUuid().startsWith("interaction:");
+			assertEquals(Boolean.FALSE, finding.getFindingWithholds(), "precondition: every finding is a caution");
+		}
+		assertTrue(chain && interaction, "precondition: an interaction caution and a chain, were: "
+				+ arrangement.chart().getText());
+		String modelAnswer = "The model's answer.";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(CitedFindingPartnerCompletionTest.patient(),
+			arrangement.question);
+
+		assertFalse(answer.isAnsweredByTheModule(), "the model answers: " + answer.getAnswer());
+		assertEquals(modelAnswer, answer.getAnswer());
 	}
 
 	private static OverShippedData metforminOverStavudineAndLacticAcid() {

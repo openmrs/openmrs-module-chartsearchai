@@ -133,7 +133,10 @@ public class ClassCodeFidelityTest {
 	public void setUp() {
 		// One arrangement, read twice: the chart production would hand the model, and the
 		// safety-finding record inside it whose citation index the canned answers cite.
-		chart = DrugReferenceTestSupport.injectedSafetyFindingChart(QUESTION, ACTIVE_DRUG, ACTIVE_ATC);
+		// The canned answers are the MODEL's: since ADR Decision 140 the module answers this caution-only proposal
+		// itself wherever the property is on, which a plain case cannot switch off.
+		chart = DrugReferenceTestSupport.withTheModelAnswering(
+				DrugReferenceTestSupport.injectedSafetyFindingChart(QUESTION, ACTIVE_DRUG, ACTIVE_ATC));
 		finding = DrugReferenceTestSupport.safetyFindingIn(chart);
 		assertTrue(ClassCodeFidelityCheck.classCodesIn(finding.getText()).contains(TRUE_CODE),
 				"the premise: the real injected finding states the class code the answer must copy — "

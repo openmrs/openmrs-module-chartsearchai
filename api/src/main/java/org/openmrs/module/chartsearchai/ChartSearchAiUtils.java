@@ -145,6 +145,18 @@ public class ChartSearchAiUtils {
 			"(?<=[" + Pattern.quote(SENTENCE_TERMINATORS) + "])\\s+|[\\r\\n]+");
 
 	/**
+	 * "Clinical significance" followed, in the same sentence, by a word saying it is not known — the shapes the
+	 * shipped DDInter mechanisms use ("is unknown", "is not known", "has not been established", "remains
+	 * unknown"). Deliberately not "is unlikely to be of clinical significance", which states a significance.
+	 * One definition for both of its readers: {@code SignificanceQualifierCheck}, which reports an answer
+	 * dropping it (ADR Decision 136), and {@code DrugReferenceInjector.briefDetail}, which keeps it in a
+	 * composed caution answer (ADR Decision 140).
+	 */
+	public static final Pattern UNKNOWN_SIGNIFICANCE = Pattern.compile(
+			"clinical significance\\b[^.!?]*?\\b(?:unknown|not (?:been )?known|not (?:been )?established|uncertain|unclear)",
+			Pattern.CASE_INSENSITIVE);
+
+	/**
 	 * @param between the text separating two adjacent words
 	 * @param aMarkedCutEndsIt whether a run of {@link #MIN_ELISION_DOTS} or more
 	 *            {@link #ELISION_DOT}s in that gap ends a sentence. TRUE is the reading this method

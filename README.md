@@ -226,7 +226,7 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 | Property | Value | Description |
 |----------|-------|-------------|
-| `chartsearchai.querystore.topK` | `12` | Number of similarity records requested from querystore. In `queryScoped` mode (the default `chartsearchai.chartMode`) this sizes the query-scoped slice the LLM actually sees, alongside the question's complete typed scope; in `fullChart` mode it only sizes the optional focus hint, and is unused when `chartsearchai.embedding.preFilter` is `false`. querystore is a required module and is always the retrieval path — there is no toggle to disable it. `ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K` carries the default and the measurements behind it |
+| `chartsearchai.querystore.topK` | `12` | Number of similarity records requested for the optional focus hint in `fullChart` mode; unused when `chartsearchai.embedding.preFilter` is `false`. The `queryScoped` path uses QueryStore's context-slice similarity limit instead. querystore is a required module and is always the retrieval path — there is no toggle to disable it. `ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K` carries the default and the measurements behind it |
 | `querystore.embedding.modelFilePath` | `querystore/model.onnx` | Path to the ONNX embedder, relative to `<openmrs-application-data-directory>`. Querystore ships this with an empty default (the module is model-agnostic), so it has to be set somewhere — on the Docker path `backend-init.sh` does it, otherwise you do (see *Who sets these* below) |
 | `querystore.embedding.vocabFilePath` | `querystore/vocab.txt` | Path to the WordPiece vocab, same convention |
 | `querystore.embedding.queryModelFilePath` | *(empty)* | Leave empty for `e5-base-v2`; set only for dual-encoder models like MedCPT |
@@ -241,7 +241,7 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `chartsearchai.chartMode` | `queryScoped` | How the prompt's chart context is assembled. `queryScoped` (default) sends only a slice: every record of the question's typed scope (complete by construction — an enumeration answer cannot omit what was never retrieved), plus the `chartsearchai.querystore.topK` similarity records, plus demographics. `fullChart` serializes the whole chart into every prompt. **The full-chart prefill machinery — warmup, the prewarm bootstrap, per-patient KV persistence, the progressive-reasoning preview — is dormant in `queryScoped` mode and re-engages only under `fullChart`.** A value that is not an exact (case-insensitive) `queryScoped` behaves as `fullChart`, so a typo fails toward the whole chart; an absent or unreadable GP takes the default. See [ADR Decision 28](docs/adr.md#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for the A/B behind the default |
+| `chartsearchai.chartMode` | `queryScoped` | How the prompt's chart context is assembled. `queryScoped` (default) sends only a slice: QueryStore selects demographics, mandatory clinical records, exact matches, complete typed scopes and observation panels, plus optional recency and similarity records. Local token budgeting can trim only the optional records; required evidence that exceeds the input budget causes an explicit refusal. `fullChart` serializes the whole chart into every prompt. **The full-chart prefill machinery — warmup, the prewarm bootstrap, per-patient KV persistence, the progressive-reasoning preview — is dormant in `queryScoped` mode and re-engages only under `fullChart`.** A value that is not an exact (case-insensitive) `queryScoped` behaves as `fullChart`, so a typo fails toward the whole chart; an absent or unreadable GP takes the default. See [ADR Decision 28](docs/adr.md#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for the A/B behind the default |
 | `chartsearchai.embedding.preFilter` | `false` | *(`fullChart` mode only)* When `true`, querystore additionally ranks the patient's records by similarity to the question and passes a short **focus hint** — the top `chartsearchai.querystore.topK` record indices — to the LLM. **The full chart is still sent either way**, so the hint biases attention without removing records the LLM needs for negative reasoning (correctly answering "any allergies?" requires having seen the empty allergy section, not just an absence of matches). Has no effect in the default `queryScoped` mode |
 
 #### LLM tuning
@@ -949,21 +949,6 @@ Gemma 3 and Gemma 3n are licensed under the [Gemma Terms of Use](https://ai.goog
 
 Llama 3.3 is licensed under the [Llama 3.2 Community License](https://www.llama.com/llama3_2/license/), Copyright (C) Meta Platforms, Inc. All Rights Reserved.
 
-## Provider integration contract
-
-The `api.provider` package defines a shared contract for the bundled answering
-pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
-turn requests and results, ordered events, and cancellation. The contract is the
-foundation for provider integration; concrete adapters implement it. The running
-search endpoints are not yet routed through this contract.
-
-`AnswerEnvelope` preserves the complete provider payload while exposing the answer
-text needed for display, conversation replay and audit. `TurnLifecycleValidator`
-checks event order and advertised capabilities. `TurnCancellation` closes bound
-resources, and `TurnPreemptionRegistry` cancels the previous turn when another
-starts in the same conversation. Their existing tests include the shared
-`api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
-
 ## Local token counting
 
 `TokenCounter` and `LocalLlamaTokenCounter` provide the local engine's exact token
@@ -995,6 +980,21 @@ an upstream merge or Maven publication first. QueryStore's own tests remain in
 its PR. Main publication and scheduled QueryStore-main compatibility checks retain
 their existing workflows.
 
+## Provider integration contract
+
+The `api.provider` package defines the shared conversation contract for bundled
+inference and an optional Med Agent Hub relay: explicit provider identity and
+capabilities, turn requests/results, ordered events and cancellation. The
+conversation endpoints use this contract; the existing search endpoints continue
+to use the bundled pipeline.
+
+`AnswerEnvelope` preserves the complete provider payload while exposing the answer
+text needed for display, conversation replay and audit. `TurnLifecycleValidator`
+checks event order and advertised capabilities. `TurnCancellation` closes bound
+resources, and `TurnPreemptionRegistry` cancels the previous turn when another
+starts in the same conversation. Their existing tests include the shared
+`api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
+
 ## Safety-check execution status
 
 `DrugSafetyValidator.validateWithStatus` returns warnings, a `checked`, `limited`
@@ -1007,8 +1007,8 @@ Completed bundled answers now carry this status and its limitation codes through
 `ChartAnswer` and the provider envelope, including answers composed from module
 findings. Early answers state that the check is unavailable until its result is
 attached. Existing warning callers and standing chart alerts retain their
-interfaces. REST publication and frontend display belong to the endpoint and
-presentation contributions.
+interfaces. Search and conversation answer payloads publish the same safety status
+and clinical limitations through the shared controller serializer.
 
 ## Bundled provider integration
 
@@ -1026,10 +1026,9 @@ from module findings remain available without model tokenization or inference.
 availability. A fresh installation enables bundled inference only; missing or
 unready implementations remain visible with a reason, and a requested provider is
 never silently replaced. This contribution provides the bundled implementation and
-registry; provider discovery and conversation HTTP endpoints are separate changes.
-The approved streaming toggle and optional-model capability behavior still require
-coordination with those endpoints and the frontend; this extraction does not claim
-that acceptance.
+registry. The conversation endpoints expose discovery and execute the selected
+provider without cross-provider fallback. Combined frontend/model acceptance
+remains separate from local component checks.
 
 ### Conversation persistence
 
@@ -1042,8 +1041,8 @@ provider, mode, conversation and request attribution into the audit record.
 Checked or edited answers can be reused for a follow-up while In-Depth is still
 running. Failed and needs-review answers remain inspectable in storage but are
 excluded from replay. Audit retention clears the turn's audit link without deleting
-the conversation answer. The migration and Hibernate mappings are included here;
-REST history endpoints and provider execution wiring are separate contributions.
+the conversation answer. The migration and Hibernate mappings are included here.
+The history endpoint restores the stored answer envelope and terminal metadata.
 
 ### Med Agent Hub adapter
 
@@ -1065,6 +1064,38 @@ provider unavailable. The optional Bearer token belongs in the runtime property
 `chartsearchai.hub.apikey`, never in a global property. `HubProfileService` relays
 profile metadata from `/v1/models` on the same configured Hub.
 
-This adapter is an integration building block. Provider selection, conversation
-storage and REST endpoint wiring are separate contributions; configuring it alone
-does not route the existing search endpoint through the Hub.
+The conversation endpoint can select this adapter explicitly. The existing search
+endpoints remain bundled; enabling Hub does not silently redirect them.
+
+### Conversation endpoints
+
+All paths below are under `/ws/rest/v1/chartsearchai`. Requests require the query
+privilege; patient-specific requests also require access to the selected patient. Conversations belong to the current
+OpenMRS user and keep the provider/mode that produced their turns.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/providers` | Configured providers, capabilities, availability and default |
+| GET | `/models` | Hub product-profile metadata from the configured Hub |
+| GET | `/chat?patient=<uuid>&session=<optional uuid>` | Recorded history; omitted session restores the user's latest active conversation |
+| POST | `/chat/new` | Close the current conversation and open a fresh one |
+| POST | `/chat/stream` | Execute and persist one provider-neutral turn with canonical lifecycle events |
+
+New-chat requests carry `patient` and an optional explicit `provider`/`mode`. Chat
+requests also carry `question`, optional `session` and, for Hub, the required
+`profile`. An omitted mode uses the selected provider's configured mode. A provider
+switch starts a new conversation. Unavailable selections fail explicitly.
+
+The stream publishes a complete answer even when a provider supplies no incremental
+tokens. Optional review, evidence and In-Depth events stay separate from that answer.
+A client can disable incremental display while retaining the same provider/profile
+and conversation transport. Missing optional events do not assert successful checks.
+A later question preempts unfinished work for the same conversation. Terminal
+completion is sent after persistence and includes the audit identifier for feedback.
+The existing `/feedback` request continues to use `questionId`.
+
+A response disconnect or unexpected execution failure settles an already started
+turn as an error in stored history. Checked answers, original drafts and partial
+In-Depth content remain inspectable after an interrupted optional stage; unfinished
+In-Depth work is marked failed. Incomplete turns are not replayed as completed
+conversation context.

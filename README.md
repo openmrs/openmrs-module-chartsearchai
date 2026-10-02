@@ -982,13 +982,13 @@ require the QueryStore contribution in [PR #68](https://github.com/openmrs/openm
 build and test against its declared source dependency before an upstream artifact
 is available.
 
-For this extraction, `paired-build` installs QueryStore revision
-`8b79db9791fe47315d3aae9cb09e9fdf004e6ee6` and runs the full ChartSearchAI
-reactor on Java 11, 17 and 21. QueryStore's own tests remain in its PR. The
-published-snapshot build and upstream-HEAD compatibility check are replaced for
-`codex/context-budget` only, because neither supplies the required API yet. Remove
-that branch-specific substitution after QueryStore #68 merges and publishes the
-API, and rerun the ordinary checks before merging this contribution.
+Pull-request builds install QueryStore revision
+`55bf9971eb293b2155fb72de1e7cadfd6fab3bdd` from source and run the full
+ChartSearchAI reactor on Java 11, 17 and 21. This verifies the declared API for
+all dependent contributions without selecting builds by branch name or requiring
+an upstream merge or Maven publication first. QueryStore's own tests remain in
+its PR. Main publication and scheduled QueryStore-main compatibility checks retain
+their existing workflows.
 
 To verify counting against a real local engine, prepare a separate application-data
 directory containing `model.gguf` and a compatible `chartsearchai/bin/llama-server`

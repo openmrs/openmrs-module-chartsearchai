@@ -15,6 +15,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -485,7 +487,7 @@ public class LlmProvider {
 	 * (schema order: reasoning precedes answer). The reasoning channel is purely additive — the
 	 * answer stream is byte-identical without a consumer for it.
 	 *
-	 * <p><b>The ONLY streaming arity, and the narrower ones were deleted rather than kept as
+	 * <p><b>Both streaming forms carry every prompt-selection argument; narrower ones were deleted rather than kept as
 	 * conveniences</b>, when the flag made them dangerous. Three flag-less delegates stood here — 3-,
 	 * 4- and 5-argument — reached by nothing in production or in the suite, the widest hardcoding
 	 * {@code enumerateFindings = false} in its delegate. Before #397 they were behaviourally
@@ -506,7 +508,7 @@ public class LlmProvider {
 	 *
 	 * @param enumerateFindings see {@link #buildUserMessage(String, List, String, boolean)}. It
 	 *        reaches the user message and never the KV seed above, which is what keeps that seed a
-	 *        byte-prefix of this query; why it is a parameter of the one arity is the paragraph
+	 *        byte-prefix of this query; why it is a parameter of both streaming forms is the paragraph
 	 *        above and {@code search}'s own @param
 	 * @param referenceRecords see {@code search}'s own @param
 	 * @param drugsAlreadyOrdered see {@code search}'s own @param. Like {@code enumerateFindings} it reaches
@@ -516,6 +518,28 @@ public class LlmProvider {
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
+		return searchStreamingInternal(numberedRecords, focusIndices, question, tokenConsumer,
+				reasoningConsumer, cacheScope, enumerateFindings, referenceRecords, drugsAlreadyOrdered,
+				CancellationSignal.NONE);
+	}
+
+	/** Cancellation-aware streaming form; retains all upstream prompt-selection arguments. */
+	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered, CancellationSignal cancellation) {
+		if (cancellation == null || cancellation == CancellationSignal.NONE) {
+			return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer,
+					reasoningConsumer, cacheScope, enumerateFindings, referenceRecords, drugsAlreadyOrdered);
+		}
+		return searchStreamingInternal(numberedRecords, focusIndices, question, tokenConsumer,
+				reasoningConsumer, cacheScope, enumerateFindings, referenceRecords, drugsAlreadyOrdered, cancellation);
+	}
+
+	private LlmResponse searchStreamingInternal(String numberedRecords, List<Integer> focusIndices,
+			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered, CancellationSignal cancellation) {
 
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
@@ -534,7 +558,7 @@ public class LlmProvider {
 		};
 
 		LlmEngine.InferenceResult result = getActiveEngine().inferStreaming(
-				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed, referenceRecords);
+				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed, referenceRecords, cancellation);
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());

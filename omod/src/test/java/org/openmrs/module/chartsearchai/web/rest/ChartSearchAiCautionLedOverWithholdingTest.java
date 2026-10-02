@@ -28,6 +28,7 @@ import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.CautionLedOverWithholding;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -84,7 +85,8 @@ public class ChartSearchAiCautionLedOverWithholdingTest {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
-				null, null, null, null, null, null, null, false, null, stated, null, null, null, null);
+				null, null, null, null, null, null, null, false, null, stated, null, null, null, null,
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList());
 	}
 
 	@SuppressWarnings("unchecked")

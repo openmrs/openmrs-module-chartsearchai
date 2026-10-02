@@ -99,12 +99,13 @@ public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContex
 		});
 		service.setDrugSafetyValidator(new DrugSafetyValidator() {
 
-			// The overload production actually calls — mappings for echo scoping (issue #105) and the
-			// sink since issue #336. Stubbing a narrower one leaves this seam inert.
+			// Intercept the status-carrying entry point with mappings and pair extent intact.
+			// This fixture supplies warnings without measuring patient-context coverage.
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
 					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
-				return Collections.emptyList();
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, Collections.emptyList(),
+						java.util.Collections.singletonList("patient_context_unavailable"));
 			}
 		});
 		return service;

@@ -487,15 +487,15 @@ public class LlmInferenceServiceTest {
 		});
 		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
 
-			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
-			// and sink-carrying since issue #336. Stubbing the four-argument one instead leaves this
-			// stub INERT — production would not reach it — which is why it names both parameters.
+			// Intercept the status-carrying entry point with mappings and pair extent intact.
+			// This fixture supplies warnings without measuring patient-context coverage.
 			@Override
-			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
+			public SafetyCheckResult validateWithStatus(
 					String answer, String question, org.openmrs.Patient patient,
 					java.util.List<RecordMapping> mappings,
 					org.openmrs.module.chartsearchai.reference.PairChipExtent.Sink pairExtentSink) {
-				return java.util.Collections.emptyList();
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, java.util.Collections.emptyList(),
+						java.util.Collections.singletonList("patient_context_unavailable"));
 			}
 		});
 		service.setChartBuildingStrategy(new ChartBuildingStrategy() {

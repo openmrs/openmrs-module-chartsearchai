@@ -989,3 +989,17 @@ This Java API is the safety-status foundation for provider integration. Existing
 warning callers and standing chart alerts retain their interfaces. Publishing the
 status on provider answers and rendering it in the frontend belong to the subsequent
 integration contributions.
+
+### Conversation persistence
+
+`ConversationService` stores conversation headers and ordered turns for the
+current OpenMRS user and patient. Reusing a conversation requires the same provider
+and mode; switching either, or explicitly starting a new conversation, closes the
+previous header. Each completed turn retains its full provider payload and copies
+provider, mode, conversation and request attribution into the audit record.
+
+Checked or edited answers can be reused for a follow-up while In-Depth is still
+running. Failed and needs-review answers remain inspectable in storage but are
+excluded from replay. Audit retention clears the turn's audit link without deleting
+the conversation answer. The migration and Hibernate mappings are included here;
+REST history endpoints and provider execution wiring are separate contributions.

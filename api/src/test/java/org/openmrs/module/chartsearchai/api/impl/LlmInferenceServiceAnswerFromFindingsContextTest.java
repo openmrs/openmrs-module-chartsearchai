@@ -405,6 +405,111 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A proposed drug whose only relationships to her orders are rows below the severity floor — no finding at all —
+	 * is answered by the module with those rows (ADR Decision 142): a lead counting them by their rating, then one
+	 * line per pair citing the drug's reference record and her order's record. Never "should not be given", which
+	 * the model wrote over four Unknown rows; never a clearance. Clarithromycin relates to her aspirin only in
+	 * DDInter's Unknown tier.
+	 */
+	@Test
+	public void aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows() {
+		String question = "Can I give her clarithromycin?";
+		assertTrue(findingsInThePromptFor(question).isEmpty(), "precondition: no finding is raised");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked");
+		assertTrue(answer.isAnsweredByTheModule());
+		int reference = -1;
+		for (RecordReference ref : answer.getReferences()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(ref.getResourceType())) {
+				reference = ref.getIndex();
+			}
+		}
+		assertEquals("1 interaction of unknown severity for Clarithromycin:\n"
+				// Her order by its own display — the standard dataset's drug name, as the chart records it.
+				+ "Clarithromycin" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "ASPIRIN — Unknown. ["
+				+ reference + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
+	}
+
+	/**
+	 * Below a floor an install raised, a pair carries a rating of its own, and the lead says the rows are
+	 * lower-rated rather than of unknown severity (ADR Decision 142): with the floor at Moderate, omeprazole's
+	 * Minor row against her aspirin is below it, and is the only relationship.
+	 */
+	@Test
+	public void aPairBelowARaisedFloorIsStatedWithItsOwnRating() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "moderate");
+		String question = "Can I give her omeprazole?";
+		assertTrue(findingsInThePromptFor(question).isEmpty(), "precondition: the Minor row raises no finding");
+
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, question);
+
+		int reference = -1;
+		for (RecordReference ref : answer.getReferences()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(ref.getResourceType())) {
+				reference = ref.getIndex();
+			}
+		}
+		assertEquals("1 lower-rated interaction for Omeprazole:\n"
+				+ "Omeprazole" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "ASPIRIN — Minor. [" + reference
+				+ "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
+	}
+
+	/** A question that names the drug without proposing it keeps the model's answer, below-floor rows or not. */
+	@Test
+	public void aBelowFloorQuestionThatProposesNothingStillAsksTheModel() {
+		String question = "Does clarithromycin interact with her medications?";
+		RecordingProvider precondition = new RecordingProvider();
+		answerFromFindings(false);
+		ChartAnswer off = serviceWith(precondition).search(patient, question);
+		answerFromFindings(true);
+		assertTrue(off.getPairChipExtent() != null && !off.getPairChipExtent().getBelowFloor().isEmpty(),
+				"precondition: the question relates clarithromycin to her aspirin below the floor");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, question);
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/**
+	 * A pair whose order has not started keeps the model's answer (ADR Decision 142): the line would call it her
+	 * active order. Patient 6 holds only an aspirin order scheduled for 2099.
+	 */
+	@Test
+	public void aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel() {
+		executeDataSet("ScheduledAspirinOrderTestData.xml");
+		Patient six = Context.getPatientService().getPatient(6);
+		String question = "Can I give her clarithromycin?";
+		answerFromFindings(false);
+		ChartAnswer off = serviceWith(new RecordingProvider()).search(six, question);
+		answerFromFindings(true);
+		assertTrue(off.getPairChipExtent() != null && !off.getPairChipExtent().getBelowFloor().isEmpty(),
+				"precondition: clarithromycin relates to her scheduled aspirin below the floor, was: "
+						+ off.getPairChipExtent());
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(six, question);
+
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/** The same answer however the proposal is worded, since no model words it (ADR Decision 142). */
+	@Test
+	public void aBelowFloorAnswerDoesNotDependOnHowTheProposalIsWorded() {
+		ChartAnswer can = serviceWith(new RecordingProvider()).search(patient, "Can I give her clarithromycin?");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer should = serviceWith(provider).search(patient, "Should I give her clarithromycin?");
+
+		assertEquals(0, provider.calls, "no model is asked");
+		assertEquals(can.getAnswer(), should.getAnswer());
+		assertEquals(ChartAnswerTestSupport.referenceIndexes(can), ChartAnswerTestSupport.referenceIndexes(should));
+	}
+
 	/** The index of the answer's reference to the record of {@code orderUuid}, failing where there is none. */
 	private static int recordOf(ChartAnswer answer, String orderUuid) {
 		for (RecordReference reference : answer.getReferences()) {

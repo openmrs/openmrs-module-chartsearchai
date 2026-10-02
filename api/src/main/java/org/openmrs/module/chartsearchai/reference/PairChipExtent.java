@@ -271,10 +271,39 @@ public final class PairChipExtent {
 
 		private final String severity;
 
+		/** The displays of her orders the pair's partner was matched against — see {@link #herOrders()}. */
+		private final List<String> herOrders;
+
+		/** Whether every one of those orders has started — see {@link #onStartedOrdersOnly()}. */
+		private final boolean onStartedOrdersOnly;
+
 		public BelowFloorPair(String drug, String partner, String severity) {
+			this(drug, partner, severity, Collections.<String> emptyList(), false);
+		}
+
+		BelowFloorPair(String drug, String partner, String severity, List<String> herOrders,
+				boolean onStartedOrdersOnly) {
 			this.drug = drug;
 			this.partner = partner;
 			this.severity = severity;
+			this.herOrders = Collections.unmodifiableList(new ArrayList<String>(herOrders));
+			this.onStartedOrdersOnly = onStartedOrdersOnly;
+		}
+
+		/**
+		 * The displays of her active orders the partner was matched against, by the walk a chip's
+		 * {@code SafetyWarning.matchedOrderNames()} comes from, in chart order — what a module-composed answer
+		 * cites her order by (ADR Decision 142). Empty where the partner side resolved to no entry. Never on
+		 * the wire: a partner is one of her medications (ADR Decision 102), and the wire states it by label.
+		 */
+		List<String> herOrders() {
+			return herOrders;
+		}
+
+		/** Whether {@link #herOrders()} is non-empty and every one of those orders has started — a
+		 *  module-composed answer states only those (ADR Decision 142). */
+		boolean onStartedOrdersOnly() {
+			return onStartedOrdersOnly;
 		}
 
 		public String getDrug() {

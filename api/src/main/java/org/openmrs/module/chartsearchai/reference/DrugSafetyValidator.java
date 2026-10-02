@@ -1094,7 +1094,7 @@ public class DrugSafetyValidator {
 					questionDrugScreened = true;
 					questionDrugPairs += related;
 					questionDrugBelowFloor.addAll(belowFloorPairs(rows, subjects, context, severityFloor,
-						orderEntries));
+						orderEntries, bridgedOrders));
 				}
 			}
 			if (dosePending.remove(substance)) {
@@ -7214,7 +7214,7 @@ public class DrugSafetyValidator {
 	 */
 	static List<PairChipExtent.BelowFloorPair> belowFloorPairs(List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
-			List<DrugReference> orderEntries) {
+			List<DrugReference> orderEntries, BridgedOrders bridgedOrders) {
 		if (context == null || rows.isEmpty()) {
 			return Collections.emptyList();
 		}
@@ -7224,6 +7224,7 @@ public class DrugSafetyValidator {
 		}
 		String drug = subjects.subjectOf(rows.get(0)).displayLabel();
 		Map<Object, DrugReference.Interaction> worst = new LinkedHashMap<Object, DrugReference.Interaction>();
+		Map<Object, DrugReference> worstRow = new HashMap<Object, DrugReference>();
 		for (DrugReference ref : rows) {
 			for (DrugReference.Interaction i : ref.getInteractions()) {
 				if (clearsSeverityFloor(i, severityFloor) || partnerLabel(i) == null
@@ -7237,13 +7238,31 @@ public class DrugSafetyValidator {
 				DrugReference.Interaction incumbent = worst.get(key);
 				if (incumbent == null || severityRank(i.getSeverity()) > severityRank(incumbent.getSeverity())) {
 					worst.put(key, i);
+					worstRow.put(key, ref);
 				}
 			}
 		}
 		List<PairChipExtent.BelowFloorPair> pairs = new ArrayList<PairChipExtent.BelowFloorPair>();
-		for (DrugReference.Interaction i : worst.values()) {
+		for (Map.Entry<Object, DrugReference.Interaction> pair : worst.entrySet()) {
+			DrugReference.Interaction i = pair.getValue();
+			DrugReference ref = worstRow.get(pair.getKey());
+			// Her orders the partner was matched against, by the walk an interaction chip's matched order names
+			// come from (ADR Decision 142): the partner side only, the subject being a proposal.
+			Set<String> matchedNames = new LinkedHashSet<String>();
+			chartOrderBridges(Collections.<DrugReference> emptyList(), null,
+				activeOrderEntryFor(orderEntries, ref, i), partnerLabel(i), context, context.getActiveDrugOrders(),
+				orderEntries, bridgedOrders, subjects, matchedNames);
+			List<String> herOrders = new ArrayList<String>();
+			boolean started = true;
+			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+				String display = order.getDisplay() == null ? null : order.getDisplay().trim();
+				if (display != null && matchedNames.contains(display) && !herOrders.contains(display)) {
+					herOrders.add(display);
+					started &= order.hasStarted();
+				}
+			}
 			pairs.add(new PairChipExtent.BelowFloorPair(drug, partnerLabel(i),
-					ChartSearchAiUtils.firstNonBlank(i.getSeverity())));
+					ChartSearchAiUtils.firstNonBlank(i.getSeverity()), herOrders, started && !herOrders.isEmpty()));
 		}
 		return pairs;
 	}

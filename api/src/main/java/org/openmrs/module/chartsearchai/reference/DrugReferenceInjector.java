@@ -500,6 +500,17 @@ public class DrugReferenceInjector {
 	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question,
 			List<DrugReference> orderEntries, List<RecordMapping> chartMappings,
 			ListedDrugsWithNoActiveOrder.Sink listedSink) {
+		return preAnswerFindings(context, question, orderEntries, chartMappings, listedSink, null);
+	}
+
+	/**
+	 * As above, additionally handing the validator a sink for its interaction extent — {@link #injectRecords}'
+	 * call, which composes an answer from the pairs below the severity floor where nothing else was found (ADR
+	 * Decision 142).
+	 */
+	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question,
+			List<DrugReference> orderEntries, List<RecordMapping> chartMappings,
+			ListedDrugsWithNoActiveOrder.Sink listedSink, PairChipExtent.Sink pairExtentSink) {
 		// Gated on the SAME toggle that gates the chips, because the two must never disagree. The
 		// validator's public entry point checks this GP; the package-private overload used here does
 		// not, so without this an operator setting validateAnswers=false would switch the chips off
@@ -511,7 +522,7 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
 			return Collections.emptyList();
 		}
-		return drugSafetyValidator.validate("", question, context, chartMappings, orderEntries, null,
+		return drugSafetyValidator.validate("", question, context, chartMappings, orderEntries, pairExtentSink,
 				DrugSafetyValidator.SubjectMatterScope.OF_THE_RESPONSE, listedSink);
 	}
 
@@ -633,8 +644,9 @@ public class DrugReferenceInjector {
 		// Handed the resolution above rather than left to derive it again (issue #255): validate used to
 		// resolve the same orders again, and this method already holds that answer.
 		ListedDrugsWithNoActiveOrder.Sink listed = new ListedDrugsWithNoActiveOrder.Sink();
+		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries, chart.getMappings(),
-				listed);
+				listed, pairExtent);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		// Whether the interaction SCREEN ran over a pair of this patient's own medications and related
 		// none of them — issue #401, and the one thing this injection has to say when it has nothing
@@ -891,6 +903,15 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					!questionDrugs.isEmpty());
+		} else if (findings.isEmpty() && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
+						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries)) {
+			moduleAnswer = composeFromBelowFloor(question, questionDrugs, screenedSubstances, pairExtent.stated(),
+					mappings, context);
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -2570,6 +2591,83 @@ public class DrugReferenceInjector {
 			markers.append(" [").append(number).append("]");
 		}
 		return markers.toString();
+	}
+
+	/**
+	 * The module's answer to a proposal that raised NO finding but relates the drug to her orders through rows the
+	 * severity floor filtered (ADR Decision 142), or {@code null} where the model answers. <em>"Can I give her
+	 * clarithromycin?"</em> over four DDInter rows rated Unknown, none with a mechanism, was answered by the model
+	 * <em>"No — Clarithromycin should not be given"</em> under one wording and with no verdict under another, and
+	 * its citations decided which of her allergy conflicts were raised beside it.
+	 *
+	 * <p>It states those rows and nothing else: a lead counting them by rating, then one line per pair — the drug,
+	 * {@link DrugSafetyValidator#ACTIVE_ORDER_INTERACTION_PHRASE}, her order by its display, the rating — citing the
+	 * drug's reference record, where the rows are, and her order's record. Never a clearance and never a negative,
+	 * as {@link #answersFromFindings} refuses both: it does not say the drug can be given, nor that nothing else
+	 * relates it, nor that the rows have no mechanism, which an operator's data may carry.
+	 *
+	 * <p>Fail-closed: one drug, proposed ({@link #questionProposes}) and not hers; the extent stated and carrying
+	 * at least one pair; every pair rated, on orders that have all started, each with a record
+	 * {@link #orderRecordNumbers} can cite; and the drug's own reference record in the chart. Anything short of
+	 * that keeps the model call.
+	 */
+	private static String composeFromBelowFloor(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, PairChipExtent extent, List<RecordMapping> mappings,
+			PatientClinicalContext context) {
+		if (extent == null || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()) {
+			return null;
+		}
+		Set<Object> asked = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
+				|| !questionProposes(question, questionDrugs)) {
+			return null;
+		}
+		List<String> rows = rowIds(questionDrugs);
+		Integer reference = null;
+		for (RecordMapping mapping : mappings) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+					&& rows.contains(mapping.getResourceUuid())) {
+				reference = Integer.valueOf(mapping.getIndex());
+				break;
+			}
+		}
+		if (reference == null) {
+			return null;
+		}
+		Map<String, Integer> orderNumbers = orderRecordNumbers(new DrugOrderRecords(mappings), context);
+		List<String> lines = new ArrayList<String>();
+		boolean allUnknown = true;
+		String drug = null;
+		for (PairChipExtent.BelowFloorPair pair : extent.getBelowFloor()) {
+			if (!pair.onStartedOrdersOnly() || ChartSearchAiUtils.isBlank(pair.getSeverity())) {
+				return null;
+			}
+			Set<Integer> numbers = new TreeSet<Integer>();
+			for (String display : pair.herOrders()) {
+				Integer number = orderNumbers.get(display);
+				if (number == null) {
+					return null;
+				}
+				numbers.add(number);
+			}
+			StringBuilder line = new StringBuilder(pair.getDrug())
+					.append(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE)
+					.append(String.join(" and ", pair.herOrders())).append(" — ").append(pair.getSeverity())
+					.append(". [").append(reference).append(']');
+			for (Integer number : numbers) {
+				line.append(" [").append(number).append(']');
+			}
+			lines.add(line.toString());
+			allUnknown &= "unknown".equalsIgnoreCase(pair.getSeverity().trim());
+			drug = pair.getDrug();
+		}
+		int n = lines.size();
+		lines.add(0, n + (allUnknown ? (n == 1 ? " interaction of unknown severity for " : " interactions of unknown severity for ")
+				: (n == 1 ? " lower-rated interaction for " : " lower-rated interactions for ")) + drug + ":");
+		return String.join("\n", lines);
 	}
 
 	/**

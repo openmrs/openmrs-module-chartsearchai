@@ -973,9 +973,27 @@ so the model's chat template is included. Both requests use the same authenticat
 non-proxied client as inference.
 
 Counting is available for the local engine only. Remote endpoints are not assumed
-to provide a tokenizer, and this interface does not estimate their counts. These
-methods are the foundation for the context-budget contribution; they do not yet
-change which chart records are selected or enforce a new input limit.
+to provide a tokenizer, and this interface does not estimate their counts.
+In `queryScoped` mode, the chart builder uses these counts to retain required evidence
+and fit optional records within the model input budget. If required evidence alone
+exceeds that budget, the turn fails explicitly instead of dropping required records.
+The count includes the system prompt, question and model chat template. Without an
+available counter, the builder preserves the selected records.
+
+Context selection uses QueryStore's `getContextSlice` API with the raw question and
+server-side interpretation enabled. Full-chart reads use `getPatientChartRead`.
+Both paths reject truncated results and incomplete source projections. These APIs
+require the QueryStore contribution in [PR #68](https://github.com/openmrs/openmrs-module-querystore/pull/68);
+build and test against its declared source dependency before an upstream artifact
+is available.
+
+Pull-request builds install QueryStore revision
+`55bf9971eb293b2155fb72de1e7cadfd6fab3bdd` from source and run the full
+ChartSearchAI reactor on Java 11, 17 and 21. This verifies the declared API for
+all dependent contributions without selecting builds by branch name or requiring
+an upstream merge or Maven publication first. QueryStore's own tests remain in
+its PR. Main publication and scheduled QueryStore-main compatibility checks retain
+their existing workflows.
 
 ## Safety-check execution status
 

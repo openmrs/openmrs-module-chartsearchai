@@ -67,7 +67,7 @@ jobs:
         with:
           persist-credentials: false
           repository: pmanko/openmrs-module-querystore
-          ref: 55bf9971eb293b2155fb72de1e7cadfd6fab3bdd
+          ref: 286993cc094499ed29f97d4574775cd2c96f5676
           path: .paired/querystore
 
       - name: Set up Java ${{ matrix.java }}

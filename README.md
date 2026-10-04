@@ -983,7 +983,7 @@ build and test against its declared source dependency before an upstream artifac
 is available.
 
 Pull-request builds install QueryStore revision
-`55bf9971eb293b2155fb72de1e7cadfd6fab3bdd` from source and run the full
+`286993cc094499ed29f97d4574775cd2c96f5676` from source and run the full
 ChartSearchAI reactor on Java 11, 17 and 21. This verifies the declared API for
 all dependent contributions without selecting builds by branch name or requiring
 an upstream merge or Maven publication first. QueryStore's own tests remain in

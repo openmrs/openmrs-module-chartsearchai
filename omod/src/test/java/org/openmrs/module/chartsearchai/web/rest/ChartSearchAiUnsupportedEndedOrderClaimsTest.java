@@ -77,7 +77,7 @@ public class ChartSearchAiUnsupportedEndedOrderClaimsTest {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
-				null, null, null, null, null, null, null, false, null, null, null, null, stated, null);
+				null, null, null, null, null, null, null, false, null, null, null, null, stated, null, null);
 	}
 
 	@SuppressWarnings("unchecked")

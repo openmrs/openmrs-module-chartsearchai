@@ -349,7 +349,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers);
+					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+							chart.getProposalOwnOrderFindingLines()));
 			outcome = "ok";
 			return answer;
 		}
@@ -780,7 +781,9 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
-					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null));
+					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null,
+					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+							chart.getProposalOwnOrderFindingLines())));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -915,7 +918,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers);
+					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+							chart.getProposalOwnOrderFindingLines()));
 			outcome = "ok";
 			return answer;
 		}
@@ -1010,11 +1014,11 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null, null));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
-				doseCeilingCoverage, null, null);
+				doseCeilingCoverage, null, null, null);
 	}
 
 	/**

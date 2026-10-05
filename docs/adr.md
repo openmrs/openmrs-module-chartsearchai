@@ -13814,7 +13814,10 @@ word and none on the one in her chart.
   answer's references did not carry, so the marker resolved to nothing — the browser found it, the lidocaine chip open
   beside an answer naming `[55]`. Carrying it would have meant a second writer of `attachedByTheModule`, which
   `extractCitedReferences` alone writes, for the chart evidence behind a finding the MODEL cited (ADR Decision 80). The
-  finding's chip, which the answer does not cite, is drawn in full beside it.
+  finding's chip, which the answer does not cite, would then be drawn in full beside the sentence that names it — so
+  the response names those findings structurally, `ChartAnswer.getFindingsStatedByTheModule()` (the
+  `findingsStatedByTheModule` key), resolved by `OwnOrderFindingStatement.statedFindings`, the reading the sentence
+  itself is built from, and a client folds their chips as stated.
 - **Which are cited is `SafetyFindingCitationExtentCheck.citedFindingIndexes`**, the one reading of that.
 - **It never rewrites the model's prose**, so a "can be given" stands beside the line stating a Major; Decision 119's
   `cautionLedOverWithholding` still reports that pairing.

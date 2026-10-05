@@ -704,6 +704,8 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				answer.getAnswer());
 		assertFalse(answer.getAnswer().contains("[" + own + "]"),
 				"the statement cites no marker, so none points at a record the answer's references do not carry");
+		assertEquals(Collections.singletonList(Integer.valueOf(own)), answer.getFindingsStatedByTheModule(),
+				"the response names the finding the module's sentence states, so a client can join its chip to it");
 	}
 
 	/** An answer citing that finding has nothing stated after it (ADR Decision 147). */
@@ -717,6 +719,8 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		ChartAnswer answer = serviceAnswering(modelAnswer, obs()).service.search(patient, FLUCONAZOLE_QUESTION);
 
 		assertEquals(modelAnswer + NONE_OF_THE_LIST, answer.getAnswer());
+		assertEquals(Collections.emptyList(), answer.getFindingsStatedByTheModule(),
+				"a measurement of none: the answer cited the finding, so the module stated nothing");
 	}
 
 	private static final class TestableService extends LlmInferenceService {

@@ -39,6 +39,27 @@ final class OwnOrderFindingStatement {
 	}
 
 	/**
+	 * @return the record numbers of the findings {@link #withUnstatedOwnOrderFindings} states after {@code answer}, in
+	 *         chart order — those of {@code lines} the answer does not cite, none for a blank answer — published as
+	 *         {@code ChartAnswer.getFindingsStatedByTheModule()}. One reading for both, so the key cannot name a
+	 *         finding the sentence does not state.
+	 */
+	static List<Integer> statedFindings(String answer, List<RecordReference> cited, List<RecordMapping> mappings,
+			Map<Integer, String> lines) {
+		List<Integer> stated = new ArrayList<Integer>();
+		if (answer == null || answer.trim().isEmpty() || lines == null || lines.isEmpty()) {
+			return stated;
+		}
+		Set<Integer> citedFindings = SafetyFindingCitationExtentCheck.citedFindingIndexes(answer, cited, mappings);
+		for (Integer index : lines.keySet()) {
+			if (!citedFindings.contains(index)) {
+				stated.add(index);
+			}
+		}
+		return stated;
+	}
+
+	/**
 	 * @return {@code answer} with the lines of {@code lines} whose finding {@code answer} does not cite appended after
 	 *         {@link #LEAD}, or {@code answer} unchanged where it cites them all or is blank
 	 */
@@ -50,10 +71,10 @@ final class OwnOrderFindingStatement {
 		if (answer == null || answer.trim().isEmpty() || lines == null || lines.isEmpty()) {
 			return answer;
 		}
-		Set<Integer> stated = SafetyFindingCitationExtentCheck.citedFindingIndexes(answer, cited, mappings);
+		List<Integer> stated = statedFindings(answer, cited, mappings, lines);
 		List<String> unstated = new ArrayList<String>();
 		for (Map.Entry<Integer, String> line : lines.entrySet()) {
-			if (!stated.contains(line.getKey())) {
+			if (stated.contains(line.getKey())) {
 				// No citation marker, as ADR Decision 100's sentence carries none: a marker is a reference of the answer,
 				// and the only writer of a reference the module attached is extractCitedReferences, which records the
 				// chart evidence behind a finding the MODEL cited (ADR Decision 80). The finding's own chip, uncited, is

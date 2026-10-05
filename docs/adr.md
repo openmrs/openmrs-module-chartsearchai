@@ -146,6 +146,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 142: A proposal related to her orders only below the severity floor is answered with those rows](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)
 - [Decision 143: A proposal related to none of her orders is answered with what the interaction check established](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
 - [Decision 144: A below-floor answer states a bottom line scoped to the interaction data](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data)
+- [Decision 145: An order a composed answer lists only below the floor does not scope its chips](#decision-145-an-order-a-composed-answer-lists-only-below-the-floor-does-not-scope-its-chips)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13695,4 +13696,46 @@ her fluconazole answer the tiotropium one.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
 `.aPairBelowARaisedFloorIsStatedWithItsOwnRating` and `.aSourceSilentOnMechanismsIsNotSaidToCarryNone`.
+
+## Decision 145: An order a composed answer lists only below the floor does not scope its chips
+
+**Status: Accepted** (October 2026) — implemented, no issue. Narrows
+[Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)'s
+chips rule.
+
+### Context
+
+Decision 140 handed the chips pass of a composed answer every marker it carries, so that a contraindication of an order a
+FINDING is about stands beside the answer as beside a model's citing that order. Decisions 142 and 144 then gave composed
+answers lines that cite her orders without stating a finding about them — the rows below the floor. On *"Is aspirin safe
+for her?"* the closing line *"It also lists Lidocaine and Tiotropium against it …"* cited her lidocaine and tiotropium
+orders, and her recorded allergies to both came up beside an answer about aspirin: real conflicts, with no bearing on the
+question, present only because a line listed those orders.
+
+### The decision
+
+- **The chips pass of a composed answer reads the markers of its FINDING lines alone** —
+  `LlmInferenceService.findingLineMarkersOf`: a line whose markers include a `safety_finding` record. Decided from the
+  record a marker cites, never from the line's words. A line listing rows below the floor still cites her orders, so a
+  clinician can open them.
+- **What it gives up**: the incidental catch — her allergy to a drug she is prescribed, raised beside a question about
+  another drug. It stays on `/chartalerts` (ADR Decision 79), and beside any answer about that order.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: PR #594 @ 967c4b89 against this change over 57
+cells. Every answer was byte-identical — the change moves only what the chips pass reads — and no cell the model
+answers moved, no composed cell gained a chip, and Susan's fluconazole answer kept her lidocaine allergy, its finding
+line citing that order. Composed answers lost 23 contraindication chips. 21 were the case the change is for, an allergy
+to an order only a listing line cited. **The gate failed as written on the other two, and the failure was accepted**:
+Betty's erythromycin and clarithromycin answers lost *"Bupivacaine is in the same ATC class (N01BB) as the patient's
+allergy to Lidocaine — possible cross-reactivity"*, a chip about an order no line cites. The rule allowed a loss only
+for a chip about a cited order; this one came in through the allergen side — the listing line cited her lidocaine
+order, which made her lidocaine allergy subject matter, and her bupivacaine order cross-reacts with it. With the
+answers byte-identical and the listing line's marker the only input removed, the chip existed only because a line
+listed an order; it is the case the change is for, which the rule did not anticipate.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.anOrderListedOnlyOnACautionAnswersClosingLineDoesNotBringItsConflictsBesideIt`
+and `.anOrderListedOnlyOnABelowFloorAnswerDoesNotBringItsConflictsBesideIt`; Decision 140's half by
+`.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
 

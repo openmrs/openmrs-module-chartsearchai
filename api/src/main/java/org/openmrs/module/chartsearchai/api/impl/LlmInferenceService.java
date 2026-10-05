@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -946,7 +947,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 * derives from), {@code orderStopDates}, the chips and their pair extent.
 	 *
 	 * <p><b>The chips pass reads the question and the composed answer's CITATIONS, never its prose</b> —
-	 * {@code validate} is handed the answer's markers alone ({@link #markersOf}). The composed text names
+	 * {@code validate} is handed the markers of its finding lines alone ({@link #findingLineMarkersOf}). The composed text names
 	 * her own orders, and scoping the order-driven contraindication arm by text the module itself just
 	 * wrote would be circular: the ticket's M8 and N5 cells are a model's answer raising a chip the
 	 * question alone does not. The markers are a different input: each line cites the chart record of
@@ -975,7 +976,8 @@ public class LlmInferenceService implements ChartSearchService {
 		// repeat it in full beneath the answer that just said it — asked of the module's own text.
 		List<SafetyWarning> safetyWarnings = DrugReferenceInjector.withFindingCitations(
 				ModuleAnswerStatement.markStated(composed,
-						drugSafetyValidator.validate(markersOf(composed), question, patient, mappings, pairExtent)),
+						drugSafetyValidator.validate(findingLineMarkersOf(composed, mappings), question, patient, mappings,
+								pairExtent)),
 				mappings);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
@@ -1006,11 +1008,27 @@ public class LlmInferenceService implements ChartSearchService {
 				doseCeilingCoverage, null, null);
 	}
 
-	/** {@code answer}'s inline citation markers alone, ascending and space-separated — what the chips pass
-	 *  reads of a composed answer (see {@link #answerFromTheModule}). */
-	private static String markersOf(String answer) {
+	/**
+	 * The markers of {@code answer}'s lines that state a FINDING — that cite a {@code safety_finding} record — alone,
+	 * ascending and space-separated: what the chips pass reads of a composed answer (see {@link #answerFromTheModule}).
+	 * A line listing rows below the severity floor cites her orders too, so a clinician can open them, but is not a
+	 * finding about them, and her other conflicts with those orders are not what the answer is about (ADR Decision
+	 * 145). Decided from the record a marker cites, never from the line's words.
+	 */
+	private static String findingLineMarkersOf(String answer, List<RecordMapping> mappings) {
+		Set<Integer> findings = new HashSet<Integer>();
+		for (RecordMapping finding : ChartSearchAiUtils.safetyFindingMappings(mappings)) {
+			findings.add(Integer.valueOf(finding.getIndex()));
+		}
+		Set<Integer> cited = new TreeSet<Integer>();
+		for (String line : answer.split("\n")) {
+			Set<Integer> markers = ChartSearchAiUtils.citedIndexes(line);
+			if (!Collections.disjoint(markers, findings)) {
+				cited.addAll(markers);
+			}
+		}
 		StringBuilder markers = new StringBuilder();
-		for (Integer index : new TreeSet<Integer>(ChartSearchAiUtils.citedIndexes(answer))) {
+		for (Integer index : cited) {
 			markers.append(markers.length() == 0 ? "" : " ").append('[').append(index).append(']');
 		}
 		return markers.toString();

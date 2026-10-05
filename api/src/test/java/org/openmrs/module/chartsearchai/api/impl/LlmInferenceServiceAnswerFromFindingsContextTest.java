@@ -567,6 +567,59 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]", lines[2]);
 	}
 
+	/**
+	 * An order a composed answer lists only as a row below the floor is cited, and is not what the answer is about
+	 * (ADR Decision 145): her recorded aspirin allergy against her aspirin order is not raised beside an answer about
+	 * metformin whose closing line lists that order, nor beside one about clarithromycin made only of such rows. The
+	 * chips beside a composed answer are scoped by the orders its FINDINGS are about.
+	 */
+	@Test
+	public void anOrderListedOnlyOnACautionAnswersClosingLineDoesNotBringItsConflictsBesideIt() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		assertNoAspirinConflictBeside("Can I give her metformin?");
+	}
+
+	/** {@link #anOrderListedOnlyOnACautionAnswersClosingLineDoesNotBringItsConflictsBesideIt}, for an answer made only
+	 *  of rows below the floor: clarithromycin relates to her aspirin in DDInter's Unknown tier alone. */
+	@Test
+	public void anOrderListedOnlyOnABelowFloorAnswerDoesNotBringItsConflictsBesideIt() {
+		assertNoAspirinConflictBeside("Can I give her clarithromycin?");
+	}
+
+	private void assertNoAspirinConflictBeside(String question) {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		ChartAnswer allergies = serviceWith(new RecordingProvider()).search(patient, "What is she allergic to?");
+		assertTrue(aspirinConflictIn(allergies), "precondition: her aspirin order against her aspirin allergy is a chip "
+				+ "where the response is about it, was: " + allergies.getSafetyWarnings());
+		{
+			ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, question);
+
+			assertTrue(answer.isAnsweredByTheModule(), "precondition: " + answer.getAnswer());
+			int aspirinRecord = recordOf(answer, ASPIRIN_ORDER_UUID);
+			String listing = null;
+			for (String line : answer.getAnswer().split("\n")) {
+				if (line.contains("[" + aspirinRecord + "]")) {
+					listing = line;
+				}
+			}
+			assertNotNull(listing, "precondition: a line cites her aspirin order: " + answer.getAnswer());
+			assertTrue(listing.startsWith("It also lists ") || listing.startsWith("The interaction data gives "),
+					"precondition: it cites it only as a row below the floor: " + listing);
+			assertFalse(aspirinConflictIn(answer),
+					question + ": her aspirin conflict is not beside this answer: " + answer.getSafetyWarnings());
+		}
+	}
+
+	private static boolean aspirinConflictIn(ChartAnswer answer) {
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType())
+					&& chip.getDrug().toLowerCase(java.util.Locale.ROOT).contains("aspirin")) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** The same answer however the proposal is worded, since no model words it (ADR Decision 142). */
 	@Test
 	public void aBelowFloorAnswerDoesNotDependOnHowTheProposalIsWorded() {

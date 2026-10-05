@@ -147,6 +147,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 143: A proposal related to none of her orders is answered with what the interaction check established](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
 - [Decision 144: A below-floor answer states a bottom line scoped to the interaction data](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data)
 - [Decision 145: An order a composed answer lists only below the floor does not scope its chips](#decision-145-an-order-a-composed-answer-lists-only-below-the-floor-does-not-scope-its-chips)
+- [Decision 146: A below-floor statement cites the data and not her orders](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13647,7 +13648,7 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalTheDataRela
 
 ## Decision 144: A below-floor answer states a bottom line scoped to the interaction data
 
-**Status: Accepted** (October 2026) — implemented, no issue. Amends [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows).
+**Status: Accepted** (October 2026) — implemented, no issue. Its wording is amended by [Decision 146](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders). Amends [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows).
 
 ### Context
 
@@ -13670,7 +13671,7 @@ itself.
 - **A rated row below a raised floor is named with its rating** — *"ASPIRIN (Minor) — each rated below the level this
   module reports as a finding"*.
 - **"This patient's orders"**, not "her": the answer reaches patients of either sex.
-- **A caution answer states its drug's rows below the floor too**, on a closing line: *"It also lists Lidocaine and
+- **A caution answer states its drug's rows below the floor too** (removed by [Decision 146](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders)), on a closing line: *"It also lists Lidocaine and
   Tiotropium against it, with no severity or mechanism on file. [45] [6] [4]"* — `belowFloorClosingLine`, through the
   one reading of those rows both answers share (`BelowFloorRows`). Before it, *"Is aspirin safe for her?"* named its one
   Minor caution and said nothing of the two rows against her lidocaine and tiotropium, while a drug with no finding was
@@ -13699,7 +13700,7 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHe
 
 ## Decision 145: An order a composed answer lists only below the floor does not scope its chips
 
-**Status: Accepted** (October 2026) — implemented, no issue. Narrows
+**Status: Accepted** (October 2026) — implemented, no issue. Since [Decision 146](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders) a listing line cites no order of hers at all. Narrows
 [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)'s
 chips rule.
 
@@ -13738,4 +13739,48 @@ listed an order; it is the case the change is for, which the rule did not antici
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.anOrderListedOnlyOnACautionAnswersClosingLineDoesNotBringItsConflictsBesideIt`
 and `.anOrderListedOnlyOnABelowFloorAnswerDoesNotBringItsConflictsBesideIt`; Decision 140's half by
 `.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
+
+## Decision 146: A below-floor statement cites the data and not her orders
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends [Decision 144](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data).
+
+### Context
+
+Decision 144's sentence named the orders its rows were against and cited each order's record. Read by hand on *"Is
+ibuprofen safe for her?"*: lidocaine, metoclopramide and tiotropium are rows the data lists with no rating and no
+mechanism, none a recognised concern with ibuprofen. Naming them suggested they were the issue; their records say she
+takes them, nothing about ibuprofen. The citations had served one purpose besides — scoping the chips — and Decision 145
+had just ended that for these lines.
+
+### The decision
+
+- **The statement cites the drug's reference record alone** — the record listing the rows, which is the evidence for
+  the claim — and names no order: *"The interaction data gives no rated reason to withhold Ibuprofen: none of its 3 rows
+  against this patient's orders carries a severity or mechanism. [45]"*; a caution answer's closing line *"The
+  interaction data also lists it against 2 more of this patient's orders, with no severity or mechanism on file. [45]"*.
+  A rated row below a raised floor states its rating: *"its row … is rated Minor, below the level this module reports as
+  a finding"*.
+- **Which orders** is one click away, in that record.
+- **A caution answer no longer states its rows below the floor at all.** Decision 144's closing line was read by hand
+  on *"should i give her panadol?"*: two rows against her neomycin and tiotropium, unrated, with no mechanism, neither
+  a recognised concern with paracetamol — a line a clinician can do nothing with. Where a finding answers the question,
+  the unrated rows beside it add nothing to it; where none does, they are the whole of what the data holds, and the
+  below-floor answer still states them.
+- **The citable-order condition is gone with the citations**; an order that has not started still keeps the model call,
+  the sentence speaking of her current orders.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: `main` @ 69083eec against this change over 57 cells.
+**It passed.** In 26 cells the below-floor sentence or closing line alone changed, each now citing only the drug's
+reference record main's cited, stating main's count of orders, naming none, and keeping "or mechanism" where main said
+it. Every cell's chips were main's; the other 31 were byte-identical.
+
+A second round, removing the closing line, against that round's build over the same 57 cells and *"should i give her
+panadol?"*, **passed**: the eight caution answers carrying the line lost exactly it, and nothing else moved — every
+other cell and every chip byte-identical.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
+`.aPairBelowARaisedFloorIsStatedWithItsOwnRating`, `.aCautionAnswerAlsoStatesTheRowsBelowTheFloor` and the two
+`.anOrderListedOnly…` cases.
 

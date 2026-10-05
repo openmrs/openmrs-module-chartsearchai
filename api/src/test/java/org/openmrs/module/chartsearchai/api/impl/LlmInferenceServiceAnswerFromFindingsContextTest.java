@@ -538,6 +538,35 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.getAnswer().contains("mechanism"), answer.getAnswer());
 	}
 
+	/**
+	 * A caution answer also states the drug's rows below the severity floor, on a closing line of its own (ADR
+	 * Decision 144): metformin's Moderate caution against her warfarin is the finding, and the data also lists
+	 * metformin against her aspirin, rated Unknown with no mechanism — a row the answer said nothing of, so a
+	 * clinician saw one relationship where the data holds two.
+	 */
+	@Test
+	public void aCautionAnswerAlsoStatesTheRowsBelowTheFloor() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		String question = "Can I give her metformin?";
+		List<Finding> findings = findingsInThePromptFor(question);
+		assertEquals(1, findings.size(), "precondition: one finding, " + findings);
+		assertTrue(findings.get(0).text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION),
+				"precondition: a caution, " + findings.get(0).text);
+
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, question);
+
+		int reference = -1;
+		for (RecordReference ref : answer.getReferences()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(ref.getResourceType())) {
+				reference = ref.getIndex();
+			}
+		}
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(3, lines.length, "the lead, the finding, and the rows below the floor: " + answer.getAnswer());
+		assertEquals("It also lists ASPIRIN against it, with no severity or mechanism on file. [" + reference + "] ["
+				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]", lines[2]);
+	}
+
 	/** The same answer however the proposal is worded, since no model words it (ADR Decision 142). */
 	@Test
 	public void aBelowFloorAnswerDoesNotDependOnHowTheProposalIsWorded() {

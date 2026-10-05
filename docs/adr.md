@@ -13669,6 +13669,11 @@ itself.
 - **A rated row below a raised floor is named with its rating** — *"ASPIRIN (Minor) — each rated below the level this
   module reports as a finding"*.
 - **"This patient's orders"**, not "her": the answer reaches patients of either sex.
+- **A caution answer states its drug's rows below the floor too**, on a closing line: *"It also lists Lidocaine and
+  Tiotropium against it, with no severity or mechanism on file. [45] [6] [4]"* — `belowFloorClosingLine`, through the
+  one reading of those rows both answers share (`BelowFloorRows`). Before it, *"Is aspirin safe for her?"* named its one
+  Minor caution and said nothing of the two rows against her lidocaine and tiotropium, while a drug with no finding was
+  answered with exactly such rows. Not on a "No": its lead is a stronger reason the rows would only dilute.
 
 The risk, accepted on the record: a reader may take *"gives no rated reason to withhold"* as a clearance. The scope line
 is there to say it is not one.
@@ -13681,6 +13686,12 @@ phrasings and five more proposals. **It passed.** The 19 cells main answers with
 the one sentence, each naming exactly main's orders with exactly main's markers, each saying no severity or mechanism is
 on file — every one a DDInter Unknown row with no mechanism — with their chips unchanged. The other 38 were
 byte-identical.
+
+A second round, for the closing line, against that first round's build over the same 57 cells, **passed**: seven caution
+answers gained exactly one closing line naming exactly their below-floor pairs' orders, every pair a DDInter Unknown row
+with no mechanism; the other 50 were byte-identical. No chip was lost. Three cells gained chips, each a recorded allergy
+to an order the closing line now cites — Susan's aspirin and erythromycin answers her lidocaine and tiotropium allergies,
+her fluconazole answer the tiotropium one.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
 `.aPairBelowARaisedFloorIsStatedWithItsOwnRating` and `.aSourceSilentOnMechanismsIsNotSaidToCarryNone`.

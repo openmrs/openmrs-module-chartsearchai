@@ -104,7 +104,7 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(),
 				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
-		String completed = answer.getAnswer().toLowerCase(Locale.ROOT);
+		String completed = OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()).toLowerCase(Locale.ROOT);
 		for (String order : arrangement.mergedOrders) {
 			assertTrue(completed.contains(order.toLowerCase(Locale.ROOT)),
 					"every order of the finding the answer cited must reach the answer a client is "
@@ -134,7 +134,7 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(),
 				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
-		assertFalse(answer.getAnswer().toLowerCase(Locale.ROOT)
+		assertFalse(OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()).toLowerCase(Locale.ROOT)
 				.contains(arrangement.otherOrder.toLowerCase(Locale.ROOT)),
 				"the order of a finding the answer never cited is not \"covered by those findings\", was: "
 						+ answer.getAnswer());
@@ -150,8 +150,8 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(),
 				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
-		assertEquals(modelAnswer, answer.getAnswer(),
-				"an answer citing no finding has nothing appended to it");
+		assertEquals(modelAnswer, OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()),
+				"an answer citing no finding has no order of a finding appended to it");
 		assertNull(answer.getFindingPartnerCoverage(),
 				"and states no findingPartners measurement: there is no cited finding whose orders it "
 						+ "could have left out, and an uncited finding is findingCitations' to count");
@@ -173,8 +173,8 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(),
 				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION);
 
-		assertEquals(modelAnswer, answer.getAnswer(),
-				"an answer that named every order of the finding it cited is returned unchanged");
+		assertEquals(modelAnswer, OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()),
+				"an answer that named every order of the finding it cited has no order appended to it");
 		FindingPartnerCoverage coverage = answer.getFindingPartnerCoverage();
 		assertNotNull(coverage, "the answer cited a finding, so it is measured");
 		assertEquals(arrangement.mergedOrders.size(), coverage.getNamed(), "was: " + coverage);
@@ -191,7 +191,7 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		ChartAnswer answer = arrangement.service(modelAnswer).searchStreaming(patient(),
 				DrugReferenceTestSupport.SHARED_MECHANISM_QUESTION, token -> { });
 
-		String completed = answer.getAnswer().toLowerCase(Locale.ROOT);
+		String completed = OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()).toLowerCase(Locale.ROOT);
 		assertFalse(completed.contains(arrangement.otherOrder.toLowerCase(Locale.ROOT)),
 				"was: " + answer.getAnswer());
 		for (String order : arrangement.mergedOrders) {
@@ -248,7 +248,7 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 		assertEquals(1, answer.getFindingCitationExtent().getCited(),
 				"and findingCitations counts the one finding the prose marked, was: "
 						+ answer.getFindingCitationExtent());
-		String completed = answer.getAnswer().toLowerCase(Locale.ROOT);
+		String completed = OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()).toLowerCase(Locale.ROOT);
 		assertFalse(completed.contains(arrangement.otherOrder.toLowerCase(Locale.ROOT)),
 				"the order of a finding only the structured array lists is not \"covered by those "
 						+ "findings\", was: " + answer.getAnswer());

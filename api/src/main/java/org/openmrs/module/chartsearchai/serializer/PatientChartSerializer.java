@@ -555,6 +555,9 @@ public class PatientChartSerializer {
 		/** @see #getDrugsAlreadyOrdered() */
 		private List<AlreadyOrderedDrug> drugsAlreadyOrdered = Collections.<AlreadyOrderedDrug> emptyList();
 
+		/** @see #getProposalOwnOrderFindingLines() */
+		private Map<Integer, String> proposalOwnOrderFindingLines = Collections.<Integer, String> emptyMap();
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -683,6 +686,24 @@ public class PatientChartSerializer {
 		 */
 		public List<String> getListedDrugsWithNoActiveOrder() {
 			return listedDrugsWithNoActiveOrder;
+		}
+
+		/** Records the line each finding about the drug the question proposes against one of her orders states —
+		 *  ADR Decision 147, and {@code DrugReferenceInjector} is the only caller. */
+		public void markProposalOwnOrderFindingLines(Map<Integer, String> lines) {
+			this.proposalOwnOrderFindingLines = lines == null || lines.isEmpty() ? Collections.<Integer, String> emptyMap()
+					: Collections.unmodifiableMap(new LinkedHashMap<Integer, String>(lines));
+		}
+
+		/**
+		 * The injected findings about the drug the question proposes against one of this patient's own active
+		 * orders, each by its record number, in chart order, with the line a client reads for it: the finding's
+		 * first sentence and any sentence saying its significance is unknown — ADR Decision 147. Empty, never
+		 * null, on every chart the injector stated none on. {@code LlmInferenceService} states, after a model's
+		 * answer, those the answer does not cite.
+		 */
+		public Map<Integer, String> getProposalOwnOrderFindingLines() {
+			return proposalOwnOrderFindingLines;
 		}
 
 		/** Records the drugs the question proposes that her active orders already carry — issue #548, and

@@ -324,6 +324,10 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
 					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
 							drugSafetyValidator));
+			// And the findings about the drug proposed against her own orders the answer does not cite (ADR
+			// Decision 147), asked of the MODEL's prose.
+			completedAnswer = OwnOrderFindingStatement.withUnstatedOwnOrderFindings(completedAnswer, cited,
+					chart.getMappings(), chart.getProposalOwnOrderFindingLines());
 			// And the drugs the question listed as hers that her chart holds no active order for (issue
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
@@ -769,7 +773,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// The listed-drug sentence (issue #515) is on this answer too: the chart stamped it before the
 			// model was asked, so unlike the ended-order sentence it owes the chips nothing.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(
-					ListedDrugStatement.withListedDrugsStated(response.getAnswer(),
+					ListedDrugStatement.withListedDrugsStated(OwnOrderFindingStatement.withUnstatedOwnOrderFindings(
+							response.getAnswer(), cited, chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
 							chart.getListedDrugsWithNoActiveOrder()), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
@@ -885,6 +890,10 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
 					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
 							drugSafetyValidator));
+			// And the findings about the drug proposed against her own orders the answer does not cite (ADR
+			// Decision 147), asked of the MODEL's prose.
+			completedAnswer = OwnOrderFindingStatement.withUnstatedOwnOrderFindings(completedAnswer, cited,
+					chart.getMappings(), chart.getProposalOwnOrderFindingLines());
 			// And the drugs the question listed as hers that her chart holds no active order for (issue
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,

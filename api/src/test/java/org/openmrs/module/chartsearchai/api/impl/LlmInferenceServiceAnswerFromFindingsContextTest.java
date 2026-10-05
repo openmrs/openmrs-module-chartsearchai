@@ -428,10 +428,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	/**
 	 * A proposed drug whose only relationships to her orders are rows below the severity floor — no finding at all —
-	 * is answered by the module with those rows (ADR Decision 142): a lead counting them by their rating, then one
-	 * line per pair citing the drug's reference record and her order's record. Never "should not be given", which
-	 * the model wrote over four Unknown rows; never a clearance. Clarithromycin relates to her aspirin only in
-	 * DDInter's Unknown tier.
+	 * is answered by the module with those rows (ADR Decisions 142, 144): a bottom line scoped to the interaction
+	 * data, the orders and what the data says of them, citing the drug's reference record and each order's, then
+	 * what that bottom line does not cover. Never "should not be given", which the model wrote over four Unknown
+	 * rows; never a clearance. Clarithromycin relates to her aspirin only in DDInter's Unknown tier.
 	 */
 	@Test
 	public void aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows() {
@@ -449,10 +449,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				reference = ref.getIndex();
 			}
 		}
-		assertEquals("1 interaction of unknown severity for Clarithromycin:\n"
-				// Her order by its own display — the standard dataset's drug name, as the chart records it.
-				+ "Clarithromycin" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "ASPIRIN — Unknown. ["
-				+ reference + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
+		// Her order by its own display — the standard dataset's drug name, as the chart records it. DDInter says
+		// this row carries no mechanism, so the answer may say so (ADR Decision 144).
+		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin: it lists 1 of this "
+				+ "patient's orders against it — ASPIRIN — with no severity or mechanism on file. [" + reference + "] ["
+				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
 	}
 
 	/**
@@ -475,9 +477,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				reference = ref.getIndex();
 			}
 		}
-		assertEquals("1 lower-rated interaction for Omeprazole:\n"
-				+ "Omeprazole" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "ASPIRIN — Minor. [" + reference
-				+ "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Omeprazole: it lists 1 of this "
+				+ "patient's orders against it — ASPIRIN (Minor) — each rated below the level this module reports as a "
+				+ "finding. [" + reference + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
 	}
 
 	/** A question that names the drug without proposing it keeps the model's answer, below-floor rows or not. */
@@ -517,6 +520,22 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
 		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/**
+	 * A source that does not say whether a row carries a mechanism — every source but DDInter's — never has the
+	 * answer say none is on file (ADR Decision 144): the row here carries one, rated Unknown.
+	 */
+	@Test
+	public void aSourceSilentOnMechanismsIsNotSaidToCarryNone() throws Exception {
+		DrugReferenceService reference = DrugReferenceTestSupport.curatedFixtureService(
+				"chartsearchai-test/drug-reference-below-floor-source-states-no-mechanism-flag.json");
+		ChartAnswer answer = serviceWith(new RecordingProvider(), reference).search(patient,
+				"Can I give her clarithromycin?");
+
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: answered by the module: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("— ASPIRIN — with no severity rated."), answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("mechanism"), answer.getAnswer());
 	}
 
 	/** The same answer however the proposal is worded, since no model words it (ADR Decision 142). */

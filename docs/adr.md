@@ -145,6 +145,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 140: A proposal whose findings are all cautions about the drug is answered with the cautions found](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)
 - [Decision 142: A proposal related to her orders only below the severity floor is answered with those rows](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)
 - [Decision 143: A proposal related to none of her orders is answered with what the interaction check established](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
+- [Decision 144: A below-floor answer states a bottom line scoped to the interaction data](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13474,7 +13475,7 @@ and `.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
 
 ## Decision 142: A proposal related to her orders only below the severity floor is answered with those rows
 
-**Status: Accepted** (October 2026) — implemented, no issue. Extends [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found).
+**Status: Accepted** (October 2026) — implemented, no issue. Extends [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found). Its answer's wording is amended by [Decision 144](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data).
 
 ### Context
 
@@ -13642,3 +13643,45 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalTheDataRela
 `.aProposalRelatedToHerOrdersOnlyByAPairNoLineCanStateStillAsksTheModel`,
 `.anAnswerOfNoPairCountsEveryMedicationTheCheckComparedTheDrugAgainst` and
 `.anAnswerOfNoPairCountsACombinationPrescriptionAsOneMedication`.
+
+## Decision 144: A below-floor answer states a bottom line scoped to the interaction data
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows).
+
+### Context
+
+Decision 142's answer to *"Is clarithromycin safe for her?"* listed four lines, each ending *"— Unknown."*, and gave no
+call. Read by hand for what a clinician gets from it: no bottom line; "unknown severity" open to being read as "probably
+minor"; one non-statement four times. A "yes" is not available — the check covers rated pairs in its data and nothing
+beyond drug interactions — and a "no" is the refusal Decision 142 removed. What the data does license is a call about
+itself.
+
+### The decision
+
+- **One sentence with a bottom line scoped to the interaction data**, then its scope on a line of its own:
+  *"The interaction data gives no rated reason to withhold Clarithromycin: it lists 4 of this patient's orders against
+  it — Lidocaine, Metoclopramide, Neomycin and Tiotropium — none with a severity or mechanism on file. [45] [6] [8] [7]
+  [4]"* / `DrugReferenceInjector.BELOW_FLOOR_SCOPE`, *"Interactions the data does not rate, and anything beyond drug
+  interactions, are not covered."*
+- **"No mechanism on file" is the data's statement, never an inference**: `DrugReference.Interaction.mechanismOnFile()`,
+  written by `DdiDrugReferenceSource` alone off the note it writes — its no-mechanism branch — and carried on each pair.
+  A source that says nothing (every other source) gets *"none with a severity rated"*.
+- **A rated row below a raised floor is named with its rating** — *"ASPIRIN (Minor) — each rated below the level this
+  module reports as a finding"*.
+- **"This patient's orders"**, not "her": the answer reaches patients of either sex.
+
+The risk, accepted on the record: a reader may take *"gives no rated reason to withhold"* as a clearance. The scope line
+is there to say it is not one.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: `main` @ 61497e47 against this branch over 57 cells —
+round 3's 20 on the DDI rig's patients, the 20 of `capture_probe_safety.sh`, Susan's six, the five clarithromycin
+phrasings and five more proposals. **It passed.** The 19 cells main answers with Decision 142's lead were rewritten to
+the one sentence, each naming exactly main's orders with exactly main's markers, each saying no severity or mechanism is
+on file — every one a DDInter Unknown row with no mechanism — with their chips unchanged. The other 38 were
+byte-identical.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
+`.aPairBelowARaisedFloorIsStatedWithItsOwnRating` and `.aSourceSilentOnMechanismsIsNotSaidToCarryNone`.
+

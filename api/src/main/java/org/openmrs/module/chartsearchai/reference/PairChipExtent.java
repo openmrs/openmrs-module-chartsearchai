@@ -277,17 +277,28 @@ public final class PairChipExtent {
 		/** Whether every one of those orders has started — see {@link #onStartedOrdersOnly()}. */
 		private final boolean onStartedOrdersOnly;
 
+		/** Whether the row stated carries a mechanism — see {@link #mechanismOnFile()}. */
+		private final Boolean mechanismOnFile;
+
 		public BelowFloorPair(String drug, String partner, String severity) {
-			this(drug, partner, severity, Collections.<String> emptyList(), false);
+			this(drug, partner, severity, Collections.<String> emptyList(), false, null);
 		}
 
 		BelowFloorPair(String drug, String partner, String severity, List<String> herOrders,
-				boolean onStartedOrdersOnly) {
+				boolean onStartedOrdersOnly, Boolean mechanismOnFile) {
 			this.drug = drug;
 			this.partner = partner;
 			this.severity = severity;
 			this.herOrders = Collections.unmodifiableList(new ArrayList<String>(herOrders));
 			this.onStartedOrdersOnly = onStartedOrdersOnly;
+			this.mechanismOnFile = mechanismOnFile;
+		}
+
+		/** The row's {@code DrugReference.Interaction.mechanismOnFile()}: {@code null} where its source says
+		 *  nothing. A module-composed answer says no mechanism is on file only where every pair's is
+		 *  {@code FALSE} (ADR Decision 144). */
+		Boolean mechanismOnFile() {
+			return mechanismOnFile;
 		}
 
 		/**

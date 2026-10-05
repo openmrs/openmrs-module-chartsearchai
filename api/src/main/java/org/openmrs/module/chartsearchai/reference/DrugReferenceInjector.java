@@ -2604,11 +2604,12 @@ public class DrugReferenceInjector {
 	 * <em>"No — Clarithromycin should not be given"</em> under one wording and with no verdict under another, and
 	 * its citations decided which of her allergy conflicts were raised beside it.
 	 *
-	 * <p>It states those rows and nothing else: a lead counting them by rating, then one line per pair — the drug,
-	 * {@link DrugSafetyValidator#ACTIVE_ORDER_INTERACTION_PHRASE}, her order by its display, the rating — citing the
-	 * drug's reference record, where the rows are, and her order's record. Never a clearance and never a negative,
-	 * as {@link #answersFromFindings} refuses both: it does not say the drug can be given, nor that nothing else
-	 * relates it, nor that the rows have no mechanism, which an operator's data may carry.
+	 * <p>It states those rows and a bottom line scoped to them (ADR Decision 144): <em>"The interaction data gives no
+	 * rated reason to withhold Clarithromycin: it lists 4 of this patient's orders against it — Lidocaine, … — none
+	 * with a severity or mechanism on file."</em>, citing the drug's reference record, where the rows are, and each
+	 * order's record, then {@link #BELOW_FLOOR_SCOPE} on a line of its own. "No mechanism" only where every row's
+	 * source says so ({@code BelowFloorPair.mechanismOnFile()}); a rated row below a raised floor is named with its
+	 * rating. Never a clearance: it does not say the drug can be given, nor that nothing else relates it.
 	 *
 	 * <p>Fail-closed: one drug, proposed ({@link #questionProposes}) and not hers; the extent stated and carrying
 	 * at least one pair; every pair rated, on orders that have all started, each with a record
@@ -2627,36 +2628,62 @@ public class DrugReferenceInjector {
 		}
 		Integer reference = Integer.valueOf(record.getIndex());
 		Map<String, Integer> orderNumbers = orderRecordNumbers(new DrugOrderRecords(mappings), context);
-		List<String> lines = new ArrayList<String>();
+		// One sentence with a bottom line scoped to the interaction data (ADR Decision 144), the scope it does not
+		// cover on a line of its own.
+		List<String> orders = new ArrayList<String>();
+		List<String> named = new ArrayList<String>();
+		Set<Integer> numbers = new LinkedHashSet<Integer>();
 		boolean allUnknown = true;
+		boolean noMechanismAnywhere = true;
 		String drug = null;
 		for (PairChipExtent.BelowFloorPair pair : extent.getBelowFloor()) {
 			if (!pair.onStartedOrdersOnly() || ChartSearchAiUtils.isBlank(pair.getSeverity())) {
 				return null;
 			}
-			Set<Integer> numbers = new TreeSet<Integer>();
+			String severity = pair.getSeverity().trim();
+			allUnknown &= "unknown".equalsIgnoreCase(severity);
+			noMechanismAnywhere &= Boolean.FALSE.equals(pair.mechanismOnFile());
 			for (String display : pair.herOrders()) {
 				Integer number = orderNumbers.get(display);
 				if (number == null) {
 					return null;
 				}
-				numbers.add(number);
+				if (!orders.contains(display)) {
+					orders.add(display);
+					named.add(display + " (" + severity + ")");
+					numbers.add(number);
+				}
 			}
-			StringBuilder line = new StringBuilder(pair.getDrug())
-					.append(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE)
-					.append(String.join(" and ", pair.herOrders())).append(" — ").append(pair.getSeverity())
-					.append(". [").append(reference).append(']');
-			for (Integer number : numbers) {
-				line.append(" [").append(number).append(']');
-			}
-			lines.add(line.toString());
-			allUnknown &= "unknown".equalsIgnoreCase(pair.getSeverity().trim());
 			drug = pair.getDrug();
 		}
-		int n = lines.size();
-		lines.add(0, n + (allUnknown ? (n == 1 ? " interaction of unknown severity for " : " interactions of unknown severity for ")
-				: (n == 1 ? " lower-rated interaction for " : " lower-rated interactions for ")) + drug + ":");
-		return String.join("\n", lines);
+		StringBuilder answer = new StringBuilder("The interaction data gives no rated reason to withhold ").append(drug)
+				.append(": it lists ").append(orders.size()).append(" of this patient's orders against it — ")
+				.append(joinedAsAList(allUnknown ? orders : named)).append(" — ")
+				.append(!allUnknown ? "each rated below the level this module reports as a finding"
+						: noMechanismAnywhere ? (orders.size() == 1 ? "with no severity or mechanism on file"
+								: "none with a severity or mechanism on file")
+								: (orders.size() == 1 ? "with no severity rated" : "none with a severity rated"))
+				.append(". [").append(reference).append(']');
+		for (Integer number : numbers) {
+			answer.append(" [").append(number).append(']');
+		}
+		return answer.append('\n').append(BELOW_FLOOR_SCOPE).toString();
+	}
+
+	/** What a below-floor answer's bottom line does not cover, stated under it (ADR Decision 144). */
+	static final String BELOW_FLOOR_SCOPE =
+			"Interactions the data does not rate, and anything beyond drug interactions, are not covered.";
+
+	/** {@code items} joined "A", "A and B", "A, B and C". */
+	private static String joinedAsAList(List<String> items) {
+		StringBuilder joined = new StringBuilder();
+		for (int i = 0; i < items.size(); i++) {
+			if (i > 0) {
+				joined.append(i == items.size() - 1 ? " and " : ", ");
+			}
+			joined.append(items.get(i));
+		}
+		return joined.toString();
 	}
 
 	/**

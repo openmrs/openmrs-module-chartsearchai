@@ -1,0 +1,30 @@
+{
+ "version": "1.0",
+ "source": "hand-authored fixture for ADR Decision 144 — not shipped data",
+ "description": "ADR Decision 144: a proposed drug relating to patient 7's aspirin order (order 111) only through a row rated Unknown, below the shipped severity floor, from a source that does not say whether a mechanism is on file — every source but DDInter's. The module's answer must then not claim that none is. Aspirin carries no rule and exists only so her order resolves.",
+ "entries": [
+  {
+   "id": "clarithromycin",
+   "name": "Clarithromycin",
+   "aliases": [
+    "clarithromycin"
+   ],
+   "interactions": [
+    {
+     "token": "aspirin",
+     "severity": "Unknown",
+     "note": "A mechanism sentence this source carries."
+    }
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "source": "hand-authored fixture"
+  }
+ ]
+}

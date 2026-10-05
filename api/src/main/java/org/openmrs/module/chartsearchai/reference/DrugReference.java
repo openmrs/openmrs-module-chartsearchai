@@ -3228,6 +3228,9 @@ public class DrugReference {
 
 		private String note;
 
+		/** See {@link #mechanismOnFile()}. */
+		private Boolean mechanismOnFile;
+
 		/** Source-assigned severity ({@code Major}/{@code Moderate}/{@code Minor}/{@code Unknown}
 		 *  for DDInter rows), or {@code null} for sources that don't rate rules (the curated
 		 *  seed) — a null severity is exempt from the validator's severity floor. */
@@ -3255,6 +3258,20 @@ public class DrugReference {
 
 		public void setNote(String note) {
 			this.note = note;
+		}
+
+		/**
+		 * Whether the source carried a mechanism for this row: {@code TRUE} or {@code FALSE} where the source says,
+		 * {@code null} where it says nothing — every source but DDInter's. Written by
+		 * {@code DdiDrugReferenceSource} alone, off the note it writes; never read off {@link #getNote()} by a
+		 * consumer. Not a bean property, so no serializer reads or writes it. ADR Decision 144.
+		 */
+		Boolean mechanismOnFile() {
+			return mechanismOnFile;
+		}
+
+		void recordMechanismOnFile(boolean onFile) {
+			this.mechanismOnFile = Boolean.valueOf(onFile);
 		}
 
 		public String getSeverity() {

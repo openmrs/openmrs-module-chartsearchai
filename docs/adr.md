@@ -13671,7 +13671,7 @@ itself.
 - **A rated row below a raised floor is named with its rating** — *"ASPIRIN (Minor) — each rated below the level this
   module reports as a finding"*.
 - **"This patient's orders"**, not "her": the answer reaches patients of either sex.
-- **A caution answer states its drug's rows below the floor too**, on a closing line: *"It also lists Lidocaine and
+- **A caution answer states its drug's rows below the floor too** (removed by [Decision 146](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders)), on a closing line: *"It also lists Lidocaine and
   Tiotropium against it, with no severity or mechanism on file. [45] [6] [4]"* — `belowFloorClosingLine`, through the
   one reading of those rows both answers share (`BelowFloorRows`). Before it, *"Is aspirin safe for her?"* named its one
   Minor caution and said nothing of the two rows against her lidocaine and tiotropium, while a drug with no finding was
@@ -13761,6 +13761,11 @@ had just ended that for these lines.
   A rated row below a raised floor states its rating: *"its row … is rated Minor, below the level this module reports as
   a finding"*.
 - **Which orders** is one click away, in that record.
+- **A caution answer no longer states its rows below the floor at all.** Decision 144's closing line was read by hand
+  on *"should i give her panadol?"*: two rows against her neomycin and tiotropium, unrated, with no mechanism, neither
+  a recognised concern with paracetamol — a line a clinician can do nothing with. Where a finding answers the question,
+  the unrated rows beside it add nothing to it; where none does, they are the whole of what the data holds, and the
+  below-floor answer still states them.
 - **The citable-order condition is gone with the citations**; an order that has not started still keeps the model call,
   the sentence speaking of her current orders.
 
@@ -13770,6 +13775,10 @@ Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: `main` @ 69083
 **It passed.** In 26 cells the below-floor sentence or closing line alone changed, each now citing only the drug's
 reference record main's cited, stating main's count of orders, naming none, and keeping "or mechanism" where main said
 it. Every cell's chips were main's; the other 31 were byte-identical.
+
+A second round, removing the closing line, against that round's build over the same 57 cells and *"should i give her
+panadol?"*, **passed**: the eight caution answers carrying the line lost exactly it, and nothing else moved — every
+other cell and every chip byte-identical.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
 `.aPairBelowARaisedFloorIsStatedWithItsOwnRating`, `.aCautionAnswerAlsoStatesTheRowsBelowTheFloor` and the two

@@ -902,8 +902,7 @@ public class DrugReferenceInjector {
 			// gates what the MODEL reads (ADR Decision 77), and no model reads this answer (ADR Decision 140).
 			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					!questionDrugs.isEmpty(), belowFloorClosingLine(question, questionDrugs, screenedSubstances,
-							pairExtent.stated(), mappings, context));
+					!questionDrugs.isEmpty());
 		} else if (findings.isEmpty() && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -2647,33 +2646,8 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The closing line of a caution answer stating the drug's rows below the severity floor (ADR Decisions 144, 146),
-	 * or {@code null} where there are none or {@link BelowFloorRows#of} cannot state them: <em>"The interaction data
-	 * also lists it against 2 more of this patient's orders, with no severity or mechanism on file. [45]"</em>,
-	 * citing the data that lists them and not her orders.
-	 */
-	private static String belowFloorClosingLine(String question, List<DrugReference> questionDrugs,
-			Set<Object> herSubstances, PairChipExtent extent, List<RecordMapping> mappings,
-			PatientClinicalContext context) {
-		if (extent == null || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty() || context == null) {
-			return null;
-		}
-		RecordMapping record = proposedDrugsRecord(question, questionDrugs, herSubstances, mappings);
-		BelowFloorRows rows = record == null ? null : BelowFloorRows.of(extent);
-		if (rows == null) {
-			return null;
-		}
-		int n = rows.orders.size();
-		return "The interaction data also lists it against " + n + " more of this patient's "
-				+ "orders, "
-				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
-						: rows.noMechanism ? "with no severity or mechanism on file" : "with no severity rated")
-				+ ". [" + record.getIndex() + "]";
-	}
-
-	/**
-	 * The pairs below the severity floor as an answer states them — one reading for both answers that do (ADR
-	 * Decisions 144, 146): her orders by display, to count; the ratings, in the order the pairs state them; whether
+	 * The pairs below the severity floor as the below-floor answer states them (ADR Decisions 144, 146): her orders by
+	 * display, to count; the ratings, in the order the pairs state them; whether
 	 * every pair is rated Unknown; whether the data says of every one that no mechanism is on file
 	 * ({@code BelowFloorPair.mechanismOnFile()}). {@link #of} answers {@code null} where a pair cannot be stated —
 	 * unrated, or on an order that has not started, which "this patient's orders" would misdescribe.
@@ -3193,8 +3167,7 @@ public class DrugReferenceInjector {
 	 *         keeps the model call
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
-			String belowFloorClosingLine) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -3232,11 +3205,6 @@ public class DrugReferenceInjector {
 			// Every line is an interaction caution about this drug, which cautionsOnlyAbout admitted, so the
 			// count is the lines'.
 			lines.add(0, cautionLead(lines.size(), first.getDrug()));
-			// The drug's rows below the floor, which no finding states (ADR Decision 144). After the lead counts the
-			// lines, so the count stays the findings'.
-			if (belowFloorClosingLine != null) {
-				lines.add(belowFloorClosingLine);
-			}
 		}
 		return String.join("\n", lines);
 	}

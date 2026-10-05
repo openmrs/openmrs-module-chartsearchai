@@ -2861,7 +2861,8 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>It states what {@link #composeFromBelowFloor} or {@link #composeFromNoPair} states for the drug proposed
 	 * alone, over the drug-in-play arm's own statement about that drug ({@code PairChipExtent.Sink.statedFor}), then
-	 * a line that its check against the drugs listed raised no finding, on the lines' second place so that the
+	 * a line that its check against the listed drugs her orders do not resolve to raised no finding — none where her
+	 * orders resolve them all, since the first line already covers her orders — on the lines' second place so that the
 	 * below-floor answer's scope still closes what it covers. Never a word on the listed drugs' own findings: they are
 	 * not about the drug proposed, and their chips are not published (ADR Decision 148).
 	 *
@@ -2922,9 +2923,16 @@ public class DrugReferenceInjector {
 		if (subject == null) {
 			return null;
 		}
+		// A listed drug her orders resolve to is one of her orders, which the first line already checked the drug
+		// against; naming it here would state that check twice.
 		List<String> names = new ArrayList<String>();
-		for (List<DrugReference> rows : listedRows.values()) {
-			names.add(DrugSafetyValidator.interactionSubject(rows, context).displayLabel());
+		for (Map.Entry<Object, List<DrugReference>> rows : listedRows.entrySet()) {
+			if (!herSubstances.contains(rows.getKey())) {
+				names.add(DrugSafetyValidator.interactionSubject(rows.getValue(), context).displayLabel());
+			}
+		}
+		if (names.isEmpty()) {
+			return alone;
 		}
 		String listLine = "The check of " + subject.displayLabel() + " against " + joinedAsAList(names)
 				+ ", also named in the question, raised no finding.";

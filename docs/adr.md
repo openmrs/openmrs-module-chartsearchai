@@ -13958,7 +13958,9 @@ And the carried finding made the finding list non-empty, while both compositions
   `composeFromNoPair`, the drug proposed alone. It hands them, as that drug's extent, the drug-in-play arm's own
   statement about its substance. It then adds a second line: *"The check of Metformin against Lamivudine, Nevirapine and
   Stavudine, also named in the question, raised no finding."* The listed drugs are named as a chip names a substance
-  (`DrugSafetyValidator.interactionSubject`), in the question's order. The sentence that her chart holds none of them
+  (`DrugSafetyValidator.interactionSubject`), in the question's order — only those her orders do not resolve to, and
+  the line is left out where her orders resolve them all. A listed drug she holds is one of her orders, which the
+  first line already covers; naming it again repeated that check, as the gate found on Kamwara's cell. The sentence that her chart holds none of them
   takes a line of its own (`ListedDrugStatement.withListedDrugsStatedOnALine`), because the composed lines end in
   markers.
 - **The drug-in-play arm states each question substance to the caller** — `PairChipExtent.Sink.statedFor`, recorded by
@@ -13990,7 +13992,9 @@ otherwise identical. Every other rule held:
   Susan's metformin moved from *"The records do not address the safety of giving Metformin."* to *"The interaction data
   gives no rated reason to withhold Metformin: none of its 4 rows against this patient's orders carries a severity or
   mechanism. [46]"*, then the list line, the scope and the sentence that her chart holds none of the three. Kamwara holds
-  the three; the model had answered *"Metformin can be given, with one caution"* over her Unknown rows.
+  the three; the model had answered *"Metformin can be given, with one caution"* over her Unknown rows. Her composed
+  answer named the three again in the list line, though her first line had counted them among her orders; the list
+  line has left out a drug her orders resolve to since.
 - No composed cell's chips moved, and none carried a chip about the drug proposed.
 - Left to the model: Susan's clarithromycin after the list, whose question pairs raised a Moderate finding about
   clarithromycin; "paracetamol", which the data does not resolve; and the list cells about amlodipine, fluconazole and
@@ -14004,7 +14008,8 @@ requires.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalAfterAListIsAnsweredWithWhatTheCheckEstablishedAgainstHerOrdersAndTheList`,
 `.aCautionAboutAListedDrugDoesNotKeepTheModelCall`, `.aProposalAfterAListThatRelatesToNoneOfHerOrdersIsAnsweredWithWhatTheCheckEstablished`,
-`.aCautionBetweenTwoListedDrugsDoesNotKeepTheModelCall`, `.aListQuestionWithAWithholdingFindingAboutAListedDrugStillAsksTheModel`
+`.aCautionBetweenTwoListedDrugsDoesNotKeepTheModelCall`, `.theListLineNamesOnlyTheListedDrugsHerChartDoesNotHold`,
+`.aListQuestionWithAWithholdingFindingAboutAListedDrugStillAsksTheModel`
 (the withholding guard), `.aListQuestionWhosePairsTheCapTruncatedStillAsksTheModel` (the truncation guard),
 `.aListQuestionWithAClassFindingAboutTheDrugProposedStillAsksTheModel` (the finding-subject guard) and
 `.aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStillAsksTheModel`.

@@ -861,6 +861,32 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give metformin?", shipped());
 	}
 
+	/**
+	 * A listed drug her chart holds is one of her orders, which the first line already checked the drug proposed
+	 * against, so the list line names only the listed drugs she does not hold, and is left out where she holds them
+	 * all (ADR Decision 149). Asked of Kamwara, who holds all three, it repeated her own orders as "also named in the
+	 * question". She holds aspirin here.
+	 */
+	@Test
+	public void theListLineNamesOnlyTheListedDrugsHerChartDoesNotHold() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer all = serviceWith(provider, shipped()).search(patient,
+				"The patient is currently on Aspirin, is it safe to give metformin?");
+		ChartAnswer some = serviceWith(provider, shipped()).search(patient,
+				"The patient is currently on Aspirin, Lamivudine, is it safe to give metformin?");
+
+		assertEquals(0, provider.calls, "no model is asked: " + all.getAnswer() + " / " + some.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Metformin: its row against this "
+				+ "patient's orders carries no severity or mechanism. [" + referenceRecordOf(all, "metformin") + "]\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.",
+				all.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Metformin: its row against this "
+				+ "patient's orders carries no severity or mechanism. [" + referenceRecordOf(some, "metformin") + "]\n"
+				+ "The check of Metformin against Lamivudine, also named in the question, raised no finding.\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.\n"
+				+ "The chart holds no active order for Lamivudine.", some.getAnswer());
+	}
+
 	/** Listed drugs related to EACH OTHER above the floor do not keep the model call where nothing withholds and none
 	 *  of it is about the drug proposed (ADR Decision 149): nevirapine and fluconazole relate Moderate. */
 	@Test

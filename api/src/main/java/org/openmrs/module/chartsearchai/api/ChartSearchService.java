@@ -1102,7 +1102,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null);
 		}
 
 		/**
@@ -1144,7 +1144,11 @@ public interface ChartSearchService {
 				List<UnfoundedFindingSeverity> unfoundedFindingSeverities,
 				DrugReferenceLoad.Coverage doseCeilingCoverage,
 				List<String> unsupportedEndedOrderClaims,
-				List<Integer> unstatedSignificanceQualifiers) {
+				List<Integer> unstatedSignificanceQualifiers,
+				List<Integer> findingsStatedByTheModule) {
+			// Null survives as null, the rule every list above shares (ADR Decision 147).
+			this.findingsStatedByTheModule = findingsStatedByTheModule == null ? null
+					: java.util.Collections.unmodifiableList(new java.util.ArrayList<Integer>(findingsStatedByTheModule));
 			// Null survives as null, the rule every list above shares (ADR Decision 136).
 			this.unstatedSignificanceQualifiers = unstatedSignificanceQualifiers == null ? null
 					: java.util.Collections.unmodifiableList(new java.util.ArrayList<Integer>(unstatedSignificanceQualifiers));
@@ -1948,6 +1952,21 @@ public interface ChartSearchService {
 
 		/** @see #getUnstatedSignificanceQualifiers() */
 		private final List<Integer> unstatedSignificanceQualifiers;
+
+		/** @see #getFindingsStatedByTheModule() */
+		private final List<Integer> findingsStatedByTheModule;
+
+		/**
+		 * @return the record numbers of the findings the module's own sentence after a model's answer states — <em>"Not
+		 *         stated above, against this patient's own orders: …"</em> (ADR Decision 147) — ascending in chart order,
+		 *         published as the {@code findingsStatedByTheModule} key, so a client can join each one's chip
+		 *         ({@code SafetyWarning.getFindingCitation()}) to the sentence, which cites no marker. {@code []} where it
+		 *         stated none; {@code null}, no measurement, on an answer the module wrote, which states every finding
+		 *         in its own lines.
+		 */
+		public List<Integer> getFindingsStatedByTheModule() {
+			return findingsStatedByTheModule;
+		}
 
 		/**
 		 * @return the citation indexes, ascending, of the safety findings the answer cites whose record says the

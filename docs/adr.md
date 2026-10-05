@@ -148,6 +148,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 144: A below-floor answer states a bottom line scoped to the interaction data](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data)
 - [Decision 145: An order a composed answer lists only below the floor does not scope its chips](#decision-145-an-order-a-composed-answer-lists-only-below-the-floor-does-not-scope-its-chips)
 - [Decision 146: A below-floor statement cites the data and not her orders](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders)
+- [Decision 147: A finding about the drug proposed against her own order is stated where a model's answer leaves it out](#decision-147-a-finding-about-the-drug-proposed-against-her-own-order-is-stated-where-a-models-answer-leaves-it-out)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13783,4 +13784,67 @@ other cell and every chip byte-identical.
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
 `.aPairBelowARaisedFloorIsStatedWithItsOwnRating`, `.aCautionAnswerAlsoStatesTheRowsBelowTheFloor` and the two
 `.anOrderListedOnly…` cases.
+
+## Decision 147: A finding about the drug proposed against her own order is stated where a model's answer leaves it out
+
+**Status: Accepted** (October 2026) — implemented, no issue. Beside [Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)
+and [Decision 100](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again).
+
+### Context
+
+*"The patient is currently on Abacavir, Lopinavir / ritonavir, Didanosine and Trimethoprim and sulfamethoxazole is it
+safe to give Fluconazole?"* (patient Susan) was answered by the model *"Fluconazole can be given, with several cautions:
+…"*, citing three interactions with drugs her chart does not hold and saying nothing of the one Moderate interaction
+with her own lidocaine order. Decision 90 lets the prose summarise, the client drawing every finding as a chip, so the
+finding was on screen; but the answer's own text put the weight on three relationships that rest on the question's
+word and none on the one in her chart.
+
+### The decision
+
+- **After a model's answer, the module states each finding about the drug the question proposes against one of her
+  own orders that the answer does not cite**: *"Not stated above, against this patient's own orders: Fluconazole
+  interacts with active order Lidocaine — Moderate."* — `OwnOrderFindingStatement`, before the list's
+  no-active-order sentence, on the early `done` and the final answer alike.
+- **Which findings, and their words, are the injector's**, stamped on the chart
+  (`PatientChart.getProposalOwnOrderFindingLines()`): interactions stating a proposal clause whose every subject row is
+  of a drug the question proposes — a single-drug proposal's, or a list question's drug after its list. A question-pair
+  finding states both drugs' rows, so one relating the drug to a merely LISTED one is not among them. The line is the
+  finding's `briefDetail`.
+- **It cites no marker**, as Decision 100's sentence cites none. A first build appended each finding's `[n]`, which the
+  answer's references did not carry, so the marker resolved to nothing — the browser found it, the lidocaine chip open
+  beside an answer naming `[55]`. Carrying it would have meant a second writer of `attachedByTheModule`, which
+  `extractCitedReferences` alone writes, for the chart evidence behind a finding the MODEL cited (ADR Decision 80). The
+  finding's chip, which the answer does not cite, would then be drawn in full beside the sentence that names it — so
+  the response names those findings structurally, `ChartAnswer.getFindingsStatedByTheModule()` (the
+  `findingsStatedByTheModule` key), resolved by `OwnOrderFindingStatement.statedFindings`, the reading the sentence
+  itself is built from, and a client folds their chips as stated.
+- **Which are cited is `SafetyFindingCitationExtentCheck.citedFindingIndexes`**, the one reading of that.
+- **It never rewrites the model's prose**, so a "can be given" stands beside the line stating a Major; Decision 119's
+  `cautionLedOverWithholding` still reports that pairing.
+- A composed answer states all its findings already and is not touched.
+
+- **A blank answer is left as it was**, as the repair pass leaves it: what it cites is read off the structured array.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: `main` @ 9182aa7f against this change over 63 cells —
+gate 11's 58 and five list questions, the reported one among them. **It passed.** Three model answers gained the
+statement, each naming a finding about the drug proposed against her own order that the answer did not cite, with its
+rating (then still with its marker, since removed): the reported question's *"Fluconazole interacts with active order
+Lidocaine — Moderate"*, Susan's
+rifampicin list question's Minor against the same order, and Joshua's aspirin probe's Moderate against his lisinopril.
+Every module-written answer, every chip and the other 57 cells were byte-identical.
+
+### What the tests carry
+
+Twelve cases of four other classes — the partner completion, the finding-enumeration repair, the scheduled-partner
+naming and a chain case — had fixtures whose model answer leaves such a finding uncited, so their final answers gained
+the statement. Each now reads its own sentence off the answer with the statement taken off its end
+(`OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement`, which fails where anything but the statement
+follows), and the partner completion's "never credited" cases read the completion's sentence alone. What the statement
+says is pinned by the two cases below, and six cases of `LlmInferenceServiceListedMedicationsContextTest` carry it beside
+their list sentence.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aFindingAboutTheDrugProposedAgainstHerOwnOrderIsStatedWhereTheAnswerLeftItOut`
+and `.aFindingTheAnswerCitesIsNotStatedAgain`; six cases of that class pin the line beside their list sentence.
 

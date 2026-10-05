@@ -122,7 +122,7 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		ChartAnswer answer = serviceAnswering(modelAnswer).service.search(patient, AMLODIPINE_QUESTION);
 
 		assertEquals(modelAnswer + " Also covered by those findings and not named above: scheduled order "
-				+ "Rifampicin (rifampin) (" + STARTS + ").", answer.getAnswer(),
+				+ "Rifampicin (rifampin) (" + STARTS + ").", OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()),
 				"the module names the partner as a scheduled order, with its date");
 	}
 

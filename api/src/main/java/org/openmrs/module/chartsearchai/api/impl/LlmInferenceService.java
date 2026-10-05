@@ -324,6 +324,10 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
 					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
 							drugSafetyValidator));
+			// And the findings about the drug proposed against her own orders the answer does not cite (ADR
+			// Decision 147), asked of the MODEL's prose.
+			completedAnswer = OwnOrderFindingStatement.withUnstatedOwnOrderFindings(completedAnswer, cited,
+					chart.getMappings(), chart.getProposalOwnOrderFindingLines());
 			// And the drugs the question listed as hers that her chart holds no active order for (issue
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
@@ -345,7 +349,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers);
+					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+							chart.getProposalOwnOrderFindingLines()));
 			outcome = "ok";
 			return answer;
 		}
@@ -769,13 +774,16 @@ public class LlmInferenceService implements ChartSearchService {
 			// The listed-drug sentence (issue #515) is on this answer too: the chart stamped it before the
 			// model was asked, so unlike the ended-order sentence it owes the chips nothing.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(
-					ListedDrugStatement.withListedDrugsStated(response.getAnswer(),
+					ListedDrugStatement.withListedDrugsStated(OwnOrderFindingStatement.withUnstatedOwnOrderFindings(
+							response.getAnswer(), cited, chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
 							chart.getListedDrugsWithNoActiveOrder()), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
 					chartRead.stated(), conditionRuleCoverage, orderStopDates, null, false, null,
-					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null));
+					cautionLedOverWithholding, null, doseCeilingCoverage, unsupportedEndedOrderClaims, null,
+					OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+							chart.getProposalOwnOrderFindingLines())));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -885,6 +893,10 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = EndedOrderStatement.withEndedOrdersStated(completedAnswer,
 					EndedOrderStatement.unstatedEndedOrders(response.getAnswer(), safetyWarnings,
 							drugSafetyValidator));
+			// And the findings about the drug proposed against her own orders the answer does not cite (ADR
+			// Decision 147), asked of the MODEL's prose.
+			completedAnswer = OwnOrderFindingStatement.withUnstatedOwnOrderFindings(completedAnswer, cited,
+					chart.getMappings(), chart.getProposalOwnOrderFindingLines());
 			// And the drugs the question listed as hers that her chart holds no active order for (issue
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
@@ -906,7 +918,8 @@ public class LlmInferenceService implements ChartSearchService {
 					findingCitationExtent, chartRead.stated(), conditionRuleCoverage, orderStopDates,
 					findingPartnerCoverage, false, interactionClaimPairs, cautionLedOverWithholding,
 					unfoundedFindingSeverities, doseCeilingCoverage, unsupportedEndedOrderClaims,
-					unstatedSignificanceQualifiers);
+					unstatedSignificanceQualifiers, OwnOrderFindingStatement.statedFindings(response.getAnswer(), cited, chart.getMappings(),
+							chart.getProposalOwnOrderFindingLines()));
 			outcome = "ok";
 			return answer;
 		}
@@ -1001,11 +1014,11 @@ public class LlmInferenceService implements ChartSearchService {
 		ungroundedAnswerConsumer.accept(new ChartAnswer(answer, references, 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), searchMode, referenceSlice, null,
 				unresolvedDrugClass, null, null, null, null, null, null, chartReadForSafety,
-				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null));
+				conditionRuleCoverage, orderStopDates, null, true, null, null, null, doseCeilingCoverage, null, null, null));
 		return new ChartAnswer(answer, references, 0, 0, 0, safetyWarnings, searchMode, referenceSlice,
 				pairExtent.stated(), unresolvedDrugClass, null, null, null, null, null, null,
 				chartReadForSafety, conditionRuleCoverage, orderStopDates, null, true, null, null, null,
-				doseCeilingCoverage, null, null);
+				doseCeilingCoverage, null, null, null);
 	}
 
 	/**

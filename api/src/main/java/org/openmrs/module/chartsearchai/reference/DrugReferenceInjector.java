@@ -932,6 +932,10 @@ public class DrugReferenceInjector {
 		// that say so and nothing else, so LlmProvider's clause after the question is stated exactly where
 		// such a finding is in the prompt.
 		injected.markDrugsAlreadyOrdered(drugsAlreadyOrdered(findings));
+		// And the line of each finding about the drug the question proposes against one of her orders (ADR Decision
+		// 147), which LlmInferenceService states after a model's answer that does not cite it.
+		injected.markProposalOwnOrderFindingLines(proposalOwnOrderFindingLines(question, questionDrugs, findings,
+				findingNumbers));
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
 		// derives its KV-cache decision from PatientChart.isQueryScoped() precisely so a mode-flip /
 		// GP-read race cannot mis-scope the persist; a fresh PatientChart defaults the flag to false,
@@ -2643,6 +2647,57 @@ public class DrugReferenceInjector {
 								: "none of its " + n + " rows against this patient's orders carries a severity")
 								+ (rows.noMechanism ? " or mechanism" : ""))
 				+ ". [" + reference + "]\n" + BELOW_FLOOR_SCOPE;
+	}
+
+	/**
+	 * Each injected finding about the drug {@code question} proposes against one of this patient's own active orders,
+	 * by its record number, with the line a client reads for it (ADR Decision 147): {@link #briefDetail} of its detail,
+	 * the sentence ended. A finding qualifies where it is an INTERACTION stating a proposal clause
+	 * ({@link #STRENGTH_WITHHOLD} or {@link #STRENGTH_CAUTION}) and every subject row is of a substance the question
+	 * proposes. That last is what keeps out a question-pair finding relating the drug to one the question merely
+	 * LISTS, which her chart need not hold: such a finding states both of its drugs' rows. Every other interaction a
+	 * proposal raises is the drug-in-play arm's against her own orders. The drugs proposed are every drug the question names where {@link #questionProposes} admits it, else
+	 * those it does not list before its proposal ({@link #listedBeforeTheProposal}), else none.
+	 */
+	private static Map<Integer, String> proposalOwnOrderFindingLines(String question, List<DrugReference> questionDrugs,
+			List<SafetyWarning> findings, List<Integer> numbers) {
+		Set<Object> proposed = new HashSet<Object>();
+		if (questionProposes(question, questionDrugs)) {
+			for (DrugReference entry : questionDrugs) {
+				proposed.add(entry.substanceGroupKey());
+			}
+		} else {
+			List<DrugReference> listed = listedBeforeTheProposal(question, questionDrugs);
+			if (!listed.isEmpty()) {
+				for (DrugReference entry : questionDrugs) {
+					proposed.add(entry.substanceGroupKey());
+				}
+				for (DrugReference entry : listed) {
+					proposed.remove(entry.substanceGroupKey());
+				}
+			}
+		}
+		Map<Integer, String> lines = new LinkedHashMap<Integer, String>();
+		if (proposed.isEmpty()) {
+			return lines;
+		}
+		for (int i = 0; i < findings.size(); i++) {
+			SafetyWarning finding = findings.get(i);
+			String clause = strengthClause(finding);
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+					|| !(STRENGTH_WITHHOLD.equals(clause) || STRENGTH_CAUTION.equals(clause))
+					|| finding.subjectRows().isEmpty()) {
+				continue;
+			}
+			boolean aboutTheProposal = true;
+			for (DrugReference row : finding.subjectRows()) {
+				aboutTheProposal &= proposed.contains(row.substanceGroupKey());
+			}
+			if (aboutTheProposal) {
+				lines.put(numbers.get(i), DrugSafetyValidator.endSentence(briefDetail(finding.getDetail())));
+			}
+		}
+		return lines;
 	}
 
 	/**

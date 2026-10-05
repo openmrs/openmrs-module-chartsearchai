@@ -1897,6 +1897,10 @@ public class ChartSearchAiRestController {
 		// ADR Decision 136: the cited findings whose unknown-significance qualifier the answer drops.
 		List<Integer> qualifiers = answer.getUnstatedSignificanceQualifiers();
 		target.put("unstatedSignificanceQualifiers", qualifiers == null ? null : new ArrayList<Integer>(qualifiers));
+		// ADR Decision 147: the findings the module's own sentence after the answer states, which cites no marker.
+		List<Integer> statedByTheModule = answer.getFindingsStatedByTheModule();
+		target.put("findingsStatedByTheModule",
+			statedByTheModule == null ? null : new ArrayList<Integer>(statedByTheModule));
 		target.put("unstatedDosingCeilings",
 			serializeUnstatedDosingCeilings(answer.getUnstatedDosingCeilings()));
 		target.put("orderStopDates", serializeOrderStopDates(answer.getOrderStopDates()));

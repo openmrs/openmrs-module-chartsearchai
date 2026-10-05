@@ -220,7 +220,7 @@ public class FindingEnumerationRepairTest extends BaseModuleContextSensitiveTest
 		ChartAnswer answer = service.search(patient(), QUESTION);
 
 		assertEquals(2, provider.calls(), "the premise: the repair did run");
-		assertEquals(original, answer.getAnswer(),
+		assertEquals(original, OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()),
 				"a continuation citing no uncited finding must be discarded whole, leaving the "
 						+ "original answer byte for byte. Answer: " + answer.getAnswer());
 		assertEquals(findings.size() - 1, answer.getFindingCitationExtent().getCited(),
@@ -246,7 +246,7 @@ public class FindingEnumerationRepairTest extends BaseModuleContextSensitiveTest
 		ChartAnswer answer = service.search(patient(), QUESTION);
 
 		assertEquals(2, provider.calls(), "the premise: the repair did run");
-		assertEquals(original, answer.getAnswer(),
+		assertEquals(original, OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()),
 				"a continuation whose prose anchors no owed finding must be discarded whole, however "
 						+ "its structured array lists them. Answer: " + answer.getAnswer());
 		assertEquals(findings.size() - 1, answer.getFindingCitationExtent().getCited(),
@@ -294,7 +294,7 @@ public class FindingEnumerationRepairTest extends BaseModuleContextSensitiveTest
 		assertEquals(1, provider.calls(),
 				"with the repair off the model must be asked exactly once, whatever the answer left "
 						+ "uncited");
-		assertEquals(original, answer.getAnswer(), "and the answer must be untouched");
+		assertEquals(original, OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()), "and the answer must be untouched");
 		assertEquals(findings.size() - 1, answer.getFindingCitationExtent().getCited(),
 				"and the extent must report the shortfall, which is issue #395's whole payload");
 	}

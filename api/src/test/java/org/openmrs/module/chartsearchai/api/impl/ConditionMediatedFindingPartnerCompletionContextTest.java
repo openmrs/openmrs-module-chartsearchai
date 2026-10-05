@@ -144,7 +144,7 @@ public class ConditionMediatedFindingPartnerCompletionContextTest extends BaseMo
 			arrangement.question);
 
 		assertFalse(answer.isAnsweredByTheModule(), "the model answers: " + answer.getAnswer());
-		assertEquals(modelAnswer, answer.getAnswer());
+		assertEquals(modelAnswer, OwnOrderFindingStatementTestSupport.withoutTheOwnOrderStatement(answer.getAnswer()));
 	}
 
 	private static OverShippedData metforminOverStavudineAndLacticAcid() {

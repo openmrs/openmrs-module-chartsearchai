@@ -242,14 +242,7 @@ public class RemoteLlmEngineResponseSizeBoundTest extends BaseModuleContextSensi
 	}
 
 	private void respondError(HttpExchange exchange, int status, String body) throws IOException {
-		try {
-			exchange.getRequestBody().readAllBytes();
-			byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-			exchange.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
-			exchange.getResponseBody().write(bytes);
-		} finally {
-			exchange.close();
-		}
+		respondOnce(exchange, status, "application/json", body.getBytes(StandardCharsets.UTF_8));
 	}
 
 	@AfterEach

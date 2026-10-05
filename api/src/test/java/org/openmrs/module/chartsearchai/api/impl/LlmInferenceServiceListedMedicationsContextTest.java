@@ -723,6 +723,26 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				"a measurement of none: the answer cited the finding, so the module stated nothing");
 	}
 
+	/**
+	 * A proposal question's response publishes no chip about a drug it merely lists that her chart does not hold (ADR
+	 * Decision 148): nevirapine against her rifampicin order is a fact about a drug the question says
+	 * she takes, not about whether fluconazole may be given. The fluconazole chips — against her own rifampicin, and
+	 * the pair with the listed nevirapine, whose subject is fluconazole — stay.
+	 */
+	@Test
+	public void aProposalQuestionPublishesNoChipAboutADrugItOnlyLists() throws IOException {
+		ChartAnswer answer = serviceAnswering("Fluconazole can be given, with one caution.", obs()).service.search(
+				patient, FLUCONAZOLE_QUESTION);
+
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertFalse(chip.isAboutADrugOtherThanTheOneProposed() && !chip.isAboutAnotherOfHerMedications(),
+					"no chip about a listed drug she is not on, was: " + chip);
+			assertFalse("Nevirapine".equals(chip.getDrug()), "the listed nevirapine raises no chip, was: " + chip);
+		}
+		chip(answer, "Fluconazole", "rifamp", "Major");
+		chip(answer, "Fluconazole", "nevirapine", "Moderate");
+	}
+
 	private static final class TestableService extends LlmInferenceService {
 
 		@Override
@@ -916,18 +936,17 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 	}
 
 	/**
-	 * A chip whose subject is not the drug the question proposes says so (ADR Decision 137): asked about fluconazole,
-	 * the listed nevirapine screened against her rifampicin order is a finding about nevirapine, not fluconazole,
-	 * while the findings headed by fluconazole — against her order, and against the listed nevirapine — are about
-	 * the drug asked about.
+	 * The findings headed by the drug the question proposes say they are about it (ADR Decision 137): asked about
+	 * fluconazole, those against her order and against the listed nevirapine. The chip about the listed nevirapine
+	 * itself, which says the opposite, is no longer published (ADR Decision 148), and
+	 * {@code .aProposalQuestionPublishesNoChipAboutADrugItOnlyLists} is what now pins that the validator marks it: a
+	 * chip it stopped marking would be published, and that case would see it.
 	 */
 	@Test
 	public void aChipAboutADrugOtherThanTheOneProposedSaysSo() throws IOException {
 		ChartAnswer answer = serviceAnswering("Fluconazole can be given, with one caution.", obs()).service.search(
 				patient, FLUCONAZOLE_QUESTION);
 
-		assertTrue(chip(answer, "Nevirapine", "rifamp", "Major").isAboutADrugOtherThanTheOneProposed(),
-				"the listed nevirapine against her rifampicin order is not about fluconazole");
 		assertFalse(chip(answer, "Fluconazole", "rifamp", "Major").isAboutADrugOtherThanTheOneProposed(),
 				"fluconazole against her own order is about the drug asked about");
 		assertFalse(chip(answer, "Fluconazole", "nevirapine", "Moderate").isAboutADrugOtherThanTheOneProposed(),
@@ -976,7 +995,5 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				chip(answer, "Fluconazole", "rifamp", "Major").getFindingCitation());
 		assertEquals(Integer.valueOf(againstNevirapine),
 				chip(answer, "Fluconazole", "nevirapine", "Moderate").getFindingCitation());
-		assertEquals(Integer.valueOf(findingNumber(recorder.prompt, "Nevirapine", "rifamp")),
-				chip(answer, "Nevirapine", "rifamp", "Major").getFindingCitation());
 	}
 }

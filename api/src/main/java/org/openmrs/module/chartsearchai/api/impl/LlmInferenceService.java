@@ -339,7 +339,8 @@ public class LlmInferenceService implements ChartSearchService {
 					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
 			completedAnswer = conflicting.getAnswer();
 			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
-			safetyWarnings = DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings());
+			safetyWarnings = aboutTheDrugAsked(
+					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()));
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -908,7 +909,8 @@ public class LlmInferenceService implements ChartSearchService {
 					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
 			completedAnswer = conflicting.getAnswer();
 			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
-			safetyWarnings = DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings());
+			safetyWarnings = aboutTheDrugAsked(
+					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()));
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -987,11 +989,11 @@ public class LlmInferenceService implements ChartSearchService {
 		PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 		// Every chip whose finding the composed text states is published as stated, so a client does not
 		// repeat it in full beneath the answer that just said it — asked of the module's own text.
-		List<SafetyWarning> safetyWarnings = DrugReferenceInjector.withFindingCitations(
+		List<SafetyWarning> safetyWarnings = aboutTheDrugAsked(DrugReferenceInjector.withFindingCitations(
 				ModuleAnswerStatement.markStated(composed,
 						drugSafetyValidator.validate(findingLineMarkersOf(composed, mappings), question, patient, mappings,
 								pairExtent)),
-				mappings);
+				mappings));
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is
@@ -1045,6 +1047,26 @@ public class LlmInferenceService implements ChartSearchService {
 			markers.append(markers.length() == 0 ? "" : " ").append('[').append(index).append(']');
 		}
 		return markers.toString();
+	}
+
+	/**
+	 * The chips a response publishes: all but those about a drug the question proposes nothing about and that is not one
+	 * of her own prescriptions (ADR Decision 148) — {@code SafetyWarning.isAboutADrugOtherThanTheOneProposed()} and not
+	 * {@code isAboutAnotherOfHerMedications()}: in practice a drug the question only LISTS as hers, which her chart does
+	 * not hold. On <em>"The patient is currently on Abacavir, Lopinavir / ritonavir, … is it safe to give
+	 * Fluconazole?"</em> eight of twelve chips were that regimen's interactions with itself and her orders, nothing about
+	 * fluconazole. A conflict of one of her OWN orders stays — her allergy to a drug she is prescribed, beside an answer
+	 * whose finding is about that order (ADR Decision 140). Taken off where the chips are final, so every check before
+	 * it still reads them.
+	 */
+	private static List<SafetyWarning> aboutTheDrugAsked(List<SafetyWarning> chips) {
+		List<SafetyWarning> published = new ArrayList<SafetyWarning>(chips.size());
+		for (SafetyWarning chip : chips) {
+			if (!chip.isAboutADrugOtherThanTheOneProposed() || chip.isAboutAnotherOfHerMedications()) {
+				published.add(chip);
+			}
+		}
+		return published;
 	}
 
 	/**

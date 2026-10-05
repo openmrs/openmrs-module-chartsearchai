@@ -151,6 +151,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 146: A below-floor statement cites the data and not her orders](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders)
 - [Decision 147: A finding about the drug proposed against her own order is stated where a model's answer leaves it out](#decision-147-a-finding-about-the-drug-proposed-against-her-own-order-is-stated-where-a-models-answer-leaves-it-out)
 - [Decision 148: A proposal question publishes no chip about a listed drug she is not on](#decision-148-a-proposal-question-publishes-no-chip-about-a-listed-drug-she-is-not-on)
+- [Decision 149: A proposal after a list of drugs is answered with what the check established for the drug proposed](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13931,3 +13932,79 @@ also pins that the validator marks such a chip — one it stopped marking would 
 `LlmInferenceServiceAnswerFromFindingsContextTest.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt` for the
 own-order half.
 
+## Decision 149: A proposal after a list of drugs is answered with what the check established for the drug proposed
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends
+[Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows) and
+[Decision 143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
+to a question listing drugs before its proposal. Does not take up
+the caution answers of the unmerged Decision 141 draft, which a question like this still leaves to the model.
+
+### Context
+
+*"The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give metformin?"*, asked of patient Susan,
+whose chart holds none of the three, was answered by the model *"The records do not address the safety of giving
+Metformin."*, and the module added that her chart holds no order for the three. The response said the interaction check
+had run: `interactionPairs` `{"found": 0}`, and `findingCitations` `{"carried": 1, "cited": 0}` — one finding in the
+prompt, which the answer did not cite. The shipped data relates metformin to four of her orders,
+and to each drug listed, only by rows rated Unknown with no mechanism. Asked of metformin alone, the module answers from those
+rows (Decision 142). Two things kept it from doing so here. The three listed drugs make four substances, which opens the
+question-pair arm; that arm then states `interactionPairs`, and the drug-in-play arm's rows below the floor are dropped.
+And the carried finding made the finding list non-empty, while both compositions require an empty one.
+
+### The decision
+
+- **The module answers it**: `DrugReferenceInjector.composeAfterAList`. It hands `composeFromBelowFloor`, then
+  `composeFromNoPair`, the drug proposed alone. It hands them, as that drug's extent, the drug-in-play arm's own
+  statement about its substance. It then adds a second line: *"The check of Metformin against Lamivudine, Nevirapine and
+  Stavudine, also named in the question, raised no finding."* The listed drugs are named as a chip names a substance
+  (`DrugSafetyValidator.interactionSubject`), in the question's order. The sentence that her chart holds none of them
+  takes a line of its own (`ListedDrugStatement.withListedDrugsStatedOnALine`), because the composed lines end in
+  markers.
+- **The drug-in-play arm states each question substance to the caller** — `PairChipExtent.Sink.statedFor`, recorded by
+  `validate` beside the published statement on the same pass. It is never on the wire: one key must not carry two
+  populations, which is `PairChipExtent`'s own rule.
+- **Fail-closed**, beyond the two compositions' gates, all on the injection's own resolutions:
+  - The question lists drugs (`listedBeforeTheProposal`) and proposes one substance besides them.
+  - The question's own pairs were stated and every one reported, `found == reported`. A pair `maxPairChips` withheld may
+    be one of the drug proposed, and it raises no finding.
+  - The drug-in-play arm's statement about the drug proposed has `found == 0`.
+  - Every finding is `isAboutADrugOtherThanTheOneProposed` and none `licensesWithholding`. The second is the Decision 141
+    draft's reason: a line about the drug proposed beside a reason to withhold a listed one would read as the whole of
+    what the check found.
+- **"Raised no finding" and never "does not interact"**: the line claims what the check reported. Below a raised floor a
+  rated row can stand under it, and the bottom line already scopes itself to the rated data.
+- **A finding about a listed drug is not stated.** It is not about the drug proposed, and since Decision 148 its chip is
+  not published either. It stays in the references a client reaches.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: `main` @ 0f531772 (omod f6ad786e) against this
+change (omod c9f0dd91) over 51 cells — the previous gate's 43, five list questions and three of their single-drug twins.
+**It failed as written, and was accepted by the maintainer.** Rules 3 and 4 asked each composed list cell's first line
+to equal its twin's byte for byte, and the twin's marker number is one lower: the list question's chart carries one more
+record before it. Each pair cites the same record — metformin's `drug_reference` 6809, mebendazole's 6672 — and is
+otherwise identical. Every other rule held:
+- Every non-list cell, and every list cell the model still answers, was byte-identical in answer and chips.
+- Four list cells became the module's: Susan's metformin under two wordings, Kamwara's metformin, and Susan's mebendazole.
+  Susan's metformin moved from *"The records do not address the safety of giving Metformin."* to *"The interaction data
+  gives no rated reason to withhold Metformin: none of its 4 rows against this patient's orders carries a severity or
+  mechanism. [46]"*, then the list line, the scope and the sentence that her chart holds none of the three. Kamwara holds
+  the three; the model had answered *"Metformin can be given, with one caution"* over her Unknown rows.
+- No composed cell's chips moved, and none carried a chip about the drug proposed.
+- Left to the model: Susan's clarithromycin after the list, whose question pairs raised a Moderate finding about
+  clarithromycin; "paracetamol", which the data does not resolve; and the list cells about amlodipine, fluconazole and
+  rifampicin, each with a finding about the drug proposed.
+
+### Not pinned
+
+Deleting the `found == 0` guard on the drug-in-play arm's statement reddens nothing. Every pair that statement counts is
+a chip about the drug proposed, which the finding guard refuses first. It is kept as the gate's statement of what it
+requires.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalAfterAListIsAnsweredWithWhatTheCheckEstablishedAgainstHerOrdersAndTheList`,
+`.aCautionAboutAListedDrugDoesNotKeepTheModelCall`, `.aProposalAfterAListThatRelatesToNoneOfHerOrdersIsAnsweredWithWhatTheCheckEstablished`,
+`.aCautionBetweenTwoListedDrugsDoesNotKeepTheModelCall`, `.aListQuestionWithAWithholdingFindingAboutAListedDrugStillAsksTheModel`
+(the withholding guard), `.aListQuestionWhosePairsTheCapTruncatedStillAsksTheModel` (the truncation guard),
+`.aListQuestionWithAClassFindingAboutTheDrugProposedStillAsksTheModel` (the finding-subject guard) and
+`.aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStillAsksTheModel`.

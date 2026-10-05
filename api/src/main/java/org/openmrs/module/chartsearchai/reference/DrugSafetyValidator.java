@@ -1011,6 +1011,10 @@ public class DrugSafetyValidator {
 		// What the same screen related below the floor (ADR Decision 127), stated beside the count and
 		// over the same population: the question's substances, never the answer's.
 		List<PairChipExtent.BelowFloorPair> questionDrugBelowFloor = new ArrayList<PairChipExtent.BelowFloorPair>();
+		// The same screen per question substance, whichever arm states the field (ADR Decision 149): a question
+		// listing drugs opens the question-pair arm, which then speaks for the question, while what the drug it
+		// proposes relates to among her orders is still this arm's to say.
+		Map<Object, PairChipExtent> questionDrugExtents = new LinkedHashMap<Object, PairChipExtent>();
 
 		// The substances in play the drug-in-play arm states the CURRENT-medication referent for, asked
 		// per drug in play below (issue #402, ADR Decision 123): those her active orders establish she
@@ -1093,8 +1097,10 @@ public class DrugSafetyValidator {
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
 					questionDrugPairs += related;
-					questionDrugBelowFloor.addAll(belowFloorPairs(rows, subjects, context, severityFloor,
-						orderEntries, bridgedOrders));
+					List<PairChipExtent.BelowFloorPair> belowFloor = belowFloorPairs(rows, subjects, context,
+						severityFloor, orderEntries, bridgedOrders);
+					questionDrugBelowFloor.addAll(belowFloor);
+					questionDrugExtents.put(substance, PairChipExtent.of(related, related, belowFloor));
 				}
 			}
 			if (dosePending.remove(substance)) {
@@ -1225,6 +1231,11 @@ public class DrugSafetyValidator {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
 		recordPairExtent(pairExtentSink, pairExtent);
+		// On the condition the fallback above states its own on, for the same reason: on a chart recording no
+		// medication there is no population the screen ran over.
+		if (pairExtentSink != null && hasActiveMedicationRecords(context)) {
+			pairExtentSink.recordPerQuestionSubstance(questionDrugExtents);
+		}
 		return warnings;
 	}
 

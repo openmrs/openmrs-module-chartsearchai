@@ -781,6 +781,133 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her mebendazole?", shipped());
 	}
 
+	/**
+	 * A proposal after a list of drugs the question says she is on is answered by the module where the check raised
+	 * nothing about the drug proposed (ADR Decision 149): what the check established against her own orders, as the
+	 * same proposal alone is answered (ADR Decision 142), then that its check against the drugs listed raised no
+	 * finding, then that her chart holds none of them. Asked of Susan on the 3.7.1 standalone, the model answered
+	 * "The records do not address the safety of giving Metformin.". The shipped data relates metformin to her aspirin
+	 * and to each drug listed only by rows rated Unknown.
+	 */
+	@Test
+	public void aProposalAfterAListIsAnsweredWithWhatTheCheckEstablishedAgainstHerOrdersAndTheList() {
+		String question = "The patient is currently on Lamivudine, Nevirapine, Stavudine, is it safe to give metformin?";
+		assertTrue(findingsInThePromptFor(question, shipped()).isEmpty(), "precondition: no finding is raised");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals("The interaction data gives no rated reason to withhold Metformin: its row against this "
+				+ "patient's orders carries no severity or mechanism. [" + referenceRecordOf(answer, "metformin") + "]\n"
+				+ "The check of Metformin against Lamivudine, Nevirapine and Stavudine, also named in the question, "
+				+ "raised no finding.\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.\n"
+				+ "The chart holds no active order for Lamivudine, Nevirapine or Stavudine.", answer.getAnswer());
+		assertCitesNoOrderOfHers(answer);
+	}
+
+	/**
+	 * A CAUTION about a listed drug against her own order is not about the drug proposed, and the answer is still the
+	 * module's (ADR Decision 149) — Susan's shape, whose listed nevirapine relates to her lidocaine Minor. Here the
+	 * listed atenolol relates to her aspirin Minor, and to metformin only Unknown.
+	 */
+	@Test
+	public void aCautionAboutAListedDrugDoesNotKeepTheModelCall() {
+		String question = "The patient is currently on Atenolol, is it safe to give metformin?";
+		assertFalse(findingsInThePromptFor(question, shipped()).isEmpty(),
+				"precondition: the listed atenolol raises a finding against her aspirin");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Metformin: its row against this "
+				+ "patient's orders carries no severity or mechanism. [" + referenceRecordOf(answer, "metformin") + "]\n"
+				+ "The check of Metformin against Atenolol, also named in the question, raised no finding.\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.\n"
+				+ "The chart holds no active order for Atenolol.", answer.getAnswer());
+	}
+
+	/** A proposal after a list that the data relates to none of her orders is answered with Decision 143's sentence,
+	 *  then the list's (ADR Decision 149): the shipped data relates mebendazole to neither her aspirin nor lamivudine. */
+	@Test
+	public void aProposalAfterAListThatRelatesToNoneOfHerOrdersIsAnsweredWithWhatTheCheckEstablished() {
+		String question = "The patient is currently on Lamivudine, is it safe to give mebendazole?";
+		assertTrue(findingsInThePromptFor(question, shipped()).isEmpty(), "precondition: no finding is raised");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("The interaction check relates Mebendazole to none of this patient's 1 active medication. ["
+				+ referenceRecordOf(answer, "mebendazole") + "]\n"
+				+ "The check of Mebendazole against Lamivudine, also named in the question, raised no finding.\n"
+				+ "The chart holds no active order for Lamivudine.", answer.getAnswer());
+	}
+
+	/** A finding that withholds keeps the model call even about a listed drug (ADR Decision 149): an answer about the
+	 *  drug proposed alone would read as the whole of what the check found. Methotrexate relates to her aspirin Major. */
+	@Test
+	public void aListQuestionWithAWithholdingFindingAboutAListedDrugStillAsksTheModel() {
+		assertTheModelIsAsked("The patient is currently on Methotrexate, is it safe to give metformin?", shipped());
+	}
+
+	/** A finding about the drug proposed against a listed drug keeps the model call (ADR Decision 149): this answer
+	 *  states only that the check raised none. Ibuprofen relates to metformin Moderate. */
+	@Test
+	public void aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStillAsksTheModel() {
+		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give metformin?", shipped());
+	}
+
+	/** Listed drugs related to EACH OTHER above the floor do not keep the model call where nothing withholds and none
+	 *  of it is about the drug proposed (ADR Decision 149): nevirapine and fluconazole relate Moderate. */
+	@Test
+	public void aCautionBetweenTwoListedDrugsDoesNotKeepTheModelCall() {
+		String question = "The patient is currently on Nevirapine, Fluconazole, is it safe to give metformin?";
+		answerFromFindings(false);
+		ChartAnswer off = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+		answerFromFindings(true);
+		assertTrue(off.getPairChipExtent() != null && off.getPairChipExtent().getFound() > 0,
+				"precondition: the question's own pairs relate two listed drugs, was: " + off.getPairChipExtent());
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(
+				"\nThe check of Metformin against Nevirapine and Fluconazole, also named in the question, raised no "
+						+ "finding.\n"), answer.getAnswer());
+	}
+
+	/** A question-pair list the cap truncated may have withheld a pair of the drug proposed, which then raised no
+	 *  finding, so the model answers (ADR Decision 149): three listed drugs relating pairwise Moderate, cap one. */
+	@Test
+	public void aListQuestionWhosePairsTheCapTruncatedStillAsksTheModel() {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_MAX_PAIR_CHIPS, "1");
+		String question = "The patient is currently on Nevirapine, Fluconazole, Amlodipine, is it safe to give metformin?";
+		answerFromFindings(false);
+		ChartAnswer off = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+		PairChipExtent extent = off.getPairChipExtent();
+		assertTrue(extent != null && extent.getFound() > extent.getReported(),
+				"precondition: the cap withheld a pair, was: " + extent);
+
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/** A finding about the drug proposed that counts no pair keeps the model call (ADR Decision 149): vorapaxar shares
+	 *  her aspirin's platelet-inhibitor subgroup, which no data row relates, so the drug-in-play arm's statement about it
+	 *  is {@code found == 0} while a finding about it stands. */
+	@Test
+	public void aListQuestionWithAClassFindingAboutTheDrugProposedStillAsksTheModel() {
+		assertTheModelIsAsked("The patient is currently on Lamivudine, is it safe to give vorapaxar?", shipped());
+	}
+
 	/** {@link #assertTheCheckRelatedNothing}, then the model is asked for {@code question} with the property on. */
 	private void assertTheModelAnswersWhatTheCheckRelatedToNothing(Patient who, String question,
 			DrugReferenceService reference) {

@@ -1002,9 +1002,9 @@ public class LlmInferenceService implements ChartSearchService {
 		answer = EndedOrderStatement.withEndedOrdersStated(answer,
 				EndedOrderStatement.unstatedEndedOrders(composed, safetyWarnings,
 						drugSafetyValidator));
-		// And issue #515's, for the same reason — though no composed answer is to a question listing
-		// drugs today: answersFromFindings admits one naming a single substance.
-		answer = ListedDrugStatement.withListedDrugsStated(answer, chart.getListedDrugsWithNoActiveOrder());
+		// And issue #515's: a proposal after a list is composed since ADR Decision 149, and the sentence takes a
+		// line of its own, since the composed lines end in markers.
+		answer = ListedDrugStatement.withListedDrugsStatedOnALine(answer, chart.getListedDrugsWithNoActiveOrder());
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);

@@ -13803,13 +13803,18 @@ word and none on the one in her chart.
 
 - **After a model's answer, the module states each finding about the drug the question proposes against one of her
   own orders that the answer does not cite**: *"Not stated above, against this patient's own orders: Fluconazole
-  interacts with active order Lidocaine — Moderate [55]."* — `OwnOrderFindingStatement`, before the list's
+  interacts with active order Lidocaine — Moderate."* — `OwnOrderFindingStatement`, before the list's
   no-active-order sentence, on the early `done` and the final answer alike.
 - **Which findings, and their words, are the injector's**, stamped on the chart
   (`PatientChart.getProposalOwnOrderFindingLines()`): interactions stating a proposal clause whose every subject row is
   of a drug the question proposes — a single-drug proposal's, or a list question's drug after its list. A question-pair
   finding states both drugs' rows, so one relating the drug to a merely LISTED one is not among them. The line is the
   finding's `briefDetail`.
+- **It cites no marker**, as Decision 100's sentence cites none. A first build appended each finding's `[n]`, which the
+  answer's references did not carry, so the marker resolved to nothing — the browser found it, the lidocaine chip open
+  beside an answer naming `[55]`. Carrying it would have meant a second writer of `attachedByTheModule`, which
+  `extractCitedReferences` alone writes, for the chart evidence behind a finding the MODEL cited (ADR Decision 80). The
+  finding's chip, which the answer does not cite, is drawn in full beside it.
 - **Which are cited is `SafetyFindingCitationExtentCheck.citedFindingIndexes`**, the one reading of that.
 - **It never rewrites the model's prose**, so a "can be given" stands beside the line stating a Major; Decision 119's
   `cautionLedOverWithholding` still reports that pairing.
@@ -13822,7 +13827,8 @@ word and none on the one in her chart.
 Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: `main` @ 9182aa7f against this change over 63 cells —
 gate 11's 58 and five list questions, the reported one among them. **It passed.** Three model answers gained the
 statement, each naming a finding about the drug proposed against her own order that the answer did not cite, with its
-rating: the reported question's *"Fluconazole interacts with active order Lidocaine — Moderate [55]"*, Susan's
+rating (then still with its marker, since removed): the reported question's *"Fluconazole interacts with active order
+Lidocaine — Moderate"*, Susan's
 rifampicin list question's Minor against the same order, and Joshua's aspirin probe's Moderate against his lisinopril.
 Every module-written answer, every chip and the other 57 cells were byte-identical.
 

@@ -40,8 +40,7 @@ final class OwnOrderFindingStatement {
 
 	/**
 	 * @return {@code answer} with the lines of {@code lines} whose finding {@code answer} does not cite appended after
-	 *         {@link #LEAD}, each with its own record number, or {@code answer} unchanged where it cites them all or
-	 *         is blank
+	 *         {@link #LEAD}, or {@code answer} unchanged where it cites them all or is blank
 	 */
 	static String withUnstatedOwnOrderFindings(String answer, List<RecordReference> cited, List<RecordMapping> mappings,
 			Map<Integer, String> lines) {
@@ -55,11 +54,11 @@ final class OwnOrderFindingStatement {
 		List<String> unstated = new ArrayList<String>();
 		for (Map.Entry<Integer, String> line : lines.entrySet()) {
 			if (!stated.contains(line.getKey())) {
-				// The marker inside the sentence, before its full stop, so a sentence appended after this one does not
-				// end it a second time.
-				String sentence = line.getValue().trim();
-				String body = sentence.endsWith(".") ? sentence.substring(0, sentence.length() - 1) : sentence;
-				unstated.add(body + " [" + line.getKey() + "].");
+				// No citation marker, as ADR Decision 100's sentence carries none: a marker is a reference of the answer,
+				// and the only writer of a reference the module attached is extractCitedReferences, which records the
+				// chart evidence behind a finding the MODEL cited (ADR Decision 80). The finding's own chip, uncited, is
+				// drawn in full beside the answer.
+				unstated.add(line.getValue().trim());
 			}
 		}
 		if (unstated.isEmpty()) {

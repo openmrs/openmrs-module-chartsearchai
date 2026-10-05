@@ -144,15 +144,14 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 
 	/**
 	 * The sentence ADR Decision 147 states after an answer that leaves out {@code drug}'s findings against her own
-	 * orders: each finding's first sentence, cited by the number the prompt gave it.
+	 * orders: each finding's first sentence, with its rating and no marker.
 	 */
 	private static String ownOrderMajor(String prompt, String drug) {
 		String lines = " Not stated above, against this patient's own orders: " + drug
-				+ " interacts with active order Rifampicin (rifampin) — Major [" + findingNumber(prompt, drug, "rifamp") + "].";
+				+ " interacts with active order Rifampicin (rifampin) — Major.";
 		// Amlodipine also relates Moderate to her aspirin order, which those answers leave out too.
-		return !"Amlodipine".equals(drug) ? lines : lines + " Amlodipine interacts with active order Acetylsalicylic acid "
-				+ "(aspirin) — Moderate [" + findingNumber(prompt, drug, "aspirin", DrugReferenceInjector.STRENGTH_CAUTION)
-				+ "].";
+		return !"Amlodipine".equals(drug) ? lines
+				: lines + " Amlodipine interacts with active order Acetylsalicylic acid (aspirin) — Moderate.";
 	}
 
 	private static void assertAChip(ChartAnswer answer, String drug, String partner, String severity) {
@@ -691,7 +690,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 	/**
 	 * A model's answer that leaves out a finding about the drug proposed against one of her own orders has it stated
 	 * after it (ADR Decision 147): fluconazole against her rifampicin, rated Major, in the finding's own first
-	 * sentence and cited by its record number — and neither the finding about the listed nevirapine against her
+	 * sentence, citing no marker — and neither the finding about the listed nevirapine against her
 	 * rifampicin nor the one relating fluconazole to the listed nevirapine, which her chart does not hold.
 	 */
 	@Test
@@ -701,8 +700,10 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 
 		int own = findingNumber(recorder.prompt, "Fluconazole", "rifamp");
 		assertEquals("Fluconazole can be given, with one caution. Not stated above, against this patient's own orders: "
-				+ "Fluconazole interacts with active order Rifampicin (rifampin) — Major [" + own + "]."
-				+ NONE_OF_THE_LIST, answer.getAnswer());
+				+ "Fluconazole interacts with active order Rifampicin (rifampin) — Major." + NONE_OF_THE_LIST,
+				answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("[" + own + "]"),
+				"the statement cites no marker, so none points at a record the answer's references do not carry");
 	}
 
 	/** An answer citing that finding has nothing stated after it (ADR Decision 147). */

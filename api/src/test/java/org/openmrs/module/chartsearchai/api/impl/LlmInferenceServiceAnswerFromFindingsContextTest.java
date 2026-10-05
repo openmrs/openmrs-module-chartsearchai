@@ -73,6 +73,11 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** Patient 7's aspirin beside two proposals the arm relates to none of her orders by their own rows (issue #592). */
 	private static final String ONE_DIRECTION = "chartsearchai-test/drug-reference-no-pair-one-direction.json";
 
+	/** Patient 7's aspirin, known by its ATC code alone, beside a proposal related to it only below the floor
+	 *  (issue #592). */
+	private static final String BELOW_FLOOR_CODES_ONLY =
+			"chartsearchai-test/drug-reference-no-pair-below-floor-codes-only.json";
+
 	/** The ticket's own shape: a drug the patient is not on, proposed, related Major to her order. */
 	private static final String PROPOSAL = "Can I give her ibuprofen?";
 
@@ -561,6 +566,51 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals("The interaction check relates Mebendazole to none of this patient's 2 active medications. ["
 				+ referenceRecordOf(answer, "mebendazole") + "]", answer.getAnswer());
+	}
+
+	/** The count is of her active MEDICATIONS, the prescriptions her medication list shows, and not of the
+	 *  substances they resolve to (issue #592): beside one prescription of a lamivudine / stavudine combination
+	 *  she has two medications and three substances. */
+	@Test
+	public void anAnswerOfNoPairCountsACombinationPrescriptionAsOneMedication() throws Exception {
+		executeDataSet("AnswerFromFindingsLamivudineStavudineOrderTestData.xml");
+		String question = "Can I give her mebendazole?";
+		assertTheCheckRelatedNothing(patient, question, shipped());
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("The interaction check relates Mebendazole to none of this patient's 2 active medications. ["
+				+ referenceRecordOf(answer, "mebendazole") + "]", answer.getAnswer());
+	}
+
+	/** A pair below the floor that the below-floor answer cannot state — her order, known by its ATC code alone,
+	 *  names no drug a line could print — still relates the drug to her, so the no-pair answer must not say it
+	 *  relates the drug to none of her medications: the model answers (issue #592). Her aspirin's entry carries no
+	 *  row naming subfloran, so the empty-{@code belowFloor} conjunct is all that refuses it. */
+	@Test
+	public void aProposalRelatedToHerOrdersOnlyByAPairNoLineCanStateStillAsksTheModel() throws Exception {
+		DrugReferenceTestSupport.mapConceptToAtc(88, "B01AC06");
+		DrugReferenceTestSupport.makeOrderNameless(111, 88);
+		DrugReferenceService reference = DrugReferenceTestSupport.curatedFixtureService(BELOW_FLOOR_CODES_ONLY);
+		String question = "Can I give her subfloran?";
+		answerFromFindings(false);
+		RecordingProvider recorder = new RecordingProvider();
+		ChartAnswer off = serviceWith(recorder, reference).search(patient, question);
+		answerFromFindings(true);
+		assertFalse(FINDING_LINE.matcher(recorder.lastRecords).find(),
+				"precondition: no finding is raised: " + recorder.lastRecords);
+		PairChipExtent extent = off.getPairChipExtent();
+		assertTrue(extent != null && extent.getFound() == 0 && extent.getBelowFloor() != null
+				&& extent.getBelowFloor().size() == 1,
+				"precondition: one pair below the floor, was: " + extent);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, reference).search(patient, question);
+
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+		assertFalse(answer.isAnsweredByTheModule());
 	}
 
 	/** Beside an order that has not started, the answer would count it among her active medications, so the model

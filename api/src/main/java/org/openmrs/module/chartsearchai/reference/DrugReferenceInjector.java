@@ -2675,8 +2675,8 @@ public class DrugReferenceInjector {
 	 * requires. Never "can be given", never "safe", never a claim that the patient has no interactions. <b>Its
 	 * residue</b>: an order resolved to only SOME of its substances (a combination the data files under one
 	 * constituent) passes {@code everyActiveOrderResolves}, so its other substances were not compared — ADR Decision
-	 * 108's residue. And the count is of SUBSTANCES ({@code substanceGroupKey}, as ADR Decision 87's note counts), so a
-	 * combination prescription counts as each substance it resolves to.
+	 * 108's residue. The count is of her active ORDERS, the prescriptions her medication list shows, so a combination
+	 * prescription counts once.
 	 *
 	 * <p>Fail-closed, as {@link #composeFromBelowFloor} is, through the same {@link #proposedDrugsRecord}: one drug,
 	 * proposed and not hers, whose reference record is in the chart; her orders resolve at least one substance; and
@@ -2737,7 +2737,10 @@ public class DrugReferenceInjector {
 		if (subject == null) {
 			return null;
 		}
-		int n = herSubstances.size();
+		// Her medications are her PRESCRIPTIONS, the list a clinician reads, so a combination prescription is one
+		// of them however many substances it resolves to. Each has started (above) and resolves (the caller's
+		// branch), so the check compared the drug against what each resolves to — see the javadoc's residue.
+		int n = context.getActiveDrugOrders().size();
 		return "The interaction check relates " + subject.displayLabel() + " to none of this patient's " + n
 				+ (n == 1 ? " active medication. [" : " active medications. [") + record.getIndex() + "]";
 	}

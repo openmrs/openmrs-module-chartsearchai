@@ -13547,6 +13547,9 @@ it, under `DATASET_TAIL_LEAD`, behind the prefix the system prompt says marks ma
 - **The module answers it**: `DrugReferenceInjector.composeFromNoPair`, beside `composeFromBelowFloor` in the branch that
   runs where no finding was raised: *"The interaction check relates Nystatin to none of this patient's 2 active
   medications. [n]"*, citing the drug's reference record. Taken by the maintainer on #592.
+- **The count is of her active ORDERS**, the prescriptions her medication list shows, so a combination prescription counts
+  once. It was first the substances they resolve to (`substanceGroupKey`), which review found reading 3 beside two
+  prescriptions, one of them lamivudine / stavudine; reproduced as the composed sentence before the change.
 - **It is a statement about the CHECK and the one negative ANSWER the module composes.** Never "can be given", never "safe",
   never that the patient has no interactions. Decision 108's refusal of "no interactions were found" is about TRUTH —
   such a sentence is true only of checks that ran over everything — and this one claims the interaction check alone, and
@@ -13594,8 +13597,6 @@ answer.
 - An order resolved to only SOME of its substances — a combination the data files under one constituent — passes
   `everyActiveOrderResolves`, so its other substances were not compared: Decision 108's residue, stated in the answer's
   scope rather than removed.
-- The count is of SUBSTANCES (`substanceGroupKey`), as Decision 87's note counts, so a combination prescription counts
-  once per substance it resolves to and the number can exceed the prescriptions a clinician sees.
 - An allergy recorded under a name the data cannot resolve raises no finding (`DrugSafetyValidator.recordedAllergens`
   skips it), so the module composes this sentence beside it. Refusing on any unresolved allergen was not taken: the
   context does not say which allergy records are drug allergies, so a food or environmental allergy would refuse
@@ -13619,13 +13620,14 @@ is the lever Decision 84's ledger closed.
 ### Not pinned
 
 Mutating each guard of `composeFromNoPair` and `proposedDrugsRecord` against `LlmInferenceServiceAnswerFromFindingsContextTest`
-reddens a case for five of them: the proposal test, the started test, the contraindication-arms test, the
-interaction-rows test and the reverse direction, each the case named for it below. The others stay green: a null
+reddens a case for the proposal test, the started test, the contraindication-arms test, the
+interaction-rows test, the reverse direction and the empty `belowFloor`, each the case named for it below — the last
+through a pair `composeFromBelowFloor` refuses because her order, known by its ATC code alone, names no drug a line
+could print, beside an aspirin entry carrying no row that names the drug proposed, so the reverse-direction guard cannot
+refuse it first. The others stay green: a null
 extent and the subject lookup, which no case reaches with the other guards passing; and, each reached first by another
 guard there,
-`found == 0` (a raised finding is what a nonzero count is, and the branch runs only with none), the empty `belowFloor`
-(where it is non-empty `composeFromBelowFloor` answers, and its remaining refusals — an unrated pair, an order with no
-citable record — have no fixture), her substances non-empty (a chart with no medication record states no extent at all),
+`found == 0` (a raised finding is what a nonzero count is, and the branch runs only with none), her substances non-empty (a chart with no medication record states no extent at all),
 not-hers and one-substance (a drug she takes raises the already-ordered finding; two substances open the question-pair
 arm, whose extent carries no `belowFloor`), and the record's row match (the cases inject one reference record). They are
 kept as the gate's own statement of what it requires, as Decision 142 kept its unpinned refusal.
@@ -13636,5 +13638,7 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalTheDataRela
 `.aProposalOfNoPairBesideAnOrderTheDataCannotNameStillAsksTheModel`,
 `.aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel`,
 `.aProposalARowOfHerOwnOrdersNamesStillAsksTheModel`, `.aProposalOfADrugWithNoInteractionRowsStillAsksTheModel`,
-`.aProposalOfNoPairWithTheContraindicationArmsOffStillAsksTheModel` and
-`.anAnswerOfNoPairCountsEveryMedicationTheCheckComparedTheDrugAgainst`.
+`.aProposalOfNoPairWithTheContraindicationArmsOffStillAsksTheModel`,
+`.aProposalRelatedToHerOrdersOnlyByAPairNoLineCanStateStillAsksTheModel`,
+`.anAnswerOfNoPairCountsEveryMedicationTheCheckComparedTheDrugAgainst` and
+`.anAnswerOfNoPairCountsACombinationPrescriptionAsOneMedication`.

@@ -145,6 +145,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 140: A proposal whose findings are all cautions about the drug is answered with the cautions found](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)
 - [Decision 142: A proposal related to her orders only below the severity floor is answered with those rows](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)
 - [Decision 143: A proposal related to none of her orders is answered with what the interaction check established](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
+- [Decision 144: A below-floor answer states a bottom line scoped to the interaction data](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data)
+- [Decision 145: An order a composed answer lists only below the floor does not scope its chips](#decision-145-an-order-a-composed-answer-lists-only-below-the-floor-does-not-scope-its-chips)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13474,7 +13476,7 @@ and `.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
 
 ## Decision 142: A proposal related to her orders only below the severity floor is answered with those rows
 
-**Status: Accepted** (October 2026) — implemented, no issue. Extends [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found).
+**Status: Accepted** (October 2026) — implemented, no issue. Extends [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found). Its answer's wording is amended by [Decision 144](#decision-144-a-below-floor-answer-states-a-bottom-line-scoped-to-the-interaction-data).
 
 ### Context
 
@@ -13642,3 +13644,98 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalTheDataRela
 `.aProposalRelatedToHerOrdersOnlyByAPairNoLineCanStateStillAsksTheModel`,
 `.anAnswerOfNoPairCountsEveryMedicationTheCheckComparedTheDrugAgainst` and
 `.anAnswerOfNoPairCountsACombinationPrescriptionAsOneMedication`.
+
+## Decision 144: A below-floor answer states a bottom line scoped to the interaction data
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows).
+
+### Context
+
+Decision 142's answer to *"Is clarithromycin safe for her?"* listed four lines, each ending *"— Unknown."*, and gave no
+call. Read by hand for what a clinician gets from it: no bottom line; "unknown severity" open to being read as "probably
+minor"; one non-statement four times. A "yes" is not available — the check covers rated pairs in its data and nothing
+beyond drug interactions — and a "no" is the refusal Decision 142 removed. What the data does license is a call about
+itself.
+
+### The decision
+
+- **One sentence with a bottom line scoped to the interaction data**, then its scope on a line of its own:
+  *"The interaction data gives no rated reason to withhold Clarithromycin: it lists 4 of this patient's orders against
+  it — Lidocaine, Metoclopramide, Neomycin and Tiotropium — none with a severity or mechanism on file. [45] [6] [8] [7]
+  [4]"* / `DrugReferenceInjector.BELOW_FLOOR_SCOPE`, *"Interactions the data does not rate, and anything beyond drug
+  interactions, are not covered."*
+- **"No mechanism on file" is the data's statement, never an inference**: `DrugReference.Interaction.mechanismOnFile()`,
+  written by `DdiDrugReferenceSource` alone off the note it writes — its no-mechanism branch — and carried on each pair.
+  A source that says nothing (every other source) gets *"none with a severity rated"*.
+- **A rated row below a raised floor is named with its rating** — *"ASPIRIN (Minor) — each rated below the level this
+  module reports as a finding"*.
+- **"This patient's orders"**, not "her": the answer reaches patients of either sex.
+- **A caution answer states its drug's rows below the floor too**, on a closing line: *"It also lists Lidocaine and
+  Tiotropium against it, with no severity or mechanism on file. [45] [6] [4]"* — `belowFloorClosingLine`, through the
+  one reading of those rows both answers share (`BelowFloorRows`). Before it, *"Is aspirin safe for her?"* named its one
+  Minor caution and said nothing of the two rows against her lidocaine and tiotropium, while a drug with no finding was
+  answered with exactly such rows. Not on a "No": its lead is a stronger reason the rows would only dilute.
+
+The risk, accepted on the record: a reader may take *"gives no rated reason to withhold"* as a clearance. The scope line
+is there to say it is not one.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: `main` @ 61497e47 against this branch over 57 cells —
+round 3's 20 on the DDI rig's patients, the 20 of `capture_probe_safety.sh`, Susan's six, the five clarithromycin
+phrasings and five more proposals. **It passed.** The 19 cells main answers with Decision 142's lead were rewritten to
+the one sentence, each naming exactly main's orders with exactly main's markers, each saying no severity or mechanism is
+on file — every one a DDInter Unknown row with no mechanism — with their chips unchanged. The other 38 were
+byte-identical.
+
+A second round, for the closing line, against that first round's build over the same 57 cells, **passed**: seven caution
+answers gained exactly one closing line naming exactly their below-floor pairs' orders, every pair a DDInter Unknown row
+with no mechanism; the other 50 were byte-identical. No chip was lost. Three cells gained chips, each a recorded allergy
+to an order the closing line now cites — Susan's aspirin and erythromycin answers her lidocaine and tiotropium allergies,
+her fluconazole answer the tiotropium one.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
+`.aPairBelowARaisedFloorIsStatedWithItsOwnRating` and `.aSourceSilentOnMechanismsIsNotSaidToCarryNone`.
+
+## Decision 145: An order a composed answer lists only below the floor does not scope its chips
+
+**Status: Accepted** (October 2026) — implemented, no issue. Narrows
+[Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)'s
+chips rule.
+
+### Context
+
+Decision 140 handed the chips pass of a composed answer every marker it carries, so that a contraindication of an order a
+FINDING is about stands beside the answer as beside a model's citing that order. Decisions 142 and 144 then gave composed
+answers lines that cite her orders without stating a finding about them — the rows below the floor. On *"Is aspirin safe
+for her?"* the closing line *"It also lists Lidocaine and Tiotropium against it …"* cited her lidocaine and tiotropium
+orders, and her recorded allergies to both came up beside an answer about aspirin: real conflicts, with no bearing on the
+question, present only because a line listed those orders.
+
+### The decision
+
+- **The chips pass of a composed answer reads the markers of its FINDING lines alone** —
+  `LlmInferenceService.findingLineMarkersOf`: a line whose markers include a `safety_finding` record. Decided from the
+  record a marker cites, never from the line's words. A line listing rows below the floor still cites her orders, so a
+  clinician can open them.
+- **What it gives up**: the incidental catch — her allergy to a drug she is prescribed, raised beside a question about
+  another drug. It stays on `/chartalerts` (ADR Decision 79), and beside any answer about that order.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: PR #594 @ 967c4b89 against this change over 57
+cells. Every answer was byte-identical — the change moves only what the chips pass reads — and no cell the model
+answers moved, no composed cell gained a chip, and Susan's fluconazole answer kept her lidocaine allergy, its finding
+line citing that order. Composed answers lost 23 contraindication chips. 21 were the case the change is for, an allergy
+to an order only a listing line cited. **The gate failed as written on the other two, and the failure was accepted**:
+Betty's erythromycin and clarithromycin answers lost *"Bupivacaine is in the same ATC class (N01BB) as the patient's
+allergy to Lidocaine — possible cross-reactivity"*, a chip about an order no line cites. The rule allowed a loss only
+for a chip about a cited order; this one came in through the allergen side — the listing line cited her lidocaine
+order, which made her lidocaine allergy subject matter, and her bupivacaine order cross-reacts with it. With the
+answers byte-identical and the listing line's marker the only input removed, the chip existed only because a line
+listed an order; it is the case the change is for, which the rule did not anticipate.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.anOrderListedOnlyOnACautionAnswersClosingLineDoesNotBringItsConflictsBesideIt`
+and `.anOrderListedOnlyOnABelowFloorAnswerDoesNotBringItsConflictsBesideIt`; Decision 140's half by
+`.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt`.
+

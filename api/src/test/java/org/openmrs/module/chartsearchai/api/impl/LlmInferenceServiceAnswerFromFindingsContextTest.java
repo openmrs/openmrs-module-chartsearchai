@@ -428,10 +428,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	/**
 	 * A proposed drug whose only relationships to her orders are rows below the severity floor — no finding at all —
-	 * is answered by the module with those rows (ADR Decision 142): a lead counting them by their rating, then one
-	 * line per pair citing the drug's reference record and her order's record. Never "should not be given", which
-	 * the model wrote over four Unknown rows; never a clearance. Clarithromycin relates to her aspirin only in
-	 * DDInter's Unknown tier.
+	 * is answered by the module with those rows (ADR Decisions 142, 144): a bottom line scoped to the interaction
+	 * data, the orders and what the data says of them, citing the drug's reference record and each order's, then
+	 * what that bottom line does not cover. Never "should not be given", which the model wrote over four Unknown
+	 * rows; never a clearance. Clarithromycin relates to her aspirin only in DDInter's Unknown tier.
 	 */
 	@Test
 	public void aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows() {
@@ -449,10 +449,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				reference = ref.getIndex();
 			}
 		}
-		assertEquals("1 interaction of unknown severity for Clarithromycin:\n"
-				// Her order by its own display — the standard dataset's drug name, as the chart records it.
-				+ "Clarithromycin" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "ASPIRIN — Unknown. ["
-				+ reference + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
+		// Her order by its own display — the standard dataset's drug name, as the chart records it. DDInter says
+		// this row carries no mechanism, so the answer may say so (ADR Decision 144).
+		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin: it lists 1 of this "
+				+ "patient's orders against it — ASPIRIN — with no severity or mechanism on file. [" + reference + "] ["
+				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
 	}
 
 	/**
@@ -475,9 +477,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				reference = ref.getIndex();
 			}
 		}
-		assertEquals("1 lower-rated interaction for Omeprazole:\n"
-				+ "Omeprazole" + DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE + "ASPIRIN — Minor. [" + reference
-				+ "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Omeprazole: it lists 1 of this "
+				+ "patient's orders against it — ASPIRIN (Minor) — each rated below the level this module reports as a "
+				+ "finding. [" + reference + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
 	}
 
 	/** A question that names the drug without proposing it keeps the model's answer, below-floor rows or not. */
@@ -517,6 +520,104 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
 		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/**
+	 * A source that does not say whether a row carries a mechanism — every source but DDInter's — never has the
+	 * answer say none is on file (ADR Decision 144): the row here carries one, rated Unknown.
+	 */
+	@Test
+	public void aSourceSilentOnMechanismsIsNotSaidToCarryNone() throws Exception {
+		DrugReferenceService reference = DrugReferenceTestSupport.curatedFixtureService(
+				"chartsearchai-test/drug-reference-below-floor-source-states-no-mechanism-flag.json");
+		ChartAnswer answer = serviceWith(new RecordingProvider(), reference).search(patient,
+				"Can I give her clarithromycin?");
+
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: answered by the module: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("— ASPIRIN — with no severity rated."), answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("mechanism"), answer.getAnswer());
+	}
+
+	/**
+	 * A caution answer also states the drug's rows below the severity floor, on a closing line of its own (ADR
+	 * Decision 144): metformin's Moderate caution against her warfarin is the finding, and the data also lists
+	 * metformin against her aspirin, rated Unknown with no mechanism — a row the answer said nothing of, so a
+	 * clinician saw one relationship where the data holds two.
+	 */
+	@Test
+	public void aCautionAnswerAlsoStatesTheRowsBelowTheFloor() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		String question = "Can I give her metformin?";
+		List<Finding> findings = findingsInThePromptFor(question);
+		assertEquals(1, findings.size(), "precondition: one finding, " + findings);
+		assertTrue(findings.get(0).text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION),
+				"precondition: a caution, " + findings.get(0).text);
+
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, question);
+
+		int reference = -1;
+		for (RecordReference ref : answer.getReferences()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(ref.getResourceType())) {
+				reference = ref.getIndex();
+			}
+		}
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(3, lines.length, "the lead, the finding, and the rows below the floor: " + answer.getAnswer());
+		assertEquals("It also lists ASPIRIN against it, with no severity or mechanism on file. [" + reference + "] ["
+				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]", lines[2]);
+	}
+
+	/**
+	 * An order a composed answer lists only as a row below the floor is cited, and is not what the answer is about
+	 * (ADR Decision 145): her recorded aspirin allergy against her aspirin order is not raised beside an answer about
+	 * metformin whose closing line lists that order, nor beside one about clarithromycin made only of such rows. The
+	 * chips beside a composed answer are scoped by the orders its FINDINGS are about.
+	 */
+	@Test
+	public void anOrderListedOnlyOnACautionAnswersClosingLineDoesNotBringItsConflictsBesideIt() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		assertNoAspirinConflictBeside("Can I give her metformin?");
+	}
+
+	/** {@link #anOrderListedOnlyOnACautionAnswersClosingLineDoesNotBringItsConflictsBesideIt}, for an answer made only
+	 *  of rows below the floor: clarithromycin relates to her aspirin in DDInter's Unknown tier alone. */
+	@Test
+	public void anOrderListedOnlyOnABelowFloorAnswerDoesNotBringItsConflictsBesideIt() {
+		assertNoAspirinConflictBeside("Can I give her clarithromycin?");
+	}
+
+	private void assertNoAspirinConflictBeside(String question) {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		ChartAnswer allergies = serviceWith(new RecordingProvider()).search(patient, "What is she allergic to?");
+		assertTrue(aspirinConflictIn(allergies), "precondition: her aspirin order against her aspirin allergy is a chip "
+				+ "where the response is about it, was: " + allergies.getSafetyWarnings());
+		{
+			ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, question);
+
+			assertTrue(answer.isAnsweredByTheModule(), "precondition: " + answer.getAnswer());
+			int aspirinRecord = recordOf(answer, ASPIRIN_ORDER_UUID);
+			String listing = null;
+			for (String line : answer.getAnswer().split("\n")) {
+				if (line.contains("[" + aspirinRecord + "]")) {
+					listing = line;
+				}
+			}
+			assertNotNull(listing, "precondition: a line cites her aspirin order: " + answer.getAnswer());
+			assertTrue(listing.startsWith("It also lists ") || listing.startsWith("The interaction data gives "),
+					"precondition: it cites it only as a row below the floor: " + listing);
+			assertFalse(aspirinConflictIn(answer),
+					question + ": her aspirin conflict is not beside this answer: " + answer.getSafetyWarnings());
+		}
+	}
+
+	private static boolean aspirinConflictIn(ChartAnswer answer) {
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType())
+					&& chip.getDrug().toLowerCase(java.util.Locale.ROOT).contains("aspirin")) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The same answer however the proposal is worded, since no model words it (ADR Decision 142). */

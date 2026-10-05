@@ -273,8 +273,10 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				continue;
 			}
 			String note = noteFor(severity, gid, mech, noteCache);
-			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, severity, note));
-			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, severity, note));
+			// Off the note noteFor just wrote, so "a mechanism was on file" has one definition: its two branches.
+			boolean mechanismOnFile = !noMechanismNote(severity).equals(note);
+			partners.computeIfAbsent(a, k -> new ArrayList<Link>()).add(new Link(b, severity, note, mechanismOnFile));
+			partners.computeIfAbsent(b, k -> new ArrayList<Link>()).add(new Link(a, severity, note, mechanismOnFile));
 		}
 		// Reported through the validity collector rather than logged here: a knowledge base pairing a drug
 		// with itself is a data-validity problem in the operator's or the upstream project's file, which is
@@ -580,6 +582,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			i.setAtc(p.atc.isEmpty() ? null : p.atc.get(0));
 			i.setSeverity(link.severity);
 			i.setNote(link.note);
+			i.recordMechanismOnFile(link.mechanismOnFile);
 			out.add(i);
 		}
 		return out;
@@ -595,9 +598,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 		String text = mechanismText(mech, gid);
 		String note = (text != null && !text.isEmpty())
 				? severity + ". " + text
-				: severity + " severity interaction (DDInter 2.0; no mechanism description on file).";
+				: noMechanismNote(severity);
 		cache.put(key, note);
 		return note;
+	}
+
+	/** The note {@link #noteFor} writes for a row whose group carries no mechanism text. */
+	private static String noMechanismNote(String severity) {
+		return severity + " severity interaction (DDInter 2.0; no mechanism description on file).";
 	}
 
 	/**
@@ -720,10 +728,14 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 
 		final String note;
 
-		Link(String partnerId, String severity, String note) {
+		/** Whether {@link #note} states a mechanism — see {@code DrugReference.Interaction.mechanismOnFile()}. */
+		final boolean mechanismOnFile;
+
+		Link(String partnerId, String severity, String note, boolean mechanismOnFile) {
 			this.partnerId = partnerId;
 			this.severity = severity;
 			this.note = note;
+			this.mechanismOnFile = mechanismOnFile;
 		}
 	}
 }

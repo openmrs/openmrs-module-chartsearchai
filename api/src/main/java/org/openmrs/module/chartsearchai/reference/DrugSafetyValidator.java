@@ -7262,7 +7262,8 @@ public class DrugSafetyValidator {
 				}
 			}
 			pairs.add(new PairChipExtent.BelowFloorPair(drug, partnerLabel(i),
-					ChartSearchAiUtils.firstNonBlank(i.getSeverity()), herOrders, started && !herOrders.isEmpty()));
+					ChartSearchAiUtils.firstNonBlank(i.getSeverity()), herOrders, started && !herOrders.isEmpty(),
+					i.mechanismOnFile()));
 		}
 		return pairs;
 	}

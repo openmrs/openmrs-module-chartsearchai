@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  Issue #592: a second active drug order for patient 7 of the standard test dataset, whose only
+  active order is order 111 (ASPIRIN, concept 88): ONE prescription of a combination drug,
+  "Lamivudine / stavudine", which the reference data resolves to two substances. So her chart holds
+  two active medications and three substances, and an answer counting her medications must say 2.
+
+  A concept, its one name and a drug are supplied because the standard dataset carries no such
+  combination. The encounter is order 111's own (3, patient 7).
+-->
+<dataset>
+	<concept concept_id="9592" retired="false" datatype_id="4" class_id="3" is_set="false" creator="1"
+	         date_created="2008-08-15 00:00:00.0" uuid="9592aaaa-0000-4000-8000-00000009592a" />
+	<concept_name concept_name_id="9592" concept_id="9592" name="Lamivudine / stavudine"
+	              locale="en_GB" locale_preferred="1" concept_name_type="FULLY_SPECIFIED" creator="1"
+	              date_created="2008-08-15 00:00:00.0" voided="false" uuid="9592bbbb-0000-4000-8000-00000009592a" />
+	<drug drug_id="9592" concept_id="9592" name="Lamivudine / stavudine" combination="true"
+	      creator="1" date_created="2008-08-15 00:00:00.0" retired="false" uuid="9592cccc-0000-4000-8000-00000009592a" />
+	<orders order_id="9592" order_type_id="1" order_number="ORD-9592" urgency="ROUTINE"
+	        order_action="NEW" concept_id="9592" orderer="1" instructions="1x daily"
+	        date_activated="2008-08-15 00:00:00.0" creator="1" date_created="2008-08-15 00:00:00.0"
+	        voided="false" patient_id="7" uuid="9592dddd-0000-4000-8000-00000009592a"
+	        care_setting="1" encounter_id="3" />
+	<drug_order order_id="9592" drug_inventory_id="9592" dose="1.0" dose_units="51" as_needed="false"
+	            frequency="1" dosing_type="org.openmrs.SimpleDosingInstructions" route="22"
+	            quantity="1.0" quantity_units="51" num_refills="0" dispense_as_written="0" />
+</dataset>

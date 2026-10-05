@@ -1,0 +1,34 @@
+{
+ "version": "1.0",
+ "source": "hand-authored fixture for issue #592 — not shipped data",
+ "description": "Issue #592: patient 7's aspirin order, made nameless and reachable by its ATC code alone, against a proposal of subfloran whose only row joins it to aspirin below the severity floor (Unknown). The pair is below the floor but names none of her orders by display, so the below-floor answer refuses it; the aspirin entry carries no row naming subfloran, so nothing but the below-floor population tells the no-pair answer that the check related the drug to her. Neither answer may be composed.",
+ "entries": [
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "atcCodes": [
+    "B01AC06"
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "subfloran",
+   "name": "Subfloran",
+   "aliases": [
+    "subfloran"
+   ],
+   "interactions": [
+    {
+     "token": "aspirin",
+     "atc": "B01AC06",
+     "severity": "Unknown",
+     "note": "The interaction between subfloran and aspirin has not been characterised."
+    }
+   ],
+   "source": "hand-authored fixture"
+  }
+ ]
+}

@@ -8112,6 +8112,27 @@ public class DrugSafetyValidator {
 		return atc != null && other.normalizedAtcCodes().contains(atc);
 	}
 
+	/**
+	 * @return whether any interaction rule of {@code rows} identifies one of {@code others} ({@link #identifies}) — the
+	 *         direction the drug-in-play arm does not read, since it walks the PROPOSED drug's rows alone. The
+	 *         {@code ddinter} loader files every pair under both of its drugs, so there it is not expected to move an
+	 *         answer (ADR Decision 143's re-run moved none); a curated file need not, and a pair filed only under one
+	 *         of her orders' entries is the case this answers for {@code DrugReferenceInjector.composeFromNoPair}
+	 *         (issue #592). At any rating: the question is whether the data relates the two at all.
+	 */
+	static boolean anyRuleIdentifiesAny(List<DrugReference> rows, List<DrugReference> others) {
+		for (DrugReference row : rows) {
+			for (DrugReference.Interaction rule : row.getInteractions()) {
+				for (DrugReference other : others) {
+					if (identifies(rule, other)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	/** @return true when {@code token} is, case-folded, one of {@code other}'s own aliases. Through
 	 *          {@link DrugReference#isNamed}, which is where that rule now lives so that the
 	 *          reference-name arm of {@link PatientClinicalContext#hasActiveDrug} (issue #136) asks it
@@ -10197,7 +10218,7 @@ public class DrugSafetyValidator {
 	}
 
 	/** @return whether any of {@code orders} has not started — see {@link #scheduledStartOf} */
-	private static boolean anyHasNotStarted(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
+	static boolean anyHasNotStarted(Collection<PatientClinicalContext.ActiveDrugOrder> orders) {
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			if (!order.hasStarted()) {
 				return true;

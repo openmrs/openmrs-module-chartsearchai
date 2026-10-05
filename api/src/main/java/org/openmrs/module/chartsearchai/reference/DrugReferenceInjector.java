@@ -912,6 +912,10 @@ public class DrugReferenceInjector {
 						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries)) {
 			moduleAnswer = composeFromBelowFloor(question, questionDrugs, screenedSubstances, pairExtent.stated(),
 					mappings, context);
+			if (moduleAnswer == null) {
+				moduleAnswer = composeFromNoPair(question, questionDrugs, screenedSubstances, orderEntries,
+						pairExtent.stated(), mappings, matched, context, reading.states());
+			}
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -2617,26 +2621,11 @@ public class DrugReferenceInjector {
 		if (extent == null || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()) {
 			return null;
 		}
-		Set<Object> asked = new LinkedHashSet<Object>();
-		for (DrugReference entry : questionDrugs) {
-			asked.add(entry.substanceGroupKey());
-		}
-		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
-				|| !questionProposes(question, questionDrugs)) {
+		RecordMapping record = proposedDrugsRecord(question, questionDrugs, herSubstances, mappings);
+		if (record == null) {
 			return null;
 		}
-		List<String> rows = rowIds(questionDrugs);
-		Integer reference = null;
-		for (RecordMapping mapping : mappings) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
-					&& rows.contains(mapping.getResourceUuid())) {
-				reference = Integer.valueOf(mapping.getIndex());
-				break;
-			}
-		}
-		if (reference == null) {
-			return null;
-		}
+		Integer reference = Integer.valueOf(record.getIndex());
 		Map<String, Integer> orderNumbers = orderRecordNumbers(new DrugOrderRecords(mappings), context);
 		List<String> lines = new ArrayList<String>();
 		boolean allUnknown = true;
@@ -2671,6 +2660,118 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * The module's answer to a proposal the reference data relates to NONE of her orders, at any rating (issue #592,
+	 * ADR Decision 143), or {@code null} where the model answers: <em>"The interaction check relates Mebendazole to
+	 * none of this patient's 1 active medication. [n]"</em>, citing the drug's reference record. The model answered
+	 * such a proposal "The records do not address Mebendazole.", which reads exactly like a drug the module never
+	 * looked up, while the response's own {@code interactionPairs} said the check ran and related nothing.
+	 *
+	 * <p><b>It is a statement about the CHECK and the one negative ANSWER the module composes.</b> {@link
+	 * #answersFromFindings} refuses "no interactions were found" because it is true only of checks that ran over
+	 * everything; this sentence claims the interaction check alone, and only where that check did run over her whole
+	 * list: an extent stated with {@code found == 0} and an empty {@code belowFloor} — the drug's rows compared against
+	 * every substance her orders resolve, at every rating, {@code belowFloorPairs} being the complement of the
+	 * above-floor grouping — on a chart read for safety with every active order resolved, which the caller's branch
+	 * requires. Never "can be given", never "safe", never a claim that the patient has no interactions. <b>Its
+	 * residue</b>: an order resolved to only SOME of its substances (a combination the data files under one
+	 * constituent) passes {@code everyActiveOrderResolves}, so its other substances were not compared — ADR Decision
+	 * 108's residue. The count is of her active ORDERS, the prescriptions her medication list shows, so a combination
+	 * prescription counts once.
+	 *
+	 * <p>Fail-closed, as {@link #composeFromBelowFloor} is, through the same {@link #proposedDrugsRecord}: one drug,
+	 * proposed and not hers, whose reference record is in the chart; her orders resolve at least one substance; and
+	 * every one of them has started, since the sentence calls them her active medications. The contraindication arms
+	 * are on ({@code contraindicationsChecked}, the injection's {@code ContraindicationReading}), so "no finding"
+	 * includes her allergy records. And
+	 * the data must speak to the pair in BOTH directions: the proposed drug carries interaction rows of its own —
+	 * otherwise the check compared it against nothing (an {@code atc} install carries none, and a drug can carry none
+	 * in any source); and no row of her orders' entries names it ({@link DrugSafetyValidator#anyRuleIdentifiesAny}),
+	 * because the drug-in-play arm reads the proposed drug's rows alone and a curated file need not file a pair under
+	 * both of its drugs.
+	 * It cites the drug's record alone: the sentence relates none of her orders, so citing them would put them in the
+	 * chips pass's subject matter for a statement about none of them.
+	 *
+	 * <p>The drug is named by {@link DrugSafetyValidator#interactionSubject} over the rows the record was rendered
+	 * for — the row this response names the substance by, which is what {@code SubstanceSubjects.subjectOf} answers
+	 * for a chip and for {@link #composeFromBelowFloor}'s lines.
+	 */
+	private static String composeFromNoPair(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<DrugReference> orderEntries, PairChipExtent extent,
+			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
+			boolean contraindicationsChecked) {
+		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null
+				|| !extent.getBelowFloor().isEmpty() || herSubstances.isEmpty()) {
+			return null;
+		}
+		// With the contraindication arms off an allergy to the drug proposed raises nothing, so "no finding" no
+		// longer says her records were checked — the model, which reads them, answers instead. The injection's own
+		// ContraindicationReading, decided once for it, so this answer and its records read the toggles alike.
+		if (!contraindicationsChecked) {
+			return null;
+		}
+		// Every order counted has started: the sentence calls them her ACTIVE medications, which an order scheduled
+		// for later is not yet — the reason composeFromBelowFloor refuses a line on one (ADR Decision 142).
+		if (DrugSafetyValidator.anyHasNotStarted(context.getActiveDrugOrders())) {
+			return null;
+		}
+		RecordMapping record = proposedDrugsRecord(question, questionDrugs, herSubstances, mappings);
+		if (record == null) {
+			return null;
+		}
+		// The proposed drug carries interaction rows, so the check compared it against something; and no row of her
+		// orders names it, which the arm — reading the proposed drug's rows alone — does not ask (see the javadoc).
+		boolean carriesInteractions = false;
+		for (DrugReference row : questionDrugs) {
+			carriesInteractions |= !row.getInteractions().isEmpty();
+		}
+		if (!carriesInteractions || DrugSafetyValidator.anyRuleIdentifiesAny(orderEntries, questionDrugs)) {
+			return null;
+		}
+		DrugReference subject = null;
+		for (Map.Entry<DrugReference, SubstanceRendering> rendered : matched.entrySet()) {
+			if (rendered.getKey().getId() != null && rendered.getKey().getId().equals(record.getResourceUuid())) {
+				subject = DrugSafetyValidator.interactionSubject(rendered.getValue().rows, context);
+				break;
+			}
+		}
+		if (subject == null) {
+			return null;
+		}
+		// Her medications are her PRESCRIPTIONS, the list a clinician reads, so a combination prescription is one
+		// of them however many substances it resolves to. Each has started (above) and resolves (the caller's
+		// branch), so the check compared the drug against what each resolves to — see the javadoc's residue.
+		int n = context.getActiveDrugOrders().size();
+		return "The interaction check relates " + subject.displayLabel() + " to none of this patient's " + n
+				+ (n == 1 ? " active medication. [" : " active medications. [") + record.getIndex() + "]";
+	}
+
+	/**
+	 * The drug-reference record of the one drug {@code question} proposes, or {@code null} — the gate the two
+	 * compositions of a proposal that raised no finding share ({@link #composeFromBelowFloor}, {@link
+	 * #composeFromNoPair}): the question resolves ONE substance, not one of hers ({@code herSubstances}), and proposes
+	 * it ({@link #questionProposes}); and that drug's own reference record is in the chart, which the answer cites.
+	 */
+	private static RecordMapping proposedDrugsRecord(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<RecordMapping> mappings) {
+		Set<Object> asked = new LinkedHashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
+				|| !questionProposes(question, questionDrugs)) {
+			return null;
+		}
+		List<String> rows = rowIds(questionDrugs);
+		for (RecordMapping mapping : mappings) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())
+					&& rows.contains(mapping.getResourceUuid())) {
+				return mapping;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Whether this injection's findings answer the question, so that no model need restate them —
 	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>, ADR
 	 * Decision 108. Asked once per injection, off the resolutions this pass already holds.
@@ -2680,7 +2781,9 @@ public class DrugReferenceInjector {
 	 * over a chart that was read in full and could resolve every record in it, which nothing here can
 	 * establish — an unread allergy list, an allergen recorded as a class or a brand the data does not
 	 * carry, a switched-off arm each made such an answer false, and each was found one after another.
-	 * So those questions keep the model call.
+	 * So those questions keep the model call. The one negative answer the module composes is not this method's:
+	 * {@link #composeFromNoPair} states what the INTERACTION check established where it related the proposed
+	 * drug to none of her orders (issue #592, ADR Decision 143) — a claim about that check alone.
 	 *
 	 * <p><b>And the "No" is licensed by an INTERACTION, never by a contraindication.</b> An interaction
 	 * finding is a relationship the dataset RATES between two substances this module resolved; a

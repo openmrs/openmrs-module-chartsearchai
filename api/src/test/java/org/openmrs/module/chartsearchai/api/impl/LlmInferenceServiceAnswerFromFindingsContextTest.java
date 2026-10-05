@@ -451,10 +451,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 		// Her order by its own display — the standard dataset's drug name, as the chart records it. DDInter says
 		// this row carries no mechanism, so the answer may say so (ADR Decision 144).
-		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin: it lists 1 of this "
-				+ "patient's orders against it — ASPIRIN — with no severity or mechanism on file. [" + reference + "] ["
-				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+		assertEquals("The interaction data gives no rated reason to withhold Clarithromycin: its row against this "
+				+ "patient's orders carries no severity or mechanism. [" + reference + "]\n"
 				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
+		assertCitesNoOrderOfHers(answer);
 	}
 
 	/**
@@ -477,10 +477,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				reference = ref.getIndex();
 			}
 		}
-		assertEquals("The interaction data gives no rated reason to withhold Omeprazole: it lists 1 of this "
-				+ "patient's orders against it — ASPIRIN (Minor) — each rated below the level this module reports as a "
-				+ "finding. [" + reference + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
-				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Omeprazole: its row against this "
+				+ "patient's orders is rated Minor, below the level this module reports as a finding. [" + reference
+				+ "]\n" + "Interactions the data does not rate, and anything beyond drug interactions, are not covered.", answer.getAnswer());
 	}
 
 	/** A question that names the drug without proposing it keeps the model's answer, below-floor rows or not. */
@@ -534,7 +533,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Can I give her clarithromycin?");
 
 		assertTrue(answer.isAnsweredByTheModule(), "precondition: answered by the module: " + answer.getAnswer());
-		assertTrue(answer.getAnswer().contains("— ASPIRIN — with no severity rated."), answer.getAnswer());
+		assertTrue(answer.getAnswer().contains("its row against this patient's orders carries no severity. ["),
+				answer.getAnswer());
 		assertFalse(answer.getAnswer().contains("mechanism"), answer.getAnswer());
 	}
 
@@ -563,8 +563,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 		String[] lines = answer.getAnswer().split("\n");
 		assertEquals(3, lines.length, "the lead, the finding, and the rows below the floor: " + answer.getAnswer());
-		assertEquals("It also lists ASPIRIN against it, with no severity or mechanism on file. [" + reference + "] ["
-				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]", lines[2]);
+		assertEquals("The interaction data also lists it against 1 more of this patient's orders, with no severity or "
+				+ "mechanism on file. [" + reference + "]", lines[2]);
 	}
 
 	/**
@@ -595,18 +595,20 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, question);
 
 			assertTrue(answer.isAnsweredByTheModule(), "precondition: " + answer.getAnswer());
-			int aspirinRecord = recordOf(answer, ASPIRIN_ORDER_UUID);
-			String listing = null;
-			for (String line : answer.getAnswer().split("\n")) {
-				if (line.contains("[" + aspirinRecord + "]")) {
-					listing = line;
-				}
-			}
-			assertNotNull(listing, "precondition: a line cites her aspirin order: " + answer.getAnswer());
-			assertTrue(listing.startsWith("It also lists ") || listing.startsWith("The interaction data gives "),
-					"precondition: it cites it only as a row below the floor: " + listing);
+			assertTrue(answer.getAnswer().contains("The interaction data "),
+					"precondition: the answer states her aspirin order's row below the floor: " + answer.getAnswer());
+			assertCitesNoOrderOfHers(answer);
 			assertFalse(aspirinConflictIn(answer),
 					question + ": her aspirin conflict is not beside this answer: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/** A line listing rows below the floor cites the data that lists them and none of her orders (ADR Decision 146). */
+	private static void assertCitesNoOrderOfHers(ChartAnswer answer) {
+		for (RecordReference reference : answer.getReferences()) {
+			assertFalse(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER.equals(reference.getResourceType())
+					&& ASPIRIN_ORDER_UUID.equals(reference.getResourceUuid()),
+					"her aspirin order, listed only below the floor, is not cited: " + answer.getAnswer());
 		}
 	}
 

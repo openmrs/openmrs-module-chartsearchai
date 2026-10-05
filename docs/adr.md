@@ -150,6 +150,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 145: An order a composed answer lists only below the floor does not scope its chips](#decision-145-an-order-a-composed-answer-lists-only-below-the-floor-does-not-scope-its-chips)
 - [Decision 146: A below-floor statement cites the data and not her orders](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders)
 - [Decision 147: A finding about the drug proposed against her own order is stated where a model's answer leaves it out](#decision-147-a-finding-about-the-drug-proposed-against-her-own-order-is-stated-where-a-models-answer-leaves-it-out)
+- [Decision 148: A proposal question publishes no chip about a listed drug she is not on](#decision-148-a-proposal-question-publishes-no-chip-about-a-listed-drug-she-is-not-on)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13886,4 +13887,47 @@ their list sentence.
 
 Pinned by `LlmInferenceServiceListedMedicationsContextTest.aFindingAboutTheDrugProposedAgainstHerOwnOrderIsStatedWhereTheAnswerLeftItOut`
 and `.aFindingTheAnswerCitesIsNotStatedAgain`; six cases of that class pin the line beside their list sentence.
+
+## Decision 148: A proposal question publishes no chip about a listed drug she is not on
+
+**Status: Accepted** (October 2026) — implemented, no issue. Narrows what
+[Decision 137](#decision-137-a-chip-about-a-drug-other-than-the-one-proposed-says-so) marks into what a response publishes.
+
+### Context
+
+*"The patient is currently on Abacavir, Lopinavir / ritonavir, Didanosine and Trimethoprim and sulfamethoxazole is it
+safe to give Fluconazole?"* (patient Susan) raised twelve chips. Four were about fluconazole. Eight were the listed
+regimen's own interactions with itself and with her orders — lopinavir with didanosine, ritonavir with
+co-trimoxazole, sulfamethoxazole with her lidocaine, rated Major — none bearing on whether fluconazole may be given, and
+none about drugs her chart holds. Decision 137 already marked them and the reference client set them apart, behind a
+line; read by hand, they remained noise for the question asked.
+
+### The decision
+
+- **A response publishes no chip that is about a drug other than the one the question proposes and is not one of her own
+  prescriptions** — `isAboutADrugOtherThanTheOneProposed()` and not `isAboutAnotherOfHerMedications()`:
+  `LlmInferenceService.aboutTheDrugAsked`, where each answer's chips are final, on the model's paths and the module's.
+  Every check before it still reads them.
+- **A conflict of one of her own orders stays**: her recorded allergy to a drug she is prescribed, beside an answer whose
+  finding is about that order — Decision 140's chip, which "everything not about the drug" would have taken off. That
+  choice was put to the user and the narrower rule chosen.
+- **The findings stay in the prompt**; the model may still write about them, and a client reaches their records through
+  the references. They are raised on a question about those drugs.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-05: `main` @ 9182aa7f against this change over 63 cells.
+**It passed.** Every answer was byte-identical. Seven cells lost sixteen chips, each about a drug the question lists and
+her chart does not hold, none about the drug proposed or one of her own prescriptions; the reported question's twelve
+became its four about fluconazole. Every other chip was main's.
+
+### What it costs
+
+A Major among the listed drugs — sulfamethoxazole with her lidocaine, on that question — is no longer a chip. It is about
+drugs her chart does not hold; were she on co-trimoxazole, her chart would hold it and the chip would be hers.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aProposalQuestionPublishesNoChipAboutADrugItOnlyLists`, which
+also pins that the validator marks such a chip — one it stopped marking would be published — and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aComposedLineCitesItsOrdersRecordAndTheChipsAreScopedByIt` for the
+own-order half.
 

@@ -991,7 +991,7 @@ public class LlmInferenceService implements ChartSearchService {
 		List<RecordReference> references = extractCitedReferences(answer, null, mappings);
 		List<ChartSearchService.OrderStopDate> orderStopDates =
 				ChartSearchAiUtils.orderStopDates(answer, references, mappings);
-		log.info("Answered from the module's own safety findings, no model call (issue #469) "
+		log.info("Answered from the module's own drug-safety check, no model call (issue #469) "
 				+ "patient={} findings={}", patient == null ? null : patient.getPatientId(),
 				ChartSearchAiUtils.safetyFindingMappings(mappings).size());
 		tokenConsumer.accept(answer);

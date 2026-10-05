@@ -144,6 +144,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 138: Each chip names the record number of its own finding](#decision-138-each-chip-names-the-record-number-of-its-own-finding)
 - [Decision 140: A proposal whose findings are all cautions about the drug is answered with the cautions found](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)
 - [Decision 142: A proposal related to her orders only below the severity floor is answered with those rows](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows)
+- [Decision 143: A proposal related to none of her orders is answered with what the interaction check established](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -2529,6 +2530,7 @@ Same harness, the same box, run against each head's production code in turn, on 
 - **−** The pre-answer pass still resolves `findForActiveOrders` TWICE over one context — once in `DrugReferenceInjector.injectRecords` and again inside the `validate` it calls — which `DrugSafetyValidator` already records as cost. That is a repeat to REMOVE rather than a fold to hoist, it needs no new type, and by the argument above its share GROWS now that the folding is gone. Not taken here; CLAUDE.md's #151 bullet prescribes the shape ("wherever a caller already holds the resolved list, pass it down rather than resolving again"). **Taken since, by exactly that shape: Decision 58, issue [#255](https://github.com/openmrs/openmrs-module-chartsearchai/issues/255).**
 - **−** The identity guard rests on probes inserted into the dataset. They carry a shared alias so that more than one scan reaches them, so they DO match one synthetic order name and one synthetic allergen — they publish no codes and no rules, so they raise no chip, but they are no longer inert by construction and a future arm keyed on something other than codes or rules would notice them.
 - **−** **Three siblings of this defect are left standing, each measured and each prototyped by the review that found them.** They are not folding, which is why they are not here. (1) `DrugReference.isNamed` re-derives `normalizeName(alias)` per alias per call — 219,170 calls in a ten-drug pass and 79% of that pass's `normalizeName` total, with `StringLatin1.toLowerCase` at 29% of leaf samples — the review's own profiling run, not the counter run above, so do not read it against that run's needle-side figure in the Alternatives list; an index-aligned `normalizedAliases` derived in `setAliases` beside `foldedAliases` measured 28.1 → 22.5 ms at ten drugs, chip hashes identical — that review's own chart, whose ten-drug pass is the 28.1, and not this decision's 28.0, which it is within a tenth of by coincidence. This decision's rejected-alternatives list declines the NEEDLE side of `normalizeName` and is right to; this is the HAYSTACK side, which nothing had measured. (2) `findByDrugName` sweeps the whole dataset, and one order name can be swept several times in a pass: two sites resolve recorded names — `findForActiveOrders` and `orderPartners` — each builds its own `impliedByName`, and that cache memoises the substance narrowing rather than the sweep. Measured on one arrangement, 2 / 3 / 4 sweeps of a single name at one / two / three unmapped orders carrying it. Those sweeps are the 597,480 constant comparisons in the counter table above. **No RULE for the count is stated here. Four were written and each was measured false**, so take the measurement above as one arrangement's and not as a law: the two sites neither key alike (`findForActiveOrders` iterates the deduplicated name set; `substanceRowsNamedBy` memoises per ORDER) nor run over the same orders, and every rule written over one of those facts was falsified by the other. The saving is what was measured, not the count: a per-pass map threaded down beside it, CLAUDE.md's own #151 shape, measured 12.5 → 7.8 ms at one drug in play — on the reviewing agent's own chart, whose absolutes are its own, not this decision's, which measures 17.0 ms in that cell. A cross-pass FIELD memo is worth more and must not be taken — #172's forbidden shape, keyed on chart-supplied names and so unbounded. (3) `normalizedAtcCodes()` allocates a fresh `LinkedHashSet` per call, 45,364 times in a ten-drug pass; deriving it in `setAtcCodes` measured 28.1 → 26.2 ms, on that same review's chart. A fourth, unmeasured: `PatientClinicalContext.containsFolded` re-derives `foldDiacritics(value)` for every haystack element on every call over the pass-invariant allergy and condition sets — the same shape, bounded by matched rules rather than by the dataset.
+
 
 ## Known limitations
 
@@ -13523,3 +13525,116 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHe
 `.aBelowFloorAnswerDoesNotDependOnHowTheProposalIsWorded`, `.aPairBelowARaisedFloorIsStatedWithItsOwnRating`,
 `.aBelowFloorQuestionThatProposesNothingStillAsksTheModel` and `.aBelowFloorPairOnAnOrderThatHasNotStartedStillAsksTheModel`.
 
+## Decision 143: A proposal related to none of her orders is answered with what the interaction check established
+
+**Status: Accepted** (October 2026) — implemented, issue [#592](https://github.com/openmrs/openmrs-module-chartsearchai/issues/592).
+Extends [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows),
+and narrows, for this one shape, the rule that the module never composes a negative
+([Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)).
+
+### Context
+
+Patient Mark Smith `de4b0d62`, on chloroquine and diphenhydramine. Asked *"Can I give him nystatin?"* (and epinephrine and
+amoxicillin), the response stated `interactionPairs {"found": 0, "reported": 0, "belowFloor": []}`: the drug-in-play arm
+compared the drug against both of his orders and the reference data relates it to neither, at any rating. The model
+answered *"The records do not address Nystatin."* — the sentence it also writes for a drug the module never resolved
+(#591's "paracetamol"), so a clinician could not tell "checked, related to none of his orders" from "never looked up".
+Nothing in the prompt said the check had run: the drug's `drug_reference` record carried only the dataset's partners for
+it, under `DATASET_TAIL_LEAD`, behind the prefix the system prompt says marks material that is not this patient's.
+
+### The decision
+
+- **The module answers it**: `DrugReferenceInjector.composeFromNoPair`, beside `composeFromBelowFloor` in the branch that
+  runs where no finding was raised: *"The interaction check relates Nystatin to none of this patient's 2 active
+  medications. [n]"*, citing the drug's reference record. Taken by the maintainer on #592.
+- **It is a statement about the CHECK and the one negative ANSWER the module composes.** Never "can be given", never "safe",
+  never that the patient has no interactions. Decision 108's refusal of "no interactions were found" is about TRUTH —
+  such a sentence is true only of checks that ran over everything — and this one claims the interaction check alone, and
+  only where that check ran over her whole list: an extent stated with `found == 0` and an empty `belowFloor`
+  (`DrugSafetyValidator.belowFloorPairs` is the complement of the above-floor grouping over the same her-order test, so
+  together they say the drug's rows were compared against every substance her orders resolve, at every rating), on a chart
+  read for safety with every active order resolved — the branch's own conjuncts, Decision 142's.
+- **Fail-closed**, through `DrugReferenceInjector.proposedDrugsRecord`, which `composeFromBelowFloor` now shares: the
+  question resolves one substance, not one of hers, and proposes it; and the drug's reference record is in the chart. Her
+  orders must resolve at least one substance, and every one of them must have started: the sentence calls them her
+  active medications, which an order scheduled for later is not yet — Decision 142's reason for refusing a line on one.
+- **The data must speak to the pair in both directions.** The proposed drug carries interaction rows of its own —
+  otherwise the check compared it against nothing: an `atc` install carries none, and a drug can carry none in any
+  source. And no row of her orders' entries names it (`DrugSafetyValidator.anyRuleIdentifiesAny`, over `identifies`):
+  the drug-in-play arm reads the PROPOSED drug's rows alone, and while the `ddinter` loader files every pair under both
+  of its drugs, a curated file need not (`drug-reference-no-pair-one-direction.json` poses it). Both found by review,
+  each reproduced by a case below as the composed sentence before its guard.
+- **The contraindication arms are on** (the injection's own `ContraindicationReading`, which asks
+  `DrugSafetyValidator.reportsContraindications` once for it). With them off an allergy to
+  the drug proposed raises nothing, so "no finding" would no longer include her allergy records, and the model, which
+  reads them, answers. Found by review; reproduced as the composed sentence before the guard.
+- **It cites the drug's record alone.** The sentence relates none of her orders, so citing their records would put them
+  in the chips pass's subject matter for a statement about none of them.
+- **The drug is named by `DrugSafetyValidator.interactionSubject`** over the rows the record was rendered for — the row
+  this response names the substance by, the computation `SubstanceSubjects.subjectOf` makes for a chip and for Decision
+  142's lines.
+
+### Measured
+
+:8081 (RefApp 3.7.1 standalone, shipped DDInter knowledge base, local E4B), 2026-10-05: `main` @ 315d10db against this
+branch, 23 cells, one run each — the thirteen questions of the 2026-10-02 sweep and ten more. Five cells moved, each a
+single-drug proposal whose response states `{"found": 0, "reported": 0, "belowFloor": []}`: Mark Smith's epinephrine,
+nystatin (two phrasings) and amoxicillin, from *"The records do not address Nystatin."* to *"The interaction check relates
+Nystatin to none of this patient's 2 active medications. [24]"*, and Kamwara's mebendazole, from *"The records do not
+address whether Mebendazole can be given."* to the same sentence with her 3. Each cites the drug's `drug_reference`
+record and nothing else, and the count equals the patient's number of active orders on both charts. The other eighteen
+cells were byte-identical in answer, `answeredByTheModule`, `interactionPairs` and chip details — among them both
+below-floor proposals Decision 142 answers, a proposal raising an allergy finding, and a question naming nystatin
+without proposing it. Re-run on the build carrying the two-direction guards below, all 23 cells were byte-identical to
+the first run of this branch: on the `ddinter` data, which files each pair under both drugs, neither guard moves an
+answer.
+
+### Residue
+
+- An order resolved to only SOME of its substances — a combination the data files under one constituent — passes
+  `everyActiveOrderResolves`, so its other substances were not compared: Decision 108's residue, stated in the answer's
+  scope rather than removed.
+- The count is of SUBSTANCES (`substanceGroupKey`), as Decision 87's note counts, so a combination prescription counts
+  once per substance it resolves to and the number can exceed the prescriptions a clinician sees.
+- An allergy recorded under a name the data cannot resolve raises no finding (`DrugSafetyValidator.recordedAllergens`
+  skips it), so the module composes this sentence beside it. Refusing on any unresolved allergen was not taken: the
+  context does not say which allergy records are drug allergies, so a food or environmental allergy would refuse
+  every such patient. Before this decision the model answered such a proposal; whether it raised the allergy was not
+  measured.
+- A recorded condition is not checked where the loaded data publishes no condition rule — `conditionRuleCoverage`
+  reads `absent` on the shipped `ddinter` and `atc` sources — so the module composes this sentence beside a condition
+  that may rule the drug out. Refusing wherever coverage is absent and the chart records a condition would refuse
+  nearly every patient with one, the allergy alternative's trade. Whether the model raised such a condition before
+  this decision was not measured.
+
+### Rejected alternative
+
+**A FINDING-prefixed record stating that the check ran, with the model still answering.** Refuted before any code was
+written: where a "Safety finding" record names the drug asked about, the shipped system prompt's finding branch offers
+two leads only — open with "No", or state that the drug can be given (`LlmProvider`'s safety paragraph) — and the record
+states neither strength clause. So the model would be pushed into a refusal nothing licenses or a clearance, and
+Decision 87 measured the model copying such a record's negative lead into its verdict. Changing the system prompt instead
+is the lever Decision 84's ledger closed.
+
+### Not pinned
+
+Mutating each guard of `composeFromNoPair` and `proposedDrugsRecord` against `LlmInferenceServiceAnswerFromFindingsContextTest`
+reddens a case for five of them: the proposal test, the started test, the contraindication-arms test, the
+interaction-rows test and the reverse direction, each the case named for it below. The others stay green: a null
+extent and the subject lookup, which no case reaches with the other guards passing; and, each reached first by another
+guard there,
+`found == 0` (a raised finding is what a nonzero count is, and the branch runs only with none), the empty `belowFloor`
+(where it is non-empty `composeFromBelowFloor` answers, and its remaining refusals — an unrated pair, an order with no
+citable record — have no fixture), her substances non-empty (a chart with no medication record states no extent at all),
+not-hers and one-substance (a drug she takes raises the already-ordered finding; two substances open the question-pair
+arm, whose extent carries no `belowFloor`), and the record's row match (the cases inject one reference record). They are
+kept as the gate's own statement of what it requires, as Decision 142 kept its unpinned refusal.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalTheDataRelatesToNoneOfHerOrdersIsAnsweredWithWhatTheCheckEstablished`,
+`.anAnswerOfNoPairDoesNotDependOnHowTheProposalIsWorded`, `.aQuestionOfNoPairThatProposesNothingStillAsksTheModel`,
+`.aProposalOfNoPairWhoseReferenceRecordIsNotInTheChartStillAsksTheModel`,
+`.aProposalOfNoPairBesideAnOrderTheDataCannotNameStillAsksTheModel`,
+`.aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel`,
+`.aProposalARowOfHerOwnOrdersNamesStillAsksTheModel`, `.aProposalOfADrugWithNoInteractionRowsStillAsksTheModel`,
+`.aProposalOfNoPairWithTheContraindicationArmsOffStillAsksTheModel` and
+`.anAnswerOfNoPairCountsEveryMedicationTheCheckComparedTheDrugAgainst`.

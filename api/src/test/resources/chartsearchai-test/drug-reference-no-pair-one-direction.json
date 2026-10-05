@@ -1,0 +1,45 @@
+{
+ "version": "1.0",
+ "source": "hand-authored fixture for issue #592 — not shipped data",
+ "description": "Issue #592: patient 7's aspirin order against two proposals the drug-in-play arm, which reads the PROPOSED drug's rows alone, relates to none of her orders. Zolfixan carries an interaction row of its own (with warfarin, which she does not take) while the only row joining it to her aspirin is filed on the ASPIRIN entry — a curated file need not mirror a pair, unlike the ddinter loader. Nointerax carries no interaction row at all, so a check over its rows compared it against nothing. Neither may be answered 'relates X to none of her medications'.",
+ "entries": [
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "interactions": [
+    {
+     "token": "zolfixan",
+     "severity": "Moderate",
+     "note": "Zolfixan may increase the risk of bleeding with salicylates."
+    }
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "zolfixan",
+   "name": "Zolfixan",
+   "aliases": [
+    "zolfixan"
+   ],
+   "interactions": [
+    {
+     "token": "warfarin",
+     "severity": "Minor",
+     "note": "Zolfixan may slightly raise warfarin exposure."
+    }
+   ],
+   "source": "hand-authored fixture"
+  },
+  {
+   "id": "nointerax",
+   "name": "Nointerax",
+   "aliases": [
+    "nointerax"
+   ],
+   "source": "hand-authored fixture"
+  }
+ ]
+}

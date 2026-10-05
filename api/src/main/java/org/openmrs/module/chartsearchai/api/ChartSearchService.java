@@ -1582,8 +1582,10 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * Whether this answer's text was composed by the module from its own drug-safety findings,
-		 * with no model asked to write it — issue
+		 * Whether this answer's text was composed by the module from its own drug-safety check — its
+		 * findings, or for a proposal that raised none what the interaction check related below the
+		 * severity floor or did not relate at all (ADR Decisions 142, 143) — with no model asked to write
+		 * it — issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>,
 		 * {@code chartsearchai.drugSafety.answerFromFindings}, ADR Decision 108. Published as the
 		 * {@code answeredByTheModule} response key, the answer-level counterpart of

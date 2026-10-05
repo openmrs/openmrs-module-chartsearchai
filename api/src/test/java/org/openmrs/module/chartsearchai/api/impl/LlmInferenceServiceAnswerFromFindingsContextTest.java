@@ -33,10 +33,12 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
+import org.openmrs.module.chartsearchai.reference.DrugReference;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
@@ -68,6 +70,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	private static final String METFORMIN_ORDER = "AnswerFromFindingsMetforminOrderTestData.xml";
 
+	/** Patient 7's aspirin beside two proposals the arm relates to none of her orders by their own rows (issue #592). */
+	private static final String ONE_DIRECTION = "chartsearchai-test/drug-reference-no-pair-one-direction.json";
+
 	/** The ticket's own shape: a drug the patient is not on, proposed, related Major to her order. */
 	private static final String PROPOSAL = "Can I give her ibuprofen?";
 
@@ -88,6 +93,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			" This finding is about a medication this patient is already taking.";
 
 	private Patient patient;
+
+	/** The knowledge base the module ships, loaded once for the cases that need a drug the bundled excerpt does
+	 *  not carry (issue #592). */
+	private static DrugReferenceService shipped;
+
+	private static synchronized DrugReferenceService shipped() {
+		if (shipped == null) {
+			shipped = DrugReferenceTestSupport.shippedServiceWithGroups();
+		}
+		return shipped;
+	}
 
 	@BeforeEach
 	public void setUp() {
@@ -508,6 +524,157 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "no model is asked");
 		assertEquals(can.getAnswer(), should.getAnswer());
 		assertEquals(ChartAnswerTestSupport.referenceIndexes(can), ChartAnswerTestSupport.referenceIndexes(should));
+	}
+
+	/**
+	 * A proposed drug the reference data relates to NONE of her orders, at any rating — no finding, the extent stated
+	 * with nothing found and nothing below the floor — is answered by the module with what the check established
+	 * (issue #592): the drug, and how many of her medications it was compared against, citing the drug's reference
+	 * record. Never "can be given" and never "no interactions" as a claim about the patient; the model answered
+	 * "The records do not address Mebendazole.", which reads like a drug nobody looked up. The shipped knowledge base
+	 * relates mebendazole to her aspirin in no row — the bundled excerpt carries neither drug, so these cases read the
+	 * shipped data.
+	 */
+	@Test
+	public void aProposalTheDataRelatesToNoneOfHerOrdersIsAnsweredWithWhatTheCheckEstablished() {
+		String question = "Can I give her mebendazole?";
+		assertTheCheckRelatedNothing(patient, question, shipped());
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals("The interaction check relates Mebendazole to none of this patient's 1 active medication. ["
+				+ referenceRecordOf(answer, "mebendazole") + "]", answer.getAnswer());
+	}
+
+	/** Each of her medications the drug was compared against is counted (issue #592): beside a metformin order she
+	 *  has two, and the shipped data relates mebendazole to neither. */
+	@Test
+	public void anAnswerOfNoPairCountsEveryMedicationTheCheckComparedTheDrugAgainst() throws Exception {
+		executeDataSet(METFORMIN_ORDER);
+		String question = "Can I give her mebendazole?";
+		assertTheCheckRelatedNothing(patient, question, shipped());
+
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+
+		assertEquals("The interaction check relates Mebendazole to none of this patient's 2 active medications. ["
+				+ referenceRecordOf(answer, "mebendazole") + "]", answer.getAnswer());
+	}
+
+	/** Beside an order that has not started, the answer would count it among her active medications, so the model
+	 *  answers (issue #592) — Decision 142 refuses a line on such an order for the same reason. Patient 6 holds only
+	 *  an aspirin order scheduled for 2099. */
+	@Test
+	public void aProposalOfNoPairBesideAnOrderThatHasNotStartedStillAsksTheModel() throws Exception {
+		executeDataSet("ScheduledAspirinOrderTestData.xml");
+		Patient six = Context.getPatientService().getPatient(6);
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(six, "Can I give her mebendazole?", shipped());
+	}
+
+	/** The same answer however the proposal is worded, since no model words it (issue #592). */
+	@Test
+	public void anAnswerOfNoPairDoesNotDependOnHowTheProposalIsWorded() {
+		ChartAnswer can = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her mebendazole?");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer should = serviceWith(provider, shipped()).search(patient, "Should I give her mebendazole?");
+
+		assertEquals(0, provider.calls, "no model is asked");
+		assertEquals(can.getAnswer(), should.getAnswer());
+		assertEquals(ChartAnswerTestSupport.referenceIndexes(can), ChartAnswerTestSupport.referenceIndexes(should));
+	}
+
+	/** A question that names the drug without proposing it keeps the model's answer (issue #592). */
+	@Test
+	public void aQuestionOfNoPairThatProposesNothingStillAsksTheModel() {
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Does mebendazole interact with her medications?",
+				shipped());
+	}
+
+	/** Without the drug's reference record in the chart the answer would cite nothing for it, so the model answers
+	 *  (issue #592): the question leg switched off injects no record for a drug she does not take. */
+	@Test
+	public void aProposalOfNoPairWhoseReferenceRecordIsNotInTheChartStillAsksTheModel() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_INJECT_FROM_QUERY, "false");
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her mebendazole?", shipped());
+	}
+
+	/** Beside an order the data cannot name, "none of her medications" is not established, so the model answers
+	 *  (issue #592) — the read conjunct Decision 142's composition stands on too. */
+	@Test
+	public void aProposalOfNoPairBesideAnOrderTheDataCannotNameStillAsksTheModel() throws Exception {
+		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her mebendazole?", shipped());
+	}
+
+	/** The arm reads the PROPOSED drug's rows; a curated file need not mirror a pair, so a row only her aspirin's
+	 *  entry carries relates zolfixan to her while the arm relates nothing — the model answers (issue #592). */
+	@Test
+	public void aProposalARowOfHerOwnOrdersNamesStillAsksTheModel() throws Exception {
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her zolfixan?",
+				DrugReferenceTestSupport.curatedFixtureService(ONE_DIRECTION));
+	}
+
+	/** A drug whose own entry carries no interaction row was compared against nothing, so "relates it to none of
+	 *  her medications" would report a check that never ran — the model answers (issue #592). */
+	@Test
+	public void aProposalOfADrugWithNoInteractionRowsStillAsksTheModel() throws Exception {
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her nointerax?",
+				DrugReferenceTestSupport.curatedFixtureService(ONE_DIRECTION));
+	}
+
+	/** With the contraindication arms switched off, an allergy to the drug proposed raises nothing, so the module
+	 *  cannot answer for a check of her records it did not run — the model answers (issue #592). */
+	@Test
+	public void aProposalOfNoPairWithTheContraindicationArmsOffStillAsksTheModel() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her mebendazole?", shipped());
+	}
+
+	/** {@link #assertTheCheckRelatedNothing}, then the model is asked for {@code question} with the property on. */
+	private void assertTheModelAnswersWhatTheCheckRelatedToNothing(Patient who, String question,
+			DrugReferenceService reference) {
+		assertTheCheckRelatedNothing(who, question, reference);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, reference).search(who, question);
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/** With the property off, one search: the model is asked, the prompt carries no finding, and the interaction
+	 *  extent says the check ran and related the drug to none of her orders at any rating. */
+	private void assertTheCheckRelatedNothing(Patient who, String question, DrugReferenceService reference) {
+		answerFromFindings(false);
+		RecordingProvider recorder = new RecordingProvider();
+		ChartAnswer off = serviceWith(recorder, reference).search(who, question);
+		answerFromFindings(true);
+		assertEquals(1, recorder.calls, "precondition: with the property off the model is asked");
+		assertFalse(FINDING_LINE.matcher(recorder.lastRecords).find(),
+				"precondition: no finding is raised: " + recorder.lastRecords);
+		PairChipExtent extent = off.getPairChipExtent();
+		assertTrue(extent != null && extent.getFound() == 0 && extent.getBelowFloor() != null
+				&& extent.getBelowFloor().isEmpty(),
+				"precondition: the check ran and related nothing at any rating, was: " + extent);
+	}
+
+	/** The index of the answer's reference to the shipped reference record of {@code drug}, failing where the answer
+	 *  cites none or cites another drug's. */
+	private static int referenceRecordOf(ChartAnswer answer, String drug) {
+		List<String> rows = new ArrayList<String>();
+		for (DrugReference entry : shipped().findImpliedByQuery(drug)) {
+			rows.add(entry.getId());
+		}
+		for (RecordReference ref : answer.getReferences()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(ref.getResourceType())
+					&& rows.contains(ref.getResourceUuid())) {
+				return ref.getIndex();
+			}
+		}
+		throw new AssertionError("the answer cites no reference record of " + drug + " " + rows + ": "
+				+ answer.getReferences());
 	}
 
 	/** The index of the answer's reference to the record of {@code orderUuid}, failing where there is none. */

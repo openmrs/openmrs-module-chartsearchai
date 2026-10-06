@@ -847,18 +847,158 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "The chart holds no active order for Lamivudine.", answer.getAnswer());
 	}
 
-	/** A finding that withholds keeps the model call even about a listed drug (ADR Decision 149): an answer about the
-	 *  drug proposed alone would read as the whole of what the check found. Methotrexate relates to her aspirin Major. */
+	/** A finding about a listed drug alone neither keeps the model call nor reaches the answer, even one that
+	 *  withholds (ADR Decision 150): it is not about the drug proposed, and its chip is not published (ADR Decision
+	 *  148). Methotrexate relates to her aspirin Major, and to metformin only Unknown. */
 	@Test
-	public void aListQuestionWithAWithholdingFindingAboutAListedDrugStillAsksTheModel() {
-		assertTheModelIsAsked("The patient is currently on Methotrexate, is it safe to give metformin?", shipped());
+	public void aWithholdingFindingAboutAListedDrugAloneDoesNotKeepTheModelCall() {
+		String question = "The patient is currently on Methotrexate, is it safe to give metformin?";
+		List<Finding> findings = findingsInThePromptFor(question, shipped());
+		boolean listedMajor = false;
+		for (Finding finding : findings) {
+			listedMajor |= finding.text.startsWith("Methotrexate") && finding.text.contains("— Major.")
+					&& finding.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD);
+		}
+		assertTrue(listedMajor, "precondition: methotrexate withholds against her aspirin, findings were: " + findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("The interaction data gives no rated reason to withhold Metformin: its row against this "
+				+ "patient's orders carries no severity or mechanism. [" + referenceRecordOf(answer, "metformin") + "]\n"
+				+ "The check of Metformin against Methotrexate, also named in the question, raised no finding.\n"
+				+ "Interactions the data does not rate, and anything beyond drug interactions, are not covered.\n"
+				+ "The chart holds no active order for Methotrexate.", answer.getAnswer());
 	}
 
-	/** A finding about the drug proposed against a listed drug keeps the model call (ADR Decision 149): this answer
-	 *  states only that the check raised none. Ibuprofen relates to metformin Moderate. */
+	/**
+	 * A list question whose findings about the drug proposed withhold it only against a drug the question lists, which
+	 * her chart does not hold, is answered "No if she is on" that drug (ADR Decision 150). Susan, asked of fluconazole
+	 * after a list carrying efavirenz, was answered "Fluconazole can be given, with two cautions", leaving out the
+	 * Major the data rates it with efavirenz. One brief line per finding about the drug proposed, strongest first.
+	 */
 	@Test
-	public void aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStillAsksTheModel() {
-		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give metformin?", shipped());
+	public void aListQuestionWithholdingOnlyAgainstAListedDrugIsAnsweredNoIfSheIsOnIt() {
+		String question = "The patient is currently on Efavirenz, Zidovudine, is it safe to give fluconazole?";
+		Finding efavirenz = findingNamed(question, "Fluconazole interacts with Efavirenz");
+		Finding zidovudine = findingNamed(question, "Fluconazole interacts with Zidovudine");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals("No if she is on Efavirenz — this module's drug-safety check found a reason to withhold "
+				+ "Fluconazole against it.\n"
+				+ "Fluconazole interacts with Efavirenz, also named in the question — Major. [" + efavirenz.index + "]\n"
+				+ "Fluconazole interacts with Zidovudine, also named in the question — Moderate. [" + zidovudine.index
+				+ "]\n"
+				+ "The chart holds no active order for Efavirenz or Zidovudine.", answer.getAnswer());
+	}
+
+	/** A finding withholding the drug proposed against one of her OWN orders leads with the unconditional "No" (ADR
+	 *  Decisions 108, 150): ibuprofen relates to her aspirin Major, and to the listed zidovudine Moderate. */
+	@Test
+	public void aListQuestionWithholdingAgainstHerOwnOrderIsAnsweredNo() {
+		String question = "The patient is currently on Zidovudine, is it safe to give ibuprofen?";
+		Finding aspirin = findingNamed(question, "Ibuprofen interacts with active order Acetylsalicylic acid (aspirin)");
+		Finding zidovudine = findingNamed(question, "Ibuprofen interacts with Zidovudine");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"
+				+ "Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. [" + aspirin.index + "] ["
+				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+				+ "Ibuprofen interacts with Zidovudine, also named in the question — Moderate. [" + zidovudine.index
+				+ "]\n"
+				+ "The chart holds no active order for Zidovudine.", answer.getAnswer());
+	}
+
+	/** Cautions alone take Decision 140's lead, a caution against her own order before one against a listed drug (ADR
+	 *  Decision 150): amlodipine relates Moderate to her aspirin and to the listed efavirenz. */
+	@Test
+	public void aListQuestionOfCautionsStatesHerOwnOrdersFirst() {
+		String question = "The patient is currently on Efavirenz, is it safe to give amlodipine?";
+		Finding aspirin = findingNamed(question, "Amlodipine interacts with active order Acetylsalicylic acid (aspirin)");
+		Finding efavirenz = findingNamed(question, "Amlodipine interacts with Efavirenz");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("2 interaction cautions for Amlodipine:\n"
+				+ "Amlodipine interacts with active order Acetylsalicylic acid (aspirin) — Moderate. [" + aspirin.index
+				+ "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+				+ "Amlodipine interacts with Efavirenz, also named in the question — Moderate. [" + efavirenz.index
+				+ "]\n"
+				+ "The chart holds no active order for Efavirenz.", answer.getAnswer());
+	}
+
+	/** A contraindication about the drug proposed keeps the model call (ADR Decisions 108, 150): its match against her
+	 *  records' free text is not one the module can vouch for. She is recorded allergic to fluconazole. */
+	@Test
+	public void aListQuestionWithAContraindicationAboutTheDrugProposedStillAsksTheModel() {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Fluconazole");
+		assertTheModelIsAsked("The patient is currently on Nevirapine, is it safe to give fluconazole?", shipped());
+	}
+
+	/** An unrated rule withholding the drug proposed licenses no "No", after a list as alone (ADR Decisions 108, 150):
+	 *  the curated paracetamol rule against her warfarin carries no rating. */
+	@Test
+	public void aListQuestionWhoseFindingIsAnUnratedRuleStillAsksTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceService curated = DrugReferenceTestSupport
+				.curatedFixtureService("chartsearchai-test/drug-reference-answer-from-findings-unrated-rule.json");
+		String question = "The patient is currently on Ibuprofen, is it safe to give paracetamol?";
+		boolean unrated = false;
+		for (Finding finding : findingsInThePromptFor(question, curated)) {
+			unrated |= finding.text.startsWith("Paracetamol interacts with active order")
+					&& finding.text.endsWith(DrugReferenceInjector.STRENGTH_WITHHOLD);
+		}
+		assertTrue(unrated, "precondition: an unrated interaction withholds paracetamol");
+		assertTheModelIsAsked(question, curated);
+	}
+
+	/** A drug she already takes is not proposed, after a list as alone (ADR Decisions 108, 150): her warfarin. */
+	@Test
+	public void aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give warfarin?");
+	}
+
+	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not
+	 *  exactly one. */
+	private Finding findingNamed(String question, String opening) {
+		Finding found = null;
+		List<Finding> findings = findingsInThePromptFor(question, shipped());
+		for (Finding finding : findings) {
+			if (finding.text.startsWith(opening)) {
+				assertNull(found, "precondition: one finding opens " + opening + ", findings were: " + findings);
+				found = finding;
+			}
+		}
+		assertNotNull(found, "precondition: a finding opens " + opening + ", findings were: " + findings);
+		return found;
+	}
+
+	/** A finding about the drug proposed against a listed drug is stated as one, never as "raised no finding" (ADR
+	 *  Decisions 149, 150): ibuprofen relates to metformin Moderate, and to her aspirin Major, which is about ibuprofen
+	 *  alone and is not stated. */
+	@Test
+	public void aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStatesThatFinding() {
+		String question = "The patient is currently on Ibuprofen, is it safe to give metformin?";
+		Finding ibuprofen = findingNamed(question, "Metformin interacts with Ibuprofen");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("1 interaction caution for Metformin:\n"
+				+ "Metformin interacts with Ibuprofen, also named in the question — Moderate. [" + ibuprofen.index + "]\n"
+				+ "The chart holds no active order for Ibuprofen.", answer.getAnswer());
 	}
 
 	/**
@@ -926,12 +1066,21 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.isAnsweredByTheModule());
 	}
 
-	/** A finding about the drug proposed that counts no pair keeps the model call (ADR Decision 149): vorapaxar shares
-	 *  her aspirin's platelet-inhibitor subgroup, which no data row relates, so the drug-in-play arm's statement about it
-	 *  is {@code found == 0} while a finding about it stands. */
+	/** A finding about the drug proposed that counts no pair is stated, and the answer never says the check raised none
+	 *  (ADR Decisions 149, 150): vorapaxar shares her aspirin's platelet-inhibitor subgroup, which no data row relates,
+	 *  so the drug-in-play arm's statement about it is {@code found == 0} while a caution about it stands. */
 	@Test
-	public void aListQuestionWithAClassFindingAboutTheDrugProposedStillAsksTheModel() {
-		assertTheModelIsAsked("The patient is currently on Lamivudine, is it safe to give vorapaxar?", shipped());
+	public void aListQuestionWithAClassFindingAboutTheDrugProposedStatesIt() {
+		String question = "The patient is currently on Lamivudine, is it safe to give vorapaxar?";
+		Finding aspirin = findingNamed(question, "Vorapaxar");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith("1 interaction caution for Vorapaxar:\nVorapaxar "), answer.getAnswer());
+		assertTrue(answer.getAnswer().contains(" [" + aspirin.index + "]"), answer.getAnswer());
+		assertFalse(answer.getAnswer().contains("raised no finding"), answer.getAnswer());
 	}
 
 	/** {@link #assertTheCheckRelatedNothing}, then the model is asked for {@code question} with the property on. */

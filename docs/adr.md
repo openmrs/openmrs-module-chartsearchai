@@ -152,6 +152,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 147: A finding about the drug proposed against her own order is stated where a model's answer leaves it out](#decision-147-a-finding-about-the-drug-proposed-against-her-own-order-is-stated-where-a-models-answer-leaves-it-out)
 - [Decision 148: A proposal question publishes no chip about a listed drug she is not on](#decision-148-a-proposal-question-publishes-no-chip-about-a-listed-drug-she-is-not-on)
 - [Decision 149: A proposal after a list of drugs is answered with what the check established for the drug proposed](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed)
+- [Decision 150: A proposal after a list is answered from its findings about the drug proposed](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -13937,8 +13938,8 @@ own-order half.
 **Status: Accepted** (October 2026) — implemented, no issue. Extends
 [Decision 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows) and
 [Decision 143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
-to a question listing drugs before its proposal. Does not take up
-the caution answers of the unmerged Decision 141 draft, which a question like this still leaves to the model.
+to a question listing drugs before its proposal. One whose findings are about the drug proposed is
+[Decision 150](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed)'s.
 
 ### Context
 
@@ -13971,9 +13972,9 @@ And the carried finding made the finding list non-empty, while both compositions
   - The question's own pairs were stated and every one reported, `found == reported`. A pair `maxPairChips` withheld may
     be one of the drug proposed, and it raises no finding.
   - The drug-in-play arm's statement about the drug proposed has `found == 0`.
-  - Every finding is `isAboutADrugOtherThanTheOneProposed` and none `licensesWithholding`. The second is the Decision 141
-    draft's reason: a line about the drug proposed beside a reason to withhold a listed one would read as the whole of
-    what the check found.
+  - No finding is about the drug proposed: every one answers `isAboutADrugOtherThanTheOneProposed`. Where one does not,
+    Decision 150 answers, and the line saying the check raised none is never written. A finding about another drug does
+    not keep the model call, whatever it withholds — Decision 150 records that choice.
 - **"Raised no finding" and never "does not interact"**: the line claims what the check reported. Below a raised floor a
   rated row can stand under it, and the bottom line already scopes itself to the rated data.
 - **A finding about a listed drug is not stated.** It is not about the drug proposed, and since Decision 148 its chip is
@@ -13998,18 +13999,90 @@ otherwise identical. Every other rule held:
 - No composed cell's chips moved, and none carried a chip about the drug proposed.
 - Left to the model: Susan's clarithromycin after the list, whose question pairs raised a Moderate finding about
   clarithromycin; "paracetamol", which the data does not resolve; and the list cells about amlodipine, fluconazole and
-  rifampicin, each with a finding about the drug proposed.
+  rifampicin, each with a finding about the drug proposed — since Decision 150, answered by the module.
 
 ### Not pinned
 
 Deleting the `found == 0` guard on the drug-in-play arm's statement reddens nothing. Every pair that statement counts is
-a chip about the drug proposed, which the finding guard refuses first. It is kept as the gate's statement of what it
+a chip about the drug proposed, which routes the question to Decision 150 first. It is kept as the gate's statement of what it
 requires.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalAfterAListIsAnsweredWithWhatTheCheckEstablishedAgainstHerOrdersAndTheList`,
 `.aCautionAboutAListedDrugDoesNotKeepTheModelCall`, `.aProposalAfterAListThatRelatesToNoneOfHerOrdersIsAnsweredWithWhatTheCheckEstablished`,
 `.aCautionBetweenTwoListedDrugsDoesNotKeepTheModelCall`, `.theListLineNamesOnlyTheListedDrugsHerChartDoesNotHold`,
-`.aListQuestionWithAWithholdingFindingAboutAListedDrugStillAsksTheModel`
-(the withholding guard), `.aListQuestionWhosePairsTheCapTruncatedStillAsksTheModel` (the truncation guard),
-`.aListQuestionWithAClassFindingAboutTheDrugProposedStillAsksTheModel` (the finding-subject guard) and
-`.aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStillAsksTheModel`.
+`.aWithholdingFindingAboutAListedDrugAloneDoesNotKeepTheModelCall`,
+`.aListQuestionWhosePairsTheCapTruncatedStillAsksTheModel` (the truncation guard),
+`.aListQuestionWithAClassFindingAboutTheDrugProposedStatesIt` (the routing to Decision 150, through a finding that counts
+no pair) and `.aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStatesThatFinding`.
+
+## Decision 150: A proposal after a list is answered from its findings about the drug proposed
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends
+[Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found) and
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+to a question listing drugs before its proposal, beside
+[Decision 149](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed).
+Takes up what the unmerged Decision 141 draft proposed for cautions, and its withholding case as well.
+
+### Context
+
+*"The patient is currently on Lamivudine / zidovudine, Efavirenz, Trimethoprim and sulfamethoxazole is it safe to give
+Fluconazole?"*, asked of Susan, whose chart holds none of them, was answered by the model *"Fluconazole can be given, with
+two cautions"* — zidovudine, Moderate, and sulfamethoxazole, Minor. It left out the finding the data rates Major, fluconazole
+with efavirenz (QT prolongation), and `cautionLedOverWithholding` reported it. Asked of rifampicin after a list carrying
+nevirapine, the model wrote *"No — Rifampicin should not be given"*, resting on nevirapine alone, a drug her chart does not
+hold, as the sentence the module appended then said.
+
+### The decision
+
+- **The module answers it**: `DrugReferenceInjector.composeListFindings`, reached from `composeAfterAList` wherever a
+  finding is about the drug proposed. One brief line per such finding (`briefDetail`), citing its record and, for one
+  against her order, that order's record. Strongest first; within a strength, her own orders before the drugs listed.
+- **The lead is the strongest call a line licenses**, and says whose drug it rests on:
+  - a finding the data rates a reason to withhold against one of HER orders: Decision 108's *"No — this module's
+    drug-safety check found a reason to withhold Ibuprofen."*;
+  - every such finding against a drug the question lists and her chart does not hold: *"No if she is on Efavirenz — this
+    module's drug-safety check found a reason to withhold Fluconazole against it."*;
+  - else Decision 140's *"2 interaction cautions for Amlodipine:"*.
+- **A finding about a drug other than the one proposed is neither stated nor a reason to keep the model call**, whatever
+  it withholds — in Decision 149's answer as in this one. The Major on the reported question that is not about
+  fluconazole, sulfamethoxazole with her lidocaine, is the one Decision 148 already took off the chips, naming it under
+  *What it costs*. Put to the maintainer, against stating it on a line apart or keeping the model call: ignore it.
+- **Fail-closed, as Decision 108 is for the drug asked alone**: the proposed rows are one substance she does not take,
+  and every finding about it is an INTERACTION stating a proposal clause, one that withholds being one the data rates a
+  reason to withhold (`licensesTheModulesNo`). A contraindication, an unrated rule or a referent clause keeps the model
+  call. So does a question-pair list the cap truncated, Decision 149's guard.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: PR #598 @ fa055f65 (omod 67d16d27) against this change
+(omod d5c4efbf) over 56 cells — the previous gate's 51 and five list questions. **It failed as written on one cell, and
+was accepted by the maintainer.** Susan's rifampicin after the efavirenz regimen stays with the model in both arms (the
+cap truncated its question pairs, 11 found and 10 reported), and the two arms' answers differ. This change cannot reach
+that cell, and arm B's answer is byte-identical to the one arm A's own build gave three times earlier the same day; arm A's
+fresh run, after its restart, worded it differently. Every other rule held:
+- Every non-list cell, every list cell the model still answers, and every list cell Decision 149 composed, was
+  byte-identical to arm A.
+- Twelve list cells became the module's. Each states exactly the findings about the drug proposed that arm A's chips
+  carried, strongest first, under the lead its strongest line licenses, and none says the drug can be given. The reported
+  question now opens *"No if she is on Efavirenz — this module's drug-safety check found a reason to withhold Fluconazole
+  against it."*, the Major first. Susan's rifampicin after the nevirapine list opens *"No if she is on Nevirapine"*;
+  Kamwara, who holds nevirapine, gets Decision 108's unconditional "No".
+- No chip about the drug proposed was lost. Five composed cells, each citing her lidocaine order on a line, gained the
+  chip of her recorded allergy to lidocaine — Decision 140's scoping, the trade the Decision 141 draft left open.
+
+### Not pinned
+
+Three guards refuse nothing on their own, each because another refuses first, and are kept as statements of what the
+composition requires. The INTERACTION-type test: a contraindication states the withholding clause, which it is not rated
+to license. The one-substance-not-hers test: a drug she takes raises a current-medication clause, which the clause test
+refuses (`.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel` holds the outcome). And the sort key putting her
+own orders first within a strength: the drug-in-play arm's findings precede the question-pair arm's in the list it
+receives, so deleting the key moves no line today.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionWithholdingOnlyAgainstAListedDrugIsAnsweredNoIfSheIsOnIt`,
+`.aListQuestionWithholdingAgainstHerOwnOrderIsAnsweredNo`, `.aListQuestionOfCautionsStatesHerOwnOrdersFirst`,
+`.aListQuestionWhoseProposalTheDataRatesAgainstAListedDrugStatesThatFinding`, `.aListQuestionWithAClassFindingAboutTheDrugProposedStatesIt`,
+`.aWithholdingFindingAboutAListedDrugAloneDoesNotKeepTheModelCall`, `.aListQuestionWhoseFindingIsAnUnratedRuleStillAsksTheModel`
+(the rating test), `.aListQuestionWithAContraindicationAboutTheDrugProposedStillAsksTheModel` and
+`.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel`.

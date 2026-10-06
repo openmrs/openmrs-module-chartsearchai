@@ -969,11 +969,36 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give warfarin?");
 	}
 
+	/**
+	 * A question asking whether she has ever taken a drug puts no finding about GIVING it in the prompt (ADR Decision
+	 * 151): <em>"has she ever taken panadol?"</em>, asked of Susan, was answered <em>"The records indicate that
+	 * Acetaminophen can be given, but there are cautions…"</em> from the two interaction findings the prompt carried.
+	 * Ibuprofen relates to her aspirin Major, which a proposal of it carries.
+	 */
+	@Test
+	public void aHistoryQuestionCarriesNoFindingAboutGivingTheDrug() {
+		boolean proposalCarriesIt = false;
+		for (Finding finding : findingsInThePromptFor("Can I give her ibuprofen?", shipped())) {
+			proposalCarriesIt |= finding.text.startsWith("Ibuprofen interacts with active order");
+		}
+		assertTrue(proposalCarriesIt, "precondition: a proposal of ibuprofen carries its finding against her aspirin");
+
+		for (String question : new String[] { "Has she ever taken ibuprofen?", "Was she ever on ibuprofen?" }) {
+			assertEquals(Collections.emptyList(), findingsInThePromptFor(question, shipped()),
+					question + " carries no finding about giving ibuprofen");
+		}
+	}
+
 	/** On a question asking whether she has ever taken a drug she IS taking, that drug's conflicts with her other
 	 *  orders stay (ADR Decision 151): they are her chart's, not a proposal's. Her warfarin relates Major to her aspirin. */
 	@Test
 	public void aHistoryQuestionAboutHerOwnMedicationKeepsItsChips() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
+		boolean prompted = false;
+		for (Finding finding : findingsInThePromptFor("Has she ever taken warfarin?")) {
+			prompted |= finding.text.startsWith("Warfarin interacts with active order");
+		}
+		assertTrue(prompted, "her warfarin's interaction with her aspirin stays in the prompt too");
 		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, "Has she ever taken warfarin?");
 		boolean kept = false;
 		for (SafetyWarning chip : answer.getSafetyWarnings()) {

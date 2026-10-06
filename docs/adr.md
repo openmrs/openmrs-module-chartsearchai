@@ -14115,7 +14115,8 @@ arm runs on any question naming a drug, so every such question carried the chips
   words `asksWhetherToGiveADrug` reads.
 - **What stays**: a chip about a medication she IS taking — its conflicts with her other orders are her chart's, not a
   proposal's — and every contraindication, her recorded allergy to the drug being part of its history with her.
-- **The prompt is unchanged.** The findings still reach the model, as Decision 148 left them.
+- **Nor does the prompt carry those findings**: the injector puts the findings it receives to the same test before it
+  renders them (round 2). With the chips alone gone, the model still answered from them — see *Round 2* below.
 - **Not taken: answering such a question from the module.** "Her chart records no fluconazole order, active or ended"
   would need her full order history, which the safety context does not read (it reads active orders), and would still
   say nothing of a drug recorded only in a note or given outside this chart — which the model, reading the chart text,
@@ -14130,14 +14131,34 @@ lost exactly the interaction chip about giving the drug asked about: both flucon
 order Lidocaine — Moderate"*) and Kamwara's *"Has the patient ever been on rifampicin?"* (*"…interacts with active order
 Nevirapine — Major"*). *"Has she ever taken lidocaine?"* kept its three chips: lidocaine is her own order.
 
-### What it does not fix
+### Round 2: the findings leave the prompt too
 
-The finding still reaches the model, and on *"Was she ever on fluconazole?"* the model answered from it: *"Fluconazole is
-related to the active order Lidocaine, and it is a caution to note, a Moderate problem [46]."* — a reading of the
-interaction for a question about her history, citing a finding whose chip this decision no longer publishes. Keeping
-such findings out of the prompt of a history question would change what the model reads, which this decision does not.
+The first round took the chips off and left the findings in the prompt, and the model answered from them. On *"Was she
+ever on fluconazole?"*: *"Fluconazole is related to the active order Lidocaine, and it is a caution to note, a Moderate
+problem [46]."* On *"has she ever taken panadol?"*: *"The records indicate that Acetaminophen can be given, but there are
+cautions to note regarding its interaction with active medications…"* — a proposal's verdict on a question about her
+history, citing two findings whose chips the response no longer published. So the injector now drops the same findings
+before they reach the prompt (`DrugReferenceInjector.isAboutGivingTheDrugAHistoryQuestionNames`, asked of the findings
+the pre-answer pass returns), and the stamp the chips are filtered by is that same resolution.
+
+Gate 17, pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: round 1 (omod 45028e8e) against round 2 (omod
+cf9f86a7) over 65 cells — gate 16's 62 and three more history questions. **It failed as written, and was accepted by the
+maintainer.** Both failures are on *"Has she ever taken lidocaine?"*, whose drug is her own order:
+- Rule 2 asked that no history cell cite a finding about the drug asked about, and that cell's findings are about her
+  current medication, which this decision keeps by design. The rule omitted that exemption.
+- Rule 4 asked its answer to stay byte-identical, and its wording moved (*"Yes, the patient has records related to
+  Lidocaine use and allergy"* to *"Yes, the records address Lidocaine"*) while it carried and cited the same three findings.
+  All four runs of it across gates 16 and 17 report the same prompt size in the audit row — 4683 input tokens, 2066
+  reference characters over 4 records — so the move is read as the model's run-to-run variation after a restart.
+
+Every other rule held. All 57 non-history cells were byte-identical in answer and chips, and every history cell's chips
+were round 1's. Four history cells carried fewer findings and changed answer: *"has she ever taken panadol?"* moved from
+*"The records indicate that Acetaminophen can be given, but there are cautions…"* to *"The records do not address the
+patient's intake of Panadol."*; *"Was she ever on fluconazole?"* from the lidocaine caution to *"The records do not address
+whether the patient was ever on Fluconazole."*; the other two kept their sense. None states a proposal's verdict.
 
 Pinned by `LlmInferenceServiceListedMedicationsContextTest.aQuestionAskingWhetherSheHasTakenADrugPublishesNoInteractionChipAboutGivingIt`
 (one question per shape, each reddening when its shape is broken), `.aQuestionAboutHowADrugInteractsKeepsItsChips`,
+`LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionCarriesNoFindingAboutGivingTheDrug` (the prompt),
 `LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionAboutHerOwnMedicationKeepsItsChips` (the
 current-medication exception) and `.aHistoryQuestionKeepsHerAllergyToTheDrug` (the interaction-type test).

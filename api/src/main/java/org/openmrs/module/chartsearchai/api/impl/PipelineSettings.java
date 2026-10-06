@@ -41,11 +41,11 @@ final class PipelineSettings {
 		return "true".equalsIgnoreCase(mode.trim());
 	}
 
-	/** True when {@code chartsearchai.chartMode} selects the query-scoped slice (the
-	 *  {@link ChartSearchAiConstants#CHART_MODE_DEFAULT default} since 2026-07): prompts carry a
+	/** True when {@code chartsearchai.chartMode} selects the query-scoped slice (the default from 2026-07 to
+	 *  2026-10; {@link ChartSearchAiConstants#CHART_MODE_DEFAULT} is fullChart since): prompts carry a
 	 *  query-scoped record slice instead of the whole chart, and the full-chart prefill machinery
 	 *  (warmup, prewarm, per-patient KV persistence, preview) disengages. Resolution: an absent or
-	 *  unreadable GP takes {@code CHART_MODE_DEFAULT} (= queryScoped) via the fail-safe
+	 *  unreadable GP takes {@code CHART_MODE_DEFAULT} (= fullChart) via the fail-safe
 	 *  {@link ChartSearchAiUtils#getStringGlobalProperty} reader; a GP explicitly set to
 	 *  {@code fullChart} — or to any typo that is not an exact (case-insensitive) {@code queryScoped}
 	 *  — resolves to fullChart, so a mistyped value still fails toward the whole chart. Safe for the

@@ -2109,7 +2109,16 @@ Three additive, data-driven extensions:
 
 ## Decision 28: Query-scoped slice charts (chartMode=queryScoped)
 
-**Status: Accepted** (July 2026) — implemented behind `chartsearchai.chartMode`, which now defaults to `queryScoped` (it shipped defaulting to `fullChart`; see the update below). Complements — and in scoped mode disengages — the warmup/prewarm/KV-persistence machinery of Decisions 12 and 26.
+**Status: Accepted** (July 2026) — implemented behind `chartsearchai.chartMode`, which defaults to `fullChart` again since 2026-10 (it shipped defaulting to `fullChart`, defaulted to `queryScoped` from 2026-07; see the two updates below). Complements — and in scoped mode disengages — the warmup/prewarm/KV-persistence machinery of Decisions 12 and 26.
+
+**Update (2026-10, default flipped back to `fullChart`).** Taken by the maintainer, against this decision's own
+measurements, which still stand and were not re-run: on a CPU host a not-yet-warmed patient's first answer is
+73–74 s in full-chart mode against 12–27 s scoped, and the 40-cell adjudicated gate scored full-chart lower on mean F1,
+abstention and off-topic citations. Recommended against when asked. What prompted it is that a scoped slice does not
+carry every record, so a check reading the prompt's chart — Decision 154's test that no record names the drug — sees
+only what the slice retrieved. `config.xml` and `CHART_MODE_DEFAULT` both read `fullChart`; an install whose row for
+`chartsearchai.chartMode` already stores a value keeps it, so this moves only installs that never set it. The warmup,
+prewarm and KV-persistence machinery this decision disengaged re-engages under the default.
 
 **Update (2026-07, default flipped to `queryScoped`).** After validation, `queryScoped` became the default (`config.xml` defaultValue + the `CHART_MODE_DEFAULT` constant both readers use). Evidence: a 22-patient drift-metric A/B — scoped beat fullChart on meanF1 (0.748 vs 0.668), abstention (0.86 vs 0.74), and off-topic drift (181 vs 477: the focused slice keeps the small model from citing a whole chart's worth of noise) — plus a CPU latency check where scoped's cold first answer was ~3× faster (no full-chart prefill). Consequences: (1) the full-chart prefill machinery (warmup, prewarm bootstrap, per-patient KV persistence, progressive-reasoning preview) is now dormant by default — it re-engages only when an operator sets `chartMode=fullChart`; (2) the fail-safe direction reverses — an *absent or unreadable* `chartMode` GP now resolves to `queryScoped`, though a GP set to any non-`queryScoped` value (including a typo) still resolves to fullChart, so a mistyped value fails toward the whole chart. `fullChart` remains supported for many-questions-per-patient sessions where its warm-cache reuse and completeness-over-focus are preferred.
 

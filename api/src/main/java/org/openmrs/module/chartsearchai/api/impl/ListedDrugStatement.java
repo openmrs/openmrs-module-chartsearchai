@@ -42,15 +42,29 @@ final class ListedDrugStatement {
 		if (names == null || names.isEmpty() || answer == null) {
 			return answer;
 		}
-		StringBuilder sb = new StringBuilder(DrugSafetyValidator.endSentence(answer.trim()));
-		sb.append(" The chart holds no active order for ");
+		// Trimmed so a blank answer takes the sentence without a leading space.
+		return (DrugSafetyValidator.endSentence(answer.trim()) + " " + statement(names)).trim();
+	}
+
+	/**
+	 * {@link #withListedDrugsStated}'s sentence on a line of its own, for an answer the module composed, whose
+	 * lines end in citation markers (ADR Decision 149).
+	 */
+	static String withListedDrugsStatedOnALine(String answer, List<String> names) {
+		if (names == null || names.isEmpty() || answer == null) {
+			return answer;
+		}
+		return (answer.trim() + "\n" + statement(names)).trim();
+	}
+
+	private static String statement(List<String> names) {
+		StringBuilder sb = new StringBuilder("The chart holds no active order for ");
 		for (int i = 0; i < names.size(); i++) {
 			if (i > 0) {
 				sb.append(i == names.size() - 1 ? " or " : ", ");
 			}
 			sb.append(names.get(i));
 		}
-		// Trimmed so a blank answer takes the sentence without a leading space.
-		return sb.append('.').toString().trim();
+		return sb.append('.').toString();
 	}
 }

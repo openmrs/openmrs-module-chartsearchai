@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -910,12 +911,25 @@ public class DrugReferenceInjector {
 				&& context.chartReadForSafety()
 				&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
 						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries)) {
-			moduleAnswer = composeFromBelowFloor(question, questionDrugs, screenedSubstances, pairExtent.stated(),
+			boolean proposes = questionProposes(question, questionDrugs);
+			moduleAnswer = composeFromBelowFloor(proposes, questionDrugs, screenedSubstances, pairExtent.stated(),
 					mappings, context);
 			if (moduleAnswer == null) {
-				moduleAnswer = composeFromNoPair(question, questionDrugs, screenedSubstances, orderEntries,
+				moduleAnswer = composeFromNoPair(proposes, questionDrugs, screenedSubstances, orderEntries,
 						pairExtent.stated(), mappings, matched, context, reading.states());
 			}
+		}
+		if (moduleAnswer == null && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety()
+				&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
+						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries)) {
+			moduleAnswer = composeAfterAList(question, questionDrugs, screenedSubstances, orderEntries, findings,
+					findingNumbers, orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					pairExtent, mappings, matched, context, reading.states());
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -2620,13 +2634,13 @@ public class DrugReferenceInjector {
 	 * {@link #orderRecordNumbers} can cite; and the drug's own reference record in the chart. Anything short of
 	 * that keeps the model call.
 	 */
-	private static String composeFromBelowFloor(String question, List<DrugReference> questionDrugs,
+	private static String composeFromBelowFloor(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, PairChipExtent extent, List<RecordMapping> mappings,
 			PatientClinicalContext context) {
 		if (extent == null || extent.getBelowFloor() == null || extent.getBelowFloor().isEmpty()) {
 			return null;
 		}
-		RecordMapping record = proposedDrugsRecord(question, questionDrugs, herSubstances, mappings);
+		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, herSubstances, mappings);
 		if (record == null) {
 			return null;
 		}
@@ -2797,7 +2811,7 @@ public class DrugReferenceInjector {
 	 * for — the row this response names the substance by, which is what {@code SubstanceSubjects.subjectOf} answers
 	 * for a chip and for {@link #composeFromBelowFloor}'s lines.
 	 */
-	private static String composeFromNoPair(String question, List<DrugReference> questionDrugs,
+	private static String composeFromNoPair(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<DrugReference> orderEntries, PairChipExtent extent,
 			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
 			boolean contraindicationsChecked) {
@@ -2816,7 +2830,7 @@ public class DrugReferenceInjector {
 		if (DrugSafetyValidator.anyHasNotStarted(context.getActiveDrugOrders())) {
 			return null;
 		}
-		RecordMapping record = proposedDrugsRecord(question, questionDrugs, herSubstances, mappings);
+		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, herSubstances, mappings);
 		if (record == null) {
 			return null;
 		}
@@ -2829,13 +2843,7 @@ public class DrugReferenceInjector {
 		if (!carriesInteractions || DrugSafetyValidator.anyRuleIdentifiesAny(orderEntries, questionDrugs)) {
 			return null;
 		}
-		DrugReference subject = null;
-		for (Map.Entry<DrugReference, SubstanceRendering> rendered : matched.entrySet()) {
-			if (rendered.getKey().getId() != null && rendered.getKey().getId().equals(record.getResourceUuid())) {
-				subject = DrugSafetyValidator.interactionSubject(rendered.getValue().rows, context);
-				break;
-			}
-		}
+		DrugReference subject = subjectOfRecord(record, matched, context);
 		if (subject == null) {
 			return null;
 		}
@@ -2848,19 +2856,231 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The drug-reference record of the one drug {@code question} proposes, or {@code null} — the gate the two
-	 * compositions of a proposal that raised no finding share ({@link #composeFromBelowFloor}, {@link
-	 * #composeFromNoPair}): the question resolves ONE substance, not one of hers ({@code herSubstances}), and proposes
-	 * it ({@link #questionProposes}); and that drug's own reference record is in the chart, which the answer cites.
+	 * The module's answer to a proposal that follows a list of drugs the question says she is on (ADR Decision 149),
+	 * or {@code null} where the model answers. <em>"The patient is currently on Lamivudine, Nevirapine, Stavudine, is
+	 * it safe to give metformin?"</em>, asked of a chart holding none of the three, was answered by the model <em>"The
+	 * records do not address the safety of giving Metformin."</em> — the sentence ADR Decisions 142 and 143 replaced
+	 * for a proposal asked alone, and the module answered metformin alone from the rows relating it to her orders.
+	 *
+	 * <p>It states what {@link #composeFromBelowFloor} or {@link #composeFromNoPair} states for the drug proposed
+	 * alone, over the drug-in-play arm's own statement about that drug ({@code PairChipExtent.Sink.statedFor}), then
+	 * a line that its check against the listed drugs her orders do not resolve to raised no finding — none where her
+	 * orders resolve them all, since the first line already covers her orders — on the lines' second place so that the
+	 * below-floor answer's scope still closes what it covers. Never a word on the listed drugs' own findings: they are
+	 * not about the drug proposed, and their chips are not published (ADR Decision 148).
+	 *
+	 * <p>Fail-closed, beyond the two compositions' own gates: the question lists drugs before its proposal
+	 * ({@link #listedBeforeTheProposal}) and proposes one substance besides them; the question's own pairs stated
+	 * and every one reported ({@code found == reported}), since a pair the cap withheld may be the drug proposed's
+	 * and would raise no finding; and the drug-in-play arm's statement about the drug proposed has {@code found == 0}.
+	 *
+	 * <p>A finding about a drug other than the one proposed ({@code SafetyWarning.isAboutADrugOtherThanTheOneProposed})
+	 * is neither stated nor a reason to keep the model call, whatever it withholds (ADR Decision 150): it is about her
+	 * listed regimen, and its chip is not published (ADR Decision 148). Where a finding IS about the drug proposed,
+	 * {@link #composeListFindings} answers instead, and this method's own line, which says the check raised none, is
+	 * never written.
 	 */
-	private static RecordMapping proposedDrugsRecord(String question, List<DrugReference> questionDrugs,
+	private static String composeAfterAList(String question, List<DrugReference> questionDrugs,
+			Set<Object> herSubstances, List<DrugReference> orderEntries, List<SafetyWarning> findings,
+			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
+			PairChipExtent.Sink pairExtent, List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched,
+			PatientClinicalContext context, boolean contraindicationsChecked) {
+		List<DrugReference> listed = listedBeforeTheProposal(question, questionDrugs);
+		PairChipExtent questionPairs = pairExtent.stated();
+		if (listed.isEmpty() || questionPairs == null || questionPairs.getFound() != questionPairs.getReported()) {
+			return null;
+		}
+		// A finding about a drug other than the one proposed is neither stated nor a reason to keep the model call
+		// (ADR Decision 150): it is about her listed regimen, and its chip is not published (ADR Decision 148).
+		List<Integer> aboutTheProposal = new ArrayList<Integer>();
+		for (int i = 0; i < findings.size(); i++) {
+			if (!findings.get(i).isAboutADrugOtherThanTheOneProposed()) {
+				aboutTheProposal.add(Integer.valueOf(i));
+			}
+		}
+		Map<Object, List<DrugReference>> listedRows = new LinkedHashMap<Object, List<DrugReference>>();
+		for (DrugReference entry : listed) {
+			if (!listedRows.containsKey(entry.substanceGroupKey())) {
+				listedRows.put(entry.substanceGroupKey(), new ArrayList<DrugReference>());
+			}
+			listedRows.get(entry.substanceGroupKey()).add(entry);
+		}
+		List<DrugReference> proposed = new ArrayList<DrugReference>();
+		for (DrugReference entry : questionDrugs) {
+			if (!listedRows.containsKey(entry.substanceGroupKey())) {
+				proposed.add(entry);
+			}
+		}
+		if (proposed.isEmpty()) {
+			return null;
+		}
+		if (!aboutTheProposal.isEmpty()) {
+			return composeListFindings(proposed, herSubstances, listedRows, findings, aboutTheProposal, findingNumbers,
+					orderRecordNumbers, herOrderRecords, context);
+		}
+		PairChipExtent own = pairExtent.statedFor(proposed.get(0).substanceGroupKey());
+		if (own == null || own.getFound() != 0) {
+			return null;
+		}
+		String alone = composeFromBelowFloor(true, proposed, herSubstances, own, mappings, context);
+		if (alone == null) {
+			alone = composeFromNoPair(true, proposed, herSubstances, orderEntries, own, mappings, matched, context,
+					contraindicationsChecked);
+		}
+		if (alone == null) {
+			return null;
+		}
+		// Both compositions passed proposedDrugsRecord, so the record is there and the proposed rows one substance.
+		DrugReference subject = subjectOfRecord(proposedDrugsRecord(true, proposed, herSubstances, mappings), matched,
+				context);
+		if (subject == null) {
+			return null;
+		}
+		// A listed drug her orders resolve to is one of her orders, which the first line already checked the drug
+		// against; naming it here would state that check twice.
+		List<String> names = new ArrayList<String>();
+		for (Map.Entry<Object, List<DrugReference>> rows : listedRows.entrySet()) {
+			if (!herSubstances.contains(rows.getKey())) {
+				names.add(DrugSafetyValidator.interactionSubject(rows.getValue(), context).displayLabel());
+			}
+		}
+		if (names.isEmpty()) {
+			return alone;
+		}
+		String listLine = "The check of " + subject.displayLabel() + " against " + joinedAsAList(names)
+				+ ", also named in the question, raised no finding.";
+		int firstLineEnd = alone.indexOf('\n');
+		return firstLineEnd < 0 ? alone + "\n" + listLine
+				: alone.substring(0, firstLineEnd) + "\n" + listLine + alone.substring(firstLineEnd);
+	}
+
+	/**
+	 * The module's answer to a proposal after a list whose findings about the drug proposed answer it (ADR Decision
+	 * 150), or {@code null} where the model answers. <em>"The patient is currently on Lamivudine / zidovudine,
+	 * Efavirenz, Trimethoprim and sulfamethoxazole is it safe to give Fluconazole?"</em> was answered by the model
+	 * <em>"Fluconazole can be given, with two cautions"</em>, leaving out the Major the data rates fluconazole with
+	 * efavirenz, which her chart does not hold.
+	 *
+	 * <p>One brief line per finding about the drug proposed ({@link #briefDetail}), strongest first and, within a
+	 * strength, those against her own orders before those against a drug the question lists. The lead is the
+	 * strongest call a line licenses: Decision 108's "No" where a finding withholds the drug against one of her
+	 * orders; <em>"No if she is on Efavirenz — this module's drug-safety check found a reason to withhold Fluconazole
+	 * against it."</em> where every withholding finding is against a listed drug she does not hold, since her chart
+	 * does not say she is on it; else Decision 140's count of cautions.
+	 *
+	 * <p>Fail-closed: the proposed rows are one substance, not hers; every finding about it is an INTERACTION
+	 * stating a proposal clause, and one that withholds is one the data RATES a reason to withhold
+	 * ({@link #licensesTheModulesNo}) — a contraindication, an unrated rule or a referent clause keeps the model call,
+	 * as Decision 108 has it for a drug asked alone.
+	 */
+	private static String composeListFindings(List<DrugReference> proposed, Set<Object> herSubstances,
+			Map<Object, List<DrugReference>> listedRows, List<SafetyWarning> findings, List<Integer> aboutTheProposal,
+			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
+			PatientClinicalContext context) {
+		Set<Object> asked = new HashSet<Object>();
+		for (DrugReference entry : proposed) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)) {
+			return null;
+		}
+		// Per finding: the listed substances it is against that her orders do not resolve to — empty for one against
+		// her own orders.
+		final Map<Integer, List<Object>> againstListed = new HashMap<Integer, List<Object>>();
+		for (Integer i : aboutTheProposal) {
+			SafetyWarning finding = findings.get(i);
+			String clause = strengthClause(finding);
+			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) || finding.subjectRows().isEmpty()
+					|| !(STRENGTH_CAUTION.equals(clause)
+							|| STRENGTH_WITHHOLD.equals(clause) && licensesTheModulesNo(finding))) {
+				return null;
+			}
+			List<Object> partners = new ArrayList<Object>();
+			for (DrugReference row : finding.subjectRows()) {
+				Object key = row.substanceGroupKey();
+				if (listedRows.containsKey(key) && !herSubstances.contains(key) && !partners.contains(key)) {
+					partners.add(key);
+				}
+			}
+			againstListed.put(i, partners);
+		}
+		List<Integer> order = new ArrayList<Integer>(aboutTheProposal);
+		Collections.sort(order, Comparator.<Integer> comparingInt(i -> strengthRank(strengthClause(findings.get(i))))
+				.thenComparingInt(i -> againstListed.get(i).isEmpty() ? 0 : 1));
+		boolean withholdsAgainstHerOrders = false;
+		List<Object> withholdingListed = new ArrayList<Object>();
+		List<String> lines = new ArrayList<String>(order.size() + 1);
+		for (Integer i : order) {
+			SafetyWarning finding = findings.get(i);
+			if (STRENGTH_WITHHOLD.equals(strengthClause(finding))) {
+				if (againstListed.get(i).isEmpty()) {
+					withholdsAgainstHerOrders = true;
+				}
+				for (Object key : againstListed.get(i)) {
+					if (!withholdingListed.contains(key)) {
+						withholdingListed.add(key);
+					}
+				}
+			}
+			String line = findingBody(finding, briefDetail(finding.getDetail()), orderRecordNumbers, true) + " ["
+					+ findingNumbers.get(i) + "]";
+			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
+		}
+		String drug = findings.get(order.get(0)).getDrug();
+		if (withholdsAgainstHerOrders) {
+			lines.add(0, WITHHOLD_LEAD_OPENING + drug + WITHHOLD_LEAD_CLOSING);
+		} else if (!withholdingListed.isEmpty()) {
+			List<String> names = new ArrayList<String>();
+			for (Object key : withholdingListed) {
+				names.add(DrugSafetyValidator.interactionSubject(listedRows.get(key), context).displayLabel());
+			}
+			lines.add(0, "No if she is on " + joinedAsAlternatives(names) + " — this module's drug-safety check found "
+					+ "a reason to withhold " + drug + (names.size() == 1 ? " against it." : " against each."));
+		} else {
+			lines.add(0, cautionLead(order.size(), drug));
+		}
+		return String.join("\n", lines);
+	}
+
+	/** {@code items} joined "A", "A or B", "A, B or C". */
+	private static String joinedAsAlternatives(List<String> items) {
+		StringBuilder joined = new StringBuilder();
+		for (int i = 0; i < items.size(); i++) {
+			if (i > 0) {
+				joined.append(i == items.size() - 1 ? " or " : ", ");
+			}
+			joined.append(items.get(i));
+		}
+		return joined.toString();
+	}
+
+	/** The row the response names the substance of {@code record} by — {@link DrugSafetyValidator#interactionSubject}
+	 *  over the rows the record was rendered for — or {@code null} where no rendering is that record's. */
+	private static DrugReference subjectOfRecord(RecordMapping record, Map<DrugReference, SubstanceRendering> matched,
+			PatientClinicalContext context) {
+		for (Map.Entry<DrugReference, SubstanceRendering> rendered : matched.entrySet()) {
+			if (rendered.getKey().getId() != null && rendered.getKey().getId().equals(record.getResourceUuid())) {
+				return DrugSafetyValidator.interactionSubject(rendered.getValue().rows, context);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The drug-reference record of the one drug {@code questionDrugs} resolve, or {@code null} — the gate the two
+	 * compositions of a proposal that raised no finding share ({@link #composeFromBelowFloor}, {@link
+	 * #composeFromNoPair}): the drugs are ONE substance, not one of hers ({@code herSubstances}), and the question
+	 * proposes it ({@code proposes}: {@link #questionProposes}, or the proposal after a list that {@link
+	 * #composeAfterAList} hands its drug alone); and that drug's own reference record is in the chart, which the
+	 * answer cites.
+	 */
+	private static RecordMapping proposedDrugsRecord(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<RecordMapping> mappings) {
 		Set<Object> asked = new LinkedHashSet<Object>();
 		for (DrugReference entry : questionDrugs) {
 			asked.add(entry.substanceGroupKey());
 		}
-		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
-				|| !questionProposes(question, questionDrugs)) {
+		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances) || !proposes) {
 			return null;
 		}
 		List<String> rows = rowIds(questionDrugs);

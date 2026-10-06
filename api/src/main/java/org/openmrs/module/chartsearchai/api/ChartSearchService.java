@@ -1102,7 +1102,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null);
+					null, null, null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, false);
 		}
 
 		/**
@@ -1145,7 +1145,8 @@ public interface ChartSearchService {
 				DrugReferenceLoad.Coverage doseCeilingCoverage,
 				List<String> unsupportedEndedOrderClaims,
 				List<Integer> unstatedSignificanceQualifiers,
-				List<Integer> findingsStatedByTheModule) {
+				List<Integer> findingsStatedByTheModule, boolean asksWhetherSheHasTakenADrug) {
+			this.asksWhetherSheHasTakenADrug = asksWhetherSheHasTakenADrug;
 			// Null survives as null, the rule every list above shares (ADR Decision 147).
 			this.findingsStatedByTheModule = findingsStatedByTheModule == null ? null
 					: java.util.Collections.unmodifiableList(new java.util.ArrayList<Integer>(findingsStatedByTheModule));
@@ -1955,6 +1956,21 @@ public interface ChartSearchService {
 
 		/** @see #getFindingsStatedByTheModule() */
 		private final List<Integer> findingsStatedByTheModule;
+
+		/** @see #asksWhetherSheHasTakenADrug() */
+		private final boolean asksWhetherSheHasTakenADrug;
+
+		/**
+		 * Whether the question asked whether the patient has EVER taken one drug — {@code
+		 * QueryScopeRouter.asksWhetherSheHasTakenADrug}, read off the chart the injector stamped
+		 * ({@code PatientChart.getHistoryQuestionDrugRows()}) and never re-asked of the question here (ADR Decision 156).
+		 * Published as the {@code asksWhetherSheHasTakenADrug} key, so a client can draw the chips beside such an answer
+		 * apart from the answer: they are about that drug's place in her chart, not a reading of the question. {@code
+		 * false} on every other question, and on a pass that built no such stamp.
+		 */
+		public boolean asksWhetherSheHasTakenADrug() {
+			return asksWhetherSheHasTakenADrug;
+		}
 
 		/**
 		 * @return the record numbers of the findings the module's own sentence after a model's answer states — <em>"Not

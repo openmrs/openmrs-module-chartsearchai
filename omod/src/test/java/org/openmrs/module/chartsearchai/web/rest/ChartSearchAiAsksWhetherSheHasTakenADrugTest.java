@@ -33,20 +33,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Whether any model wrote the answer reaches the wire as {@code answeredByTheModule} — issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/469">#469</a>. What it
- * means is canonical at {@code ChartSearchService.ChartAnswer.isAnsweredByTheModule()}, and that the
- * orchestration sets it is pinned one layer down by {@code LlmInferenceServiceAnswerFromFindingsContextTest}.
- * Here the subject is the wire: every surface, both values, and one write.
+ * Whether the question asked if the patient has EVER taken one drug reaches the wire as
+ * {@code asksWhetherSheHasTakenADrug} (ADR Decision 156), on the search response and on every SSE event carrying the
+ * answer, so a client can draw the chips beside such an answer apart from it.
  */
-public class ChartSearchAiAnsweredByTheModuleTest {
+public class ChartSearchAiAsksWhetherSheHasTakenADrugTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
-	private static final String QUESTION = "Can I give her ibuprofen?";
+	private static final String QUESTION = "Has she ever taken ibuprofen?";
 
-	private static final String COMPOSED = "No — this module's drug-safety check found a reason to withhold "
-			+ "Ibuprofen.";
+	private static final String COMPOSED = "This patient's chart records no Ibuprofen order, active or ended.";
 
 	private ChartSearchAiRestController controller;
 
@@ -54,11 +51,11 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	private boolean byTheModule;
+	private boolean history;
 
 	@BeforeEach
 	public void setUp() {
-		byTheModule = true;
+		history = true;
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new ComposedAnswerStubService());
@@ -76,7 +73,7 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 		return new ChartSearchService.ChartAnswer(COMPOSED,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-				null, null, null, null, null, null, byTheModule, null, null, null, null, null, null, null, false);
+				null, null, null, null, null, null, false, null, null, null, null, null, null, null, history);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -90,12 +87,12 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 
 	@Test
 	public void theSearchResponseStatesBothValues() {
-		assertEquals(Boolean.TRUE, searchPayload().get("answeredByTheModule"));
-		byTheModule = false;
-		Map<String, Object> modelWritten = searchPayload();
-		assertTrue(modelWritten.containsKey("answeredByTheModule"),
+		assertEquals(Boolean.TRUE, searchPayload().get("asksWhetherSheHasTakenADrug"));
+		history = false;
+		Map<String, Object> other = searchPayload();
+		assertTrue(other.containsKey("asksWhetherSheHasTakenADrug"),
 				"the key is present on every answer, so a client reads one field unconditionally");
-		assertEquals(Boolean.FALSE, modelWritten.get("answeredByTheModule"));
+		assertEquals(Boolean.FALSE, other.get("asksWhetherSheHasTakenADrug"));
 	}
 
 	@Test
@@ -103,29 +100,28 @@ public class ChartSearchAiAnsweredByTheModuleTest {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
 
 		JsonNode done = SseEvents.dataOfType(out, "done", MAPPER);
-		assertTrue(done.get("answeredByTheModule").asBoolean(),
-				"the early done is what a streaming user sees, and the flag is known as soon as the chart is built");
-		assertTrue(SseEvents.dataOfType(out, "grounded", MAPPER).get("answeredByTheModule").asBoolean());
+		assertTrue(done.get("asksWhetherSheHasTakenADrug").asBoolean(),
+				"the early done is what a streaming user sees");
+		assertTrue(SseEvents.dataOfType(out, "grounded", MAPPER).get("asksWhetherSheHasTakenADrug").asBoolean());
 	}
 
 	@Test
 	public void theClassicDoneEventStatesIt() throws Exception {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), false);
 
-		assertTrue(SseEvents.dataOfType(out, "done", MAPPER).get("answeredByTheModule").asBoolean());
+		assertTrue(SseEvents.dataOfType(out, "done", MAPPER).get("asksWhetherSheHasTakenADrug").asBoolean());
 	}
 
 	@Test
 	public void theWholePayloadStillMarshalsForAnXmlClient() throws Exception {
-		XmlPayloads.assertMarshals(searchPayload(), "a composed answer");
+		XmlPayloads.assertMarshals(searchPayload(), "a history question's answer");
 	}
 
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {
 		int keys = ChartSearchAiStreamingTest.occurrences(ChartSearchAiStreamingTest.controllerSource(),
-				"\"answeredByTheModule\"");
-		assertEquals(1, keys, "answeredByTheModule must be written in exactly one place, beside the keys "
-				+ "it explains. Found " + keys + " writes of it.");
+				"\"asksWhetherSheHasTakenADrug\"");
+		assertEquals(1, keys, "asksWhetherSheHasTakenADrug must be written in exactly one place. Found " + keys + " writes of it.");
 	}
 
 	private class ComposedAnswerStubService implements ChartSearchService {

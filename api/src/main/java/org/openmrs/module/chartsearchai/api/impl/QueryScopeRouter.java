@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -329,10 +330,42 @@ public final class QueryScopeRouter {
 		return Collections.unmodifiableList(patterns);
 	}
 
+	/**
+	 * The words a shape of {@link #PROPOSAL_SHAPES}, {@link #SCREEN_SHAPES} or {@link #HISTORY_SHAPES} can open with —
+	 * the ones {@link #fitsAShape} restores a clipped first word to (ADR Decision 152).
+	 */
+	private static final List<String> LEADING_WORDS = Collections.unmodifiableList(Arrays.asList("are", "can", "could",
+			"did", "do", "does", "has", "have", "is", "may", "should", "was", "were", "will", "would"));
+
+	/**
+	 * Whether {@code words} fit one of {@code shapes} — as written, or with a first word that lost its leading letters
+	 * read as the {@link #LEADING_WORDS} word it is the end of (ADR Decision 152). <em>"s it safe to give
+	 * metformin?"</em> fitted no shape and was left to the model, which answered "The records do not address the safety
+	 * of giving Metformin." while the question with its "I" was the module's. The rest of the question must still fit a
+	 * shape exactly, so the restored word adds only the word a shape already names: a word mistyped any other way —
+	 * "Ts", "Cna" — is not guessed at, and every grammar stays fail-closed.
+	 */
 	private static boolean fitsAShape(List<String> words, List<Pattern> shapes) {
 		if (words == null || words.isEmpty()) {
 			return false;
 		}
+		if (fitsAsWritten(words, shapes)) {
+			return true;
+		}
+		String first = words.get(0);
+		for (String leading : LEADING_WORDS) {
+			if (leading.length() > first.length() && leading.endsWith(first)) {
+				List<String> restored = new ArrayList<String>(words);
+				restored.set(0, leading);
+				if (fitsAsWritten(restored, shapes)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static boolean fitsAsWritten(List<String> words, List<Pattern> shapes) {
 		String joined = String.join(" ", words);
 		for (Pattern shape : shapes) {
 			if (shape.matcher(joined).matches()) {

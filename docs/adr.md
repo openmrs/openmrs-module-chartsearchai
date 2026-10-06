@@ -158,6 +158,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 153: A module's "No" states brief lines, keeping a folded class sentence](#decision-153-a-modules-no-states-brief-lines-keeping-a-folded-class-sentence)
 - [Decision 154: A question whether she has ever taken a drug no order of hers carried is answered by the module](#decision-154-a-question-whether-she-has-ever-taken-a-drug-no-order-of-hers-carried-is-answered-by-the-module)
 - [Decision 155: A question whether she has ever taken a drug her orders carried states each order and whether it is in force](#decision-155-a-question-whether-she-has-ever-taken-a-drug-her-orders-carried-states-each-order-and-whether-it-is-in-force)
+- [Decision 156: A response says whether its question asked if she has ever taken a drug](#decision-156-a-response-says-whether-its-question-asked-if-she-has-ever-taken-a-drug)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -14375,3 +14376,36 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionAbou
 `.aHistoryQuestionWhoseOrdersAreNotAllCitableStillAsksTheModel` (the record test) and
 `.aHistoryQuestionWhoseOrderRecordCarriesNoStampStillAsksTheModel` (the stamp test, which also asserts the injection still
 ran: without the guard a null stamp throws and the whole injection is dropped).
+
+## Decision 156: A response says whether its question asked if she has ever taken a drug
+
+**Status: Accepted** (October 2026) — implemented, no issue.
+
+### Context
+
+*"Has she ever taken Metoclopramide?"*, asked of Susan, who is on it, carried one chip: *"Metoclopramide interacts with active
+order Lidocaine — Major."* [Decision 151](#decision-151-a-question-whether-she-has-ever-taken-a-drug-publishes-no-chip-about-giving-it)
+keeps it — a conflict of a medication she is taking — and the reference client drew it in the red box of findings about
+the drug asked, since it is about that drug. Put to the maintainer: keep it as a warning, draw it neutral and collapsed,
+or drop it. Neutral and collapsed was chosen, which the client cannot do on its own: nothing on the response said the
+question was one of history.
+
+### The decision
+
+- **`ChartAnswer.asksWhetherSheHasTakenADrug()`**, published as the `asksWhetherSheHasTakenADrug` key on every surface
+  carrying the answer, written in exactly one place in `ChartSearchAiRestController`. It is read off the injector's own
+  stamp, `PatientChart.getHistoryQuestionDrugRows()` non-empty, and never re-asked of the question — so it is true exactly
+  where Decision 151's grammar admitted the question, whether the model or the module wrote the answer.
+- **The drawing is the client's.** The README tells a client to draw such a response's chips apart from the answer.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: this change (omod 333254b6) against the captures of
+gate 21's arm B, the code `main` carries since #604, over the same 83 cells. **It passed.** Every answer,
+`answeredByTheModule`, reference and chip was byte-identical. The key read `true` on exactly the 16 history questions
+whose drug the data resolves, `false` on *"Has she ever been on paracetamol?"* — "paracetamol" resolves to no drug, so
+no stamp is made — and `false` on every other cell.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aResponseSaysWhetherTheQuestionAskedIfSheHasEverTakenADrug`
+(the model's answer, the module's, the early done, and a proposal) and
+`ChartSearchAiAsksWhetherSheHasTakenADrugTest` (the wire, both SSE paths, XML, and the one write).

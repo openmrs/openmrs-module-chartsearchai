@@ -1262,6 +1262,32 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A response to a question whether she has ever taken a drug says so, so a client can draw its chips apart from the
+	 * answer (ADR Decision 156): on the model's answer, on the module's, and on the early done a streaming user sees.
+	 * A proposal of the same drug says it is not one.
+	 */
+	@Test
+	public void aResponseSaysWhetherTheQuestionAskedIfSheHasEverTakenADrug() {
+		ChartAnswer model = serviceWith(new RecordingProvider(), shipped()).search(patient, "Has she ever taken aspirin?");
+		assertFalse(model.isAnsweredByTheModule(), "precondition: the model answers this one");
+		assertTrue(model.asksWhetherSheHasTakenADrug(), "the model's answer");
+
+		ChartAnswer module = serviceWith(new RecordingProvider(), shipped()).search(patient,
+				"Has she ever taken mebendazole?");
+		assertTrue(module.isAnsweredByTheModule(), "precondition: the module answers this one");
+		assertTrue(module.asksWhetherSheHasTakenADrug(), "the module's answer");
+
+		final List<ChartAnswer> early = new ArrayList<ChartAnswer>();
+		serviceWith(new RecordingProvider(), shipped()).searchStreaming(patient, "Has she ever taken aspirin?", t -> { },
+				r -> { }, c -> { }, early::add);
+		assertEquals(1, early.size());
+		assertTrue(early.get(0).asksWhetherSheHasTakenADrug(), "the early done");
+
+		assertFalse(serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her aspirin?")
+				.asksWhetherSheHasTakenADrug(), "a proposal is not one");
+	}
+
 	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not
 	 *  exactly one. */
 	private Finding findingNamed(String question, String opening) {

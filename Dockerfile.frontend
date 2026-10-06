@@ -14,7 +14,28 @@ WORKDIR /esm
 # the gate could name was present and the deploy reported success. The entry is byte-
 # identical in size across those builds (83,245), so nothing comparing sizes sees it.
 RUN git rev-parse HEAD > /esm/ESM_SHA
-RUN yarn install --immutable && yarn build && yarn pack
+RUN yarn install --immutable
+# Give every ESM commit its own URL path. `openmrs assemble` serves a module from
+# `<name>-<version>/`, and this package's version never moves (1.0.0), so every build was
+# served from the SAME `openmrs-esm-chartsearchai-app-1.0.0/` paths — which Cloudflare caches
+# as default-cacheable `.js` with the base nginx's `expires 1y`. Measured 2026-10-07: browsers
+# were served an entry bundle Last-Modified 16 Sep (cf-cache-status HIT, age ~19.5 days) and a
+# chunk from 21 Sep that the origin no longer had at all, while the origin served the 6 Oct
+# build — three weeks of frontend deploys that reached the server and never a browser. The
+# importmap that names the path is served `no-cache, must-revalidate` and was current, so a
+# path unique to the build makes every browser fetch the new bundle on the next deploy, with
+# no CDN purge. Stamped after the install (the lockfile records the workspace as
+# `0.0.0-use.local`, so `--immutable` is unaffected either way) and before the build and pack,
+# which is what `openmrs assemble` reads the version from. `-git<sha12>`: a prerelease
+# identifier carrying a letter, so a sha that is all digits with a leading zero stays valid
+# semver. The build-spa stage asserts the assembled path carries it.
+RUN node -e 'const fs=require("fs"); \
+  const p=JSON.parse(fs.readFileSync("package.json","utf8")); \
+  const sha=fs.readFileSync("ESM_SHA","utf8").trim().slice(0,12); \
+  p.version=p.version.split("-")[0]+"-git"+sha; \
+  fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n"); \
+  console.log("ESM version",p.version);'
+RUN yarn build && yarn pack
 
 FROM --platform=$BUILDPLATFORM node:24-alpine AS build-spa
 
@@ -74,6 +95,8 @@ RUN node /app/precompress-spa.mjs /app/dist
 RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
   const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-chartsearchai-app"]; \
   if(!spec){console.error("importmap does not name the ESM");process.exit(1);} \
+  const tag="-git"+readFileSync("/app/dist/chartsearchai-esm.sha","utf8").trim().slice(0,12)+"/"; \
+  if(!spec.includes(tag)){console.error("importmap names the ESM at",spec,"which does not carry",tag,"so a CDN may serve an earlier build at that path");process.exit(1);} \
   const entry="/app/dist/"+spec.replace(/^\.\//,""); \
   const stamp=statSync("/app/dist/chartsearchai-esm.sha").mtimeMs, e=statSync(entry).mtimeMs; \
   console.log("stamp mtime",stamp,"entry mtime",e,entry); \

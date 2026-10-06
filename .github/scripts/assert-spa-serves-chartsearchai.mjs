@@ -244,10 +244,16 @@ async function probe(page, paths) {
 /**
  * Reads one asset's headers. Used for the ESM entry bundle, whose URL is only known after the
  * importmap has been parsed, so it cannot join the fixed probe above.
+ *
+ * `bust: false` reads it the way a BROWSER requests it — the plain URL, which an edge cache may
+ * answer. Every other read here is cache-busted so its comparison is made against the origin;
+ * this one exists because that made the gate blind to what clinicians were actually served.
+ * Measured 2026-10-07: for three weeks the busted reads saw the current build and the gate was
+ * green, while the plain URL answered `cf-cache-status: HIT` with an entry Last-Modified 16 Sep.
  */
-async function readHead(page, url) {
+async function readHead(page, url, { bust: busting = true } = {}) {
   return page.evaluate(
-    async ({ u, challengeMs, waits, bustSeed }) => {
+    async ({ u, challengeMs, waits, bustSeed, busting }) => {
       let n = bustSeed;
       // `cache: 'no-store'` is a BROWSER-cache directive and sends no request header, so an edge
       // cache may still answer. The entry is a `.js`, which is in Cloudflare's default cacheable
@@ -263,7 +269,7 @@ async function readHead(page, url) {
         // URL for the whole poll — an edge-cached 403 would then be polled to the deadline and
         // returned as "could not be read at all", i.e. RED on a healthy deployment, and on the
         // more cacheable side of the comparison at that.
-        const bust = `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}`;
+        const bust = busting ? `${u}${u.includes('?') ? '&' : '?'}cb=${Date.now()}-${++n}` : u;
         try {
           const r = await fetch(bust, { cache: 'no-store' });
           if (r.status !== 403 || i >= waits.length || Date.now() > deadline) {
@@ -287,7 +293,7 @@ async function readHead(page, url) {
         await new Promise((resolve) => setTimeout(resolve, waits[i]));
       }
     },
-    { u: url, challengeMs: CHALLENGE_MS, waits: POLL_WAITS, bustSeed: (reads += 100) },
+    { u: url, challengeMs: CHALLENGE_MS, waits: POLL_WAITS, bustSeed: (reads += 100), busting },
   );
 }
 
@@ -314,7 +320,7 @@ function entryUrlFrom(importmapBody) {
  * Splits what it finds: `problems` fail the gate, `warnings` are printed and do not. The only
  * warning is the ESM-tip comparison — see EXPECTED_SHA for why it cannot be a failure.
  */
-function problemsWith({ importmap, routes, esmSha }, entryHead) {
+function problemsWith({ importmap, routes, esmSha }, entryHead, browserEntryHead) {
   const problems = [];
   const warnings = [];
   const enc = (r) => `content-encoding: ${r.encoding ?? 'none'}`;
@@ -420,6 +426,37 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
     }
   }
 
+  // What a BROWSER is served at the entry's plain URL, as opposed to the origin copies compared
+  // above. An edge cache answering an earlier build there means this deploy reached the server and
+  // not a single clinician — the 2026-10-07 finding, three weeks long, every gate run green.
+  // Dockerfile.frontend now gives each ESM commit its own path, so a deploy's URLs are new to the
+  // edge; this is what says so on the deploy itself if that ever stops holding. Unreadable (a
+  // challenge, the network) is a note and not a verdict: it establishes nothing either way.
+  if (looksLikeStampedSha(esmSha) && browserEntryHead) {
+    const edge = `cf-cache-status: ${browserEntryHead.cache ?? 'none'}, age: ${browserEntryHead.age ?? 'none'}`;
+    if (browserEntryHead.status === 403 || browserEntryHead.status === 0) {
+      warnings.push(
+        `${browserEntryHead.url} could not be read as a browser requests it (HTTP ${browserEntryHead.status}` +
+          `${mitigation(browserEntryHead)}), so what clinicians are served was not checked`,
+      );
+    } else if (browserEntryHead.status !== 200) {
+      problems.push(
+        `${browserEntryHead.url} as a browser requests it returned HTTP ${browserEntryHead.status} (${edge})` +
+          ' — browsers are not served this deploy\'s entry bundle',
+      );
+    } else {
+      const servedAt = Date.parse(browserEntryHead.lastModified ?? '');
+      const stampAt = Date.parse(esmSha.lastModified ?? '');
+      if (Number.isFinite(servedAt) && Number.isFinite(stampAt) && servedAt < stampAt) {
+        problems.push(
+          `${browserEntryHead.url} as a browser requests it is from an earlier build (${edge};` +
+            ` entry: ${browserEntryHead.lastModified}; stamp: ${esmSha.lastModified}) — an edge cache` +
+            ' is serving it in place of this deploy, so browsers run the old frontend',
+        );
+      }
+    }
+  }
+
   // A HIT on either side means the comparison was made against an edge copy, not the origin — the
   // unique `?cb=` defeats that under default Cloudflare config, but a zone set to ignore query
   // strings would serve one cached answer to every read. Collected and printed since the round
@@ -480,6 +517,11 @@ function problemsWith({ importmap, routes, esmSha }, entryHead) {
   return { problems, warnings };
 }
 
+/** Whether the stamp read is a commit sha — the same test problemsWith applies before any provenance comparison. */
+function looksLikeStampedSha(esmSha) {
+  return esmSha.status === 200 && /^[0-9a-f]{40}$/.test(esmSha.body.trim());
+}
+
 // Everything above is importable; the gate itself is below.
 //
 // The condition is ENTRY-POINT IDENTITY, deliberately, and not an environment variable. It was
@@ -525,13 +567,16 @@ async function runAttempts(newSession, { attempts, delayMs, wait = sleep, log = 
       // Only a same-origin path is readable; a foreign or missing specifier is reported by
       // problemsWith instead of fetched.
       const entryHead = typeof entry === 'string' ? await readHead(session.page, entry) : null;
-      ({ problems, warnings } = problemsWith(probed, entryHead));
+      const browserEntryHead = typeof entry === 'string' ? await readHead(session.page, entry, { bust: false }) : null;
+      ({ problems, warnings } = problemsWith(probed, entryHead, browserEntryHead));
       lastDiagnostics = {
         sha: (probed.esmSha.body || '').trim().slice(0, 12) || null,
         stampAt: probed.esmSha.lastModified,
         stampCache: probed.esmSha.cache,
         entry: entryHead && entryHead.url,
         entryAt: entryHead && entryHead.lastModified,
+        browserEntryAt: browserEntryHead && browserEntryHead.lastModified,
+        browserEntryCache: browserEntryHead && browserEntryHead.cache,
         // Whether the comparison actually ran, asserted rather than inferred from a caller
         // invariant — the success line says it ran, and must not say so on trust.
         provenanceCompared: Boolean(
@@ -615,6 +660,10 @@ try {
           `${served.stampCache ? `, cf-cache-status: ${served.stampCache}` : ''})`,
       );
       console.log(`  entry bundle: ${served.entry ?? 'not read'} (${served.entryAt ?? 'no Last-Modified'})`);
+      console.log(
+        `  as a browser is served it: ${served.browserEntryAt ?? 'not read'}` +
+          `${served.browserEntryCache ? ` (cf-cache-status: ${served.browserEntryCache})` : ''}`,
+      );
       console.log(`  ESM tip comparison: ${EXPECTED_SHA ? 'compared' : 'NOT resolved, so not compared'}`);
       console.log(
         served.provenanceCompared
@@ -675,6 +724,12 @@ try {
       'tag over different ESM content. Being re-publishable it is mutable too, so it',
       'narrows what a host can be running without pinning it — only a digest pins.',
       'Nothing in this repo sets TAG; doing so is a host-side change.',
+      '',
+      'A failure that says "as a browser requests it is from an earlier build" means an',
+      'edge cache (Cloudflare) answers the PLAIN url with an older build while the origin',
+      'serves this one — the 2026-10-07 shape, three weeks of deploys no browser received.',
+      'Dockerfile.frontend gives every ESM commit its own path (`…-git<sha12>/`) so a new',
+      'deploy has urls new to the edge; check that the importmap names such a path.',
       '',
       'Three directions this gate does NOT cover, so that a green run is not read for',
       'more than it says. A wholly stale but self-consistent image (see EXPECTED_SHA',

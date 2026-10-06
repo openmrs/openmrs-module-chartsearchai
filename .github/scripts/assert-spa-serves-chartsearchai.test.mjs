@@ -119,6 +119,57 @@ const entryHead = (over = {}) => ({ url: '/x/app.js', status: 200, lastModified:
 }
 
 // ---- entryUrlFrom: the shapes one specifier can take --------------------------------------
+// ---- what a BROWSER is served: the edge cache shadowing a deploy ----------------------------
+{
+  // 2026-10-07's real values: the stamp the origin served, and the entry a browser was served at
+  // the plain URL — an edge copy nineteen days old. Every busted read was current, so this is the
+  // only read that could see it.
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA, 'Tue, 06 Oct 2026 22:30:34 GMT') },
+    entryHead({ lastModified: 'Tue, 06 Oct 2026 22:31:37 GMT' }),
+    entryHead({ lastModified: 'Wed, 16 Sep 2026 20:05:04 GMT', cache: 'HIT', age: '1681762' }),
+  );
+  check('an edge-cached earlier entry a browser is served fails', has(problems, 'is from an earlier build'), problems.join('; '));
+  check('and says it is the edge cache', has(problems, 'cf-cache-status: HIT, age: 1681762'), problems.join('; '));
+}
+{
+  const { problems, warnings } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA) },
+    entryHead(),
+    entryHead({ cache: 'MISS' }),
+  );
+  check('a browser served this build passes', problems.length === 0 && warnings.length === 0, problems.join('; '));
+}
+{
+  const { problems, warnings } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA) },
+    entryHead(),
+    entryHead({ status: 403, mitigated: 'challenge' }),
+  );
+  check(
+    'a browser read refused by a challenge is a note, never a verdict',
+    problems.length === 0 && warnings.some((w) => w.includes('could not be read as a browser requests it')),
+    problems.concat(warnings).join('; '),
+  );
+}
+{
+  // The origin had no 663.js on 2026-10-07; an entry missing at the plain URL is the same shape.
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res(SHA) },
+    entryHead(),
+    entryHead({ status: 404, cache: 'MISS' }),
+  );
+  check('an entry a browser cannot get fails', has(problems, 'browsers are not served'), problems.join('; '));
+}
+{
+  // Not a verdict where the stamp is not a sha: the provenance comparison is refused there too.
+  const { problems } = gate.problemsWith(
+    { importmap: importmapFor('./x/app.js'), routes, esmSha: res('<!doctype html>') },
+    entryHead(),
+    entryHead({ lastModified: 'Wed, 16 Sep 2026 20:05:04 GMT', cache: 'HIT' }),
+  );
+  check('a non-sha stamp fabricates no edge-cache finding', !has(problems, 'earlier build'), problems.join('; '));
+}
 check('relative specifier resolves under the SPA base', gate.entryUrlFrom(importmapFor('./a/b.js').body) === '/openmrs/spa/a/b.js');
 check('root-relative specifier is kept', gate.entryUrlFrom(importmapFor('/openmrs/spa/a/b.js').body) === '/openmrs/spa/a/b.js');
 check('a foreign specifier is reported, not resolved', gate.entryUrlFrom(importmapFor('https://cdn.example.org/a.js').body)?.foreign !== undefined);
@@ -285,6 +336,18 @@ check('isHealthy is false for any problem', gate.isHealthy([]) === true && gate.
   check('probe never fetches one path at the same URL twice', new Set(seen).size === seen.length, seen.join(' '));
 }
 
+
+{
+  // The browser read must be the PLAIN url, every time: a buster there would read the origin, which
+  // is the blindness this read exists to remove.
+  const plain = [];
+  globalThis.fetch = async (u) => {
+    plain.push(u);
+    return { status: 200, text: async () => '', headers: { get: () => null } };
+  };
+  await gate.readHead(page, '/openmrs/spa/x/app.js', { bust: false });
+  check('the browser read fetches the plain url', plain.length === 1 && plain[0] === '/openmrs/spa/x/app.js', plain.join(' '));
+}
 
 {
   // Per POLL, not per call: readHead's buster sat above its loop while probe's sat inside, so a

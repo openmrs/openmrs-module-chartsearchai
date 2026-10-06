@@ -1024,6 +1024,46 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(allergy, "her recorded allergy to fluconazole stays, chips were: " + answer.getSafetyWarnings());
 	}
 
+	/**
+	 * A question whose first word lost its leading letters is read as the word it was clipped from, where the rest
+	 * then fits a shape exactly (ADR Decision 152): <em>"s it safe to give metformin?"</em>, asked of Susan, was answered
+	 * by the model "The records do not address the safety of giving Metformin." while <em>"Is it safe to give
+	 * metformin?"</em> got the module's answer. Each clipped proposal gets its full form's answer.
+	 */
+	@Test
+	public void aProposalWhoseFirstWordLostItsLeadingLettersGetsItsFullFormsAnswer() {
+		String[][] pairs = { { "s it safe to give her mebendazole?", "Is it safe to give her mebendazole?" },
+				{ "an I give her mebendazole?", "Can I give her mebendazole?" },
+				{ "hould I give her mebendazole?", "Should I give her mebendazole?" } };
+		for (String[] pair : pairs) {
+			ChartAnswer full = serviceWith(new RecordingProvider(), shipped()).search(patient, pair[1]);
+			assertTrue(full.isAnsweredByTheModule(), "precondition: the module answers " + pair[1]);
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer clipped = serviceWith(provider, shipped()).search(patient, pair[0]);
+			assertEquals(0, provider.calls, pair[0] + " asks no model: " + clipped.getAnswer());
+			assertEquals(full.getAnswer(), clipped.getAnswer(), pair[0]);
+		}
+	}
+
+	/** A first word that is not the clipped end of a shape's own leading word keeps the model call (ADR Decision 152):
+	 *  a typo inside the word is not guessed at. */
+	@Test
+	public void aFirstWordMistypedOtherThanByClippingStillAsksTheModel() {
+		for (String question : new String[] { "Ts it safe to give her mebendazole?", "Cna I give her mebendazole?",
+				"it safe to give her mebendazole?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+			assertEquals(1, provider.calls, question + " asks the model: " + answer.getAnswer());
+		}
+	}
+
+	/** The history grammar reads a clipped first word too (ADR Decisions 151, 152): "as she ever taken ibuprofen?"
+	 *  carries no finding about giving ibuprofen, as its full form does not. */
+	@Test
+	public void aHistoryQuestionWhoseFirstWordLostItsLeadingLetterIsStillOne() {
+		assertEquals(Collections.emptyList(), findingsInThePromptFor("as she ever taken ibuprofen?", shipped()));
+	}
+
 	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not
 	 *  exactly one. */
 	private Finding findingNamed(String question, String opening) {

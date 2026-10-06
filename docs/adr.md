@@ -154,6 +154,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 149: A proposal after a list of drugs is answered with what the check established for the drug proposed](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed)
 - [Decision 150: A proposal after a list is answered from its findings about the drug proposed](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed)
 - [Decision 151: A question whether she has ever taken a drug publishes no chip about giving it](#decision-151-a-question-whether-she-has-ever-taken-a-drug-publishes-no-chip-about-giving-it)
+- [Decision 152: A question whose first word lost its leading letters is read as the word it was clipped from](#decision-152-a-question-whose-first-word-lost-its-leading-letters-is-read-as-the-word-it-was-clipped-from)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -14162,3 +14163,45 @@ Pinned by `LlmInferenceServiceListedMedicationsContextTest.aQuestionAskingWhethe
 `LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionCarriesNoFindingAboutGivingTheDrug` (the prompt),
 `LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionAboutHerOwnMedicationKeepsItsChips` (the
 current-medication exception) and `.aHistoryQuestionKeepsHerAllergyToTheDrug` (the interaction-type test).
+
+## Decision 152: A question whose first word lost its leading letters is read as the word it was clipped from
+
+**Status: Accepted** (October 2026) — implemented, no issue. Widens the question grammars of
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+and [Decision 151](#decision-151-a-question-whether-she-has-ever-taken-a-drug-publishes-no-chip-about-giving-it) by one
+reading.
+
+### Context
+
+*"s it safe to give metformin?"*, asked of Susan, was answered by the model *"The records do not address the safety of
+giving Metformin."* — the sentence Decisions 142 and 143 replaced — while *"Is it safe to give metformin?"* got the
+module's answer from the four Unknown rows relating metformin to her orders. The clipped "s" fitted no proposal shape,
+and the grammar is fail-closed by design, so the question fell to the model.
+
+### The decision
+
+- **`QueryScopeRouter.fitsAShape`, where a question fits no shape as written, reads its first word as the
+  `LEADING_WORDS` word it is the proper END of** — "s" of "is", "an" of "can", "hould" of "should", "as" of "has" — and
+  admits the question only where the rest then fits a shape exactly. One matcher, so the proposal, screen and history
+  grammars all read it.
+- **Clipping only.** A first word mistyped any other way — "Ts", "Cna" — or a question missing its first word entirely
+  — "it safe to give …" — is not guessed at, and keeps the model call. Every grammar stays fail-closed: the restored word
+  is one a shape already names, in the place it names it.
+- **Taken by the maintainer** over the recommendation to leave typos to the model, whose answer to the clipped question
+  was vaguer and not wrong.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: `main` @ c73d7941 (omod cf9f86a7) against this change
+(omod d7795791) over 73 cells — gate 17's 65, three clipped proposals with their full forms, one clipped history question
+and one mistyped control. **It passed.** All 65 earlier cells and the three full forms were byte-identical in answer and
+chips. Each clipped proposal became the module's, byte-identical to its full form: *"s it safe to give metformin?"* moved
+from *"The records do not address the safety of giving Metformin."* to the below-floor answer; *"an I give her
+fluconazole?"* from the model's *"Fluconazole can be given, with one caution"* to *"1 interaction caution for
+Fluconazole:"*; Kamwara's *"hould I give her rifampicin?"* from *"No — rifampicin should not be given"* to Decision 108's
+lead. *"as she ever taken panadol?"* carried no finding and moved from *"Acetaminophen can be given, with two cautions"*
+to *"The records do not address the patient's use of Acetaminophen."* *"Ts it safe to give metformin?"* stayed with the
+model.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseFirstWordLostItsLeadingLettersGetsItsFullFormsAnswer`,
+`.aFirstWordMistypedOtherThanByClippingStillAsksTheModel` and `.aHistoryQuestionWhoseFirstWordLostItsLeadingLetterIsStillOne`.

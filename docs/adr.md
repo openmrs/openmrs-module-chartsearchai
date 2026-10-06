@@ -14558,3 +14558,42 @@ and `.aProposalForAPatientWithNoOrdersAsksTheModelWhereContraindicationsAreNotCh
 conjunct reddens its own case: the contraindication reading, the proposal, and the flattened names and codes — the last
 only once the case's co-medication was one the data does not relate to warfarin (with metformin a caution finding was
 raised and another branch answered, so the case could not see the conjunct).
+
+## Decision 159: Her own orders sharing a substance do not stop the answer to a proposal
+
+**Status: Accepted** (October 2026) — implemented, no issue. Widens the branch
+[Decisions 142](#decision-142-a-proposal-related-to-her-orders-only-below-the-severity-floor-is-answered-with-those-rows),
+[143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established) and
+[158](#decision-158-a-proposal-for-a-patient-with-no-active-medication-orders-is-answered-with-what-the-check-had-to-compare)
+answer from.
+
+### Context
+
+On the demo (2026-10-07, `main` efcb6bf3, `answerFromFindings` on), *"Can I give her ibuprofen?"* for patient
+`dda99123-1691-11df-97a5-7038c432aabf` — lamivudine, stavudine, nevirapine and isoniazid, each ordered twice — was
+answered by the model *"The records do not address the safety of giving ibuprofen."*, citing nothing, beside four chips
+*"Lamivudine is in active orders Lamivudine (2 orders) — possible duplicate therapy"* and their three siblings. The
+response's `interactionPairs` read `found: 0` with ibuprofen's four rows against her orders all below the floor: the
+shape Decision 142 answers. Its branch ran only where the injection raised NO finding, and #477's finding that her own
+orders share a substance — raised on any question that resolves a drug — is one, though it says nothing about ibuprofen.
+So every proposal for a patient with a duplicated order reached the model.
+
+### The decision
+
+- **That finding does not stop the branch.** `DrugReferenceInjector.onlyHerOwnOrdersSharingASubstance` replaces the
+  empty-findings test: the no-finding compositions run where every finding is
+  `SafetyWarning.statesOrdersSharingASubstance()`. Any other finding — about the drug proposed, a contraindication, a
+  condition — still takes the branches it took.
+- **It is stated after the answer**, one line per finding, through `findingLine` — the rendering `composeFromFindings`
+  uses, now extracted so the two cannot drift — as a "No" states it after the drug's own findings
+  ([Decision 116](#decision-116-a-question-about-a-drug-states-which-of-her-orders-share-a-substance-too)'s ordering).
+  Left to the chip alone, the answer would say nothing of a finding shown beside it.
+
+### The gate
+
+`LlmInferenceServiceAnswerFromFindingsContextTest`, patient 7 with two rifampicin orders, the shipped knowledge base:
+`.aProposalTheCheckRelatesToNoneOfHerOrdersIsAnsweredBesideHerOwnOrdersSharingASubstance` (mebendazole, Decision 143's
+sentence then the finding) and `.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredBesideHerOwnOrdersSharingASubstance`
+(nystatin, Decision 142's) each first assert that the prompt carries exactly that one finding, failed before the change
+— the model was asked — and pass after it. Mutated back to the empty-findings test, both redden; with the line
+dropped, both redden.

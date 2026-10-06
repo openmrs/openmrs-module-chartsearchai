@@ -933,7 +933,7 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					!questionDrugs.isEmpty());
-		} else if (findings.isEmpty() && context != null
+		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
@@ -951,6 +951,10 @@ public class DrugReferenceInjector {
 				moduleAnswer = composeFromNoActiveOrders(proposes, questionDrugs, mappings, matched, context,
 						reading.states());
 			}
+			// A finding that her own orders share a substance says nothing about the drug proposed, so it does not
+			// stop the answer; it is stated after it (ADR Decision 159).
+			moduleAnswer = withHerOwnOrdersSharingASubstance(moduleAnswer, findings, findingNumbers, orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers);
 		}
 		if (moduleAnswer == null && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -3659,15 +3663,7 @@ public class DrugReferenceInjector {
 		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[order.get(0)]);
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {
-			SafetyWarning finding = findings.get(i);
-			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
-					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
-					&& finding.orderScheduledStart() == null;
-			String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
-					orderRecordNumbers, true)
-					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
-					+ " [" + numbers.get(i) + "]";
-			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
+			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, proposal));
 		}
 		SafetyWarning first = findings.get(order.get(0));
 		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
@@ -3678,6 +3674,57 @@ public class DrugReferenceInjector {
 			lines.add(0, cautionLead(lines.size(), first.getDrug()));
 		}
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * One finding as a line of a composed answer: a proposal's brief line or a screen's whole body, any
+	 * current-medication referent, the finding's record number and the records of her orders it is about. The one
+	 * rendering {@link #composeFromFindings} and {@link #withHerOwnOrdersSharingASubstance} share, so a finding is
+	 * stated alike under either.
+	 */
+	private static String findingLine(SafetyWarning finding, Integer number, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, boolean proposal) {
+		boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
+				&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
+				&& finding.orderScheduledStart() == null;
+		String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
+				orderRecordNumbers, true)
+				+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
+				+ " [" + number + "]";
+		return line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line));
+	}
+
+	/**
+	 * Whether every one of {@code findings} is {@link SafetyWarning#statesOrdersSharingASubstance()}' — that two or
+	 * more of her own orders carry one substance (issue #477) — and so none is about the drug a proposal names (ADR
+	 * Decision 159). True of no findings at all.
+	 */
+	private static boolean onlyHerOwnOrdersSharingASubstance(List<SafetyWarning> findings) {
+		for (SafetyWarning finding : findings) {
+			if (!finding.statesOrdersSharingASubstance()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * {@code answer}, the module's statement about the drug proposed, followed by a line for each of {@code findings}
+	 * — every one of them her own orders sharing a substance — as a "No" states them after the drug's own findings
+	 * (ADR Decisions 116, 159), so the answer and the chips beside it say the same thing. {@code answer} itself where
+	 * there are none, or where it is null.
+	 */
+	private static String withHerOwnOrdersSharingASubstance(String answer, List<SafetyWarning> findings,
+			List<Integer> numbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords) {
+		if (answer == null || findings.isEmpty()) {
+			return answer;
+		}
+		StringBuilder composed = new StringBuilder(answer);
+		for (int i = 0; i < findings.size(); i++) {
+			composed.append('\n').append(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers,
+					herOrderRecords, true));
+		}
+		return composed.toString();
 	}
 
 	/**

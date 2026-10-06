@@ -74,6 +74,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	private static final String METFORMIN_ORDER = "AnswerFromFindingsMetforminOrderTestData.xml";
 
+	private static final String RIFAMPICIN_ORDER = "ListedMedicationsRifampicinOrderTestData.xml";
+
+	private static final String SECOND_RIFAMPICIN_ORDER = "ListedMedicationsSecondRifampicinOrderTestData.xml";
+
 	/** Patient 7's aspirin beside two proposals the arm relates to none of her orders by their own rows (issue #592). */
 	private static final String ONE_DIRECTION = "chartsearchai-test/drug-reference-no-pair-one-direction.json";
 
@@ -780,6 +784,70 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(1, provider.calls, "the model answers: " + answer.getAnswer());
 		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/**
+	 * A finding that two of her own orders carry one substance (issue #477) says nothing about the drug proposed, so it
+	 * does not stop the module answering the proposal with what the interaction check established (ADR Decision 159):
+	 * the no-pair sentence, then the finding as a line of its own, as a "No" states it after the drug's own findings
+	 * (ADR Decision 116). On the demo (2026-10-07) a patient whose four drugs were each ordered twice was answered
+	 * "The records do not address the safety of giving ibuprofen." beside four duplicate-therapy chips: every such
+	 * proposal reached the model. Here her rifampicin is ordered twice.
+	 */
+	@Test
+	public void aProposalTheCheckRelatesToNoneOfHerOrdersIsAnsweredBesideHerOwnOrdersSharingASubstance()
+			throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		String question = "Can I give her mebendazole?";
+		Finding duplicate = onlyFindingIsHerOwnOrdersSharingASubstance(question);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(2, lines.length, answer.getAnswer());
+		assertEquals("The interaction check relates Mebendazole to none of this patient's 3 active medications. ["
+				+ referenceRecordOf(answer, "mebendazole") + "]", lines[0]);
+		assertTrue(lines[1].startsWith(duplicate.drug + " are in active orders ")
+				&& lines[1].contains(" [" + duplicate.index + "]"),
+				"the finding about her own orders is stated as a line, citing its record: " + lines[1]);
+	}
+
+	/** The same beside a proposal the check relates to her orders only below the severity floor (ADR Decisions 142,
+	 *  159): the below-floor answer, then the finding about her own orders. */
+	@Test
+	public void aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredBesideHerOwnOrdersSharingASubstance()
+			throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		String question = "Can I give her nystatin?";
+		Finding duplicate = onlyFindingIsHerOwnOrdersSharingASubstance(question);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\n");
+		assertTrue(lines[0].startsWith("The interaction data gives no rated reason to withhold Nystatin"),
+				answer.getAnswer());
+		String last = lines[lines.length - 1];
+		assertTrue(last.startsWith(duplicate.drug + " are in active orders ")
+				&& last.contains(" [" + duplicate.index + "]"),
+				"the finding about her own orders closes the answer, citing its record: " + answer.getAnswer());
+	}
+
+	/** The premise both cases rest on: with the property off, the prompt carries one finding, and it is that two of
+	 *  her own orders share a substance — none about the drug proposed. */
+	private Finding onlyFindingIsHerOwnOrdersSharingASubstance(String question) {
+		List<Finding> findings = findingsInThePromptFor(question, shipped());
+		assertEquals(1, findings.size(), "premise: one finding, " + findings);
+		Finding only = findings.get(0);
+		assertTrue(only.text.startsWith(only.drug + " are in active orders "),
+				"premise: the finding is her own orders sharing a substance, " + only.text);
+		return only;
 	}
 
 	/** A pair below the floor that the below-floor answer cannot state — her order, known by its ATC code alone,

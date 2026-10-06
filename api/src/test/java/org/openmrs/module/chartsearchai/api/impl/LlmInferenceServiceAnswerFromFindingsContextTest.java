@@ -969,6 +969,36 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give warfarin?");
 	}
 
+	/** On a question asking whether she has ever taken a drug she IS taking, that drug's conflicts with her other
+	 *  orders stay (ADR Decision 151): they are her chart's, not a proposal's. Her warfarin relates Major to her aspirin. */
+	@Test
+	public void aHistoryQuestionAboutHerOwnMedicationKeepsItsChips() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, "Has she ever taken warfarin?");
+		boolean kept = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			kept |= SafetyWarning.TYPE_INTERACTION.equals(chip.getType()) && chip.getDrug().startsWith("Warfarin")
+					&& chip.isAboutACurrentMedication();
+		}
+		assertTrue(kept, "her warfarin's interaction with her aspirin stays, chips were: " + answer.getSafetyWarnings());
+	}
+
+	/** On a question asking whether she has ever taken a drug, her recorded allergy to it stays (ADR Decision 151): it
+	 *  is about the drug's history with her, while the interaction chips about giving it come off. */
+	@Test
+	public void aHistoryQuestionKeepsHerAllergyToTheDrug() {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Fluconazole");
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient,
+				"Has she ever taken fluconazole?");
+		boolean allergy = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			allergy |= SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType());
+			assertFalse(SafetyWarning.TYPE_INTERACTION.equals(chip.getType()) && "Fluconazole".equals(chip.getDrug()),
+					"no interaction chip about giving fluconazole, was: " + chip);
+		}
+		assertTrue(allergy, "her recorded allergy to fluconazole stays, chips were: " + answer.getSafetyWarnings());
+	}
+
 	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not
 	 *  exactly one. */
 	private Finding findingNamed(String question, String opening) {

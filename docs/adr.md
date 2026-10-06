@@ -153,6 +153,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 148: A proposal question publishes no chip about a listed drug she is not on](#decision-148-a-proposal-question-publishes-no-chip-about-a-listed-drug-she-is-not-on)
 - [Decision 149: A proposal after a list of drugs is answered with what the check established for the drug proposed](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed)
 - [Decision 150: A proposal after a list is answered from its findings about the drug proposed](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed)
+- [Decision 151: A question whether she has ever taken a drug publishes no chip about giving it](#decision-151-a-question-whether-she-has-ever-taken-a-drug-publishes-no-chip-about-giving-it)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -14086,3 +14087,57 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionWithhol
 `.aWithholdingFindingAboutAListedDrugAloneDoesNotKeepTheModelCall`, `.aListQuestionWhoseFindingIsAnUnratedRuleStillAsksTheModel`
 (the rating test), `.aListQuestionWithAContraindicationAboutTheDrugProposedStillAsksTheModel` and
 `.aListQuestionProposingADrugSheAlreadyTakesStillAsksTheModel`.
+
+## Decision 151: A question whether she has ever taken a drug publishes no chip about giving it
+
+**Status: Accepted** (October 2026) — implemented, no issue. Narrows what a response publishes, as
+[Decision 148](#decision-148-a-proposal-question-publishes-no-chip-about-a-listed-drug-she-is-not-on) did for a listed
+drug.
+
+### Context
+
+*"Has she ever taken fluconazole?"*, asked of Susan, whose chart has never held fluconazole, was answered *"The records do
+not address whether the patient has ever taken Fluconazole."* beside one chip: *"Fluconazole interacts with active order
+Lidocaine — Moderate."* — a warning about giving the drug now, on a question about her history with it. The drug-in-play
+arm runs on any question naming a drug, so every such question carried the chips of a proposal.
+
+### The decision
+
+- **A response to a question asking whether she has EVER taken one drug publishes no interaction chip about giving it**:
+  `LlmInferenceService.aboutTheDrugAsked`, where the chips are final, asking
+  `DrugReferenceInjector.isAboutGivingTheDrugAHistoryQuestionNames` of each — an interaction chip whose every subject row
+  is the named drug's, and not about a medication she takes.
+- **The question shape is a closed grammar**, `QueryScopeRouter.asksWhetherSheHasTakenADrug`: *"Has she ever taken /
+  been on / been prescribed X?"*, *"Did she ever take X?"*, *"Was she ever on X?"*, *"Has X ever been given to her?"*,
+  each optionally ending "before", "in the past" or "previously". Past tense only — *"Does she take X?"* asks about now.
+  Fail-closed: a phrasing it misses publishes the chips it did before.
+- **The injector names the drug's rows on the chart** (`PatientChart.getHistoryQuestionDrugRows()`), off the same marked
+  words `asksWhetherToGiveADrug` reads.
+- **What stays**: a chip about a medication she IS taking — its conflicts with her other orders are her chart's, not a
+  proposal's — and every contraindication, her recorded allergy to the drug being part of its history with her.
+- **The prompt is unchanged.** The findings still reach the model, as Decision 148 left them.
+- **Not taken: answering such a question from the module.** "Her chart records no fluconazole order, active or ended"
+  would need her full order history, which the safety context does not read (it reads active orders), and would still
+  say nothing of a drug recorded only in a note or given outside this chart — which the model, reading the chart text,
+  can find. Put to the maintainer; chips only.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: `main` @ 2c40ad70 (omod d5c4efbf) against this change
+(omod 45028e8e) over 62 cells — gate 15's 56, five history questions and the present-tense *"Does she take
+fluconazole?"*. **It passed.** Every answer was byte-identical, and every chip of every other cell. Three history cells
+lost exactly the interaction chip about giving the drug asked about: both fluconazole wordings (*"…interacts with active
+order Lidocaine — Moderate"*) and Kamwara's *"Has the patient ever been on rifampicin?"* (*"…interacts with active order
+Nevirapine — Major"*). *"Has she ever taken lidocaine?"* kept its three chips: lidocaine is her own order.
+
+### What it does not fix
+
+The finding still reaches the model, and on *"Was she ever on fluconazole?"* the model answered from it: *"Fluconazole is
+related to the active order Lidocaine, and it is a caution to note, a Moderate problem [46]."* — a reading of the
+interaction for a question about her history, citing a finding whose chip this decision no longer publishes. Keeping
+such findings out of the prompt of a history question would change what the model reads, which this decision does not.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aQuestionAskingWhetherSheHasTakenADrugPublishesNoInteractionChipAboutGivingIt`
+(one question per shape, each reddening when its shape is broken), `.aQuestionAboutHowADrugInteractsKeepsItsChips`,
+`LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionAboutHerOwnMedicationKeepsItsChips` (the
+current-medication exception) and `.aHistoryQuestionKeepsHerAllergyToTheDrug` (the interaction-type test).

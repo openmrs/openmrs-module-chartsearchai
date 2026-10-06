@@ -942,6 +942,12 @@ public class DrugReferenceInjector {
 		// And, for the same reason, the drugs the question lists that her chart holds no active order for
 		// (issue #515), which LlmInferenceService states after the answer.
 		injected.markListedDrugsWithNoActiveOrder(listed.stated());
+		// And the rows of the drug a question asks whether she has ever taken (ADR Decision 151), so LlmInferenceService
+		// publishes no chip about giving it beside that question.
+		if (!questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherSheHasTakenADrug(wordsBesideItsNames(question, questionDrugs))) {
+			injected.markHistoryQuestionDrugRows(rowIds(questionDrugs));
+		}
 		// And the drugs the question proposes that her orders already carry (issue #548), off the findings
 		// that say so and nothing else, so LlmProvider's clause after the question is stated exactly where
 		// such a finding is in the prompt.
@@ -3498,6 +3504,27 @@ public class DrugReferenceInjector {
 		}
 		return Boolean.valueOf(STRENGTH_WITHHOLD.equals(clause) || STRENGTH_CHANGE_CURRENT_MEDICATION.equals(clause)
 				|| STRENGTH_WITHHOLD_ENDED_ORDER.equals(clause));
+	}
+
+	/**
+	 * Whether {@code chip} is about GIVING the drug a question asking whether she has ever taken it names (ADR
+	 * Decision 151): an INTERACTION chip whose every subject row is one of {@code historyQuestionDrugRows}
+	 * ({@code PatientChart.getHistoryQuestionDrugRows()}), and not about a medication she is taking. Such a chip
+	 * answers whether the drug may be given, which that question does not ask. Her own medication's chip stays: it is
+	 * a conflict in her chart. A contraindication stays as well: her recorded allergy to the drug is about the drug's
+	 * history with her.
+	 */
+	public static boolean isAboutGivingTheDrugAHistoryQuestionNames(SafetyWarning chip, List<String> historyQuestionDrugRows) {
+		if (historyQuestionDrugRows.isEmpty() || !SafetyWarning.TYPE_INTERACTION.equals(chip.getType())
+				|| chip.isAboutACurrentMedication() || chip.subjectRows().isEmpty()) {
+			return false;
+		}
+		for (DrugReference row : chip.subjectRows()) {
+			if (!historyQuestionDrugRows.contains(row.getId())) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** The ids of {@code rows}, in order — how a finding's subject rows travel on its record (issue #515). */

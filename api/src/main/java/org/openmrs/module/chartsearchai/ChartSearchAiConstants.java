@@ -56,17 +56,19 @@ public class ChartSearchAiConstants {
 	/**
 	 * How the LLM prompt's chart context is assembled per query.
 	 * <ul>
-	 *   <li>{@link #CHART_MODE_QUERY_SCOPED} ({@link #CHART_MODE_DEFAULT default}) — the prompt carries
+	 *   <li>{@link #CHART_MODE_QUERY_SCOPED} — the prompt carries
 	 *       only a query-scoped slice: every record of the question's typed scope (e.g. all drug orders
 	 *       for a medications question — complete by construction, see {@code QueryScopeRouter}) plus the
 	 *       querystore similarity top-K plus the demographics record, in the chart's most-recent-first
 	 *       order. Slices are a few hundred tokens, so a cold patient's first answer starts after a small
 	 *       prefill with no pre-warming of any kind; the full-chart prefill machinery (warmup, prewarm
 	 *       bootstrap, per-patient KV persistence, progressive-reasoning preview) disengages in this
-	 *       mode. Made the default 2026-07 after a 22-patient drift-metric A/B: scoped beat fullChart on
-	 *       meanF1 (0.748 vs 0.668), abstention (0.86 vs 0.74), and off-topic drift (181 vs 477) — the
-	 *       focused slice keeps the small model from drowning in a whole chart's worth of noise.</li>
-	 *   <li>{@link #CHART_MODE_FULL_CHART} — the patient's whole chart is serialized into every prompt.
+	 *       mode. It was the default from 2026-07 to 2026-10, made so after a 22-patient drift-metric A/B:
+	 *       scoped beat fullChart on meanF1 (0.748 vs 0.668), abstention (0.86 vs 0.74), and off-topic drift
+	 *       (181 vs 477) — ADR Decision 28 carries those measurements.</li>
+	 *   <li>{@link #CHART_MODE_FULL_CHART} ({@link #CHART_MODE_DEFAULT default} since 2026-10, by the
+	 *       maintainer's decision recorded in ADR Decision 28) — the patient's whole chart is serialized into
+	 *       every prompt.
 	 *       The chart bytes do not vary with the question, so llama-server's KV prefix cache (plus
 	 *       warmup/prewarm/disk persistence) amortizes the multi-thousand-token prefill across queries;
 	 *       this makes repeat/varied questions on an already-warmed patient fast, at the cost of a heavy
@@ -88,7 +90,7 @@ public class ChartSearchAiConstants {
 	 * scoped gate requires an exact (case-insensitive) {@code queryScoped} match — only a genuinely
 	 * absent or unreadable GP takes this default.
 	 */
-	public static final String CHART_MODE_DEFAULT = CHART_MODE_QUERY_SCOPED;
+	public static final String CHART_MODE_DEFAULT = CHART_MODE_FULL_CHART;
 
 	/**
 	 * A full chart carrying the similarity focus hint {@code chartsearchai.embedding.preFilter}

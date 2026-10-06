@@ -24,26 +24,25 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
  * {@link PipelineSettings#queryScopedMode()} run here exercises the real default
  * decision without a context.
  *
- * <p>queryScoped became the default in 2026-07 (a 22-patient drift-metric A/B:
- * scoped beat fullChart on meanF1 0.748 vs 0.668, abstention 0.86 vs 0.74, and
- * off-topic drift 181 vs 477). This test fails on the pre-change default
- * (fullChart) and documents the deliberate fail-safe direction: an absent or
- * unreadable GP resolves to queryScoped.
+ * <p>fullChart is the default since 2026-10, by the maintainer's decision recorded in
+ * ADR Decision 28, which also carries the measurements that had made queryScoped the
+ * default from 2026-07. This test fails on that earlier default and documents the
+ * fail-safe direction: an absent or unreadable GP resolves to fullChart.
  */
 public class PipelineSettingsDefaultTest {
 
 	@Test
-	public void queryScopedMode_defaultsToQueryScoped_whenGpUnsetOrUnreadable() {
-		assertTrue(PipelineSettings.queryScopedMode(),
-				"chartMode default must be queryScoped when chartsearchai.chartMode is unset");
+	public void queryScopedMode_defaultsToFullChart_whenGpUnsetOrUnreadable() {
+		assertFalse(PipelineSettings.queryScopedMode(),
+				"chartMode default must be fullChart when chartsearchai.chartMode is unset");
 	}
 
 	@Test
-	public void chartModeDefault_constant_isQueryScoped() {
+	public void chartModeDefault_constant_isFullChart() {
 		// Single source of truth both readers point at; guards against a silent revert.
-		assertTrue(ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED
+		assertTrue(ChartSearchAiConstants.CHART_MODE_FULL_CHART
 				.equals(ChartSearchAiConstants.CHART_MODE_DEFAULT),
-				"CHART_MODE_DEFAULT must be queryScoped");
+				"CHART_MODE_DEFAULT must be fullChart");
 	}
 
 	@Test

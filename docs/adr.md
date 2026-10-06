@@ -14597,3 +14597,36 @@ sentence then the finding) and `.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsA
 (nystatin, Decision 142's) each first assert that the prompt carries exactly that one finding, failed before the change
 — the model was asked — and pass after it. Mutated back to the empty-findings test, both redden; with the line
 dropped, both redden.
+
+## Decision 160: Her own orders sharing a substance do not stop a caution-only answer either
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends
+[Decision 159](#decision-159-her-own-orders-sharing-a-substance-do-not-stop-the-answer-to-a-proposal) to
+[Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)'s
+answer.
+
+### Context
+
+Decision 159 let #477's finding — two of her own orders carry one substance — stand beside the answers to a proposal
+that raised no finding of its own. A proposal that did raise one was still exposed. Probed 2026-10-07 on patient 7
+with two rifampicin orders, the shipped knowledge base: *"Can I give her clarithromycin?"* raised a Moderate
+interaction with her rifampicin — a caution, which Decision 140 answers — and the duplicate. `cautionsOnlyAbout`
+requires EVERY finding to be a caution about the drug proposed, the duplicate is not one, and the model answered, the
+module appending the caution it left unstated. The withholding "No" was not exposed: one finding licensing it is
+enough, and `composeFromFindings` already states the duplicate after the drug's own findings.
+
+### The decision
+
+- **`cautionsOnlyAbout` is asked of the findings without her own orders sharing a substance**
+  (`DrugReferenceInjector.notHerOwnOrdersSharingASubstance`), so at least one real caution about the drug is still
+  required, and any other finding still refuses.
+- **The lead counts the cautions alone**: *"1 interaction caution for Clarithromycin:"*, not 2 — the duplicate is not a
+  caution about the drug proposed. It follows the cautions as a line, where `composeFromFindings` already orders it.
+
+### The gate
+
+`LlmInferenceServiceAnswerFromFindingsContextTest.aCautionOnlyProposalIsAnsweredBesideHerOwnOrdersSharingASubstance`
+asserts its premise (the prompt carries a caution about clarithromycin and the duplicate), failed before the change —
+the model was asked — and passes after it, the answer exactly three lines. Mutated back to asking every finding, it
+reddens on the model call; with the lead counting every line, it reddens on "2 interaction cautions".
+`.aWithholdingProposalIsAnsweredBesideHerOwnOrdersSharingASubstance` pins the "No" that already held.

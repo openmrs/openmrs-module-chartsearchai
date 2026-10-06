@@ -839,6 +839,57 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"the finding about her own orders closes the answer, citing its record: " + answer.getAnswer());
 	}
 
+	/**
+	 * A proposal whose own findings are all interaction cautions is answered with Decision 140's count of cautions
+	 * beside a finding that two of her own orders share a substance, as it is without one (ADR Decision 160): the
+	 * cautions, counted alone — the duplicate is not a caution about the drug proposed — then the duplicate as a line
+	 * of its own. Measured 2026-10-07, "Can I give her clarithromycin?" beside her two rifampicin orders reached the
+	 * model, the module appending the caution it left unstated.
+	 */
+	@Test
+	public void aCautionOnlyProposalIsAnsweredBesideHerOwnOrdersSharingASubstance() throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		String question = "Can I give her clarithromycin?";
+		List<Finding> findings = findingsInThePromptFor(question, shipped());
+		assertEquals(2, findings.size(), "premise: a caution and the duplicate, " + findings);
+		Finding caution = findings.get(0).text.startsWith("Clarithromycin interacts with") ? findings.get(0) : findings.get(1);
+		Finding duplicate = caution == findings.get(0) ? findings.get(1) : findings.get(0);
+		assertTrue(caution.text.endsWith(DrugReferenceInjector.STRENGTH_CAUTION), "premise: a caution, " + caution.text);
+		assertTrue(duplicate.text.startsWith(duplicate.drug + " are in active orders "), "premise: " + duplicate.text);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		String[] lines = answer.getAnswer().split("\\n");
+		assertEquals(3, lines.length, answer.getAnswer());
+		assertEquals("1 interaction caution for Clarithromycin:", lines[0],
+				"the count is of the cautions about the drug, not of her own orders' duplicate");
+		assertTrue(lines[1].startsWith("Clarithromycin interacts with active order Rifampicin (rifampin) — Moderate.")
+				&& lines[1].contains(" [" + caution.index + "]"), lines[1]);
+		assertTrue(lines[2].startsWith(duplicate.drug + " are in active orders ")
+				&& lines[2].contains(" [" + duplicate.index + "]"), lines[2]);
+	}
+
+	/** And a withholding finding still leads with the module's "No", the duplicate stated last — what the "No" did
+	 *  before ADR Decision 160, pinned beside the change to the caution path. */
+	@Test
+	public void aWithholdingProposalIsAnsweredBesideHerOwnOrdersSharingASubstance() throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, PROPOSAL);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\\n");
+		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		assertTrue(lines[lines.length - 1].contains(" are in active orders ")
+				&& lines[lines.length - 1].contains("(2 orders) — possible duplicate therapy"), answer.getAnswer());
+	}
+
 	/** The premise both cases rest on: with the property off, the prompt carries one finding, and it is that two of
 	 *  her own orders share a substance — none about the drug proposed. */
 	private Finding onlyFindingIsHerOwnOrdersSharingASubstance(String question) {

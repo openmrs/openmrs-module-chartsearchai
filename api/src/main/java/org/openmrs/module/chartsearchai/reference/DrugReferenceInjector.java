@@ -3387,8 +3387,10 @@ public class DrugReferenceInjector {
 			}
 		}
 		// Or every finding is an interaction caution about the drug proposed (ADR Decision 140), answered with
-		// the cautions and never a clearance — see cautionsOnlyAbout.
-		return cautionsOnlyAbout(asked, findings);
+		// the cautions and never a clearance — see cautionsOnlyAbout. A finding that her own orders share a
+		// substance is about neither the drug nor a pair, so it is set aside here as it is where no finding was
+		// raised (ADR Decisions 159, 160), and stated after the cautions by composeFromFindings.
+		return cautionsOnlyAbout(asked, notHerOwnOrdersSharingASubstance(findings));
 	}
 
 	/**
@@ -3669,9 +3671,10 @@ public class DrugReferenceInjector {
 		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
 			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
 		} else if (cautions) {
-			// Every line is an interaction caution about this drug, which cautionsOnlyAbout admitted, so the
-			// count is the lines'.
-			lines.add(0, cautionLead(lines.size(), first.getDrug()));
+			// Every line but her own orders sharing a substance is an interaction caution about this drug, which
+			// cautionsOnlyAbout admitted, so the count is of those lines: the duplicate is not a caution about the
+			// drug proposed (ADR Decision 160).
+			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), first.getDrug()));
 		}
 		return String.join("\n", lines);
 	}
@@ -3695,17 +3698,26 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Whether every one of {@code findings} is {@link SafetyWarning#statesOrdersSharingASubstance()}' — that two or
-	 * more of her own orders carry one substance (issue #477) — and so none is about the drug a proposal names (ADR
-	 * Decision 159). True of no findings at all.
+	 * {@code findings} without {@link SafetyWarning#statesOrdersSharingASubstance()}' — that two or more of her own
+	 * orders carry one substance (issue #477), which is about neither the drug a proposal names nor a pair (ADR
+	 * Decisions 159, 160). In order.
 	 */
-	private static boolean onlyHerOwnOrdersSharingASubstance(List<SafetyWarning> findings) {
+	private static List<SafetyWarning> notHerOwnOrdersSharingASubstance(List<SafetyWarning> findings) {
+		List<SafetyWarning> bearing = new ArrayList<SafetyWarning>(findings.size());
 		for (SafetyWarning finding : findings) {
 			if (!finding.statesOrdersSharingASubstance()) {
-				return false;
+				bearing.add(finding);
 			}
 		}
-		return true;
+		return bearing;
+	}
+
+	/**
+	 * Whether every one of {@code findings} is her own orders sharing a substance, so none is about the drug a
+	 * proposal names (ADR Decision 159) — true of no findings at all.
+	 */
+	private static boolean onlyHerOwnOrdersSharingASubstance(List<SafetyWarning> findings) {
+		return notHerOwnOrdersSharingASubstance(findings).isEmpty();
 	}
 
 	/**

@@ -513,7 +513,7 @@ public class LlmInferenceServiceTest {
 			@Override
 			public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 					String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-					String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+					String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 					List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 				tokenConsumer.accept("Finding A [1] and finding B [2].");
 				return new LlmResponse("Finding A [1] and finding B [2].", Arrays.asList(1, 2));

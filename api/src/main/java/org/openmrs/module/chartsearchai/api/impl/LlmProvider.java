@@ -496,14 +496,17 @@ public class LlmProvider {
 	 * {@code null} and {@code false} explicitly, which is what makes the flag visible at the call.
 	 *
 	 * <p>When {@code cacheScope} is non-null (the pipeline mode produces a question-independent chart
-	 * prefix — see {@code LlmInferenceService.shouldRunWarmup}), the engine may restore this
-	 * patient's prefilled chart KV from disk instead of re-prefilling, and persist a fresh cold
-	 * prefill, so a query arriving cold (server restart, prompt-cache overflow, or warmup never
-	 * fired) does not re-pay the full prefill. The KV filename is keyed on the question-INDEPENDENT
-	 * prefix {@code buildUserMessage(numberedRecords, "")} — the exact bytes {@link #warmup} sends —
-	 * so warmup-saved and query-saved entries share one file per patient+chart. A null scope sends a
-	 * null seed, which makes the engine skip all disk KV work.
+	 * prefix — see {@code LlmInferenceService.shouldRunWarmup}), the engine restores this patient's
+	 * saved chart prefix before it answers, making it first when there is none (ADR Decision 157).
+	 * The KV filename is keyed on {@code buildUserMessage(cacheSeedRecords, "")} — the exact bytes
+	 * {@link #warmup} sends — so a query restores the entry a chart-open warmup made. A null scope
+	 * sends a null seed, which makes the engine skip all disk KV work.
 	 *
+	 * @param cacheSeedRecords the chart text before the module appended the question's reference
+	 *        records — the text warmup primes. NOT {@code numberedRecords}: seeded off the injected
+	 *        chart, a drug question keys an entry of its own, made from whatever the slot last held,
+	 *        and its answer depends on that history (ADR Decision 157). Read only when
+	 *        {@code cacheScope} is non-null
 	 * @param enumerateFindings see {@link #buildUserMessage(String, List, String, boolean)}. It
 	 *        reaches the user message and never the KV seed above, which is what keeps that seed a
 	 *        byte-prefix of this query; why it is a parameter of the one arity is the paragraph
@@ -514,14 +517,15 @@ public class LlmProvider {
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			String cacheScope, String cacheSeedRecords, boolean enumerateFindings,
+			LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
 				findingProse(enumerateFindings), drugsAlreadyOrdered);
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
-		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
+		String cacheSeed = cacheScope == null ? null : buildUserMessage(cacheSeedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
 
 		// Extract the "answer" value (shown to the clinician) and the "reasoning" value (the

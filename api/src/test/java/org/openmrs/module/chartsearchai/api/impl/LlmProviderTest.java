@@ -1177,7 +1177,8 @@ public class LlmProviderTest {
 		List<Integer> focus = Arrays.asList(1, 2);
 
 		provider.searchStreaming(records, focus, "Is the patient diabetic?",
-				tok -> { }, reason -> { }, "patient-uuid-42", false, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
+				tok -> { }, reason -> { }, "patient-uuid-42", records, false, LlmEngine.ReferenceRecords.ABSENT,
+				Collections.emptyList());
 
 		assertEquals("patient-uuid-42", engine.capturedScope,
 				"the patient UUID must reach the engine as the KV cache scope so the query path can "
@@ -1194,6 +1195,28 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void searchStreaming_seedsTheKvOffTheChartBeforeInjection_notOffThePromptsRecords() {
+		// A drug question's prompt carries reference records the module appended after the chart. The
+		// seed must be the chart WITHOUT them — what warmup primes — so the query restores the entry a
+		// chart-open warmup made and computes the appended records on top. Seeded off the prompt's
+		// records instead, a drug question keys an entry of its own, made from whatever the slot last
+		// held, and its answer depends on that history (ADR Decision 157).
+		CapturingEngine engine = new CapturingEngine();
+		LlmProvider provider = providerWith(engine);
+		String chart = "1. [2024-01-01] BP 120/80\n2. [2024-02-02] HbA1c 7.1%";
+		String prompted = chart + "\n3. Drug reference: Warfarin. Major interactions: ketoprofen.";
+		List<Integer> focus = Arrays.asList(1, 2);
+
+		provider.searchStreaming(prompted, focus, "Is warfarin safe for her?", tok -> { }, reason -> { },
+				"patient-uuid-42", chart, false, LlmEngine.ReferenceRecords.PRESENT, Collections.emptyList());
+
+		assertEquals(LlmProvider.buildUserMessage(prompted, focus, "Is warfarin safe for her?"),
+				engine.capturedUserMessage, "the model must still be asked over the injected records");
+		assertEquals(LlmProvider.buildUserMessage(chart, ""), engine.capturedSeed,
+				"the KV seed must be the chart warmup primes, before the module's appended records");
+	}
+
+	@Test
 	public void searchStreaming_scopeAware_nullScopeSendsNoSeed_soUnstablePipelinesNeverPersistKv() {
 		// When the caller passes a null scope (the pipeline mode makes the chart prefix
 		// question-dependent), the engine must receive a null seed and therefore do no disk KV ops.
@@ -1201,7 +1224,7 @@ public class LlmProviderTest {
 		LlmProvider provider = providerWith(engine);
 
 		provider.searchStreaming("1. x", Arrays.<Integer>asList(), "q",
-				tok -> { }, reason -> { }, null, false, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
+				tok -> { }, reason -> { }, null, null, false, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
 
 		assertNull(engine.capturedScope, "a null scope must pass through unchanged");
 		assertNull(engine.capturedSeed,
@@ -1311,7 +1334,7 @@ public class LlmProviderTest {
 		String question = "should i give Warfarin?";
 
 		provider.searchStreaming(records, focus, question, tok -> { }, reason -> { },
-				"patient-uuid-42", true, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
+				"patient-uuid-42", records, true, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,

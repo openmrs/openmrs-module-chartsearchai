@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -613,6 +614,34 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 						+ "prompt carrying no finding to enumerate");
 	}
 
+	/**
+	 * The committed streaming pass is prompted with the INJECTED chart and seeds its KV off the chart
+	 * BEFORE injection — the chart a chart-open warmup primes — so a drug question restores the entry
+	 * the warmup made and computes the appended records on top of it (ADR Decision 157). The harness
+	 * tells the two apart: the strategy serves one chart and the injector hands back another.
+	 */
+	@Test
+	public void theCommittedPassSeedsItsKvOffTheChartBeforeInjection() {
+		PatientChart base = baseChart();
+		PatientChart injected = chartWithSeveralFindings();
+		assertNotEquals(base.getText(), injected.getText(),
+				"the premise: injection must change the chart, or seed and prompt cannot be told apart");
+		RecordingProvider provider = new RecordingProvider();
+		TestableService service = newService(base, injected, provider);
+		Patient patient = new Patient();
+		patient.setUuid("uuid-1");
+
+		service.searchStreaming(patient, QUESTION, token -> { });
+
+		assertEquals(Arrays.asList("uuid-1"), provider.streamingScopes,
+				"the premise: one committed pass, carrying the patient's KV scope");
+		assertEquals(Arrays.asList(injected.getText()), provider.streamingRecords,
+				"the model must be asked over the injected chart");
+		assertEquals(Arrays.asList(base.getText()), provider.streamingSeedRecords,
+				"and the KV seed must be the chart before injection — seeded off the injected one, a "
+						+ "drug question keys an entry no warmup made, built from whatever the slot held");
+	}
+
 	/** A private harness, per the convention this package states — not a shared one. The strategy
 	 *  serves {@code built} and the stub injector RETURNS {@code injected} rather than its argument,
 	 *  which is how the two positions of the flag's read are told apart — see
@@ -716,6 +745,11 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 		/** The KV-cache scope each streaming pass was handed, in order — null is the preview. */
 		private final List<String> streamingScopes = new ArrayList<String>();
 
+		/** The records each streaming pass was prompted with, and the records its KV seed was cut from. */
+		private final List<String> streamingRecords = new ArrayList<String>();
+
+		private final List<String> streamingSeedRecords = new ArrayList<String>();
+
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
 				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
@@ -727,11 +761,13 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			lastFlag = Boolean.valueOf(enumerateFindings);
 			streamingFlags.add(Boolean.valueOf(enumerateFindings));
 			streamingScopes.add(cacheScope);
+			streamingRecords.add(numberedRecords);
+			streamingSeedRecords.add(cacheSeedRecords);
 			return new LlmResponse("No.", Collections.<Integer> emptyList());
 		}
 	}

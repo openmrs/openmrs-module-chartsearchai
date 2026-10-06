@@ -568,7 +568,7 @@ public class UnfoundedFindingSeverityTest extends BaseModuleContextSensitiveTest
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return new LlmResponse(answer, citations);
 		}

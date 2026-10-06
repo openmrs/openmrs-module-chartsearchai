@@ -945,7 +945,7 @@ public class DosingCeilingFidelityTest {
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}

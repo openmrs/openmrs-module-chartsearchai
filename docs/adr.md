@@ -14409,3 +14409,109 @@ no stamp is made — and `false` on every other cell.
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aResponseSaysWhetherTheQuestionAskedIfSheHasEverTakenADrug`
 (the model's answer, the module's, the early done, and a proposal) and
 `ChartSearchAiAsksWhetherSheHasTakenADrugTest` (the wire, both SSE paths, XML, and the one write).
+
+## Decision 157: Every streaming query starts from the patient's saved chart prefix
+
+**Status: Accepted** (October 2026) — implemented, no issue.
+
+### Context
+
+On the demo (2026-10-06, `main` cb8451f9, local Gemma 4 E2B on a GPU-less host), *"Is warfarin safe for her?"* for patient
+`dd749903-1691-11df-97a5-7038c432aabf` was answered two ways with byte-identical request bodies, and which way followed
+one thing: whether `/warmup` had run first. The audit rows of that afternoon: the five `search/stream` calls with no
+warmup before them (rows 87, 88, 89, 91, 93) answered *"The records do not address the safety of warfarin for her."*; the
+four preceded by a warmup — two through the UI, which fires it on chart open, and two by REST — answered *"No — Warfarin
+has major interactions with ketoprofen, ketorolac, lepirudin, levofloxacin, and lomefloxacin [87]."* Row 93 came straight
+after a UI run and still gave the first answer, so it was not leftover state alone. The server log showed every warmup
+restoring the patient's entry from disk (`Warmup restored KV cache from disk`) and no query ever doing so: a query whose
+chart key was in `ramResidentKeys` skipped the restore and answered from whatever the slot held.
+
+Two claims in this module were false, and the code rested on them: that a restored KV "is byte-for-byte what a fresh
+prefill would produce, so answer quality is unchanged" (the `kvCacheDir` GP description, `ChartSearchAiConstants`, the
+warmup's own comment), and that the cache-reuse flip on borderline questions is a trade-off "fundamental to llama-server's
+design" (`LocalLlmEngine.buildServerCommand`'s javadoc). Decision 80's own note had it right — the flips are prefix-cache
+state, "removable by resetting the slot at a latency cost that wants a measurement first".
+
+### What was measured
+
+A scratch script driving llama-server b8850 (`4eac5b4`, `publish-natives.yml`'s default tag) directly over HTTP, with
+the production flags plus `--device none`, `gemma-4-E2B-it-Q4_K_M.gguf`, a 5,302-token prompt built from
+`TestDatasetHelper.FULL_PATIENT_DATASET`'s 153 records and a warfarin question. Each row is three runs, each on a freshly
+started server; the figure is the first answer token's log-probability, and all three runs of every row agreed to the
+fourth decimal:
+
+| How the slot reached the question | log p(first token) |
+|---|---|
+| a fresh prefill of the whole prompt | −0.5877 |
+| the chart prefix restored from a saved entry, then the question | −0.3039 |
+| the chart prefix primed in RAM, then the question | −0.4332 |
+
+Deterministic per path, different across paths, by up to 0.28 in probability: on a borderline question that is the
+answer. Then five histories, each followed by *restore the saved entry, then the question* — nothing before it, the same
+question before it, a different question before it, a fresh full prefill before it, and a prime plus two questions before
+it. **All five gave −0.3039**, token for token. Restoring took 8–10 ms for the 51.2 MB entry, from the page cache, on an
+Apple M-series CPU; it is not measured on the demo, whose RAM pressure may send it to disk.
+
+Tried and not adopted:
+
+- **Re-priming the prefix before each query instead of restoring it.** It re-evaluates the prefix's last token on its own,
+  and that moves the state too: −0.3293 against −0.4242 for the first question in the same series (that series ran
+  with `--swa-full`, below; the five-history result above held with and without it).
+- **`--swa-full`** (Gemma 4's sliding-window layers kept at full size). It made *primed* and *restored* agree, but not
+  *fresh*, and it changes what a fresh prefill answers — so it is a model-behaviour change with a memory cost, and
+  restoring before every query is enough without it.
+
+### The decision
+
+- **A streaming query restores the patient's saved entry before it answers — always, not only when the server's RAM is
+  cold for the chart.** `LocalLlmEngine.kvQueryAction` takes no RAM-residency input, so nothing can bring the skip back;
+  `ramResidentKeys` is gone.
+- **The entry is the chart warmup primes, never the prompt's records.** A drug question's prompt carries reference records
+  `DrugReferenceInjector` appended after the chart, so `LlmInferenceService.searchStreaming` hands
+  `LlmProvider.searchStreaming` the chart as it stood before injection (`cacheSeedRecords`) and the KV is keyed on that.
+  The query restores the entry a chart-open warmup made and computes the appended records and the question on top.
+  Keyed on the injected chart, as before this decision, every drug question needed an entry of its own; made from
+  whatever the slot held it depended on history, and made from scratch it would cost a full chart prefill per question.
+- **An entry is made from scratch, in one place.** `LocalLlmEngine.primeAndPersist` makes it for `warmup` and for a
+  query that found none, with `cache_prompt=false`: priming the same prefix after three different slot histories saved
+  three byte-identical files that way, and a different file with reuse on. It is then restored like any other, and the
+  query no longer saves the slot after it answers. The from-scratch prefill costs the system prompt's tokens once per
+  chart version, mostly inside the background warmup.
+- **The cost:** one restore per streaming query, and an exact repeat of the previous question re-processes its question
+  tail rather than one token. The answer cache (`chartsearchai.cacheTtlMinutes`) is the lever for repeats.
+
+### Not covered, said rather than implied
+
+- **The non-streaming `/search` path** passes no cache scope (`LlmProvider.search`), so it still answers from whatever
+  the slot holds. Giving it one changes a signature the suite's test doubles override, which is its own change.
+- **`chartsearchai.llm.kvCacheDir=off`, and `chartMode=queryScoped`** (which supplies no seed) have nothing to restore,
+  and keep the history dependence.
+- **A restore that fails** is logged at WARN and the query proceeds from whatever the slot holds.
+- **On a GPU** (Metal, measured locally) the same histories happened to agree before this change; nothing here says a GPU
+  backend cannot diverge.
+
+### The gate
+
+`LocalEngineAnswerHistoryIndependenceTest`, opt-in, drives `LlmInferenceService.warmup` and
+`LlmInferenceService.searchStreaming` — the real `ChartBuildingStrategy` over a chart `QueryStoreChartBuilder` builds from
+`FULL_PATIENT_DATASET`, the real injector over the DDInter excerpt (`DrugReferenceTestSupport.ddinterInjector`), and the
+Spring-wired `LlmProvider` and `LocalLlmEngine`, which starts the bundled llama-server CPU-only. It asks a question after
+five histories — a chart-open warmup, a different question, the same question, its entry evicted and remade with another
+answer in the slot, a server restart — and compares the whole streamed output with the same question on a cold engine
+with nothing saved. It does so for *"Is warfarin safe for her?"*, whose prompt carries the injector's records, and for a
+question the module appends nothing to; each case first asserts which of the two it is.
+
+- **Before this decision it failed**, at the warmup history: *"…the records do not address the safety of warfarin."*
+  against *"…the records do not address warfarin safety."*, with different reasoning. That was an earlier form of the
+  test, driving `LlmProvider` directly with no injected records.
+- **After it, it passed**: that earlier form three runs out of three, the final form on the one run made of it.
+- **Mutated, it reddens where each half is pinned.** Restoring nothing when an entry exists (the slot answers): both
+  questions, at the different-question history. `cache_prompt=true` in `primeAndPersist`: the eviction history, measured
+  on the `LlmProvider`-driven form. The seed taken off the prompt's records: not this test — from-scratch entries keep
+  the answers equal at a prefill per question — but
+  `LlmProviderTest.searchStreaming_seedsTheKvOffTheChartBeforeInjection_notOffThePromptsRecords` in `LlmProvider` and
+  `FindingEnumerationClauseContextTest.theCommittedPassSeedsItsKvOffTheChartBeforeInjection` in `LlmInferenceService`.
+
+The restore policy is pinned in CI by `LocalLlmEngineTest.kvQueryAction_aSavedEntryIsRestoredBeforeEveryQuery` and
+`kvQueryAction_noSavedEntryIsMadeTheWayWarmupMakesItThenRestored`, which replace the spec this decision reverses
+(`kvQueryAction_ramResidentYieldsNone_soWarmRepeatsAndAlternatingPatientsNeverReRestore`).

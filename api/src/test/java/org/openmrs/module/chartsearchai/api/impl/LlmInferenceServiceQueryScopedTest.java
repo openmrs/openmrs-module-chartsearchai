@@ -407,7 +407,7 @@ public class LlmInferenceServiceQueryScopedTest {
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			searchStreamingCalls++;
 			// The preview pass discards its answer; only non-preview calls record the scope so the

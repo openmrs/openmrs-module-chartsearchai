@@ -193,9 +193,9 @@ public class LocalLlmEngineTest {
 		// fuzzy matching adds nothing — we only pay the per-token RoPE re-application cost.
 		// Note: this flag is NOT the determinism lever — cache_prompt in the request body
 		// is the real cause of the borderline-argmax flip ("is she pregnant?" alternating
-		// between Gravida and Self-Induced Abortion). The flip is fundamental to llama-server's
-		// cache_prompt design (reused-vs-fresh KV is numerically close but not bit-identical)
-		// and cache_prompt stays on because the latency win is the whole point.
+		// between Gravida and Self-Induced Abortion). cache_prompt stays on because the latency
+		// win is the whole point; what removes the history dependence is restoring the saved
+		// prefix before every streaming query (kvQueryAction, ADR Decision 157).
 		List<String> cmd = LocalLlmEngine.buildServerCommand(
 				"/bin/llama-server", "/data/model.gguf", 9999, 32768);
 
@@ -311,45 +311,31 @@ public class LocalLlmEngineTest {
 	@Test
 	public void kvQueryAction_disabledYieldsNone() {
 		// KV persistence off (no slot-save-path or no seed) -> the query path must do nothing
-		// special, regardless of RAM/disk state. This preserves the pre-feature behavior exactly.
+		// special, whatever is on disk. This preserves the pre-feature behavior exactly.
 		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
-				LocalLlmEngine.kvQueryAction(false, false, false));
+				LocalLlmEngine.kvQueryAction(false, false));
 		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
-				LocalLlmEngine.kvQueryAction(false, false, true));
-		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
-				LocalLlmEngine.kvQueryAction(false, true, true));
+				LocalLlmEngine.kvQueryAction(false, true));
 	}
 
 	@Test
-	public void kvQueryAction_ramResidentYieldsNone_soWarmRepeatsAndAlternatingPatientsNeverReRestore() {
-		// The chart's prefix was already loaded into this server's RAM prompt-cache pool earlier
-		// this lifetime (a prior warmup/query). llama-server's cache_prompt will reuse it, so a
-		// disk restore would be pure wasted I/O — and on an alternating-patient workload where both
-		// charts fit the RAM pool, restoring on every switch would REGRESS the warm 0.6-0.8s path.
-		// Must be NONE even when a disk file also exists.
-		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
-				LocalLlmEngine.kvQueryAction(true, true, false));
-		assertEquals(LocalLlmEngine.KvQueryAction.NONE,
-				LocalLlmEngine.kvQueryAction(true, true, true));
-	}
-
-	@Test
-	public void kvQueryAction_coldRamButDiskHitYieldsRestore() {
-		// The exact gap this feature closes: the RAM pool is cold for this chart (e.g. after a
-		// server restart / idle-unload, or warmup never fired) but its prefilled KV is on disk.
-		// Restore (tens of ms) instead of a full chart re-prefill (tens of seconds on a GPU-less host).
+	public void kvQueryAction_aSavedEntryIsRestoredBeforeEveryQuery() {
+		// Not only when the server's RAM is cold for the chart: whatever the slot holds — a warmup's
+		// prefill, an earlier question, this question a moment ago — moved a borderline answer on the
+		// demo and locally, so every query starts from the saved entry (ADR Decision 157). The policy
+		// takes no RAM-residency input at all, so no caller can reintroduce the skip.
 		assertEquals(LocalLlmEngine.KvQueryAction.RESTORE,
-				LocalLlmEngine.kvQueryAction(true, false, true));
+				LocalLlmEngine.kvQueryAction(true, true));
 	}
 
 	@Test
-	public void kvQueryAction_coldEverywhereYieldsPrefillAndSave() {
-		// First-ever visit (or a chart that changed, hashing to a new file): nothing to restore, so
-		// the query prefills as before — but its KV must then be PERSISTED so the next visit (even
-		// after a restart) restores it instead of re-paying the prefill. Without the save, a cold
-		// query without a preceding warmup would throw its expensive prefill away (the observed gap).
-		assertEquals(LocalLlmEngine.KvQueryAction.PREFILL_AND_SAVE,
-				LocalLlmEngine.kvQueryAction(true, false, false));
+	public void kvQueryAction_noSavedEntryIsMadeTheWayWarmupMakesItThenRestored() {
+		// First-ever visit (or a chart that changed, hashing to a new file): the query makes the entry
+		// exactly as warmup does — prefill the question-independent prefix, save it — and then restores
+		// it, because a just-primed slot is a different path from a restored one and the answer would
+		// otherwise differ from the same question asked after a chart-open warmup (ADR Decision 157).
+		assertEquals(LocalLlmEngine.KvQueryAction.PRIME_SAVE_AND_RESTORE,
+				LocalLlmEngine.kvQueryAction(true, false));
 	}
 
 	@Test

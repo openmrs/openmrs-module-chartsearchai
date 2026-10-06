@@ -73,6 +73,16 @@ public final class DrugReferenceTestSupport {
 		return injectedReference(injectedDdinterChart(question)).getText();
 	}
 
+	/**
+	 * The REAL injector over the DDInter excerpt, for a case in another package that drives the whole
+	 * {@code LlmInferenceService} and so needs production's appended records on the chart it builds:
+	 * {@code LocalEngineAnswerHistoryIndependenceTest}, where the prompt and its KV seed differ by
+	 * exactly what this appends.
+	 */
+	public static DrugReferenceInjector ddinterInjector() {
+		return injector(ddinterService());
+	}
+
 	/** The one arrangement behind both public DDInter accessors, so they cannot drift apart. */
 	private static PatientChart injectedDdinterChart(String question) {
 		return injector(ddinterService()).injectRecords(oneRecordChart(),

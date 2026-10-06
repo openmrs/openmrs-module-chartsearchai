@@ -574,7 +574,7 @@ public class LlmInferenceService implements ChartSearchService {
 				// written as a literal (issue #512): it states what the prompt carries, which for this
 				// chart is none, and a read cannot go stale if that ever changes.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
-						DISCARD_TOKENS, previewReasoningConsumer, null, false,
+						DISCARD_TOKENS, previewReasoningConsumer, null, null, false,
 						LlmEngine.ReferenceRecords.in(ChartSearchAiUtils.referenceSlice(focused.getMappings())),
 						focused.getDrugsAlreadyOrdered());
 			}
@@ -645,6 +645,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
 			// canonical for the three answers and for why that pass rather than validate's.
 			ChartReadStatus chartRead = new ChartReadStatus();
+			// The chart as warmup builds it, before the question's reference records are appended:
+			// the KV seed, so this query restores the same saved entry a chart-open warmup made and
+			// computes everything the question added on top of it (ADR Decision 157). Seeded off the
+			// injected chart instead, a drug question keys an entry of its own, made from whatever the
+			// slot last held — and the answer depends on that history again.
+			String uninjectedRecords = chartTextOrPlaceholder(chart);
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
@@ -709,7 +715,7 @@ public class LlmInferenceService implements ChartSearchService {
 			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer, kvCacheScope, enumerateFindings, referenceRecords,
+					reasoningConsumer, kvCacheScope, uninjectedRecords, enumerateFindings, referenceRecords,
 					chart.getDrugsAlreadyOrdered());
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
@@ -735,7 +741,7 @@ public class LlmInferenceService implements ChartSearchService {
 						llmProvider.searchStreaming(chartTextOrPlaceholder(chart),
 								chart.getFocusIndices(),
 								findingEnumerationRepairQuestion(owedRepair), tokenConsumer,
-								reasoningConsumer, kvCacheScope, false, referenceRecords,
+								reasoningConsumer, kvCacheScope, uninjectedRecords, false, referenceRecords,
 								noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
 				llmMs += System.currentTimeMillis() - repairStart;

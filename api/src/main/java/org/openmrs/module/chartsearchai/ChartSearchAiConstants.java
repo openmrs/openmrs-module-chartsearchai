@@ -180,9 +180,9 @@ public class ChartSearchAiConstants {
 	 * distinct chart prefix). When set, llama-server is launched with {@code --slot-save-path} and
 	 * both the chart-open warmup and the streaming query path restore a patient's KV from disk
 	 * (I/O-bound, ~tens of ms) instead of re-running the full chart prefill (CPU-bound, tens of
-	 * seconds to minutes on a GPU-less host) whenever the in-process RAM prompt cache is cold for it;
-	 * a cold query also saves its fresh prefill so the next visit is fast even without a warmup. The restored state is byte-for-byte what a
-	 * fresh prefill would have produced, so answer quality is unchanged. Enabled by default: an
+	 * seconds to minutes on a GPU-less host). Every streaming query restores it before answering, even
+	 * when the chart is already in RAM, and a query that finds none makes it the way warmup does, so
+	 * an answer does not depend on what the server ran before it (ADR Decision 157). Enabled by default: an
 	 * empty/unset value resolves to {@code <appdata>/chartsearchai/kvcache}. Set an explicit path to
 	 * relocate it (e.g. to faster or larger storage), or a disable token
 	 * ({@code off}/{@code false}/{@code none}/{@code disabled}) to turn it off — the escape hatch for

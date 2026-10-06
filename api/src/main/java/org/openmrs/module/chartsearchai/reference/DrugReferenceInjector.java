@@ -2727,7 +2727,7 @@ public class DrugReferenceInjector {
 				aboutTheProposal &= proposed.contains(row.substanceGroupKey());
 			}
 			if (aboutTheProposal) {
-				lines.put(numbers.get(i), DrugSafetyValidator.endSentence(briefDetail(finding.getDetail())));
+				lines.put(numbers.get(i), DrugSafetyValidator.endSentence(briefDetail(finding)));
 			}
 		}
 		return lines;
@@ -3041,7 +3041,7 @@ public class DrugReferenceInjector {
 					}
 				}
 			}
-			String line = findingBody(finding, briefDetail(finding.getDetail()), orderRecordNumbers, true) + " ["
+			String line = findingBody(finding, briefDetail(finding), orderRecordNumbers, true) + " ["
 					+ findingNumbers.get(i) + "]";
 			lines.add(line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line)));
 		}
@@ -3477,8 +3477,8 @@ public class DrugReferenceInjector {
 				.thenComparingInt(i -> strengthRank(clauses[i]))
 				.thenComparingInt(i -> STRENGTH_WITHHOLD.equals(clauses[i]) && licensesTheModulesNo(findings.get(i))
 						? 0 : 1));
-		// A caution-only proposal (ADR Decision 140), which cautionsOnlyAbout admitted: brief lines under a lead
-		// counting them. Every other composed answer states each finding's whole body, as before.
+		// A proposal's answer states brief lines, under its "No" as under its count of cautions (ADR Decisions 140, 153);
+		// a screen's answer still states each finding's whole body.
 		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[order.get(0)]);
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {
@@ -3486,7 +3486,7 @@ public class DrugReferenceInjector {
 			boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
 					&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
 					&& finding.orderScheduledStart() == null;
-			String line = findingBody(finding, cautions ? briefDetail(finding.getDetail()) : finding.getDetail(),
+			String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
 					orderRecordNumbers, true)
 					+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 					+ " [" + numbers.get(i) + "]";
@@ -3631,19 +3631,24 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * A finding's detail, brief — the line a composed caution answer states (ADR Decision 140): its first
+	 * A finding's detail, brief — the line a composed answer states for it (ADR Decisions 140, 153): its first
 	 * sentence, which names the drug, her order and, on the shipped knowledge base, the rating its note opens
 	 * with; then every later sentence saying the interaction's clinical significance is unknown
 	 * ({@link ChartSearchAiUtils#UNKNOWN_SIGNIFICANCE}, ADR Decision 136's own reading), so the qualifier is
-	 * never dropped. The mechanism prose is left to the chip, which carries the whole detail. Sentences are
-	 * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}'s. A folded class sentence cannot be cut here: a fold
-	 * withholds, so no caution answer carries one.
+	 * never dropped; then, for an interaction that FOLDED a class relationship onto its rule
+	 * ({@link SafetyWarning#carriesUnratedRelationship()}), that class sentence, which
+	 * {@code DrugSafetyValidator.interactionWarning} appends as the detail's last sentence — it is the relationship
+	 * that made the finding withhold, and is not the mechanism prose. The mechanism prose is left to the chip, which
+	 * carries the whole detail. Sentences are {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}'s.
 	 */
-	static String briefDetail(String detail) {
-		String[] sentences = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(detail.trim());
+	static String briefDetail(SafetyWarning finding) {
+		String[] sentences = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(finding.getDetail().trim());
 		StringBuilder brief = new StringBuilder(sentences[0]);
+		int last = sentences.length - 1;
+		boolean folded = SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
+				&& finding.carriesUnratedRelationship();
 		for (int i = 1; i < sentences.length; i++) {
-			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences[i]).find()) {
+			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences[i]).find() || folded && i == last) {
 				brief.append(' ').append(sentences[i]);
 			}
 		}

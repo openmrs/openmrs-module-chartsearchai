@@ -81,6 +81,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** The ticket's own shape: a drug the patient is not on, proposed, related Major to her order. */
 	private static final String PROPOSAL = "Can I give her ibuprofen?";
 
+	/** The brief line a composed "No" states for ibuprofen against her aspirin, up to its own marker (ADR Decision 153):
+	 *  the finding's first sentence and the cross-reactivity relationship it folded. */
+	private static final String IBUPROFEN_LINE = "Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. "
+			+ "Ibuprofen is in the same cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — "
+			+ "possible additive or duplicate-class therapy. [";
+
 	private static final String SCREEN = "Are there any drug interactions with her current medications?";
 
 	/** One numbered finding line of the chart the model is handed. */
@@ -261,16 +267,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
 
 		assertEquals(0, provider.calls, "the module resolved the question, so the model is not asked");
-		assertTrue(answer.getAnswer().startsWith("No — this module's drug-safety check found a reason to withhold "
-				+ findings.get(0).drug + "."),
-				"the lead is the call the finding states, was: " + answer.getAnswer());
-		assertCarriesEveryFinding(answer, findings);
+		// One brief line per finding, as a caution answer's (ADR Decision 153): the finding's first sentence with its
+		// rating, and the class relationship it folded, which is what makes it withhold; the mechanism stays on the chip.
+		assertEquals(1, findings.size(), "precondition: one finding, was: " + findings);
+		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ibuprofen.\n" + IBUPROFEN_LINE
+				+ findings.get(0).index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
 		assertNoModelProseWasJudged(answer);
 		assertTrue(answer.isAnsweredByTheModule(), "and the answer says no model wrote it");
 		assertFalse(answer.getSafetyWarnings().isEmpty(), "the chips are produced as before");
 		for (org.openmrs.module.chartsearchai.reference.SafetyWarning chip : answer.getSafetyWarnings()) {
-			assertTrue(answer.getAnswer().contains(chip.getDetail()),
-					"every chip beside a composed answer is a finding it states. Missing: " + chip.getDetail());
+			assertTrue(answer.getAnswer().contains("[" + chip.getFindingCitation() + "]"),
+					"every chip beside a composed answer is a finding it cites. Missing: " + chip.getDetail());
 		}
 		assertNotNull(answer.getPairChipExtent(), "and so is the pair extent");
 	}
@@ -283,9 +290,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	 * {@code statedInTheAnswer: false}.
 	 */
 	@Test
-	public void everyChipTheComposedAnswerStatesIsPublishedAsStated() {
+	public void everyChipTheComposedAnswerStatesIsPublishedAsStated() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
 		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).search(patient, PROPOSAL);
+		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
 		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
 		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
@@ -297,15 +305,28 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	@Test
-	public void searchStreaming_publishesTheChipsTheComposedAnswerStatesAsStatedToo() {
+	public void searchStreaming_publishesTheChipsTheComposedAnswerStatesAsStatedToo() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
 		RecordingProvider provider = new RecordingProvider();
-		ChartAnswer answer = serviceWith(provider).searchStreaming(patient, PROPOSAL, text -> { },
+		ChartAnswer answer = serviceWith(provider).searchStreaming(patient, SCREEN, text -> { },
 				reasoning -> { }, citations -> { }, early -> { });
 
 		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
 		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
 		for (SafetyWarning chip : answer.getSafetyWarnings()) {
 			assertTrue(chip.isStatedInTheAnswer(), "the streaming path marks them alike: " + chip.getDetail());
+		}
+	}
+
+	/** A proposal's "No" states brief lines, so no chip beside it is stated in full and each is shown beside it (ADR
+	 *  Decision 153), as beside a caution answer. */
+	@Test
+	public void aChipBesideTheModulesBriefNoIsNotMarkedStated() {
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, PROPOSAL);
+		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
+		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertFalse(chip.isStatedInTheAnswer(), "a brief line does not state the chip in full: " + chip.getDetail());
 		}
 	}
 
@@ -356,7 +377,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "neither the answer pass nor a preview pass asks the model");
 		assertEquals(answer.getAnswer(), streamed.toString(),
 				"a user watching the stream is handed the answer the response carries");
-		assertCarriesEveryFinding(answer, findings);
+		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ibuprofen.\n" + IBUPROFEN_LINE
+				+ findings.get(0).index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
 		assertNoModelProseWasJudged(answer);
 		assertTrue(answer.isAnsweredByTheModule(), "the returned answer says so");
 		assertEquals(1, early.size(), "the early done fired");
@@ -910,8 +932,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
 		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"
-				+ "Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. [" + aspirin.index + "] ["
-				+ recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
+				+ "Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. Ibuprofen is in the same "
+				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — possible additive or "
+				+ "duplicate-class therapy. [" + aspirin.index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]\n"
 				+ "Ibuprofen interacts with Zidovudine, also named in the question — Moderate. [" + zidovudine.index
 				+ "]\n"
 				+ "The chart holds no active order for Zidovudine.", answer.getAnswer());
@@ -1062,6 +1085,31 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	@Test
 	public void aHistoryQuestionWhoseFirstWordLostItsLeadingLetterIsStillOne() {
 		assertEquals(Collections.emptyList(), findingsInThePromptFor("as she ever taken ibuprofen?", shipped()));
+	}
+
+	/**
+	 * A module's "No" states one brief line per finding, as its cautions do, and a line whose finding folded a class
+	 * relationship onto the rule keeps that class sentence (ADR Decision 153). <em>"Is gentamicin appropriate for this
+	 * patient?"</em>, asked of Susan, stated every finding's whole mechanism paragraph under its "No". Clopidogrel relates
+	 * Major to her warfarin and Moderate to her aspirin, with which it shares a platelet-inhibitor subgroup.
+	 */
+	@Test
+	public void aModulesNoStatesBriefLinesKeepingAFoldedClassSentence() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		String question = "Can I give her clopidogrel?";
+		Finding warfarin = findingNamed(question, "Clopidogrel interacts with active order Warfarin");
+		Finding aspirin = findingNamed(question, "Clopidogrel interacts with active order Acetylsalicylic acid (aspirin)");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Clopidogrel.\n"
+				+ "Clopidogrel interacts with active order Warfarin — Major. [" + warfarin.index + "] ["
+				+ recordOf(answer, WARFARIN_ORDER_UUID) + "]\n"
+				+ "Clopidogrel interacts with active order Acetylsalicylic acid (aspirin) — Moderate. Clopidogrel is in the "
+				+ "same ATC class (B01AC) as active order Acetylsalicylic acid (aspirin) — possible duplicate therapy. ["
+				+ aspirin.index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
 	}
 
 	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not
@@ -1313,8 +1361,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		String text = answer.getAnswer();
 		assertTrue(text.startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ciprofloxacin"
 				+ DrugReferenceInjector.WITHHOLD_LEAD_CLOSING), "the withholding call leads: " + text);
-		assertTrue(text.indexOf(withhold) < text.indexOf(caution), "then the stronger finding first: " + text);
-		assertCarriesEveryFinding(answer, findings);
+		Finding major = findingNamed(question, "Ciprofloxacin interacts with active order Warfarin");
+		Finding moderate = findingNamed(question, "Ciprofloxacin interacts with active order Acetylsalicylic acid (aspirin)");
+		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ciprofloxacin.\n"
+				+ "Ciprofloxacin interacts with active order Warfarin — Major. [" + major.index + "] ["
+				+ recordOf(answer, WARFARIN_ORDER_UUID) + "]\n"
+				+ "Ciprofloxacin interacts with active order Acetylsalicylic acid (aspirin) — Moderate. [" + moderate.index
+				+ "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", text, "then the stronger finding first");
 	}
 
 	/**
@@ -1350,11 +1403,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the Major interaction still licenses the module's answer");
 		String[] lines = answer.getAnswer().split("\n");
 		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
-		assertLineIs(answer, interaction, lines[1],
+		assertEquals("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. Ibuprofen is in the same "
+				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — possible additive or "
+				+ "duplicate-class therapy. [" + interaction.index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", lines[1],
 				"the sentence under the \"No\" is the interaction that licensed it: " + answer.getAnswer());
-		assertTrue(answer.getAnswer().contains(expectedLine(answer, allergy)),
-				"and the allergy is still stated: " + answer.getAnswer());
-		assertCarriesEveryFinding(answer, findings);
+		assertTrue(answer.getAnswer().contains("\nThe patient has a recorded allergy to Ibuprofen. No severity is rated "
+				+ "for this finding. [" + allergy.index + "]"), "and the allergy is still stated: " + answer.getAnswer());
 	}
 
 	/**

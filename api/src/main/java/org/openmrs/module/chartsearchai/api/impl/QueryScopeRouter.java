@@ -300,6 +300,27 @@ public final class QueryScopeRouter {
 			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?interactions?"
 					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?(?: i should know about)?");
 
+	private static final String SUBJECT = "(?:she|he|they|the patient|this patient)";
+
+	private static final String BEFORE = "(?: before| in the past| previously)?";
+
+	/**
+	 * The question shapes asking whether the patient has EVER taken one drug, over {@link #words} with the drug's name
+	 * marked {@link #DRUG_NAME} — ADR Decision 151. A grammar for the reason {@link #PROPOSAL_SHAPES} is, and
+	 * past-tense only: "Does she take fluconazole?" asks about now, and is not admitted.
+	 */
+	private static final List<Pattern> HISTORY_SHAPES = shapes(
+			// "Has she ever taken fluconazole?", "Has the patient been on warfarin before?"
+			"(?:has|have) " + SUBJECT + " (?:ever )?(?:taken|used|had|received|been on|been given|been prescribed|been "
+					+ "started on) " + D + BEFORE,
+			// "Did she ever take fluconazole?", "Did the patient receive warfarin in the past?"
+			"did " + SUBJECT + " (?:ever )?(?:take|use|have|receive|get) " + D + BEFORE,
+			// "Was she ever on fluconazole?", "Was the patient ever prescribed warfarin?"
+			"(?:was|were) " + SUBJECT + " (?:ever )?(?:on|given|prescribed|started on) " + D + BEFORE,
+			// "Has fluconazole ever been prescribed for her?", "Was warfarin ever given to the patient?"
+			"(?:has|was) " + D + " (?:ever )?(?:been )?(?:given|prescribed|ordered|administered|used)(?: (?:to|for) "
+					+ PATIENT + ")?" + BEFORE);
+
 	private static List<Pattern> shapes(String... shapes) {
 		List<Pattern> patterns = new ArrayList<Pattern>(shapes.length);
 		for (String shape : shapes) {
@@ -342,6 +363,16 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
 		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);
+	}
+
+	/**
+	 * Whether a question asks whether the patient has EVER taken one drug, and nothing else — one of
+	 * {@link #HISTORY_SHAPES}, asked of its {@link #words} with the drug's own name marked {@link #DRUG_NAME}. ADR
+	 * Decision 151: such a response publishes no interaction chip about giving that drug. Fail-CLOSED as
+	 * {@link #asksWhetherToGiveADrug} is: a phrasing it misses keeps the chips it always had.
+	 */
+	public static boolean asksWhetherSheHasTakenADrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, HISTORY_SHAPES);
 	}
 
 	/**

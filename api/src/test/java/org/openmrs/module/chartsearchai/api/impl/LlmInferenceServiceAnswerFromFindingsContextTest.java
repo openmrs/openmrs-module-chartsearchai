@@ -969,6 +969,61 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelIsAsked("The patient is currently on Ibuprofen, is it safe to give warfarin?");
 	}
 
+	/**
+	 * A question asking whether she has ever taken a drug puts no finding about GIVING it in the prompt (ADR Decision
+	 * 151): <em>"has she ever taken panadol?"</em>, asked of Susan, was answered <em>"The records indicate that
+	 * Acetaminophen can be given, but there are cautions…"</em> from the two interaction findings the prompt carried.
+	 * Ibuprofen relates to her aspirin Major, which a proposal of it carries.
+	 */
+	@Test
+	public void aHistoryQuestionCarriesNoFindingAboutGivingTheDrug() {
+		boolean proposalCarriesIt = false;
+		for (Finding finding : findingsInThePromptFor("Can I give her ibuprofen?", shipped())) {
+			proposalCarriesIt |= finding.text.startsWith("Ibuprofen interacts with active order");
+		}
+		assertTrue(proposalCarriesIt, "precondition: a proposal of ibuprofen carries its finding against her aspirin");
+
+		for (String question : new String[] { "Has she ever taken ibuprofen?", "Was she ever on ibuprofen?" }) {
+			assertEquals(Collections.emptyList(), findingsInThePromptFor(question, shipped()),
+					question + " carries no finding about giving ibuprofen");
+		}
+	}
+
+	/** On a question asking whether she has ever taken a drug she IS taking, that drug's conflicts with her other
+	 *  orders stay (ADR Decision 151): they are her chart's, not a proposal's. Her warfarin relates Major to her aspirin. */
+	@Test
+	public void aHistoryQuestionAboutHerOwnMedicationKeepsItsChips() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		boolean prompted = false;
+		for (Finding finding : findingsInThePromptFor("Has she ever taken warfarin?")) {
+			prompted |= finding.text.startsWith("Warfarin interacts with active order");
+		}
+		assertTrue(prompted, "her warfarin's interaction with her aspirin stays in the prompt too");
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, "Has she ever taken warfarin?");
+		boolean kept = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			kept |= SafetyWarning.TYPE_INTERACTION.equals(chip.getType()) && chip.getDrug().startsWith("Warfarin")
+					&& chip.isAboutACurrentMedication();
+		}
+		assertTrue(kept, "her warfarin's interaction with her aspirin stays, chips were: " + answer.getSafetyWarnings());
+	}
+
+	/** On a question asking whether she has ever taken a drug, her recorded allergy to it stays (ADR Decision 151): it
+	 *  is about the drug's history with her, while the interaction chips about giving it come off. */
+	@Test
+	public void aHistoryQuestionKeepsHerAllergyToTheDrug() {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Fluconazole");
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient,
+				"Has she ever taken fluconazole?");
+		boolean allergy = false;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			allergy |= SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType());
+			assertFalse(SafetyWarning.TYPE_INTERACTION.equals(chip.getType()) && "Fluconazole".equals(chip.getDrug()),
+					"no interaction chip about giving fluconazole, was: " + chip);
+		}
+		assertTrue(allergy, "her recorded allergy to fluconazole stays, chips were: " + answer.getSafetyWarnings());
+	}
+
 	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not
 	 *  exactly one. */
 	private Finding findingNamed(String question, String opening) {

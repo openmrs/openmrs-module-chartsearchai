@@ -743,6 +743,36 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		chip(answer, "Fluconazole", "nevirapine", "Moderate");
 	}
 
+	/**
+	 * A question asking whether she has ever taken a drug publishes no interaction chip about giving it (ADR Decision
+	 * 151): <em>"Has she ever taken fluconazole?"</em>, asked of Susan, published the warning that fluconazole
+	 * interacts with her lidocaine, which is not what was asked. Here fluconazole relates to her rifampicin order
+	 * Major, and a proposal of it publishes that chip.
+	 */
+	@Test
+	public void aQuestionAskingWhetherSheHasTakenADrugPublishesNoInteractionChipAboutGivingIt() throws IOException {
+		chip(serviceAnswering("No.", obs()).service.search(patient, "Can I give her fluconazole?"), "Fluconazole",
+				"rifamp", "Major");
+
+		for (String question : new String[] { "Has she ever taken fluconazole?", "Was she ever on fluconazole?",
+				"Did the patient ever take fluconazole?", "Has fluconazole ever been prescribed for her?" }) {
+			ChartAnswer answer = serviceAnswering("The records do not address fluconazole.", obs()).service.search(
+					patient, question);
+			for (SafetyWarning chip : answer.getSafetyWarnings()) {
+				assertFalse(SafetyWarning.TYPE_INTERACTION.equals(chip.getType()) && "Fluconazole".equals(chip.getDrug()),
+						question + " publishes no interaction chip about fluconazole, was: " + chip);
+			}
+		}
+	}
+
+	/** A question asking how a drug relates to her medications is not a history question, and keeps its chips (ADR
+	 *  Decision 151). */
+	@Test
+	public void aQuestionAboutHowADrugInteractsKeepsItsChips() throws IOException {
+		chip(serviceAnswering("It interacts with her rifampicin.", obs()).service.search(patient,
+				"Does fluconazole interact with her medications?"), "Fluconazole", "rifamp", "Major");
+	}
+
 	private static final class TestableService extends LlmInferenceService {
 
 		@Override

@@ -340,7 +340,7 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = conflicting.getAnswer();
 			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
 			safetyWarnings = aboutTheDrugAsked(
-					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()));
+					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()), chart);
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -910,7 +910,7 @@ public class LlmInferenceService implements ChartSearchService {
 			completedAnswer = conflicting.getAnswer();
 			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
 			safetyWarnings = aboutTheDrugAsked(
-					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()));
+					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()), chart);
 			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -993,7 +993,7 @@ public class LlmInferenceService implements ChartSearchService {
 				ModuleAnswerStatement.markStated(composed,
 						drugSafetyValidator.validate(findingLineMarkersOf(composed, mappings), question, patient, mappings,
 								pairExtent)),
-				mappings));
+				mappings), chart);
 		String answer = FindingPartnerCoverageCheck.withUnstatedPartnersNamed(composed,
 				extractCitedReferences(composed, null, mappings), mappings, drugSafetyValidator);
 		// Issue #472's statement too, so the two paths cannot differ — though no composed answer is
@@ -1056,13 +1056,17 @@ public class LlmInferenceService implements ChartSearchService {
 	 * not hold. On <em>"The patient is currently on Abacavir, Lopinavir / ritonavir, … is it safe to give
 	 * Fluconazole?"</em> eight of twelve chips were that regimen's interactions with itself and her orders, nothing about
 	 * fluconazole. A conflict of one of her OWN orders stays — her allergy to a drug she is prescribed, beside an answer
-	 * whose finding is about that order (ADR Decision 140). Taken off where the chips are final, so every check before
+	 * whose finding is about that order (ADR Decision 140). Nor any interaction chip about GIVING the drug a question
+	 * asks whether she has ever taken (ADR Decision 151, {@code DrugReferenceInjector.isAboutGivingTheDrugAHistoryQuestionNames}):
+	 * <em>"Has she ever taken fluconazole?"</em> published that fluconazole interacts with her lidocaine. Taken off where the chips are final, so every check before
 	 * it still reads them.
 	 */
-	private static List<SafetyWarning> aboutTheDrugAsked(List<SafetyWarning> chips) {
+	private static List<SafetyWarning> aboutTheDrugAsked(List<SafetyWarning> chips, PatientChart chart) {
 		List<SafetyWarning> published = new ArrayList<SafetyWarning>(chips.size());
 		for (SafetyWarning chip : chips) {
-			if (!chip.isAboutADrugOtherThanTheOneProposed() || chip.isAboutAnotherOfHerMedications()) {
+			if ((!chip.isAboutADrugOtherThanTheOneProposed() || chip.isAboutAnotherOfHerMedications())
+					&& !DrugReferenceInjector.isAboutGivingTheDrugAHistoryQuestionNames(chip,
+							chart.getHistoryQuestionDrugRows())) {
 				published.add(chip);
 			}
 		}

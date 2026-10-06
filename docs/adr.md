@@ -156,6 +156,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 151: A question whether she has ever taken a drug publishes no chip about giving it](#decision-151-a-question-whether-she-has-ever-taken-a-drug-publishes-no-chip-about-giving-it)
 - [Decision 152: A question whose first word lost its leading letters is read as the word it was clipped from](#decision-152-a-question-whose-first-word-lost-its-leading-letters-is-read-as-the-word-it-was-clipped-from)
 - [Decision 153: A module's "No" states brief lines, keeping a folded class sentence](#decision-153-a-modules-no-states-brief-lines-keeping-a-folded-class-sentence)
+- [Decision 154: A question whether she has ever taken a drug no order of hers carried is answered by the module](#decision-154-a-question-whether-she-has-ever-taken-a-drug-no-order-of-hers-carried-is-answered-by-the-module)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -14256,3 +14257,58 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aModulesNoStatesBrie
 `.aListQuestionWithholdingAgainstHerOwnOrderIsAnsweredNo` (the fold, on a list answer) and
 `.aChipBesideTheModulesBriefNoIsNotMarkedStated`; a screen's whole bodies and stated chips by
 `.everyChipTheComposedAnswerStatesIsPublishedAsStated`.
+
+## Decision 154: A question whether she has ever taken a drug no order of hers carried is answered by the module
+
+**Status: Accepted** (October 2026) — implemented, no issue. Takes up what
+[Decision 151](#decision-151-a-question-whether-she-has-ever-taken-a-drug-publishes-no-chip-about-giving-it) recorded as
+not taken.
+
+### Context
+
+*"has she ever taken aspirin?"*, asked of Susan, whose chart has never held aspirin, was answered by the model *"The records
+do not address aspirin."* — and *"Has she ever taken fluconazole?"* and the panadol question alike. The module could say
+more: her orders were read. But its safety context reads ACTIVE orders alone, so it could not say "never".
+
+### The decision
+
+- **`PatientClinicalContextBuilder.buildOrderHistory`** reads every drug order she ever had, voided ones excluded, each
+  through the one conversion an active order takes (`addDrugOrder`, extracted from `build` for it), into a context whose
+  order list is that history. So `DrugReferenceService.findForActiveOrders` and `DrugSafetyValidator.everyActiveOrderResolves`
+  answer over the history unchanged, and no order is resolved a second way. Read lazily, by `inject`, only for a question
+  `QueryScopeRouter.asksWhetherSheHasTakenADrug` admits.
+- **`DrugReferenceInjector.composeNoOrderEver`** answers only the negative: *"This patient's chart records no Mebendazole
+  order, active or ended."*, then *"A drug recorded only in a note, or given outside this chart, is not covered."* Where an
+  order did carry the drug, the model answers from that order's record, which it cites.
+- **Fail-closed**: one substance named; the history read in full; every order in it resolved, since one the data cannot
+  name may be the drug; none of their substances the drug's; and no record of the question's chart, outside the module's
+  own reference material, naming the drug — a note or observation that may record it given without an order.
+
+### Residue
+
+The record test reads the chart built for the question, which in query-scoped mode (the default) is a slice: a note the
+slice did not carry is not seen. The scope line states it. Medication recorded only as a free-text observation outside
+the slice, or dispensed outside this chart, is the same residue.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: `main` @ eb29e012 (omod bfe87b92) against this change
+(omod 87f2322a) over 80 cells — gate 19's 75 and five more history questions. **It passed.** All 66 non-history cells
+were byte-identical in answer and chips. Eleven history cells became the module's — fluconazole (two wordings),
+metformin, ibuprofen, gentamicin, mebendazole, aspirin and panadol (twice, one clipped) for Susan; rifampicin and
+metformin for Kamwara — and for each, the patient's orders table, every action and status with voided rows excluded,
+holds no order whose drug or concept name carries the drug asked about or the name the answer gives it, read by SQL
+after capture. *"has she ever taken aspirin?"* now reads *"This patient's chart records no Acetylsalicylic acid
+(aspirin) order, active or ended."* and the scope line. Lidocaine (Susan's order) and nevirapine (Kamwara's) stayed with
+the model, which cites the order; *"Has she ever been on paracetamol?"* stayed with it too — the data does not resolve
+"paracetamol" — and was byte-identical.
+
+### Not pinned
+
+The read guard: no fixture fails the order-history read, so deleting the `activeDrugOrdersRead()` conjunct reddens
+nothing. Kept as the composition's statement of what it requires.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aDrugNoOrderOfHersEverCarriedIsAnsweredWithThatScopedToOrders`,
+`.aHistoryQuestionAboutADrugSheTakesStillAsksTheModel` and `.aHistoryQuestionAboutADrugOnlyAnEndedOrderCarriedStillAsksTheModel`
+(the substance test), `.aHistoryQuestionWhoseDrugAChartRecordNamesStillAsksTheModel` (the record test) and
+`.aHistoryQuestionBesideAnOrderTheDataCannotNameStillAsksTheModel` (the resolution test).

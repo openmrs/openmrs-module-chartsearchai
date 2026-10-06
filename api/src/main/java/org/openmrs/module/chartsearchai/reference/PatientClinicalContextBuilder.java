@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -130,138 +131,7 @@ final class PatientClinicalContextBuilder {
 					continue;
 				}
 				DrugOrder drugOrder = (DrugOrder) order;
-				// The order's coded Drug, materialized ONCE (issue #413) — and since issue #421 read out
-				// there too, so what arrives here is the name, concept and dose form rather than the
-				// entity. One unreadable drug is therefore one degradation and one log line, and the
-				// three values cannot disagree about whether this order has a drug. What that does NOT
-				// mean is that this loop holds no lazy association: two of the three are Concept
-				// proxies, and reading one still throws where the concept cannot be loaded. That is
-				// conceptUuid's subject and its javadoc enumerates the readers that each open a try of
-				// their own; do not restate the list here. What #421 removed is the DRUG half.
-				CodedDrug coded = drug(drugOrder);
-				// Per-order names, collected BEFORE they are folded into the flattened set: the
-				// reconciliation must be able to tell one order's names from another's, which the
-				// flattened set (every name of every order together) cannot.
-				Set<String> orderNames = new LinkedHashSet<String>();
-				addDrugName(orderNames, drugOrder, coded.name);
-				drugNames.addAll(orderNames);
-				Concept concept = drugOrder.getConcept();
-				if (coded.concept != null) {
-					concept = coded.concept;
-				}
-				// Per-order codes for the same reason as the per-order names above, read once off the
-				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
-				// order's two codes read as two orders and the order witnesses its own interaction
-				// (issue #132). The flattened union is still assembled here — the class arms and
-				// findByActiveOrders want exactly that. Since issue #290 it no longer holds codes that
-				// no ActiveDrugOrder accounts for: an order the module cannot NAME reaches the
-				// per-order list below too, and one carrying no ATC code at all contributes to neither.
-				Set<String> orderAtcCodes = new LinkedHashSet<String>();
-				addAtcCodes(orderAtcCodes, concept);
-				atcCodes.addAll(orderAtcCodes);
-				// Where the chart says the drug is APPLIED (issue #234). Per order only — there is no
-				// flattened counterpart and there must not be one, because the whole point of it is to
-				// narrow ONE prescription's classification and a union over the medication list would
-				// attribute one order's route to another.
-				Set<String> orderAdministration = new LinkedHashSet<String>();
-				addAdministration(orderAdministration, drugOrder, coded.dosageForm);
-				// Resolved once and read by both the skip test and the label below, so the two cannot
-				// answer differently about which codes this order has.
-				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
-				// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
-				// carries (issue #290). Skipping it left its codes in the flattened union with no order
-				// behind them, and DrugSafetyValidator.orderPartners keys such a code on the raw code
-				// string — but ONLY a code the dataset cannot NAME, since a covered one takes the entry
-				// rung above that and is keyed on substanceGroupKey(). So the defect was one chip per
-				// UNNAMEABLE code, each labelled by the bare code; a fully covered order is one partner
-				// per covered substance before and after, which is deliberate (see OrderPartner.substances
-				// — two covered codes must stay two partners). Measured through the real validate over the
-				// CURATED SEED, which carries neither code: 2 chips for a 2-code order, 1 once the same
-				// order has a name; and over a fixture that covers BOTH codes, 2 chips either way. The
-				// decision, and the three trades it accepts, are ADR Decision 38.
-				//
-				// One thing about getName() belongs HERE rather than in the ADR, because issue #290's
-				// first plan was built on getting it wrong: a concept named only outside the current
-				// locale does NOT yield null. getName() walks LocaleUtility.getLocalesInOrder(), then
-				// falls back to the first fully-specified name in ANY locale, then to any synonym. What
-				// reaches this branch is a name that could not be READ — addConceptName swallowing a
-				// RuntimeException from a detached or lazy-init proxy while addAtcCodes succeeds in a
-				// separate try, voided names, or a blank recorded name (addRaw drops it, so getName()
-				// need not be null at all). Since issue #413 a coded Drug whose own name could not be
-				// read reaches it too, by the same route one field over: drug() degrades to null and the
-				// order keeps only what its concept and free text name it with.
-				//
-				// The name set stays EMPTY because it is matched against chart prose, so a code in it
-				// would match free text; the cost of that is in the ADR. The display is built from the
-				// normalized codes rather than the raw ones so that the label, the test below and the
-				// codes ActiveDrugOrder stores cannot disagree — NOT as a defence against a blank code,
-				// which addRaw already dropped. An order with no name and no code is still skipped: no
-				// chip can be raised for it, which is what the old skip was right about. Since issue #413
-				// that population has a second member — an order whose ONLY name was the coded Drug, whose
-				// concept is unnamed and which carries no ATC code — and the else below is what keeps the
-				// skip honest for THAT member: the order is named in a WARN and the pass reports itself
-				// unread, rather than an empty medication list being certified as a clean screen. The older
-				// member, an order that simply never had a name, is untouched and still skipped in silence;
-				// the branch says why it is not treated alike.
-				//
-				// The code-only WARN below is the trace that a chip is speaking for an order the module
-				// could not name; it does not distinguish a name that could not be read from a concept
-				// that has none, because no consumer behaves differently on that today. It REPEATS, and
-				// that is accepted rather than overlooked: build() is called once by
-				// DrugReferenceInjector.inject and once by DrugSafetyValidator.validate, so one such
-				// order emits two identical lines per /search for as long as the dictionary defect
-				// stands. Not deduped, because the only dedup available here is a JVM-lifetime set of
-				// order uuids — unbounded on per-patient keys, and it would answer for whoever asked
-				// first, so an operator who turns to the log later would find no trace at all. The
-				// neighbouring reconciliation WARN (DrugReferenceInjector) repeats on the same terms:
-				// its condition, a querystore index behind the OrderService read, also persists until
-				// someone acts on it.
-				// The concept the order was written against, read off the SAME resolved local the ATC
-				// codes above came from and never off drugOrder.getConcept() again (issue #353): where
-				// the order carries a coded Drug those two differ, and keying one join on each would
-				// let two layers disagree about which concept one prescription is — issue #151's shape.
-				String orderConceptUuid = conceptUuid(concept);
-				// Whether core calls this order STARTED, and when it will where it has not (issue #553):
-				// getActiveOrders above admits an order on its dateActivated alone, so one scheduled for
-				// next month is on this list. Core's own two calls, never a reading of scheduledDate.
-				Date scheduledStart = ChartSearchAiUtils.scheduledStartOf(drugOrder);
-				if (!orderNames.isEmpty()) {
-					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
-							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
-							orderConceptUuid, scheduledStart));
-				} else if (!normalizedCodes.isEmpty()) {
-					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
-					log.warn("Active drug order {} has no readable name; it will be identified by its ATC "
-							+ "codes as {}. A safety chip for it is labelled that way unless the reference "
-							+ "data can name one of those codes, and the order cannot be matched against "
-							+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
-					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
-							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
-							orderConceptUuid, scheduledStart));
-				} else if (coded.unreadable) {
-					// Neither rung, and the reason is a read this pass could not make. The skip itself
-					// is older than issue #413 and is untouched below; what #413 adds is a way INTO it,
-					// and saying the active orders were READ while one of them is missing because of a
-					// failed read is the confusion the stamp exists to prevent (#247) — on the standing
-					// surface it is a patient with a prescription certified as a screened empty chart.
-					// So the pass reports itself unread, which is what it did before this loop guarded
-					// the drug read; what #413 changed is that the orders BESIDE this one keep their
-					// place on the list.
-					//
-					// Gated on the FAILED read and never on the drop alone, and the difference is not
-					// cosmetic: an order that simply never had a name, a code or a coded drug is dropped
-					// here too, nothing having failed to read, and stamping the pass unread for it would
-					// hand a client screened:false — every chip on the chart withheld, including ones
-					// raised on other orders the module read perfectly. Measured through the real
-					// standingChartAlerts: one such order costs the whole alert list. That population is
-					// left exactly as it was, silently skipped, and its own certified-empty-screen
-					// residue is older than this issue and not closed here.
-					log.warn("Active drug order {} has no readable name and no ATC code because its coded "
-							+ "drug could not be read, so it is left off this patient's medication list "
-							+ "entirely and the active-order read is reported as incomplete rather than "
-							+ "clean.", drugOrder.getUuid());
-					activeDrugOrderUnaccountedFor = true;
-				}
+				activeDrugOrderUnaccountedFor |= addDrugOrder(drugOrder, "Active", drugNames, atcCodes, activeOrders);
 			}
 		}
 		catch (RuntimeException e) {
@@ -331,6 +201,189 @@ final class PatientClinicalContextBuilder {
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
 				activeOrders, null, contraindicationRecordsRead, activeDrugOrderReadCompleted,
 				activeDrugOrderUnaccountedFor, allergyRecords, conditionRecords);
+	}
+
+	/**
+	 * One drug order as the drug-safety layer reads it: its names and ATC codes added to the flattened sets, and the
+	 * order itself to {@code orders} — the conversion {@link #build} applies to each active order, and
+	 * {@link #buildOrderHistory} to each order the patient ever had (ADR Decision 154), so the two read one order
+	 * alike. {@code kind} opens the WARN lines ("Active", "Historical").
+	 *
+	 * @return whether the order is left off {@code orders} because its coded drug could not be read, so the pass must
+	 *         report its order read as incomplete
+	 */
+	private static boolean addDrugOrder(DrugOrder drugOrder, String kind, Set<String> drugNames, Set<String> atcCodes,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		// The order's coded Drug, materialized ONCE (issue #413) — and since issue #421 read out
+		// there too, so what arrives here is the name, concept and dose form rather than the
+		// entity. One unreadable drug is therefore one degradation and one log line, and the
+		// three values cannot disagree about whether this order has a drug. What that does NOT
+		// mean is that this loop holds no lazy association: two of the three are Concept
+		// proxies, and reading one still throws where the concept cannot be loaded. That is
+		// conceptUuid's subject and its javadoc enumerates the readers that each open a try of
+		// their own; do not restate the list here. What #421 removed is the DRUG half.
+		CodedDrug coded = drug(drugOrder);
+		// Per-order names, collected BEFORE they are folded into the flattened set: the
+		// reconciliation must be able to tell one order's names from another's, which the
+		// flattened set (every name of every order together) cannot.
+		Set<String> orderNames = new LinkedHashSet<String>();
+		addDrugName(orderNames, drugOrder, coded.name);
+		drugNames.addAll(orderNames);
+		Concept concept = drugOrder.getConcept();
+		if (coded.concept != null) {
+			concept = coded.concept;
+		}
+		// Per-order codes for the same reason as the per-order names above, read once off the
+		// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
+		// order's two codes read as two orders and the order witnesses its own interaction
+		// (issue #132). The flattened union is still assembled here — the class arms and
+		// findByActiveOrders want exactly that. Since issue #290 it no longer holds codes that
+		// no ActiveDrugOrder accounts for: an order the module cannot NAME reaches the
+		// per-order list below too, and one carrying no ATC code at all contributes to neither.
+		Set<String> orderAtcCodes = new LinkedHashSet<String>();
+		addAtcCodes(orderAtcCodes, concept);
+		atcCodes.addAll(orderAtcCodes);
+		// Where the chart says the drug is APPLIED (issue #234). Per order only — there is no
+		// flattened counterpart and there must not be one, because the whole point of it is to
+		// narrow ONE prescription's classification and a union over the medication list would
+		// attribute one order's route to another.
+		Set<String> orderAdministration = new LinkedHashSet<String>();
+		addAdministration(orderAdministration, drugOrder, coded.dosageForm);
+		// Resolved once and read by both the skip test and the label below, so the two cannot
+		// answer differently about which codes this order has.
+		Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
+		// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
+		// carries (issue #290). Skipping it left its codes in the flattened union with no order
+		// behind them, and DrugSafetyValidator.orderPartners keys such a code on the raw code
+		// string — but ONLY a code the dataset cannot NAME, since a covered one takes the entry
+		// rung above that and is keyed on substanceGroupKey(). So the defect was one chip per
+		// UNNAMEABLE code, each labelled by the bare code; a fully covered order is one partner
+		// per covered substance before and after, which is deliberate (see OrderPartner.substances
+		// — two covered codes must stay two partners). Measured through the real validate over the
+		// CURATED SEED, which carries neither code: 2 chips for a 2-code order, 1 once the same
+		// order has a name; and over a fixture that covers BOTH codes, 2 chips either way. The
+		// decision, and the three trades it accepts, are ADR Decision 38.
+		//
+		// One thing about getName() belongs HERE rather than in the ADR, because issue #290's
+		// first plan was built on getting it wrong: a concept named only outside the current
+		// locale does NOT yield null. getName() walks LocaleUtility.getLocalesInOrder(), then
+		// falls back to the first fully-specified name in ANY locale, then to any synonym. What
+		// reaches this branch is a name that could not be READ — addConceptName swallowing a
+		// RuntimeException from a detached or lazy-init proxy while addAtcCodes succeeds in a
+		// separate try, voided names, or a blank recorded name (addRaw drops it, so getName()
+		// need not be null at all). Since issue #413 a coded Drug whose own name could not be
+		// read reaches it too, by the same route one field over: drug() degrades to null and the
+		// order keeps only what its concept and free text name it with.
+		//
+		// The name set stays EMPTY because it is matched against chart prose, so a code in it
+		// would match free text; the cost of that is in the ADR. The display is built from the
+		// normalized codes rather than the raw ones so that the label, the test below and the
+		// codes ActiveDrugOrder stores cannot disagree — NOT as a defence against a blank code,
+		// which addRaw already dropped. An order with no name and no code is still skipped: no
+		// chip can be raised for it, which is what the old skip was right about. Since issue #413
+		// that population has a second member — an order whose ONLY name was the coded Drug, whose
+		// concept is unnamed and which carries no ATC code — and the else below is what keeps the
+		// skip honest for THAT member: the order is named in a WARN and the pass reports itself
+		// unread, rather than an empty medication list being certified as a clean screen. The older
+		// member, an order that simply never had a name, is untouched and still skipped in silence;
+		// the branch says why it is not treated alike.
+		//
+		// The code-only WARN below is the trace that a chip is speaking for an order the module
+		// could not name; it does not distinguish a name that could not be read from a concept
+		// that has none, because no consumer behaves differently on that today. It REPEATS, and
+		// that is accepted rather than overlooked: build() is called once by
+		// DrugReferenceInjector.inject and once by DrugSafetyValidator.validate, so one such
+		// order emits two identical lines per /search for as long as the dictionary defect
+		// stands. Not deduped, because the only dedup available here is a JVM-lifetime set of
+		// order uuids — unbounded on per-patient keys, and it would answer for whoever asked
+		// first, so an operator who turns to the log later would find no trace at all. The
+		// neighbouring reconciliation WARN (DrugReferenceInjector) repeats on the same terms:
+		// its condition, a querystore index behind the OrderService read, also persists until
+		// someone acts on it.
+		// The concept the order was written against, read off the SAME resolved local the ATC
+		// codes above came from and never off drugOrder.getConcept() again (issue #353): where
+		// the order carries a coded Drug those two differ, and keying one join on each would
+		// let two layers disagree about which concept one prescription is — issue #151's shape.
+		String orderConceptUuid = conceptUuid(concept);
+		// Whether core calls this order STARTED, and when it will where it has not (issue #553):
+		// getActiveOrders above admits an order on its dateActivated alone, so one scheduled for
+		// next month is on this list. Core's own two calls, never a reading of scheduledDate.
+		Date scheduledStart = ChartSearchAiUtils.scheduledStartOf(drugOrder);
+		if (!orderNames.isEmpty()) {
+			orders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
+					orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
+					orderConceptUuid, scheduledStart));
+		} else if (!normalizedCodes.isEmpty()) {
+			String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
+			log.warn(kind + " drug order {} has no readable name; it will be identified by its ATC "
+					+ "codes as {}. A safety chip for it is labelled that way unless the reference "
+					+ "data can name one of those codes, and the order cannot be matched against "
+					+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
+			orders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+					drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
+					orderConceptUuid, scheduledStart));
+		} else if (coded.unreadable) {
+			// Neither rung, and the reason is a read this pass could not make. The skip itself
+			// is older than issue #413 and is untouched below; what #413 adds is a way INTO it,
+			// and saying the active orders were READ while one of them is missing because of a
+			// failed read is the confusion the stamp exists to prevent (#247) — on the standing
+			// surface it is a patient with a prescription certified as a screened empty chart.
+			// So the pass reports itself unread, which is what it did before this loop guarded
+			// the drug read; what #413 changed is that the orders BESIDE this one keep their
+			// place on the list.
+			//
+			// Gated on the FAILED read and never on the drop alone, and the difference is not
+			// cosmetic: an order that simply never had a name, a code or a coded drug is dropped
+			// here too, nothing having failed to read, and stamping the pass unread for it would
+			// hand a client screened:false — every chip on the chart withheld, including ones
+			// raised on other orders the module read perfectly. Measured through the real
+			// standingChartAlerts: one such order costs the whole alert list. That population is
+			// left exactly as it was, silently skipped, and its own certified-empty-screen
+			// residue is older than this issue and not closed here.
+			log.warn(kind + " drug order {} has no readable name and no ATC code because its coded "
+					+ "drug could not be read, so it is left off this patient's medication list "
+					+ "entirely and the order read is reported as incomplete rather than "
+					+ "clean.", drugOrder.getUuid());
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Every drug order this patient EVER had — active, ended, stopped or lapsed, voided ones excluded — each read as
+	 * {@link #build} reads an active one ({@link #addDrugOrder}), as a context carrying nothing else: its
+	 * {@code getActiveDrugOrders()} is the whole order history, and {@code activeDrugOrdersRead()} says whether that
+	 * history was read in full (ADR Decision 154). For the one question that needs it, whether she has ever taken a
+	 * drug, so {@code DrugReferenceService.findForActiveOrders} and {@code DrugSafetyValidator.everyActiveOrderResolves}
+	 * answer it over the history unchanged, and no second resolution of an order exists. Not a context to screen:
+	 * its allergy and condition reads did not happen, and it says so.
+	 */
+	static PatientClinicalContext buildOrderHistory(Patient patient) {
+		Set<String> drugNames = new LinkedHashSet<String>();
+		Set<String> atcCodes = new LinkedHashSet<String>();
+		List<PatientClinicalContext.ActiveDrugOrder> orders = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		if (patient == null) {
+			return new PatientClinicalContext(null, null, drugNames, atcCodes, Collections.<String> emptySet(),
+					Collections.<String> emptySet(), orders, null, false, false);
+		}
+		boolean readCompleted = true;
+		boolean unaccountedFor = false;
+		try {
+			for (Order order : Context.getOrderService().getAllOrdersByPatient(patient)) {
+				if (!(order instanceof DrugOrder) || order.getVoided()) {
+					continue;
+				}
+				unaccountedFor |= addDrugOrder((DrugOrder) order, "Historical", drugNames, atcCodes, orders);
+			}
+		}
+		catch (RuntimeException e) {
+			warnUnreadable("drug order history", "no answer about whether she has ever taken a drug is composed", e,
+					PrivilegeConstants.GET_ORDERS);
+			readCompleted = false;
+		}
+		return new PatientClinicalContext(null, null, drugNames, atcCodes, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), orders, null, false, readCompleted, unaccountedFor,
+				Collections.<String, Set<String>> emptyMap(), Collections.<String, Set<String>> emptyMap());
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

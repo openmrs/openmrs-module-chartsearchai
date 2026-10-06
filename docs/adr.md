@@ -155,6 +155,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 150: A proposal after a list is answered from its findings about the drug proposed](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed)
 - [Decision 151: A question whether she has ever taken a drug publishes no chip about giving it](#decision-151-a-question-whether-she-has-ever-taken-a-drug-publishes-no-chip-about-giving-it)
 - [Decision 152: A question whose first word lost its leading letters is read as the word it was clipped from](#decision-152-a-question-whose-first-word-lost-its-leading-letters-is-read-as-the-word-it-was-clipped-from)
+- [Decision 153: A module's "No" states brief lines, keeping a folded class sentence](#decision-153-a-modules-no-states-brief-lines-keeping-a-folded-class-sentence)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -14205,3 +14206,53 @@ model.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalWhoseFirstWordLostItsLeadingLettersGetsItsFullFormsAnswer`,
 `.aFirstWordMistypedOtherThanByClippingStillAsksTheModel` and `.aHistoryQuestionWhoseFirstWordLostItsLeadingLetterIsStillOne`.
+
+## Decision 153: A module's "No" states brief lines, keeping a folded class sentence
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends the brief line of
+[Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)
+to [Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)'s
+"No", and corrects [Decision 150](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed)'s.
+
+### Context
+
+*"Is gentamicin appropriate for this patient?"*, asked of Susan, was answered with Decision 108's "No" and three findings,
+each stated in its record's whole words: the botulinum-toxin mechanism paragraph, five sentences on aminoglycoside
+nephrotoxicity and ototoxicity, and the lidocaine note, one carrying the data's own double space. The caution answers
+beside it state one line per finding.
+
+### The decision
+
+- **A proposal's composed answer states brief lines under its "No" too**: `DrugReferenceInjector.composeFromFindings`
+  passes `briefDetail` whenever the question is a proposal. A screen's answer, which has no lead, keeps the whole bodies.
+- **`briefDetail` keeps a folded class sentence**: for an interaction that folded a class relationship onto its rule
+  (`SafetyWarning.carriesUnratedRelationship()`, set where `DrugSafetyValidator.interactionWarning` appends that sentence
+  as the detail's last), the last sentence is kept beside the first. It is the relationship that made the finding
+  withhold — *"Gentamicin is in the same ATC class (J01GB) as active order Neomycin — possible duplicate therapy."* — and
+  not mechanism prose. `briefDetail` had said a folded sentence could not reach it, because a fold withholds and only
+  cautions were brief.
+- **Which corrects Decision 150**, whose brief lines were cut the same way and could carry a withholding fold: its
+  *"Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major."* had dropped *"Ibuprofen is in the same
+  cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — possible additive or duplicate-class
+  therapy."*, which its own test then pinned. Found by this decision's change, which reddened that test.
+- **A chip beside a brief "No" is no longer published `statedInTheAnswer`**, as beside a caution answer: the mechanism
+  is the chip's, and a client shows it there.
+
+### The gate
+
+Pre-registered, :8081, local E4B, the shipped prompt, 2026-10-06: `main` @ 3d44187c (omod d7795791) against this change
+(omod bfe87b92) over 75 cells — gate 18's 73 and two gentamicin questions. **It passed.** Every cell the model answers,
+and every composed answer not led by "No", was byte-identical in answer and chips. Each of the eleven single-drug "No"
+answers kept its lead, its lines and every line's markers, and every sentence it states is one its old line stated; they
+shrank from 451–1391 characters to 164–390. Gentamicin's now reads, after its lead: *"Gentamicin interacts with active
+order Botulinum toxin type A — Major. [47] [5]"*, *"Gentamicin interacts with active order Neomycin — Moderate. Gentamicin
+is in the same ATC class (J01GB) as active order Neomycin — possible duplicate therapy. [48] [7]"*, *"Gentamicin interacts
+with active order Lidocaine — Minor. [49] [6]"*. The three list answers led by "No" were unchanged, none of their lines
+carrying a fold.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aModulesNoStatesBriefLinesKeepingAFoldedClassSentence`,
+`.aProposedDrugTheModuleWithholdsIsAnsweredFromItsFindingsWithoutAskingTheModel`,
+`.theLineUnderTheNoIsTheInteractionThatLicensedIt`, `.findingsOfDifferentStrengthsAreLedByTheWithholdingCall`,
+`.aListQuestionWithholdingAgainstHerOwnOrderIsAnsweredNo` (the fold, on a list answer) and
+`.aChipBesideTheModulesBriefNoIsNotMarkedStated`; a screen's whole bodies and stated chips by
+`.everyChipTheComposedAnswerStatesIsPublishedAsStated`.

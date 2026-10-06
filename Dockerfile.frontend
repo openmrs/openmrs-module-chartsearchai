@@ -26,13 +26,18 @@ RUN yarn install --immutable
 # path unique to the build makes every browser fetch the new bundle on the next deploy, with
 # no CDN purge. Stamped after the install (the lockfile records the workspace as
 # `0.0.0-use.local`, so `--immutable` is unaffected either way) and before the build and pack,
-# which is what `openmrs assemble` reads the version from. `-git<sha12>`: a prerelease
-# identifier carrying a letter, so a sha that is all digits with a leading zero stays valid
-# semver. The build-spa stage asserts the assembled path carries it.
+# which is what `openmrs assemble` reads the version from. `-git<sha12>.r<build>`: unique per
+# IMAGE BUILD, not per ESM commit — measured the same night, a backend-only push rebuilt this
+# image from the same ESM commit into the same path, the edge kept the previous build's copy,
+# and the deploy gate (rightly) read it as an earlier build. The build id is CACHE_BUST, which
+# build-docker.yml sets to the run id; a local build without it takes the time. Both
+# identifiers carry a letter, so a sha that is all digits with a leading zero stays valid semver.
+# The build-spa stage asserts the assembled path carries it.
 RUN node -e 'const fs=require("fs"); \
   const p=JSON.parse(fs.readFileSync("package.json","utf8")); \
   const sha=fs.readFileSync("ESM_SHA","utf8").trim().slice(0,12); \
-  p.version=p.version.split("-")[0]+"-git"+sha; \
+  const build=(process.env.CACHE_BUST||"").replace(/[^0-9A-Za-z]/g,"")||String(Date.now()); \
+  p.version=p.version.split("-")[0]+"-git"+sha+".r"+build; \
   fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n"); \
   console.log("ESM version",p.version);'
 RUN yarn build && yarn pack
@@ -95,8 +100,8 @@ RUN node /app/precompress-spa.mjs /app/dist
 RUN node -e 'const {existsSync,statSync,readFileSync}=require("fs"); \
   const spec=(JSON.parse(readFileSync("/app/dist/importmap.json","utf8")).imports||{})["@openmrs/esm-chartsearchai-app"]; \
   if(!spec){console.error("importmap does not name the ESM");process.exit(1);} \
-  const tag="-git"+readFileSync("/app/dist/chartsearchai-esm.sha","utf8").trim().slice(0,12)+"/"; \
-  if(!spec.includes(tag)){console.error("importmap names the ESM at",spec,"which does not carry",tag,"so a CDN may serve an earlier build at that path");process.exit(1);} \
+  const tag=new RegExp("-git"+readFileSync("/app/dist/chartsearchai-esm.sha","utf8").trim().slice(0,12)+"\\.r[0-9A-Za-z]+/"); \
+  if(!tag.test(spec)){console.error("importmap names the ESM at",spec,"which does not carry",String(tag),"so a CDN may serve an earlier build at that path");process.exit(1);} \
   const entry="/app/dist/"+spec.replace(/^\.\//,""); \
   const stamp=statSync("/app/dist/chartsearchai-esm.sha").mtimeMs, e=statSync(entry).mtimeMs; \
   console.log("stamp mtime",stamp,"entry mtime",e,entry); \

@@ -69,6 +69,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** The uuid of patient 7's aspirin order in the standard test dataset. */
 	private static final String ASPIRIN_ORDER_UUID = "e1f95924-697a-11e3-bd76-0800271c1b75";
 
+	/** Patient 7's first aspirin order, stopped on 2008-08-15 when order 111 revised it. */
+	private static final String FIRST_ASPIRIN_ORDER_UUID = "921de0a3-05c4-444a-be03-e01b4c4b9142";
+
 	private static final String METFORMIN_ORDER = "AnswerFromFindingsMetforminOrderTestData.xml";
 
 	/** Patient 7's aspirin beside two proposals the arm relates to none of her orders by their own rows (issue #592). */
@@ -1138,7 +1141,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ "A drug recorded only in a note, or given outside this chart, is not covered.", answer.getAnswer());
 	}
 
-	/** A drug she is taking keeps the model call, whose answer cites the order (ADR Decision 154): her aspirin. */
+	/** A drug she is taking, where the question's chart carries no record of her order to cite, keeps the model call
+	 *  (ADR Decisions 154, 155): her aspirin, beside a chart of one observation. */
 	@Test
 	public void aHistoryQuestionAboutADrugSheTakesStillAsksTheModel() {
 		RecordingProvider provider = new RecordingProvider();
@@ -1146,7 +1150,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
 	}
 
-	/** A drug she had only as an ENDED order keeps the model call too (ADR Decision 154): patient 6's one drug order,
+	/** A drug she had only as an ENDED order is not answered "no order" (ADR Decision 154), and where the question's chart
+	 *  carries no record of that order to cite, the model answers (ADR Decision 155): patient 6's one drug order,
 	 *  Triomune-30, lapsed in 2008, and lamivudine is one of its substances. */
 	@Test
 	public void aHistoryQuestionAboutADrugOnlyAnEndedOrderCarriedStillAsksTheModel() throws Exception {
@@ -1180,6 +1185,81 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Has she ever taken mebendazole?");
 		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+	}
+
+	/**
+	 * A question whether she has ever taken a drug she is ON is answered by the module with every order that carried it
+	 * and whether each is in force, by its record's own stamps (ADR Decision 155). <em>"Has she ever taken
+	 * Metoclopramide?"</em>, asked of Susan, who is on it, was answered "Yes — Metoclopramide was ordered on 2026-08-03
+	 * [8]", which did not say she still is. Patient 7's aspirin is two orders: order 1, stopped on 2008-08-15, and
+	 * order 111, its revision, in force — the first of which core hands back as a Hibernate proxy, which the order-history
+	 * read once skipped.
+	 */
+	@Test
+	public void aHistoryQuestionAboutADrugSheIsOnStatesEveryOrderAndWhichIsInForce() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWithChart(provider, shipped(), DrugReferenceTestSupport.obsRecord(1, "BP 120/80"),
+				new RecordMapping(2, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, ASPIRIN_ORDER_UUID,
+						day("2008-08-15"), "Drug order: Aspirin", null, 0, Boolean.TRUE),
+				new RecordMapping(3, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, FIRST_ASPIRIN_ORDER_UUID,
+						day("2008-08-08"), "Drug order: Aspirin", null, 0, Boolean.FALSE, day("2008-08-15"))).search(
+								patient, "Has she ever taken aspirin?");
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("This patient's chart records 2 Acetylsalicylic acid (aspirin) orders:\n"
+				+ "ASPIRIN — ended 2008-08-15, ordered 2008-08-08. [3]\n"
+				+ "ASPIRIN — active, ordered 2008-08-15. [2]", answer.getAnswer());
+	}
+
+	/** Every order that carried the drug must be citable, or the answer would list some of them as all (ADR Decision
+	 *  155): the chart carries her active aspirin order's record and not the stopped one's. */
+	@Test
+	public void aHistoryQuestionWhoseOrdersAreNotAllCitableStillAsksTheModel() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWithChart(provider, shipped(),
+				new RecordMapping(2, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, ASPIRIN_ORDER_UUID,
+						day("2008-08-15"), "Drug order: Aspirin", null, 0, Boolean.TRUE)).search(patient,
+								"Has she ever taken aspirin?");
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+	}
+
+	/** An order that ended is stated with the day it ended, by the record's own stamps (ADR Decision 155): patient 6's
+	 *  Triomune-30 lapsed in 2008, and lamivudine is one of its substances. */
+	@Test
+	public void aHistoryQuestionAboutADrugOnlyAnEndedOrderCarriedStatesWhenItEnded() throws Exception {
+		executeDataSet("DrugOrderCurrencyTestData.xml");
+		Patient six = Context.getPatientService().getPatient(6);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWithChart(provider, shipped(),
+				new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
+						"9318bbbb-0000-4000-8000-00000000318b", day("2008-01-01"), "Drug order: Triomune-30", null, 0,
+						Boolean.FALSE, day("2008-01-09"))).search(six, "Has she ever taken lamivudine?");
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertEquals("This patient's chart records 1 Lamivudine order:\n"
+				+ "Triomune-30 — ended 2008-01-09, ordered 2008-01-01. [1]", answer.getAnswer());
+	}
+
+	/** An order whose record carries no in-force stamp cannot be stated, so the model answers (ADR Decision 155). */
+	@Test
+	public void aHistoryQuestionWhoseOrderRecordCarriesNoStampStillAsksTheModel() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWithChart(provider, shipped(),
+				new RecordMapping(2, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, ASPIRIN_ORDER_UUID,
+						day("2025-01-15"), "Drug order: Aspirin", null, 0, null)).search(patient,
+								"Has she ever taken aspirin?");
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+		assertTrue(answer.getReferenceSlice() != null && answer.getReferenceSlice().getRecords() > 0,
+				"and the injection still ran, so the model reads the reference material: " + answer.getReferenceSlice());
+	}
+
+	private static java.util.Date day(String isoDay) {
+		try {
+			return new java.text.SimpleDateFormat("yyyy-MM-dd").parse(isoDay);
+		}
+		catch (java.text.ParseException e) {
+			throw new IllegalArgumentException(isoDay, e);
+		}
 	}
 
 	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not

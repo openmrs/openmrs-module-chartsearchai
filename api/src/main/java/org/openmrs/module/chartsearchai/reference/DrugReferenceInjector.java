@@ -3125,9 +3125,12 @@ public class DrugReferenceInjector {
 			asked.add(entry.substanceGroupKey());
 		}
 		if (asked.size() != 1 || history == null || !history.activeDrugOrdersRead()
-				|| !DrugSafetyValidator.everyActiveOrderResolves(service, history, historyEntries)
-				|| !Collections.disjoint(asked, DrugSafetyValidator.substancesOf(historyEntries))) {
+				|| !DrugSafetyValidator.everyActiveOrderResolves(service, history, historyEntries)) {
 			return null;
+		}
+		String drug = DrugSafetyValidator.interactionSubject(questionDrugs, context).displayLabel();
+		if (!Collections.disjoint(asked, DrugSafetyValidator.substancesOf(historyEntries))) {
+			return composeOrdersCarrying(service, asked, drug, history, chartRecords);
 		}
 		for (RecordMapping record : chartRecords) {
 			if (ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
@@ -3140,8 +3143,67 @@ public class DrugReferenceInjector {
 				}
 			}
 		}
-		return "This patient's chart records no " + DrugSafetyValidator.interactionSubject(questionDrugs, context)
-				.displayLabel() + " order, active or ended.\n" + NO_ORDER_EVER_SCOPE;
+		return "This patient's chart records no " + drug + " order, active or ended.\n" + NO_ORDER_EVER_SCOPE;
+	}
+
+	/**
+	 * The module's answer to a question whether she has ever taken a drug that orders of hers DID carry (ADR Decision
+	 * 155), or {@code null} where the model answers: <em>"This patient's chart records 1 Metoclopramide order:"</em>, then
+	 * one line per order — its display, whether it is in force by the record's own stamp, when it was ordered and, for one
+	 * that ended, when — citing the order's chart record. <em>"Has she ever taken Metoclopramide?"</em>, asked of Susan,
+	 * who is on it, was answered "Yes — Metoclopramide was ordered on 2026-08-03 [8]", which did not say she still is.
+	 *
+	 * <p>Which orders carry the drug is asked of each order alone, through {@link DrugReferenceService#findForActiveOrders}
+	 * over a context of that one order — the resolution the negative answer's test reads over the whole history — and
+	 * never through {@code DrugSafetyValidator.resolvesFrom}, whose name leg is deliberately wider than the candidate set.
+	 * Each such order must have a {@code drug_order} record in the question's chart, whose
+	 * {@code RecordMapping.getOrderActive()} is not {@code null}: the line states that stamp, its date the record's own
+	 * ({@code getDate()}) and its end {@code getOrderStopDate()} — never a reading of the record's text, and never a date
+	 * the stamps do not carry.
+	 */
+	private static String composeOrdersCarrying(DrugReferenceService service, Set<Object> asked, String drug,
+			PatientClinicalContext history, List<RecordMapping> chartRecords) {
+		List<String> lines = new ArrayList<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : history.getActiveDrugOrders()) {
+			PatientClinicalContext alone = new PatientClinicalContext(null, null, order.getNames(), order.getAtcCodes(),
+					Collections.<String> emptySet(), Collections.<String> emptySet(),
+					Collections.singletonList(order));
+			if (Collections.disjoint(asked, DrugSafetyValidator.substancesOf(service.findForActiveOrders(alone)))) {
+				continue;
+			}
+			RecordMapping record = null;
+			for (RecordMapping candidate : chartRecords) {
+				if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER.equals(candidate.getResourceType())
+						&& order.getUuid() != null && order.getUuid().equals(candidate.getResourceUuid())) {
+					record = candidate;
+					break;
+				}
+			}
+			if (record == null || record.getOrderActive() == null) {
+				return null;
+			}
+			StringBuilder line = new StringBuilder(order.getDisplay()).append(" — ");
+			if (record.getOrderActive().booleanValue()) {
+				line.append("active");
+			} else {
+				line.append(record.getOrderStopDate() == null ? "no longer active"
+						: "ended " + isoDay(record.getOrderStopDate()));
+			}
+			if (record.getDate() != null) {
+				line.append(", ordered ").append(isoDay(record.getDate()));
+			}
+			lines.add(line.append(". [").append(record.getIndex()).append("]").toString());
+		}
+		if (lines.isEmpty()) {
+			return null;
+		}
+		return "This patient's chart records " + lines.size() + " " + drug + (lines.size() == 1 ? " order:" : " orders:")
+				+ "\n" + String.join("\n", lines);
+	}
+
+	/** {@code date} as the calendar day the chart states it on, {@code yyyy-MM-dd} in the server's zone. */
+	private static String isoDay(java.util.Date date) {
+		return new java.text.SimpleDateFormat("yyyy-MM-dd").format(date);
 	}
 
 	/** The row the response names the substance of {@code record} by — {@link DrugSafetyValidator#interactionSubject}

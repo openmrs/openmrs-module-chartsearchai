@@ -14515,3 +14515,46 @@ question the module appends nothing to; each case first asserts which of the two
 The restore policy is pinned in CI by `LocalLlmEngineTest.kvQueryAction_aSavedEntryIsRestoredBeforeEveryQuery` and
 `kvQueryAction_noSavedEntryIsMadeTheWayWarmupMakesItThenRestored`, which replace the spec this decision reverses
 (`kvQueryAction_ramResidentYieldsNone_soWarmRepeatsAndAlternatingPatientsNeverReRestore`).
+
+## Decision 158: A proposal for a patient with no active medication orders is answered with what the check had to compare
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends
+[Decision 143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)
+to the patient it declined for.
+
+### Context
+
+On the demo (2026-10-06, `main` ed513ee1, local E2B), *"Is warfarin safe for her?"* for patient
+`dd749903-1691-11df-97a5-7038c432aabf`, who has no drug orders, was answered by the model *"No — Warfarin has major
+interactions with ketoprofen, ketorolac, lepirudin, levofloxacin, and lomefloxacin [87]."*, with no chip and record 87
+— warfarin's `drug_reference` record — its one citation. None of those five drugs is hers: they are the dataset's partners
+for warfarin, rendered under `DATASET_TAIL_LEAD`, the prefix the system prompt says marks material that is not this
+patient's. Decision 143's sentence would have answered had she had orders; its own conjunct — her orders resolve at least
+one substance — declined, and with no order the drug-in-play arm states no extent either. Every module branch declined,
+and the model read the dataset's list as hers.
+
+### The decision
+
+- **The module answers it**: `DrugReferenceInjector.composeFromNoActiveOrders`, tried where `composeFromNoPair` declines:
+  *"This patient has no active medication orders, so the interaction check had none to relate Warfarin to. [87]"*, citing
+  the drug's reference record alone.
+- **A statement about the CHECK, as Decision 143's is**: what it had to compare the drug against. Never "can be given",
+  never "safe", never that the patient has no interactions. "Medication orders" rather than "medications": a
+  medication the chart records only as an observation is not one the check reads.
+- **Fail-closed on Decision 143's conjuncts that still apply**: no finding, on a chart read for safety — so her orders
+  were READ and none is active, not unread; the contraindication arms on, so "no finding" includes her allergy records;
+  one drug, proposed, whose reference record is in the chart (`proposedDrugsRecord`, shared). And the context carries
+  no active drug in any form — no order, and no flattened name or code (issue #118's shape), which still records a
+  medication.
+
+### The gate
+
+`LlmInferenceServiceAnswerFromFindingsContextTest`, over the real injector and validator and the shipped knowledge
+base, patient 6 (no active order):
+`.aProposalForAPatientWithNoActiveOrdersIsAnsweredWithWhatTheCheckEstablished` and its streaming twin failed before the
+change — the model was asked — and pass after it; `.aQuestionNamingADrugWithoutProposingItForAPatientWithNoOrdersStillAsksTheModel`
+and `.aProposalForAPatientWithNoOrdersAsksTheModelWhereContraindicationsAreNotChecked` pin the refusals.
+`NoActiveOrdersProposalAnswerTest` drives the injector with the flattened shape the database cannot build. Mutated, each
+conjunct reddens its own case: the contraindication reading, the proposal, and the flattened names and codes — the last
+only once the case's co-medication was one the data does not relate to warfarin (with metformin a caution finding was
+raised and another branch answered, so the case could not see the conjunct).

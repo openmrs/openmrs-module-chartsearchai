@@ -716,6 +716,72 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ referenceRecordOf(answer, "mebendazole") + "]", answer.getAnswer());
 	}
 
+	/**
+	 * A proposal for a patient with NO active medication orders is answered by the module with what the check
+	 * established (ADR Decision 158): there was nothing for the interaction check to relate the drug to. On the demo
+	 * (2026-10-06) "Is warfarin safe for her?", asked of a patient with no orders, was answered by the model "No —
+	 * Warfarin has major interactions with ketoprofen, ketorolac, lepirudin, levofloxacin, and lomefloxacin [87]" —
+	 * the drug's dataset-wide partners, none of them hers, read as hers. Decision 143's sentence declined there, its
+	 * orders resolving no substance. Patient 6 holds no active order.
+	 */
+	@Test
+	public void aProposalForAPatientWithNoActiveOrdersIsAnsweredWithWhatTheCheckEstablished() {
+		Patient withNoOrders = Context.getPatientService().getPatient(6);
+		String question = "Is warfarin safe for her?";
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(withNoOrders, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals("This patient has no active medication orders, so the interaction check had none to relate "
+				+ "Warfarin to. [" + referenceRecordOf(answer, "warfarin") + "]", answer.getAnswer());
+		assertEquals(1, answer.getReferences().size(), "it cites the drug's record alone: " + answer.getReferences());
+	}
+
+	/** The same answer on the streaming path, the one the UI takes: the module's answer is served on both. */
+	@Test
+	public void aProposalForAPatientWithNoActiveOrdersIsAnsweredByTheModuleOnTheStreamingPathToo() {
+		Patient withNoOrders = Context.getPatientService().getPatient(6);
+		RecordingProvider provider = new RecordingProvider();
+		StringBuilder streamed = new StringBuilder();
+
+		ChartAnswer answer = serviceWith(provider, shipped()).searchStreaming(withNoOrders, "Is warfarin safe for her?",
+				streamed::append);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertTrue(answer.getAnswer().startsWith("This patient has no active medication orders, so the interaction "
+				+ "check had none to relate Warfarin to. ["), answer.getAnswer());
+	}
+
+	/** A question naming the drug without PROPOSING it is not answered so (fail-closed): the model answers. */
+	@Test
+	public void aQuestionNamingADrugWithoutProposingItForAPatientWithNoOrdersStillAsksTheModel() {
+		Patient withNoOrders = Context.getPatientService().getPatient(6);
+		RecordingProvider provider = new RecordingProvider();
+
+		ChartAnswer answer = serviceWith(provider, shipped()).search(withNoOrders, "When was warfarin last mentioned?");
+
+		assertEquals(1, provider.calls, "the model answers: " + answer.getAnswer());
+		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/** With the contraindication arms off, an allergy to the drug raises nothing, so "no finding" would not include
+	 *  her allergy records: the model answers (fail-closed, as Decision 143's sentence is). */
+	@Test
+	public void aProposalForAPatientWithNoOrdersAsksTheModelWhereContraindicationsAreNotChecked() {
+		Patient withNoOrders = Context.getPatientService().getPatient(6);
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
+		RecordingProvider provider = new RecordingProvider();
+
+		ChartAnswer answer = serviceWith(provider, shipped()).search(withNoOrders, "Is warfarin safe for her?");
+
+		assertEquals(1, provider.calls, "the model answers: " + answer.getAnswer());
+		assertFalse(answer.isAnsweredByTheModule());
+	}
+
 	/** A pair below the floor that the below-floor answer cannot state — her order, known by its ATC code alone,
 	 *  names no drug a line could print — still relates the drug to her, so the no-pair answer must not say it
 	 *  relates the drug to none of her medications: the model answers (issue #592). Her aspirin's entry carries no

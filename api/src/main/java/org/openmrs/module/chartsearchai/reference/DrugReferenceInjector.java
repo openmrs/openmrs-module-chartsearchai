@@ -947,6 +947,10 @@ public class DrugReferenceInjector {
 				moduleAnswer = composeFromNoPair(proposes, questionDrugs, screenedSubstances, orderEntries,
 						pairExtent.stated(), mappings, matched, context, reading.states());
 			}
+			if (moduleAnswer == null) {
+				moduleAnswer = composeFromNoActiveOrders(proposes, questionDrugs, mappings, matched, context,
+						reading.states());
+			}
 		}
 		if (moduleAnswer == null && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -2897,6 +2901,44 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * The module's answer to a proposal for a patient with NO active medication orders (ADR Decision 158), or
+	 * {@code null} where the model answers: <em>"This patient has no active medication orders, so the interaction check
+	 * had none to relate Warfarin to. [n]"</em>, citing the drug's reference record. {@link #composeFromNoPair} declines
+	 * there — her orders resolve no substance, and the drug-in-play arm states no extent over an empty list — and the
+	 * model, left with the drug's record alone, answered "No — Warfarin has major interactions with ketoprofen,
+	 * ketorolac, lepirudin, levofloxacin, and lomefloxacin": the dataset's partners for the drug, rendered under
+	 * {@code DATASET_TAIL_LEAD} as not this patient's, read as hers.
+	 *
+	 * <p>Like {@link #composeFromNoPair} it is a statement about the CHECK — what it had to compare the drug against —
+	 * and never "can be given", never "safe". Fail-closed on the same conjuncts: the caller's branch requires no
+	 * finding and a chart read for safety, so her orders were READ and none is active, rather than unread; the
+	 * contraindication arms are on ({@code contraindicationsChecked}), so "no finding" includes her allergy records; and
+	 * {@link #proposedDrugsRecord} requires one drug, proposed, whose reference record is in the chart. The context
+	 * must carry no active drug at all — no order, no flattened name, no flattened code — since a context carrying
+	 * codes without per-order structure still records medications. Its residue is Decision 143's: a medication the
+	 * chart records only as an observation, never as an order, is not one the check reads. It cites the drug's
+	 * record alone.
+	 */
+	private static String composeFromNoActiveOrders(boolean proposes, List<DrugReference> questionDrugs,
+			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
+			boolean contraindicationsChecked) {
+		if (!contraindicationsChecked || !context.getActiveDrugOrders().isEmpty()
+				|| !context.getActiveDrugNames().isEmpty() || !context.getActiveDrugAtcCodes().isEmpty()) {
+			return null;
+		}
+		RecordMapping record = proposedDrugsRecord(proposes, questionDrugs, Collections.<Object> emptySet(), mappings);
+		if (record == null) {
+			return null;
+		}
+		DrugReference subject = subjectOfRecord(record, matched, context);
+		if (subject == null) {
+			return null;
+		}
+		return "This patient has no active medication orders, so the interaction check had none to relate "
+				+ subject.displayLabel() + " to. [" + record.getIndex() + "]";
+	}
+
+	/**
 	 * The module's answer to a proposal that follows a list of drugs the question says she is on (ADR Decision 149),
 	 * or {@code null} where the model answers. <em>"The patient is currently on Lamivudine, Nevirapine, Stavudine, is
 	 * it safe to give metformin?"</em>, asked of a chart holding none of the three, was answered by the model <em>"The
@@ -3257,7 +3299,9 @@ public class DrugReferenceInjector {
 	 * carry, a switched-off arm each made such an answer false, and each was found one after another.
 	 * So those questions keep the model call. The one negative answer the module composes is not this method's:
 	 * {@link #composeFromNoPair} states what the INTERACTION check established where it related the proposed
-	 * drug to none of her orders (issue #592, ADR Decision 143) — a claim about that check alone.
+	 * drug to none of her orders (issue #592, ADR Decision 143) — a claim about that check alone — and
+	 * {@link #composeFromNoActiveOrders} states that it had nothing to compare the drug against, for a patient
+	 * with no active medication orders (ADR Decision 158).
 	 *
 	 * <p><b>And the "No" is licensed by an INTERACTION, never by a contraindication.</b> An interaction
 	 * finding is a relationship the dataset RATES between two substances this module resolved; a

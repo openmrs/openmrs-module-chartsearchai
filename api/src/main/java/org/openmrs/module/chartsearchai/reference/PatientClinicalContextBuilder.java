@@ -31,6 +31,7 @@ import org.openmrs.Order;
 import org.openmrs.Patient;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.db.hibernate.HibernateUtil;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.util.PrivilegeConstants;
@@ -369,7 +370,11 @@ final class PatientClinicalContextBuilder {
 		boolean readCompleted = true;
 		boolean unaccountedFor = false;
 		try {
-			for (Order order : Context.getOrderService().getAllOrdersByPatient(patient)) {
+			for (Order listed : Context.getOrderService().getAllOrdersByPatient(patient)) {
+				// Unwrapped before the type test: an order the session already loaded as another order's
+				// previousOrder comes back as a proxy of Order, which is no instanceof DrugOrder, and was skipped —
+				// patient 7's first aspirin order, the one order 111 revised (ADR Decision 155).
+				Order order = HibernateUtil.getRealObjectFromProxy(listed);
 				if (!(order instanceof DrugOrder) || order.getVoided()) {
 					continue;
 				}

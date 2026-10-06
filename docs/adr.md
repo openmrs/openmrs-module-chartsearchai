@@ -157,6 +157,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 152: A question whose first word lost its leading letters is read as the word it was clipped from](#decision-152-a-question-whose-first-word-lost-its-leading-letters-is-read-as-the-word-it-was-clipped-from)
 - [Decision 153: A module's "No" states brief lines, keeping a folded class sentence](#decision-153-a-modules-no-states-brief-lines-keeping-a-folded-class-sentence)
 - [Decision 154: A question whether she has ever taken a drug no order of hers carried is answered by the module](#decision-154-a-question-whether-she-has-ever-taken-a-drug-no-order-of-hers-carried-is-answered-by-the-module)
+- [Decision 155: A question whether she has ever taken a drug her orders carried states each order and whether it is in force](#decision-155-a-question-whether-she-has-ever-taken-a-drug-her-orders-carried-states-each-order-and-whether-it-is-in-force)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -14321,3 +14322,56 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aDrugNoOrderOfHersEv
 `.aHistoryQuestionAboutADrugSheTakesStillAsksTheModel` and `.aHistoryQuestionAboutADrugOnlyAnEndedOrderCarriedStillAsksTheModel`
 (the substance test), `.aHistoryQuestionWhoseDrugAChartRecordNamesStillAsksTheModel` (the record test) and
 `.aHistoryQuestionBesideAnOrderTheDataCannotNameStillAsksTheModel` (the resolution test).
+
+## Decision 155: A question whether she has ever taken a drug her orders carried states each order and whether it is in force
+
+**Status: Accepted** (October 2026) — implemented, no issue. The positive half of
+[Decision 154](#decision-154-a-question-whether-she-has-ever-taken-a-drug-no-order-of-hers-carried-is-answered-by-the-module),
+and a correction to its order-history read.
+
+### Context
+
+*"Has she ever taken Metoclopramide?"*, asked of Susan, who is on it, was answered by the model *"Yes — Metoclopramide was
+ordered on 2026-08-03 [8]."* It did not say she still is, though her chart's record of that order carries the module's own
+stamp that it is in force.
+
+### The decision
+
+- **`DrugReferenceInjector.composeOrdersCarrying`** answers where orders of hers carried the drug: *"This patient's chart
+  records 2 Acetylsalicylic acid (aspirin) orders:"*, then one line per order — *"ASPIRIN — ended 2008-08-15, ordered
+  2008-08-08. [3]"*, *"ASPIRIN — active, ordered 2008-08-15. [2]"* — each citing the order's `drug_order` record. Its
+  status is the record's `getOrderActive()`, its end `getOrderStopDate()`, its date the record's own; never a reading of
+  the record's text, and never a date the stamps do not carry.
+- **Which orders carried the drug is asked of each order alone**, through `findForActiveOrders` over a context of that one
+  order: the resolution Decision 154's negative test reads over the whole history. Not through
+  `DrugSafetyValidator.resolvesFrom`, whose name leg is deliberately wider than the candidate set.
+- **Fail-closed**: Decision 154's gates — one substance, the history read in full, every order resolved — and every order
+  that carried the drug must have a record in the question's chart whose in-force stamp is not `null`. An answer citing
+  some of her orders would read as all of them.
+
+### A defect in Decision 154's read, found here
+
+`buildOrderHistory` skipped an order core handed back as a Hibernate proxy of `Order`, which is no `instanceof
+DrugOrder`. An order the session has already loaded as another order's `previousOrder` comes back that way: patient 7's
+first aspirin order, the one order 111 revised, was left out of her history. So Decision 154's "no order, active or ended"
+could be false for a drug whose only order was so loaded. Each order is now unwrapped
+(`HibernateUtil.getRealObjectFromProxy`) before the type test. The active-order read in `build` asks the same type test of
+`getActiveOrders` and was not changed: an active order is not normally another order's `previousOrder`, and no case
+reproduced a proxy there.
+
+### The gate
+
+Pre-registered, :8081 (`chartMode` stored as `fullChart`), local E4B, the shipped prompt, 2026-10-06: `main` @ 6aa25193
+(omod 340a2266) against this change (omod 5f879de5) over 83 cells — gate 20's 80 and three history questions about drugs
+the patients hold. **It passed.** All 66 non-history cells were byte-identical, and so was every history answer Decision
+154 composed: the proxy fix moved none of them. Five history cells became the module's — Susan's lidocaine, metoclopramide
+and neomycin, Kamwara's nevirapine and lamivudine — each one order, each *"— active, ordered <day>. [n]"* citing its
+`drug_order` record. For each, the orders table, read by SQL after capture, holds exactly that many non-voided orders
+naming the drug, none stopped or expired. Their chips were arm A's. *"Has she ever taken Metoclopramide?"* now reads
+*"This patient's chart records 1 Metoclopramide order:"* / *"Metoclopramide — active, ordered 2026-08-03. [8]"*.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aHistoryQuestionAboutADrugSheIsOnStatesEveryOrderAndWhichIsInForce`
+(both statuses, and the proxied order), `.aHistoryQuestionAboutADrugOnlyAnEndedOrderCarriedStatesWhenItEnded`,
+`.aHistoryQuestionWhoseOrdersAreNotAllCitableStillAsksTheModel` (the record test) and
+`.aHistoryQuestionWhoseOrderRecordCarriesNoStampStillAsksTheModel` (the stamp test, which also asserts the injection still
+ran: without the guard a null stamp throws and the whole injection is dropped).

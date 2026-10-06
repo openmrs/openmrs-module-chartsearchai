@@ -41,6 +41,7 @@ import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 
@@ -130,6 +131,14 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	private static TestableService serviceWith(RecordingProvider provider) {
 		return serviceWith(provider, DrugReferenceTestSupport.ddinterServiceWithGroups());
+	}
+
+	/** {@link #serviceWith(RecordingProvider, DrugReferenceService)} over a chart of {@code records}. */
+	private static TestableService serviceWithChart(RecordingProvider provider, DrugReferenceService reference,
+			RecordMapping... records) {
+		TestableService service = serviceWith(provider, reference);
+		service.setChartBuildingStrategy(new StubStrategy(records));
+		return service;
 	}
 
 	private static TestableService serviceWith(RecordingProvider provider, DrugReferenceService reference) {
@@ -1112,6 +1121,67 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ aspirin.index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", answer.getAnswer());
 	}
 
+	/**
+	 * A question asking whether she has ever taken a drug no order of hers ever carried is answered by the module with
+	 * that, scoped to orders (ADR Decision 154). <em>"has she ever taken aspirin?"</em>, asked of Susan, whose chart has
+	 * never held it, was answered "The records do not address aspirin." The shipped data's mebendazole is no order of
+	 * this patient's, active or ended.
+	 */
+	@Test
+	public void aDrugNoOrderOfHersEverCarriedIsAnsweredWithThatScopedToOrders() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Has she ever taken mebendazole?");
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals("This patient's chart records no Mebendazole order, active or ended.\n"
+				+ "A drug recorded only in a note, or given outside this chart, is not covered.", answer.getAnswer());
+	}
+
+	/** A drug she is taking keeps the model call, whose answer cites the order (ADR Decision 154): her aspirin. */
+	@Test
+	public void aHistoryQuestionAboutADrugSheTakesStillAsksTheModel() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Has she ever taken aspirin?");
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+	}
+
+	/** A drug she had only as an ENDED order keeps the model call too (ADR Decision 154): patient 6's one drug order,
+	 *  Triomune-30, lapsed in 2008, and lamivudine is one of its substances. */
+	@Test
+	public void aHistoryQuestionAboutADrugOnlyAnEndedOrderCarriedStillAsksTheModel() throws Exception {
+		executeDataSet("DrugOrderCurrencyTestData.xml");
+		Patient six = Context.getPatientService().getPatient(6);
+		RecordingProvider control = new RecordingProvider();
+		ChartAnswer none = serviceWith(control, shipped()).search(six, "Has she ever taken mebendazole?");
+		assertEquals(0, control.calls, "positive control, the module answers for a drug no order carried: "
+				+ none.getAnswer());
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(six, "Has she ever taken lamivudine?");
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+	}
+
+	/** A chart record naming the drug keeps the model call (ADR Decision 154): it may record the drug given outside an
+	 *  order, which the answer's scope would otherwise only disclaim. */
+	@Test
+	public void aHistoryQuestionWhoseDrugAChartRecordNamesStillAsksTheModel() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWithChart(provider, shipped(),
+				DrugReferenceTestSupport.obsRecord(1, "Mebendazole 100 mg given at the clinic")).search(patient,
+						"Has she ever taken mebendazole?");
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+	}
+
+	/** An order the data cannot resolve may be the drug asked about, so the model answers (ADR Decision 154). */
+	@Test
+	public void aHistoryQuestionBesideAnOrderTheDataCannotNameStillAsksTheModel() throws Exception {
+		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Has she ever taken mebendazole?");
+		assertEquals(1, provider.calls, "the model is asked: " + answer.getAnswer());
+	}
+
 	/** The one finding in the prompt for {@code question} whose text opens {@code opening}, failing where there is not
 	 *  exactly one. */
 	private Finding findingNamed(String question, String opening) {
@@ -2018,9 +2088,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** One obs record: the chart this path joins the injected records onto. */
 	private static final class StubStrategy extends ChartBuildingStrategy {
 
+		private final RecordMapping[] records;
+
+		private StubStrategy(RecordMapping... records) {
+			this.records = records.length == 0
+					? new RecordMapping[] { DrugReferenceTestSupport.obsRecord(1, "BP 120/80") }
+					: records;
+		}
+
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
-			return DrugReferenceTestSupport.chartOf(DrugReferenceTestSupport.obsRecord(1, "BP 120/80"));
+			return DrugReferenceTestSupport.chartOf(records);
 		}
 
 		@Override

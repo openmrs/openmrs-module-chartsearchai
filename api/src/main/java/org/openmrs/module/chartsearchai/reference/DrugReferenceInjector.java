@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -583,7 +584,9 @@ public class DrugReferenceInjector {
 			if (readStatus != null) {
 				readStatus.record(context.chartReadForSafety());
 			}
-			return injectRecords(chart, context, question);
+			// The order history is read only where a question asks whether she has ever taken a drug (ADR Decision 154),
+			// so every other question costs what it did.
+			return injectRecords(chart, context, question, () -> PatientClinicalContextBuilder.buildOrderHistory(patient));
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-reference injection failed; leaving the chart unmodified — the answer path is never broken",
@@ -598,6 +601,16 @@ public class DrugReferenceInjector {
 	 * {@code injectFromQuery} / {@code injectFromOrders} toggles.
 	 */
 	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question) {
+		return injectRecords(chart, rawContext, question, null);
+	}
+
+	/**
+	 * {@link #injectRecords(PatientChart, PatientClinicalContext, String)}, with {@code orderHistory} supplying every
+	 * drug order the patient ever had ({@code PatientClinicalContextBuilder.buildOrderHistory}) for the one answer that
+	 * needs it, read only if asked (ADR Decision 154). {@code null} composes no such answer.
+	 */
+	PatientChart injectRecords(PatientChart chart, PatientClinicalContext rawContext, String question,
+			Supplier<PatientClinicalContext> orderHistory) {
 		// The same resolution DrugSafetyValidator.validate applies, for the same reason
 		// (issue #136): orderedInteractionNotes decides which interactions to promote through
 		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would
@@ -946,6 +959,15 @@ public class DrugReferenceInjector {
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent, mappings, matched, context, reading.states());
+		}
+		if (moduleAnswer == null && !historyQuestionDrugRows.isEmpty() && orderHistory != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)) {
+			PatientClinicalContext history = orderHistory.get();
+			moduleAnswer = composeNoOrderEver(drugReferenceService, questionDrugs, history,
+					history == null ? Collections.<DrugReference> emptyList() : drugReferenceService.findForActiveOrders(history),
+					chart.getMappings(), context);
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
@@ -3071,6 +3093,55 @@ public class DrugReferenceInjector {
 			joined.append(items.get(i));
 		}
 		return joined.toString();
+	}
+
+	/** What an answer that no order of hers carried the drug does not cover, stated under it (ADR Decision 154). */
+	static final String NO_ORDER_EVER_SCOPE = "A drug recorded only in a note, or given outside this chart, is not covered.";
+
+	/**
+	 * The module's answer to a question whether she has ever taken one drug that no order of hers, active or ended,
+	 * ever carried (ADR Decision 154), or {@code null} where the model answers. <em>"has she ever taken aspirin?"</em>,
+	 * asked of Susan, whose chart has never held it, was answered "The records do not address aspirin."
+	 *
+	 * <p>It states what her orders establish and no more: <em>"This patient's chart records no Mebendazole order,
+	 * active or ended."</em>, then {@link #NO_ORDER_EVER_SCOPE}. Only the negative: where an order did carry the drug
+	 * the model answers from the order's record, which it cites.
+	 *
+	 * <p>Fail-closed: the question names ONE substance; her order history was read in full
+	 * ({@code activeDrugOrdersRead()} of the history context, which a failed read or an order whose coded drug could
+	 * not be read takes off); every order in it resolves to the reference data
+	 * ({@link DrugSafetyValidator#everyActiveOrderResolves}, asked of the whole history), since an order it cannot name
+	 * may be the drug; none of those orders' substances is the drug's; and no record of the chart built for the
+	 * question names the drug ({@link DrugReference#matchesText}) outside the module's own reference material, since
+	 * such a record — a note, an observation — may record it given without an order, which the scope line would
+	 * otherwise only disclaim. That last reads the chart the question was given, which in query-scoped mode is a slice
+	 * and not every record: a note the slice did not carry is not seen, the residue the scope line states.
+	 */
+	private static String composeNoOrderEver(DrugReferenceService service, List<DrugReference> questionDrugs,
+			PatientClinicalContext history,
+			List<DrugReference> historyEntries, List<RecordMapping> chartRecords, PatientClinicalContext context) {
+		Set<Object> asked = new HashSet<Object>();
+		for (DrugReference entry : questionDrugs) {
+			asked.add(entry.substanceGroupKey());
+		}
+		if (asked.size() != 1 || history == null || !history.activeDrugOrdersRead()
+				|| !DrugSafetyValidator.everyActiveOrderResolves(service, history, historyEntries)
+				|| !Collections.disjoint(asked, DrugSafetyValidator.substancesOf(historyEntries))) {
+			return null;
+		}
+		for (RecordMapping record : chartRecords) {
+			if (ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
+					ChartSearchAiUtils.referenceGroup(record.getResourceType()))) {
+				continue;
+			}
+			for (DrugReference entry : questionDrugs) {
+				if (entry.matchesText(record.getText())) {
+					return null;
+				}
+			}
+		}
+		return "This patient's chart records no " + DrugSafetyValidator.interactionSubject(questionDrugs, context)
+				.displayLabel() + " order, active or ended.\n" + NO_ORDER_EVER_SCOPE;
 	}
 
 	/** The row the response names the substance of {@code record} by — {@link DrugSafetyValidator#interactionSubject}

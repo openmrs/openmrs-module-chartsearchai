@@ -22,7 +22,8 @@ public interface ConversationDAO {
 
 	ClinicalConversation saveConversation(ClinicalConversation conversation);
 
-	ClinicalConversation getConversation(Integer conversationId);
+	/** Updates activity without overwriting a conversation closed by another request. */
+	void touchConversation(Integer conversationId, Date activityAt);
 
 	/**
 	 * Loads and locks a conversation for a short write transaction. Turn allocation uses this
@@ -43,7 +44,8 @@ public interface ConversationDAO {
 	int getLastOrdinal(ClinicalConversation conversation);
 
 	/**
-	 * Deletes turns completed before the retention horizon, then conversation headers with no
+	 * Deletes turns completed before the retention horizon (or started before it if unfinished),
+	 * then conversation headers with no
 	 * surviving turns whose last activity is also before the horizon.
 	 */
 	int purgeBefore(Date before);

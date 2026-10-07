@@ -13,7 +13,7 @@ import java.util.Date;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
-import org.openmrs.module.chartsearchai.api.AuditLogService;
+import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.scheduler.tasks.AbstractTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +24,9 @@ import org.slf4j.LoggerFactory;
  * growth of the {@code chartsearchai_audit_log} table.
  *
  * <p>Retention period is controlled by the {@code chartsearchai.auditLogRetentionDays}
- * global property (default 90 days). Set to 0 to disable purging and retain all logs.</p>
+ * global property (default 90 days). Conversation content uses the separate
+ * {@code chartsearchai.chat.retentionDays} property (also 90 days). Setting either to 0 disables
+ * only that retention policy. Unfinished turns expire by their start time.</p>
  */
 public class AuditLogPurgeTask extends AbstractTask {
 
@@ -32,6 +34,11 @@ public class AuditLogPurgeTask extends AbstractTask {
 
 	@Override
 	public void execute() {
+		purgeAuditLogs();
+		purgeConversations();
+	}
+
+	private void purgeAuditLogs() {
 		int retentionDays = getRetentionDays();
 		if (retentionDays <= 0) {
 			log.info("Audit log purge disabled (retention days is 0)");
@@ -53,6 +60,25 @@ public class AuditLogPurgeTask extends AbstractTask {
 				deleted, retentionDays);
 	}
 
+	private void purgeConversations() {
+		String value = Context.getAdministrationService()
+				.getGlobalProperty(ChartSearchAiConstants.GP_CHAT_RETENTION_DAYS);
+		int days = parseRetentionDays(value, ChartSearchAiConstants.DEFAULT_CHAT_RETENTION_DAYS);
+		if (days <= 0) {
+			log.info("Chat history purge disabled (retention days is non-positive)");
+			return;
+		}
+		ConversationService service = Context.getRegisteredComponent(
+				"chartSearchAi.conversationService", ConversationService.class);
+		if (service == null) {
+			log.error("ConversationService not available, skipping chat history purge");
+			return;
+		}
+		Date cutoff = new Date(System.currentTimeMillis() - days * 24L * 60L * 60L * 1000L);
+		int deleted = service.purgeBefore(cutoff);
+		log.info("Chat history purge completed: deleted {} rows older than {} days", deleted, days);
+	}
+
 	int getRetentionDays() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_AUDIT_LOG_RETENTION_DAYS);
@@ -64,14 +90,18 @@ public class AuditLogPurgeTask extends AbstractTask {
 	 * if the value is null, empty, or not a valid integer.
 	 */
 	static int parseRetentionDays(String value) {
+		return parseRetentionDays(value, ChartSearchAiConstants.DEFAULT_AUDIT_LOG_RETENTION_DAYS);
+	}
+
+	private static int parseRetentionDays(String value, int defaultDays) {
 		if (value != null && !value.trim().isEmpty()) {
 			try {
 				return Integer.parseInt(value.trim());
 			}
 			catch (NumberFormatException e) {
-				log.warn("Invalid audit log retention value '{}', using default", value);
+				log.warn("Invalid retention value '{}', using default", value);
 			}
 		}
-		return ChartSearchAiConstants.DEFAULT_AUDIT_LOG_RETENTION_DAYS;
+		return defaultDays;
 	}
 }

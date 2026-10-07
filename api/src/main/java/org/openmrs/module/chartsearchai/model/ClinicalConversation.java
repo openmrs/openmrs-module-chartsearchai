@@ -27,8 +27,6 @@ public class ClinicalConversation implements Serializable {
 
 	public static final String STATUS_CLOSED = "closed";
 
-	public static final String STATUS_EXPIRED = "expired";
-
 	private static final long serialVersionUID = 1L;
 
 	private Integer conversationId;
@@ -48,8 +46,6 @@ public class ClinicalConversation implements Serializable {
 	private Date lastActivityAt;
 
 	private Date endedAt;
-
-	private String title;
 
 	private String status = STATUS_ACTIVE;
 
@@ -123,14 +119,6 @@ public class ClinicalConversation implements Serializable {
 
 	public void setEndedAt(Date endedAt) {
 		this.endedAt = endedAt;
-	}
-
-	public String getTitle() {
-		return title;
-	}
-
-	public void setTitle(String title) {
-		this.title = title;
 	}
 
 	public String getStatus() {

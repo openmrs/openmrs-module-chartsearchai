@@ -275,8 +275,8 @@ public class LocalLlmEngine implements LlmEngine {
 	 * {@code /tokenize} endpoint (llama.cpp server API) — mirrors med-agent-hub's
 	 * {@code RouterTokenCounter.count()}, which likewise delegates counting to the real engine
 	 * rather than approximating in the application layer. Starts the server first if it is not
-	 * already running: a token-budget check only ever precedes a generation call that would need
-	 * the server running anyway, so this adds no new cold-start cost.
+	 * already running. A budget check may reject the request before generation; the idle timer
+	 * still unloads a server started only for counting.
 	 */
 	synchronized int countTokens(String text) {
 		ensureServerRunning();
@@ -289,6 +289,9 @@ public class LocalLlmEngine implements LlmEngine {
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new APIException("Local llama-server /tokenize call was interrupted", e);
+		}
+		finally {
+			resetIdleTimer();
 		}
 	}
 
@@ -304,6 +307,9 @@ public class LocalLlmEngine implements LlmEngine {
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new APIException("Local chat input token count was interrupted", e);
+		}
+		finally {
+			resetIdleTimer();
 		}
 	}
 
@@ -899,6 +905,7 @@ public class LocalLlmEngine implements LlmEngine {
 		}
 
 		startServer(modelPath);
+		resetIdleTimer();
 	}
 
 	/**

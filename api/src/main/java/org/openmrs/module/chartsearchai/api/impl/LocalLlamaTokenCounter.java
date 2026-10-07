@@ -13,6 +13,7 @@ import java.util.List;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +30,9 @@ public class LocalLlamaTokenCounter implements TokenCounter {
 
 	@Autowired
 	private LocalLlmEngine localLlmEngine;
+
+	@Autowired
+	private LlmProvider llmProvider;
 
 	/** Test seam: production wires {@link LocalLlmEngine} via {@link Autowired}. */
 	void setLocalLlmEngine(LocalLlmEngine localLlmEngine) {
@@ -48,28 +52,11 @@ public class LocalLlamaTokenCounter implements TokenCounter {
 	}
 
 	@Override
-	public int count(String text) {
-		return localLlmEngine.countTokens(text);
-	}
-
-	@Override
-	public int countPrompt(String numberedRecords, String question) {
-		return localLlmEngine.countChatInputTokens(systemPrompt(),
-				LlmProvider.buildUserMessage(numberedRecords, question));
-	}
-
-	@Override
-	public int countPrompt(String numberedRecords, List<Integer> focusIndices, String question) {
-		return localLlmEngine.countChatInputTokens(systemPrompt(),
-				LlmProvider.buildUserMessage(numberedRecords, focusIndices, question));
-	}
-
-	/** Package-visible configuration seam for a context-free contract test. */
-	String systemPrompt() {
-		String configured = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
-		return configured == null || configured.trim().isEmpty()
-				? LlmProvider.DEFAULT_SYSTEM_PROMPT : configured.trim();
+	public int countPrompt(String numberedRecords, List<Integer> focusIndices, String question,
+			boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
+		LlmProvider.AnswerMessages messages = llmProvider.answerMessages(numberedRecords, focusIndices,
+				question, enumerateFindings, drugsAlreadyOrdered);
+		return localLlmEngine.countChatInputTokens(messages.system, messages.user);
 	}
 
 	@Override

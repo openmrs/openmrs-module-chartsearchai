@@ -99,7 +99,7 @@ public class LocalLlmEngineTest {
 		AtomicReference<String> requestBody = new AtomicReference<>();
 		AtomicReference<String> authorization = new AtomicReference<>();
 		tokenizeServer = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
-		tokenizeServer.createContext("/v1/chat/completions/input_tokens", exchange -> {
+		tokenizeServer.createContext("/v1/messages/count_tokens", exchange -> {
 			authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
 			requestBody.set(new String(exchange.getRequestBody().readAllBytes(),
 					StandardCharsets.UTF_8));
@@ -766,8 +766,9 @@ public class LocalLlmEngineTest {
 	}
 
 	@Test
-	public void parseTokenizeResponse_acceptsTheSummaryCountShapes() throws Exception {
-		assertEquals(7, LlmResponseParser.parseTokenizeResponse("{\"n_tokens\":7}"));
+	public void parseTokenizeResponse_rejectsUnsupportedSummaryShapes() throws Exception {
+		assertThrows(IOException.class, () -> LlmResponseParser.parseTokenizeResponse("{\"n_tokens\":7}"));
+		assertThrows(IOException.class, () -> LlmResponseParser.parseTokenizeResponse("{\"tokens\":7}"));
 	}
 
 	@Test

@@ -160,7 +160,7 @@ final class LlamaServerEndpoint {
 	}
 
 	String inputTokensUrl() {
-		return completionsUrl() + "/input_tokens";
+		return baseUrl() + "/v1/messages/count_tokens";
 	}
 
 	String healthUrl() {

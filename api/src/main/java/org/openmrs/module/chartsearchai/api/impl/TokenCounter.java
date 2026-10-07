@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.List;
 
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
+
 /**
  * An exact token count from the LLM engine actually serving this deployment — mirrors
  * med-agent-hub's {@code TokenCounter} protocol (server/context_sources.py), which likewise
@@ -30,21 +32,9 @@ public interface TokenCounter {
 	 */
 	boolean isAvailable();
 
-	/** Exact token count for {@code text} from the real, currently-configured engine. */
-	int count(String text);
-
-	/** Exact count for the assembled answer request, including chat-template and prompt overhead. */
-	default int countPrompt(String numberedRecords, String question) {
-		return count(numberedRecords);
-	}
-
-	/**
-	 * Exact count for the assembled answer request when the prompt includes a similarity focus
-	 * hint. Implementations that do not distinguish that prompt shape retain the legacy behavior.
-	 */
-	default int countPrompt(String numberedRecords, List<Integer> focusIndices, String question) {
-		return countPrompt(numberedRecords, question);
-	}
+	/** Exact count of the same assembled answer messages sent for inference, including all clauses. */
+	int countPrompt(String numberedRecords, List<Integer> focusIndices, String question,
+			boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered);
 
 	/** The current input budget: the engine's configured context window minus its output
 	 *  reservation — mirrors med-agent-hub's {@code ContextBudget.input_limit}. */

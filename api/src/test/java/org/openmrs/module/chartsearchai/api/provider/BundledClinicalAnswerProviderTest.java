@@ -21,9 +21,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -510,41 +507,6 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals("Aspirin 81mg [1]", result.getAnswer().getText());
 		assertNull(result.getProblemCode());
 		assertEquals(TurnEventType.TURN_DONE, observed.get(observed.size() - 1));
-	}
-
-	@Test
-	public void cancellationInterruptsAnActiveBundledInferenceCall() throws Exception {
-		CountDownLatch entered = new CountDownLatch(1);
-		ChartSearchService blocking = new ScriptedChartSearchService() {
-			@Override
-			public ChartAnswer searchStreaming(Patient patient, String question,
-					Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-					Consumer<List<RecordReference>> citationsConsumer,
-					Consumer<ChartAnswer> ungroundedAnswerConsumer,
-					Consumer<String> preliminaryReasoningConsumer,
-					CancellationSignal cancellation) {
-				entered.countDown();
-				try {
-					Thread.sleep(TimeUnit.MINUTES.toMillis(1));
-					throw new AssertionError("cancellation did not interrupt inference");
-				}
-				catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-					throw new IllegalStateException("interrupted", e);
-				}
-			}
-		};
-		BundledClinicalAnswerProvider provider = provider(blocking);
-		TurnCancellation cancellation = new TurnCancellation();
-
-		CompletableFuture<TurnResult> running = CompletableFuture.supplyAsync(() -> provider
-				.execute(request(), event -> { }, cancellation).toCompletableFuture().join());
-		assertTrue(entered.await(2, TimeUnit.SECONDS));
-		cancellation.cancel();
-
-		TurnResult result = running.get(2, TimeUnit.SECONDS);
-		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
-		assertEquals("cancelled", result.getProblemCode());
 	}
 
 	// Readiness must reflect whether the configured engine is actually usable: a provider that

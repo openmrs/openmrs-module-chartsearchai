@@ -21,6 +21,14 @@ public class ChartSearchAiConstants {
 	 *  clinical one. */
 	public static final String PRIV_MANAGE_PREWARM = "Manage AI Prewarm";
 
+	/** Comma-separated provider ids enabled by the administrator. */
+	public static final String GP_PROVIDERS_ENABLED = "chartsearchai.providers.enabled";
+
+	/** Provider preselected for new conversations. */
+	public static final String GP_DEFAULT_PROVIDER = "chartsearchai.providers.default";
+
+	public static final String DEFAULT_PROVIDER = "bundled";
+
 	public static final String GP_LLM_MODEL_FILE_PATH = "chartsearchai.llm.modelFilePath";
 
 	public static final String GP_EMBEDDING_PRE_FILTER = "chartsearchai.embedding.preFilter";

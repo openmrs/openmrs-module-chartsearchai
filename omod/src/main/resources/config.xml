@@ -45,6 +45,18 @@
 
 	<!-- Global Properties -->
 	<globalProperty>
+		<property>chartsearchai.providers.enabled</property>
+		<defaultValue>bundled</defaultValue>
+		<description>Comma-separated provider ids enabled for clinical answers, in display order. The bundled provider is enabled by default. Add hub only when its adapter and endpoint are configured. Unavailable providers remain visible but cannot serve turns.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.providers.default</property>
+		<defaultValue>bundled</defaultValue>
+		<description>Provider preselected for new conversations. Must name an enabled provider. If invalid, selection uses bundled when enabled, otherwise the first enabled provider. Existing conversations retain their provider.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.llm.engine</property>
 		<defaultValue>local</defaultValue>
 		<description>LLM inference engine. "local" (default) runs a GGUF model on the host via a bundled llama-server subprocess on the loopback interface — no external network calls, data stays on the server. "remote" calls an OpenAI-compatible chat completions API over the network — requires chartsearchai.llm.remote.endpointUrl, chartsearchai.llm.remote.apikey, and chartsearchai.llm.remote.modelName to be configured. Use "remote" for self-hosted GPU inference servers (vLLM, Ollama, text-generation-inference) or cloud-hosted models (OpenAI, Anthropic, Google AI).</description>

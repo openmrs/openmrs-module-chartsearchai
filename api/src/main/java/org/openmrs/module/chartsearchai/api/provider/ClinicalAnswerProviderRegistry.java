@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -36,14 +37,6 @@ import org.springframework.stereotype.Service;
 @Service("chartSearchAi.clinicalAnswerProviderRegistry")
 public class ClinicalAnswerProviderRegistry {
 
-	/** Comma-separated ordered provider ids configuration enables. Fresh-install default: bundled only. */
-	public static final String GP_PROVIDERS_ENABLED = "chartsearchai.providers.enabled";
-
-	/** The provider preselected for new conversations. Must be an enabled provider. */
-	public static final String GP_DEFAULT_PROVIDER = "chartsearchai.providers.default";
-
-	public static final String FRESH_INSTALL_DEFAULT = BundledClinicalAnswerProvider.PROVIDER_ID;
-
 	private final Map<String, ClinicalAnswerProvider> providersById = new LinkedHashMap<>();
 
 	@Autowired
@@ -63,7 +56,7 @@ public class ClinicalAnswerProviderRegistry {
 	/** The configured enabled provider ids, in configuration order. */
 	public List<String> enabledProviderIds() {
 		List<String> ids = new ArrayList<>();
-		for (String id : gp(GP_PROVIDERS_ENABLED, FRESH_INSTALL_DEFAULT).split(",")) {
+		for (String id : gp(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, ChartSearchAiConstants.DEFAULT_PROVIDER).split(",")) {
 			String trimmed = id.trim();
 			if (!trimmed.isEmpty() && !ids.contains(trimmed)) {
 				ids.add(trimmed);
@@ -104,14 +97,14 @@ public class ClinicalAnswerProviderRegistry {
 	 */
 	public String getDefaultProviderId() {
 		List<String> enabled = enabledProviderIds();
-		String configured = gp(GP_DEFAULT_PROVIDER, FRESH_INSTALL_DEFAULT);
+		String configured = gp(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, ChartSearchAiConstants.DEFAULT_PROVIDER);
 		if (enabled.contains(configured)) {
 			return configured;
 		}
-		if (enabled.contains(FRESH_INSTALL_DEFAULT)) {
-			return FRESH_INSTALL_DEFAULT;
+		if (enabled.contains(ChartSearchAiConstants.DEFAULT_PROVIDER)) {
+			return ChartSearchAiConstants.DEFAULT_PROVIDER;
 		}
-		return enabled.isEmpty() ? FRESH_INSTALL_DEFAULT : enabled.get(0);
+		return enabled.isEmpty() ? ChartSearchAiConstants.DEFAULT_PROVIDER : enabled.get(0);
 	}
 
 	/** The picker only exists when there is an actual choice. */

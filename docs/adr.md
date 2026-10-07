@@ -12170,7 +12170,8 @@ as hers with the gate's two changes came after arm F and ran in none of the arms
 ## Decision 124: An allergy question states her conflicting orders in the answer
 
 **Status: Accepted** (September 2026) — implemented. `ConflictingOrderStatement`, the
-`SafetyWarning.isStatedInTheAnswer()` accessor and its `statedInTheAnswer` wire key.
+`SafetyWarning.isStatedInTheAnswer()` accessor and its `statedInTheAnswer` wire key. Its wording is amended by
+[Decision 167](#decision-167-an-order-conflicting-only-with-its-own-recorded-allergy-is-named-in-one-short-line).
 
 ### Context
 
@@ -14827,3 +14828,48 @@ module appends does (Decision 80's rule).
 `…searchStreaming_statesTheClassNoteOnTheUngroundedAnswerAndTheFinalOne` failed before the change.
 `…anAnswerCitingTheClassNoteIsLeftAsItIs` fails when the citation guard is removed, and the streaming case fails when
 the early answer is left without the sentence.
+
+## Decision 167: An order conflicting only with its own recorded allergy is named in one short line
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends the wording of
+[Decision 124](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer).
+
+### Context
+
+*"any allergies"*, asked on the 3.7.1 standalone of Susan Young (`763e6e5f…`, allergic to Lidocaïne, Tetryzoline
+and Tiotropium, prescribed Tiotropium and Lidocaine), was answered on 2026-10-07:
+
+> Yes — the patient has the following allergies: Lidocaïne [1], Tetryzoline [2], and Tiotropium [3]. Currently
+> prescribed: Tiotropium. The patient has a recorded allergy to Tiotropium. Currently prescribed: Lidocaine. The
+> patient has a recorded allergy to Lidocaine.
+
+Every word is true, and the one fact the list lacks — two of the allergens are drugs she is prescribed — reads as
+four flat sentences, each allergy sentence repeating what the list had just said. The owner's ruling: name the
+orders once, in one line, without the chips' sentences.
+
+### The decision
+
+- **An order whose every finding is an allergy recorded to its very drug is named in one line**:
+  *"Currently prescribed despite a recorded allergy: Tiotropium; Lidocaine."* — her orders as her chart spells
+  them, semicolons between them since a display can carry a comma, before any other order the statement names.
+- **Which findings qualify is fixed where the chip is built**, `SafetyWarning.isARecordedAllergyToItsOwnDrug()`,
+  written only by `recordedAllergenContraindication`: the identity sentence where the recorded name NAMES the row.
+  Its other form exists because the module could not say the allergy is to that drug, the two cross-reactivity
+  sentences are an allergy to ANOTHER drug, and a rule finding may be no allergy at all, so for each "despite a
+  recorded allergy" would claim what the chart does not say.
+- **Any other order keeps Decision 124's form** — the order, then each finding about it verbatim — and so does an
+  order with one finding of each kind, so no finding is marked stated while the answer drops it.
+- Decision 124's gate, all-or-nothing rule and `statedInTheAnswer` marking are unchanged.
+
+### Residues
+
+- The line does not read the model's prose, so it follows a list that already named the drug, as Decision 124's
+  statement did.
+- An identity chip's own sentence no longer appears in the answer, so `statedInTheAnswer` is `true` on a chip whose
+  `detail` the answer does not carry; it states the finding, not its words.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest` — the one-order and two-order lines, the cross-reactivity
+order kept in the chip's words, and one order with both kinds of finding — and, for the flag, by
+`RecordedAllergenChipNameTest.onlyTheChipNamingTheRecordedAllergyIsAnAllergyToItsOwnDrug`. Making the flag true for
+the relationship sentence reddens that case; true for a cross-reactivity sentence, the two cross-reactivity cases;
+"any finding" for "every finding", the mixed case; a comma for the semicolon, the two-order case.

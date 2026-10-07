@@ -84,12 +84,13 @@ public final class SafetyWarningFixtures {
 	 * (issue #527). {@code aboutACurrentMedication} is that factory's own parameter: {@code true} as
 	 * {@code DrugSafetyValidator.addActiveOrderContraindications} passes it for one of her active orders,
 	 * {@code false} as the drug-in-play loop passes it for a drug the question or the answer put in play.
-	 * {@code chartRecords} is empty, being on no chip key.
+	 * {@code chartRecords} is empty, being on no chip key; {@code isARecordedAllergyToItsOwnDrug} is false,
+	 * being on no wire key.
 	 */
 	public static SafetyWarning recordedAllergenContraindication(String drug, String detail,
 			boolean aboutACurrentMedication) {
 		return SafetyWarning.recordedAllergenContraindication(drug, detail, aboutACurrentMedication,
-			Collections.<String> emptySet());
+			Collections.<String> emptySet(), false);
 	}
 
 	/**

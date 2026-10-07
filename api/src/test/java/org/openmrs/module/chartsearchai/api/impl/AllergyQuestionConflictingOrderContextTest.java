@@ -53,6 +53,12 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 	private static final String SLICE = "chartsearchai-test/ddi-listed-medications-proposal.json";
 
+	/** Aspirin and clopidogrel, which share ATC subgroup B01AC — see the slice's own note. */
+	private static final String CROSS_REACTIVE_SLICE = "chartsearchai-test/ddi-allergy-cross-reactive-order.json";
+
+	/** WEIGHT, a concept no drug resolves from, standing in for "other non-coded" for a second free-text allergy. */
+	private static final int SECOND_PLACEHOLDER_CONCEPT = 5089;
+
 	private static final String ALLERGY_QUESTION = "any allergies?";
 
 	private static final String MODEL_ANSWER = "Yes — the patient has a recorded allergy to Aspirin [1].";
@@ -65,16 +71,23 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 	private Patient patient;
 
+	/** The free-text aspirin allergy every case starts from. */
+	private String aspirinAllergyUuid;
+
 	@BeforeEach
 	public void setUp() {
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
 		patient = Context.getPatientService().getPatient(7);
-		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		aspirinAllergyUuid = DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
 	}
 
 	private static TestableService serviceAnswering(String modelAnswer) throws IOException {
-		DrugReferenceService references = DrugReferenceTestSupport.ddiFixtureService(SLICE);
+		return serviceAnswering(modelAnswer, SLICE);
+	}
+
+	private static TestableService serviceAnswering(String modelAnswer, String slice) throws IOException {
+		DrugReferenceService references = DrugReferenceTestSupport.ddiFixtureService(slice);
 		TestableService service = new TestableService();
 		service.setChartBuildingStrategy(new StubStrategy(DrugReferenceTestSupport.obsRecord(1, "BP 120/80")));
 		service.setLlmProvider(new Recorder(modelAnswer));
@@ -101,9 +114,10 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);
 
 		SafetyWarning chip = theAspirinChip(answer);
-		assertEquals(MODEL_ANSWER + " Currently prescribed: " + ORDER_DISPLAY + ". " + chip.getDetail(),
+		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: " + ORDER_DISPLAY + ".",
 				answer.getAnswer(),
-				"the answer names her order as her chart spells it, then states the chip's own finding");
+				"an allergy recorded to the very drug she is prescribed is stated as one short line naming her order "
+						+ "as her chart spells it, not as her order followed by the chip repeating the allergy list");
 		assertTrue(chip.isStatedInTheAnswer(),
 				"the chip says the answer states it, so a client need not render it a second time");
 	}
@@ -115,12 +129,80 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				token -> { }, reasoning -> { }, citations -> { }, early::add);
 
 		SafetyWarning chip = theAspirinChip(answer);
-		assertEquals(MODEL_ANSWER + " Currently prescribed: " + ORDER_DISPLAY + ". " + chip.getDetail(),
+		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: " + ORDER_DISPLAY + ".",
 				answer.getAnswer(), "the streaming path completes the final answer the same way");
 		assertTrue(chip.isStatedInTheAnswer(), "and marks the chip the same way");
 		assertEquals(1, early.size(), "precondition: the early done fired");
 		assertEquals(MODEL_ANSWER, early.get(0).getAnswer(),
 				"the early done carries no chips, so it states nothing about them either");
+	}
+
+	/**
+	 * The reported shape: two of her orders, each the drug of one of her recorded allergies. Patient 2 of the
+	 * standard dataset holds an aspirin order and Triomune-30, which carries nevirapine; she is recorded as
+	 * allergic to both. One line names both orders as her chart spells them, a semicolon between them, since
+	 * a display can carry a comma.
+	 */
+	@Test
+	public void search_twoOrdersEachConflictingWithItsOwnAllergyShareOneLine() throws IOException {
+		Patient two = Context.getPatientService().getPatient(2);
+		DrugReferenceTestSupport.recordFreeTextAllergy(two, 88, "Aspirin");
+		DrugReferenceTestSupport.recordFreeTextAllergy(two, SECOND_PLACEHOLDER_CONCEPT, "Nevirapine");
+
+		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(Context.getPatientService().getPatient(2),
+				ALLERGY_QUESTION);
+
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertTrue(chip.isStatedInTheAnswer(), "every chip is stated, was: " + chip);
+		}
+		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: Triomune-30; ASPIRIN.",
+				answer.getAnswer(), "both orders in one line, chips were: " + answer.getSafetyWarnings());
+	}
+
+	/**
+	 * A chip raised by an allergy to a DIFFERENT drug of the same class is not "a recorded allergy" to her
+	 * order, so the short line would say something the chart does not: her order is named and the chip's own
+	 * sentence quoted after it, as before ADR Decision 167.
+	 */
+	@Test
+	public void search_aCrossReactiveAllergyIsStatedInTheChipsOwnWords() throws IOException {
+		Context.getPatientService().voidAllergy(Context.getPatientService().getAllergyByUuid(aspirinAllergyUuid),
+				"this case's only allergy is clopidogrel");
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
+		String modelAnswer = "Yes — the patient has a recorded allergy to Clopidogrel [1].";
+
+		ChartAnswer answer = serviceAnswering(modelAnswer, CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
+
+		SafetyWarning chip = theAspirinChip(answer);
+		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Clopidogrel"),
+				"precondition: the chip is the cross-reactivity finding, was: " + chip.getDetail());
+		assertEquals(modelAnswer + " Currently prescribed: " + ORDER_DISPLAY + ". " + chip.getDetail() + ".",
+				answer.getAnswer(), "the order is named and the finding quoted, claiming no allergy to the order itself");
+		assertTrue(chip.isStatedInTheAnswer(), "and the chip is still marked stated");
+	}
+
+	/**
+	 * Both kinds about ONE order: the order is named once, in the form that quotes every finding about it, so
+	 * the cross-reactivity finding is not marked stated while the answer drops it.
+	 */
+	@Test
+	public void search_anOrderWithACrossReactiveFindingBesideItsOwnAllergyQuotesEveryFinding() throws IOException {
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, SECOND_PLACEHOLDER_CONCEPT, "Clopidogrel");
+
+		ChartAnswer answer = serviceAnswering(MODEL_ANSWER, CROSS_REACTIVE_SLICE).search(patient, ALLERGY_QUESTION);
+
+		List<String> details = new ArrayList<String>();
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			assertTrue(chip.isStatedInTheAnswer(), "every chip is stated, was: " + chip);
+			details.add(chip.getDetail());
+		}
+		assertEquals(2, details.size(), "precondition: her own aspirin allergy and the clopidogrel cross-reactivity "
+				+ "both raise a chip, chips were: " + answer.getSafetyWarnings());
+		assertEquals(MODEL_ANSWER + " Currently prescribed: " + ORDER_DISPLAY + ". " + details.get(0) + " "
+				+ details.get(1) + ".", answer.getAnswer(), "the order once, then each finding about it in its own words");
 	}
 
 	@Test

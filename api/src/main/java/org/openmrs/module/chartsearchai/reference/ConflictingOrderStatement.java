@@ -12,8 +12,10 @@ package org.openmrs.module.chartsearchai.reference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 
@@ -30,11 +32,16 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * clinician only as a drug-safety alert beside an answer to a question that asked for none.
  *
  * <p><b>What it does.</b> Each contraindication chip about a medication she already takes whose orders
- * the arm could name ({@link SafetyWarning#currentOrderDisplays()}) is stated after the answer: her
- * order as her chart spells it, then the chip's own {@link SafetyWarning#getDetail()} verbatim — never a
- * paraphrase, so the sentence claims exactly what the finding does and no strength of its own. Every
- * such chip is then {@link SafetyWarning#asStatedInTheAnswer() marked}, and still published: the wire
- * keeps every finding, and a client reads {@code statedInTheAnswer} to know the clinician has read it.
+ * the arm could name ({@link SafetyWarning#currentOrderDisplays()}) is stated after the answer, her
+ * orders as her chart spells them. An order whose every finding is an allergy recorded to its very drug
+ * ({@link SafetyWarning#isARecordedAllergyToItsOwnDrug()}) is named in ONE short line, <em>"Currently
+ * prescribed despite a recorded allergy: Tiotropium; Lidocaine."</em> — the chips' own sentences repeat
+ * the allergy list the answer just gave, and the conflict is the one fact the list lacks (ADR Decision
+ * 167). Any other order is named and followed by each chip's own {@link SafetyWarning#getDetail()}
+ * verbatim, as Decision 124 states it: a cross-reactivity or rule finding is an allergy to ANOTHER drug or
+ * no allergy at all, so only its own words claim exactly what it does. Every such chip is then
+ * {@link SafetyWarning#asStatedInTheAnswer() marked}, and still published: the wire keeps every finding,
+ * and a client reads {@code statedInTheAnswer} to know the clinician has read it.
  * APPENDS, as {@code EndedOrderStatement} does: no marker, since it offers no record of its own; no
  * prompt change; and never a word about whether any drug may be given.
  *
@@ -49,6 +56,9 @@ public final class ConflictingOrderStatement {
 
 	/** The words that introduce her order, before its display. */
 	static final String CURRENTLY_PRESCRIBED = "Currently prescribed: ";
+
+	/** The words that introduce her orders whose every finding is an allergy recorded to its own drug. */
+	static final String PRESCRIBED_DESPITE_AN_ALLERGY = "Currently prescribed despite a recorded allergy: ";
 
 	private ConflictingOrderStatement() {
 	}
@@ -84,32 +94,53 @@ public final class ConflictingOrderStatement {
 			return unchanged;
 		}
 		// One group per set of orders, in chip order, so two findings about one order name it once.
-		Map<List<String>, List<String>> detailsByOrders = new LinkedHashMap<List<String>, List<String>>();
+		Map<List<String>, List<SafetyWarning>> chipsByOrders = new LinkedHashMap<List<String>, List<SafetyWarning>>();
 		for (SafetyWarning chip : warnings) {
 			if (!SafetyWarning.TYPE_CONTRAINDICATION.equals(chip.getType()) || !chip.isAboutACurrentMedication()
 					|| chip.currentOrderDisplays().isEmpty()) {
 				return unchanged;
 			}
-			List<String> details = detailsByOrders.get(chip.currentOrderDisplays());
-			if (details == null) {
-				details = new ArrayList<String>();
-				detailsByOrders.put(chip.currentOrderDisplays(), details);
+			List<SafetyWarning> chips = chipsByOrders.get(chip.currentOrderDisplays());
+			if (chips == null) {
+				chips = new ArrayList<SafetyWarning>();
+				chipsByOrders.put(chip.currentOrderDisplays(), chips);
 			}
-			details.add(DrugSafetyValidator.endSentence(chip.getDetail().trim()));
+			chips.add(chip);
+		}
+		// Semicolons between orders, since a display can carry a comma.
+		Set<String> despiteAnAllergy = new LinkedHashSet<String>();
+		StringBuilder quoted = new StringBuilder();
+		for (Map.Entry<List<String>, List<SafetyWarning>> group : chipsByOrders.entrySet()) {
+			if (everyOneIsAnAllergyToItsOwnDrug(group.getValue())) {
+				despiteAnAllergy.addAll(group.getKey());
+				continue;
+			}
+			quoted.append(' ').append(CURRENTLY_PRESCRIBED).append(String.join(", ", group.getKey())).append('.');
+			for (SafetyWarning chip : group.getValue()) {
+				quoted.append(' ').append(DrugSafetyValidator.endSentence(chip.getDetail().trim()));
+			}
 		}
 		StringBuilder sb = new StringBuilder(DrugSafetyValidator.endSentence(answer.trim()));
-		for (Map.Entry<List<String>, List<String>> group : detailsByOrders.entrySet()) {
-			sb.append(' ').append(CURRENTLY_PRESCRIBED).append(String.join(", ", group.getKey())).append('.');
-			for (String detail : group.getValue()) {
-				sb.append(' ').append(detail);
-			}
+		if (!despiteAnAllergy.isEmpty()) {
+			sb.append(' ').append(PRESCRIBED_DESPITE_AN_ALLERGY).append(String.join("; ", despiteAnAllergy)).append('.');
 		}
+		sb.append(quoted);
 		List<SafetyWarning> stated = new ArrayList<SafetyWarning>(warnings.size());
 		for (SafetyWarning chip : warnings) {
 			stated.add(chip.asStatedInTheAnswer());
 		}
 		// Trimmed so a blank answer takes the statement without a leading space.
 		return new Stated(sb.toString().trim(), Collections.unmodifiableList(stated));
+	}
+
+	/** Whether every one of {@code chips}, all about one set of her orders, is an allergy to its own drug. */
+	private static boolean everyOneIsAnAllergyToItsOwnDrug(List<SafetyWarning> chips) {
+		for (SafetyWarning chip : chips) {
+			if (!chip.isARecordedAllergyToItsOwnDrug()) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

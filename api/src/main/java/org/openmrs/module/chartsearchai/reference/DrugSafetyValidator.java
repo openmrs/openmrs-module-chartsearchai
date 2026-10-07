@@ -10823,7 +10823,7 @@ public class DrugSafetyValidator {
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						SafetyWarning.recordedAllergenContraindication(sameSubstance.displayLabel(),
 								recorded.identitySentence(sameSubstance), subjectIsACurrentMedication,
-								recorded.chartRecords()),
+								recorded.chartRecords(), recorded.names(sameSubstance)),
 						recorded.names(sameSubstance));
 			}
 		}
@@ -10872,7 +10872,7 @@ public class DrugSafetyValidator {
 									subject.displayLabel() + " is in the same ATC class (" + shared
 											+ ") as the patient's allergy to " + recorded.allergenName(implied)
 											+ " — possible cross-reactivity", subjectIsACurrentMedication,
-									recorded.chartRecords()),
+									recorded.chartRecords(), false),
 							recorded.names(implied));
 					chipped = true;
 					break;
@@ -10889,7 +10889,7 @@ public class DrugSafetyValidator {
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
 											+ recorded.allergenName(implied) + " — possible cross-reactivity",
-									subjectIsACurrentMedication, recorded.chartRecords()),
+									subjectIsACurrentMedication, recorded.chartRecords(), false),
 							recorded.names(implied));
 					break;
 				}

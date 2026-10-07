@@ -164,6 +164,9 @@ public class SafetyWarning {
 	/** @see #getFindingCitation() */
 	private final Integer findingCitation;
 
+	/** @see #isARecordedAllergyToItsOwnDrug() */
+	private final boolean aRecordedAllergyToItsOwnDrug;
+
 	/** @see #partnerScheduledStarts() */
 	private final Map<String, String> partnerScheduledStarts;
 
@@ -288,11 +291,14 @@ public class SafetyWarning {
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}
 	 * @param chartRecords see {@link #chartRecords()} — the records the {@code RecordedAllergen} this
 	 *        sentence was built from was read off, unioned across the spellings its merge folded in
+	 * @param aRecordedAllergyToItsOwnDrug see {@link #isARecordedAllergyToItsOwnDrug()}
 	 */
 	static SafetyWarning recordedAllergenContraindication(String drug, String detail,
-			boolean aboutACurrentMedication, Collection<String> chartRecords) {
+			boolean aboutACurrentMedication, Collection<String> chartRecords, boolean aRecordedAllergyToItsOwnDrug) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, chartRecords);
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, chartRecords, false, null, false,
+				null, null, false, null, null, null, null, false, null, null, null, null, false, false, null,
+				aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -358,7 +364,8 @@ public class SafetyWarning {
 			boolean aboutACurrentMedication, PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, null, false, orders, false,
-				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered, false, false, null);
+				null, null, false, null, null, null, null, false, null, null, null, alreadyOrdered, false, false, null,
+				false);
 	}
 
 	/**
@@ -446,7 +453,7 @@ public class SafetyWarning {
 		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
 				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
-				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, null, false, null, null, null, null, false, false, null);
+				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, null, null, false, null, null, null, null, false, false, null, false);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
@@ -461,7 +468,8 @@ public class SafetyWarning {
 			boolean statedInTheAnswer, Map<String, List<DrugReference>> partnerRows,
 			Map<String, String> partnerScheduledStarts, String orderScheduledStart,
 			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered, boolean aboutAnotherOfHerMedications,
-			boolean aboutADrugOtherThanTheOneProposed, Integer findingCitation) {
+			boolean aboutADrugOtherThanTheOneProposed, Integer findingCitation, boolean aRecordedAllergyToItsOwnDrug) {
+		this.aRecordedAllergyToItsOwnDrug = aRecordedAllergyToItsOwnDrug;
 		this.alreadyOrdered = alreadyOrdered;
 		this.findingCitation = findingCitation;
 		this.aboutADrugOtherThanTheOneProposed = aboutADrugOtherThanTheOneProposed;
@@ -1227,7 +1235,7 @@ public class SafetyWarning {
 				stopDate == null ? null : DateFormatUtil.formatDate(stopDate), rows, ordersSharingASubstance,
 				matchedOrderNames, subjectRows, currentMedicationOrders, currentOrderDisplays, statedInTheAnswer,
 				partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -1243,7 +1251,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, names, subjectRows, currentMedicationOrders, currentOrderDisplays,
 				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/** @return the names {@link #withMatchedOrderNames} set, never null */
@@ -1289,7 +1297,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, orders, displays,
 				statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -1352,7 +1360,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, spelled, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -1397,7 +1405,20 @@ public class SafetyWarning {
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts,
 				DateFormatUtil.formatDate(start), alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
+	}
+
+	/**
+	 * Whether this chip says the chart records an allergy to the very drug it is about — the allergen arm's
+	 * identity sentence where the recorded name NAMES the row ({@code RecordedAllergen.identitySentence}'s
+	 * first form). False for its second form, which the module wrote because it could not say that, for the
+	 * two cross-reactivity sentences, whose allergy is to another drug, and for every other arm. Fixed at
+	 * construction by {@link #recordedAllergenContraindication}, the only writer. Package-private and
+	 * unpublished: {@link ConflictingOrderStatement} is its reader, and states such an order as one short
+	 * line (ADR Decision 167).
+	 */
+	boolean isARecordedAllergyToItsOwnDrug() {
+		return aRecordedAllergyToItsOwnDrug;
 	}
 
 	/** This warning, stated as one the answer states in its own words — see {@link #isStatedInTheAnswer()}.
@@ -1408,14 +1429,15 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, true, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
-	 * Whether the module has stated this finding in the ANSWER itself, carrying this chip's own
-	 * {@link #getDetail()} verbatim — {@link ConflictingOrderStatement}, which names the order it is about
-	 * on a question asking only for the patient's allergies, and {@link ModuleAnswerStatement}, for an
-	 * answer the module composed from its own findings. Published VERBATIM as each chip's {@code statedInTheAnswer}
+	 * Whether the module has stated this finding in the ANSWER itself — {@link ConflictingOrderStatement},
+	 * which names the order it is about on a question asking only for the patient's allergies, carrying this
+	 * chip's own {@link #getDetail()} verbatim except where the finding is an allergy to the order's own drug
+	 * ({@link #isARecordedAllergyToItsOwnDrug()}, ADR Decision 167), and {@link ModuleAnswerStatement}, for an
+	 * answer the module composed from its own findings, carrying it verbatim. Published VERBATIM as each chip's {@code statedInTheAnswer}
 	 * wire key, so this accessor's name IS the key. The chip is published either way: {@code true} tells a
 	 * client the clinician has already read this finding in the answer, so rendering it again beside a list
 	 * the clinician asked for repeats it. {@code false} says nothing about the answer's prose, which may
@@ -1437,7 +1459,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, true, aboutADrugOtherThanTheOneProposed, findingCitation);
+				alreadyOrdered, true, aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -1475,7 +1497,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, aboutAnotherOfHerMedications, other, findingCitation);
+				alreadyOrdered, aboutAnotherOfHerMedications, other, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -1507,7 +1529,8 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart,
-				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, citation);
+				alreadyOrdered, aboutAnotherOfHerMedications, aboutADrugOtherThanTheOneProposed, citation,
+				aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -1544,7 +1567,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, rows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, partnerRows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**
@@ -1576,7 +1599,7 @@ public class SafetyWarning {
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
 				endedOrderRows, ordersSharingASubstance, matchedOrderNames, subjectRows, currentMedicationOrders,
 				currentOrderDisplays, statedInTheAnswer, rows, partnerScheduledStarts, orderScheduledStart, alreadyOrdered, aboutAnotherOfHerMedications,
-				aboutADrugOtherThanTheOneProposed, findingCitation);
+				aboutADrugOtherThanTheOneProposed, findingCitation, aRecordedAllergyToItsOwnDrug);
 	}
 
 	/**

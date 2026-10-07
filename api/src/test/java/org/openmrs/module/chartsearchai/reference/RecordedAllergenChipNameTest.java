@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -99,6 +100,28 @@ public class RecordedAllergenChipNameTest {
 				+ "\"ado-trastuzumab emtansine\".]", details.toString(),
 				"the row the recorded name does not name may not be announced as the recorded allergy — "
 						+ "it states the relationship instead, and still names itself, was: " + details);
+	}
+
+	/**
+	 * ADR Decision 167: only the sentence saying the chart records an allergy to the chip's very drug says
+	 * the allergy is to it, so only that chip may be stated as "prescribed despite a recorded allergy". THE
+	 * case's two chips, one of each form.
+	 */
+	@Test
+	public void onlyTheChipNamingTheRecordedAllergyIsAnAllergyToItsOwnDrug() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(SHARED_CIEL_LIST);
+
+		List<String> flagged = new ArrayList<String>();
+		for (SafetyWarning chip : DrugReferenceTestSupport.validator(service).validate("",
+				"Is it safe to give her trastuzumab deruxtecan?",
+				DrugReferenceTestSupport.ctx(60, null, null, null, DrugReferenceTestSupport.set(KADCYLA), null))) {
+			flagged.add(chip.getDetail() + " -> " + chip.isARecordedAllergyToItsOwnDrug());
+		}
+
+		assertEquals("[The patient has a recorded allergy to Trastuzumab. -> true, "
+				+ "Trastuzumab deruxtecan is contraindicated by a recorded allergy to "
+				+ "\"ado-trastuzumab emtansine\". -> false]", flagged.toString(),
+				"the relationship sentence is an allergy the module could not say is to its own drug");
 	}
 
 	@Test

@@ -33,9 +33,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.provider.BundledClinicalAnswerProvider;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -127,7 +130,7 @@ public class ProviderRestContractTest {
 				Arrays.asList(3), Arrays.asList(new ChartSearchService.UnstatedFindingSeverity(2, "Major")),
 				null, new ChartSearchService.ActiveOrderClaims(2, 1), null, null,
 				DrugReferenceLoad.Coverage.PUBLISHED, null, null, false, null, null, null, null, null, null,
-				"checked", Collections.emptyList());
+				"checked", Collections.emptyList(), Arrays.asList(2), true);
 		AnswerEnvelope envelope = AnswerEnvelope.fromPayload(answerPayload("Aspirin 81mg."), source);
 		provider.events = Arrays.asList(
 				TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
@@ -149,11 +152,66 @@ public class ProviderRestContractTest {
 			assertEquals(2, payload.path("activeOrderClaims").path("stated").asInt(), type);
 			assertEquals(1, payload.path("activeOrderClaims").path("uncited").asInt(), type);
 			assertEquals("published", payload.path("conditionRuleCoverage").asText(), type);
+			assertEquals(2, payload.path("findingsStatedByTheModule").get(0).asInt(), type);
+			assertTrue(payload.path("asksWhetherSheHasTakenADrug").asBoolean(), type);
 			assertTrue(payload.has("interactionPairs"),
 					type + " must state interactionPairs even when none was measured");
 		}
 		assertEquals(Arrays.asList(3), conversations.lastFinishedPayload.get("misattributedOrderCitations"));
 		assertEquals("published", conversations.lastFinishedPayload.get("conditionRuleCoverage"));
+		assertEquals(Arrays.asList(2), conversations.lastFinishedPayload.get("findingsStatedByTheModule"));
+		assertEquals(Boolean.TRUE, conversations.lastFinishedPayload.get("asksWhetherSheHasTakenADrug"));
+	}
+
+	@Test
+	public void bundledCitationsUseTheSharedWireShapeOnEventsAndPersistedAnswers() throws Exception {
+		ChartSearchService.ChartAnswer source = new ChartSearchService.ChartAnswer("A recorded finding [3]",
+				Arrays.asList(
+						new ChartSearchService.RecordReference(2, "drug_order", "order-uuid", null, Boolean.FALSE,
+								null, 0, true, Arrays.asList(3)),
+						new ChartSearchService.RecordReference(3, "safety_finding", "finding-uuid", null,
+								Boolean.FALSE, "module", 0)), 0, 0, 0);
+		StreamingChartSearchStub service = new StreamingChartSearchStub() {
+			@Override
+			public ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokens,
+					Consumer<String> reasoning, Consumer<List<RecordReference>> references,
+					Consumer<ChartAnswer> answer, Consumer<String> preliminary, CancellationSignal cancellation) {
+				answer.accept(source);
+				return source;
+			}
+		};
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(service) {
+			@Override protected String gp(String key, String fallback) {
+				if (ChartSearchAiConstants.GP_CHART_MODE.equals(key)) return "queryScoped";
+				if (ChartSearchAiConstants.GP_GROUNDING_ENABLED.equals(key)) return "true";
+				return fallback;
+			}
+			@Override protected String requireLocalModel(String configured) { return "test-model"; }
+		};
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		controller.streamProviderTurn(out, patient(), "What medications?", "bundled",
+				ProviderMode.QUERY_SCOPED, null, null);
+		for (String type : Arrays.asList("answer_done", "evidence_updated", "turn_done")) {
+			assertCitationWireShape(ssePayload(out, type));
+		}
+		assertCitationWireShape(MAPPER.valueToTree(conversations.lastFinishedPayload));
+	}
+
+	private static void assertCitationWireShape(JsonNode payload) {
+		JsonNode references = payload.path("references");
+		assertEquals(2, references.size());
+		assertEquals("chart", references.get(0).path("group").asText());
+		assertTrue(references.get(0).path("attachedByTheModule").asBoolean());
+		assertEquals(3, references.get(0).path("attachedFor").get(0).asInt());
+		assertTrue(references.get(0).path("grounded").isBoolean());
+		assertEquals(Boolean.FALSE, references.get(0).path("grounded").booleanValue());
+		assertEquals("reference", references.get(1).path("group").asText());
+		assertTrue(references.get(1).path("grounded").isNull(),
+				"reference-group grounding verdicts must never be published");
 	}
 
 	@Test
@@ -538,8 +596,8 @@ public class ProviderRestContractTest {
 		return new ClinicalAnswerProviderRegistry(list) {
 			private final Map<String, String> gps = new HashMap<>();
 			{
-				gps.put(ClinicalAnswerProviderRegistry.GP_PROVIDERS_ENABLED, enabled);
-				gps.put(ClinicalAnswerProviderRegistry.GP_DEFAULT_PROVIDER, list.get(0).id());
+				gps.put(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, enabled);
+				gps.put(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, list.get(0).id());
 			}
 
 			@Override
@@ -737,6 +795,11 @@ public class ProviderRestContractTest {
 			recordedCheckedAnswers++;
 			lastRecordedCheckedAnswer = answer.getText();
 			return true;
+		}
+
+		@Override
+		public int purgeBefore(java.util.Date cutoff) {
+			throw new UnsupportedOperationException();
 		}
 
 		@Override

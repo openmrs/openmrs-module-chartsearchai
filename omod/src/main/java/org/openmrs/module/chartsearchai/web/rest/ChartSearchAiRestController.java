@@ -1639,8 +1639,8 @@ public class ChartSearchAiRestController {
 	 * A bundled envelope projects only what the api module can serialize. The module's answer-limit
 	 * statements ({@code misattributedOrderCitations}, {@code unstatedFindingSeverities},
 	 * {@code conditionRuleCoverage}, {@code interactionPairs}, {@code activeOrderClaims}) and the wire
-	 * shape of the safety chips live in this controller's serializers, which {@code /search} and
-	 * {@code /search/stream} publish through {@link #putModuleStatements}. Publish them here too, once,
+	 * shape of the safety chips live in {@link #putModuleStatements}; references use
+	 * {@link #serializeReferences}. Publish both here as {@code /search} and {@code /search/stream} do,
 	 * from the {@link ChartAnswer} the envelope carries, so the provider stream and the persisted turn
 	 * state the same facts as the legacy stream. A relayed provider's envelope carries no source and
 	 * passes through unchanged.
@@ -1650,6 +1650,7 @@ public class ChartSearchAiRestController {
 			return envelope;
 		}
 		Map<String, Object> payload = new LinkedHashMap<String, Object>(envelope.getPayload());
+		payload.put("references", serializeReferences(envelope.getSource().getReferences()));
 		putModuleStatements(payload, envelope.getSource());
 		return AnswerEnvelope.fromPayload(payload, envelope.getSource());
 	}

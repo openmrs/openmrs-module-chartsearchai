@@ -524,26 +524,26 @@ public class LlmProvider {
 			LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 		return searchStreamingInternal(numberedRecords, focusIndices, question, tokenConsumer,
-				reasoningConsumer, cacheScope, enumerateFindings, referenceRecords, drugsAlreadyOrdered,
+				reasoningConsumer, cacheScope, cacheSeedRecords, enumerateFindings, referenceRecords, drugsAlreadyOrdered,
 				CancellationSignal.NONE);
 	}
 
 	/** Cancellation-aware streaming form; retains all upstream prompt-selection arguments. */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered, CancellationSignal cancellation) {
 		if (cancellation == null || cancellation == CancellationSignal.NONE) {
 			return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer,
-					reasoningConsumer, cacheScope, enumerateFindings, referenceRecords, drugsAlreadyOrdered);
+					reasoningConsumer, cacheScope, cacheSeedRecords, enumerateFindings, referenceRecords, drugsAlreadyOrdered);
 		}
 		return searchStreamingInternal(numberedRecords, focusIndices, question, tokenConsumer,
-				reasoningConsumer, cacheScope, enumerateFindings, referenceRecords, drugsAlreadyOrdered, cancellation);
+				reasoningConsumer, cacheScope, cacheSeedRecords, enumerateFindings, referenceRecords, drugsAlreadyOrdered, cancellation);
 	}
 
 	private LlmResponse searchStreamingInternal(String numberedRecords, List<Integer> focusIndices,
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-			String cacheScope, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered, CancellationSignal cancellation) {
 
 		AnswerMessages messages = answerMessages(numberedRecords, focusIndices, question,

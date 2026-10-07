@@ -362,8 +362,8 @@ public class BundledClinicalAnswerProviderTest {
 				"drug reference defaults off upstream, so it must not be advertised");
 		assertFalse(descriptor.getCapabilities().contains(ProviderCapability.INDEPTH),
 				"bundled has no In-Depth stage");
-		assertEquals(Collections.singletonList(ProviderMode.QUERY_SCOPED), descriptor.getModes(),
-				"bundled advertises the configured chart mode (queryScoped is the upstream default)");
+		assertEquals(Collections.singletonList(ProviderMode.FULL_CHART_STABLE), descriptor.getModes(),
+				"bundled advertises the configured chart mode (fullChart is the upstream default)");
 	}
 
 	@Test
@@ -448,17 +448,27 @@ public class BundledClinicalAnswerProviderTest {
 		ScriptedChartSearchService service = new ScriptedChartSearchService();
 		service.ungrounded = answer("a", Collections.emptyList());
 		service.groundedResult = answer("a", Collections.emptyList());
-		BundledClinicalAnswerProvider provider = provider(service);
-
-		CollectingSink sink = new CollectingSink();
-		TurnRequest fullChartRequest = new TurnRequest(patient(), QUESTION, "conversation-1", "request-1",
-				ProviderMode.FULL_CHART_STABLE);
-		TurnResult result = provider.execute(fullChartRequest, sink, CancellationSignal.NONE)
-				.toCompletableFuture().get();
-
-		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
-		assertEquals("unsupported_mode", result.getProblemCode());
-		assertEquals(ProviderMode.FULL_CHART_STABLE, result.getMode());
+		for (ProviderMode configured : Arrays.asList(ProviderMode.FULL_CHART_STABLE, ProviderMode.QUERY_SCOPED)) {
+			BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(service) {
+				@Override
+				protected String gp(String property, String defaultValue) {
+					if (ChartSearchAiConstants.GP_CHART_MODE.equals(property)) {
+						return configured == ProviderMode.QUERY_SCOPED ? "queryScoped" : "fullChart";
+					}
+					return defaultValue;
+				}
+			};
+			ProviderMode unsupported = configured == ProviderMode.QUERY_SCOPED
+					? ProviderMode.FULL_CHART_STABLE : ProviderMode.QUERY_SCOPED;
+			CollectingSink sink = new CollectingSink();
+			TurnRequest unsupportedRequest = new TurnRequest(patient(), QUESTION, "conversation-1", "request-1",
+					unsupported);
+			TurnResult result = provider.execute(unsupportedRequest, sink, CancellationSignal.NONE)
+					.toCompletableFuture().get();
+			assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+			assertEquals("unsupported_mode", result.getProblemCode());
+			assertEquals(unsupported, result.getMode());
+		}
 	}
 
 	@Test
@@ -474,7 +484,7 @@ public class BundledClinicalAnswerProviderTest {
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR), sink.types());
 		assertEquals("cancelled", result.getProblemCode());
-		assertEquals(ProviderMode.QUERY_SCOPED, result.getMode());
+		assertEquals(ProviderMode.FULL_CHART_STABLE, result.getMode());
 	}
 
 	@Test

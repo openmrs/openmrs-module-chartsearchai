@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
@@ -245,6 +246,35 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				+ finding.text + "\nChips: " + answer.getSafetyWarnings());
 	}
 
+	/** The first sentence of {@code finding}'s answer-facing body — what a brief line opens with (ADR Decisions 140, 171). */
+	private static String firstSentence(Finding finding) {
+		String body = answerFacingBody(finding);
+		int end = body.indexOf(". ");
+		return end < 0 ? body : body.substring(0, end + 1);
+	}
+
+	/**
+	 * A screen's answer states each finding as a brief line (ADR Decision 171): the line opening with the record's first
+	 * sentence, cited by its own number, and the finding a reference of the answer.
+	 */
+	private static void assertStatesEveryFindingBriefly(ChartAnswer answer, List<Finding> findings) {
+		List<String> lines = Arrays.asList(answer.getAnswer().split("\n"));
+		for (Finding finding : findings) {
+			boolean found = false;
+			for (String line : lines) {
+				found |= line.startsWith(firstSentence(finding)) && line.contains(" [" + finding.index + "]");
+			}
+			assertTrue(found, "a line opens with finding [" + finding.index + "]'s first sentence and cites it. Finding: "
+					+ finding.text + "\nAnswer: " + answer.getAnswer());
+			assertTrue(ChartAnswerTestSupport.referenceIndexes(answer).contains(Integer.valueOf(finding.index)),
+					"and the finding is a reference of the answer");
+		}
+		for (String clause : STRENGTH_CLAUSES) {
+			assertFalse(answer.getAnswer().contains(clause.trim()),
+					"a strength clause is prompt-facing only and must not reach the answer: " + answer.getAnswer());
+		}
+	}
+
 	private static void assertCarriesEveryFinding(ChartAnswer answer, List<Finding> findings) {
 		for (Finding finding : findings) {
 			assertTrue(answer.getAnswer().contains(expectedLine(answer, finding)),
@@ -299,8 +329,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * A chip whose finding the composed answer states is published as stated, so a client does not
-	 * draw it a second time in full beneath the answer that just said it. Live on the 3.7.1 standalone,
+	 * A chip whose finding the composed answer states whole is published as stated, so a client does not
+	 * draw it a second time in full beneath the answer that just said it — and only such a chip: a screen's
+	 * brief line leaves an interaction's mechanism on its chip (ADR Decision 171). Live on the 3.7.1 standalone,
 	 * "Does she have any drug interactions I should know about?" came back composed from five findings,
 	 * each line its chip's own detail, and all five chips beside it still published
 	 * {@code statedInTheAnswer: false}.
@@ -308,30 +339,43 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	@Test
 	public void everyChipTheComposedAnswerStatesIsPublishedAsStated() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
 		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
-		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
+		assertStatedExactlyWhereTheAnswerCarriesTheDetail(answer);
+	}
+
+	/** Each chip is published stated exactly where the composed answer carries its detail whole — and the answer
+	 *  carries one such chip and one it does not, so neither direction passes vacuously. */
+	private static void assertStatedExactlyWhereTheAnswerCarriesTheDetail(ChartAnswer answer) {
+		int whole = 0;
+		int brief = 0;
 		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			assertTrue(answer.getAnswer().contains(chip.getDetail()), "precondition: the answer states " + chip.getDetail());
-			assertTrue(chip.isStatedInTheAnswer(), "a chip the composed answer states is published as stated: "
+			boolean carried = answer.getAnswer().contains(chip.getDetail());
+			if (carried) {
+				whole++;
+			} else {
+				brief++;
+			}
+			assertEquals(carried, chip.isStatedInTheAnswer(), "stated exactly where the answer carries the detail: "
 					+ chip.getDetail());
 		}
+		assertTrue(whole > 0 && brief > 0, "precondition: one chip stated whole and one briefly, chips were: "
+				+ answer.getSafetyWarnings());
 	}
 
 	@Test
 	public void searchStreaming_publishesTheChipsTheComposedAnswerStatesAsStatedToo() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).searchStreaming(patient, SCREEN, text -> { },
 				reasoning -> { }, citations -> { }, early -> { });
 
 		assertTrue(answer.isAnsweredByTheModule(), "precondition: the module composed this answer");
-		assertFalse(answer.getSafetyWarnings().isEmpty(), "precondition: the answer carries chips");
-		for (SafetyWarning chip : answer.getSafetyWarnings()) {
-			assertTrue(chip.isStatedInTheAnswer(), "the streaming path marks them alike: " + chip.getDetail());
-		}
+		assertStatedExactlyWhereTheAnswerCarriesTheDetail(answer);
 	}
 
 	/** A proposal's "No" states brief lines, so no chip beside it is stated in full and each is shown beside it (ADR
@@ -1959,7 +2003,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTrue(answer.getAnswer().contains(answerFacingBody(allergy) + CURRENT_MEDICATION_REFERENT
 				+ " [" + allergy.index + "]"),
 				"the allergy line says the drug is one she already takes: " + answer.getAnswer());
-		assertCarriesEveryFinding(answer, findings);
+		assertStatesEveryFindingBriefly(answer, findings);
 	}
 
 	/**
@@ -1985,8 +2029,10 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls);
 		String[] lines = answer.getAnswer().split("\n");
-		assertLineIs(answer, findings.get(0), lines[0], answer.getAnswer());
-		assertLineIs(answer, findings.get(1), lines[1], answer.getAnswer());
+		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))) && lines[1].contains(" [" + findings.get(0).index
+				+ "]"), "after its count, the unrated pair the arm raised first: " + answer.getAnswer());
+		assertTrue(lines[2].startsWith(firstSentence(findings.get(1))) && lines[2].contains(" [" + findings.get(1).index
+				+ "]"), "then the Major one: " + answer.getAnswer());
 	}
 
 	@Test
@@ -2257,14 +2303,47 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
 		String[] lines = answer.getAnswer().split("\\n");
-		assertTrue(lines[0].startsWith(answerFacingBody(findings.get(0))),
-				"it opens with the pair it related, as a screen does: " + answer.getAnswer());
+		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))),
+				"after its count, the pair it related, as a screen does: " + answer.getAnswer());
 		assertEquals("Not checked: 1 active order the drug data does not identify — Marevan. It was not screened "
 				+ "against this patient's other medications.", lines[lines.length - 1]);
 	}
 
+	/**
+	 * ADR Decision 171: a screen's answer opens with what it found, counted — never a choice of which medication to
+	 * change — states each finding's brief line as a proposal's answer does, and closes with what it does not cover.
+	 * Her warfarin and aspirin orders interact Major, and she is recorded as allergic to the aspirin she takes.
+	 */
 	@Test
-	public void aScreenThatRaisedFindingsOpensWithTheFindingItselfAndChoosesNoDrugToChange() throws Exception {
+	public void aScreensAnswerCountsItsFindingsStatesBriefLinesAndSaysWhatItDoesNotCover() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Aspirin");
+		answerFromFindings(true);
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(4, lines.length, "a count, two findings and the scope: " + answer.getAnswer());
+		assertEquals("1 interaction among this patient's active medications, and 1 contraindication:", lines[0]);
+		assertTrue(lines[1].startsWith("Acetylsalicylic acid (aspirin) interacts with active order Warfarin — Major. ["),
+				"the interaction's brief line — its first sentence, then its markers: " + lines[1]);
+		assertTrue(lines[2].startsWith("The patient has a recorded allergy to Acetylsalicylic acid (aspirin)."),
+				"then the allergy: " + lines[2]);
+		assertEquals("Interactions the data does not rate, and anything beyond drug interactions and contraindications, "
+				+ "are not covered.", lines[3]);
+		for (org.openmrs.module.chartsearchai.reference.SafetyWarning chip : answer.getSafetyWarnings()) {
+			boolean interaction = org.openmrs.module.chartsearchai.reference.SafetyWarning.TYPE_INTERACTION.equals(
+					chip.getType());
+			assertEquals(!interaction, chip.isStatedInTheAnswer(), "the interaction's mechanism stays on its chip, "
+					+ "so only the allergy, stated whole, is stated: " + chip.getDetail());
+			assertTrue(answer.getAnswer().contains("[" + chip.getFindingCitation() + "]"),
+					"every chip is a finding the answer cites: " + chip.getDetail());
+		}
+	}
+
+	@Test
+	public void aScreenThatRaisedFindingsOpensWithItsCountAndChoosesNoDrugToChange() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		List<Finding> findings = findingsInThePromptFor(SCREEN);
 		assertFalse(findings.isEmpty(), "precondition: her warfarin and aspirin orders interact Major");
@@ -2273,11 +2352,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
 		assertEquals(0, provider.calls);
-		assertTrue(answer.getAnswer().startsWith(answerFacingBody(findings.get(0))),
-				"a finding about her own medications opens with the finding, which names the medication "
-						+ "and what it relates it to — never a lead choosing which of the two to change: "
-						+ answer.getAnswer());
-		assertCarriesEveryFinding(answer, findings);
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals("1 interaction among this patient's active medications:", lines[0],
+				"a screen opens with what it found, counted — never a lead choosing which of the two to change "
+						+ "(ADR Decision 171): " + answer.getAnswer());
+		assertTrue(lines[1].startsWith(firstSentence(findings.get(0))),
+				"then the finding, which names the medication and what it relates it to: " + answer.getAnswer());
+		assertStatesEveryFindingBriefly(answer, findings);
 		assertTrue(answer.isAnsweredByTheModule());
 	}
 
@@ -2323,8 +2404,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question);
-			assertTrue(answer.getAnswer().startsWith("Acetylsalicylic acid (aspirin) interacts with active order"),
-					"the interaction leads, not the allergy finding: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().split("\n")[1].startsWith(
+					"Acetylsalicylic acid (aspirin) interacts with active order"),
+					"after its count, the interaction leads, not the allergy finding: " + answer.getAnswer());
 		}
 	}
 

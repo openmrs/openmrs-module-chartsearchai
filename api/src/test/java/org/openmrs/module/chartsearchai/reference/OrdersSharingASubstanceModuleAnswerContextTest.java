@@ -89,12 +89,14 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 		String answer = chart.getModuleAnswer();
 		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
 		List<String> lines = Arrays.asList(answer.split("\n"));
-		assertEquals(3, lines.size(), "was: " + answer);
-		assertTrue(lines.get(0).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+		assertEquals(5, lines.size(), "the count, three findings and the scope (ADR Decision 171), was: " + answer);
+		assertEquals("2 interactions among this patient's active medications, and 1 substance carried by more than one "
+				+ "of her orders:", lines.get(0), "the shared substance is counted on its own, being no pair");
+		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
 			"the Major leads: " + answer);
-		assertTrue(lines.get(1).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
+		assertTrue(lines.get(2).startsWith("Rifampicin (rifampin) is in active orders Isoniazid / pyrazinamide /"
 				+ " rifampin and Rifampicin 150mg — possible duplicate therapy."), "then this finding: " + answer);
-		assertTrue(lines.get(2).startsWith("Isoniazid interacts with active order Rifampicin (rifampin) — Minor."),
+		assertTrue(lines.get(3).startsWith("Isoniazid interacts with active order Rifampicin (rifampin) — Minor."),
 			"then the caution: " + answer);
 	}
 

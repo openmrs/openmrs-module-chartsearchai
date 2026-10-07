@@ -3705,9 +3705,10 @@ public class DrugReferenceInjector {
 	 * issue #553): that sentence already says the order is hers, and the referent would say she is taking
 	 * a drug she has not started.
 	 *
-	 * <p><b>Only a proposal carries a lead.</b> An answer whose first finding is about her own
-	 * medications — a screen — opens with that finding: a lead saying which of two medications to
-	 * change would state a choice no finding makes, which issue #469 measured the model adding in three cells.
+	 * <p><b>A screen's lead counts, and chooses nothing.</b> A lead saying which of two medications to change would
+	 * state a choice no finding makes, which issue #469 measured the model adding in three cells; a screen's answer
+	 * opens with how many of each kind of finding follow ({@link #screenLead}) and closes with {@link #SCREEN_SCOPE}
+	 * (ADR Decision 171).
 	 *
 	 * @return the answer, or {@code null} where a finding states a clause {@link #strengthRank} does not
 	 *         rank — no strength clause at all, which no reachable type does today, or an ended-order
@@ -3731,12 +3732,12 @@ public class DrugReferenceInjector {
 				.thenComparingInt(i -> strengthRank(clauses[i]))
 				.thenComparingInt(i -> STRENGTH_WITHHOLD.equals(clauses[i]) && licensesTheModulesNo(findings.get(i))
 						? 0 : 1));
-		// A proposal's answer states brief lines, under its "No" as under its count of cautions (ADR Decisions 140, 153);
-		// a screen's answer still states each finding's whole body.
+		// Brief lines, under a proposal's "No" or count of cautions (ADR Decisions 140, 153) and under a screen's count
+		// (ADR Decision 171): the mechanism stays on the chip.
 		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[order.get(0)]);
 		List<String> lines = new ArrayList<String>(order.size());
 		for (Integer i : order) {
-			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, proposal));
+			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true));
 		}
 		SafetyWarning first = findings.get(order.get(0));
 		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
@@ -3746,8 +3747,50 @@ public class DrugReferenceInjector {
 			// cautionsOnlyAbout admitted, so the count is of those lines: the duplicate is not a caution about the
 			// drug proposed (ADR Decision 160).
 			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), first.getDrug()));
+		} else if (!proposal) {
+			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171).
+			lines.add(0, screenLead(findings));
+			lines.add(SCREEN_SCOPE);
 		}
 		return String.join("\n", lines);
+	}
+
+	/** What a screen's answer does not cover, stated under its findings (ADR Decision 171). A screen states her
+	 *  contraindications as well as her interactions, so {@link #BELOW_FLOOR_SCOPE}'s words would be false of it. */
+	static final String SCREEN_SCOPE = "Interactions the data does not rate, and anything beyond drug interactions and "
+			+ "contraindications, are not covered.";
+
+	/**
+	 * How a screen's composed answer opens (ADR Decision 171): <em>"3 interactions among this patient's active
+	 * medications, and 2 contraindications:"</em> — counts of what follows, by the finding's type, and never which of
+	 * two medications to change, a choice no finding makes (issue #469). Her orders sharing a substance (issue #477)
+	 * is counted on its own, being no interaction between two drugs.
+	 */
+	private static String screenLead(List<SafetyWarning> findings) {
+		int interactions = 0;
+		int contraindications = 0;
+		int sharing = 0;
+		for (SafetyWarning finding : findings) {
+			if (finding.statesOrdersSharingASubstance()) {
+				sharing++;
+			} else if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
+				interactions++;
+			} else {
+				contraindications++;
+			}
+		}
+		List<String> counts = new ArrayList<String>();
+		if (interactions > 0) {
+			counts.add(interactions + (interactions == 1 ? " interaction" : " interactions")
+					+ " among this patient's active medications");
+		}
+		if (contraindications > 0) {
+			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications"));
+		}
+		if (sharing > 0) {
+			counts.add(sharing + (sharing == 1 ? " substance" : " substances") + " carried by more than one of her orders");
+		}
+		return String.join(", and ", counts) + ":";
 	}
 
 	/** Her orders were read and she has no active drug in any form — no order, no flattened name or code (issue #118's
@@ -4004,8 +4047,12 @@ public class DrugReferenceInjector {
 	 * never dropped; then, for an interaction that FOLDED a class relationship onto its rule
 	 * ({@link SafetyWarning#carriesUnratedRelationship()}), that class sentence, which
 	 * {@code DrugSafetyValidator.interactionWarning} appends as the detail's last sentence — it is the relationship
-	 * that made the finding withhold, and is not the mechanism prose. The mechanism prose is left to the chip, which
-	 * carries the whole detail. Sentences are {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}'s.
+	 * that made the finding withhold, and is not the mechanism prose; and, for a finding about an order that has not
+	 * started ({@link SafetyWarning#orderScheduledStart()}), the sentence saying so, which
+	 * {@code SafetyWarning.statingItsOrderHasNotStarted} appends as the detail's last — without it the line reads as a
+	 * drug she is taking (issue #553; ADR Decision 171, where a screen's brief lines first dropped it). The mechanism
+	 * prose is left to the chip, which carries the whole detail. Sentences are
+	 * {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}'s.
 	 */
 	static String briefDetail(SafetyWarning finding) {
 		String[] sentences = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(finding.getDetail().trim());
@@ -4013,8 +4060,9 @@ public class DrugReferenceInjector {
 		int last = sentences.length - 1;
 		boolean folded = SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
 				&& finding.carriesUnratedRelationship();
+		boolean scheduled = finding.orderScheduledStart() != null;
 		for (int i = 1; i < sentences.length; i++) {
-			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences[i]).find() || folded && i == last) {
+			if (ChartSearchAiUtils.UNKNOWN_SIGNIFICANCE.matcher(sentences[i]).find() || (folded || scheduled) && i == last) {
 				brief.append(' ').append(sentences[i]);
 			}
 		}

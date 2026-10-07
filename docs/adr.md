@@ -14240,7 +14240,9 @@ beside it state one line per finding.
 ### The decision
 
 - **A proposal's composed answer states brief lines under its "No" too**: `DrugReferenceInjector.composeFromFindings`
-  passes `briefDetail` whenever the question is a proposal. A screen's answer, which has no lead, keeps the whole bodies.
+  passes `briefDetail` whenever the question is a proposal. A screen's answer, which has no lead, keeps the whole bodies —
+  until [Decision 171](#decision-171-a-screens-answer-counts-its-findings-states-brief-lines-and-says-what-it-does-not-cover)
+  gives it a lead and brief lines too.
 - **`briefDetail` keeps a folded class sentence**: for an interaction that folded a class relationship onto its rule
   (`SafetyWarning.carriesUnratedRelationship()`, set where `DrugSafetyValidator.interactionWarning` appends that sentence
   as the detail's last), the last sentence is kept beside the first. It is the relationship that made the finding
@@ -15010,3 +15012,50 @@ Pinned by `LlmInferenceServiceListedMedicationsContextTest` — every statement 
 prompt and the answer's references; `.aFindingAboutTheDrugProposedAgainstHerOwnOrderIsStatedWhereTheAnswerLeftItOut`
 and `.aQuestionWhetherTwoDrugsCanBeGivenTogetherStatesTheirFindingsAgainstHerOwnOrders` redden when an order's record
 is attached for no finding, and the streaming case when the early `done` attaches nothing.
+
+## Decision 171: A screen's answer counts its findings, states brief lines and says what it does not cover
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends
+[Decision 153](#decision-153-a-modules-no-states-brief-lines-keeping-a-folded-class-sentence)'s screen exception.
+
+### Context
+
+*"Does she have any drug interactions I should know about?"*, asked of Susan Young (`763e6e5f…`) on the 3.7.1
+standalone, was answered by the module with five lines and nothing around them: three interactions, each in DDInter's
+whole mechanism note (one carrying the data's own double space), and her two allergy conflicts. It opened straight into
+the first finding, stated nothing about its scope, and ran to five paragraphs a clinician must read to learn there were
+five findings. The proposal answers beside it open with a count or a verdict, state brief lines, and close by saying
+what is not covered. Asked of the knowledge base directly, the three interactions are every rated pair among her five
+orders; three more pairs are listed `Unknown` and four have no row.
+
+### The decision
+
+- **A screen's answer opens with a count of what follows**, by kind — `DrugReferenceInjector.screenLead`: *"3
+  interactions among this patient's active medications, and 2 contraindications:"*, with her orders sharing a substance
+  (issue #477) counted on their own, being no pair. A count chooses nothing, so issue #469's refusal of a lead naming
+  which of two medications to change stands.
+- **Brief lines**, `briefDetail` as under a proposal's answer: the first sentence, any unknown-significance sentence, a
+  folded class sentence. A chip whose line is brief is no longer published `statedInTheAnswer` — the mechanism is the
+  chip's, as beside Decision 153's "No"; an allergy line, one sentence, is still stated whole and its chip still is.
+- **`briefDetail` keeps the sentence saying an order has not started** (`SafetyWarning.orderScheduledStart()`), the
+  detail's last as a fold is. The screen's brief lines first dropped it — *"The patient has a recorded allergy to
+  Rifampicin (rifampin). No severity is rated for this finding."* for an order scheduled for 2099 — which
+  `LlmInferenceServiceScheduledOrderContextTest.theModulesOwnAnswerNeverSaysSheIsAlreadyTakingHerScheduledOrder` caught;
+  a proposal's brief line about such an order had the same gap.
+- **It closes with `SCREEN_SCOPE`**: *"Interactions the data does not rate, and anything beyond drug interactions and
+  contraindications, are not covered."* — not the below-floor answer's sentence, whose *"anything beyond drug
+  interactions"* would be false beside her contraindications.
+
+### Not taken
+
+- **Naming the pairs the data lists unrated.** The screening arm states no below-floor pairs (`belowFloor` is `null` on
+  its extent), so the three `Unknown` pairs go unmentioned. Listing them was proposed and is not done here:
+  [Decision 146](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders)'s second round removed exactly
+  such a line from the caution answers — *"a line a clinician can do nothing with. Where a finding answers the question,
+  the unrated rows beside it add nothing"* — and the scope line already says unrated interactions are not covered.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aScreensAnswerCountsItsFindingsStatesBriefLinesAndSaysWhatItDoesNotCover`,
+`.aScreenThatRaisedFindingsOpensWithItsCountAndChoosesNoDrugToChange`, `.everyChipTheComposedAnswerStatesIsPublishedAsStated`
+(stated exactly where the answer carries the detail whole, in both directions),
+`OrdersSharingASubstanceModuleAnswerContextTest.theSharedSubstanceFollowsARatedMajorAndPrecedesACaution` (the shared
+substance counted on its own) and the scheduled-order case above.

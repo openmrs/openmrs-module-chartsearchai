@@ -959,6 +959,34 @@ resources, and `TurnPreemptionRegistry` cancels the previous turn when another
 starts in the same conversation. Their existing tests include the shared
 `api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
 
+## Local token counting
+
+`TokenCounter` and `LocalLlamaTokenCounter` provide the local engine's exact token
+counts for chart-context budgeting. Plain text uses llama-server's `/tokenize`
+endpoint; assembled system/user messages use `/v1/messages/count_tokens`
+so the model's chat template is included. Both requests use the same authenticated,
+non-proxied client as inference.
+
+Counting is available for the local engine only. Remote endpoints are not assumed
+to provide a tokenizer, and this interface does not estimate their counts. These
+methods are the foundation for the context-budget contribution; they do not yet
+change which chart records are selected or enforce a new input limit.
+
+To verify counting against a real local engine, prepare a separate application-data
+directory containing `model.gguf` and a compatible `chartsearchai/bin/llama-server`
+(with its shared libraries):
+
+```sh
+mvn -pl api -Dtest=LocalLlamaTokenCounterTest \
+  -Dchartsearchai.test.tokenCount.enabled=true \
+  -Dchartsearchai.test.tokenCount.dataDirectory=/path/to/test-data test
+```
+
+The opt-in check starts and stops its own server on port 18095 (override with
+`-Dchartsearchai.test.tokenCount.port`), compares the count with inference usage,
+and verifies idle-unload scheduling. It does not use a running OpenMRS installation.
+
+
 ## License
 
 This project is licensed under the [MPL 2.0](http://openmrs.org/license/).

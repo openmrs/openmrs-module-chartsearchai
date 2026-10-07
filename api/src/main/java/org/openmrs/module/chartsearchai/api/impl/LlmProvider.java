@@ -464,9 +464,10 @@ public class LlmProvider {
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
 			boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
-		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				findingProse(enumerateFindings), drugsAlreadyOrdered);
+		AnswerMessages messages = answerMessages(numberedRecords, focusIndices, question,
+				enumerateFindings, drugsAlreadyOrdered);
+		String systemPrompt = messages.system;
+		String userMessage = messages.user;
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
@@ -521,9 +522,10 @@ public class LlmProvider {
 			LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 
-		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				findingProse(enumerateFindings), drugsAlreadyOrdered);
+		AnswerMessages messages = answerMessages(numberedRecords, focusIndices, question,
+				enumerateFindings, drugsAlreadyOrdered);
+		String systemPrompt = messages.system;
+		String userMessage = messages.user;
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
 		String cacheSeed = cacheScope == null ? null : buildUserMessage(cacheSeedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
@@ -542,6 +544,23 @@ public class LlmProvider {
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());
+	}
+
+	/** The shared message assembly for inference and exact input budgeting. */
+	AnswerMessages answerMessages(String numberedRecords, List<Integer> focusIndices, String question,
+			boolean enumerateFindings, List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
+		return new AnswerMessages(getSystemPrompt(), buildUserMessage(numberedRecords, focusIndices,
+				question, findingProse(enumerateFindings), drugsAlreadyOrdered));
+	}
+
+	static final class AnswerMessages {
+		final String system;
+		final String user;
+
+		AnswerMessages(String system, String user) {
+			this.system = system;
+			this.user = user;
+		}
 	}
 
 	/**

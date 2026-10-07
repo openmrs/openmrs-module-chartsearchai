@@ -60,6 +60,10 @@ public class LlmInferenceService implements ChartSearchService {
 
 	private static final Logger log = LoggerFactory.getLogger(LlmInferenceService.class);
 
+	/** The order a client reads references in: newest record first, an undated one last. */
+	private static final Comparator<RecordReference> NEWEST_FIRST = Comparator.comparing(RecordReference::getDate,
+			Comparator.nullsLast(Comparator.reverseOrder()));
+
 	/** Sink for the progressive-reasoning preview pass's answer tokens: the preview's answer is never
 	 *  shown — only its reasoning surfaces, and only the full-chart pass is committed. */
 	private static final Consumer<String> DISCARD_TOKENS = token -> { };
@@ -341,13 +345,18 @@ public class LlmInferenceService implements ChartSearchService {
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
 			// chips it states, which is why the chips it hands back are the ones the answer carries.
-			ConflictingOrderStatement.Stated conflicting =
-					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
+			// ADR Decision 138's record numbers are joined first, so the records the statement cites are attached for
+			// the findings it states (ADR Decision 168).
+			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
+					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
+					chart.getOrderRecordNumbers());
 			completedAnswer = conflicting.getAnswer();
-			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
-			safetyWarnings = aboutTheDrugAsked(
-					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()), chart);
-			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
+			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
+			// And the order records it cites, as the module's, by the one method that decides which indices become
+			// references; after grounding, which judges what the MODEL cited.
+			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
+					conflicting.getCitedOrderRecords(), chart.getMappings());
+			ChartAnswer answer = new ChartAnswer(completedAnswer, answerReferences,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
@@ -920,13 +929,18 @@ public class LlmInferenceService implements ChartSearchService {
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
 			// chips it states, which is why the chips it hands back are the ones the answer carries.
-			ConflictingOrderStatement.Stated conflicting =
-					ConflictingOrderStatement.state(question, completedAnswer, safetyWarnings);
+			// ADR Decision 138's record numbers are joined first, so the records the statement cites are attached for
+			// the findings it states (ADR Decision 168).
+			ConflictingOrderStatement.Stated conflicting = ConflictingOrderStatement.state(question, completedAnswer,
+					DrugReferenceInjector.withFindingCitations(safetyWarnings, chart.getMappings()),
+					chart.getOrderRecordNumbers());
 			completedAnswer = conflicting.getAnswer();
-			// ADR Decision 138: each chip's own record number, joined while the chart is in hand.
-			safetyWarnings = aboutTheDrugAsked(
-					DrugReferenceInjector.withFindingCitations(conflicting.getWarnings(), chart.getMappings()), chart);
-			ChartAnswer answer = new ChartAnswer(completedAnswer, references,
+			safetyWarnings = aboutTheDrugAsked(conflicting.getWarnings(), chart);
+			// And the order records it cites, as the module's, by the one method that decides which indices become
+			// references; after grounding, which judges what the MODEL cited.
+			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
+					conflicting.getCitedOrderRecords(), chart.getMappings());
+			ChartAnswer answer = new ChartAnswer(completedAnswer, answerReferences,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
@@ -1308,6 +1322,39 @@ public class LlmInferenceService implements ChartSearchService {
 		return extractCitedReferences(null, citations, mappings);
 	}
 
+	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
+			List<RecordMapping> mappings) {
+		return extractCitedReferences(answer, citations, mappings, Collections.<Integer, List<Integer>> emptyMap());
+	}
+
+	/**
+	 * {@code references} with the records a sentence the MODULE appended cites (ADR Decision 168) added as the
+	 * module's — through {@link #extractCitedReferences(String, List, List, Map)}, the one method deciding which
+	 * indices become references and the only writer of {@code attachedByTheModule}. A record already among
+	 * {@code references} stays as it is: the model cited it, and its citation keeps its grounding verdict.
+	 */
+	static List<RecordReference> withReferencesTheModuleStated(List<RecordReference> references,
+			Map<Integer, List<Integer>> statedByTheModule, List<RecordMapping> mappings) {
+		if (statedByTheModule == null || statedByTheModule.isEmpty()) {
+			return references;
+		}
+		Set<Integer> already = new HashSet<Integer>();
+		List<RecordReference> merged = new ArrayList<RecordReference>();
+		if (references != null) {
+			for (RecordReference reference : references) {
+				already.add(reference.getIndex());
+				merged.add(reference);
+			}
+		}
+		for (RecordReference stated : extractCitedReferences(null, null, mappings, statedByTheModule)) {
+			if (!already.contains(stated.getIndex())) {
+				merged.add(stated);
+			}
+		}
+		Collections.sort(merged, NEWEST_FIRST);
+		return merged;
+	}
+
 	/**
 	 * Builds the clickable reference list for an answer, reconciling the two
 	 * sources of citation indices the MODEL can disagree with itself about: its
@@ -1345,9 +1392,13 @@ public class LlmInferenceService implements ChartSearchService {
 	 * the derivation is read off what the model cited and never off what this step added, so a
 	 * record that later carried a derivation of its own would not be followed. Resolved after both
 	 * of the reads above — see the comment at the walk for which one is load-bearing and why.
+	 *
+	 * <p><b>A fourth, also the module's</b> (ADR Decision 168): {@code statedByTheModule}, the records a
+	 * sentence the module appended to the answer cites, each with the findings that sentence states. They are
+	 * attached as the derivations are, for those findings, and a record the model cited stays the model's.
 	 */
 	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
-			List<RecordMapping> mappings) {
+			List<RecordMapping> mappings, Map<Integer, List<Integer>> statedByTheModule) {
 		Map<Integer, RecordMapping> indexMap = new HashMap<Integer, RecordMapping>();
 		for (RecordMapping mapping : mappings) {
 			indexMap.put(mapping.getIndex(), mapping);
@@ -1438,6 +1489,25 @@ public class LlmInferenceService implements ChartSearchService {
 				}
 			}
 		}
+		// The records a sentence the module appended cites (ADR Decision 168), after the model's own and for the
+		// findings that sentence states — attached like a derivation, and a no-op where the model cited it.
+		for (Map.Entry<Integer, List<Integer>> stated : statedByTheModule.entrySet()) {
+			Integer index = stated.getKey();
+			if (seen.contains(index) || !indexMap.containsKey(index)) {
+				continue;
+			}
+			attached.add(index);
+			List<Integer> findings = attachedFor.get(index);
+			if (findings == null) {
+				findings = new ArrayList<Integer>();
+				attachedFor.put(index, findings);
+			}
+			for (Integer finding : stated.getValue()) {
+				if (!findings.contains(finding)) {
+					findings.add(finding);
+				}
+			}
+		}
 		seen.addAll(attached);
 
 		List<RecordReference> references = new ArrayList<RecordReference>();
@@ -1454,8 +1524,7 @@ public class LlmInferenceService implements ChartSearchService {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}
 		}
-		Collections.sort(references, Comparator.comparing(RecordReference::getDate,
-				Comparator.nullsLast(Comparator.reverseOrder())));
+		Collections.sort(references, NEWEST_FIRST);
 		return references;
 	}
 

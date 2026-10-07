@@ -12171,7 +12171,9 @@ as hers with the gate's two changes came after arm F and ran in none of the arms
 
 **Status: Accepted** (September 2026) — implemented. `ConflictingOrderStatement`, the
 `SafetyWarning.isStatedInTheAnswer()` accessor and its `statedInTheAnswer` wire key. Its wording is amended by
-[Decision 167](#decision-167-an-order-conflicting-only-with-its-own-recorded-allergy-is-named-in-one-short-line).
+[Decision 167](#decision-167-an-order-conflicting-only-with-its-own-recorded-allergy-is-named-in-one-short-line), and
+its orders cite their records since
+[Decision 168](#decision-168-the-allergy-answers-conflicting-orders-cite-the-records-they-are).
 
 ### Context
 
@@ -14873,3 +14875,50 @@ order kept in the chip's words, and one order with both kinds of finding — and
 `RecordedAllergenChipNameTest.onlyTheChipNamingTheRecordedAllergyIsAnAllergyToItsOwnDrug`. Making the flag true for
 the relationship sentence reddens that case; true for a cross-reactivity sentence, the two cross-reactivity cases;
 "any finding" for "every finding", the mixed case; a comma for the semicolon, the two-order case.
+
+## Decision 168: The allergy answer's conflicting orders cite the records they are
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends
+[Decision 124](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer), which appended its
+statement with no marker.
+
+### Context
+
+After Decision 167 Susan Young's *"any allergies"* ended *"Currently prescribed despite a recorded allergy:
+Tiotropium; Lidocaine."* — the one fact the allergy list lacks, and nothing in it a clinician could open. Decision 124
+cited nothing because the statement offered no record of its own, and [Decision 147](#decision-147-a-finding-about-the-drug-proposed-against-her-own-order-is-stated-where-a-models-answer-leaves-it-out)
+measured why a module sentence's marker cannot simply be appended: the answer's references are resolved before the
+module appends anything, so the marker resolved to nothing in the browser.
+
+### The decision
+
+- **Each order the statement names cites the record that order IS**, in both of its forms:
+  *"Currently prescribed despite a recorded allergy: Tiotropium [12]; Lidocaine [13]."* The number is the injector's
+  `orderRecordNumbers` rule ([Decision 77](#decision-77-a-findings-chart-order-attribution-names-the-record-number-its-order-is)),
+  stamped on the chart as `PatientChart.getOrderRecordNumbers()`: no number for a display two of her orders share, or a
+  record two orders could be, so Triomune-30 held as two orders is named and cites nothing. Ungated by
+  `chartsearchai.drugSafety.citeOrderRecords`, which decides what the MODEL reads; no model reads this sentence, the
+  reason the composed answer's lines cite the same records ([Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)).
+- **The order is looked up by its own display**, which the chip now carries beside the display it prints
+  (`SafetyWarning.orderDisplayPrintedAs`), since an order that has not started prints its start date (issue #553).
+- **The record reaches the references as the MODULE's**, through `extractCitedReferences`, still the one writer of
+  `attachedByTheModule` ([Decision 80](#decision-80-the-module-publishes-the-chart-record-a-cited-finding-fired-on-as-a-citation-the-model-did-not-emit)):
+  `attachedFor` names the findings the sentence states about that order, and grounding publishes no verdict for it.
+  It is added after grounding, which judges what the model cited. A record the model cited itself stays the model's.
+
+### Why not cite the finding records
+
+The line names her orders, so the evidence for it is the orders — what Decision 146 chose for the below-floor
+statement, the other way round. The findings are on the wire beside it as chips.
+
+### Residues
+
+- An order no record unambiguously is names no number, and the sentence reads as before for it.
+- The checks that read the answer's markers read the model's prose, before the statement is appended, so none of
+  them sees the module's markers.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest` (the line's markers in both forms and on the streaming
+answer, the reference attached for its finding, an order two prescriptions share citing nothing, and a record the
+model cited staying the model's), `LlmInferenceServiceScheduledOrderContextTest.anAllergyQuestionStatesHerScheduledOrderWithTheDateItStarts`
+(the order looked up by its own display) and
+`LlmInferenceServiceTest.extractCitedReferences_shouldNotClaimARecordTheModelCitedAlthoughTheModuleStatedItToo`.

@@ -217,7 +217,7 @@ public class CurrentMedicationOrdersTest {
 		List<SafetyWarning> alerts = standingAlerts(fourIbuprofenOrdersAndAnAllergy());
 
 		ConflictingOrderStatement.Stated stated = ConflictingOrderStatement.state("any allergies?",
-			"She is allergic to ibuprofen.", alerts);
+			"She is allergic to ibuprofen.", alerts, Collections.<String, Integer> emptyMap());
 
 		assertTrue(stated.getAnswer().startsWith(
 			"She is allergic to ibuprofen. Currently prescribed: Advil 400mg, Nurofen 200mg. "),

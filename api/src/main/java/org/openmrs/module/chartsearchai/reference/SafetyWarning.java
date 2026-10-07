@@ -143,8 +143,8 @@ public class SafetyWarning {
 	/** @see #subjectRows() */
 	private final List<DrugReference> subjectRows;
 
-	/** @see #currentOrderDisplays() */
-	private final List<String> currentOrderDisplays;
+	/** @see #currentOrderDisplays(), and {@link #orderDisplayPrintedAs} for each one's value. */
+	private final Map<String, String> currentOrderDisplays;
 
 	/** @see #currentMedicationOrders() */
 	private final List<CurrentMedicationOrder> currentMedicationOrders;
@@ -464,7 +464,7 @@ public class SafetyWarning {
 			List<String> namedPartners, boolean aboutAnEndedOrder, String endedOrderStopDate,
 			List<DrugReference> endedOrderRows, boolean ordersSharingASubstance,
 			Collection<String> matchedOrderNames, List<DrugReference> subjectRows,
-			List<CurrentMedicationOrder> currentMedicationOrders, Collection<String> currentOrderDisplays,
+			List<CurrentMedicationOrder> currentMedicationOrders, Map<String, String> currentOrderDisplays,
 			boolean statedInTheAnswer, Map<String, List<DrugReference>> partnerRows,
 			Map<String, String> partnerScheduledStarts, String orderScheduledStart,
 			PatientChartSerializer.AlreadyOrderedDrug alreadyOrdered, boolean aboutAnotherOfHerMedications,
@@ -497,8 +497,8 @@ public class SafetyWarning {
 		this.partnerRows = Collections.unmodifiableMap(rowsByPartner);
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
 		this.currentOrderDisplays = currentOrderDisplays == null || currentOrderDisplays.isEmpty()
-				? Collections.<String> emptyList()
-				: Collections.unmodifiableList(new ArrayList<String>(new LinkedHashSet<String>(currentOrderDisplays)));
+				? Collections.<String, String> emptyMap()
+				: Collections.unmodifiableMap(new LinkedHashMap<String, String>(currentOrderDisplays));
 		this.statedInTheAnswer = statedInTheAnswer;
 		this.ordersSharingASubstance = ordersSharingASubstance;
 		// Copied and wrapped for the reason chartOrderBridges is; never null.
@@ -1286,12 +1286,13 @@ public class SafetyWarning {
 	/**
 	 * This warning, carrying {@code orders} as this patient's own active orders a CONTRAINDICATION about a
 	 * medication she already takes is about — see {@link #currentMedicationOrders()} — and {@code displays}
-	 * as the ones of those a sentence may print — see {@link #currentOrderDisplays()}. Package-private:
+	 * as the ones of those a sentence may print, each with the order's own display it prints — see
+	 * {@link #currentOrderDisplays()} and {@link #orderDisplayPrintedAs}. Package-private:
 	 * written only by {@code DrugSafetyValidator.currentMedicationOrdersOn}, which production reaches from
 	 * {@code DrugSafetyValidator.ContraindicationChips} alone, off the orders either contraindication arm
 	 * recorded for the chip's substance. Changes nothing this warning prints.
 	 */
-	SafetyWarning withCurrentMedicationOrders(List<CurrentMedicationOrder> orders, Collection<String> displays) {
+	SafetyWarning withCurrentMedicationOrders(List<CurrentMedicationOrder> orders, Map<String, String> displays) {
 		return new SafetyWarning(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch,
 				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords,
 				restsOnSharedClassificationAlone, namedPartners, aboutAnEndedOrder, endedOrderStopDate,
@@ -1334,7 +1335,17 @@ public class SafetyWarning {
 	 * finding. Not published: {@link ConflictingOrderStatement} is its reader.
 	 */
 	List<String> currentOrderDisplays() {
-		return currentOrderDisplays;
+		return Collections.unmodifiableList(new ArrayList<String>(currentOrderDisplays.keySet()));
+	}
+
+	/**
+	 * @return the order's own display that {@code printed}, one of {@link #currentOrderDisplays()}, prints —
+	 *         the same string but for an order that has not started, which is printed with its start date (issue
+	 *         #553) — so a reader can look the order up by the display her chart records (ADR Decision 168);
+	 *         {@code null} for a string this chip does not print. Not published.
+	 */
+	String orderDisplayPrintedAs(String printed) {
+		return currentOrderDisplays.get(printed);
 	}
 
 	/**

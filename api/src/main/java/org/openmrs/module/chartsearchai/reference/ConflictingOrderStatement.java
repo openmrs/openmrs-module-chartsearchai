@@ -42,8 +42,11 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * no allergy at all, so only its own words claim exactly what it does. Every such chip is then
  * {@link SafetyWarning#asStatedInTheAnswer() marked}, and still published: the wire keeps every finding,
  * and a client reads {@code statedInTheAnswer} to know the clinician has read it.
- * APPENDS, as {@code EndedOrderStatement} does: no marker, since it offers no record of its own; no
- * prompt change; and never a word about whether any drug may be given.
+ * APPENDS, as {@code EndedOrderStatement} does: no prompt change, and never a word about whether any drug may
+ * be given. Each order it names cites the record that order IS, where one record unambiguously is
+ * ({@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart#getOrderRecordNumbers()},
+ * the injector's rule), and the records it cites are handed back ({@link Stated#getCitedOrderRecords()}) for
+ * the references to carry as the module's — ADR Decision 168.
  *
  * <p><b>When.</b> Only where the question asks about her allergies and neither about her medications nor
  * for a drug-safety reading ({@link #asksOnlyForAllergies}), and only where EVERY chip on the answer is
@@ -70,9 +73,21 @@ public final class ConflictingOrderStatement {
 
 		private final List<SafetyWarning> warnings;
 
-		private Stated(String answer, List<SafetyWarning> warnings) {
+		private final Map<Integer, List<Integer>> citedOrderRecords;
+
+		private Stated(String answer, List<SafetyWarning> warnings, Map<Integer, List<Integer>> citedOrderRecords) {
 			this.answer = answer;
 			this.warnings = warnings;
+			this.citedOrderRecords = citedOrderRecords;
+		}
+
+		/**
+		 * Each order record the statement cites, with the record numbers of the findings it states about that
+		 * order, in the order cited — the input {@code LlmInferenceService.extractCitedReferences} attaches as the
+		 * module's. Empty, never null, where nothing was stated or no order named had a record to cite.
+		 */
+		public Map<Integer, List<Integer>> getCitedOrderRecords() {
+			return citedOrderRecords;
 		}
 
 		public String getAnswer() {
@@ -85,11 +100,13 @@ public final class ConflictingOrderStatement {
 	}
 
 	/**
+	 * @param orderRecordNumbers the record each of her orders' displays is, from the chart the injector built
 	 * @return {@code answer} with her conflicting orders stated and every chip it states marked, or both
 	 *         unchanged where the question or the chips do not qualify — see this class's javadoc.
 	 */
-	public static Stated state(String question, String answer, List<SafetyWarning> warnings) {
-		Stated unchanged = new Stated(answer, warnings);
+	public static Stated state(String question, String answer, List<SafetyWarning> warnings,
+			Map<String, Integer> orderRecordNumbers) {
+		Stated unchanged = new Stated(answer, warnings, Collections.<Integer, List<Integer>> emptyMap());
 		if (answer == null || warnings == null || warnings.isEmpty() || !asksOnlyForAllergies(question)) {
 			return unchanged;
 		}
@@ -107,15 +124,20 @@ public final class ConflictingOrderStatement {
 			}
 			chips.add(chip);
 		}
+		Map<Integer, List<Integer>> cited = new LinkedHashMap<Integer, List<Integer>>();
 		// Semicolons between orders, since a display can carry a comma.
 		Set<String> despiteAnAllergy = new LinkedHashSet<String>();
 		StringBuilder quoted = new StringBuilder();
 		for (Map.Entry<List<String>, List<SafetyWarning>> group : chipsByOrders.entrySet()) {
+			List<String> items = new ArrayList<String>(group.getKey().size());
+			for (String printed : group.getKey()) {
+				items.add(cite(printed, group.getValue(), orderRecordNumbers, cited));
+			}
 			if (everyOneIsAnAllergyToItsOwnDrug(group.getValue())) {
-				despiteAnAllergy.addAll(group.getKey());
+				despiteAnAllergy.addAll(items);
 				continue;
 			}
-			quoted.append(' ').append(CURRENTLY_PRESCRIBED).append(String.join(", ", group.getKey())).append('.');
+			quoted.append(' ').append(CURRENTLY_PRESCRIBED).append(String.join(", ", items)).append('.');
 			for (SafetyWarning chip : group.getValue()) {
 				quoted.append(' ').append(DrugSafetyValidator.endSentence(chip.getDetail().trim()));
 			}
@@ -130,7 +152,33 @@ public final class ConflictingOrderStatement {
 			stated.add(chip.asStatedInTheAnswer());
 		}
 		// Trimmed so a blank answer takes the statement without a leading space.
-		return new Stated(sb.toString().trim(), Collections.unmodifiableList(stated));
+		return new Stated(sb.toString().trim(), Collections.unmodifiableList(stated), Collections.unmodifiableMap(cited));
+	}
+
+	/**
+	 * @return {@code printed} followed by the marker of the record its order is, where the injector numbered
+	 *         one, recording that record in {@code cited} with the findings {@code chips} state about it; else
+	 *         {@code printed} alone, which is what an order two prescriptions share a display with, or one no
+	 *         record unambiguously is, reads.
+	 */
+	private static String cite(String printed, List<SafetyWarning> chips, Map<String, Integer> orderRecordNumbers,
+			Map<Integer, List<Integer>> cited) {
+		Integer number = orderRecordNumbers == null ? null
+				: orderRecordNumbers.get(chips.get(0).orderDisplayPrintedAs(printed));
+		if (number == null) {
+			return printed;
+		}
+		List<Integer> findings = cited.get(number);
+		if (findings == null) {
+			findings = new ArrayList<Integer>();
+			cited.put(number, findings);
+		}
+		for (SafetyWarning chip : chips) {
+			if (chip.getFindingCitation() != null && !findings.contains(chip.getFindingCitation())) {
+				findings.add(chip.getFindingCitation());
+			}
+		}
+		return printed + " [" + number + "]";
 	}
 
 	/** Whether every one of {@code chips}, all about one set of her orders, is an allergy to its own drug. */

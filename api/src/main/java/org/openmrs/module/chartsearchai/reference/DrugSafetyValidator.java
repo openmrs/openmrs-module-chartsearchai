@@ -10297,7 +10297,9 @@ public class DrugSafetyValidator {
 	private static SafetyWarning currentMedicationOrdersOn(SafetyWarning chip,
 			List<PatientClinicalContext.ActiveDrugOrder> orders, boolean printable) {
 		List<SafetyWarning.CurrentMedicationOrder> published = new ArrayList<SafetyWarning.CurrentMedicationOrder>();
-		Set<String> displays = new LinkedHashSet<String>();
+		// Each printed display with the order's own display it prints (ADR Decision 168); the first order to print
+		// one keeps it, as the set this was did.
+		Map<String, String> displays = new LinkedHashMap<String, String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
 			published.add(new SafetyWarning.CurrentMedicationOrder(display, order.getUuid()));
@@ -10305,8 +10307,8 @@ public class DrugSafetyValidator {
 				// An order that has not started is printed with its start date, so "Currently prescribed"
 				// does not read as a drug she is taking (issue #553). The wire list above keeps the order's
 				// own display: its start is not a name.
-				displays.add(order.hasStarted() ? display
-						: display + " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart()) + ")");
+				displays.putIfAbsent(order.hasStarted() ? display
+						: display + " (" + PatientChartSerializer.scheduledToStart(order.getScheduledStart()) + ")", display);
 			}
 		}
 		return chip.withCurrentMedicationOrders(published, displays);

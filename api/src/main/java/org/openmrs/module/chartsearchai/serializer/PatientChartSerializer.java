@@ -561,6 +561,9 @@ public class PatientChartSerializer {
 		/** @see #getProposalOwnOrderFindingLines() */
 		private Map<Integer, String> proposalOwnOrderFindingLines = Collections.<Integer, String> emptyMap();
 
+		/** @see #getOrderRecordNumbers() */
+		private Map<String, Integer> orderRecordNumbers = Collections.<String, Integer> emptyMap();
+
 		public PatientChart(String text, List<RecordMapping> mappings) {
 			this(text, mappings, Collections.<Integer>emptyList());
 		}
@@ -724,6 +727,25 @@ public class PatientChartSerializer {
 		 */
 		public Map<Integer, String> getProposalOwnOrderFindingLines() {
 			return proposalOwnOrderFindingLines;
+		}
+
+		/** Records the record number each of her active orders' displays IS — ADR Decision 168, and
+		 *  {@code DrugReferenceInjector} is the only caller. */
+		public void markOrderRecordNumbers(Map<String, Integer> numbers) {
+			this.orderRecordNumbers = numbers == null || numbers.isEmpty() ? Collections.<String, Integer> emptyMap()
+					: Collections.unmodifiableMap(new LinkedHashMap<String, Integer>(numbers));
+		}
+
+		/**
+		 * The record number of each of this patient's active orders, keyed by the order's display, where one
+		 * record is unambiguously that order — {@code DrugReferenceInjector.orderRecordNumbers}' rule, which
+		 * numbers no display two orders share or a record two orders could be. Empty, never null, on every chart
+		 * the injector numbered none on. {@code ConflictingOrderStatement} cites them after a model's answer (ADR
+		 * Decision 168), which no model reads, so {@code chartsearchai.drugSafety.citeOrderRecords} does not gate
+		 * them — that flag decides what the MODEL reads (ADR Decision 77).
+		 */
+		public Map<String, Integer> getOrderRecordNumbers() {
+			return orderRecordNumbers;
 		}
 
 		/** Records the drugs the question proposes that her active orders already carry — issue #548, and

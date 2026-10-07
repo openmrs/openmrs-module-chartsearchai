@@ -25,6 +25,7 @@ import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -109,17 +110,67 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		return about.get(0);
 	}
 
+	/** The one reference the answer carries to the record {@code orderUuid}'s order IS. */
+	private static RecordReference theOrderRecord(ChartAnswer answer, String orderUuid) {
+		List<RecordReference> found = new ArrayList<RecordReference>();
+		List<String> uuids = new ArrayList<String>();
+		for (RecordReference reference : answer.getReferences()) {
+			uuids.add(reference.getIndex() + ":" + reference.getResourceUuid());
+			if (orderUuid.equals(reference.getResourceUuid())) {
+				found.add(reference);
+			}
+		}
+		assertEquals(1, found.size(), "precondition: one reference to the order's own record, references were: "
+				+ uuids);
+		return found.get(0);
+	}
+
+	/**
+	 * ADR Decision 168: the record the line cites reaches the references as one the MODULE attached, for the
+	 * finding the line states — so a clinician can open her order from the answer.
+	 */
+	private static void assertTheModuleAttachedHerOrder(ChartAnswer answer) {
+		SafetyWarning chip = theAspirinChip(answer);
+		assertTrue(chip.getFindingCitation() != null, "precondition: the chip names its finding's record");
+		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
+		assertTrue(order.isAttachedByTheModule(), "the module cited it, not the model");
+		assertEquals(Collections.singletonList(chip.getFindingCitation()), order.getAttachedFor(),
+				"attached for the finding the line states");
+	}
+
 	@Test
 	public void search_anAllergyQuestionStatesTheConflictingOrderInTheAnswer() throws IOException {
 		ChartAnswer answer = serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION);
 
 		SafetyWarning chip = theAspirinChip(answer);
-		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: " + ORDER_DISPLAY + ".",
-				answer.getAnswer(),
+		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
+		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: " + ORDER_DISPLAY + " ["
+				+ order.getIndex() + "].", answer.getAnswer(),
 				"an allergy recorded to the very drug she is prescribed is stated as one short line naming her order "
-						+ "as her chart spells it, not as her order followed by the chip repeating the allergy list");
+						+ "as her chart spells it and citing the record it is, not as her order followed by the chip "
+						+ "repeating the allergy list");
+		assertTheModuleAttachedHerOrder(answer);
 		assertTrue(chip.isStatedInTheAnswer(),
 				"the chip says the answer states it, so a client need not render it a second time");
+	}
+
+	/**
+	 * A record the MODEL already cited stays the model's citation, as a record the model cited stays its own
+	 * under issue #305's attachment: the module's marker beside it claims nothing the model did not.
+	 */
+	@Test
+	public void search_anOrderRecordTheModelCitedStaysTheModelsCitation() throws IOException {
+		int number = theOrderRecord(serviceAnswering(MODEL_ANSWER).search(patient, ALLERGY_QUESTION),
+				Context.getOrderService().getOrder(111).getUuid()).getIndex();
+		String modelAnswer = "Yes — the patient has a recorded allergy to Aspirin [1], and takes aspirin [" + number + "].";
+
+		ChartAnswer answer = serviceAnswering(modelAnswer).search(patient, ALLERGY_QUESTION);
+
+		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
+		assertEquals(number, order.getIndex(), "precondition: the same chart numbers the order alike");
+		assertEquals(modelAnswer + " Currently prescribed despite a recorded allergy: " + ORDER_DISPLAY + " [" + number
+				+ "].", answer.getAnswer(), "the line still cites it");
+		assertFalse(order.isAttachedByTheModule(), "and the reference stays the one the model emitted");
 	}
 
 	@Test
@@ -129,8 +180,10 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				token -> { }, reasoning -> { }, citations -> { }, early::add);
 
 		SafetyWarning chip = theAspirinChip(answer);
-		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: " + ORDER_DISPLAY + ".",
-				answer.getAnswer(), "the streaming path completes the final answer the same way");
+		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
+		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: " + ORDER_DISPLAY + " ["
+				+ order.getIndex() + "].", answer.getAnswer(), "the streaming path completes the final answer the same way");
+		assertTheModuleAttachedHerOrder(answer);
 		assertTrue(chip.isStatedInTheAnswer(), "and marks the chip the same way");
 		assertEquals(1, early.size(), "precondition: the early done fired");
 		assertEquals(MODEL_ANSWER, early.get(0).getAnswer(),
@@ -141,7 +194,8 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 	 * The reported shape: two of her orders, each the drug of one of her recorded allergies. Patient 2 of the
 	 * standard dataset holds an aspirin order and Triomune-30, which carries nevirapine; she is recorded as
 	 * allergic to both. One line names both orders as her chart spells them, a semicolon between them, since
-	 * a display can carry a comma.
+	 * a display can carry a comma. Triomune-30 is TWO of her orders, so no one record is the item it names, and
+	 * it cites none — the injector's rule, which numbers a display only where it is one record.
 	 */
 	@Test
 	public void search_twoOrdersEachConflictingWithItsOwnAllergyShareOneLine() throws IOException {
@@ -155,8 +209,15 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		for (SafetyWarning chip : answer.getSafetyWarnings()) {
 			assertTrue(chip.isStatedInTheAnswer(), "every chip is stated, was: " + chip);
 		}
-		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: Triomune-30; ASPIRIN.",
-				answer.getAnswer(), "both orders in one line, chips were: " + answer.getSafetyWarnings());
+		RecordReference aspirin = theOrderRecord(answer, Context.getOrderService().getOrder(444).getUuid());
+		assertEquals(MODEL_ANSWER + " Currently prescribed despite a recorded allergy: Triomune-30; ASPIRIN ["
+				+ aspirin.getIndex() + "].", answer.getAnswer(),
+				"both orders in one line, the one that is one record citing it, chips were: " + answer.getSafetyWarnings());
+		for (RecordReference reference : answer.getReferences()) {
+			assertTrue(!reference.isAttachedByTheModule() || reference.getIndex() == aspirin.getIndex(),
+					"no record is attached for the item no one record is, was: " + reference.getIndex() + " "
+							+ reference.getResourceUuid());
+		}
 	}
 
 	/**
@@ -179,8 +240,11 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		SafetyWarning chip = theAspirinChip(answer);
 		assertTrue(chip.getDetail().contains("same ATC class") && chip.getDetail().contains("Clopidogrel"),
 				"precondition: the chip is the cross-reactivity finding, was: " + chip.getDetail());
-		assertEquals(modelAnswer + " Currently prescribed: " + ORDER_DISPLAY + ". " + chip.getDetail() + ".",
-				answer.getAnswer(), "the order is named and the finding quoted, claiming no allergy to the order itself");
+		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
+		assertEquals(modelAnswer + " Currently prescribed: " + ORDER_DISPLAY + " [" + order.getIndex() + "]. "
+				+ chip.getDetail() + ".", answer.getAnswer(),
+				"the order is named, cited and the finding quoted, claiming no allergy to the order itself");
+		assertTheModuleAttachedHerOrder(answer);
 		assertTrue(chip.isStatedInTheAnswer(), "and the chip is still marked stated");
 	}
 
@@ -201,8 +265,16 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 		}
 		assertEquals(2, details.size(), "precondition: her own aspirin allergy and the clopidogrel cross-reactivity "
 				+ "both raise a chip, chips were: " + answer.getSafetyWarnings());
-		assertEquals(MODEL_ANSWER + " Currently prescribed: " + ORDER_DISPLAY + ". " + details.get(0) + " "
-				+ details.get(1) + ".", answer.getAnswer(), "the order once, then each finding about it in its own words");
+		RecordReference order = theOrderRecord(answer, Context.getOrderService().getOrder(111).getUuid());
+		assertEquals(MODEL_ANSWER + " Currently prescribed: " + ORDER_DISPLAY + " [" + order.getIndex() + "]. "
+				+ details.get(0) + " " + details.get(1) + ".", answer.getAnswer(),
+				"the order once, cited, then each finding about it in its own words");
+		List<Integer> findings = new ArrayList<Integer>();
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			findings.add(chip.getFindingCitation());
+		}
+		assertTrue(order.isAttachedByTheModule(), "the module cited it");
+		assertEquals(findings, order.getAttachedFor(), "for every finding the line states about the order");
 	}
 
 	@Test

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
@@ -139,8 +140,30 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 
 		// The placeholder concept the free-text allergen needs (88) is her aspirin's, so the answer states her
 		// aspirin order as well; this case is about the Rifampicin statement.
-		assertEquals(modelAnswer + " Currently prescribed despite a recorded allergy: ASPIRIN; Rifampicin (" + STARTS
-				+ ").", answer.getAnswer(), "the order is stated with its start date");
+		// Each order cites the record it is (ADR Decision 168) — the one reference carrying its uuid.
+		assertEquals(modelAnswer + " Currently prescribed despite a recorded allergy: ASPIRIN ["
+				+ orderRecordOf(answer, "ASPIRIN") + "]; Rifampicin (" + STARTS + ") [" + orderRecordOf(answer, "Rifampicin")
+				+ "].", answer.getAnswer(), "the order is stated with its start date");
+	}
+
+	/** The index of the one reference to the record of the order a chip names by {@code display}. */
+	private static int orderRecordOf(ChartAnswer answer, String display) {
+		String uuid = null;
+		for (SafetyWarning chip : answer.getSafetyWarnings()) {
+			for (SafetyWarning.CurrentMedicationOrder order : chip.currentMedicationOrders()) {
+				if (display.equals(order.getOrderDisplay())) {
+					uuid = order.getOrderUuid();
+				}
+			}
+		}
+		List<Integer> found = new ArrayList<Integer>();
+		for (ChartSearchService.RecordReference reference : answer.getReferences()) {
+			if (uuid != null && uuid.equals(reference.getResourceUuid())) {
+				found.add(reference.getIndex());
+			}
+		}
+		assertEquals(1, found.size(), "precondition: one reference to the record of " + display + " (" + uuid + ")");
+		return found.get(0);
 	}
 
 	@Test

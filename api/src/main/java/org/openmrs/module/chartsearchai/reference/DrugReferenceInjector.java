@@ -1023,6 +1023,10 @@ public class DrugReferenceInjector {
 		// 147), which LlmInferenceService states after a model's answer that does not cite it.
 		injected.markProposalOwnOrderFindingLines(proposalOwnOrderFindingLines(question, questionDrugs, findings,
 				findingNumbers));
+		// And the record each of her orders is (ADR Decision 168), which ConflictingOrderStatement cites after a
+		// model's answer — the module's own sentence, so ungated, as the composed answer's numbers are.
+		injected.markOrderRecordNumbers(orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
+				: orderRecordNumbers);
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
 		// derives its KV-cache decision from PatientChart.isQueryScoped() precisely so a mode-flip /
 		// GP-read race cannot mis-scope the persist; a fresh PatientChart defaults the flag to false,

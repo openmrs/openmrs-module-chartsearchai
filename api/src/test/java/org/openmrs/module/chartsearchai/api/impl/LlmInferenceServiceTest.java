@@ -20,6 +20,8 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
@@ -246,6 +248,32 @@ public class LlmInferenceServiceTest {
 			assertFalse(reference.isAttachedByTheModule(), "reference [" + reference.getIndex()
 					+ "] was cited by the model — inline for [1], in the array for [2] — so neither is "
 					+ "the module's citation");
+		}
+	}
+
+	/**
+	 * A record a sentence the module appended cites (ADR Decision 168) and the model cited too stays the
+	 * model's citation, as a derivation the model cited does: the module's marker beside it claims nothing the
+	 * model did not, and only one the model did not cite is the module's. The production caller,
+	 * {@code withReferencesTheModuleStated}, hands no model citations and keeps the model's references itself,
+	 * so this is the rule for any caller handing both.
+	 */
+	@Test
+	public void extractCitedReferences_shouldNotClaimARecordTheModelCitedAlthoughTheModuleStatedItToo() {
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(1, "allergy", uuid(456), null, "Allergy: Aspirin"),
+				new RecordMapping(2, "drug_order", uuid(457), null, "Drug order: Aspirin"));
+		Map<Integer, List<Integer>> stated = new LinkedHashMap<Integer, List<Integer>>();
+		stated.put(Integer.valueOf(1), Collections.<Integer> emptyList());
+		stated.put(Integer.valueOf(2), Collections.<Integer> emptyList());
+
+		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
+				"She is allergic to aspirin [1].", null, mappings, stated);
+
+		assertEquals(2, result.size(), "both records resolve, was: " + result.size());
+		for (RecordReference reference : result) {
+			assertEquals(reference.getIndex() == 2, reference.isAttachedByTheModule(), "[" + reference.getIndex()
+					+ "]: the model cited [1], so only [2] is the module's");
 		}
 	}
 

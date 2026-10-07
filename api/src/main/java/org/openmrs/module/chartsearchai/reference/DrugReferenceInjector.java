@@ -4104,9 +4104,22 @@ public class DrugReferenceInjector {
 	 * @param drugClass the class name {@link DrugReferenceService#namedDrugClass} answered with
 	 */
 	private static String renderDrugClassNote(String drugClass) {
-		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". Reference entries are indexed by "
-				+ "individual substance name, so the class was not resolved to any substance. "
-				+ "Ask about a specific drug by name.";
+		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". " + DRUG_CLASS_NOTE_BODY;
+	}
+
+	/** What the drug-class note says after naming the class — one string for the note and the answer's statement. */
+	private static final String DRUG_CLASS_NOTE_BODY = "Reference entries are indexed by individual substance name, so "
+			+ "the class was not resolved to any substance. Ask about a specific drug by name.";
+
+	/**
+	 * The drug-class note's words as a sentence of the answer (ADR Decision 166), stated after a model's answer that
+	 * does not cite the note: {@link #renderDrugClassNote} less its record-type prefix, the class named as the
+	 * question's.
+	 *
+	 * @param drugClass the class {@code ChartSearchAiUtils.unresolvedDrugClass} read off the injected chart
+	 */
+	public static String drugClassStatement(String drugClass) {
+		return "The question names the drug class \"" + drugClass + "\". " + DRUG_CLASS_NOTE_BODY;
 	}
 
 	/**

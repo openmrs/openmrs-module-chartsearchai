@@ -336,6 +336,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
 					chart.getListedDrugsWithNoActiveOrder());
+			// And the drug-class note's own sentence where the answer does not cite the note (ADR Decision 166).
+			completedAnswer = DrugClassStatement.withDrugClassStated(completedAnswer, unresolvedDrugClass, cited);
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
 			// chips it states, which is why the chips it hands back are the ones the answer carries.
@@ -785,9 +787,10 @@ public class LlmInferenceService implements ChartSearchService {
 			// The listed-drug sentence (issue #515) is on this answer too: the chart stamped it before the
 			// model was asked, so unlike the ended-order sentence it owes the chips nothing.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(
-					ListedDrugStatement.withListedDrugsStated(OwnOrderFindingStatement.withUnstatedOwnOrderFindings(
-							response.getAnswer(), cited, chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
-							chart.getListedDrugsWithNoActiveOrder()), cited,
+					DrugClassStatement.withDrugClassStated(ListedDrugStatement.withListedDrugsStated(
+							OwnOrderFindingStatement.withUnstatedOwnOrderFindings(response.getAnswer(), cited,
+									chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
+							chart.getListedDrugsWithNoActiveOrder()), unresolvedDrugClass, cited), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
@@ -912,6 +915,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// #515), as the pre-answer pass stamped them on the chart.
 			completedAnswer = ListedDrugStatement.withListedDrugsStated(completedAnswer,
 					chart.getListedDrugsWithNoActiveOrder());
+			// And the drug-class note's own sentence where the answer does not cite the note (ADR Decision 166).
+			completedAnswer = DrugClassStatement.withDrugClassStated(completedAnswer, unresolvedDrugClass, cited);
 			// And, on a question asking only for her allergies, which of her own orders conflict with them
 			// (ADR Decision 124) — last, so it follows every sentence the module appends, and it marks the
 			// chips it states, which is why the chips it hands back are the ones the answer carries.

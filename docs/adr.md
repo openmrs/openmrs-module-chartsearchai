@@ -14798,3 +14798,32 @@ not hold still closes the answer.
 `LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionTheCheckRelatesToNoneOfHerOrdersIsAnsweredBesideHerOwnOrdersSharingASubstance`
 and `…aListQuestionWhoseFindingsAboutTheDrugAnswerItIsAnsweredBesideHerOwnOrdersSharingASubstance` failed before the
 change (the model was asked), and both fail when the finding is set aside but not stated.
+
+## Decision 166: A question naming a drug class is told so in the answer itself
+
+**Status: Accepted** (October 2026) — implemented, no issue. Completes the half of
+[Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
+that left the statement to clients.
+
+### Context
+
+A question naming a class ("Can I give her an NSAID?") injects the `drug_class_note` record (#354) and publishes
+the class as `unresolvedDrugClass`. The model was measured not to relay the note, which is why the key exists, but
+no client draws the key: openmrs-esm-chartsearchai reads it nowhere. On the demo (2026-10-07) all five sweep patients
+were answered "The records do not address whether an NSAID can be given." (or "the safety of giving an NSAID"), and
+nothing else.
+
+### The decision
+
+`DrugClassStatement` appends the note's own words, as `DrugReferenceInjector.drugClassStatement` states them, after
+a model's answer that does not cite the note — on `/search`, on the streaming answer and on the early `done` answer.
+It keeps the model's answer rather than replacing it, since the module cannot relate a class to her records (an
+allergy recorded against a class member is one the model may name). It carries no citation marker, as no sentence the
+module appends does (Decision 80's rule).
+
+### The gate
+
+`LlmInferenceServiceUnresolvedDrugClassTest.search_statesTheClassNoteAfterAnAnswerThatDoesNotCiteIt` and
+`…searchStreaming_statesTheClassNoteOnTheUngroundedAnswerAndTheFinalOne` failed before the change.
+`…anAnswerCitingTheClassNoteIsLeftAsItIs` fails when the citation guard is removed, and the streaming case fails when
+the early answer is left without the sentence.

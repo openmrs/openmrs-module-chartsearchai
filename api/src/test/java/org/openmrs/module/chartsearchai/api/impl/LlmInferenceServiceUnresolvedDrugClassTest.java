@@ -59,6 +59,11 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContextSensitiveTest {
 
+	/** What the module states after an answer that does not cite the class note (ADR Decision 166). */
+	private static final String CLASS_STATEMENT = "The question names the drug class \"oral contraceptive\". Reference "
+			+ "entries are indexed by individual substance name, so the class was not resolved to any substance. Ask "
+			+ "about a specific drug by name.";
+
 	/** The issue's headline question, verbatim. */
 	private static final String CLASS_QUESTION = "Can I start this patient on an oral contraceptive?";
 
@@ -151,6 +156,61 @@ public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContex
 	}
 
 	/**
+	 * The class reaches the answer's own words too (ADR Decision 166): the key above is drawn by no client yet, so on
+	 * the demo (2026-10-07) "Can I give her an NSAID?" read "The records do not address whether an NSAID can be given."
+	 * and nothing else, for every patient asked. The note's own sentence is stated after the model's answer.
+	 */
+	@Test
+	public void search_statesTheClassNoteAfterAnAnswerThatDoesNotCiteIt() {
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedDrugClassNoteChart(CLASS_QUESTION))
+				.search(patient(), CLASS_QUESTION);
+
+		assertEquals(StubProvider.ANSWER + " " + CLASS_STATEMENT, answer.getAnswer());
+	}
+
+	/** Both answers the streaming method hands back carry it: the early one is what the {@code done} event shows. */
+	@Test
+	public void searchStreaming_statesTheClassNoteOnTheUngroundedAnswerAndTheFinalOne() {
+		final List<String> ungrounded = new ArrayList<String>();
+
+		ChartAnswer answer = serviceOver(DrugReferenceTestSupport.injectedDrugClassNoteChart(CLASS_QUESTION))
+				.searchStreaming(patient(), CLASS_QUESTION, token -> { }, reasoning -> { }, citations -> { },
+						early -> ungrounded.add(early.getAnswer()));
+
+		assertEquals(Collections.singletonList(StubProvider.ANSWER + " " + CLASS_STATEMENT), ungrounded);
+		assertEquals(StubProvider.ANSWER + " " + CLASS_STATEMENT, answer.getAnswer());
+	}
+
+	/** An answer that cites the note already relays it, so nothing is stated twice. */
+	@Test
+	public void anAnswerCitingTheClassNoteIsLeftAsItIs() {
+		PatientChart injected = DrugReferenceTestSupport.injectedDrugClassNoteChart(CLASS_QUESTION);
+		Integer note = null;
+		for (RecordMapping mapping : injected.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE.equals(mapping.getResourceType())) {
+				note = Integer.valueOf(mapping.getIndex());
+			}
+		}
+		assertNotNull(note, "premise: the chart carries the class note");
+		final String citing = "The question names a drug class rather than a drug [" + note + "].";
+		final List<Integer> citations = Collections.singletonList(note);
+		TestableService service = serviceOver(injected);
+		service.setLlmProvider(new StubProvider() {
+
+			@Override
+			public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
+					String cacheScope, String cacheSeedRecords, boolean enumerateFindings,
+					LlmEngine.ReferenceRecords referenceRecords, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
+				return new LlmResponse(citing, citations);
+			}
+		});
+
+		ChartAnswer answer = service.search(patient(), CLASS_QUESTION);
+
+		assertEquals(citing, answer.getAnswer());
+	}
+
+	/**
 	 * The statement is read off the CHART and never by asking the question again. This is the one
 	 * arrangement that can tell those apart: the question names a recognised class, but the chart the
 	 * model was given carries no note — which is what a resolved substance, or a question-driven
@@ -165,6 +225,7 @@ public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContex
 
 		assertNull(answer.getUnresolvedDrugClass(),
 				"a chart carrying no class note must state no class, whatever the question said");
+		assertEquals(StubProvider.ANSWER, answer.getAnswer(), "and states no class in the answer either");
 	}
 
 	/**
@@ -229,7 +290,7 @@ public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContex
 	 * Answers what the issue's live run measured, verbatim — an answer that relays no part of the
 	 * note and emits no citation marker, which is the state these cases have to hold under.
 	 */
-	private static final class StubProvider extends LlmProvider {
+	private static class StubProvider extends LlmProvider {
 
 		private static final String ANSWER =
 				"The records do not address starting an oral contraceptive for this patient.";

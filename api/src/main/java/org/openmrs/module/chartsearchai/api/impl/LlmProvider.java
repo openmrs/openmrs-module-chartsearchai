@@ -462,15 +462,19 @@ public class LlmProvider {
 	 * @return the LLM's response with answer text and structured citation indices
 	 */
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-			boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+			String cacheScope, String cacheSeedRecords, boolean enumerateFindings,
+			LlmEngine.ReferenceRecords referenceRecords,
 			List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
 				findingProse(enumerateFindings), drugsAlreadyOrdered);
+		// The KV seed, as searchStreaming builds it: the chart before injection, which warmup primes (ADR Decisions
+		// 157, 164). A null scope sends a null seed, and the engine does no disk KV work.
+		String cacheSeed = cacheScope == null ? null : buildUserMessage(cacheSeedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
-				systemPrompt, userMessage, timeoutSeconds, referenceRecords);
+				systemPrompt, userMessage, timeoutSeconds, cacheScope, cacheSeed, referenceRecords);
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());

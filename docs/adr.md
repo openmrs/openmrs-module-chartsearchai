@@ -14743,3 +14743,31 @@ cases in `LlmInferenceServiceAnswerFromFindingsContextTest` failed on the old wo
 
 The prompt-facing half — the note still reaches the model where the module does not answer — was not re-measured
 for verdict polarity; the property that measurement was about, the order of the two propositions, is unchanged.
+
+## Decision 164: The non-streaming search starts from the saved chart prefix too
+
+**Status: Accepted** (October 2026) — implemented, no issue. Closes the residue
+[Decision 157](#decision-157-every-streaming-query-starts-from-the-patients-saved-chart-prefix) named first.
+
+### Context
+
+Decision 157 made every streaming answer start from the patient's saved chart prefix, so an answer no longer depended
+on what the model server ran before it. `POST /chartsearchai/search` was left out: `LlmProvider.search` took no
+cache scope, so an API client's answer still followed whatever the slot last held.
+
+### The decision
+
+- `LlmProvider.search` takes the scope and the pre-injection chart (`cacheSeedRecords`) as `searchStreaming` does,
+  and `LlmInferenceService.search` hands them over for the answer and for the finding-enumeration repair pass.
+- `LlmEngine` gains a scoped `infer`, a default falling back to the unscoped form for an engine with no KV cache.
+  `LocalLlmEngine` implements it through `startFromSavedPrefix` — the restore block moved out of `inferStreaming`,
+  so both answer paths run the one rule.
+
+### The gate
+
+`LlmProviderTest.search_seedsTheKvOffTheChartBeforeInjection_asSearchStreamingDoes` and
+`FindingEnumerationClauseContextTest.theSearchPassCarriesTheScopeAndSeedsItsKvOffTheChartBeforeInjection` pin the
+hand-off; each reddens on its mutation (the unscoped `infer` called; no scope, or the injected chart, handed over).
+`LocalEngineAnswerHistoryIndependenceTest.aDrugQuestionOnTheSearchPathIsAnsweredTheSameWhateverTheEngineDidBeforeIt`
+drives `/search` through the real engine over the five histories; with `startFromSavedPrefix` dropped from the scoped
+`infer` it fails ("… must be answered identically after the …").

@@ -48,8 +48,8 @@ which is the root file's "Documenting a decision" rule.
 - **`--host 127.0.0.1` and `--no-webui` are load-bearing, not tidiness.** The first stops an
   inherited `LLAMA_ARG_HOST` widening the bind; the second closes the Web UI root.
   → ADR Decision 107, rows 4 and 6; `LocalLlmServerAuthTest`.
-- **Every streaming query restores its saved prefix first** (`LocalLlmEngine.kvQueryAction`).
-  → ADR Decision 157.
+- **Every query, streaming or not, restores its saved prefix first** (`LocalLlmEngine.kvQueryAction`).
+  → ADR Decisions 157, 164.
 
 ## Its opt-in test suites
 

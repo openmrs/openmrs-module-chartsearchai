@@ -265,7 +265,7 @@ public class LlmInferenceServiceWarmupIntegrationTest {
 		// reaches is a tripwire that cannot fire.
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			throw new UnsupportedOperationException("warmup tests should never reach search");
 		}

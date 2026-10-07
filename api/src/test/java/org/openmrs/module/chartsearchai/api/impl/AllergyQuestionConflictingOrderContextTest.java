@@ -213,7 +213,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return new LlmResponse(answer, Collections.singletonList(Integer.valueOf(1)));
 		}
@@ -224,7 +224,7 @@ public class AllergyQuestionConflictingOrderContextTest extends BaseModuleContex
 				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			tokenConsumer.accept(answer);
-			return search(numberedRecords, focusIndices, question, enumerateFindings, referenceRecords,
+			return search(numberedRecords, focusIndices, question, cacheScope, cacheSeedRecords, enumerateFindings, referenceRecords,
 					drugsAlreadyOrdered);
 		}
 	}

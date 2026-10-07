@@ -620,6 +620,26 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 	 * the warmup made and computes the appended records on top of it (ADR Decision 157). The harness
 	 * tells the two apart: the strategy serves one chart and the injector hands back another.
 	 */
+	/** The non-streaming path hands the provider the same scope and pre-injection seed the streaming one does (ADR
+	 *  Decision 164); until then it handed neither, and /search answered from whatever the slot held. */
+	@Test
+	public void theSearchPassCarriesTheScopeAndSeedsItsKvOffTheChartBeforeInjection() {
+		PatientChart base = baseChart();
+		PatientChart injected = chartWithSeveralFindings();
+		RecordingProvider provider = new RecordingProvider();
+		TestableService service = newService(base, injected, provider);
+		Patient patient = new Patient();
+		patient.setUuid("uuid-1");
+
+		service.search(patient, QUESTION);
+
+		assertEquals(Arrays.asList("uuid-1"), provider.searchScopes, "one pass, carrying the patient's KV scope");
+		assertEquals(Arrays.asList(injected.getText()), provider.searchRecords,
+				"the model must be asked over the injected chart");
+		assertEquals(Arrays.asList(base.getText()), provider.searchSeedRecords,
+				"and the KV seed must be the chart before injection");
+	}
+
 	@Test
 	public void theCommittedPassSeedsItsKvOffTheChartBeforeInjection() {
 		PatientChart base = baseChart();
@@ -745,6 +765,13 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 		/** The KV-cache scope each streaming pass was handed, in order — null is the preview. */
 		private final List<String> streamingScopes = new ArrayList<String>();
 
+		/** What each non-streaming pass was handed: its KV scope, its prompt's records, its seed's records. */
+		private final List<String> searchScopes = new ArrayList<String>();
+
+		private final List<String> searchRecords = new ArrayList<String>();
+
+		private final List<String> searchSeedRecords = new ArrayList<String>();
+
 		/** The records each streaming pass was prompted with, and the records its KV seed was cut from. */
 		private final List<String> streamingRecords = new ArrayList<String>();
 
@@ -752,9 +779,12 @@ public class FindingEnumerationClauseContextTest extends BaseModuleContextSensit
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String question, String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			lastFlag = Boolean.valueOf(enumerateFindings);
+			searchScopes.add(cacheScope);
+			searchRecords.add(numberedRecords);
+			searchSeedRecords.add(cacheSeedRecords);
 			return new LlmResponse("No.", Collections.<Integer> emptyList());
 		}
 

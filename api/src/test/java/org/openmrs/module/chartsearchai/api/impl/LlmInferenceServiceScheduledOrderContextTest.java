@@ -220,7 +220,7 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
-				boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			prompt = numberedRecords;
 			return new LlmResponse(answer, Collections.singletonList(Integer.valueOf(1)));
@@ -232,7 +232,7 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 				String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<PatientChartSerializer.AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			tokenConsumer.accept(answer);
-			return search(numberedRecords, focusIndices, question, enumerateFindings, referenceRecords,
+			return search(numberedRecords, focusIndices, question, cacheScope, cacheSeedRecords, enumerateFindings, referenceRecords,
 				drugsAlreadyOrdered);
 		}
 	}

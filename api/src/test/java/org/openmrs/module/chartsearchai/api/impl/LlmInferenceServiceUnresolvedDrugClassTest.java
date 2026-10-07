@@ -236,7 +236,7 @@ public class LlmInferenceServiceUnresolvedDrugClassTest extends BaseModuleContex
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String question, String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return new LlmResponse(ANSWER, Collections.<Integer> emptyList());
 		}

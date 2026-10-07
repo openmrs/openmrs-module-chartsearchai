@@ -359,7 +359,7 @@ public class LlmInferenceServiceCitationWiringTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String question, String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}
@@ -382,7 +382,7 @@ public class LlmInferenceServiceCitationWiringTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
+				String question, String cacheScope, String cacheSeedRecords, boolean enumerateFindings, LlmEngine.ReferenceRecords referenceRecords,
 				List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			return canned();
 		}

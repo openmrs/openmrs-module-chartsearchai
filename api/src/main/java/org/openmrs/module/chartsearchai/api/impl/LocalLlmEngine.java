@@ -221,6 +221,56 @@ public class LocalLlmEngine implements LlmEngine {
 				timeoutSeconds);
 	}
 
+	/**
+	 * As {@link #infer(String, String, int, ReferenceRecords)}, starting from the patient's saved chart prefix as
+	 * {@link #inferStreaming} does, so a {@code /search} answer depends on its prompt and not on what this server
+	 * ran before it (ADR Decisions 157, 164).
+	 */
+	@Override
+	public synchronized InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds,
+			String cacheScope, String cacheSeed, final ReferenceRecords referenceRecords) {
+		ensureServerRunning();
+		startFromSavedPrefix(systemPrompt, timeoutSeconds, cacheScope, cacheSeed);
+		return postForResult(buildRequestBody(systemPrompt, userMessage, false, referenceRecords),
+				timeoutSeconds);
+	}
+
+	/**
+	 * Restores the patient's saved chart prefix into the slot before an answer, making the entry first where there is
+	 * none — the ONE place the rule lives for both answer paths ({@link #inferStreaming} and the scoped
+	 * {@link #infer}). A null {@code cacheSeed}, or KV persistence off, does nothing.
+	 */
+	private void startFromSavedPrefix(String systemPrompt, int timeoutSeconds, String cacheScope, String cacheSeed) {
+		// Every query starts from the patient's SAVED chart prefix, restored into the slot, and never
+		// from whatever the slot last held — ADR Decision 157. llama-server's prefix reuse is
+		// deterministic per path but not equal across paths, so a slot left by a warmup, by an earlier
+		// question, by this question a moment ago or by a fresh prefill each moved a borderline answer
+		// (measured on the demo and locally). The seed is the question-INDEPENDENT prefix #warmup
+		// primes, so warmup-saved and query-saved entries share one filename per patient+chart; a
+		// missing entry is made the way warmup makes it, and then restored like any other, because a
+		// slot that has just been primed is itself a different path from one restored from disk.
+		String cacheDir = loadedSlotSavePath;
+		String cacheKey = (cacheDir != null && cacheSeed != null)
+				? kvCacheKey(cacheScope, systemPrompt, cacheSeed,
+						modelDiscriminator(loadedModelPath, loadedContextSize))
+				: null;
+		KvQueryAction action = kvQueryAction(cacheKey != null,
+				cacheKey != null && new File(cacheDir, cacheKey).isFile());
+		if (action == KvQueryAction.PRIME_SAVE_AND_RESTORE) {
+			primeAndPersist(systemPrompt, cacheSeed, timeoutSeconds, cacheKey, cacheScope, cacheDir, false);
+		}
+		if (action != KvQueryAction.NONE) {
+			if (restoreSlot(cacheKey, timeoutSeconds)) {
+				log.debug("Query restored KV cache from disk: {}", cacheKey);
+			}
+			else {
+				log.warn("Query could not restore the saved KV prefix {}; this answer starts from "
+						+ "whatever the server last held, so the same question may be answered "
+						+ "differently next time", cacheKey);
+			}
+		}
+	}
+
 	@Override
 	public synchronized InferenceResult infer(String systemPrompt, String userMessage,
 			int timeoutSeconds, ObjectNode responseFormat) {
@@ -289,34 +339,7 @@ public class LocalLlmEngine implements LlmEngine {
 			final ReferenceRecords referenceRecords) {
 		ensureServerRunning();
 
-		// Every query starts from the patient's SAVED chart prefix, restored into the slot, and never
-		// from whatever the slot last held — ADR Decision 157. llama-server's prefix reuse is
-		// deterministic per path but not equal across paths, so a slot left by a warmup, by an earlier
-		// question, by this question a moment ago or by a fresh prefill each moved a borderline answer
-		// (measured on the demo and locally). The seed is the question-INDEPENDENT prefix #warmup
-		// primes, so warmup-saved and query-saved entries share one filename per patient+chart; a
-		// missing entry is made the way warmup makes it, and then restored like any other, because a
-		// slot that has just been primed is itself a different path from one restored from disk.
-		String cacheDir = loadedSlotSavePath;
-		String cacheKey = (cacheDir != null && cacheSeed != null)
-				? kvCacheKey(cacheScope, systemPrompt, cacheSeed,
-						modelDiscriminator(loadedModelPath, loadedContextSize))
-				: null;
-		KvQueryAction action = kvQueryAction(cacheKey != null,
-				cacheKey != null && new File(cacheDir, cacheKey).isFile());
-		if (action == KvQueryAction.PRIME_SAVE_AND_RESTORE) {
-			primeAndPersist(systemPrompt, cacheSeed, timeoutSeconds, cacheKey, cacheScope, cacheDir, false);
-		}
-		if (action != KvQueryAction.NONE) {
-			if (restoreSlot(cacheKey, timeoutSeconds)) {
-				log.debug("Query restored KV cache from disk: {}", cacheKey);
-			}
-			else {
-				log.warn("Query could not restore the saved KV prefix {}; this answer starts from "
-						+ "whatever the server last held, so the same question may be answered "
-						+ "differently next time", cacheKey);
-			}
-		}
+		startFromSavedPrefix(systemPrompt, timeoutSeconds, cacheScope, cacheSeed);
 
 		String requestBody = buildRequestBody(systemPrompt, userMessage, true, referenceRecords);
 

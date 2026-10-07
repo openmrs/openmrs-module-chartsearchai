@@ -1065,6 +1065,17 @@ public class LlmProviderTest {
 			throw new AssertionError("streaming test must not call infer");
 		}
 
+		/** The scoped non-streaming form {@code search} calls since ADR Decision 164. */
+		@Override
+		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds, String cacheScope,
+				String cacheSeed, ReferenceRecords referenceRecords) {
+			this.capturedSystem = systemPrompt;
+			this.capturedUserMessage = userMessage;
+			this.capturedScope = cacheScope;
+			this.capturedSeed = cacheSeed;
+			return new InferenceResult("{\"reasoning\": \"r\", \"answer\": \"a\", \"citations\": []}", 1, 1, 0);
+		}
+
 		@Override
 		public InferenceResult inferStreaming(String s, String u, int t, Consumer<String> c) {
 			throw new AssertionError("the scope-aware 6-arg overload must be used so KV scoping reaches the engine");
@@ -1195,6 +1206,26 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void search_seedsTheKvOffTheChartBeforeInjection_asSearchStreamingDoes() {
+		// The non-streaming /search path reuses the same KV discipline (ADR Decision 164): the scope reaches the
+		// engine, and the seed is the chart warmup primes — never the prompt's injected records.
+		CapturingEngine engine = new CapturingEngine();
+		LlmProvider provider = providerWith(engine);
+		String chart = "1. [2024-01-01] BP 120/80\n2. [2024-02-02] HbA1c 7.1%";
+		String prompted = chart + "\n3. Drug reference: Warfarin. Major interactions: ketoprofen.";
+		List<Integer> focus = Arrays.asList(1, 2);
+
+		provider.search(prompted, focus, "Is warfarin safe for her?", "patient-uuid-42", chart, false,
+				LlmEngine.ReferenceRecords.PRESENT, Collections.emptyList());
+
+		assertEquals("patient-uuid-42", engine.capturedScope, "the patient's scope must reach the engine");
+		assertEquals(LlmProvider.buildUserMessage(prompted, focus, "Is warfarin safe for her?"),
+				engine.capturedUserMessage, "the model must still be asked over the injected records");
+		assertEquals(LlmProvider.buildUserMessage(chart, ""), engine.capturedSeed,
+				"the KV seed must be the chart warmup primes, before the module's appended records");
+	}
+
+	@Test
 	public void searchStreaming_seedsTheKvOffTheChartBeforeInjection_notOffThePromptsRecords() {
 		// A drug question's prompt carries reference records the module appended after the chart. The
 		// seed must be the chart WITHOUT them — what warmup primes — so the query restores the entry a
@@ -1278,7 +1309,7 @@ public class LlmProviderTest {
 		List<Integer> focus = Arrays.asList(1);
 		String question = "should i give Warfarin?";
 
-		provider.search(records, focus, question, true, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
+		provider.search(records, focus, question, null, null, true, LlmEngine.ReferenceRecords.ABSENT, Collections.emptyList());
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,
@@ -1304,7 +1335,7 @@ public class LlmProviderTest {
 		String records = "1. [2024-01-01] BP 120/80";
 		List<Integer> focus = Arrays.<Integer>asList();
 
-		provider.search(records, focus, "Is she hypertensive?", false, LlmEngine.ReferenceRecords.ABSENT,
+		provider.search(records, focus, "Is she hypertensive?", null, null, false, LlmEngine.ReferenceRecords.ABSENT,
 				Collections.emptyList());
 
 		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is she hypertensive?", false),

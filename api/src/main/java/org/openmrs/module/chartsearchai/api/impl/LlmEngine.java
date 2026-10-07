@@ -129,6 +129,17 @@ public interface LlmEngine {
 			ReferenceRecords referenceRecords);
 
 	/**
+	 * As {@link #infer(String, String, int, ReferenceRecords)}, participating in the on-disk KV cache the way
+	 * {@link #inferStreaming(String, String, int, Consumer, String, String, ReferenceRecords)} does: an engine that
+	 * persists prefilled chart KV starts from the patient's saved entry, so the answer does not depend on what it ran
+	 * before (ADR Decision 164). An engine that persists none answers as the unscoped form does.
+	 */
+	default InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds, String cacheScope,
+			String cacheSeed, ReferenceRecords referenceRecords) {
+		return infer(systemPrompt, userMessage, timeoutSeconds, referenceRecords);
+	}
+
+	/**
 	 * As {@link #inferStreaming(String, String, int, Consumer, String, String)}, for a chart-answer
 	 * prompt whose chart may carry the module's own reference records. Abstract for the reason
 	 * {@link #infer(String, String, int, ReferenceRecords)} gives.

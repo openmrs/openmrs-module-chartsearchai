@@ -170,6 +170,16 @@ public class LocalEngineAnswerHistoryIndependenceTest extends BaseModuleContextS
 		assertAnsweredTheSameWhateverCameBefore(CHART_QUESTION, false, DRUG_QUESTION);
 	}
 
+	/** The same on the non-streaming {@code /search} path, which until ADR Decision 164 restored nothing. */
+	@Test
+	public void aDrugQuestionOnTheSearchPathIsAnsweredTheSameWhateverTheEngineDidBeforeIt() throws IOException {
+		streaming = false;
+		assertAnsweredTheSameWhateverCameBefore(DRUG_QUESTION, true, CHART_QUESTION);
+	}
+
+	/** Which answer path {@link #ask} drives: {@code searchStreaming}, or {@code search} for the {@code /search} case. */
+	private boolean streaming = true;
+
 	/**
 	 * {@code question}, asked after five histories, against the same question on a cold engine with
 	 * nothing saved: a chart-open warmup, {@code otherQuestion}, the question itself, an evicted entry
@@ -227,6 +237,14 @@ public class LocalEngineAnswerHistoryIndependenceTest extends BaseModuleContextS
 	}
 
 	private Asked ask(String question) {
+		if (!streaming) {
+			ChartAnswer result = service.search(patient, question);
+			StringBuilder cited = new StringBuilder();
+			for (org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference ref : result.getReferences()) {
+				cited.append(ref.getIndex()).append(' ');
+			}
+			return new Asked(result, "answer: " + result.getAnswer() + "\ncited: " + cited);
+		}
 		StringBuilder answer = new StringBuilder();
 		StringBuilder reasoning = new StringBuilder();
 		ChartAnswer result = service.searchStreaming(patient, question, answer::append, reasoning::append);

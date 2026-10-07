@@ -128,6 +128,10 @@ public class LlmInferenceService implements ChartSearchService {
 			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
 			// canonical for the three answers and for why that pass rather than validate's.
 			ChartReadStatus chartRead = new ChartReadStatus();
+			// The KV seed and scope, as searchStreaming takes them (ADR Decision 164): the chart before injection,
+			// and no scope for a query-scoped slice.
+			String uninjectedRecords = chartTextOrPlaceholder(chart);
+			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
@@ -184,8 +188,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// The drugs the question proposes that her orders already carry (issue #548), off the
 			// post-inject chart for the reason the flag above is: the injector is the stamp's only writer.
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
-					chart.getFocusIndices(), question, enumerateFindings, referenceRecords,
-					chart.getDrugsAlreadyOrdered());
+					chart.getFocusIndices(), question, kvCacheScope, uninjectedRecords, enumerateFindings,
+					referenceRecords, chart.getDrugsAlreadyOrdered());
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -204,8 +208,8 @@ public class LlmInferenceService implements ChartSearchService {
 				long repairStart = System.currentTimeMillis();
 				response = withRepairedFindingEnumeration(response,
 						llmProvider.search(chartTextOrPlaceholder(chart), chart.getFocusIndices(),
-								findingEnumerationRepairQuestion(owedRepair), false, referenceRecords,
-								noDrugsAlreadyOrdered()),
+								findingEnumerationRepairQuestion(owedRepair), kvCacheScope, uninjectedRecords, false,
+								referenceRecords, noDrugsAlreadyOrdered()),
 						owedRepair, chart.getMappings());
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),

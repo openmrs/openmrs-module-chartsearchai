@@ -27,6 +27,7 @@ import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -290,7 +291,8 @@ public class ChartSearchAiConditionRuleCoverageTest {
 			return new ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-					null, null, null, stated, null, null, false, null, null, null, doseStated, null, null, null, false);
+					null, null, null, stated, null, null, false, null, null, null, doseStated, null, null,
+					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false);
 		}
 
 		@Override

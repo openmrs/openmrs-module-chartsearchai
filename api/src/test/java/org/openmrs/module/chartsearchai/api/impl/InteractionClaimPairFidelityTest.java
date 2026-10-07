@@ -1928,13 +1928,14 @@ public class InteractionClaimPairFidelityTest extends BaseModuleContextSensitive
 		});
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {
 
-			// The overload production calls: mappings-carrying (issue #105) and sink-carrying (issue
-			// #336). The chips are the real validator's over the ANSWER it is handed.
+			// Intercept the status-carrying entry point with mappings and pair extent intact.
+			// This fixture supplies warnings without measuring patient-context coverage.
 			@Override
-			public List<SafetyWarning> validate(String answer, String q, Patient patient,
+			public SafetyCheckResult validateWithStatus(String answer, String q, Patient patient,
 					List<PatientChartSerializer.RecordMapping> mappings,
 					PairChipExtent.Sink pairExtentSink) {
-				return chips.apply(answer);
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, chips.apply(answer),
+						java.util.Collections.singletonList("patient_context_unavailable"));
 			}
 		});
 		created.setLlmProvider(new StubProvider(modelAnswer));

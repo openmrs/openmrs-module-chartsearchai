@@ -26,6 +26,7 @@ import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -99,7 +100,8 @@ public class ChartSearchAiFindingCitationsTest {
 				Collections.<SafetyWarning> emptyList(), null, null, null, null,
 				Collections.<Integer> emptyList(), Collections.<Integer> emptyList(),
 				Collections.<ChartSearchService.UnstatedFindingSeverity> emptyList(), null, null, stated,
-				null, null, null, null, false, null, null, null, null, null, null, null, false);
+				null, null, null, null, false, null, null, null, null, null, null,
+				DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false);
 	}
 
 	@SuppressWarnings("unchecked")

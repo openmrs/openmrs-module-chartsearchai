@@ -14,10 +14,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.IOException;
+import java.io.File;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.io.InputStream;
 import java.util.Collections;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
@@ -38,6 +43,15 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 	private Patient patient;
 
 	private DrugReferenceService referenceService;
+
+	private final List<File> created = new ArrayList<>();
+
+	@AfterEach
+	public void removeTestDatasets() throws IOException {
+		for (File file : created) {
+			Files.deleteIfExists(file.toPath());
+		}
+	}
 
 	@BeforeEach
 	public void setUp() {
@@ -76,6 +90,14 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void completeCheckIsChecked() throws IOException {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertEquals(fixtureCase("drug-safety.complete-check-is-checked")
+				.path("expected_status").asText(), result.getStatus(), result.getIssues().toString());
+		assertTrue(result.getIssues().isEmpty());
+	}
+
+	private void prepareCompletePatient() {
 		Context.getAdministrationService().executeSQL("update orders set voided = 1 where patient_id = 7", false);
 		Context.flushSession();
 		Context.clearSession();
@@ -93,17 +115,15 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertTrue(context.contraindicationRecordsRead());
 		assertEquals(70.0, context.getWeightKg());
 		assertTrue(context.getActiveDrugOrders().isEmpty(), "positive case must not hide unmapped active orders");
-		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
-		assertEquals(fixtureCase("drug-safety.complete-check-is-checked")
-				.path("expected_status").asText(), result.getStatus(), result.getIssues().toString());
-		assertTrue(result.getIssues().isEmpty());
 	}
 
 	@Test
 	public void partialCheckIsLimited() throws IOException {
 		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
 		assertEquals(fixtureCase("drug-safety.partial-check-is-limited")
-				.path("expected_status").asText(), validate(patient).getStatus());
+				.path("expected_status").asText(), result.getStatus());
+		assertTrue(result.getIssues().contains("checks_partially_disabled"));
 	}
 
 	@Test
@@ -122,6 +142,89 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
 		assertEquals("unavailable", result.getStatus());
 		assertTrue(result.getIssues().contains("source_unavailable"));
+	}
+
+	@Test
+	public void answerWithoutAnAssessableDoseDoesNotClaimTheChartIsIncomplete() {
+		prepareCompletePatient();
+		DrugSafetyValidator.SafetyCheckResult result = validator.validateWithStatus(
+				"Ibuprofen and paracetamol were discussed.", "Do ibuprofen and paracetamol interact?",
+				patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("dose_not_assessable"), result.getIssues());
+	}
+
+	@Test
+	public void damagedGroupsLimitTheInteractionCheckEvenWithoutAllergies() throws IOException {
+		prepareCompletePatient();
+		String entries = "{\"entries\":["
+				+ "{\"id\":\"group-probe\",\"name\":\"GroupProbe\",\"atcCodes\":[\"M01AE01\"],"
+				+ "\"ageBands\":[{\"minYears\":0,\"maxYears\":120,\"maxDailyDoseMg\":1000}],"
+				+ "\"contraindications\":[{\"type\":\"condition\",\"token\":\"probe condition\"}],\"interactions\":[]},"
+				+ "{\"id\":\"order-probe\",\"name\":\"OrderProbe\",\"atcCodes\":[\"N02BA01\"],"
+				+ "\"ageBands\":[{\"minYears\":0,\"maxYears\":120,\"maxDailyDoseMg\":1000}],"
+				+ "\"contraindications\":[{\"type\":\"condition\",\"token\":\"probe condition\"}],\"interactions\":[]}]}";
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				DrugReferenceTestSupport.writeDatasetToAppData("status-group-probes.json", entries, created));
+		Context.getAdministrationService().executeSQL("update orders set voided = 0 where order_id = 111", false);
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = 'OrderProbe' where order_id = 111", false);
+		Context.flushSession();
+		Context.clearSession();
+		patient = Context.getPatientService().getPatient(7);
+		assertTrue(PatientClinicalContextBuilder.build(patient).getAllergyTokens().isEmpty());
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		DrugSafetyValidator.SafetyCheckResult healthy = validator.validateWithStatus("GroupProbe 100 mg twice daily.",
+				"Can I take GroupProbe?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("checked", healthy.getStatus(), healthy.getIssues().toString());
+		assertTrue(healthy.getWarnings().stream().anyMatch(w -> w.getDetail().contains("cross-reactivity group")));
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH,
+				DrugReferenceTestSupport.writeDatasetToAppData("status-missing-groups.json", "{}", created));
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		DrugSafetyValidator.SafetyCheckResult degraded = validator.validateWithStatus("GroupProbe 100 mg twice daily.",
+				"Can I take GroupProbe?", patient, Collections.emptyList(), new PairChipExtent.Sink());
+		assertEquals("limited", degraded.getStatus());
+		assertEquals(Collections.singletonList("cross_reactivity_data_partially_invalid"), degraded.getIssues());
+		assertFalse(degraded.getWarnings().stream().anyMatch(w -> w.getDetail().contains("cross-reactivity group")));
+	}
+
+	@Test
+	public void sourceLoadFailureHasItsOwnLimitationEvenWhenFallbackRulesWork() throws IOException {
+		prepareCompletePatient();
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				DrugReferenceTestSupport.writeDatasetToAppData("status-unreadable-source.json", "{", created));
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertFalse(referenceService.getLoadStatus().isInert());
+		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("source_data_partially_invalid"), result.getIssues());
+	}
+
+	@Test
+	public void aRecognizedDrugWithoutInteractionDataHasItsOwnLimitation() throws IOException {
+		prepareCompletePatient();
+		ObjectMapper mapper = new ObjectMapper();
+		JsonNode dataset;
+		try (InputStream input = getClass().getResourceAsStream("/chartsearchai/drug-reference.json")) {
+			dataset = mapper.readTree(input);
+		}
+		for (JsonNode entry : dataset.path("entries")) {
+			if ("ibuprofen".equals(entry.path("id").asText())) {
+				((com.fasterxml.jackson.databind.node.ObjectNode) entry).putArray("interactions");
+				((com.fasterxml.jackson.databind.node.ObjectNode) entry).putArray("atcCodes");
+			}
+		}
+		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				DrugReferenceTestSupport.writeDatasetToAppData("status-no-interactions.json",
+						mapper.writeValueAsString(dataset), created));
+		referenceService = new DrugReferenceService();
+		validator = DrugReferenceTestSupport.validator(referenceService);
+		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
+		assertEquals("limited", result.getStatus());
+		assertEquals(Collections.singletonList("interaction_reference_unavailable"), result.getIssues());
 	}
 
 	@Test
@@ -173,7 +276,8 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 				referenceService.getLoadStatus().coverageOf(DrugReferenceLoad.Arm.DOSE_CEILINGS));
 		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
 		assertEquals("limited", result.getStatus());
-		assertTrue(result.getIssues().contains("check_scope_limited"));
+		assertTrue(result.getIssues().contains("condition_rules_unavailable"));
+		assertTrue(result.getIssues().contains("no_actionable_dose_reference"));
 	}
 
 	@Test
@@ -192,7 +296,7 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 				"Latest blood test recorded.", "What is the latest blood test?", patient,
 				Collections.emptyList(), new PairChipExtent.Sink());
 		assertEquals("limited", result.getStatus());
-		assertTrue(result.getIssues().contains("check_scope_limited"));
+		assertTrue(result.getIssues().contains("no_applicable_check"));
 	}
 
 	@Test
@@ -201,7 +305,7 @@ public class DrugSafetyStatusTest extends BaseModuleContextSensitiveTest {
 		assertEquals(null, PatientClinicalContextBuilder.build(patient).getWeightKg());
 		DrugSafetyValidator.SafetyCheckResult result = validate(patient);
 		assertEquals("limited", result.getStatus());
-		assertTrue(result.getIssues().contains("exposure_incomplete"));
+		assertTrue(result.getIssues().contains("weight_unavailable"));
 	}
 
 	@Test

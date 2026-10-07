@@ -992,7 +992,18 @@ and verifies idle-unload scheduling. It does not use a running OpenMRS installat
 or `unavailable` status, and limitation codes from one invocation. An empty warning
 list alone does not show that a check ran. Status reflects available reference data,
 patient-context reads, medication mappings, enabled checks and dose information.
-It does not certify that a medication is safe.
+It does not certify that a medication is safe. It covers only drugs recognized by
+the loaded reference data: an unrecognized drug is not checked, and an answer
+naming one beside a recognized drug can still report `checked`.
+
+Limitation codes state the cause: `source_data_partially_invalid` and
+`cross_reactivity_data_partially_invalid` identify degraded reference files;
+`checks_partially_disabled` identifies configuration; `no_applicable_check` means
+this answer triggered no applicable check. `condition_rules_unavailable`,
+`interaction_reference_unavailable` and `no_actionable_dose_reference` describe
+missing usable rules. `dose_not_assessable` means the answer supplied no dose and
+schedule that could be assessed; `weight_unavailable` means a weight-based check
+lacked the patient's weight. Neither code claims missing allergy or condition data.
 
 This Java API is the safety-status foundation for provider integration. Existing
 warning callers and standing chart alerts retain their interfaces. Publishing the

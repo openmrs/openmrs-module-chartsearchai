@@ -403,21 +403,19 @@ public class DrugSafetyValidator {
 			}
 			for (DrugReferenceValidity.Finding finding : load.getFindings()) {
 				if (finding.getRemedy() != DrugReferenceValidity.Remedy.REPAIRED) {
-					coverage.limited("check_scope_limited");
+					coverage.limited("source_data_partially_invalid");
 				}
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			if (!context.activeDrugOrdersRead() || !context.contraindicationRecordsRead()) {
+			if (!context.chartReadForSafety()) {
 				coverage.unavailable("patient_context_unavailable");
 			}
 			if (!context.activeDrugIdentitiesComplete()) {
 				coverage.limited("mapping_incomplete");
 			}
-			if (!context.getAllergyTokens().isEmpty()) {
-				for (DrugReferenceValidity.Finding finding : drugReferenceService.getCrossReactivityLoadStatus().getFindings()) {
-					if (finding.getRemedy() != DrugReferenceValidity.Remedy.REPAIRED) {
-						coverage.limited("check_scope_limited");
-					}
+			for (DrugReferenceValidity.Finding finding : drugReferenceService.getCrossReactivityLoadStatus().getFindings()) {
+				if (finding.getRemedy() != DrugReferenceValidity.Remedy.REPAIRED) {
+					coverage.limited("cross_reactivity_data_partially_invalid");
 				}
 			}
 			List<SafetyWarning> warnings = validate(answer, question, context, mappings, null,
@@ -785,14 +783,24 @@ public class DrugSafetyValidator {
 			SubjectMatterScope.OF_THE_RESPONSE, null);
 	}
 
+
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
+			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,
+			ListedDrugsWithNoActiveOrder.Sink listedSink) {
+		return validate(answer, question, rawContext, mappings, resolvedOrderEntries,
+				pairExtentSink, scope, listedSink, null);
+	}
+
 	/**
 	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
 	 *
-	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells ALL THREE
-	 * lines of this declaration.</b> No shorter prefix is spelled, and a needle matching more than once is a hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as deliberately not migrated). The first line alone matches every arity above that opens identically, so it names the METHOD and cannot delimit it. <b>The THIRD line is what makes the needle unique, and only since issue #280</b> — before it, the two-line prefix already was, by the one character separating this line's comma from the five-argument seam's {@code )}, and spelling the third line bought loudness alone. The delegate this issue added below wraps its first two lines exactly as this one does, so a needle stopping at line two would now match twice and hard-fail. What has not changed is the instruction: move this declaration and the needles
-	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
-	 * which say so themselves.
+	 * <p>The structural guards in {@code ChipSubjectOneResolutionTest} and
+	 * {@code CoMedicationResolutionPerPassTest} match all four declaration lines. The fourth
+	 * distinguishes this implementation from the delegate above; update both needles if this
+	 * declaration changes.
 	 *
+
 	 * @param resolvedOrderEntries the patient's active orders ALREADY resolved to their reference
 	 *        entries by a caller that needed them itself, or {@code null} from a caller that has not
 	 *        resolved them — which is every caller but {@code DrugReferenceInjector.injectRecords}.
@@ -851,14 +859,6 @@ public class DrugSafetyValidator {
 	 *        {@code null} from a caller that does not publish it — every caller but the injector's
 	 *        pre-answer pass, which holds her orders resolved and stamps the answer on its chart.
 	 */
-	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
-			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
-			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,
-			ListedDrugsWithNoActiveOrder.Sink listedSink) {
-		return validate(answer, question, rawContext, mappings, resolvedOrderEntries,
-				pairExtentSink, scope, listedSink, null);
-	}
-
 	private List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
 			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope,
@@ -981,9 +981,11 @@ public class DrugSafetyValidator {
 		if (coverage != null) {
 			boolean screeningOrders = warnInteractions && QueryScopeRouter.isInteractionScreening(question)
 					&& context.getActiveDrugOrders().size() > 1;
-			if (!warnDose || !warnInteractions || !warnContra || resolvedRows.isEmpty()
-					|| (inPlay.isEmpty() && !screeningOrders)) {
-				coverage.limited("check_scope_limited");
+			if (!warnDose || !warnInteractions || !warnContra) {
+				coverage.limited("checks_partially_disabled");
+			}
+			if (resolvedRows.isEmpty() || (inPlay.isEmpty() && !screeningOrders)) {
+				coverage.limited("no_applicable_check");
 			}
 			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 				if (orderEntries.stream().noneMatch(ref -> resolvesFrom(ref, order, bridgedOrders))) {
@@ -992,11 +994,11 @@ public class DrugSafetyValidator {
 			}
 			for (List<DrugReference> rows : resolvedRows.values()) {
 				if (warnContra && rows.stream().noneMatch(DrugReferenceLoad.Arm.CONDITION_RULES::publishedBy)) {
-					coverage.limited("check_scope_limited");
+					coverage.limited("condition_rules_unavailable");
 				}
 				if (warnInteractions && rows.stream().noneMatch(DrugReferenceLoad.Arm.INTERACTIONS::publishedBy)
 						&& rows.stream().noneMatch(DrugReferenceLoad.Arm.ATC_CODES::publishedBy)) {
-					coverage.limited("check_scope_limited");
+					coverage.limited("interaction_reference_unavailable");
 				}
 			}
 		}
@@ -14046,7 +14048,7 @@ public class DrugSafetyValidator {
 		// data can never answer.
 		if (!anyActionableBand(rows, context)) {
 			if (coverage != null) {
-				coverage.limited("check_scope_limited");
+				coverage.limited("no_actionable_dose_reference");
 			}
 			return;
 		}
@@ -14061,11 +14063,15 @@ public class DrugSafetyValidator {
 					continue;
 				}
 				if (band.getMaxDailyDoseMg() > 0 && parseDailyDoseMg(doses) == null) {
-					coverage.limited("exposure_incomplete");
+					coverage.limited("dose_not_assessable");
 				}
-				if (band.getMgPerKgMax() > 0 && (context.getWeightKg() == null
-						|| context.getWeightKg() <= 0 || parseMaxPerDoseMg(doses) == null)) {
-					coverage.limited("exposure_incomplete");
+				if (band.getMgPerKgMax() > 0) {
+					if (context.getWeightKg() == null || context.getWeightKg() <= 0) {
+						coverage.limited("weight_unavailable");
+					}
+					if (parseMaxPerDoseMg(doses) == null) {
+						coverage.limited("dose_not_assessable");
+					}
 				}
 			}
 		}

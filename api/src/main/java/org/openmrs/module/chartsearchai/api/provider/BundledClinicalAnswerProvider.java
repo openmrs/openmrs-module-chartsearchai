@@ -9,7 +9,6 @@
  */
 package org.openmrs.module.chartsearchai.api.provider;
 
-import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -221,9 +220,6 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 		boolean[] answerDoneEmitted = { false };
 		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
 		ChartAnswer finalAnswer;
-		Thread executionThread = Thread.currentThread();
-		Closeable threadInterrupt = executionThread::interrupt;
-		cancellation.bindCloseable(threadInterrupt);
 		try {
 			finalAnswer = chartSearchService.searchStreaming(request.getPatient(), request.getQuestion(),
 					token -> events.accept(TurnEvent.delta(TurnEventType.ANSWER_DELTA,
@@ -261,12 +257,6 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			}
 			log.warn("Bundled provider turn failed for request {}", request.getRequestId(), e);
 			return failed(events, sequence, configuredMode, PROBLEM_PROVIDER_FAILURE);
-		}
-		finally {
-			cancellation.unbindCloseable(threadInterrupt);
-			if (cancellation.isCancelled()) {
-				Thread.interrupted();
-			}
 		}
 
 		AnswerEnvelope finalEnvelope = toAnswerEnvelope(finalAnswer);

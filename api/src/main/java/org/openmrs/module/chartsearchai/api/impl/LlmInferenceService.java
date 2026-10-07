@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.concurrent.CancellationException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -191,7 +192,7 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 
 			// Deterministic answers need no model prompt; check before any model pass.
-			ensurePromptFits(chart, question);
+			ensurePromptFits(chart, question, enumerateFindings);
 
 			long llmStart = System.currentTimeMillis();
 			// The drugs the question proposes that her orders already carry (issue #548), off the
@@ -558,7 +559,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 * gate is off or the focused chart has no records.
 	 */
 	private long maybeEmitPreliminaryReasoning(Patient patient, String question,
-			Consumer<String> previewReasoningConsumer) {
+			Consumer<String> previewReasoningConsumer, CancellationSignal cancellation) {
 		long start = System.currentTimeMillis();
 		try {
 			if (!resolveProgressiveReasoningEnabled()) {
@@ -591,7 +592,7 @@ public class LlmInferenceService implements ChartSearchService {
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
 						DISCARD_TOKENS, previewReasoningConsumer, null, null, false,
 						LlmEngine.ReferenceRecords.in(ChartSearchAiUtils.referenceSlice(focused.getMappings())),
-						focused.getDrugsAlreadyOrdered());
+						focused.getDrugsAlreadyOrdered(), cancellation);
 			}
 		}
 		catch (RuntimeException e) {
@@ -665,7 +666,9 @@ public class LlmInferenceService implements ChartSearchService {
 		long cachedTokens = 0;
 		String outcome = "error";
 		try {
+			requireActiveTurn(cancellation);
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
+			requireActiveTurn(cancellation);
 			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
 			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
 			// canonical for the three answers and for why that pass rather than validate's.
@@ -677,6 +680,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// slot last held — and the answer depends on that history again.
 			String uninjectedRecords = chartTextOrPlaceholder(chart);
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
+			requireActiveTurn(cancellation);
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
 			// each of them derived separately is two audit-write sites that can disagree — which is
@@ -725,13 +729,14 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 
 			// Deterministic answers need no model prompt; check before any model pass.
-			ensurePromptFits(chart, question);
+			ensurePromptFits(chart, question, enumerateFindings);
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
 			// the preliminary channel before the full-chart answer prefills. No-op (returns 0) when the
 			// gate is off. Runs after the full chart is built so the patient's querystore index is
 			// already warm when the preview's searchByPatient runs (a cold patient pays it once).
-			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer);
+			previewMs = maybeEmitPreliminaryReasoning(patient, question, preliminaryReasoningConsumer, cancellation);
+			requireActiveTurn(cancellation);
 
 			long llmStart = System.currentTimeMillis();
 			// KV scope: decided against the CHART that was built, not a re-read of the chartMode
@@ -770,7 +775,7 @@ public class LlmInferenceService implements ChartSearchService {
 								chart.getFocusIndices(),
 								findingEnumerationRepairQuestion(owedRepair), tokenConsumer,
 								reasoningConsumer, kvCacheScope, uninjectedRecords, false, referenceRecords,
-								noDrugsAlreadyOrdered()),
+								noDrugsAlreadyOrdered(), cancellation),
 						owedRepair, chart.getMappings());
 				llmMs += System.currentTimeMillis() - repairStart;
 				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
@@ -895,6 +900,7 @@ public class LlmInferenceService implements ChartSearchService {
 					DosingCeilingFidelityCheck.reportUnstatedDosingCeilings(patient,
 							response.getAnswer(), cited, chart.getMappings());
 
+			requireActiveTurn(cancellation);
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
@@ -1063,17 +1069,23 @@ public class LlmInferenceService implements ChartSearchService {
 				!chart.getHistoryQuestionDrugRows().isEmpty());
 	}
 
+	private static void requireActiveTurn(CancellationSignal cancellation) {
+		if (cancellation.isCancelled()) {
+			throw new CancellationException("Turn cancelled");
+		}
+	}
+
 	/**
 	 * Final exact preflight after all deterministic chart and knowledge-reference injection. The
 	 * selector budgets its chart view earlier, but only this layer can measure the complete prompt
 	 * that will reach the model.
 	 */
-	void ensurePromptFits(PatientChart chart, String question) {
+	private void ensurePromptFits(PatientChart chart, String question, boolean enumerateFindings) {
 		if (tokenCounter == null || !tokenCounter.isAvailable()) {
 			return;
 		}
 		int inputTokens = tokenCounter.countPrompt(chartTextOrPlaceholder(chart),
-				chart.getFocusIndices(), question);
+				chart.getFocusIndices(), question, enumerateFindings, chart.getDrugsAlreadyOrdered());
 		if (inputTokens > tokenCounter.inputBudget()) {
 			throw new ChartTooLargeException("The complete chart, reference material, and question "
 					+ "exceed the configured model input budget.");

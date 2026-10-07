@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.io.Closeable;
+import java.util.concurrent.CancellationException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -563,8 +565,25 @@ public class LlmProvider {
 			answerFilter.accept(chunk);
 		};
 
-		LlmEngine.InferenceResult result = getActiveEngine().inferStreaming(
-				systemPrompt, userMessage, timeoutSeconds, tee, cacheScope, cacheSeed, referenceRecords, cancellation);
+		if (cancellation.isCancelled()) {
+			throw new CancellationException("Turn cancelled before model inference");
+		}
+		// Only model work may interrupt this thread. Chart retrieval can flush shared Lucene
+		// writers, so binding at the provider-turn boundary can permanently close an index.
+		Thread inferenceThread = Thread.currentThread();
+		Closeable interruptInference = inferenceThread::interrupt;
+		cancellation.bindCloseable(interruptInference);
+		LlmEngine.InferenceResult result;
+		try {
+			result = getActiveEngine().inferStreaming(systemPrompt, userMessage, timeoutSeconds,
+					tee, cacheScope, cacheSeed, referenceRecords, cancellation);
+		}
+		finally {
+			cancellation.unbindCloseable(interruptInference);
+			if (cancellation.isCancelled()) {
+				Thread.interrupted();
+			}
+		}
 
 		return extractResponse(result.getText(), result.getInputTokens(), result.getOutputTokens(),
 				result.getCachedTokens());

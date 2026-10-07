@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 
 /**
  * Conformance adapter for the {@code provider_capabilities} family of
@@ -89,7 +90,7 @@ public class ProviderRegistryConformanceTest {
 	private static StubRegistry registry(String enabledGp, ClinicalAnswerProvider... providers) {
 		StubRegistry registry = new StubRegistry(Arrays.asList(providers));
 		if (enabledGp != null) {
-			registry.gps.put(ClinicalAnswerProviderRegistry.GP_PROVIDERS_ENABLED, enabledGp);
+			registry.gps.put(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, enabledGp);
 		}
 		return registry;
 	}
@@ -195,18 +196,18 @@ public class ProviderRegistryConformanceTest {
 	public void theConfiguredDefaultMustBeAnEnabledProvider() {
 		StubRegistry registry = registry("bundled,hub", new FakeProvider("bundled", true),
 				new FakeProvider("hub", true));
-		registry.gps.put(ClinicalAnswerProviderRegistry.GP_DEFAULT_PROVIDER, "hub");
+		registry.gps.put(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "hub");
 		assertEquals("hub", registry.getDefaultProviderId());
 
 		// A default pointing at a provider that is not enabled falls back to bundled — the
 		// fresh-install default — rather than exposing a dead default.
-		registry.gps.put(ClinicalAnswerProviderRegistry.GP_DEFAULT_PROVIDER, "nonsense");
+		registry.gps.put(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "nonsense");
 		assertEquals("bundled", registry.getDefaultProviderId());
 
 		// A hub-only deployment cannot fall back to the disabled fresh-install default.
 		StubRegistry hubOnly = registry("hub", new FakeProvider("bundled", true),
 				new FakeProvider("hub", true));
-		hubOnly.gps.put(ClinicalAnswerProviderRegistry.GP_DEFAULT_PROVIDER, "nonsense");
+		hubOnly.gps.put(ChartSearchAiConstants.GP_DEFAULT_PROVIDER, "nonsense");
 		assertEquals("hub", hubOnly.getDefaultProviderId());
 		assertTrue(hubOnly.descriptors().get(0).isDefault());
 	}

@@ -1034,6 +1034,11 @@ presentation contributions.
 
 ## Bundled provider integration
 
+Administrators enable providers with `chartsearchai.providers.enabled`, a comma-separated
+list of ids (default `bundled`), and select the initial provider with
+`chartsearchai.providers.default` (default `bundled`). Switching providers starts a new
+conversation; it does not change the provider recorded on existing conversations.
+
 `BundledClinicalAnswerProvider` adapts the existing caching router and local/remote
 inference pipeline to the shared turn lifecycle. It emits the initial answer before
 later grounding results, retains already-completed answers when cancellation

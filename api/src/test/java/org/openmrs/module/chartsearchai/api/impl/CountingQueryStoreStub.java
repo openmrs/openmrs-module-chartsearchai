@@ -15,6 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.openmrs.module.querystore.api.QueryStoreService;
+import org.openmrs.module.querystore.backend.PatientChartRead;
+import org.openmrs.module.querystore.backend.BackendStore;
+import org.openmrs.module.querystore.backend.Hit;
+import org.openmrs.module.querystore.backend.SearchRequest;
+import org.openmrs.module.querystore.backend.SearchResult;
 import org.openmrs.module.querystore.model.QueryDocument;
 
 /**
@@ -60,6 +65,11 @@ final class CountingQueryStoreStub {
 
 	private final Method getPatientChartMethod = interfaceMethod("getPatientChart", String.class);
 
+	private final Method getPatientChartReadMethod = interfaceMethod("getPatientChartRead", String.class);
+
+	private final Method getContextSliceMethod = interfaceMethod("getContextSlice", String.class,
+			String.class, org.openmrs.module.querystore.model.ContextSliceRequest.class);
+
 	private final Method onStartupMethod = interfaceMethod("onStartup");
 
 	private final Method onShutdownMethod = interfaceMethod("onShutdown");
@@ -77,6 +87,10 @@ final class CountingQueryStoreStub {
 	List<QueryDocument> stubChart = new ArrayList<QueryDocument>();
 
 	boolean throwOnSearch = false;
+
+	boolean chartTruncated = false;
+
+	boolean projectionComplete = true;
 
 	/** One proxy per double, so its identity and hash are stable across {@link #asService()} calls. */
 	private final QueryStoreService service = (QueryStoreService) Proxy.newProxyInstance(
@@ -106,6 +120,13 @@ final class CountingQueryStoreStub {
 		}
 		if (getPatientChartMethod.equals(method)) {
 			return getPatientChart((String) arguments[0]);
+		}
+		if (getPatientChartReadMethod.equals(method)) {
+			return getPatientChartRead((String) arguments[0]);
+		}
+		if (getContextSliceMethod.equals(method)) {
+			return getContextSlice((String) arguments[0], (String) arguments[1],
+					(org.openmrs.module.querystore.model.ContextSliceRequest) arguments[2]);
 		}
 		if (onStartupMethod.equals(method) || onShutdownMethod.equals(method)) {
 			return null;
@@ -148,6 +169,76 @@ final class CountingQueryStoreStub {
 			return Boolean.valueOf(proxy == arguments[0]);
 		}
 		throw refusal(method);
+	}
+
+	public PatientChartRead getPatientChartRead(String patientUuid) {
+		getPatientChartCalls++;
+		return new PatientChartRead(stubChart, chartTruncated, projectionComplete);
+	}
+
+	int getContextSliceCalls = 0;
+
+	org.openmrs.module.querystore.model.ContextSliceRequest lastSliceRequest;
+
+	String lastSliceQuestion;
+
+	/**
+	 * Delegates to the REAL {@code QueryStoreServiceImpl} slice policy over {@code stubChart} /
+	 * {@code stubHits} — the builder tests then exercise querystore's actual shared selection
+	 * (ADR Decision 17), not a re-implementation of it in test code. Counters and the captured
+	 * request stay chartsearchai-side so tests can pin the caller's question interpretation.
+	 */
+	public org.openmrs.module.querystore.model.ContextSlice getContextSlice(String patientUuid,
+			String question, org.openmrs.module.querystore.model.ContextSliceRequest request) {
+		getContextSliceCalls++;
+		lastSliceQuestion = question;
+		lastSliceRequest = request;
+		org.openmrs.module.querystore.api.impl.QueryStoreServiceImpl real =
+				new org.openmrs.module.querystore.api.impl.QueryStoreServiceImpl() {
+
+					@Override
+					public PatientChartRead getPatientChartRead(String ignoredPatientUuid) {
+						return new PatientChartRead(stubChart, chartTruncated, projectionComplete);
+					}
+				};
+		real.setBackend(bridgeBackend());
+		org.openmrs.module.querystore.model.ContextSlice slice =
+				real.getContextSlice(patientUuid, question, request);
+		if (!chartTruncated) {
+			return slice;
+		}
+		return new org.openmrs.module.querystore.model.ContextSlice(slice.getRecords(),
+				slice.getChartSize(), true, slice.isProjectionComplete(), slice.getEffectiveTypes(),
+				slice.isTemporalApplied(), slice.getChartSnapshotId());
+	}
+
+	/** Serves only the calls made by the real slice policy; unrelated backend API growth is harmless. */
+	private BackendStore bridgeBackend() {
+		return (BackendStore) Proxy.newProxyInstance(BackendStore.class.getClassLoader(),
+				new Class<?>[] {BackendStore.class}, (proxy, method, args) -> {
+					if ("existsByPatient".equals(method.getName())) {
+						return true;
+					}
+					if ("hybrid".equals(method.getName())) {
+						SearchRequest request = (SearchRequest) args[0];
+						searchByPatientCalls++;
+						lastSearchTopK = request.getLimit();
+						lastSearchQuery = request.getQueryText();
+						if (throwOnSearch) {
+							throw new RuntimeException("simulated similarity RPC failure");
+						}
+						List<Hit> hits = new ArrayList<Hit>();
+						for (int i = 0; i < stubHits.size(); i++) {
+							hits.add(new Hit(stubHits.get(i), 1.0 - i * 0.1, i + 1));
+						}
+						return new SearchResult(hits);
+					}
+					throw refusal(method);
+				});
+	}
+
+	public List<QueryDocument> search(String question, int topK) {
+		throw new UnsupportedOperationException("not used by chartsearchai");
 	}
 
 	private static UnsupportedOperationException refusal(Method method) {

@@ -23,6 +23,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.Order;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.AlreadyOrderedDrug;
 import org.openmrs.module.chartsearchai.api.InsufficientContextException;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
@@ -86,8 +88,7 @@ public class QueryStoreChartBuilderBudgetTest {
 			return available;
 		}
 
-		@Override
-		public int count(String text) {
+		private int count(String text) {
 			return text == null || text.trim().isEmpty() ? 0 : text.trim().split("\\s+").length;
 		}
 
@@ -97,7 +98,8 @@ public class QueryStoreChartBuilderBudgetTest {
 		}
 
 		@Override
-		public int countPrompt(String numberedRecords, String question) {
+		public int countPrompt(String numberedRecords, List<Integer> focusIndices, String question,
+				boolean enumerateFindings, List<AlreadyOrderedDrug> drugsAlreadyOrdered) {
 			promptCountCalls++;
 			return count(numberedRecords) + promptOverhead;
 		}
@@ -274,6 +276,33 @@ public class QueryStoreChartBuilderBudgetTest {
 				"with no counter available, behavior must be unchanged from before this feature");
 	}
 
+	@Test
+	public void anAlreadyFittingSliceCountsOnceAndReadsOrderCurrencyOnce() {
+		assertOrderCurrencyIsReadOnce(10000);
+		assertEquals(1, tokenCounter.promptCountCalls, "the complete fitting slice needs one count");
+	}
+
+	@Test
+	public void trimmingOptionalRecordsStillReadsOrderCurrencyOnlyOnce() {
+		assertOrderCurrencyIsReadOnce(60);
+		assertTrue(tokenCounter.promptCountCalls > 1, "this fixture must exercise repeated budget probes");
+	}
+
+	private void assertOrderCurrencyIsReadOnce(int budget) {
+		tokenCounter.budget = budget;
+		queryStore.stubChart = new ArrayList<>();
+		queryStore.stubHits = new ArrayList<>();
+		queryStore.stubChart.add(doc("drug_order", "drug-1", "Medication order", LocalDate.of(2026, 1, 1)));
+		for (int i = 0; i < 20; i++) {
+			QueryDocument optional = doc("obs", "optional-" + i, words(20), LocalDate.of(2026, 2, 1));
+			queryStore.stubChart.add(optional);
+			queryStore.stubHits.add(optional);
+		}
+		PatientChart chart = builder.buildScoped(patient(), "What medications does the patient take?");
+		assertTrue(mappedUuids(chart).contains("drug-1"));
+		assertEquals(1, builder.orderReads, "all budget probes and final rendering must share the order reading");
+	}
+
 	private static List<String> similarityIds(int count) {
 		List<String> ids = new ArrayList<String>();
 		for (int i = 0; i < count; i++) {
@@ -302,6 +331,14 @@ public class QueryStoreChartBuilderBudgetTest {
 	}
 
 	private static final class TestableScopedBuilder extends QueryStoreChartBuilder {
+
+		int orderReads;
+
+		@Override
+		protected List<Order> resolveAllOrders(Patient patient) {
+			orderReads++;
+			return Collections.emptyList();
+		}
 
 		private final org.openmrs.module.querystore.api.QueryStoreService stub;
 

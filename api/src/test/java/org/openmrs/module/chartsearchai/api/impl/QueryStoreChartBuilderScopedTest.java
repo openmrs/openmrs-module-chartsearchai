@@ -25,7 +25,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -238,6 +238,7 @@ public class QueryStoreChartBuilderScopedTest {
 				"no locally-derived types — only contributed scopes would ride here; got "
 						+ queryStore.lastSliceRequest.getTypes());
 		assertEquals(3, queryStore.lastSliceRequest.getRecencyAnchorSize());
+		assertEquals(10, queryStore.lastSliceRequest.getSimilarityLimit());
 	}
 
 	@Test
@@ -312,7 +313,7 @@ public class QueryStoreChartBuilderScopedTest {
 	public void buildScoped_withholdsASliceBuiltFromAnIncompleteChart() {
 		queryStore.chartTruncated = true;
 
-		assertThrows(ChartTooLargeException.class,
+		assertThrows(IncompleteChartException.class,
 				() -> builder.buildScoped(patient(1), "What medications is the patient taking?"));
 	}
 
@@ -320,7 +321,7 @@ public class QueryStoreChartBuilderScopedTest {
 	public void buildScoped_withholdsAChartWhoseSourceProjectionIsIncomplete() {
 		queryStore.projectionComplete = false;
 
-		assertThrows(IllegalStateException.class,
+		assertThrows(IncompleteChartException.class,
 				() -> builder.buildScoped(patient(1), "any allergies?"));
 	}
 
@@ -341,9 +342,9 @@ public class QueryStoreChartBuilderScopedTest {
 		// medications question's slice carries every drug_order document, so a drug order the
 		// safety layer holds but the slice has not got means the index is behind.
 		//
-		// Pinned through the composed production build on purpose. The router's resource-type
-		// strings (QueryScopeRouter.typedSlice) and the reconciliation's lookup are separate
-		// literals in separate classes, so nothing else asserts that they still name the same
+		// Pinned through the composed production build on purpose. QueryStore's resource-type
+		// strings and the reconciliation's lookup are separate literals in separate
+		// repositories, so nothing else asserts that they still name the same
 		// type — a rename on either side would silently switch the whole feature off in the
 		// default mode with every other test still green. Similarity returns nothing here, so
 		// the drug orders can only have arrived via the typed scope.

@@ -14717,3 +14717,29 @@ was injected and the answer is its words with its number; `.aScreenThatRelatedNo
 and `.aScreenForAPatientWithNoActiveOrdersSaysThereAreNoneToCheck` (patient 6) — each failed before the change, the model
 asked, and passes after it. Mutated, the note composition disabled reddens the first two; the early return restored
 reddens the third.
+
+## Decision 163: The screen note counts substances, and says so
+
+**Status: Accepted** (October 2026) — implemented, no issue. Rewords the count clause of
+[Decision 87](#decision-87-a-screen-that-related-nothing-says-so-in-the-prompt-instead-of-reaching-the-model-as-an-empty-slice)'s
+note, which [Decision 162](#decision-162-a-screen-that-related-nothing-is-answered-with-the-screen-notes-own-words)
+made the module's own answer.
+
+### Context
+
+The note read *"No interactions were found among this patient's active medications. N of them were checked against
+each other …"*, with N the distinct substances her orders resolved to. "Of them" points back to "active
+medications", so the number read as prescriptions. On the demo (2026-10-07) Tuwei's one co-trimoxazole prescription
+— two substances — was answered "2 of them were checked", beside six orders the data does not identify. While the
+note was prompt-only that was the model's to relay; since Decision 162 the module says it to the clinician.
+
+### The decision
+
+*"… 2 substances in them were checked against each other, and the reference data relates none of them at or above the
+configured severity level."* — the count clause only. The finding stays first, the ordering issue #401 measured;
+`InteractionScreenSilenceNoteTest.theNoteStatesTheFindingBeforeTheCount` still pins it, and
+`.aScreenThatRelatedNothingStatesThatItRanAndRelatedNothing` now pins the new clause as a literal. The two module-answer
+cases in `LlmInferenceServiceAnswerFromFindingsContextTest` failed on the old words and pass on the new.
+
+The prompt-facing half — the note still reaches the model where the module does not answer — was not re-measured
+for verdict polarity; the property that measurement was about, the order of the two propositions, is unchanged.

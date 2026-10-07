@@ -2307,8 +2307,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	/** The screen note's words for two substances, as {@code DrugReferenceInjector} renders them after its finding
 	 *  prefix — pinned here as a literal, so a reword of the note shows up as a changed answer. */
 	private static final String SCREEN_NOTE_WORDS = "No interactions were found among this patient's active medications. "
-			+ "2 of them were checked against each other and the reference data relates none of them at or above the "
-			+ "configured severity level. This check compares individual substances: relationships resting only on two "
+			+ "2 substances in them were checked against each other, and the reference data relates none of them at or "
+			+ "above the configured severity level. This check compares individual substances: relationships resting only on two "
 			+ "drugs sharing a drug class are not part of it, so it is not a statement that no relationship exists.";
 
 	/** With the property off, the screen's prompt: the note is injected, and its record number. */

@@ -4170,8 +4170,10 @@ public class DrugReferenceInjector {
 	 * quoting the record, dropped both on the demo.
 	 */
 	private static String interactionScreenNoteWords(int screened) {
+		// SUBSTANCES, said so: the count is of distinct substances, and "N of them" read back against "active
+		// medications" told a clinician one co-trimoxazole prescription was two (ADR Decision 163).
 		return SCREEN_NOTE_FINDING_LEAD + screened
-				+ " of them were checked against each other and the "
+				+ " substances in them were checked against each other, and the "
 				+ "reference data relates none of them at or above the configured severity level. This "
 				+ "check compares individual substances: relationships resting only on two drugs "
 				+ "sharing a drug class are not part of it, so it is not a statement that no "

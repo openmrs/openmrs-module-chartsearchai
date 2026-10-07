@@ -125,8 +125,13 @@ public class InteractionScreenSilenceNoteTest {
 						+ "reaches an empty reference slice and describes it as the RECORDS not "
 						+ "addressing interactions: " + chart.getText());
 		String note = notes.get(0).getText();
-		assertTrue(note.contains("2"),
-				"it says how many active medications were checked against each other: " + note);
+		// SUBSTANCES, not medications: the count is of the distinct substances the data resolved her orders to, so
+		// "2 of them" — read back against "active medications" — told the demo's clinician two prescriptions were
+		// checked where one co-trimoxazole prescription carried both (ADR Decision 163). A literal, for the reason
+		// the lead's needle below is one.
+		assertTrue(note.contains("2 substances in them were checked against each other, and the reference data "
+				+ "relates none of them at or above the configured severity level."),
+				"it says how many SUBSTANCES were checked against each other: " + note);
 		assertFalse(note.toLowerCase().contains("prednisolone"),
 				"and it names no drug — it is citable evidence with nothing to navigate to: " + note);
 	}

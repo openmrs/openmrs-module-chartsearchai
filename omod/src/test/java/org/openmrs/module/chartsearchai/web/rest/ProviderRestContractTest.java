@@ -77,6 +77,77 @@ public class ProviderRestContractTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	@Test
+	public void providerStreamKeepsAliveDuringSilenceAndStopsAfterCompletion() throws Exception {
+		CountDownLatch comments = new CountDownLatch(3);
+		ByteArrayOutputStream out = new ByteArrayOutputStream() {
+			@Override public synchronized void write(byte[] frame, int offset, int length) {
+				super.write(frame, offset, length);
+				if (new String(frame, offset, length, StandardCharsets.UTF_8).startsWith(":")) comments.countDown();
+			}
+		};
+		StreamingChartSearchStub service = new StreamingChartSearchStub() {
+			@Override public ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokens,
+					Consumer<String> reasoning, Consumer<List<RecordReference>> references,
+					Consumer<ChartAnswer> answer, Consumer<String> preliminary, CancellationSignal cancellation) {
+				try {
+					assertTrue(comments.await(2, TimeUnit.SECONDS), "keep-alives must arrive during a silent model call");
+				} catch (InterruptedException e) {
+					throw new AssertionError(e);
+				}
+				ChartAnswer result = new ChartAnswer("Answer", Collections.emptyList());
+				answer.accept(result);
+				return result;
+			}
+		};
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(service) {
+			@Override protected String gp(String key, String fallback) { return fallback; }
+			@Override protected String requireLocalModel(String path) { return "model"; }
+		};
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		controller.setConversationService(new RecordingConversationService());
+		controller.setProviderRegistry(stubRegistry(provider));
+		controller.streamProviderTurn(out, patient(), "Question", "bundled", null, null, null, 20);
+		assertTrue(sseTypes(out).contains("turn_done"));
+		int completedSize = out.size();
+		new CountDownLatch(1).await(100, TimeUnit.MILLISECONDS);
+		assertEquals(completedSize, out.size(), "completed responses must release their timer");
+	}
+
+	@Test
+	public void providerRawTextChannelsPreserveSplitCodePointsIndependently() {
+		ScriptedProvider provider = new ScriptedProvider("bundled", true);
+		provider.events = Arrays.asList(
+				TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
+				TurnEvent.delta(TurnEventType.ANSWER_DELTA, 1, "bundled", "Dose \uD83D"),
+				TurnEvent.delta(TurnEventType.REASONING_DELTA, 2, "bundled", "Check \uD83D"),
+				TurnEvent.delta(TurnEventType.PRELIMINARY_DELTA, 3, "bundled", "Read \uD83D"),
+				TurnEvent.delta(TurnEventType.ANSWER_DELTA, 4, "bundled", "\uDC89 given"),
+				TurnEvent.delta(TurnEventType.REASONING_DELTA, 5, "bundled", "\uDD0E chart"),
+				TurnEvent.delta(TurnEventType.PRELIMINARY_DELTA, 6, "bundled", "\uDCCB chart"),
+				TurnEvent.withAnswer(TurnEventType.TURN_DONE, 7, "bundled",
+						AnswerEnvelope.fromPayload(answerPayload("Dose \uD83D\uDC89 given"))));
+		provider.result = TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(answerPayload("Dose \uD83D\uDC89 given")));
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		controller.setConversationService(new RecordingConversationService());
+		controller.setProviderRegistry(stubRegistry(provider));
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		controller.streamProviderTurn(out, patient(), "Question", "bundled", null, null, null);
+		for (String[] expected : new String[][] {
+				{ "answer_delta", "Dose \uD83D\uDC89 given" },
+				{ "reasoning_delta", "Check \uD83D\uDD0E chart" },
+				{ "preliminary_delta", "Read \uD83D\uDCCB chart" } }) {
+			StringBuilder text = new StringBuilder();
+			for (String frame : out.toString(StandardCharsets.UTF_8).split("\n\n")) {
+				if (frame.startsWith("event: " + expected[0] + "\n")) {
+					text.append(frame.substring(frame.indexOf("data: ") + 6));
+				}
+			}
+			assertEquals(expected[1], text.toString(), expected[0]);
+		}
+	}
+
+	@Test
 	public void drugSafetyValidatorRemainsAutowiredAfterProviderFieldsAreAdded() throws Exception {
 		Field field = ChartSearchAiRestController.class.getDeclaredField("drugSafetyValidator");
 		assertTrue(field.isAnnotationPresent(Autowired.class),
@@ -367,7 +438,7 @@ public class ProviderRestContractTest {
 
 		ThrowingOutputStream deadConnection = new ThrowingOutputStream();
 		Thread firstTurn = new Thread(() -> controller.streamProviderTurn(deadConnection, patient(),
-				"First question", "bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1"));
+				"First question", "bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1", 20));
 		firstTurn.start();
 		long deadline = System.currentTimeMillis() + 2000;
 		while (provider.capturedCancellations.isEmpty() && System.currentTimeMillis() < deadline) {
@@ -380,6 +451,9 @@ public class ProviderRestContractTest {
 				"bundled", ProviderMode.QUERY_SCOPED, null, "conversation-uuid-1");
 		assertTrue(provider.capturedCancellations.get(0).isCancelled());
 
+		int writesWhenCancelled = deadConnection.writeAttempts;
+		new CountDownLatch(1).await(100, TimeUnit.MILLISECONDS);
+
 		// Only now does the first turn's provider emit its trailing event and return — the
 		// connection is dead (deadConnection throws on every write), but that write must be
 		// skipped rather than aborting execute() before it can hand back a persistable result.
@@ -387,7 +461,8 @@ public class ProviderRestContractTest {
 		firstTurn.join(5000);
 
 		assertFalse(firstTurn.isAlive(), "first turn's thread should have unblocked and finished");
-		assertEquals(0, deadConnection.writeAttempts, "a cancelled turn must not attempt to write at all");
+		assertEquals(writesWhenCancelled, deadConnection.writeAttempts,
+				"a cancelled turn must stop both event and keep-alive writes");
 		assertEquals(2, conversations.finished,
 				"both turns should be persisted — the first turn's answer must not vanish just "
 						+ "because its browser connection was already gone when it completed");
@@ -412,7 +487,7 @@ public class ProviderRestContractTest {
 		controller.setConversationService(conversations);
 		controller.setProviderRegistry(stubRegistry(provider));
 
-		controller.streamProviderTurn(new FailAfterWritesOutputStream(1), patient(), "What meds?",
+		controller.streamProviderTurn(new FailOnEventOutputStream("answer_done"), patient(), "What meds?",
 				"hub", ProviderMode.QUERY_SCOPED, "single-e4b-checked", null);
 
 		assertEquals(1, conversations.finished,
@@ -436,12 +511,14 @@ public class ProviderRestContractTest {
 		}
 	}
 
-	private static final class FailAfterWritesOutputStream extends java.io.OutputStream {
+	private static final class FailOnEventOutputStream extends java.io.OutputStream {
 
-		private int successfulWritesRemaining;
+		private final String event;
 
-		FailAfterWritesOutputStream(int successfulWrites) {
-			this.successfulWritesRemaining = successfulWrites;
+		private boolean failed;
+
+		FailOnEventOutputStream(String event) {
+			this.event = event;
 		}
 
 		@Override
@@ -451,7 +528,8 @@ public class ProviderRestContractTest {
 
 		@Override
 		public void write(byte[] b, int off, int len) throws IOException {
-			if (successfulWritesRemaining-- <= 0) {
+			if (new String(b, off, len, StandardCharsets.UTF_8).startsWith("event: " + event + "\n")) failed = true;
+			if (failed) {
 				throw new IOException("connection reset by peer");
 			}
 		}

@@ -275,17 +275,9 @@ public class CoMedicationResolutionPerPassTest {
 	private static final String RELATIVE_SOURCE =
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
-	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 *  it. It spans ALL THREE lines of the declaration, and {@link SourceScan#body} hard-fails on a
-	 *  needle matching more than once. The first line alone matches every arity above that opens
-	 *  identically, so what it buys is the NAME — the tail alone names no method, and nothing about it
-	 *  would say the body it lands on is {@code validate}'s. <b>The third line is what makes this
-	 *  unique, and only since issue #280</b>: before it the two-line prefix already was, by the one
-	 *  character separating the declaration's trailing comma from the five-argument seam's {@code )},
-	 *  and the third line bought loudness alone. The six-argument delegate #280 added wraps its first
-	 *  two lines identically, so a needle stopping at line two now matches twice. See
-	 *  {@code ChipSubjectOneResolutionTest}'s copy of this constant for what a tail-only needle does
-	 *  and does not let through, which is not what it first appears. */
+	/** All four declaration lines identify the implementation that builds the pass's shared state.
+	 * The fourth distinguishes it from its delegate. A non-unique needle fails the source scan.
+	 */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
 					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"

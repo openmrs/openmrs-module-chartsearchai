@@ -10,6 +10,8 @@
 package org.openmrs.module.chartsearchai.api.provider;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
+import java.util.concurrent.CancellationException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -53,6 +55,11 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 			.version(HttpClient.Version.HTTP_1_1)
 			.build();
 
+	/** Bounds only response headers; review and In-Depth bodies may run longer. */
+	protected Duration headerTimeout() {
+		return Duration.ofSeconds(30);
+	}
+
 	/** Runtime-property API key seam, overridable in tests. */
 	protected String apiKey() {
 		Properties properties = Context.getRuntimeProperties();
@@ -66,6 +73,7 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 			String body = requestJson(request);
 			HttpRequest.Builder builder = HttpRequest.newBuilder()
 					.uri(URI.create(request.getEndpointUrl()))
+					.timeout(headerTimeout())
 					.version(HttpClient.Version.HTTP_1_1)
 					.header("Content-Type", "application/json")
 					.header("Accept", "text/event-stream")
@@ -74,31 +82,62 @@ public class HttpHubStreamTransport implements HubStreamTransport {
 			if (key != null && !key.trim().isEmpty()) {
 				builder.header("Authorization", "Bearer " + key.trim());
 			}
-			HttpResponse<InputStream> response = httpClient.send(builder.build(),
-					HttpResponse.BodyHandlers.ofInputStream());
-			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				String errorBody = readTruncatedErrorBody(response.body());
-				requireSuccess(response.statusCode(), errorBody);
-			}
-			// Bind the open response body so a preempting turn can force it closed from another
-			// thread, unblocking parseSse's readLine() below with an IOException instead of letting
-			// the hub keep generating an abandoned turn to completion (see TurnCancellation).
+			HttpResponse<InputStream> response = awaitHeaders(builder.build(), cancellation);
 			try (InputStream bodyStream = new BoundedResponseStream(response.body(), RemoteLlmEngine.MAX_RESPONSE_BYTES)) {
-				if (cancellation instanceof TurnCancellation) {
-					((TurnCancellation) cancellation).bindCloseable(bodyStream);
+				cancellation.bindCloseable(bodyStream);
+				try {
+					if (response.statusCode() < 200 || response.statusCode() >= 300) {
+						requireSuccess(response.statusCode(), readTruncatedErrorBody(bodyStream));
+					}
+					parseSse(bodyStream, sink);
+				} finally {
+					cancellation.unbindCloseable(bodyStream);
 				}
-				parseSse(bodyStream, sink);
 			}
 		}
 		catch (HubTransportException e) {
 			throw e;
 		}
 		catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
+			if (!cancellation.isCancelled()) Thread.currentThread().interrupt();
 			throw new RuntimeException("Hub stream interrupted", e);
 		}
 		catch (IOException e) {
 			throw new RuntimeException("Hub stream failed: " + e.getMessage(), e);
+		}
+	}
+
+	private HttpResponse<InputStream> awaitHeaders(HttpRequest request, CancellationSignal cancellation)
+			throws IOException, InterruptedException {
+		HeaderWait wait = new HeaderWait();
+		cancellation.bindCloseable(wait);
+		try {
+			if (cancellation.isCancelled()) throw new CancellationException("Hub request cancelled");
+			return httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+		} finally {
+			wait.finished();
+			cancellation.unbindCloseable(wait);
+		}
+	}
+
+	/** Scoped to the HTTP header wait, never chart reads or later work on the request thread. */
+	private static final class HeaderWait implements Closeable {
+		private final Thread thread = Thread.currentThread();
+		private boolean active = true;
+		private boolean interrupted;
+
+		@Override
+		public synchronized void close() {
+			if (active) {
+				interrupted = true;
+				thread.interrupt();
+			}
+		}
+
+		synchronized void finished() {
+			// A cancel already dequeued by TurnCancellation must not interrupt subsequent work.
+			active = false;
+			if (interrupted) Thread.interrupted();
 		}
 	}
 

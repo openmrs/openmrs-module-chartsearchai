@@ -143,6 +143,12 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 				return settled;
 			}
 			if (current != null) {
+				if (!cancellation.isCancelled()) {
+					// Parser exceptions can include response text; log the failure type, not that text.
+					Throwable cause = e.getCause() == null ? e : e.getCause();
+					log.warn("Hub provider answer tail failed for request {} ({})",
+							request.getRequestId(), cause.getClass().getSimpleName());
+				}
 				return completedWithPartialAnswer(events, sequence, request.getMode(), current, emitted);
 			}
 			if (cancellation.isCancelled()) {

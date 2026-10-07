@@ -10,10 +10,12 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -60,6 +62,30 @@ final class OwnOrderFindingStatement {
 	}
 
 	/**
+	 * @return each record the lines {@link #withUnstatedOwnOrderFindings} states cite (ADR Decision 170), with the
+	 *         findings it is cited FOR — a line's finding for none, being one itself, her order's record for that
+	 *         finding — in the order cited: the input {@code LlmInferenceService.withReferencesTheModuleStated} attaches
+	 *         as the module's. Off {@link #statedFindings}, so it names exactly the lines the sentence states.
+	 */
+	static Map<Integer, List<Integer>> citedRecords(String answer, List<RecordReference> cited,
+			List<RecordMapping> mappings, Map<Integer, String> lines) {
+		Map<Integer, List<Integer>> records = new LinkedHashMap<Integer, List<Integer>>();
+		for (Integer finding : statedFindings(answer, cited, mappings, lines)) {
+			for (Integer index : ChartSearchAiUtils.citedIndexes(lines.get(finding))) {
+				List<Integer> forFindings = records.get(index);
+				if (forFindings == null) {
+					forFindings = new ArrayList<Integer>();
+					records.put(index, forFindings);
+				}
+				if (!index.equals(finding) && !forFindings.contains(finding)) {
+					forFindings.add(finding);
+				}
+			}
+		}
+		return records;
+	}
+
+	/**
 	 * @return {@code answer} with the lines of {@code lines} whose finding {@code answer} does not cite appended after
 	 *         {@link #LEAD}, or {@code answer} unchanged where it cites them all or is blank
 	 */
@@ -75,10 +101,8 @@ final class OwnOrderFindingStatement {
 		List<String> unstated = new ArrayList<String>();
 		for (Map.Entry<Integer, String> line : lines.entrySet()) {
 			if (stated.contains(line.getKey())) {
-				// No citation marker, as ADR Decision 100's sentence carries none: a marker is a reference of the answer,
-				// and the only writer of a reference the module attached is extractCitedReferences, which records the
-				// chart evidence behind a finding the MODEL cited (ADR Decision 80). The finding's own chip, uncited, is
-				// drawn in full beside the answer.
+				// The line cites its finding and her order (ADR Decision 170); citedRecords hands those records to
+				// extractCitedReferences, the one writer of a reference the module attached (ADR Decision 80).
 				unstated.add(line.getValue().trim());
 			}
 		}

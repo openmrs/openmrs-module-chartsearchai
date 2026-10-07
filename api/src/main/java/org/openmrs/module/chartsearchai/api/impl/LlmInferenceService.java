@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -355,7 +356,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// And the order records it cites, as the module's, by the one method that decides which indices become
 			// references; after grounding, which judges what the MODEL cited.
 			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
-					conflicting.getCitedOrderRecords(), chart.getMappings());
+					statedByTheModule(OwnOrderFindingStatement.citedRecords(response.getAnswer(), cited,
+							chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
+							conflicting.getCitedOrderRecords()), chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(completedAnswer, answerReferences,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -799,7 +802,10 @@ public class LlmInferenceService implements ChartSearchService {
 					DrugClassStatement.withDrugClassStated(ListedDrugStatement.withListedDrugsStated(
 							OwnOrderFindingStatement.withUnstatedOwnOrderFindings(response.getAnswer(), cited,
 									chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
-							chart.getListedDrugsWithNoActiveOrder()), unresolvedDrugClass, cited), cited,
+							chart.getListedDrugsWithNoActiveOrder()), unresolvedDrugClass, cited),
+					// ADR Decision 170: the records the own-order statement cites, as the module's, on this answer too.
+					withReferencesTheModuleStated(cited, OwnOrderFindingStatement.citedRecords(response.getAnswer(), cited,
+							chart.getMappings(), chart.getProposalOwnOrderFindingLines()), chart.getMappings()),
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null, null,
@@ -939,7 +945,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// And the order records it cites, as the module's, by the one method that decides which indices become
 			// references; after grounding, which judges what the MODEL cited.
 			List<RecordReference> answerReferences = withReferencesTheModuleStated(references,
-					conflicting.getCitedOrderRecords(), chart.getMappings());
+					statedByTheModule(OwnOrderFindingStatement.citedRecords(response.getAnswer(), cited,
+							chart.getMappings(), chart.getProposalOwnOrderFindingLines()),
+							conflicting.getCitedOrderRecords()), chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(completedAnswer, answerReferences,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
@@ -1325,6 +1333,27 @@ public class LlmInferenceService implements ChartSearchService {
 	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
 			List<RecordMapping> mappings) {
 		return extractCitedReferences(answer, citations, mappings, Collections.<Integer, List<Integer>> emptyMap());
+	}
+
+	/** The records several sentences the module appended cite, one map, each record's findings unioned in order. */
+	@SafeVarargs
+	static Map<Integer, List<Integer>> statedByTheModule(Map<Integer, List<Integer>>... statements) {
+		Map<Integer, List<Integer>> merged = new LinkedHashMap<Integer, List<Integer>>();
+		for (Map<Integer, List<Integer>> statement : statements) {
+			for (Map.Entry<Integer, List<Integer>> record : statement.entrySet()) {
+				List<Integer> findings = merged.get(record.getKey());
+				if (findings == null) {
+					findings = new ArrayList<Integer>();
+					merged.put(record.getKey(), findings);
+				}
+				for (Integer finding : record.getValue()) {
+					if (!findings.contains(finding)) {
+						findings.add(finding);
+					}
+				}
+			}
+		}
+		return merged;
 	}
 
 	/**

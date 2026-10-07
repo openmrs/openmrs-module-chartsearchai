@@ -1021,12 +1021,13 @@ public class DrugReferenceInjector {
 		injected.markDrugsAlreadyOrdered(drugsAlreadyOrdered(findings));
 		// And the line of each finding about the drug the question proposes against one of her orders (ADR Decision
 		// 147), which LlmInferenceService states after a model's answer that does not cite it.
+		// The record each of her orders is (ADR Decision 168), which the module's own sentences after a model's answer
+		// cite — so ungated, as the composed answer's numbers are.
+		Map<String, Integer> herOrderRecords = orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
+				: orderRecordNumbers;
 		injected.markProposalOwnOrderFindingLines(proposalOwnOrderFindingLines(question, questionDrugs, findings,
-				findingNumbers));
-		// And the record each of her orders is (ADR Decision 168), which ConflictingOrderStatement cites after a
-		// model's answer — the module's own sentence, so ungated, as the composed answer's numbers are.
-		injected.markOrderRecordNumbers(orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context)
-				: orderRecordNumbers);
+				findingNumbers, herOrderRecords));
+		injected.markOrderRecordNumbers(herOrderRecords);
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
 		// derives its KV-cache decision from PatientChart.isQueryScoped() precisely so a mode-flip /
 		// GP-read race cannot mis-scope the persist; a fresh PatientChart defaults the flag to false,
@@ -2748,12 +2749,25 @@ public class DrugReferenceInjector {
 	 * proposes. That last is what keeps out a question-pair finding relating the drug to one the question merely
 	 * LISTS, which her chart need not hold: such a finding states both of its drugs' rows. Every other interaction a
 	 * proposal raises is the drug-in-play arm's against her own orders. The drugs proposed are every drug the question names where {@link #questionProposes} admits it, else
-	 * those it does not list before its proposal ({@link #listedBeforeTheProposal}), else none.
+	 * those it does not list before its proposal ({@link #listedBeforeTheProposal}), else, where it asks whether its
+	 * drugs may be given together ({@code QueryScopeRouter.asksWhetherToGiveDrugsTogether}, ADR Decision 169), every drug
+	 * it names — and then a finding is one only where it names an order of hers ({@link SafetyWarning#namedPartners()}),
+	 * since the finding relating the drugs it names to each other has every subject row proposed and is about none.
+	 *
+	 * <p>Each line cites its finding and the records of her orders it is about ({@link #orderRecordMarkers}, the
+	 * composed answer's rule), before the line's last terminator — ADR Decision 170 — so the clinician can open them.
 	 */
 	private static Map<Integer, String> proposalOwnOrderFindingLines(String question, List<DrugReference> questionDrugs,
-			List<SafetyWarning> findings, List<Integer> numbers) {
+			List<SafetyWarning> findings, List<Integer> numbers, Map<String, Integer> herOrderRecords) {
 		Set<Object> proposed = new HashSet<Object>();
+		boolean together = false;
 		if (questionProposes(question, questionDrugs)) {
+			for (DrugReference entry : questionDrugs) {
+				proposed.add(entry.substanceGroupKey());
+			}
+		} else if (!questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherToGiveDrugsTogether(wordsBesideItsNames(question, questionDrugs))) {
+			together = true;
 			for (DrugReference entry : questionDrugs) {
 				proposed.add(entry.substanceGroupKey());
 			}
@@ -2777,7 +2791,7 @@ public class DrugReferenceInjector {
 			String clause = strengthClause(finding);
 			if (!SafetyWarning.TYPE_INTERACTION.equals(finding.getType())
 					|| !(STRENGTH_WITHHOLD.equals(clause) || STRENGTH_CAUTION.equals(clause))
-					|| finding.subjectRows().isEmpty()) {
+					|| finding.subjectRows().isEmpty() || (together && finding.namedPartners().isEmpty())) {
 				continue;
 			}
 			boolean aboutTheProposal = true;
@@ -2785,10 +2799,23 @@ public class DrugReferenceInjector {
 				aboutTheProposal &= proposed.contains(row.substanceGroupKey());
 			}
 			if (aboutTheProposal) {
-				lines.put(numbers.get(i), DrugSafetyValidator.endSentence(briefDetail(finding)));
+				Integer number = numbers.get(i);
+				String markers = " [" + number + "]" + orderRecordMarkers(finding, herOrderRecords,
+						Collections.singleton(number));
+				lines.put(number, withMarkersBeforeItsEnd(DrugSafetyValidator.endSentence(briefDetail(finding)), markers));
 			}
 		}
 		return lines;
+	}
+
+	/** {@code sentence}, which {@link DrugSafetyValidator#endSentence} ended, with {@code markers} before that last
+	 *  terminator — where a citation marker sits in the answer's own prose. */
+	private static String withMarkersBeforeItsEnd(String sentence, String markers) {
+		if (sentence.isEmpty()) {
+			return markers.trim();
+		}
+		int end = sentence.length() - 1;
+		return sentence.substring(0, end) + markers + sentence.charAt(end);
 	}
 
 	/**

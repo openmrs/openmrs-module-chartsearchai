@@ -13849,6 +13849,7 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHe
 
 **Status: Accepted** (October 2026) — implemented, no issue. Beside [Decision 90](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)
 and [Decision 100](#decision-100-an-order-the-answer-leaves-unnamed-is-named-by-the-module-not-by-asking-the-model-again).
+Its "no marker" is reversed by [Decision 170](#decision-170-the-own-order-statement-cites-its-findings-and-her-orders).
 
 ### Context
 
@@ -14922,3 +14923,90 @@ answer, the reference attached for its finding, an order two prescriptions share
 model cited staying the model's), `LlmInferenceServiceScheduledOrderContextTest.anAllergyQuestionStatesHerScheduledOrderWithTheDateItStarts`
 (the order looked up by its own display) and
 `LlmInferenceServiceTest.extractCitedReferences_shouldNotClaimARecordTheModelCitedAlthoughTheModuleStatedItToo`.
+
+## Decision 169: A question whether two drugs can be given together states their findings against her own orders
+
+**Status: Accepted** (October 2026) — implemented, no issue. Widens
+[Decision 147](#decision-147-a-finding-about-the-drug-proposed-against-her-own-order-is-stated-where-a-models-answer-leaves-it-out).
+
+### Context
+
+Susan Young (`763e6e5f…`, on the 3.7.1 standalone) holds an active neomycin order. *"Can warfarin and ibuprofen be
+given together?"* was answered by the model *"No — Warfarin and Ibuprofen should not be given together: … a Major
+problem [48]."*, citing the finding relating the two drugs. The module also carried *"Warfarin interacts with active
+order Neomycin — Moderate"* [47] — the one finding about her own chart — and the answer said nothing of it;
+`findingCitations` read carried 2, cited 1, and [47] reached the references only through the model's structured array,
+so it sat under an answer that never mentions it.
+
+Decision 147's statement would have named it, and did not fire. It states findings about a drug the question PROPOSES,
+and the proposal reading is `DrugReferenceInjector.questionProposes`, over `QueryScopeRouter.PROPOSAL_SHAPES` — a
+closed grammar of ONE drug. Driven through the real predicate over the shipped knowledge base, *"Can warfarin and
+ibuprofen be given together?"*, *"Is it safe to give her warfarin and ibuprofen?"* and *"Can I give her warfarin with
+ibuprofen?"* are each proposals of nothing, and *"Can warfarin be given to her?"* is admitted — on the standalone it is
+answered *"1 interaction caution for Warfarin: Warfarin interacts with active order Neomycin — Moderate. [46] [7]"*.
+
+### The decision
+
+- **A question whether two drugs may be given together proposes both, for this statement alone**:
+  `QueryScopeRouter.asksWhetherToGiveDrugsTogether`, its own closed grammar (`TOGETHER_SHAPES`), read only by
+  `proposalOwnOrderFindingLines`. Fail-closed as the one-drug grammar is: whether they interact, whether to avoid or stop
+  them, whether she has taken them, are not admitted.
+- **`questionProposes` is untouched.** Its other readers decide the module's own "No" (#469), that a proposed drug is
+  already among her orders (#548) and the ended-order referent (#472), each written for ONE drug proposed; admitting a
+  pair there would change all of them on no measurement.
+- **Only a finding naming one of her orders is stated** (`SafetyWarning.namedPartners()`), on this path. With both drugs
+  proposed, the finding relating the two has every subject row proposed, and it is about no order of hers — stated
+  under *"against this patient's own orders"* it would say she holds the other drug.
+
+### Residues
+
+- The answer to a pair question stays the model's: the module composes no answer for one, as before.
+- A phrasing the grammar misses keeps the answer as the model wrote it, which is the state before this decision.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest.aQuestionWhetherTwoDrugsCanBeGivenTogetherStatesTheirFindingsAgainstHerOwnOrders`
+(its words exactly; it reddens without the order-naming requirement and without the grammar),
+`.theTogetherGrammarAdmitsQuestionsOfGivingBothAndNothingElse` and `.aQuestionWhetherTwoDrugsInteractIsNotAProposalOfEither`.
+
+## Decision 170: The own-order statement cites its findings and her orders
+
+**Status: Accepted** (October 2026) — implemented, no issue. Reverses
+[Decision 147](#decision-147-a-finding-about-the-drug-proposed-against-her-own-order-is-stated-where-a-models-answer-leaves-it-out)'s
+"it cites no marker".
+
+### Context
+
+After [Decision 169](#decision-169-a-question-whether-two-drugs-can-be-given-together-states-their-findings-against-her-own-orders)
+Susan Young's *"Can warfarin and ibuprofen be given together?"* ended *"Not stated above, against this patient's own
+orders: Warfarin interacts with active order Neomycin — Moderate."* — the finding stated, and nothing in the sentence a
+clinician could open. Decision 147 left the marker out for one reason: the answer's references are resolved before
+the module appends anything, so a first build's `[55]` resolved to nothing in the browser.
+[Decision 168](#decision-168-the-allergy-answers-conflicting-orders-cite-the-records-they-are) removed that reason:
+`LlmInferenceService.withReferencesTheModuleStated` adds a module sentence's citations to the references through
+`extractCitedReferences`, still the one writer of `attachedByTheModule`.
+
+### The decision
+
+- **Each line cites its finding and the records of her orders it is about**, before the line's last terminator, where
+  a marker sits in the answer's own prose: *"… Neomycin — Moderate [47] [7]."* The order markers are the composed
+  answer's own rule (`DrugReferenceInjector.orderRecordMarkers`, [Decision 140](#decision-140-a-proposal-whose-findings-are-all-cautions-about-the-drug-is-answered-with-the-cautions-found)),
+  over the record numbers Decision 168 stamps, so an order no record unambiguously is cites nothing. Before the
+  terminator, because a marker after it left the next appended sentence to add a period after the markers.
+- **Both reach the references as the module's**: `OwnOrderFindingStatement.citedRecords`, off `statedFindings` so it
+  names exactly the lines the sentence states — the finding attached for no finding, being one, her order's record for
+  its finding. On `/search`, the streaming answer and the early `done` alike. A record the model cited stays the
+  model's.
+- `findingsStatedByTheModule` is unchanged: it is still how a client folds each stated finding's chip.
+
+### What the tests carry
+
+`LlmInferenceServiceFindingProvenanceContextTest`'s four claims about what the MODEL cited — every reference but the
+attached allergy record is the model's; an answer anchoring nothing inline surfaces no reference — were written while
+the module's sentences cited nothing, over an arrangement (*"Can I give ibuprofen?"*) where Decision 147's statement is
+appended. They are now asked of the references outside the module's own sentence — the stated findings and the records
+attached for them, each asserted the module's — and the attach walk's subject mutation (iterate every mapping, not what
+the model cited) still reddens them.
+
+Pinned by `LlmInferenceServiceListedMedicationsContextTest` — every statement it pins carries its markers, read off the
+prompt and the answer's references; `.aFindingAboutTheDrugProposedAgainstHerOwnOrderIsStatedWhereTheAnswerLeftItOut`
+and `.aQuestionWhetherTwoDrugsCanBeGivenTogetherStatesTheirFindingsAgainstHerOwnOrders` redden when an order's record
+is attached for no finding, and the streaming case when the early `done` attaches nothing.

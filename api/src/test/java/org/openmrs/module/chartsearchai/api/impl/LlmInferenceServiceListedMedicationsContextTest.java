@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
@@ -30,6 +31,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.CautionLedOverWithholding;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
@@ -144,14 +146,23 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 
 	/**
 	 * The sentence ADR Decision 147 states after an answer that leaves out {@code drug}'s findings against her own
-	 * orders: each finding's first sentence, with its rating and no marker.
+	 * orders: each finding's first sentence with its rating, citing the finding and the record her order is before its
+	 * end (ADR Decision 170) — the order's record read off {@code answer}'s own references, so the case also holds that
+	 * the answer carries it.
 	 */
-	private static String ownOrderMajor(String prompt, String drug) {
+	private static String ownOrderMajor(String prompt, ChartAnswer answer, String drug) {
+		int rifampicin = referenceTo(answer, Context.getOrderService().getOrder(9515).getUuid()).getIndex();
 		String lines = " Not stated above, against this patient's own orders: " + drug
-				+ " interacts with active order Rifampicin (rifampin) — Major.";
+				+ " interacts with active order Rifampicin (rifampin) — Major [" + findingNumber(prompt, drug, "rifamp")
+				+ "] [" + rifampicin + "].";
+		if (!"Amlodipine".equals(drug)) {
+			return lines;
+		}
 		// Amlodipine also relates Moderate to her aspirin order, which those answers leave out too.
-		return !"Amlodipine".equals(drug) ? lines
-				: lines + " Amlodipine interacts with active order Acetylsalicylic acid (aspirin) — Moderate.";
+		int aspirin = referenceTo(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex();
+		return lines + " Amlodipine interacts with active order Acetylsalicylic acid (aspirin) — Moderate ["
+				+ findingNumber(prompt, "Amlodipine", "aspirin", DrugReferenceInjector.STRENGTH_CAUTION) + "] [" + aspirin
+				+ "].";
 	}
 
 	private static void assertAChip(ChartAnswer answer, String drug, String partner, String severity) {
@@ -202,7 +213,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		assertAChip(answer, "Amlodipine", "rifamp", "Major");
 		assertReported(answer.getCautionLedOverWithholding(),
 				findingNumber(recorder.prompt, "Amlodipine", "rifamp"));
-		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, "Amlodipine") + NONE_OF_THE_LIST,
+		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, answer, "Amlodipine") + NONE_OF_THE_LIST,
 				answer.getAnswer(), "the module states the Major against her own order the answer left out and what "
 						+ "the chart holds of the list, and the verdict the model wrote is untouched");
 	}
@@ -219,9 +230,9 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 				findingNumber(recorder.prompt, "Amlodipine", "rifamp"));
 		assertEquals(answer.getCautionLedOverWithholding(), early.get(0).getCautionLedOverWithholding(),
 				"resolved before the early done, so the early done carries the same report as the final answer");
-		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, "Amlodipine") + NONE_OF_THE_LIST,
+		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, answer, "Amlodipine") + NONE_OF_THE_LIST,
 				answer.getAnswer(), "the streaming path completes the final answer too");
-		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, "Amlodipine") + NONE_OF_THE_LIST,
+		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, early.get(0), "Amlodipine") + NONE_OF_THE_LIST,
 				early.get(0).getAnswer(),
 				"and the early done, which is the answer a streaming client is handed first: the chart stated the "
 						+ "list's drugs before the model was asked");
@@ -238,7 +249,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		assertAChip(answer, "Fluconazole", "rifamp", "Major");
 		assertReported(answer.getCautionLedOverWithholding(),
 				findingNumber(recorder.prompt, "Fluconazole", "rifamp"));
-		assertEquals(lead + ownOrderMajor(recorder.prompt, "Fluconazole") + NONE_OF_THE_LIST, answer.getAnswer());
+		assertEquals(lead + ownOrderMajor(recorder.prompt, answer, "Fluconazole") + NONE_OF_THE_LIST, answer.getAnswer());
 	}
 
 	/**
@@ -319,7 +330,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 
 		assertReported(answer.getCautionLedOverWithholding(),
 				findingNumber(recorder.prompt, "Amlodipine", "rifamp"));
-		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, "Amlodipine"), answer.getAnswer(),
+		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, answer, "Amlodipine"), answer.getAnswer(),
 				"the question listed nothing, so no list sentence is stated; the Major against her own order is");
 	}
 
@@ -330,7 +341,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		ChartAnswer answer = recorder.service.search(patient,
 				"The patient is currently on Rifampicin, Nevirapine, Stavudine, is it safe to give Amlodipine?");
 
-		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, "Amlodipine")
+		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, answer, "Amlodipine")
 				+ " The chart holds no active order for Nevirapine or Stavudine.", answer.getAnswer());
 	}
 
@@ -344,7 +355,7 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 			DrugReferenceTestSupport.drugOrderRecord(2, "Stavudine 30mg", Boolean.FALSE, null));
 		ChartAnswer answer = recorder.service.search(patient, AMLODIPINE_QUESTION);
 
-		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, "Amlodipine")
+		assertEquals(AMLODIPINE_CAUTION_LEAD + ownOrderMajor(recorder.prompt, answer, "Amlodipine")
 				+ " The chart holds no active order for Lamivudine or Nevirapine.", answer.getAnswer());
 	}
 
@@ -699,13 +710,111 @@ public class LlmInferenceServiceListedMedicationsContextTest extends BaseModuleC
 		ChartAnswer answer = recorder.service.search(patient, FLUCONAZOLE_QUESTION);
 
 		int own = findingNumber(recorder.prompt, "Fluconazole", "rifamp");
+		RecordReference rifampicin = referenceTo(answer, Context.getOrderService().getOrder(9515).getUuid());
 		assertEquals("Fluconazole can be given, with one caution. Not stated above, against this patient's own orders: "
-				+ "Fluconazole interacts with active order Rifampicin (rifampin) — Major." + NONE_OF_THE_LIST,
-				answer.getAnswer());
-		assertFalse(answer.getAnswer().contains("[" + own + "]"),
-				"the statement cites no marker, so none points at a record the answer's references do not carry");
+				+ "Fluconazole interacts with active order Rifampicin (rifampin) — Major [" + own + "] ["
+				+ rifampicin.getIndex() + "]." + NONE_OF_THE_LIST, answer.getAnswer(),
+				"the statement cites the finding and the record her order is (ADR Decision 170)");
+		assertTheModuleAttached(answer, own, Collections.<Integer> emptyList());
+		assertTheModuleAttached(answer, rifampicin.getIndex(), Collections.singletonList(Integer.valueOf(own)));
 		assertEquals(Collections.singletonList(Integer.valueOf(own)), answer.getFindingsStatedByTheModule(),
 				"the response names the finding the module's sentence states, so a client can join its chip to it");
+	}
+
+	/**
+	 * A question whether two drugs can be given together proposes both (ADR Decision 169), so a model's answer that
+	 * leaves out a finding about either against one of her own orders has it stated after it, as a one-drug proposal
+	 * does — fluconazole and amlodipine each against her rifampicin — and never the finding relating the two drugs
+	 * the question names, which is about no order of hers.
+	 */
+	@Test
+	public void aQuestionWhetherTwoDrugsCanBeGivenTogetherStatesTheirFindingsAgainstHerOwnOrders() throws IOException {
+		String question = "Can fluconazole and amlodipine be given together?";
+		Recorder recorder = serviceAnswering("Fluconazole and amlodipine can be given together, with cautions.", obs());
+		ChartAnswer answer = recorder.service.search(patient, question);
+
+		int fluconazole = findingNumber(recorder.prompt, "Fluconazole", "rifamp");
+		int amlodipine = findingNumber(recorder.prompt, "Amlodipine", "rifamp");
+		int aspirin = findingNumber(recorder.prompt, "Amlodipine", "aspirin", DrugReferenceInjector.STRENGTH_CAUTION);
+		int rifampicinOrder = referenceTo(answer, Context.getOrderService().getOrder(9515).getUuid()).getIndex();
+		int aspirinOrder = referenceTo(answer, Context.getOrderService().getOrder(111).getUuid()).getIndex();
+		assertEquals("Fluconazole and amlodipine can be given together, with cautions. Not stated above, against this "
+				+ "patient's own orders: Fluconazole interacts with active order Rifampicin (rifampin) — Major ["
+				+ fluconazole + "] [" + rifampicinOrder + "]. Amlodipine interacts with active order Rifampicin (rifampin) "
+				+ "— Major [" + amlodipine + "] [" + rifampicinOrder + "]. Amlodipine interacts with active order "
+				+ "Acetylsalicylic acid (aspirin) — Moderate [" + aspirin + "] [" + aspirinOrder + "].", answer.getAnswer(),
+				"each drug against her orders, citing the finding and her order, and never the finding relating the two "
+						+ "drugs the question names");
+		assertTheModuleAttached(answer, rifampicinOrder, Arrays.asList(Integer.valueOf(fluconazole),
+				Integer.valueOf(amlodipine)));
+		assertTheModuleAttached(answer, aspirinOrder, Collections.singletonList(Integer.valueOf(aspirin)));
+		assertEquals(Arrays.asList(Integer.valueOf(fluconazole), Integer.valueOf(amlodipine), Integer.valueOf(aspirin)),
+				answer.getFindingsStatedByTheModule(), "the response names the findings the sentence states");
+	}
+
+	/**
+	 * Which phrasings ask whether two drugs may be given together (ADR Decision 169), through the whole pipeline: each
+	 * admitted one has her own orders' findings stated after the model's answer, and each refused one — asking whether
+	 * they interact, whether to avoid or stop them, whether she has taken them, or naming no verb of giving — has
+	 * nothing stated, the grammar being closed.
+	 */
+	@Test
+	public void theTogetherGrammarAdmitsQuestionsOfGivingBothAndNothingElse() throws IOException {
+		String modelAnswer = "Fluconazole and amlodipine can be given together, with cautions.";
+		for (String admitted : new String[] { "Can fluconazole and amlodipine be given together?",
+				"Is it safe to give her fluconazole and amlodipine?", "Can I give her fluconazole with amlodipine?",
+				"Can she take fluconazole and amlodipine together?", "Are fluconazole and amlodipine safe together?",
+				"Can fluconazole be given with amlodipine?", "Is fluconazole safe with amlodipine?" }) {
+			assertTrue(serviceAnswering(modelAnswer, obs()).service.search(patient, admitted).getAnswer().startsWith(
+				modelAnswer + " Not stated above, against this patient's own orders: "), "admitted: " + admitted);
+		}
+		for (String refused : new String[] { "Does fluconazole interact with amlodipine?",
+				"Should fluconazole and amlodipine be avoided together?", "Can fluconazole and amlodipine be stopped?",
+				"Has she taken fluconazole and amlodipine?", "Are fluconazole and amlodipine?" }) {
+			assertEquals(modelAnswer, serviceAnswering(modelAnswer, obs()).service.search(patient, refused).getAnswer(),
+				"refused: " + refused);
+		}
+	}
+
+	/**
+	 * A question naming two drugs that does not ask whether to give them is not a proposal (ADR Decision 169): the
+	 * grammar is closed, so "does it interact" keeps the answer as the model wrote it.
+	 */
+	@Test
+	public void aQuestionWhetherTwoDrugsInteractIsNotAProposalOfEither() throws IOException {
+		String modelAnswer = "Fluconazole and amlodipine interact, a Moderate interaction.";
+		ChartAnswer answer = serviceAnswering(modelAnswer, obs()).service.search(patient,
+				"Does fluconazole interact with amlodipine?");
+
+		assertEquals(modelAnswer, answer.getAnswer(), "nothing is stated after an answer to a question proposing nothing");
+		assertEquals(Collections.emptyList(), answer.getFindingsStatedByTheModule());
+	}
+
+	/** The one reference the answer carries to the record of the order {@code orderUuid}. */
+	private static RecordReference referenceTo(ChartAnswer answer, String orderUuid) {
+		List<RecordReference> found = new ArrayList<RecordReference>();
+		for (RecordReference reference : answer.getReferences()) {
+			if (orderUuid.equals(reference.getResourceUuid())) {
+				found.add(reference);
+			}
+		}
+		assertEquals(1, found.size(), "precondition: one reference to the order's record");
+		return found.get(0);
+	}
+
+	/**
+	 * The reference at {@code index} is the MODULE's, attached for {@code findings} (ADR Decision 170): the statement
+	 * cited it, and the model did not.
+	 */
+	private static void assertTheModuleAttached(ChartAnswer answer, int index, List<Integer> findings) {
+		for (RecordReference reference : answer.getReferences()) {
+			if (reference.getIndex() == index) {
+				assertTrue(reference.isAttachedByTheModule(), "[" + index + "] is the module's citation");
+				assertEquals(findings, reference.getAttachedFor(), "[" + index + "] attached for its findings");
+				return;
+			}
+		}
+		throw new AssertionError("[" + index + "] is among the references the answer cites");
 	}
 
 	/** An answer citing that finding has nothing stated after it (ADR Decision 147). */

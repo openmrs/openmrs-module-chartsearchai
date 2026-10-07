@@ -103,6 +103,27 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		return service;
 	}
 
+	/**
+	 * The references the module's OWN sentence after the answer cites (ADR Decision 170) — the findings it states
+	 * ({@code findingsStatedByTheModule}) and the records attached for them — each asserted to be the module's. They
+	 * are not the model's citations, so the claims below about what the MODEL cited are asked of the rest.
+	 */
+	private static List<Integer> citedByTheModulesOwnSentence(ChartAnswer answer) {
+		List<Integer> stated = new ArrayList<Integer>(answer.getFindingsStatedByTheModule());
+		for (RecordReference reference : answer.getReferences()) {
+			if (!Collections.disjoint(reference.getAttachedFor(), answer.getFindingsStatedByTheModule())) {
+				stated.add(Integer.valueOf(reference.getIndex()));
+			}
+		}
+		for (RecordReference reference : answer.getReferences()) {
+			if (stated.contains(Integer.valueOf(reference.getIndex()))) {
+				assertTrue(reference.isAttachedByTheModule(), "[" + reference.getIndex() + "] is cited by the module's "
+						+ "own sentence, and says so");
+			}
+		}
+		return stated;
+	}
+
 	private static RecordReference referenceAt(ChartAnswer answer, int index) {
 		for (RecordReference reference : answer.getReferences()) {
 			if (reference.getIndex() == index) {
@@ -143,8 +164,9 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 
 		assertTrue(referenceAt(answer, ALLERGY_RECORD).isAttachedByTheModule(),
 				"the model did not cite this record; the module did, and says so");
+		List<Integer> modulesOwn = citedByTheModulesOwnSentence(answer);
 		for (RecordReference reference : answer.getReferences()) {
-			if (reference.getIndex() != ALLERGY_RECORD) {
+			if (reference.getIndex() != ALLERGY_RECORD && !modulesOwn.contains(Integer.valueOf(reference.getIndex()))) {
 				assertFalse(reference.isAttachedByTheModule(), reference.getResourceType()
 						+ " [" + reference.getIndex() + "] was cited by the model, so it must not claim "
 						+ "otherwise");
@@ -163,8 +185,10 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		ChartAnswer answer = serviceUnderTest(new CitesTheFindingAlone()).search(patient, QUESTION);
 
 		RecordReference finding = null;
+		List<Integer> modulesOwn = citedByTheModulesOwnSentence(answer);
 		for (RecordReference reference : answer.getReferences()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(reference.getResourceType())) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(reference.getResourceType())
+					&& !modulesOwn.contains(Integer.valueOf(reference.getIndex()))) {
 				assertNull(finding, "precondition: the answer cites one finding");
 				finding = reference;
 			}
@@ -174,7 +198,7 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 				referenceAt(answer, ALLERGY_RECORD).getAttachedFor(),
 				"the attached allergy record names the finding it is the chart evidence of");
 		for (RecordReference reference : answer.getReferences()) {
-			if (reference.getIndex() != ALLERGY_RECORD) {
+			if (reference.getIndex() != ALLERGY_RECORD && !modulesOwn.contains(Integer.valueOf(reference.getIndex()))) {
 				assertEquals(Collections.emptyList(), reference.getAttachedFor(), reference.getResourceType()
 						+ " [" + reference.getIndex() + "] was cited by the model, so it was attached for nothing");
 			}
@@ -252,10 +276,10 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		ChartAnswer answer = serviceUnderTest(new AbstainsWhileDumpingTheArray()).search(patient,
 				QUESTION);
 
-		assertTrue(answer.getReferences().isEmpty(),
-				"an answer anchoring nothing inline surfaces no references at all, so there is no "
-						+ "cited finding to bring a record with it. Was: "
-						+ ChartAnswerTestSupport.referenceIndexes(answer));
+		assertEquals(citedByTheModulesOwnSentence(answer), ChartAnswerTestSupport.referenceIndexes(answer),
+				"an answer anchoring nothing inline surfaces none of the model's references, so there is no "
+						+ "cited finding to bring a record with it — only those the module's own sentence cites. Was: "
+						+ ChartAnswerTestSupport.referenceIndexes(answer) + " for answer: " + answer.getAnswer());
 	}
 
 	/**
@@ -284,10 +308,13 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 						+ "model's to surface a derivation off and must attach nothing. References "
 						+ "were: " + ChartAnswerTestSupport.referenceIndexes(answer)
 						+ " for answer: " + answer.getAnswer());
+		List<Integer> modulesOwn = citedByTheModulesOwnSentence(answer);
 		for (RecordReference reference : answer.getReferences()) {
-			assertFalse(reference.isAttachedByTheModule(), reference.getResourceType() + " ["
-					+ reference.getIndex() + "] was cited by the model, so nothing here is the "
-					+ "module's citation");
+			if (!modulesOwn.contains(Integer.valueOf(reference.getIndex()))) {
+				assertFalse(reference.isAttachedByTheModule(), reference.getResourceType() + " ["
+						+ reference.getIndex() + "] was cited by the model, so nothing here but the module's own "
+						+ "sentence's is the module's citation");
+			}
 		}
 
 		ChartAnswer whenCited = serviceUnderTest(new CitesTheFindingAlone()).search(patient, QUESTION);

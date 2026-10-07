@@ -285,6 +285,46 @@ public final class QueryScopeRouter {
 					+ PATIENT + ")?(?: now| today)?");
 
 	/**
+	 * The question shapes asking whether TWO drugs may be given together, over {@link #words} with each drug's name
+	 * marked {@link #DRUG_NAME} — ADR Decision 169. A grammar for the reason {@link #PROPOSAL_SHAPES} is, and kept apart
+	 * from it, since that one's readers answer for ONE drug proposed: its one reader states the findings about either
+	 * drug against her own orders. "Does warfarin interact with ibuprofen?" asks nothing about giving, and is not
+	 * admitted.
+	 */
+	private static final List<Pattern> TOGETHER_SHAPES = shapes(
+			// "Can warfarin and ibuprofen be given together?", "Can warfarin be given with ibuprofen to her?"
+			"(?:can|could|may|should) " + D + " (?:and|with) " + D
+					+ " be (?:safely )?(?:given|started|prescribed|administered|taken|used)(?: together)?(?: (?:to|for) "
+					+ PATIENT + ")?(?: now| today)?",
+			"(?:can|could|may|should) " + D + " be (?:safely )?(?:given|started|prescribed|administered|taken|used) (?:with|alongside) "
+					+ D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			// "Can I give her warfarin with ibuprofen?", "Can I give her warfarin and ibuprofen together?"
+			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer) (?:" + PATIENT
+					+ " )?(?:on )?" + D + " (?:and|with|alongside) " + D + "(?: together)?(?: to " + PATIENT
+					+ ")?(?: now| today)?",
+			// "Can she take warfarin and ibuprofen together?"
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|be given) " + D
+					+ " (?:and|with|alongside) " + D + "(?: together)?(?: now| today)?",
+			// "Is it safe to give her warfarin and ibuprofen together?", "Is it safe to take warfarin with ibuprofen?"
+			"is it (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer) (?:"
+					+ PATIENT + " )?(?:on )?|take )" + D + " (?:and|with|alongside) " + D + "(?: together)?(?: for "
+					+ PATIENT + ")?(?: now| today)?",
+			// "Are warfarin and ibuprofen safe together?", "Is warfarin safe with ibuprofen?"
+			"are " + D + " and " + D + " (?:safe|ok|okay|appropriate)(?: to (?:give|take|use))?(?: together)?(?: for "
+					+ PATIENT + ")?",
+			"is " + D + " (?:safe|ok|okay|appropriate) (?:with|alongside) " + D + "(?: for " + PATIENT + ")?");
+
+	/**
+	 * Whether a question asks whether two drugs may be given together and nothing else — one of
+	 * {@link #TOGETHER_SHAPES}, asked of its {@link #words} with each drug's name marked {@link #DRUG_NAME}. ADR
+	 * Decision 169. Fail-CLOSED as {@link #asksWhetherToGiveADrug} is: a phrasing it misses keeps the answer as the
+	 * model wrote it.
+	 */
+	public static boolean asksWhetherToGiveDrugsTogether(List<String> wordsWithTheDrugsMarked) {
+		return fitsAShape(wordsWithTheDrugsMarked, TOGETHER_SHAPES);
+	}
+
+	/**
 	 * The question shapes a request to screen the patient's OWN medications against each other may
 	 * take — issue #469. A grammar for the reason {@link #PROPOSAL_SHAPES} is: the word list it
 	 * replaced admitted "Does this drug interact with her medications?", every word of which was on

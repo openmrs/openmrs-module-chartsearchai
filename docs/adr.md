@@ -14771,3 +14771,30 @@ hand-off; each reddens on its mutation (the unscoped `infer` called; no scope, o
 `LocalEngineAnswerHistoryIndependenceTest.aDrugQuestionOnTheSearchPathIsAnsweredTheSameWhateverTheEngineDidBeforeIt`
 drives `/search` through the real engine over the five histories; with `startFromSavedPrefix` dropped from the scoped
 `infer` it fails ("… must be answered identically after the …").
+
+## Decision 165: Her own orders sharing a substance do not stop a proposal after a list either
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends
+[Decision 159](#decision-159-her-own-orders-sharing-a-substance-do-not-stop-the-answer-to-a-proposal) to
+[Decision 149](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed)
+and [Decision 150](#decision-150-a-proposal-after-a-list-is-answered-from-its-findings-about-the-drug-proposed).
+
+### Context
+
+On the demo (2026-10-07), "The patient is currently on lamivudine and nevirapine, is it safe to give fluconazole?" was
+answered by the module for the two sweep patients without duplicate orders and by the model for the three with them.
+`composeAfterAList` counted a finding that her own orders share a substance among the findings about the drug
+proposed. That finding bypasses the `aboutADrugOtherThanTheOneProposed` stamp, so it reached `composeListFindings`,
+which admits only interaction cautions and withholds, and the answer fell to the model.
+
+### The decision
+
+`composeAfterAList` sets such a finding aside, as `answersFromFindings` does for a drug asked alone, and states it
+after what it composes, through `withHerOwnOrdersSharingASubstance`. The line about the listed drugs her chart does
+not hold still closes the answer.
+
+### The gate
+
+`LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionTheCheckRelatesToNoneOfHerOrdersIsAnsweredBesideHerOwnOrdersSharingASubstance`
+and `…aListQuestionWhoseFindingsAboutTheDrugAnswerItIsAnsweredBesideHerOwnOrdersSharingASubstance` failed before the
+change (the model was asked), and both fail when the finding is set aside but not stated.

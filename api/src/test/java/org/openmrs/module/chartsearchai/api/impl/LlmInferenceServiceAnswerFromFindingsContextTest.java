@@ -890,6 +890,81 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				&& lines[lines.length - 1].contains("(2 orders) — possible duplicate therapy"), answer.getAnswer());
 	}
 
+	/**
+	 * A proposal after a list is answered beside a finding that two of her own orders share a substance, as it is
+	 * without one (ADR Decision 165): what the check established about the drug proposed, the list line, then the
+	 * duplicate as a line of its own, before the statement of the listed drugs her chart does not hold. On the demo
+	 * (2026-10-07) "The patient is currently on lamivudine and nevirapine, is it safe to give fluconazole?" was
+	 * answered by the module for the two patients without such a finding and by the model for the three with one.
+	 */
+	@Test
+	public void aListQuestionTheCheckRelatesToNoneOfHerOrdersIsAnsweredBesideHerOwnOrdersSharingASubstance()
+			throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		String question = "The patient is currently on Zidovudine, is it safe to give mebendazole?";
+		List<Finding> findings = findingsInThePromptFor(question, shipped());
+		assertEquals(2, findings.size(), "premise: the listed drug's own finding and the duplicate, " + findings);
+		Finding listed = findings.get(0).text.startsWith("Zidovudine interacts with ") ? findings.get(0) : findings.get(1);
+		Finding duplicate = listed == findings.get(0) ? findings.get(1) : findings.get(0);
+		assertTrue(listed.text.startsWith("Zidovudine interacts with "), "premise: about the listed drug, " + findings);
+		assertTrue(duplicate.text.startsWith(duplicate.drug + " are in active orders "), "premise: " + duplicate.text);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(4, lines.length, answer.getAnswer());
+		assertEquals("The interaction check relates Mebendazole to none of this patient's 3 active medications. ["
+				+ referenceRecordOf(answer, "mebendazole") + "]", lines[0]);
+		assertEquals("The check of Mebendazole against Zidovudine, also named in the question, raised no finding.",
+				lines[1]);
+		assertTrue(lines[2].startsWith(duplicate.drug + " are in active orders ")
+				&& lines[2].contains("(2 orders) — possible duplicate therapy") && lines[2].contains(" [" + duplicate.index + "]"),
+				"the finding about her own orders is stated as a line, citing its record: " + lines[2]);
+		assertEquals("The chart holds no active order for Zidovudine.", lines[3]);
+	}
+
+	/** The same where a finding about the drug proposed answers the list question (ADR Decisions 150, 165): its lines,
+	 *  counted alone under Decision 140's lead, then the duplicate. Ibuprofen relates to her aspirin Major. */
+	@Test
+	public void aListQuestionWhoseFindingsAboutTheDrugAnswerItIsAnsweredBesideHerOwnOrdersSharingASubstance()
+			throws Exception {
+		executeDataSet(RIFAMPICIN_ORDER);
+		executeDataSet(SECOND_RIFAMPICIN_ORDER);
+		String question = "The patient is currently on Zidovudine, is it safe to give ibuprofen?";
+		List<Finding> findings = findingsInThePromptFor(question, shipped());
+		Finding duplicate = null;
+		for (Finding finding : findings) {
+			if (finding.text.startsWith(finding.drug + " are in active orders ")) {
+				assertNull(duplicate, "premise: one duplicate, " + findings);
+				duplicate = finding;
+			}
+		}
+		assertNotNull(duplicate, "premise: her two rifampicin orders raise the duplicate, " + findings);
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		String[] lines = answer.getAnswer().split("\n");
+		assertEquals(DrugReferenceInjector.WITHHOLD_LEAD_OPENING + "Ibuprofen.", lines[0], answer.getAnswer());
+		assertTrue(lines[1].startsWith("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major."),
+				answer.getAnswer());
+		assertEquals("The chart holds no active order for Zidovudine.", lines[lines.length - 1], answer.getAnswer());
+		String beforeIt = lines[lines.length - 2];
+		assertTrue(beforeIt.startsWith(duplicate.drug + " are in active orders ")
+				&& beforeIt.contains(" [" + duplicate.index + "]"),
+				"the duplicate closes what the module states, before the listed drugs' line: " + answer.getAnswer());
+		for (int i = 1; i < lines.length - 2; i++) {
+			assertTrue(lines[i].startsWith("Ibuprofen interacts with "), "only ibuprofen's own findings above it: "
+					+ answer.getAnswer());
+		}
+	}
+
 	/** The premise both cases rest on: with the property off, the prompt carries one finding, and it is that two of
 	 *  her own orders share a substance — none about the drug proposed. */
 	private Finding onlyFindingIsHerOwnOrdersSharingASubstance(String question) {

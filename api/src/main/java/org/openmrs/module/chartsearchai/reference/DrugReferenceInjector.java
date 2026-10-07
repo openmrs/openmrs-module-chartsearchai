@@ -2995,7 +2995,8 @@ public class DrugReferenceInjector {
 	 * is neither stated nor a reason to keep the model call, whatever it withholds (ADR Decision 150): it is about her
 	 * listed regimen, and its chip is not published (ADR Decision 148). Where a finding IS about the drug proposed,
 	 * {@link #composeListFindings} answers instead, and this method's own line, which says the check raised none, is
-	 * never written.
+	 * never written. A finding that her own orders share a substance is about neither, and is stated after either answer
+	 * ({@link #withHerOwnOrdersSharingASubstance}, ADR Decision 165).
 	 */
 	private static String composeAfterAList(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<DrugReference> orderEntries, List<SafetyWarning> findings,
@@ -3008,10 +3009,17 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		// A finding about a drug other than the one proposed is neither stated nor a reason to keep the model call
-		// (ADR Decision 150): it is about her listed regimen, and its chip is not published (ADR Decision 148).
+		// (ADR Decision 150): it is about her listed regimen, and its chip is not published (ADR Decision 148). Nor is a
+		// finding that her own orders share a substance, which is about no drug proposed: it is stated after the answer
+		// (ADR Decision 165), as it is for a drug asked alone (ADR Decisions 159, 160).
 		List<Integer> aboutTheProposal = new ArrayList<Integer>();
+		List<SafetyWarning> herOwnSharing = new ArrayList<SafetyWarning>();
+		List<Integer> herOwnSharingNumbers = new ArrayList<Integer>();
 		for (int i = 0; i < findings.size(); i++) {
-			if (!findings.get(i).isAboutADrugOtherThanTheOneProposed()) {
+			if (findings.get(i).statesOrdersSharingASubstance()) {
+				herOwnSharing.add(findings.get(i));
+				herOwnSharingNumbers.add(findingNumbers.get(i));
+			} else if (!findings.get(i).isAboutADrugOtherThanTheOneProposed()) {
 				aboutTheProposal.add(Integer.valueOf(i));
 			}
 		}
@@ -3032,8 +3040,9 @@ public class DrugReferenceInjector {
 			return null;
 		}
 		if (!aboutTheProposal.isEmpty()) {
-			return composeListFindings(proposed, herSubstances, listedRows, findings, aboutTheProposal, findingNumbers,
-					orderRecordNumbers, herOrderRecords, context);
+			return withHerOwnOrdersSharingASubstance(composeListFindings(proposed, herSubstances, listedRows, findings,
+					aboutTheProposal, findingNumbers, orderRecordNumbers, herOrderRecords, context), herOwnSharing,
+					herOwnSharingNumbers, orderRecordNumbers, herOrderRecords);
 		}
 		PairChipExtent own = pairExtent.statedFor(proposed.get(0).substanceGroupKey());
 		if (own == null || own.getFound() != 0) {
@@ -3061,14 +3070,15 @@ public class DrugReferenceInjector {
 				names.add(DrugSafetyValidator.interactionSubject(rows.getValue(), context).displayLabel());
 			}
 		}
-		if (names.isEmpty()) {
-			return alone;
+		if (!names.isEmpty()) {
+			String listLine = "The check of " + subject.displayLabel() + " against " + joinedAsAList(names)
+					+ ", also named in the question, raised no finding.";
+			int firstLineEnd = alone.indexOf('\n');
+			alone = firstLineEnd < 0 ? alone + "\n" + listLine
+					: alone.substring(0, firstLineEnd) + "\n" + listLine + alone.substring(firstLineEnd);
 		}
-		String listLine = "The check of " + subject.displayLabel() + " against " + joinedAsAList(names)
-				+ ", also named in the question, raised no finding.";
-		int firstLineEnd = alone.indexOf('\n');
-		return firstLineEnd < 0 ? alone + "\n" + listLine
-				: alone.substring(0, firstLineEnd) + "\n" + listLine + alone.substring(firstLineEnd);
+		return withHerOwnOrdersSharingASubstance(alone, herOwnSharing, herOwnSharingNumbers, orderRecordNumbers,
+				herOrderRecords);
 	}
 
 	/**

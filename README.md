@@ -226,7 +226,7 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 | Property | Value | Description |
 |----------|-------|-------------|
-| `chartsearchai.querystore.topK` | `12` | Number of similarity records requested from querystore. In `queryScoped` mode (the default `chartsearchai.chartMode`) this sizes the query-scoped slice the LLM actually sees, alongside the question's complete typed scope; in `fullChart` mode it only sizes the optional focus hint, and is unused when `chartsearchai.embedding.preFilter` is `false`. querystore is a required module and is always the retrieval path — there is no toggle to disable it. `ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K` carries the default and the measurements behind it |
+| `chartsearchai.querystore.topK` | `12` | Similarity limit passed to QueryStore for `queryScoped` selection and for the optional `fullChart` focus hint. Unused in `fullChart` when `chartsearchai.embedding.preFilter` is `false`. Required evidence is selected independently of this limit. `ChartSearchAiConstants.DEFAULT_QUERYSTORE_TOP_K` carries the default and its measurements |
 | `querystore.embedding.modelFilePath` | `querystore/model.onnx` | Path to the ONNX embedder, relative to `<openmrs-application-data-directory>`. Querystore ships this with an empty default (the module is model-agnostic), so it has to be set somewhere — on the Docker path `backend-init.sh` does it, otherwise you do (see *Who sets these* below) |
 | `querystore.embedding.vocabFilePath` | `querystore/vocab.txt` | Path to the WordPiece vocab, same convention |
 | `querystore.embedding.queryModelFilePath` | *(empty)* | Leave empty for `e5-base-v2`; set only for dual-encoder models like MedCPT |
@@ -241,7 +241,7 @@ chartsearchai delegates all retrieval to the [openmrs-module-querystore](https:/
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `chartsearchai.chartMode` | `fullChart` | How the prompt's chart context is assembled. `fullChart` (the default since 2026-10, the maintainer's decision) serializes the whole chart into every prompt. `queryScoped` (the default from 2026-07 to 2026-10, measured faster on a CPU host and better on the drift-metric and adjudicated gates — ADR Decision 28) sends only a slice: every record of the question's typed scope (complete by construction — an enumeration answer cannot omit what was never retrieved), plus the `chartsearchai.querystore.topK` similarity records, plus demographics. **The full-chart prefill machinery — warmup, the prewarm bootstrap, per-patient KV persistence, the progressive-reasoning preview — is dormant in `queryScoped` mode and re-engages only under `fullChart`.** A value that is not an exact (case-insensitive) `queryScoped` behaves as `fullChart`, so a typo fails toward the whole chart; an absent or unreadable GP takes the default. See [ADR Decision 28](docs/adr.md#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for the A/B behind the `queryScoped` default it held from 2026-07 to 2026-10, and the decision that ended it |
+| `chartsearchai.chartMode` | `fullChart` | How the prompt's chart context is assembled. `fullChart` (the default since 2026-10, the maintainer's decision) serializes the whole chart into every prompt. `queryScoped` (the default from 2026-07 to 2026-10, measured faster on a CPU host and better on the drift-metric and adjudicated gates — ADR Decision 28) sends only a slice: demographics, allergies, active conditions and diagnoses, exact matches, the question's complete typed scope, lab-panel families, temporal recency anchors and similarity records limited by `chartsearchai.querystore.topK`. When exact local token counting is available, budgeting trims optional records; required evidence exceeding the budget produces an explicit context-limit response. **The full-chart prefill machinery — warmup, the prewarm bootstrap, per-patient KV persistence, the progressive-reasoning preview — is dormant in `queryScoped` mode and re-engages only under `fullChart`.** A value that is not an exact (case-insensitive) `queryScoped` behaves as `fullChart`, so a typo fails toward the whole chart; an absent or unreadable GP takes the default. See [ADR Decision 28](docs/adr.md#decision-28-query-scoped-slice-charts-chartmodequeryscoped) for the A/B behind the `queryScoped` default it held from 2026-07 to 2026-10, and the decision that ended it |
 | `chartsearchai.embedding.preFilter` | `false` | *(`fullChart` mode only)* When `true`, querystore additionally ranks the patient's records by similarity to the question and passes a short **focus hint** — the top `chartsearchai.querystore.topK` record indices — to the LLM. **The full chart is still sent either way**, so the hint biases attention without removing records the LLM needs for negative reasoning (correctly answering "any allergies?" requires having seen the empty allergy section, not just an absence of matches). Has no effect in `queryScoped` mode |
 
 #### LLM tuning
@@ -977,18 +977,20 @@ available counter, the builder preserves the selected records.
 
 Context selection uses QueryStore's `getContextSlice` API with the raw question and
 server-side interpretation enabled. Full-chart reads use `getPatientChartRead`.
-Both paths reject truncated results and incomplete source projections. These APIs
+Both paths reject truncated results and incomplete source projections with an
+incomplete-chart response (HTTP 503 on blocking search). Required evidence exceeding
+the input budget returns HTTP 422 and recommends increasing the context size;
+streaming search emits the corresponding error message. These APIs
 require the QueryStore contribution in [PR #68](https://github.com/openmrs/openmrs-module-querystore/pull/68);
 build and test against its declared source dependency before an upstream artifact
 is available.
 
-Pull-request builds install QueryStore revision
-`286993cc094499ed29f97d4574775cd2c96f5676` from source and run the full
-ChartSearchAI reactor on Java 11, 17 and 21. This verifies the declared API for
-all dependent contributions without selecting builds by branch name or requiring
-an upstream merge or Maven publication first. QueryStore's own tests remain in
-its PR. Main publication and scheduled QueryStore-main compatibility checks retain
-their existing workflows.
+A temporary paired-source check validates against the QueryStore contribution while
+its API is unpublished. The ordinary published-dependency and QueryStore-main checks
+also run on pull requests. These may fail until QueryStore #68 is merged and its API
+is published; the paired check does not establish upstream merge readiness. Remove
+the temporary paired job once ordinary checks pass with the published API, before
+merging this contribution.
 
 To verify counting against a real local engine, prepare a separate application-data
 directory containing `model.gguf` and a compatible `chartsearchai/bin/llama-server`

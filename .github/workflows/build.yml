@@ -35,16 +35,15 @@ jobs:
   build:
     # Opted out of the daily schedule — see the `schedule:` comment above. This one publishes a
     # SNAPSHOT from main, so a daily run would deploy an unchanged artifact every day.
-    # Pull requests build the declared QueryStore source dependency below.
-    if: ${{ github.event_name != 'schedule' && github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'schedule' }}
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     secrets:
       MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
       MAVEN_REPO_API_KEY: ${{ secrets.MAVEN_REPO_API_KEY }}
 
-  # Build the declared QueryStore API from source before testing pull requests.
-  # This also covers dependent contributions without selecting builds by branch name.
-  # Main publication continues to use the shared OpenMRS workflow above.
+  # Temporary integration evidence until the prerequisite QueryStore API is published.
+  # Remove this supplemental job once the ordinary build and QueryStore-main checks pass
+  # with that API, before merging this contribution. It does not replace either check.
   paired-build:
     if: github.event_name == 'pull_request'
     name: Paired build with Java ${{ matrix.java }}
@@ -193,9 +192,7 @@ jobs:
   # a pin defers incompatibilities into one big-bang bump and still never tells you WHEN upstream
   # broke you, which is the actual defect here.
   build-against-querystore-head:
-    # Pull requests test the declared source dependency above; main and scheduled
-    # runs continue to check compatibility with QueryStore's latest main.
-    if: ${{ github.event_name != 'pull_request' }}
+    # Check upstream compatibility on pull requests, main pushes and the daily schedule.
     name: build against querystore HEAD (not a required check)
     runs-on: ubuntu-latest
     # Least privilege, declared here and not on the neighbouring jobs because the exposure is this

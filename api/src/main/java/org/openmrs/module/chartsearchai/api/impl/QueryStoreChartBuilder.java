@@ -27,7 +27,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.InsufficientContextException;
-import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -154,7 +154,7 @@ class QueryStoreChartBuilder {
 
 	/** Operator remediation for an unresolvable QueryStoreService, WARNed identically by
 	 *  {@link #build} and {@link #buildScoped} (buildFocused stays silent — build() has already
-	 *  warned on the same request). One constant so the degradation message cannot drift
+	 *  warned on the same request). One constant so the unavailable-service message cannot drift
 	 *  between modes that never run side by side on one deployment. */
 	private static final String QUERYSTORE_UNAVAILABLE_MSG =
 			"QueryStoreService is unavailable — querystore is a required module, so this "
@@ -201,7 +201,7 @@ class QueryStoreChartBuilder {
 		String mode = usePreFilter ? MODE_PRE_FILTER : MODE_FULL_CHART;
 
 		// WARN (not INFO): default org.openmrs.* log level is WARN, and an unavailable
-		// QueryStoreService silently produces empty-chart LLM responses if this fires.
+		// QueryStoreService prevents chart assembly and withholds the answer.
 		// Operators need this to surface, with an actionable next step.
 		QueryStoreService queryStore = resolveQueryStoreOrNull();
 		if (queryStore == null) {
@@ -229,11 +229,11 @@ class QueryStoreChartBuilder {
 			throw new IllegalStateException(failure, e);
 		}
 		if (chartRead.isTruncated()) {
-			throw new ChartTooLargeException("QueryStore returned an incomplete chart for patient "
+			throw new IncompleteChartException("QueryStore returned an incomplete chart for patient "
 					+ patient.getUuid() + "; the answer was withheld rather than treating it as complete.");
 		}
 		if (!chartRead.isProjectionComplete()) {
-			throw new IllegalStateException("QueryStore has not completely indexed the chart for patient "
+			throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
 					+ patient.getUuid() + "; the answer was withheld.");
 		}
 		List<QueryDocument> chartDocs = chartRead.getDocuments();
@@ -264,7 +264,7 @@ class QueryStoreChartBuilder {
 
 	/**
 	 * Stamps a full chart with the preFilter dispatch that produced it — every {@link #build} return
-	 * that got as far as resolving it, degraded empties included, so the audit row names the mode
+	 * that got as far as resolving it, including a successfully read empty chart, so the audit row names the mode
 	 * that was in force even when the chart came back empty.
 	 *
 	 * <p>Taken from the {@code usePreFilter} {@link #build} already dispatched on, not a second read,
@@ -326,6 +326,7 @@ class QueryStoreChartBuilder {
 		ContextSliceRequest request = new ContextSliceRequest(contributedResourceTypes(question), false);
 		request.setInterpretQuestion(true);
 		request.setRecencyAnchorSize(resolveScopedRecencyAnchor());
+		request.setSimilarityLimit(resolveQueryStoreTopK());
 
 		long rpcStart = System.currentTimeMillis();
 		ContextSlice slice;
@@ -343,17 +344,22 @@ class QueryStoreChartBuilder {
 		long rpcMs = System.currentTimeMillis() - rpcStart;
 
 		if (slice.isChartTruncated()) {
-			throw new ChartTooLargeException("QueryStore built the context slice from an incomplete chart for patient "
+			throw new IncompleteChartException("QueryStore built the context slice from an incomplete chart for patient "
 					+ patient.getUuid() + " (reported chart size " + slice.getChartSize()
 					+ "); the answer was withheld rather than treating typed evidence as complete.");
 		}
 
 		if (!slice.isProjectionComplete()) {
-			throw new IllegalStateException("QueryStore has not completely indexed the chart for patient "
+			throw new IncompleteChartException("QueryStore has not completely indexed the chart for patient "
 					+ patient.getUuid() + "; the answer was withheld.");
 		}
 
-		List<ContextSliceRecord> budgeted = applyContextBudget(patient, question, slice.getRecords());
+		List<QueryDocument> unbudgetedDocs = new ArrayList<QueryDocument>();
+		for (ContextSliceRecord record : slice.getRecords()) {
+			unbudgetedDocs.add(record.getDocument());
+		}
+		OrderCurrency orderCurrency = readOrderCurrency(patient, unbudgetedDocs);
+		List<ContextSliceRecord> budgeted = applyContextBudget(patient, question, slice.getRecords(), orderCurrency);
 
 		List<QueryDocument> sliceDocs = new ArrayList<QueryDocument>(budgeted.size());
 		int simHits = 0;
@@ -364,7 +370,7 @@ class QueryStoreChartBuilder {
 			}
 		}
 
-		List<SerializedRecord> records = toSerializedRecords(patient, sliceDocs);
+		List<SerializedRecord> records = toSerializedRecords(sliceDocs, orderCurrency);
 		long serializeStart = System.currentTimeMillis();
 		// Every record dated, as on the whole chart: temporal questions need the date on the record
 		// itself (see the serializer overload's javadoc).
@@ -379,16 +385,15 @@ class QueryStoreChartBuilder {
 		// types the chart fetch returned survived the filter above). Stamped so a consumer can tell
 		// a record that is absent because the retrieved chart lacks it from one absent because the
 		// slice never asked for its type — only the former is a discrepancy worth reporting.
-		// Stamped only here, on the path that actually applied the filter: the degraded returns
-		// above carry no records at all, so declaring completeness for them would assert a
-		// guarantee no filter enforced.
+		// Stamped only after a complete read and successful selection; an incomplete read throws
+		// instead of asserting typed completeness.
 		//
 		chart.markCompleteFor(slice.getEffectiveTypes());
 		return markScoped(chart);
 	}
 
-	/** Stamps a chart as query-scoped (every {@code buildScoped} return, including degraded
-	 *  empties) so downstream KV decisions read the chart that was BUILT, not a re-read of the
+	/** Stamps a chart as query-scoped (every {@code buildScoped} return, including a null-patient
+	 *  empty chart) so downstream KV decisions read the chart that was BUILT, not a re-read of the
 	 *  chartMode GP that can disagree with it — see {@code PatientChart#isQueryScoped()}. */
 	private static PatientChart markScoped(PatientChart chart) {
 		chart.markQueryScoped();
@@ -407,12 +412,17 @@ class QueryStoreChartBuilder {
 	 * ever tighten behavior, never introduce a new failure mode where none existed.
 	 */
 	private List<ContextSliceRecord> applyContextBudget(Patient patient, String question,
-			List<ContextSliceRecord> records) {
+			List<ContextSliceRecord> records, OrderCurrency orderCurrency) {
 		TokenCounter counter = tokenCounter;
 		if (counter == null || !counter.isAvailable()) {
 			return records;
 		}
 		int budget = counter.inputBudget();
+
+		if (counter.countPrompt(renderedTextOf(patient, records, orderCurrency),
+				Collections.<Integer>emptyList(), question, false, Collections.emptyList()) <= budget) {
+			return records;
+		}
 
 		List<ContextSliceRecord> protectedRecords = new ArrayList<ContextSliceRecord>();
 		for (ContextSliceRecord record : records) {
@@ -420,7 +430,8 @@ class QueryStoreChartBuilder {
 				protectedRecords.add(record);
 			}
 		}
-		int protectedTokens = counter.countPrompt(renderedTextOf(patient, protectedRecords), question);
+		int protectedTokens = counter.countPrompt(renderedTextOf(patient, protectedRecords, orderCurrency),
+				Collections.<Integer>emptyList(), question, false, Collections.emptyList());
 		if (protectedTokens > budget) {
 			List<String> protectedIds = new ArrayList<String>();
 			for (ContextSliceRecord record : protectedRecords) {
@@ -433,9 +444,6 @@ class QueryStoreChartBuilder {
 					protectedIds);
 		}
 
-		if (counter.countPrompt(renderedTextOf(patient, records), question) <= budget) {
-			return records;
-		}
 		Map<ContextSliceRecord, Integer> positions = new IdentityHashMap<ContextSliceRecord, Integer>();
 		for (int index = 0; index < records.size(); index++) {
 			positions.put(records.get(index), Integer.valueOf(index));
@@ -464,7 +472,8 @@ class QueryStoreChartBuilder {
 			candidate.addAll(optional.subList(0, size));
 			Collections.sort(candidate,
 					(left, right) -> Integer.compare(positions.get(left), positions.get(right)));
-			if (counter.countPrompt(renderedTextOf(patient, candidate), question) <= budget) {
+			if (counter.countPrompt(renderedTextOf(patient, candidate, orderCurrency),
+				Collections.<Integer>emptyList(), question, false, Collections.emptyList()) <= budget) {
 				low = size;
 			} else {
 				high = size - 1;
@@ -498,12 +507,12 @@ class QueryStoreChartBuilder {
 		return record.getRank() == null ? Integer.MAX_VALUE : record.getRank().intValue();
 	}
 
-	private String renderedTextOf(Patient patient, List<ContextSliceRecord> records) {
+	private String renderedTextOf(Patient patient, List<ContextSliceRecord> records, OrderCurrency orderCurrency) {
 		List<QueryDocument> docs = new ArrayList<QueryDocument>(records.size());
 		for (ContextSliceRecord record : records) {
 			docs.add(record.getDocument());
 		}
-		return chartSerializer.serialize(patient, toSerializedRecords(patient, docs),
+		return chartSerializer.serialize(patient, toSerializedRecords(docs, orderCurrency),
 				Collections.<String>emptySet(), false, false).getText();
 	}
 
@@ -576,7 +585,7 @@ class QueryStoreChartBuilder {
 		return chart;
 	}
 
-	/** The empty chart every degraded path returns — one helper so empty-chart semantics cannot
+	/** The empty chart returned for a missing patient — one helper so empty-chart semantics cannot
 	 *  drift between the three build paths. */
 	private PatientChart emptyChart(Patient patient) {
 		return chartSerializer.serialize(patient, Collections.<SerializedRecord>emptyList());
@@ -605,9 +614,8 @@ class QueryStoreChartBuilder {
 
 	/**
 	 * Runs the similarity search and collects hit uuids, degrading to an empty set on failure with
-	 * the caller-supplied WARN (each mode words its own degradation: focus hint vs typed slice).
-	 * Shared by {@link #build}'s focus-hint pass and {@link #buildScoped}'s catch-all pass so the
-	 * search→collect→degrade shape stays identical across modes.
+	 * the caller-supplied WARN. Used by {@link #build}'s optional focus-hint pass; scoped
+	 * selection and its similarity fallback are owned by QueryStore.
 	 */
 	private Set<String> searchSimilarityUuids(QueryStoreService queryStore, Patient patient,
 			String preprocessedQuestion, String degradeWarning) {
@@ -668,7 +676,10 @@ class QueryStoreChartBuilder {
 		if (docs == null || docs.isEmpty()) {
 			return Collections.<SerializedRecord>emptyList();
 		}
-		OrderCurrency orderCurrency = readOrderCurrency(patient, docs);
+		return toSerializedRecords(docs, readOrderCurrency(patient, docs));
+	}
+
+	private List<SerializedRecord> toSerializedRecords(List<QueryDocument> docs, OrderCurrency orderCurrency) {
 		List<SerializedRecord> out = new ArrayList<SerializedRecord>(docs.size());
 		for (QueryDocument doc : docs) {
 			if (doc == null) {
@@ -1010,7 +1021,7 @@ class QueryStoreChartBuilder {
 	 *  defensive toString()/blank handling keeps a malformed upstream value from leaking an empty
 	 *  or non-string token into the LLM prompt. Relies on {@link QueryDocument#getMetadata()} being
 	 *  contractually non-null (it returns an unmodifiable view of a field initialized to an empty
-	 *  map) — a regression making it nullable would NPE here and degrade the whole chart to empty. */
+	 *  map) — a regression making it nullable would fail chart assembly. */
 	private static String metadataString(QueryDocument doc, String key) {
 		Object value = doc.getMetadata().get(key);
 		if (value == null) {

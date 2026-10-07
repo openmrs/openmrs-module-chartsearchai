@@ -685,7 +685,7 @@ public class DrugReferenceInjector {
 		//   - the question ASKS to be screened and resolved no drug of its own, which is the composite
 		//     gate DrugSafetyValidator's screening arm stands on. `questionDrugs` is the resolution this
 		//     method already holds (issue #151), so the emptiness half is read and not re-derived; the
-		//     cue half is QueryScopeRouter's, the one place question intent is classified.
+		//     cue half is QueryScopeRouter's medication-safety classification; QueryStore owns retrieval scope.
 		//   - the reference data resolved at least two distinct SUBSTANCES among her active orders, so
 		//     there was a PAIR to screen. Off `orderEntries`, the same list validate was handed, but
 		//     counted through DrugReference.substanceGroupKey and never as ROWS: this KB files one

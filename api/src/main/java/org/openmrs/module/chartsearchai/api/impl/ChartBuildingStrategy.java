@@ -21,8 +21,7 @@ import org.springframework.stereotype.Service;
  * module via {@link QueryStoreChartBuilder}. querystore is a required module and the only
  * retrieval path — the legacy embedding/Lucene/Elasticsearch pipelines and the in-process
  * full-chart fallback were removed in the querystore migration (issue #51). If querystore is
- * unavailable at runtime, {@link QueryStoreChartBuilder} degrades to an empty chart rather
- * than failing chart assembly. The containing {@link LlmInferenceService} delegates here for
+ * unavailable at runtime, {@link QueryStoreChartBuilder} fails chart assembly explicitly. The containing {@link LlmInferenceService} delegates here for
  * chart assembly and otherwise focuses on the LLM call and citation handling.
  */
 @Service("chartSearchAi.chartBuildingStrategy")

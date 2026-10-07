@@ -25,7 +25,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -238,6 +238,7 @@ public class QueryStoreChartBuilderScopedTest {
 				"no locally-derived types — only contributed scopes would ride here; got "
 						+ queryStore.lastSliceRequest.getTypes());
 		assertEquals(3, queryStore.lastSliceRequest.getRecencyAnchorSize());
+		assertEquals(10, queryStore.lastSliceRequest.getSimilarityLimit());
 	}
 
 	@Test
@@ -312,7 +313,7 @@ public class QueryStoreChartBuilderScopedTest {
 	public void buildScoped_withholdsASliceBuiltFromAnIncompleteChart() {
 		queryStore.chartTruncated = true;
 
-		assertThrows(ChartTooLargeException.class,
+		assertThrows(IncompleteChartException.class,
 				() -> builder.buildScoped(patient(1), "What medications is the patient taking?"));
 	}
 
@@ -320,7 +321,7 @@ public class QueryStoreChartBuilderScopedTest {
 	public void buildScoped_withholdsAChartWhoseSourceProjectionIsIncomplete() {
 		queryStore.projectionComplete = false;
 
-		assertThrows(IllegalStateException.class,
+		assertThrows(IncompleteChartException.class,
 				() -> builder.buildScoped(patient(1), "any allergies?"));
 	}
 

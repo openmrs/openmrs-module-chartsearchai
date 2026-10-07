@@ -22,7 +22,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.IncompleteChartException;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.querystore.api.QueryStoreService;
@@ -176,7 +176,7 @@ public class QueryStoreChartBuilderTest {
 		queryStore.stubChart.add(new QueryDocument());
 		queryStore.chartTruncated = true;
 
-		assertThrows(ChartTooLargeException.class,
+		assertThrows(IncompleteChartException.class,
 				() -> builder.build(patient(1), "any allergies?"));
 	}
 
@@ -184,7 +184,7 @@ public class QueryStoreChartBuilderTest {
 	public void build_withholdsAChartWhoseSourceProjectionIsIncomplete() {
 		queryStore.projectionComplete = false;
 
-		assertThrows(IllegalStateException.class,
+		assertThrows(IncompleteChartException.class,
 				() -> builder.build(patient(1), "any allergies?"));
 	}
 

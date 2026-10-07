@@ -1126,6 +1126,11 @@ requests also carry `question`, optional `session` and, for Hub, the required
 `profile`. An omitted mode uses the selected provider's configured mode. A provider
 switch starts a new conversation. Unavailable selections fail explicitly.
 
+Chat streams use the same keep-alive comments and complete Unicode-character framing
+as `/search/stream`. The bundled gateway applies streaming proxy settings to both
+routes. Unsupported context modes are rejected before opening, closing or writing
+a conversation, on both `/chat/new` and `/chat/stream`.
+
 The stream publishes a complete answer even when a provider supplies no incremental
 tokens. Optional review, evidence and In-Depth events stay separate from that answer.
 A client can disable incremental display while retaining the same provider/profile

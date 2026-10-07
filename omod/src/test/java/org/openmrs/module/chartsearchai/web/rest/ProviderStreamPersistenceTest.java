@@ -108,30 +108,83 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 	}
 
 	@Test
-	public void actualBundledModeRejectionPersistsOneTerminalError() throws Exception {
+	public void unsupportedModeNeverReplacesOrWritesToAnExistingConversation() throws Exception {
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_CHART_MODE, "queryScoped");
-		// Readiness is not under test; execute is the real bundled rejection, before inference.
+		Patient patient = Context.getPatientService().getPatient(2);
+		ClinicalConversation original = conversations.startNew(patient, "bundled", ProviderMode.QUERY_SCOPED);
+		String uuid = original.getUuid();
 		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(null) {
-			@Override
-			public ProviderDescriptor descriptor() {
-				return readyDescriptor();
-			}
+			@Override public ProviderDescriptor descriptor() { return readyDescriptor(); }
 		};
 		ByteArrayOutputStream output = stream(provider, ProviderMode.FULL_CHART_STABLE);
 		List<JsonNode> terminal = terminalPayloads(output);
-		assertEquals(1, terminal.size(), "rejection must not be followed by a second persistence failure");
+		assertEquals(1, terminal.size());
 		assertEquals("unsupported_mode", terminal.get(0).path("problemCode").asText());
-		Patient patient = Context.getPatientService().getPatient(2);
-		ClinicalConversation conversation = conversations.getLatestActiveConversation(patient);
-		List<ClinicalConversationTurn> turns = conversations.getTurns(conversation);
-		assertEquals(1, turns.size());
-		String uuid = turns.get(0).getUuid();
 		Context.flushSession();
 		Context.clearSession();
-		ClinicalConversationTurn reloaded = conversationDAO.getTurnByUuid(uuid);
-		assertEquals("turn_error", reloaded.getTerminalState());
-		assertEquals("unsupported_mode", reloaded.getProblemCode());
-		assertNotNull(reloaded.getAuditLog());
+		assertEquals(uuid, conversations.getLatestActiveConversation(patient).getUuid());
+		assertEquals(ClinicalConversation.STATUS_ACTIVE, conversations.getByUuid(uuid).getStatus());
+		assertTrue(conversations.getTurns(conversations.getByUuid(uuid)).isEmpty(),
+				"rejected modes must not create turns or audit rows");
+
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Collections.singletonList(provider)));
+		Map<String, String> body = new HashMap<>();
+		body.put("patient", patient.getUuid());
+		body.put("provider", "bundled");
+		body.put("mode", "full_chart_stable");
+		controller.setPatientAccessCheck(new DefaultPatientAccessCheck());
+		ResponseEntity<Object> response = controller.chatNew(body);
+		assertEquals(400, response.getStatusCode().value());
+		assertEquals("unsupported_mode", new ObjectMapper().valueToTree(response.getBody()).path("problemCode").asText());
+		Context.flushSession();
+		Context.clearSession();
+		assertEquals(uuid, conversations.getLatestActiveConversation(patient).getUuid());
+	}
+
+	@Test
+	public void newChatStaysActiveWhenThePreviousStreamChecksAndFinishesItsAnswer() throws Exception {
+		Patient patient = Context.getPatientService().getPatient(2);
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		controller.setConversationService(conversations);
+		controller.setPatientAccessCheck(new DefaultPatientAccessCheck());
+		String[] sessions = new String[2];
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(null) {
+			@Override public ProviderDescriptor descriptor() { return readyDescriptor(); }
+			@Override public CompletionStage<TurnResult> execute(TurnRequest request, TurnEventSink sink,
+					CancellationSignal cancellation) {
+				sessions[0] = request.getConversationId();
+				Context.flushSession();
+				Context.clearSession();
+				// Model a later HTTP request while the stream still owns its earlier conversation entity.
+				Map<String, String> body = new HashMap<>();
+				body.put("patient", patient.getUuid());
+				body.put("provider", "bundled");
+				ResponseEntity<Object> response = controller.chatNew(body);
+				assertEquals(200, response.getStatusCode().value());
+				sessions[1] = new ObjectMapper().valueToTree(response.getBody()).path("session").asText();
+				Context.flushSession();
+				Context.clearSession();
+				AnswerEnvelope answer = AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Checked answer"));
+				sink.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_VALIDATION, 1, "bundled", answer));
+				Context.flushSession();
+				Context.clearSession();
+				assertEquals(ClinicalConversation.STATUS_CLOSED, conversations.getByUuid(sessions[0]).getStatus());
+				sink.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE, 2, "bundled", answer));
+				return CompletableFuture.completedFuture(TurnResult.done("bundled", request.getMode(), answer));
+			}
+		};
+		controller.setProviderRegistry(new ClinicalAnswerProviderRegistry(Collections.singletonList(provider)));
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		controller.streamProviderTurn(output, patient, "Question", "bundled", ProviderMode.QUERY_SCOPED, null, null);
+		Context.flushSession();
+		Context.clearSession();
+		assertEquals(ClinicalConversation.STATUS_CLOSED, conversations.getByUuid(sessions[0]).getStatus());
+		assertNotNull(conversations.getByUuid(sessions[0]).getEndedAt());
+		assertEquals(sessions[1], conversations.getLatestActiveConversation(patient).getUuid());
+		assertEquals("Checked answer", conversations.getTurns(conversations.getByUuid(sessions[0])).get(0).getAnswerText());
+		assertEquals("Checked answer", terminalPayloads(output).get(0).path("answer").asText());
 	}
 
 	private HttpServer peer;

@@ -1489,6 +1489,19 @@ public class ChartSearchAiRestController {
 	 */
 	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
 			ProviderMode mode, String profileId, String conversationUuid) {
+		streamProviderTurn(out, patient, question, providerId, mode, profileId, conversationUuid,
+				KEEP_ALIVE_INTERVAL_MS);
+	}
+
+	/** Per-call interval seam, matching the legacy stream's keep-alive tests. */
+	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
+			ProviderMode mode, String profileId, String conversationUuid, long keepAliveIntervalMillis) {
+		final SseKeepAlive keepAlive = SseKeepAlive.start(out, keepAliveIntervalMillis);
+		final java.io.Closeable stopKeepAlive = keepAlive::stop;
+		final Map<TurnEventType, WholeCodePoints> textChannels = new java.util.EnumMap<>(TurnEventType.class);
+		textChannels.put(TurnEventType.ANSWER_DELTA, new WholeCodePoints());
+		textChannels.put(TurnEventType.REASONING_DELTA, new WholeCodePoints());
+		textChannels.put(TurnEventType.PRELIMINARY_DELTA, new WholeCodePoints());
 		ClinicalConversation conversation = null;
 		TurnCancellation cancellation = null;
 		ClinicalConversationTurn startedTurn = null;
@@ -1499,6 +1512,7 @@ public class ChartSearchAiRestController {
 			ClinicalAnswerProvider provider;
 			try {
 				provider = providerRegistry.require(providerId);
+				resolvedMode = resolveProviderMode(provider, mode);
 			}
 			catch (ProviderUnavailableException e) {
 				writeSseEvent(out, TurnEventType.TURN_STARTED.getWireName(), "{}");
@@ -1514,7 +1528,6 @@ public class ChartSearchAiRestController {
 				return;
 			}
 
-			resolvedMode = resolveProviderMode(provider, mode);
 			conversation = resolveConversation(patient, providerId, resolvedMode, conversationUuid);
 			final ClinicalConversation activeConversation = conversation;
 			String requestId = UUID.randomUUID().toString();
@@ -1529,6 +1542,7 @@ public class ChartSearchAiRestController {
 			// forcibly closing that turn's open hub connection instead of letting it run to the
 			// hub's own completion after the browser has already moved on.
 			cancellation = preemptionRegistry.begin(activeConversation.getUuid());
+			cancellation.bindCloseable(stopKeepAlive);
 			final TurnCancellation activeCancellation = cancellation;
 			final java.util.concurrent.atomic.AtomicReference<TurnEvent> terminalEvent =
 					new java.util.concurrent.atomic.AtomicReference<>();
@@ -1550,7 +1564,7 @@ public class ChartSearchAiRestController {
 									return;
 								}
 								try {
-									writeTurnEventOrThrow(out, withModuleStatements(event), activeConversation, turn);
+									writeTurnEventOrThrow(out, withModuleStatements(event), activeConversation, turn, textChannels);
 								}
 								catch (RuntimeException e) {
 									activeCancellation.cancel();
@@ -1563,7 +1577,7 @@ public class ChartSearchAiRestController {
 			ClinicalConversationTurn completedTurn = conversationService.finishTurn(turn, withModuleStatements(result), responseTimeMs);
 			persisted = true;
 			if (!activeCancellation.isCancelled() && terminalEvent.get() != null) {
-				writeTurnEventOrThrow(out, withModuleStatements(terminalEvent.get()), activeConversation, completedTurn);
+				writeTurnEventOrThrow(out, withModuleStatements(terminalEvent.get()), activeConversation, completedTurn, textChannels);
 			}
 		}
 		catch (Exception e) {
@@ -1597,7 +1611,9 @@ public class ChartSearchAiRestController {
 			}
 		}
 		finally {
+			keepAlive.stop();
 			if (conversation != null && cancellation != null) {
+				cancellation.unbindCloseable(stopKeepAlive);
 				preemptionRegistry.end(conversation.getUuid(), cancellation);
 			}
 		}
@@ -1630,6 +1646,9 @@ public class ChartSearchAiRestController {
 	private ProviderMode resolveProviderMode(ClinicalAnswerProvider provider,
 			ProviderMode requestedMode) {
 		if (requestedMode != null) {
+			if (!provider.modes().contains(requestedMode)) {
+				throw new ProviderUnavailableException("unsupported_mode", "The selected provider does not support this mode.");
+			}
 			return requestedMode;
 		}
 		return provider.modes().isEmpty() ? ProviderMode.QUERY_SCOPED : provider.modes().get(0);
@@ -1671,9 +1690,9 @@ public class ChartSearchAiRestController {
 	}
 
 	private void writeTurnEventOrThrow(OutputStream out, TurnEvent event,
-			ClinicalConversation conversation, ClinicalConversationTurn turn) {
+			ClinicalConversation conversation, ClinicalConversationTurn turn, Map<TurnEventType, WholeCodePoints> textChannels) {
 		try {
-			writeTurnEvent(out, event, conversation, turn);
+			writeTurnEvent(out, event, conversation, turn, textChannels);
 		}
 		catch (IOException e) {
 			log.debug("Client disconnected during provider turn event {}", event.getType());
@@ -1682,7 +1701,7 @@ public class ChartSearchAiRestController {
 	}
 
 	private void writeTurnEvent(OutputStream out, TurnEvent event, ClinicalConversation conversation,
-			ClinicalConversationTurn turn) throws IOException {
+			ClinicalConversationTurn turn, Map<TurnEventType, WholeCodePoints> textChannels) throws IOException {
 		TurnEventType type = event.getType();
 		if ((type == TurnEventType.ANSWER_VALIDATION || type == TurnEventType.INDEPTH_ERROR)
 				&& event.getAnswer() != null) {
@@ -1691,9 +1710,10 @@ public class ChartSearchAiRestController {
 			conversationService.recordCheckedAnswer(turn, event.getAnswer());
 		}
 		String wire = type.getWireName();
-		if (type == TurnEventType.ANSWER_DELTA || type == TurnEventType.REASONING_DELTA
-				|| type == TurnEventType.PRELIMINARY_DELTA) {
-			writeSseEvent(out, wire, event.getTextDelta() == null ? "" : event.getTextDelta());
+		WholeCodePoints textChannel = textChannels.get(type);
+		if (textChannel != null) {
+			String text = textChannel.take(event.getTextDelta() == null ? "" : event.getTextDelta());
+			if (text != null) writeSseEvent(out, wire, text);
 			return;
 		}
 		if (type == TurnEventType.TURN_ERROR) {

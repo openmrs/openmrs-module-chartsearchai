@@ -291,12 +291,8 @@ public class ChartSearchAiConditionRuleCoverageTest {
 			return new ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null,
-<<<<<<< HEAD
-					null, null, null, stated, null, null, false, null, null, null, doseStated, null, null, null, false);
-=======
 					null, null, null, stated, null, null, false, null, null, null, doseStated, null, null,
-					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList());
->>>>>>> 64dbb32c (Extract bundled provider, cancellation and safety answer wiring)
+					DrugSafetyValidator.STATUS_UNAVAILABLE, Collections.emptyList(), null, false);
 		}
 
 		@Override

@@ -49,57 +49,11 @@ public class LocalLlmEngineTest {
 	}
 
 	@Test
-	public void requestTokenCount_postsTheLlamaCppContractAndReturnsExactCount() throws Exception {
-		AtomicReference<String> requestPath = new AtomicReference<>();
-		AtomicReference<String> requestBody = new AtomicReference<>();
-		AtomicReference<String> authorization = new AtomicReference<>();
-		tokenizeServer = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
-		tokenizeServer.createContext("/tokenize", exchange -> {
-			requestPath.set(exchange.getRequestURI().getPath());
-			authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
-			requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-			byte[] response = "{\"tokens\":[11,22,33]}".getBytes(StandardCharsets.UTF_8);
-			exchange.getResponseHeaders().set("Content-Type", "application/json");
-			exchange.sendResponseHeaders(200, response.length);
-			try (OutputStream output = exchange.getResponseBody()) {
-				output.write(response);
-			}
-		});
-		tokenizeServer.start();
-
-		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(tokenizeServer.getAddress().getPort());
-		int count = LocalLlmEngine.requestTokenCount(engine.getHttpClient(), endpoint, "chart text");
-
-		assertEquals(expectedAuthorization(endpoint), authorization.get());
-		assertEquals(3, count);
-		assertEquals("/tokenize", requestPath.get());
-		JsonNode body = MAPPER.readTree(requestBody.get());
-		assertEquals("chart text", body.get("content").asText());
-		assertFalse(body.get("add_special").asBoolean());
-	}
-
-	@Test
-	public void requestTokenCount_rejectsNonSuccessfulResponse() throws Exception {
-		tokenizeServer = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
-		tokenizeServer.createContext("/tokenize", exchange -> {
-			exchange.sendResponseHeaders(404, -1);
-			exchange.close();
-		});
-		tokenizeServer.start();
-		LlamaServerEndpoint endpoint = LlamaServerEndpoint.open(tokenizeServer.getAddress().getPort());
-
-		APIException error = assertThrows(APIException.class,
-				() -> LocalLlmEngine.requestTokenCount(engine.getHttpClient(), endpoint, "chart"));
-
-		assertTrue(error.getMessage().contains("returned HTTP 404"));
-	}
-
-	@Test
 	public void requestChatInputTokenCount_usesTheChatTemplateAwareEndpoint() throws Exception {
 		AtomicReference<String> requestBody = new AtomicReference<>();
 		AtomicReference<String> authorization = new AtomicReference<>();
 		tokenizeServer = HttpServer.create(new InetSocketAddress(LlamaServerEndpoint.LOOPBACK_HOST, 0), 0);
-		tokenizeServer.createContext("/v1/chat/completions/input_tokens", exchange -> {
+		tokenizeServer.createContext("/v1/messages/count_tokens", exchange -> {
 			authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
 			requestBody.set(new String(exchange.getRequestBody().readAllBytes(),
 					StandardCharsets.UTF_8));
@@ -757,24 +711,6 @@ public class LocalLlmEngineTest {
 		assertFalse(LocalLlmEngine.isContextOverflowError("not json at all"));
 		assertFalse(LocalLlmEngine.isContextOverflowError(""));
 		assertFalse(LocalLlmEngine.isContextOverflowError(null));
-	}
-
-	@Test
-	public void parseTokenizeResponse_countsTheTokensArray() throws Exception {
-		assertEquals(4, LlmResponseParser.parseTokenizeResponse("{\"tokens\":[1,2,3,4]}"));
-		assertEquals(0, LlmResponseParser.parseTokenizeResponse("{\"tokens\":[]}"));
-	}
-
-	@Test
-	public void parseTokenizeResponse_acceptsTheSummaryCountShapes() throws Exception {
-		assertEquals(7, LlmResponseParser.parseTokenizeResponse("{\"n_tokens\":7}"));
-	}
-
-	@Test
-	public void parseTokenizeResponse_rejectsAResponseWithNoTokenCount() {
-		assertThrows(IOException.class,
-				() -> LlmResponseParser.parseTokenizeResponse("{\"unrelated\":true}"));
-		assertThrows(IOException.class, () -> LlmResponseParser.parseTokenizeResponse("not json"));
 	}
 
 	@Test

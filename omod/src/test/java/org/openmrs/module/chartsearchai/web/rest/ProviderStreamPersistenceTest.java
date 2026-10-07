@@ -209,7 +209,7 @@ public class ProviderStreamPersistenceTest extends BaseModuleWebContextSensitive
 			}
 		});
 		peer.start();
-		Context.getAdministrationService().setGlobalProperty(ClinicalAnswerProviderRegistry.GP_PROVIDERS_ENABLED, "hub");
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_PROVIDERS_ENABLED, "hub");
 		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_HUB_ENDPOINT_URL,
 				"http://" + peer.getAddress().getAddress().getHostAddress() + ":" + peer.getAddress().getPort() + "/chat");
 		ChartSearchAiRestController controller = new ChartSearchAiRestController();

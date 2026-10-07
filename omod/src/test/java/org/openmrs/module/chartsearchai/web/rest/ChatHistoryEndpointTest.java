@@ -236,6 +236,11 @@ public class ChatHistoryEndpointTest {
 		}
 
 		@Override
+		public int purgeBefore(java.util.Date cutoff) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
 		public List<PriorClinicalTurn> priorClinicalTurns(ClinicalConversation conversation) {
 			throw new UnsupportedOperationException();
 		}

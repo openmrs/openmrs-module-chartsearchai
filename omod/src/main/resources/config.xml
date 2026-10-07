@@ -69,6 +69,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.hub.endpointUrl</property>
+		<defaultValue></defaultValue>
+		<description>Med Agent Hub chat-completions URL, ending in /v1/chat/completions. Leave empty to keep the Hub provider unavailable. Enable hub in chartsearchai.providers.enabled to offer it alongside bundled inference. Set any API key in the runtime property chartsearchai.hub.apikey, not a global property.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.llm.remote.modelName</property>
 		<defaultValue></defaultValue>
 		<description>Model name to request from the remote LLM endpoint. Required when chartsearchai.llm.engine is "remote". Examples: llama3.3 (Ollama), meta-llama/Llama-3.3-8B-Instruct (vLLM), gpt-4o (OpenAI), claude-opus-4-7 (Anthropic), gemini-2.5-pro (Google AI), anthropic/claude-opus-4.7 (OpenRouter).</description>

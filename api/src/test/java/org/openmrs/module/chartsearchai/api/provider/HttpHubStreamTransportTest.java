@@ -15,11 +15,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayInputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.LogCapture;
+import org.apache.logging.log4j.Level;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -51,6 +56,129 @@ public class HttpHubStreamTransportTest {
 	private HttpServer server;
 
 	private ExecutorService executor;
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	public void aStalledHeaderWaitEndsOnItsDeadlineOrCancellation(boolean cancel) throws Exception {
+		CountDownLatch received = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/stream", exchange -> {
+			try {
+				exchange.getRequestBody().readAllBytes();
+				received.countDown();
+				release.await(10, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			} finally {
+				exchange.close();
+			}
+		});
+		server.start();
+		TurnCancellation cancellation = new TurnCancellation();
+		// A cancelled request must finish before the longer header deadline.
+		HubClinicalAnswerProvider provider = httpProvider(cancel ? Duration.ofSeconds(30) : Duration.ofSeconds(1));
+		executor = Executors.newSingleThreadExecutor();
+		Future<TurnResult> completed = executor.submit(() -> {
+			TurnResult result = provider.execute(turn(), event -> { }, cancellation).toCompletableFuture().get();
+			assertTrue(!Thread.currentThread().isInterrupted(), "cancellation must not poison the request thread");
+			return result;
+		});
+		try {
+			assertTrue(received.await(5, TimeUnit.SECONDS));
+			if (cancel) cancellation.cancel();
+			TurnResult result = completed.get(3, TimeUnit.SECONDS);
+			assertEquals(cancel ? "cancelled" : "provider_failure", result.getProblemCode());
+		} finally {
+			release.countDown();
+		}
+	}
+
+	@Test
+	public void theHeaderDeadlineDoesNotLimitTheAnswerAndReviewBody() throws Exception {
+		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/stream", exchange -> {
+			exchange.getRequestBody().readAllBytes();
+			exchange.sendResponseHeaders(200, 0);
+			try (OutputStream body = exchange.getResponseBody()) {
+				body.write("event: answer_done\ndata: {\"answer\":\"Initial answer\"}\n\n".getBytes(StandardCharsets.UTF_8));
+				body.flush();
+				new CountDownLatch(1).await(2, TimeUnit.SECONDS);
+				body.write("event: done\ndata: {\"answer\":\"Checked answer\"}\n\n".getBytes(StandardCharsets.UTF_8));
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		server.start();
+		List<Closeable> registered = new ArrayList<>();
+		List<Closeable> active = new ArrayList<>();
+		CancellationSignal cancellation = new CancellationSignal() {
+			@Override public boolean isCancelled() { return false; }
+			@Override public void bindCloseable(Closeable resource) {
+				registered.add(resource);
+				active.add(resource);
+			}
+			@Override public void unbindCloseable(Closeable resource) { active.remove(resource); }
+		};
+		TurnResult result = httpProvider(Duration.ofSeconds(1)).execute(turn(), event -> { },
+				cancellation).toCompletableFuture().get();
+		assertTrue(active.isEmpty(), "completed HTTP work must be removed from cancellation tracking");
+		try {
+			// A cancellation callback already dequeued elsewhere can arrive after the request finishes.
+			for (Closeable resource : registered) resource.close();
+			assertTrue(!Thread.currentThread().isInterrupted(), "late cancellation must not interrupt subsequent work");
+		} finally {
+			Thread.interrupted();
+		}
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals("Checked answer", result.getAnswer().getText());
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	public void aBrokenAnswerTailWarnsUnlessTheUserCancelled(boolean cancel) throws Exception {
+		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+		server.createContext("/stream", exchange -> {
+			exchange.getRequestBody().readAllBytes();
+			exchange.sendResponseHeaders(200, 0);
+			try (OutputStream body = exchange.getResponseBody()) {
+				body.write(("event: answer_done\ndata: {\"answer\":\"Retained answer\"}\n\n"
+						+ "event: answer_validation\ndata: invalid-json\n\n").getBytes(StandardCharsets.UTF_8));
+			}
+		});
+		server.start();
+		TurnCancellation cancellation = new TurnCancellation();
+		try (LogCapture capture = LogCapture.on(HubClinicalAnswerProvider.class.getName())) {
+			TurnResult result = httpProvider(Duration.ofSeconds(5)).execute(turn(), event -> {
+				if (cancel && event.getType() == TurnEventType.ANSWER_DONE) cancellation.cancel();
+			}, cancellation).toCompletableFuture().get();
+			assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+			assertEquals("Retained answer", result.getAnswer().getText());
+			assertEquals(cancel ? 0 : 1, capture.messagesAt(Level.WARN).size());
+			if (!cancel) assertTrue(capture.hasMessageAt(Level.WARN, "request-1", "JsonParseException"));
+			assertTrue(capture.describeAll().stream().noneMatch(message -> message.contains("invalid-json")),
+					"diagnostics must not log the malformed response text");
+		}
+	}
+
+	private HubClinicalAnswerProvider httpProvider(Duration timeout) {
+		HttpHubStreamTransport transport = new HttpHubStreamTransport() {
+			@Override protected String apiKey() { return null; }
+			@Override protected Duration headerTimeout() { return timeout; }
+		};
+		return new HubClinicalAnswerProvider(transport) {
+			@Override protected String gp(String key, String fallback) {
+				return "http://127.0.0.1:" + server.getAddress().getPort() + "/stream";
+			}
+		};
+	}
+
+	private static TurnRequest turn() {
+		Patient patient = new Patient(7);
+		patient.setUuid("patient-1");
+		return new TurnRequest(patient, "question", "conversation-1", "request-1",
+				ProviderMode.QUERY_SCOPED, "profile", Collections.emptyList());
+	}
 
 	private static final class CloseTrackingInputStream extends ByteArrayInputStream {
 

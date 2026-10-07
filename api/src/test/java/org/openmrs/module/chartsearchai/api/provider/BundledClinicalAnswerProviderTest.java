@@ -702,7 +702,23 @@ public class BundledClinicalAnswerProviderTest {
 
 		ProviderDescriptor descriptor = provider.descriptor();
 		assertFalse(descriptor.isReady());
-		assertTrue(descriptor.getUnavailableReason().contains("Model file not found"));
+		assertTrue(descriptor.getUnavailableReason().contains(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH));
+		assertFalse(descriptor.getUnavailableReason().contains("/openmrs/data/"));
+	}
+
+	@Test
+	public void realMissingModelResolutionKeepsTheServerDirectoryOutOfReadiness() {
+		String missing = "chartsearchai/" + java.util.UUID.randomUUID() + "/missing.gguf";
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(null) {
+			@Override protected String gp(String property, String fallback) {
+				return ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH.equals(property) ? missing : fallback;
+			}
+		};
+		ProviderDescriptor descriptor = provider.descriptor();
+		assertFalse(descriptor.isReady());
+		assertTrue(descriptor.getUnavailableReason().contains(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH));
+		assertFalse(descriptor.getUnavailableReason().contains(org.openmrs.util.OpenmrsUtil.getApplicationDataDirectory()));
+		assertFalse(descriptor.getUnavailableReason().contains(missing));
 	}
 
 	@Test

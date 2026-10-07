@@ -149,7 +149,8 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 			return null;
 		}
 		catch (IllegalStateException e) {
-			return e.getMessage();
+			log.debug("Bundled local model is unavailable", e);
+			return "Local model unavailable. Check " + ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH + ".";
 		}
 	}
 

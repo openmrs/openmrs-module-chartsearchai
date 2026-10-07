@@ -10,7 +10,6 @@
 package org.openmrs.module.chartsearchai.api.provider;
 
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -33,10 +32,6 @@ public interface ClinicalAnswerProvider {
 
 	/** The provider's truthful self-description: identity, readiness, modes, and capabilities. */
 	ProviderDescriptor descriptor();
-
-	default Set<ProviderCapability> capabilities() {
-		return descriptor().getCapabilities();
-	}
 
 	default List<ProviderMode> modes() {
 		return descriptor().getModes();

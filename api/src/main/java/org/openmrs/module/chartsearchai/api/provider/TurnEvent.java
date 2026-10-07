@@ -74,7 +74,10 @@ public final class TurnEvent {
 		return textDelta;
 	}
 
-	/** The answer as of this event; populated on {@code answer_done} and {@code evidence_updated}. */
+	/**
+	 * The answer as of this event; populated on {@code answer_done}, {@code evidence_updated} and
+	 * {@code turn_done}; {@code answer_validation} and the In-Depth events may carry it too.
+	 */
 	public AnswerEnvelope getAnswer() {
 		return answer;
 	}

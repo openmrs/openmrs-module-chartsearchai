@@ -13,8 +13,9 @@ import java.io.Closeable;
 
 /**
  * Cooperative cancellation for a provider turn. Providers poll this at their natural
- * checkpoints (before starting expensive work, between stages) and end the turn with a
- * {@code cancelled} {@code turn_error} when it reports {@code true}.
+ * checkpoints (before starting expensive work, between stages). A turn cancelled before
+ * {@code answer_done} ends with a {@code cancelled} {@code turn_error}; one cancelled after it
+ * ends with {@code turn_done} carrying the answer delivered so far.
  */
 @FunctionalInterface
 public interface CancellationSignal {

@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.conversation.impl;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,9 @@ import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils.ReferenceSlice;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationDAO;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
@@ -187,8 +191,7 @@ public class ConversationServiceImpl implements ConversationService {
 		ChartSearchAuditLog audit = buildAudit(turn, result, responseTimeMs, now);
 		auditDAO.saveAuditLog(audit);
 		turn.setAuditLog(audit);
-		conversation.setLastActivityAt(now);
-		conversationDAO.saveConversation(conversation);
+		conversationDAO.touchConversation(conversation.getConversationId(), now);
 		return conversationDAO.saveTurn(turn);
 	}
 
@@ -204,8 +207,7 @@ public class ConversationServiceImpl implements ConversationService {
 		turn.setProviderPayload(serialize(answer.getPayload()));
 		turn.setPayloadMediaType(ClinicalConversationTurn.MEDIA_TYPE_JSON);
 		Date now = new Date();
-		turn.getConversation().setLastActivityAt(now);
-		conversationDAO.saveConversation(turn.getConversation());
+		conversationDAO.touchConversation(turn.getConversation().getConversationId(), now);
 		conversationDAO.saveTurn(turn);
 		return true;
 	}
@@ -224,6 +226,12 @@ public class ConversationServiceImpl implements ConversationService {
 		return prior;
 	}
 
+	@Override
+	public int purgeBefore(Date before) {
+		require(before != null, "retention cutoff is required");
+		return conversationDAO.purgeBefore(before);
+	}
+
 	private ChartSearchAuditLog buildAudit(ClinicalConversationTurn turn, TurnResult result,
 			long responseTimeMs, Date now) {
 		ClinicalConversation conversation = turn.getConversation();
@@ -231,19 +239,39 @@ public class ConversationServiceImpl implements ConversationService {
 		audit.setUser(conversation.getUser());
 		audit.setPatient(conversation.getPatient());
 		audit.setQuestion(turn.getQuestion());
-		audit.setAnswer(result.getAnswer() == null ? "" : result.getAnswer().getText());
-		audit.setReferenceCount(referenceCount(result.getAnswer()));
-		audit.setSearchMode(conversation.getProviderMode() == null
-				? conversation.getProviderId() : conversation.getProviderMode());
+		AnswerEnvelope answer = result.getAnswer() == null ? retainedAnswer(turn) : result.getAnswer();
+		audit.setAnswer(answer == null ? "" : answer.getText());
+		audit.setReferenceCount(referenceCount(answer));
+		ChartAnswer source = answer == null ? null : answer.getSource();
+		audit.setSearchMode(source == null ? ChartSearchAiConstants.SEARCH_MODE_UNKNOWN : source.getSearchMode());
+		ReferenceSlice slice = source == null ? null : source.getReferenceSlice();
+		audit.setReferenceSliceRecords(slice == null ? null : slice.getRecords());
+		audit.setReferenceSliceChars(slice == null ? null : slice.getCharacters());
 		audit.setResponseTimeMs(responseTimeMs);
-		audit.setInputTokens(number(result.getAnswer(), "inputTokens"));
-		audit.setOutputTokens(number(result.getAnswer(), "outputTokens"));
+		audit.setInputTokens(number(answer, "inputTokens"));
+		audit.setOutputTokens(number(answer, "outputTokens"));
 		audit.setProviderId(conversation.getProviderId());
 		audit.setProviderMode(conversation.getProviderMode());
 		audit.setConversationUuid(conversation.getUuid());
 		audit.setRequestId(turn.getRequestId());
 		audit.setDateCreated(now);
 		return audit;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static AnswerEnvelope retainedAnswer(ClinicalConversationTurn turn) {
+		if (turn.getAnswerText() == null) {
+			return null;
+		}
+		if (turn.getProviderPayload() == null) {
+			return AnswerEnvelope.fromPayload(Collections.singletonMap("answer", turn.getAnswerText()));
+		}
+		try {
+			return AnswerEnvelope.fromPayload(MAPPER.readValue(turn.getProviderPayload(), Map.class));
+		}
+		catch (IOException e) {
+			throw new APIException("Could not read the retained answer for audit", e);
+		}
 	}
 
 	private static int referenceCount(AnswerEnvelope answer) {

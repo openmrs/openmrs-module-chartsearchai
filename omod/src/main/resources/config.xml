@@ -177,6 +177,12 @@
 	</globalProperty>
 
 	<globalProperty>
+		<property>chartsearchai.chat.retentionDays</property>
+		<defaultValue>90</defaultValue>
+		<description>Days to retain conversation turns after completion, or after starting if unfinished. The daily purge removes older turns and old empty conversations independently of audit log retention. Set to 0 to retain conversation history indefinitely.</description>
+	</globalProperty>
+
+	<globalProperty>
 		<property>chartsearchai.cacheTtlMinutes</property>
 		<defaultValue>0</defaultValue>
 		<description>Number of minutes to cache AI chart search responses for identical patient and question combinations. Avoids redundant LLM calls. Set to 0 to disable caching (default).</description>

@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.conversation;
 
+import java.util.Date;
 import java.util.List;
 
 import org.openmrs.Patient;
@@ -63,4 +64,7 @@ public interface ConversationService {
 	 * running, projected to canonical prose for the provider's next request.
 	 */
 	List<PriorClinicalTurn> priorClinicalTurns(ClinicalConversation conversation);
+
+	/** Deletes expired conversation content in a transaction, independently of audit retention. */
+	int purgeBefore(Date before);
 }

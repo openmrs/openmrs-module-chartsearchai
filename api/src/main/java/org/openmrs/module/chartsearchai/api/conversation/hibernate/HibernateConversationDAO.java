@@ -37,9 +37,15 @@ public class HibernateConversationDAO implements ConversationDAO {
 	}
 
 	@Override
-	public ClinicalConversation getConversation(Integer conversationId) {
-		return (ClinicalConversation) sessionFactory.getCurrentSession()
-				.get(ClinicalConversation.class, conversationId);
+	public void touchConversation(Integer conversationId, Date activityAt) {
+		// A stream may retain an entity loaded before another request closed the conversation.
+		// Only activity belongs to this write; status and endedAt belong to the close operation.
+		sessionFactory.getCurrentSession()
+				.createQuery("update ClinicalConversation set lastActivityAt = :activityAt "
+						+ "where conversationId = :conversationId")
+				.setParameter("activityAt", activityAt)
+				.setParameter("conversationId", conversationId)
+				.executeUpdate();
 	}
 
 	@Override
@@ -118,7 +124,7 @@ public class HibernateConversationDAO implements ConversationDAO {
 	public int purgeBefore(Date before) {
 		int turns = sessionFactory.getCurrentSession()
 				.createQuery("delete from ClinicalConversationTurn "
-						+ "where completedAt is not null and completedAt < :before")
+						+ "where coalesce(completedAt, startedAt) < :before")
 				.setParameter("before", before)
 				.executeUpdate();
 		int conversations = sessionFactory.getCurrentSession()

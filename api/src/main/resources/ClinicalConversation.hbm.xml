@@ -27,8 +27,6 @@
 
 		<property name="endedAt" column="ended_at" type="timestamp"/>
 
-		<property name="title" column="title" type="string" length="200"/>
-
 		<property name="status" column="status" type="string" length="20" not-null="true"/>
 
 	</class>

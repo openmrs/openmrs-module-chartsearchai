@@ -29,6 +29,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.GlobalProperty;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils.ReferenceSlice;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.api.AuditLogPurgeTask;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
@@ -44,7 +48,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Provider-neutral conversation persistence through the real Spring service, Hibernate mappings,
- * Liquibase-created tables, and audit DAO. The tests deliberately use an unknown nested provider
+ * Hibernate-created H2 tables, and audit DAO. This does not execute Liquibase. The tests deliberately use an unknown nested provider
  * extension to prove Java stores the payload without taking ownership of its schema.
  */
 public class ConversationServicePersistenceTest extends BaseModuleContextSensitiveTest {
@@ -144,6 +148,9 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 		ChartSearchAuditLog audit = reloaded.getAuditLog();
 		assertNotNull(audit, "every accepted turn is independently auditable");
 		assertEquals("hub", audit.getProviderId());
+		assertEquals(ChartSearchAiConstants.SEARCH_MODE_UNKNOWN, audit.getSearchMode());
+		assertNull(audit.getReferenceSliceRecords());
+		assertNull(audit.getReferenceSliceChars());
 		assertEquals(ProviderMode.QUERY_SCOPED.getWireName(), audit.getProviderMode());
 		assertEquals(conversation.getUuid(), audit.getConversationUuid());
 		assertEquals("request-1", audit.getRequestId());
@@ -296,4 +303,156 @@ public class ConversationServicePersistenceTest extends BaseModuleContextSensiti
 				() -> conversationService.finishTurn(modeDrift,
 						TurnResult.error("bundled", ProviderMode.FULL_CHART_STABLE, "provider_failure"), 1L));
 	}
+	@Test
+	public void bundledAuditPreservesMeasuredSearchModeAndReferenceSlice() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "bundled",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "bundled-audit", "Question");
+		ChartAnswer source = new ChartAnswer("Answer", Collections.emptyList(), 12, 3, 0,
+				Collections.emptyList(), "fullChart", new ReferenceSlice(7, 320));
+		conversationService.finishTurn(turn, TurnResult.done("bundled", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer"), source)), 5L);
+		Context.flushSession();
+		Context.clearSession();
+		ChartSearchAuditLog audit = conversationDAO.getTurnByUuid(turn.getUuid()).getAuditLog();
+		assertEquals("fullChart", audit.getSearchMode());
+		assertEquals(7, audit.getReferenceSliceRecords());
+		assertEquals(320, audit.getReferenceSliceChars());
+	}
+
+	@Test
+	public void failedOptionalTailAuditsTheCheckedAnswerAlreadyDisplayed() {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "interrupted-tail", "Question");
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "The checked answer already shown");
+		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		payload.put("references", Collections.singletonList(Collections.singletonMap("label", "Visit")));
+		payload.put("inputTokens", 23);
+		payload.put("outputTokens", 8);
+		assertTrue(conversationService.recordCheckedAnswer(turn, AnswerEnvelope.fromPayload(payload)));
+		conversationService.finishTurn(turn, TurnResult.error("hub", ProviderMode.QUERY_SCOPED,
+				"provider_stream_interrupted"), 50L);
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn stored = conversationDAO.getTurnByUuid(turn.getUuid());
+		assertEquals("turn_error", stored.getTerminalState());
+		assertEquals(stored.getAnswerText(), stored.getAuditLog().getAnswer());
+		assertEquals(1, stored.getAuditLog().getReferenceCount());
+		assertEquals(23, stored.getAuditLog().getInputTokens());
+		assertEquals(8, stored.getAuditLog().getOutputTokens());
+	}
+
+	@Test
+	public void finishingAnInflightTurnDoesNotReopenTheClosedConversation() {
+		assertClosedConversationSurvivesInflightWrite(false);
+	}
+
+	@Test
+	public void recordingACheckedAnswerDoesNotReopenTheClosedConversation() {
+		assertClosedConversationSurvivesInflightWrite(true);
+	}
+
+	private void assertClosedConversationSurvivesInflightWrite(boolean checked) {
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub",
+				ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn inflight = conversationService.startTurn(conversation, "inflight", "Question");
+		Context.flushSession();
+		Context.clearSession();
+		// A later request closes the conversation while the stream retains its earlier entity.
+		ClinicalConversation fresh = conversationService.startNew(patient, "hub", ProviderMode.QUERY_SCOPED);
+		Date closedAt = conversationDAO.getConversationByUuid(conversation.getUuid()).getEndedAt();
+		Context.flushSession();
+		Context.clearSession();
+		assertEquals(ClinicalConversation.STATUS_ACTIVE, conversation.getStatus());
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", "Checked answer");
+		payload.put("answerValidation", Collections.singletonMap("status", "checked"));
+		AnswerEnvelope answer = AnswerEnvelope.fromPayload(payload);
+		if (checked) {
+			assertTrue(conversationService.recordCheckedAnswer(inflight, answer));
+		} else {
+			conversationService.finishTurn(inflight, TurnResult.done("hub", ProviderMode.QUERY_SCOPED, answer), 5L);
+		}
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversation stored = conversationDAO.getConversationByUuid(conversation.getUuid());
+		assertEquals(ClinicalConversation.STATUS_CLOSED, stored.getStatus());
+		assertEquals(closedAt, stored.getEndedAt());
+		assertEquals(fresh.getUuid(), conversationService.getLatestActiveConversation(patient).getUuid());
+		assertEquals("Checked answer", conversationDAO.getTurnByUuid(inflight.getUuid()).getAnswerText());
+	}
+
+	@Test
+	public void scheduledRetentionPurgesOldCompletedAndAbandonedTurnsEvenWithAuditPurgeDisabled() {
+		setProperty("chartsearchai.auditLogRetentionDays", "0");
+		setProperty("chartsearchai.chat.retentionDays", "90");
+		ClinicalConversation old = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn abandoned = conversationService.startTurn(old, "abandoned", "Old question");
+		ClinicalConversationTurn completed = conversationService.startTurn(old, "completed", "Old question");
+		conversationService.finishTurn(completed, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Old answer"))), 5L);
+		Date before = new Date(System.currentTimeMillis() - 100L * 24 * 60 * 60 * 1000);
+		abandoned.setStartedAt(before);
+		completed.setStartedAt(before);
+		completed.setCompletedAt(before);
+		completed.getAuditLog().setDateCreated(before);
+		old.setLastActivityAt(before);
+		Integer auditId = completed.getAuditLog().getAuditLogId();
+		Context.flushSession();
+		Context.clearSession();
+		new AuditLogPurgeTask().execute();
+		Context.flushSession();
+		Context.clearSession();
+		assertNull(conversationDAO.getTurnByUuid(abandoned.getUuid()));
+		assertNull(conversationDAO.getTurnByUuid(completed.getUuid()));
+		assertNull(conversationDAO.getConversationByUuid(old.getUuid()));
+		assertNotNull(auditLogService.getAuditLog(auditId), "audit retention is independent of chat retention");
+	}
+
+	@Test
+	public void scheduledRetentionUsesCompletionTimeAndRetainsARecentUnfinishedTurn() {
+		setProperty("chartsearchai.chat.retentionDays", "90");
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn unfinished = conversationService.startTurn(conversation, "recent", "Question");
+		ClinicalConversationTurn completed = conversationService.startTurn(conversation, "just-completed", "Question");
+		conversationService.finishTurn(completed, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer"))), 5L);
+		completed.setStartedAt(new Date(System.currentTimeMillis() - 100L * 24 * 60 * 60 * 1000));
+		Context.flushSession();
+		Context.clearSession();
+		new AuditLogPurgeTask().execute();
+		Context.flushSession();
+		Context.clearSession();
+		assertNotNull(conversationDAO.getTurnByUuid(unfinished.getUuid()));
+		assertNotNull(conversationDAO.getTurnByUuid(completed.getUuid()));
+	}
+
+	@Test
+	public void disablingChatRetentionKeepsOldTurnsWhileAuditRetentionStillRuns() {
+		setProperty("chartsearchai.chat.retentionDays", "0");
+		setProperty("chartsearchai.auditLogRetentionDays", "90");
+		ClinicalConversation conversation = conversationService.openOrCreate(patient, "hub", ProviderMode.QUERY_SCOPED);
+		ClinicalConversationTurn turn = conversationService.startTurn(conversation, "retained", "Question");
+		conversationService.finishTurn(turn, TurnResult.done("hub", ProviderMode.QUERY_SCOPED,
+				AnswerEnvelope.fromPayload(Collections.singletonMap("answer", "Answer"))), 5L);
+		Date before = new Date(System.currentTimeMillis() - 100L * 24 * 60 * 60 * 1000);
+		turn.setStartedAt(before);
+		turn.setCompletedAt(before);
+		turn.getAuditLog().setDateCreated(before);
+		Context.flushSession();
+		Context.clearSession();
+		new AuditLogPurgeTask().execute();
+		Context.flushSession();
+		Context.clearSession();
+		ClinicalConversationTurn stored = conversationDAO.getTurnByUuid(turn.getUuid());
+		assertNotNull(stored);
+		assertNull(stored.getAuditLog());
+	}
+
+	private void setProperty(String name, String value) {
+		Context.getAdministrationService().saveGlobalProperty(new GlobalProperty(name, value));
+	}
+
 }

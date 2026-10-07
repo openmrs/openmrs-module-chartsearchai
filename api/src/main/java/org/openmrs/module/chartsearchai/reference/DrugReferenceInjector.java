@@ -724,7 +724,12 @@ public class DrugReferenceInjector {
 				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
 		// A question listing drugs her chart holds no active order for is stated even where nothing else
 		// resolved (issue #515), so its chart is rebuilt to carry the stamp.
-		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && listed.stated().isEmpty()) {
+		// A screen of a patient with no active drug at all resolves nothing either, and is still answered (ADR Decision
+		// 162) — so it does not return early with the chart unstamped.
+		boolean screenOfNoMedications = questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
+				&& hasNoActiveDrug(context);
+		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
+				&& listed.stated().isEmpty()) {
 			return chart;
 		}
 
@@ -867,7 +872,9 @@ public class DrugReferenceInjector {
 		// LAST for the reason the class note is: it is about what this response's SCREEN did rather
 		// than about any entry, so it reads after everything the response resolved — which, when it
 		// fires, is nothing. Its gate is resolved above, once, beside the resolutions it reads.
+		Integer screenNoteIndex = null;
 		if (screenRelatedNothing) {
+			screenNoteIndex = Integer.valueOf(index);
 			String rendered = renderInteractionScreenNote(screenedSubstances.size());
 			mappings.add(new RecordMapping(index,
 					ChartSearchAiConstants.RESOURCE_TYPE_INTERACTION_SCREEN_NOTE,
@@ -966,6 +973,19 @@ public class DrugReferenceInjector {
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
+		}
+		// A screen of her medications that related nothing is answered with what the screen established (ADR Decision
+		// 162): the screen note's own words, or, with no active orders at all, that there are none to check.
+		if (moduleAnswer == null && context != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+				&& context.chartReadForSafety() && questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question)) {
+			moduleAnswer = composeFromAScreenThatRelatedNothing(screenNoteIndex, screenedSubstances.size(), findings,
+					findingNumbers, orderRecordNumbers,
+					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
+					context);
 		}
 		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
@@ -3689,6 +3709,35 @@ public class DrugReferenceInjector {
 		return String.join("\n", lines);
 	}
 
+	/** Her orders were read and she has no active drug in any form — no order, no flattened name or code (issue #118's
+	 *  shape still records a medication). */
+	private static boolean hasNoActiveDrug(PatientClinicalContext context) {
+		return context.activeDrugOrdersRead() && context.getActiveDrugOrders().isEmpty()
+				&& context.getActiveDrugNames().isEmpty() && context.getActiveDrugAtcCodes().isEmpty();
+	}
+
+	/**
+	 * The module's answer to a screen of her medications that related nothing (ADR Decision 162), or {@code null}
+	 * where the model answers. Where the screen note was injected — two or more of her substances compared and no
+	 * pair related, the note's own gate — the answer is the note's words, cited, then any finding that her own orders
+	 * share a substance as a line (ADR Decision 159); the note is a statement about what the SCREEN did, and stating
+	 * it whole keeps the floor and the class limit the model dropped when it quoted it. With no active drug in any
+	 * form and her orders read: <em>"This patient has no active medication orders, so there are none to check against
+	 * each other."</em> Anything else — a contraindication finding, one substance — keeps the model call.
+	 */
+	private static String composeFromAScreenThatRelatedNothing(Integer screenNoteIndex, int screened,
+			List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, PatientClinicalContext context) {
+		if (screenNoteIndex != null && onlyHerOwnOrdersSharingASubstance(findings)) {
+			return withHerOwnOrdersSharingASubstance(interactionScreenNoteWords(screened) + " [" + screenNoteIndex + "]",
+					findings, findingNumbers, orderRecordNumbers, herOrderRecords);
+		}
+		if (findings.isEmpty() && hasNoActiveDrug(context)) {
+			return "This patient has no active medication orders, so there are none to check against each other.";
+		}
+		return null;
+	}
+
 	/**
 	 * The closing line of a composed answer beside active orders the drug data does not identify (ADR Decision 161):
 	 * <em>"Not checked: 1 active order the drug data does not identify — Marevan. Whether it is the drug asked about is
@@ -4111,7 +4160,17 @@ public class DrugReferenceInjector {
 	 * @return the rendered note
 	 */
 	private static String renderInteractionScreenNote(int screened) {
-		return FINDING_PREFIX + "interaction screen. " + SCREEN_NOTE_FINDING_LEAD + screened
+		return FINDING_PREFIX + "interaction screen. " + interactionScreenNoteWords(screened);
+	}
+
+	/**
+	 * The note's words after its prefix — what the record says and, since ADR Decision 162, what the module answers a
+	 * screen that related nothing with, word for word. One method for both, so the answer cannot drop the two limits
+	 * the record states (the configured floor, and that a shared drug class is not part of the screen): the model,
+	 * quoting the record, dropped both on the demo.
+	 */
+	private static String interactionScreenNoteWords(int screened) {
+		return SCREEN_NOTE_FINDING_LEAD + screened
 				+ " of them were checked against each other and the "
 				+ "reference data relates none of them at or above the configured severity level. This "
 				+ "check compares individual substances: relationships resting only on two drugs "

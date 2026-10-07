@@ -2253,25 +2253,74 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
-	/** A screen that related nothing is answered by the model: the module never answers with the screen
-	 *  note's negative, which is true only of a screen that ran over a fully read, fully resolved list.
-	 *  A tripwire — the gate is not asked where no finding was raised — for a change that would give the
-	 *  note an answer of its own again. */
+	/**
+	 * A screen that related nothing is answered by the module with its own screen note, word for word, citing it (ADR
+	 * Decision 162). Until then the model answered from the note and dropped its scope — on the demo (2026-10-07)
+	 * "No interactions were found among this patient's active medications [46]", beside six orders that were never
+	 * checked. The note's own words keep both of its limits: the configured severity floor, and that a relationship
+	 * resting only on a shared drug class is not part of the screen.
+	 */
 	@Test
-	public void aScreenThatRelatedNothingStillAsksTheModel() throws Exception {
+	public void aScreenThatRelatedNothingIsAnsweredWithTheScreenNotesOwnWords() throws Exception {
 		executeDataSet(METFORMIN_ORDER);
-		answerFromFindings(false);
-		RecordingProvider recorder = new RecordingProvider();
-		serviceWith(recorder).search(patient, SCREEN);
-		assertTrue(recorder.lastRecords.contains(DrugReferenceInjector.FINDING_PREFIX + "interaction screen."),
-				"precondition: the screen note is injected, chart was: " + recorder.lastRecords);
+		int note = screenNoteIndex();
 
-		answerFromFindings(true);
 		RecordingProvider provider = new RecordingProvider();
 		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
 
-		assertEquals(1, provider.calls);
-		assertFalse(answer.isAnsweredByTheModule());
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals(SCREEN_NOTE_WORDS + " [" + note + "]", answer.getAnswer());
+	}
+
+	/** The same beside an order the data cannot identify: the note's words, then the order named as not screened
+	 *  (ADR Decisions 161, 162). */
+	@Test
+	public void aScreenThatRelatedNothingBesideAnOrderTheDataCannotNameNamesThatOrder() throws Exception {
+		executeDataSet(METFORMIN_ORDER);
+		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
+		int note = screenNoteIndex();
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertEquals(SCREEN_NOTE_WORDS + " [" + note + "]\n"
+				+ "Not checked: 1 active order the drug data does not identify — Marevan. It was not screened against "
+				+ "this patient's other medications.", answer.getAnswer());
+	}
+
+	/** A screen for a patient with no active medication orders says so (ADR Decision 162): there are none to check
+	 *  against each other. The model answered "The records do not address whether any of her medications are
+	 *  interacting with each other." Patient 6 holds no active order. */
+	@Test
+	public void aScreenForAPatientWithNoActiveOrdersSaysThereAreNoneToCheck() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(Context.getPatientService().getPatient(6), SCREEN);
+
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		assertEquals("This patient has no active medication orders, so there are none to check against each other.",
+				answer.getAnswer());
+	}
+
+	/** The screen note's words for two substances, as {@code DrugReferenceInjector} renders them after its finding
+	 *  prefix — pinned here as a literal, so a reword of the note shows up as a changed answer. */
+	private static final String SCREEN_NOTE_WORDS = "No interactions were found among this patient's active medications. "
+			+ "2 of them were checked against each other and the reference data relates none of them at or above the "
+			+ "configured severity level. This check compares individual substances: relationships resting only on two "
+			+ "drugs sharing a drug class are not part of it, so it is not a statement that no relationship exists.";
+
+	/** With the property off, the screen's prompt: the note is injected, and its record number. */
+	private int screenNoteIndex() {
+		answerFromFindings(false);
+		RecordingProvider recorder = new RecordingProvider();
+		serviceWith(recorder).search(patient, SCREEN);
+		answerFromFindings(true);
+		Matcher m = Pattern.compile("\\[(\\d+)\\] " + Pattern.quote(DrugReferenceInjector.FINDING_PREFIX + "interaction screen."))
+				.matcher(recorder.lastRecords);
+		assertTrue(m.find(), "precondition: the screen note is injected, chart was: " + recorder.lastRecords);
+		return Integer.parseInt(m.group(1));
 	}
 
 	/** A proposal the module would otherwise answer, over a chart whose allergy list it could not read,

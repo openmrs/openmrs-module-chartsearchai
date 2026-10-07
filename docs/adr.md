@@ -14677,3 +14677,43 @@ failed before the change and pass after it; `.aHistoryQuestionBesideAnOrderTheDa
 passes unchanged. `UnidentifiedActiveOrdersAnswerTest` drives the real injector over several unidentified orders, a
 shared display and a code-only order. Mutated — the gate restored on the findings path, the line dropped, the count
 of every order, the shared display not merged — each reddens its cases.
+
+## Decision 162: A screen that related nothing is answered with the screen note's own words
+
+**Status: Accepted** (October 2026) — implemented, no issue. Reverses, for this shape,
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)'s
+refusal to compose a screen's negative; taken by the maintainer, 2026-10-07.
+
+### Context
+
+Issue #401 gave a screen that related nothing a note of its own ([Decision 87](#decision-87-a-screen-that-related-nothing-says-so-in-the-prompt-instead-of-reaching-the-model-as-an-empty-slice)):
+*"No interactions were found among this patient's active medications. N of them were checked against each other and
+the reference data relates none of them at or above the configured severity level. This check compares individual
+substances: …, so it is not a statement that no relationship exists."* — its order and its two limits measured. The
+module still left the answer to the model, and on the demo sweep (2026-10-07) the model quoted the note's first
+sentence and dropped the rest: Tuwei got *"No interactions were found among this patient's active medications
+[46]"* beside six orders that were never checked, and Kamwara's answer copied the note whole. A patient with no
+orders at all, where no note is injected, got *"The records do not address whether any of her medications are
+interacting with each other."*
+
+### The decision
+
+- **Where the note was injected, the module answers with its words, cited**: `DrugReferenceInjector.composeFromAScreenThatRelatedNothing`,
+  over `interactionScreenNoteWords` — the one method the record and the answer now share, so the answer cannot lose
+  the floor or the class limit the record states. Her own orders sharing a substance follow as lines
+  ([Decision 159](#decision-159-her-own-orders-sharing-a-substance-do-not-stop-the-answer-to-a-proposal)), and orders
+  the data does not identify as Decision 161's closing line.
+- **With no active drug in any form and her orders read**: *"This patient has no active medication orders, so there
+  are none to check against each other."* — the screen's grammar admitted, the injection no longer returning early
+  for it.
+- **Anything else keeps the model**: a contraindication finding beside the screen (the note's own gate excludes it),
+  one substance (no pair to screen), an unread chart.
+
+### The gate
+
+`LlmInferenceServiceAnswerFromFindingsContextTest` — `.aScreenThatRelatedNothingIsAnsweredWithTheScreenNotesOwnWords`,
+which replaces `.aScreenThatRelatedNothingStillAsksTheModel` (the tripwire this decision reverses), asserting the note
+was injected and the answer is its words with its number; `.aScreenThatRelatedNothingBesideAnOrderTheDataCannotNameNamesThatOrder`;
+and `.aScreenForAPatientWithNoActiveOrdersSaysThereAreNoneToCheck` (patient 6) — each failed before the change, the model
+asked, and passes after it. Mutated, the note composition disabled reddens the first two; the early return restored
+reddens the third.

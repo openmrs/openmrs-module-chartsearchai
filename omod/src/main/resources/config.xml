@@ -23,6 +23,8 @@
 	<!-- Hibernate Mappings -->
 	<mappingFiles>
 		ChartSearchAuditLog.hbm.xml
+		ClinicalConversation.hbm.xml
+		ClinicalConversationTurn.hbm.xml
 	</mappingFiles>
 
 	<!-- Privileges -->
@@ -172,6 +174,12 @@
 		<property>chartsearchai.auditLogRetentionDays</property>
 		<defaultValue>90</defaultValue>
 		<description>Number of days to retain AI chart search audit log entries. Entries older than this are automatically purged by a daily scheduled task. Set to 0 to disable purging and retain all logs indefinitely.</description>
+	</globalProperty>
+
+	<globalProperty>
+		<property>chartsearchai.chat.retentionDays</property>
+		<defaultValue>90</defaultValue>
+		<description>Days to retain conversation turns after completion, or after starting if unfinished. The daily purge removes older turns and old empty conversations independently of audit log retention. Set to 0 to retain conversation history indefinitely.</description>
 	</globalProperty>
 
 	<globalProperty>

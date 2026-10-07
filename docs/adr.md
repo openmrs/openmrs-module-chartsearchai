@@ -14659,7 +14659,9 @@ or answer and say what was not checked. The second was taken.
 - **It closes by naming what it did not check**: `DrugReferenceInjector.unidentifiedOrdersLine`, *"Not checked: 1
   active order the drug data does not identify — Marevan. Whether it is the drug asked about is not established."*,
   or after a screen *"… It was not screened against this patient's other medications."* Each order by its display, a
-  display several orders share once with their count, an order recorded only by its codes said so. The orders come
+  display several orders share once with their count, an order recorded only by its codes said so, separated by
+  semicolons — a display can carry a comma (the demo's "Polio vaccination, oral" made a comma-joined list unreadable on
+  its first deploy). The orders come
   from `DrugSafetyValidator.unresolvedActiveOrders`, which `everyActiveOrderResolves` now reads as "empty", so the two
   cannot disagree.
 - **Decision 143's count is of the orders the data identifies**: *"… to none of the 1 active medication the drug data

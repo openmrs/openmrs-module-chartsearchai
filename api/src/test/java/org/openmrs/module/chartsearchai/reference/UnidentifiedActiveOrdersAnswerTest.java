@@ -56,8 +56,8 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 						DrugReferenceTestSupport.set("Infant formula")),
 				new PatientClinicalContext.ActiveDrugOrder("order-formula-2", "Infant formula",
 						DrugReferenceTestSupport.set("Infant formula")),
-				new PatientClinicalContext.ActiveDrugOrder("order-hepb", "Hepatitis B vaccination",
-						DrugReferenceTestSupport.set("Hepatitis B vaccination")),
+				new PatientClinicalContext.ActiveDrugOrder("order-polio", "Polio vaccination, oral",
+						DrugReferenceTestSupport.set("Polio vaccination, oral")),
 				PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly("order-coded", "J07BC01",
 						DrugReferenceTestSupport.set("J07BC01")));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shipped()).injectRecords(
@@ -71,8 +71,9 @@ public class UnidentifiedActiveOrdersAnswerTest extends BaseModuleContextSensiti
 		String[] lines = answer.split("\n");
 		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING),
 				"ibuprofen beside her aspirin is a reason to withhold it: " + answer);
-		assertEquals("Not checked: 4 active orders the drug data does not identify — Infant formula (2 orders), "
-				+ "Hepatitis B vaccination, an order recorded only by its codes. Whether one of them is the drug asked "
+		// Semicolons between orders: a display can carry a comma of its own, as the demo's "Polio vaccination, oral".
+		assertEquals("Not checked: 4 active orders the drug data does not identify — Infant formula (2 orders); "
+				+ "Polio vaccination, oral; an order recorded only by its codes. Whether one of them is the drug asked "
 				+ "about is not established.", lines[lines.length - 1]);
 	}
 }

@@ -3693,7 +3693,8 @@ public class DrugReferenceInjector {
 	 * The closing line of a composed answer beside active orders the drug data does not identify (ADR Decision 161):
 	 * <em>"Not checked: 1 active order the drug data does not identify — Marevan. Whether it is the drug asked about is
 	 * not established."</em> — or, after a screen, that they were not screened. Each order by the name it displays, a
-	 * display shared by several orders once with their count, and an order recorded only by its codes said so. It
+	 * display shared by several orders once with their count, and an order recorded only by its codes said so — joined
+	 * by semicolons, because a display can carry a comma of its own ("Polio vaccination, oral", on the demo). It
 	 * states what the module did NOT check; the lines above it are what it did.
 	 */
 	static String unidentifiedOrdersLine(List<PatientClinicalContext.ActiveDrugOrder> orders, boolean screen) {
@@ -3711,7 +3712,7 @@ public class DrugReferenceInjector {
 		}
 		int k = orders.size();
 		String head = "Not checked: " + k + (k == 1 ? " active order" : " active orders")
-				+ " the drug data does not identify — " + String.join(", ", names) + ". ";
+				+ " the drug data does not identify — " + String.join("; ", names) + ". ";
 		if (screen) {
 			return head + (k == 1 ? "It was" : "They were") + " not screened against this patient's other medications.";
 		}

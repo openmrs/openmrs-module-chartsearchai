@@ -61,10 +61,10 @@ public class TurnPreemptionRegistryTest {
 		TurnCancellation first = registry.begin("conversation-1");
 
 		registry.end("conversation-1", first);
-		TurnCancellation second = registry.begin("conversation-1");
+		registry.begin("conversation-1");
 
 		// Nothing was left registered for "conversation-1" after end(), so this second begin()
 		// must not find (and cancel) anything.
-		assertFalse(second.isCancelled());
+		assertFalse(first.isCancelled());
 	}
 }

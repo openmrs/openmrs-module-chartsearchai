@@ -920,14 +920,17 @@ public class DrugReferenceInjector {
 		// Read only where there is something it could decide, and HERE rather than where the answer is
 		// used, so that with the property off none of the composition runs at all (issue #469).
 		String moduleAnswer = null;
+		// Her active orders the drug data does not identify — once, for every composition below (ADR Decision 161).
+		List<PatientClinicalContext.ActiveDrugOrder> unidentified = context == null
+				? Collections.<PatientClinicalContext.ActiveDrugOrder> emptyList()
+				: DrugSafetyValidator.unresolvedActiveOrders(drugReferenceService, context,
+						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries);
 		if (!findings.isEmpty()
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
 				&& answersFromFindings(question, questionDrugs, screenedSubstances, findings,
-						context.chartReadForSafety()
-								&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
-										orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries))) {
+						context.chartReadForSafety())) {
 			// The records each line's orders ARE, cited by the line whatever citeOrderRecords says: that flag
 			// gates what the MODEL reads (ADR Decision 77), and no model reads this answer (ADR Decision 140).
 			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
@@ -937,15 +940,13 @@ public class DrugReferenceInjector {
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
-				&& context.chartReadForSafety()
-				&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
-						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries)) {
+				&& context.chartReadForSafety()) {
 			boolean proposes = questionProposes(question, questionDrugs);
 			moduleAnswer = composeFromBelowFloor(proposes, questionDrugs, screenedSubstances, pairExtent.stated(),
 					mappings, context);
 			if (moduleAnswer == null) {
 				moduleAnswer = composeFromNoPair(proposes, questionDrugs, screenedSubstances, orderEntries,
-						pairExtent.stated(), mappings, matched, context, reading.states());
+						pairExtent.stated(), mappings, matched, context, reading.states(), unidentified.size());
 			}
 			if (moduleAnswer == null) {
 				moduleAnswer = composeFromNoActiveOrders(proposes, questionDrugs, mappings, matched, context,
@@ -960,13 +961,16 @@ public class DrugReferenceInjector {
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
-				&& context.chartReadForSafety()
-				&& DrugSafetyValidator.everyActiveOrderResolves(drugReferenceService, context,
-						orderEntries == null ? Collections.<DrugReference> emptyList() : orderEntries)) {
+				&& context.chartReadForSafety()) {
 			moduleAnswer = composeAfterAList(question, questionDrugs, screenedSubstances, orderEntries, findings,
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					pairExtent, mappings, matched, context, reading.states());
+					pairExtent, mappings, matched, context, reading.states(), unidentified.size());
+		}
+		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
+		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.
+		if (moduleAnswer != null && !unidentified.isEmpty()) {
+			moduleAnswer = moduleAnswer + "\n" + unidentifiedOrdersLine(unidentified, questionDrugs.isEmpty());
 		}
 		if (moduleAnswer == null && !historyQuestionDrugRows.isEmpty() && orderHistory != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -2836,8 +2840,9 @@ public class DrugReferenceInjector {
 	 * everything; this sentence claims the interaction check alone, and only where that check did run over her whole
 	 * list: an extent stated with {@code found == 0} and an empty {@code belowFloor} — the drug's rows compared against
 	 * every substance her orders resolve, at every rating, {@code belowFloorPairs} being the complement of the
-	 * above-floor grouping — on a chart read for safety with every active order resolved, which the caller's branch
-	 * requires. Never "can be given", never "safe", never a claim that the patient has no interactions. <b>Its
+	 * above-floor grouping — on a chart read for safety. Since ADR Decision 161 an order the data does not identify no
+	 * longer keeps the call: the count is then of the orders it does identify, and the answer's closing line names the
+	 * rest as not checked. Never "can be given", never "safe", never a claim that the patient has no interactions. <b>Its
 	 * residue</b>: an order resolved to only SOME of its substances (a combination the data files under one
 	 * constituent) passes {@code everyActiveOrderResolves}, so its other substances were not compared — ADR Decision
 	 * 108's residue. The count is of her active ORDERS, the prescriptions her medication list shows, so a combination
@@ -2863,7 +2868,7 @@ public class DrugReferenceInjector {
 	private static String composeFromNoPair(boolean proposes, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<DrugReference> orderEntries, PairChipExtent extent,
 			List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched, PatientClinicalContext context,
-			boolean contraindicationsChecked) {
+			boolean contraindicationsChecked, int unidentified) {
 		if (extent == null || extent.getFound() != 0 || extent.getBelowFloor() == null
 				|| !extent.getBelowFloor().isEmpty() || herSubstances.isEmpty()) {
 			return null;
@@ -2899,9 +2904,14 @@ public class DrugReferenceInjector {
 		// Her medications are her PRESCRIPTIONS, the list a clinician reads, so a combination prescription is one
 		// of them however many substances it resolves to. Each has started (above) and resolves (the caller's
 		// branch), so the check compared the drug against what each resolves to — see the javadoc's residue.
-		int n = context.getActiveDrugOrders().size();
-		return "The interaction check relates " + subject.displayLabel() + " to none of this patient's " + n
-				+ (n == 1 ? " active medication. [" : " active medications. [") + record.getIndex() + "]";
+		// Beside orders the data does not identify, the count is of those it does: the drug was compared against
+		// them and no others, and the closing line names the rest (ADR Decision 161).
+		int n = context.getActiveDrugOrders().size() - unidentified;
+		String medications = n == 1 ? " active medication" : " active medications";
+		return "The interaction check relates " + subject.displayLabel()
+				+ (unidentified == 0 ? " to none of this patient's " + n + medications
+						: " to none of the " + n + medications + " the drug data identifies for this patient")
+				+ ". [" + record.getIndex() + "]";
 	}
 
 	/**
@@ -2971,7 +2981,7 @@ public class DrugReferenceInjector {
 			Set<Object> herSubstances, List<DrugReference> orderEntries, List<SafetyWarning> findings,
 			List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords,
 			PairChipExtent.Sink pairExtent, List<RecordMapping> mappings, Map<DrugReference, SubstanceRendering> matched,
-			PatientClinicalContext context, boolean contraindicationsChecked) {
+			PatientClinicalContext context, boolean contraindicationsChecked, int unidentified) {
 		List<DrugReference> listed = listedBeforeTheProposal(question, questionDrugs);
 		PairChipExtent questionPairs = pairExtent.stated();
 		if (listed.isEmpty() || questionPairs == null || questionPairs.getFound() != questionPairs.getReported()) {
@@ -3012,7 +3022,7 @@ public class DrugReferenceInjector {
 		String alone = composeFromBelowFloor(true, proposed, herSubstances, own, mappings, context);
 		if (alone == null) {
 			alone = composeFromNoPair(true, proposed, herSubstances, orderEntries, own, mappings, matched, context,
-					contraindicationsChecked);
+					contraindicationsChecked, unidentified);
 		}
 		if (alone == null) {
 			return null;
@@ -3341,13 +3351,13 @@ public class DrugReferenceInjector {
 	 *     pair either.</li>
 	 * </ul>
 	 *
-	 * <p>All need {@code chartRead}: the chart-read verdict this pass stamped, AND every active order
-	 * resolved to an entry ({@code DrugSafetyValidator.everyActiveOrderResolves}). An order unread, or
-	 * read and written under a name the data does not carry (a warfarin brand it lacks), leaves "not
-	 * already taking" unanswerable — the module cannot tell her "Marevan" is the warfarin proposed — and
-	 * leaves a screen with only part of her list to relate. An order resolved to only SOME of its
-	 * substances — a combination the data files under one constituent — passes, with the rest unseen;
-	 * ADR Decision 108 names that residue.
+	 * <p>All need {@code chartRead}: the chart-read verdict this pass stamped. An order read and written under a name
+	 * the data does not carry (a warfarin brand it lacks, a vaccine, infant formula) leaves "not already taking"
+	 * unanswerable — the module cannot tell her "Marevan" is the warfarin proposed — and a screen with only part of
+	 * her list to relate. Until ADR Decision 161 that kept the model call, and the model, left with the same chart,
+	 * answered worse; now the answer closes by naming each such order as not checked
+	 * ({@link #unidentifiedOrdersLine}). An order resolved to only SOME of its substances — a combination the data
+	 * files under one constituent — passes, with the rest unseen; ADR Decision 108 names that residue.
 	 */
 	private static boolean answersFromFindings(String question, List<DrugReference> questionDrugs,
 			Set<Object> herSubstances, List<SafetyWarning> findings, boolean chartRead) {
@@ -3677,6 +3687,35 @@ public class DrugReferenceInjector {
 			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), first.getDrug()));
 		}
 		return String.join("\n", lines);
+	}
+
+	/**
+	 * The closing line of a composed answer beside active orders the drug data does not identify (ADR Decision 161):
+	 * <em>"Not checked: 1 active order the drug data does not identify — Marevan. Whether it is the drug asked about is
+	 * not established."</em> — or, after a screen, that they were not screened. Each order by the name it displays, a
+	 * display shared by several orders once with their count, and an order recorded only by its codes said so. It
+	 * states what the module did NOT check; the lines above it are what it did.
+	 */
+	static String unidentifiedOrdersLine(List<PatientClinicalContext.ActiveDrugOrder> orders, boolean screen) {
+		Map<String, Integer> byName = new LinkedHashMap<String, Integer>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			String display = order.getDisplay();
+			String name = order.hasKnownName() && display != null && !display.trim().isEmpty() ? display.trim()
+					: "an order recorded only by its codes";
+			Integer seen = byName.get(name);
+			byName.put(name, seen == null ? 1 : seen + 1);
+		}
+		List<String> names = new ArrayList<String>(byName.size());
+		for (Map.Entry<String, Integer> entry : byName.entrySet()) {
+			names.add(entry.getValue() > 1 ? entry.getKey() + " (" + entry.getValue() + " orders)" : entry.getKey());
+		}
+		int k = orders.size();
+		String head = "Not checked: " + k + (k == 1 ? " active order" : " active orders")
+				+ " the drug data does not identify — " + String.join(", ", names) + ". ";
+		if (screen) {
+			return head + (k == 1 ? "It was" : "They were") + " not screened against this patient's other medications.";
+		}
+		return head + "Whether " + (k == 1 ? "it" : "one of them") + " is the drug asked about is not established.";
 	}
 
 	/**

@@ -967,12 +967,23 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her mebendazole?", shipped());
 	}
 
-	/** Beside an order the data cannot name, "none of her medications" is not established, so the model answers
-	 *  (issue #592) — the read conjunct Decision 142's composition stands on too. */
+	/** Beside an order the data cannot name, "none of her medications" is not established, so the sentence counts
+	 *  only the medications the data identifies, and the answer names the one it could not (ADR Decision 161) —
+	 *  until which the model answered. */
 	@Test
-	public void aProposalOfNoPairBesideAnOrderTheDataCannotNameStillAsksTheModel() throws Exception {
+	public void aProposalOfNoPairBesideAnOrderTheDataCannotNameCountsOnlyWhatTheDataIdentifies() throws Exception {
 		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
-		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Can I give her mebendazole?", shipped());
+		String question = "Can I give her mebendazole?";
+		assertTheCheckRelatedNothing(patient, question, shipped());
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertEquals("The interaction check relates Mebendazole to none of the 1 active medication the drug data "
+				+ "identifies for this patient. [" + referenceRecordOf(answer, "mebendazole") + "]\n"
+				+ "Not checked: 1 active order the drug data does not identify — Marevan. Whether it is the drug "
+				+ "asked about is not established.", answer.getAnswer());
 	}
 
 	/** The arm reads the PROPOSED drug's rows; a curated file need not mirror a pair, so a row only her aspirin's
@@ -2118,14 +2129,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * Issue #402's shape where the module cannot SEE it: her warfarin is written as a brand the data does
-	 * not carry, so "not already taking it" cannot be asked of it. An order the module read and could
-	 * not resolve keeps the call.
+	 * Issue #402's shape where the module cannot SEE it: her warfarin is written as a brand the data does not carry
+	 * ("Marevan"), so "not already taking it" cannot be asked of it. Until ADR Decision 161 that kept the model call,
+	 * and with it every proposal for a patient holding ANY order the data cannot identify — on the demo a vaccine or
+	 * infant formula, where the model then answered warfarin beside co-trimoxazole "should not be given with
+	 * Sulfamethoxazole … can be given with Trimethoprim". The module now answers from what it found and closes with
+	 * what it could not check: the order, by name, and that whether it is the drug asked about is not established.
 	 */
 	@Test
-	public void aProposalBesideAnOrderTheDataCannotNameStillAsksTheModel() throws Exception {
+	public void aProposalBesideAnOrderTheDataCannotNameIsAnsweredNamingThatOrder() throws Exception {
 		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
-		assertTheModelIsAsked("Can I give her warfarin?");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, "Can I give her warfarin?");
+
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		assertTrue(answer.isAnsweredByTheModule());
+		String[] lines = answer.getAnswer().split("\\n");
+		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		assertEquals("Not checked: 1 active order the drug data does not identify — Marevan. Whether it is the drug "
+				+ "asked about is not established.", lines[lines.length - 1]);
 	}
 
 	/** Issue #402's shape: a question naming a drug she already takes. The drug-in-play arm states a
@@ -2143,6 +2166,26 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(1, provider.calls, "warfarin is one of her own orders");
 		assertFalse(answer.isAnsweredByTheModule());
+	}
+
+	/** A screen beside an order the data cannot identify is answered from the pairs it related and says that order
+	 *  was not screened (ADR Decision 161) — until which the model answered. */
+	@Test
+	public void aScreenBesideAnOrderTheDataCannotNameIsAnsweredNamingThatOrder() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		executeDataSet("AnswerFromFindingsUnnamedWarfarinOrderTestData.xml");
+		List<Finding> findings = findingsInThePromptFor(SCREEN);
+		assertFalse(findings.isEmpty(), "precondition: her warfarin and aspirin orders interact Major");
+
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider).search(patient, SCREEN);
+
+		assertEquals(0, provider.calls, "the module answers: " + answer.getAnswer());
+		String[] lines = answer.getAnswer().split("\\n");
+		assertTrue(lines[0].startsWith(answerFacingBody(findings.get(0))),
+				"it opens with the pair it related, as a screen does: " + answer.getAnswer());
+		assertEquals("Not checked: 1 active order the drug data does not identify — Marevan. It was not screened "
+				+ "against this patient's other medications.", lines[lines.length - 1]);
 	}
 
 	@Test

@@ -10480,6 +10480,23 @@ public class DrugSafetyValidator {
 	 *  so the pass does not resolve it twice. */
 	private static boolean everyActiveOrderResolves(PatientClinicalContext context,
 			List<DrugReference> orderEntries, BridgedOrders bridged) {
+		return unresolvedActiveOrders(context, orderEntries, bridged).isEmpty();
+	}
+
+	/**
+	 * The patient's active orders that resolve to none of {@code orderEntries}, in order — what
+	 * {@link #everyActiveOrderResolves} asks to be empty, as the orders themselves, so a composed answer can NAME
+	 * what the drug data does not identify rather than give the question up (ADR Decision 161). One walk for both, so
+	 * the predicate and the list cannot disagree about which order resolved.
+	 */
+	static List<PatientClinicalContext.ActiveDrugOrder> unresolvedActiveOrders(DrugReferenceService service,
+			PatientClinicalContext context, List<DrugReference> orderEntries) {
+		return unresolvedActiveOrders(context, orderEntries, BridgedOrders.of(service, context));
+	}
+
+	private static List<PatientClinicalContext.ActiveDrugOrder> unresolvedActiveOrders(PatientClinicalContext context,
+			List<DrugReference> orderEntries, BridgedOrders bridged) {
+		List<PatientClinicalContext.ActiveDrugOrder> unresolved = new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			boolean resolved = false;
 			for (DrugReference entry : orderEntries) {
@@ -10489,10 +10506,10 @@ public class DrugSafetyValidator {
 				}
 			}
 			if (!resolved) {
-				return false;
+				unresolved.add(order);
 			}
 		}
-		return true;
+		return unresolved;
 	}
 
 	/**

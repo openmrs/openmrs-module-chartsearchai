@@ -14630,3 +14630,48 @@ asserts its premise (the prompt carries a caution about clarithromycin and the d
 the model was asked — and passes after it, the answer exactly three lines. Mutated back to asking every finding, it
 reddens on the model call; with the lead counting every line, it reddens on "2 interaction cautions".
 `.aWithholdingProposalIsAnsweredBesideHerOwnOrdersSharingASubstance` pins the "No" that already held.
+
+## Decision 161: Orders the drug data does not identify are named rather than giving the question up
+
+**Status: Accepted** (October 2026) — implemented, no issue. Narrows
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)'s
+gate and [Decision 143](#decision-143-a-proposal-related-to-none-of-her-orders-is-answered-with-what-the-interaction-check-established)'s
+conjunct; taken by the maintainer, 2026-10-07.
+
+### Context
+
+Decision 108 answered from the module only where every active order resolved to the reference data: an order read
+and written under a name the data does not carry — a warfarin brand it lacks (issue #402) — leaves "is she already
+taking it?" unanswerable, so the model was asked. A sweep of the demo (2026-10-07, 35 cells, five patients) showed
+what that cost. Tuwei, on co-trimoxazole beside vaccine and infant-formula orders, had all seven questions answered
+by the model, and *"Is warfarin safe for him?"* got *"No warfarin should not be given with Sulfamethoxazole …
+Warfarin can be given with Trimethoprim …"* — two halves of one combination prescription, one of them cleared —
+beside the module's own chips, a Major and a Moderate. *"Can I give him ibuprofen?"* got *"The records do not
+address the safety of giving ibuprofen."* No rule can tell an infant-formula order from an unrecognised warfarin
+brand without clinical knowledge the module does not carry, so the choice was put to the maintainer: keep the model,
+or answer and say what was not checked. The second was taken.
+
+### The decision
+
+- **The module answers from what it found** on the proposal, screen and after-a-list paths, the requirement that
+  every order resolve dropped there. History questions keep it ([Decision 154](#decision-154-a-question-whether-she-has-ever-taken-a-drug-no-order-of-hers-carried-is-answered-by-the-module)):
+  their answer IS a statement about every order.
+- **It closes by naming what it did not check**: `DrugReferenceInjector.unidentifiedOrdersLine`, *"Not checked: 1
+  active order the drug data does not identify — Marevan. Whether it is the drug asked about is not established."*,
+  or after a screen *"… It was not screened against this patient's other medications."* Each order by its display, a
+  display several orders share once with their count, an order recorded only by its codes said so. The orders come
+  from `DrugSafetyValidator.unresolvedActiveOrders`, which `everyActiveOrderResolves` now reads as "empty", so the two
+  cannot disagree.
+- **Decision 143's count is of the orders the data identifies**: *"… to none of the 1 active medication the drug data
+  identifies for this patient."* The drug was compared against those and no others.
+
+### The gate
+
+`LlmInferenceServiceAnswerFromFindingsContextTest`, patient 7 with her aspirin and a "Marevan" order: the
+withholding proposal (`.aProposalBesideAnOrderTheDataCannotNameIsAnsweredNamingThatOrder`), the no-pair proposal
+(`.aProposalOfNoPairBesideAnOrderTheDataCannotNameCountsOnlyWhatTheDataIdentifies`) — the two specs this decision
+reverses, each of which pinned the model call — and a screen (`.aScreenBesideAnOrderTheDataCannotNameIsAnsweredNamingThatOrder`)
+failed before the change and pass after it; `.aHistoryQuestionBesideAnOrderTheDataCannotNameStillAsksTheModel`
+passes unchanged. `UnidentifiedActiveOrdersAnswerTest` drives the real injector over several unidentified orders, a
+shared display and a code-only order. Mutated — the gate restored on the findings path, the line dropped, the count
+of every order, the shared display not merged — each reddens its cases.

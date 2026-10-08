@@ -220,11 +220,11 @@ public class CurrentMedicationOrdersTest {
 			"She is allergic to ibuprofen.", alerts, Collections.<String, Integer> emptyMap());
 
 		assertTrue(stated.getAnswer().startsWith(
-			"She is allergic to ibuprofen. Currently prescribed: Advil 400mg, Nurofen 200mg. "),
+			"She is allergic to ibuprofen.\n\nCurrent orders that conflict with the patient's records:\n"
+					+ "- Advil 400mg; Nurofen 200mg: "),
 				"was: " + stated.getAnswer());
 		assertFalse(stated.getAnswer().contains("ATC"), "was: " + stated.getAnswer());
-		assertEquals(stated.getAnswer().indexOf(ConflictingOrderStatement.CURRENTLY_PRESCRIBED),
-				stated.getAnswer().lastIndexOf(ConflictingOrderStatement.CURRENTLY_PRESCRIBED),
+		assertEquals(stated.getAnswer().indexOf("\n- "), stated.getAnswer().lastIndexOf("\n- "),
 				"one statement of her orders, however many chips of the substance there are: " + stated.getAnswer());
 	}
 

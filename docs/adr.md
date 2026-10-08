@@ -12173,7 +12173,8 @@ as hers with the gate's two changes came after arm F and ran in none of the arms
 `SafetyWarning.isStatedInTheAnswer()` accessor and its `statedInTheAnswer` wire key. Its wording is amended by
 [Decision 167](#decision-167-an-order-conflicting-only-with-its-own-recorded-allergy-is-named-in-one-short-line), and
 its orders cite their records since
-[Decision 168](#decision-168-the-allergy-answers-conflicting-orders-cite-the-records-they-are).
+[Decision 168](#decision-168-the-allergy-answers-conflicting-orders-cite-the-records-they-are), and it is laid out as a headed list since
+[Decision 173](#decision-173-the-allergy-answers-conflicting-orders-are-a-headed-list-one-item-per-order).
 
 ### Context
 
@@ -14837,7 +14838,8 @@ the early answer is left without the sentence.
 ## Decision 167: An order conflicting only with its own recorded allergy is named in one short line
 
 **Status: Accepted** (October 2026) — implemented, no issue. Amends the wording of
-[Decision 124](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer).
+[Decision 124](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer). Its one line is an
+item per order since [Decision 173](#decision-173-the-allergy-answers-conflicting-orders-are-a-headed-list-one-item-per-order).
 
 ### Context
 
@@ -15095,3 +15097,52 @@ The seed functions move, unchanged, from `backend-init.sh` to `scripts/demo-seed
 functions over seven database states. Before the change its four new cases failed: the failed lookup, the failed
 backup and the failed snapshot each seeded, and the killed import restored the dump's engine and lost the backup. Its
 three controls passed: a seeded database, an existing database and an empty database.
+
+## Decision 173: The allergy answer's conflicting orders are a headed list, one item per order
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends the layout of
+[Decision 124](#decision-124-an-allergy-question-states-her-conflicting-orders-in-the-answer) and the wording of
+[Decision 167](#decision-167-an-order-conflicting-only-with-its-own-recorded-allergy-is-named-in-one-short-line).
+
+### Context
+
+*"any allergies"*, asked on the 3.7.1 standalone on 2026-10-08 of Betty Williams (`a7090f70…`, allergic to Lidocaine,
+Ketoconazole and Aspirin, prescribed Lidocaine and Bupivacaine), was answered:
+
+> Yes — the patient has the following allergies: Lidocaine [1], Ketoconazole [2], and Aspirin [11]. Currently
+> prescribed despite a recorded allergy: Lidocaine [4]. Currently prescribed: Bupivacaine [3]. Bupivacaine is in the
+> same ATC class (N01BB) as the patient's allergy to Lidocaine — possible cross-reactivity.
+
+Every fact checked against her chart. But *"Currently prescribed: Bupivacaine [3]."* stands as a sentence of its own,
+reading as a medication list until the next sentence says why; the two conflicts open with two different leads; and
+the model's list and the module's statement run together in one paragraph. The owner's ruling: set the statement apart
+under one heading, one item per order.
+
+### The decision
+
+- **A blank line, then one heading, then one item per set of her orders**:
+
+  ```
+  Current orders that conflict with the patient's records:
+  - Lidocaine [4]: recorded allergy to this drug.
+  - Bupivacaine [3]: Bupivacaine is in the same ATC class (N01BB) as the patient's allergy to Lidocaine — possible cross-reactivity.
+  ```
+
+  The answer panel renders the answer `white-space: pre-wrap`, so the lines reach the clinician as lines.
+- **"records", not "allergies"**: Decision 124's statement also carries a rule finding, which may be no allergy at all.
+  **"Current", not "active"**: an order that has not started is stated with its start date (issue #553).
+- **Decision 167's item says only `recorded allergy to this drug.`**, one item per order, so an order two such
+  findings name is named once, as that line named it once; such items still lead, as that line did. Every other item quotes each finding's `detail` verbatim,
+  Decision 124's rule unchanged. Two orders in one item are still joined by semicolons.
+- Decision 124's gate, all-or-nothing rule and `statedInTheAnswer` marking, and Decision 168's citations, are unchanged.
+  The statement is still the last thing appended, on both the blocking and the streaming path, so nothing lands on
+  its last item.
+
+### Residues
+
+- A client that collapses whitespace in the answer reads the items run together, each still opening with `- `.
+- The heading is the first list a module statement writes into an answer; the other statements remain prose.
+
+Pinned by `AllergyQuestionConflictingOrderContextTest` (both item forms, the mixed item, two orders as two items, the
+streaming answer), `LlmInferenceServiceScheduledOrderContextTest.anAllergyQuestionStatesHerScheduledOrderWithTheDateItStarts`
+and `CurrentMedicationOrdersTest.theAnswerStillNamesEachPrintableDisplayOnce`.

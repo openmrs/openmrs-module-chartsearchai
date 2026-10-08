@@ -32,14 +32,17 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  * clinician only as a drug-safety alert beside an answer to a question that asked for none.
  *
  * <p><b>What it does.</b> Each contraindication chip about a medication she already takes whose orders
- * the arm could name ({@link SafetyWarning#currentOrderDisplays()}) is stated after the answer, her
- * orders as her chart spells them. An order whose every finding is an allergy recorded to its very drug
- * ({@link SafetyWarning#isARecordedAllergyToItsOwnDrug()}) is named in ONE short line, <em>"Currently
- * prescribed despite a recorded allergy: Tiotropium; Lidocaine."</em> — the chips' own sentences repeat
- * the allergy list the answer just gave, and the conflict is the one fact the list lacks (ADR Decision
- * 167). Any other order is named and followed by each chip's own {@link SafetyWarning#getDetail()}
- * verbatim, as Decision 124 states it: a cross-reactivity or rule finding is an allergy to ANOTHER drug or
- * no allergy at all, so only its own words claim exactly what it does. Every such chip is then
+ * the arm could name ({@link SafetyWarning#currentOrderDisplays()}) is stated after the answer, set apart
+ * from it by a blank line under {@link #HEADING}, one item per set of her orders as her chart spells them
+ * (ADR Decision 173), and one per order where the item says only {@link #OWN_ALLERGY}. An order whose every finding is an allergy recorded to its very drug
+ * ({@link SafetyWarning#isARecordedAllergyToItsOwnDrug()}) is followed by {@link #OWN_ALLERGY} alone,
+ * <em>"- Lidocaine [4]: recorded allergy to this drug."</em> — the chips' own sentences repeat the allergy
+ * list the answer just gave, and the conflict is the one fact the list lacks (ADR Decision 167). Any other
+ * order is followed by each chip's own {@link SafetyWarning#getDetail()} verbatim, as Decision 124 states
+ * it: a cross-reactivity or rule finding is an allergy to ANOTHER drug or no allergy at all, so only its
+ * own words claim exactly what it does — which is also why the heading says "records" and not
+ * "allergies", and "current" and not "active", since an order that has not started is named with its
+ * start date. Every such chip is then
  * {@link SafetyWarning#asStatedInTheAnswer() marked}, and still published: the wire keeps every finding,
  * and a client reads {@code statedInTheAnswer} to know the clinician has read it.
  * APPENDS, as {@code EndedOrderStatement} does: no prompt change, and never a word about whether any drug may
@@ -57,11 +60,14 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
  */
 public final class ConflictingOrderStatement {
 
-	/** The words that introduce her order, before its display. */
-	static final String CURRENTLY_PRESCRIBED = "Currently prescribed: ";
+	/** The line that opens the statement, after a blank line, above one item per set of her orders. */
+	static final String HEADING = "Current orders that conflict with the patient's records:";
 
-	/** The words that introduce her orders whose every finding is an allergy recorded to its own drug. */
-	static final String PRESCRIBED_DESPITE_AN_ALLERGY = "Currently prescribed despite a recorded allergy: ";
+	/** What opens each item, on its own line. */
+	static final String ITEM = "\n- ";
+
+	/** What follows an order whose every finding is an allergy recorded to its own drug, in place of them. */
+	static final String OWN_ALLERGY = ": recorded allergy to this drug.";
 
 	private ConflictingOrderStatement() {
 	}
@@ -125,26 +131,30 @@ public final class ConflictingOrderStatement {
 			chips.add(chip);
 		}
 		Map<Integer, List<Integer>> cited = new LinkedHashMap<Integer, List<Integer>>();
-		// Semicolons between orders, since a display can carry a comma.
-		Set<String> despiteAnAllergy = new LinkedHashSet<String>();
+		// Own-allergy items first, then the rest, each in chip order: Decision 167's line led the statement. An
+		// own-allergy item is one order, so an order two such findings name is named once.
+		Set<String> ownAllergy = new LinkedHashSet<String>();
 		StringBuilder quoted = new StringBuilder();
 		for (Map.Entry<List<String>, List<SafetyWarning>> group : chipsByOrders.entrySet()) {
-			List<String> items = new ArrayList<String>(group.getKey().size());
+			List<String> orders = new ArrayList<String>(group.getKey().size());
 			for (String printed : group.getKey()) {
-				items.add(cite(printed, group.getValue(), orderRecordNumbers, cited));
+				orders.add(cite(printed, group.getValue(), orderRecordNumbers, cited));
 			}
 			if (everyOneIsAnAllergyToItsOwnDrug(group.getValue())) {
-				despiteAnAllergy.addAll(items);
+				for (String order : orders) {
+					ownAllergy.add(ITEM + order + OWN_ALLERGY);
+				}
 				continue;
 			}
-			quoted.append(' ').append(CURRENTLY_PRESCRIBED).append(String.join(", ", items)).append('.');
+			// Semicolons between orders, since a display can carry a comma.
+			quoted.append(ITEM).append(String.join("; ", orders)).append(':');
 			for (SafetyWarning chip : group.getValue()) {
 				quoted.append(' ').append(DrugSafetyValidator.endSentence(chip.getDetail().trim()));
 			}
 		}
-		StringBuilder sb = new StringBuilder(DrugSafetyValidator.endSentence(answer.trim()));
-		if (!despiteAnAllergy.isEmpty()) {
-			sb.append(' ').append(PRESCRIBED_DESPITE_AN_ALLERGY).append(String.join("; ", despiteAnAllergy)).append('.');
+		StringBuilder sb = new StringBuilder(DrugSafetyValidator.endSentence(answer.trim())).append("\n\n").append(HEADING);
+		for (String item : ownAllergy) {
+			sb.append(item);
 		}
 		sb.append(quoted);
 		List<SafetyWarning> stated = new ArrayList<SafetyWarning>(warnings.size());

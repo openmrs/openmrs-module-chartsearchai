@@ -130,7 +130,7 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 	@Test
 	public void anAllergyQuestionStatesHerScheduledOrderWithTheDateItStarts() throws IOException {
 		// ADR Decision 124 states, in an allergy answer, the orders of hers a recorded allergy conflicts
-		// with — since Decision 167 as "Currently prescribed despite a recorded allergy: <display>; …". Her
+		// with — since Decision 173 as an item "- <display>: recorded allergy to this drug." per order. Her
 		// Rifampicin is prescribed and has not started, so the statement says when it starts rather than
 		// reading as a drug she is taking.
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
@@ -141,9 +141,10 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		// The placeholder concept the free-text allergen needs (88) is her aspirin's, so the answer states her
 		// aspirin order as well; this case is about the Rifampicin statement.
 		// Each order cites the record it is (ADR Decision 168) — the one reference carrying its uuid.
-		assertEquals(modelAnswer + " Currently prescribed despite a recorded allergy: ASPIRIN ["
-				+ orderRecordOf(answer, "ASPIRIN") + "]; Rifampicin (" + STARTS + ") [" + orderRecordOf(answer, "Rifampicin")
-				+ "].", answer.getAnswer(), "the order is stated with its start date");
+		assertEquals(modelAnswer + "\n\nCurrent orders that conflict with the patient's records:\n- ASPIRIN ["
+				+ orderRecordOf(answer, "ASPIRIN") + "]: recorded allergy to this drug.\n- Rifampicin (" + STARTS + ") ["
+				+ orderRecordOf(answer, "Rifampicin") + "]: recorded allergy to this drug.", answer.getAnswer(),
+				"the order is stated with its start date");
 	}
 
 	/** The index of the one reference to the record of the order a chip names by {@code display}. */

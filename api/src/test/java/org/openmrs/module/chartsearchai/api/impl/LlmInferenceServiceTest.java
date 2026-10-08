@@ -470,11 +470,15 @@ public class LlmInferenceServiceTest {
 	}
 
 	@Test
-	public void stripQueryStopwords_shouldNormalizeCurrentAndLatestToSameResult() {
-		assertEquals(
-				LlmInferenceService.stripQueryStopwords("What is the current CD4 Count?"),
-				LlmInferenceService.stripQueryStopwords("What is the latest CD4 Count?"));
-	}
+public void stripQueryStopwords_shouldPreserveCurrentAndLatestAsDistinctTerms() {
+        assertEquals(
+                "current cd4 count",
+                LlmInferenceService.stripQueryStopwords("What is the current CD4 Count?"));
+
+        assertEquals(
+                "latest cd4 count",
+                LlmInferenceService.stripQueryStopwords("What is the latest CD4 Count?"));
+}
 
 	@Test
 	public void patientChart_demographicsOnlyHasNoRecords() {

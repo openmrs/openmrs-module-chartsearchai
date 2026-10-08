@@ -292,7 +292,9 @@ fetch_llm_in_background \
 #     is the one place the restore is overridden on purpose.
 # The repairs mirror what loading this dump requires (orphan rows, stale module
 # changelog rows, liquibase checksums); see commit history for the rationale.
+# shellcheck disable=SC2034 # DEMO_DUMP_URL and DEMO_SEED_TAG are read by maybe_seed_demo_data (demo-seed.sh)
 DEMO_DUMP_URL="${CHARTSEARCHAI_DEMO_DUMP_URL:-https://github.com/openmrs/openmrs-module-chartsearchai/releases/download/demo-data-5284-2026-05-19/openmrs-2.8-refapp-demo-5284-patients-2026-05-19.sql.gz}"
+# shellcheck disable=SC2034
 DEMO_SEED_TAG="5284-2026-05-19"
 
 # Resolve DB connection from the runtime properties OpenMRS actually uses. The
@@ -311,124 +313,9 @@ DB_PASS="${OMRS_DB_PASSWORD:-${OMRS_CONFIG_CONNECTION_PASSWORD:-$(rtp_get connec
 DB_HOST="${OMRS_DB_HOSTNAME:-${OMRS_CONFIG_CONNECTION_SERVER:-$(printf %s "$_url" | sed -n 's#^jdbc:[^:]*://\([^:/]*\).*#\1#p')}}"; DB_HOST="${DB_HOST:-db}"
 DB_NAME="${OMRS_DB_NAME:-${OMRS_CONFIG_CONNECTION_DATABASE:-$(printf %s "$_url" | sed -n 's#^jdbc:[^:]*://[^/]*/\([^?]*\).*#\1#p')}}"; DB_NAME="${DB_NAME:-openmrs}"
 
-# --skip-ssl: the bundled MariaDB 11.x client requires TLS by default, but the
-# db container doesn't serve it (OpenMRS's own JDBC driver connects without TLS).
-seed_sql()  { MYSQL_PWD="$DB_PASS" mariadb      --skip-ssl -h "$DB_HOST" -u "$DB_USER" "$@"; }
-seed_dump() { MYSQL_PWD="$DB_PASS" mariadb-dump --skip-ssl -h "$DB_HOST" -u "$DB_USER" "$@"; }
-# Records a one-line progress/diagnostic breadcrumb readable over REST at
-# GET /ws/rest/v1/systemsetting?q=chartsearchai.demo.seedStatus
-seed_status() {
-  seed_sql "$DB_NAME" -e "INSERT INTO global_property (property,property_value,uuid) VALUES ('chartsearchai.demo.seedStatus','$1',UUID()) ON DUPLICATE KEY UPDATE property_value='$1';" >/dev/null 2>&1 || true
-}
-
-drop_all_tables() {
-  _drops=$(seed_sql -N "$DB_NAME" -e \
-    "SELECT CONCAT('DROP TABLE IF EXISTS \`', table_name, '\`;') FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null)
-  printf 'SET FOREIGN_KEY_CHECKS=0;\n%s\nSET FOREIGN_KEY_CHECKS=1;\n' "$_drops" | seed_sql "$DB_NAME"
-}
-
-maybe_seed_demo_data() {
-  command -v mariadb >/dev/null 2>&1 || { echo "[demo-seed] mariadb client absent; skipping."; return 0; }
-  echo "[demo-seed] db host=$DB_HOST name=$DB_NAME user=$DB_USER (creds from ${RTP:-env/defaults})"
-
-  _i=0
-  while [ "$_i" -lt 30 ]; do
-    seed_sql -N -e "SELECT 1" >/dev/null 2>&1 && break
-    _i=$((_i + 1)); sleep 2
-  done
-  if ! seed_sql -N -e "SELECT 1" >/dev/null 2>&1; then
-    echo "[demo-seed] DB $DB_HOST unreachable / auth failed; starting normally without seeding."; return 0
-  fi
-  seed_status "connected; starting seed of $DEMO_SEED_TAG"
-
-  _seeded=$(seed_sql -N "$DB_NAME" -e \
-    "SELECT property_value FROM global_property WHERE property='chartsearchai.demo.seededDataset'" 2>/dev/null || true)
-  if [ "$_seeded" = "$DEMO_SEED_TAG" ]; then
-    echo "[demo-seed] dataset $DEMO_SEED_TAG already loaded; skipping."; return 0
-  fi
-
-  echo "[demo-seed] seeding demo dataset $DEMO_SEED_TAG ..."
-  _dump=/tmp/demo-seed.sql.gz
-  seed_status "downloading dump"
-  if ! curl -fsSL --retry 3 -o "$_dump" "$DEMO_DUMP_URL"; then
-    seed_status "FAILED: dump download"; echo "[demo-seed] dump download failed; starting with existing data."; return 0
-  fi
-
-  _bk=/openmrs/data/pre-demo-seed-backup.sql.gz
-  echo "[demo-seed] backing up current '$DB_NAME' to $_bk ..."
-  seed_status "backing up current DB"
-  if ! seed_dump --single-transaction --routines --triggers "$DB_NAME" 2>/dev/null | gzip > "$_bk"; then
-    seed_status "FAILED: backup"; echo "[demo-seed] backup failed; aborting seed, starting with existing data."; rm -f "$_bk"; return 0
-  fi
-
-  _gp=/tmp/gp-snapshot.sql
-  seed_dump --replace --no-create-info --skip-extended-insert "$DB_NAME" global_property \
-    --where="property LIKE 'chartsearchai%' OR property LIKE 'querystore%'" > "$_gp" 2>/dev/null || : > "$_gp"
-
-  echo "[demo-seed] clearing existing tables ..."
-  seed_status "clearing tables"
-  if ! drop_all_tables; then
-    seed_status "FAILED: clear tables (restoring backup)"; echo "[demo-seed] failed to clear tables; restoring backup."; gunzip -c "$_bk" | seed_sql "$DB_NAME" || true; return 0
-  fi
-
-  echo "[demo-seed] importing dump ..."
-  seed_status "importing dump"
-  # strip CREATE DATABASE / USE so the import needs no CREATE-database privilege;
-  # everything targets the existing $DB_NAME via the client's default database.
-  if ! gunzip -c "$_dump" | sed -E '/^CREATE DATABASE/d; /^USE /d' | seed_sql "$DB_NAME"; then
-    seed_status "FAILED: import (restoring backup)"; echo "[demo-seed] import failed; restoring backup."
-    drop_all_tables || true
-    gunzip -c "$_bk" | seed_sql "$DB_NAME" || echo "[demo-seed] WARNING: restore failed; DB may be inconsistent."
-    return 0
-  fi
-
-  echo "[demo-seed] repairing orphans + liquibase, restoring config ..."
-  seed_status "repairing + restoring config"
-  seed_sql -f "$DB_NAME" <<SQL
-SET FOREIGN_KEY_CHECKS=0;
-DELETE pa FROM person_attribute    pa LEFT JOIN person  p  ON p.person_id  = pa.person_id  WHERE p.person_id   IS NULL;
-DELETE v  FROM visit               v  LEFT JOIN patient pt ON pt.patient_id = v.patient_id  WHERE pt.patient_id IS NULL;
-DELETE d  FROM encounter_diagnosis d  LEFT JOIN patient pt ON pt.patient_id = d.patient_id  WHERE pt.patient_id IS NULL;
-DELETE c  FROM conditions          c  LEFT JOIN patient pt ON pt.patient_id = c.patient_id  WHERE pt.patient_id IS NULL;
-DELETE o  FROM orders              o  LEFT JOIN patient pt ON pt.patient_id = o.patient_id  WHERE pt.patient_id IS NULL;
-DELETE e  FROM encounter           e  LEFT JOIN patient pt ON pt.patient_id = e.patient_id  WHERE pt.patient_id IS NULL;
-DELETE ob FROM obs                 ob LEFT JOIN person  p  ON p.person_id  = ob.person_id   WHERE p.person_id   IS NULL;
-DELETE a  FROM allergy             a  LEFT JOIN patient pt ON pt.patient_id = a.patient_id  WHERE pt.patient_id IS NULL;
-DELETE FROM liquibasechangelog WHERE id LIKE 'chartsearchai%' OR id LIKE 'querystore%';
-UPDATE liquibasechangelog SET md5sum = NULL;
-SET FOREIGN_KEY_CHECKS=1;
-SQL
-
-  { echo 'SET FOREIGN_KEY_CHECKS=0;'; cat "$_gp"; } | seed_sql -f "$DB_NAME" || true
-
-  seed_sql "$DB_NAME" -e \
-    "INSERT INTO global_property (property, property_value, uuid) VALUES ('chartsearchai.demo.seededDataset','$DEMO_SEED_TAG', UUID()) ON DUPLICATE KEY UPDATE property_value='$DEMO_SEED_TAG';" || true
-
-  # A fresh dump bypasses querystore's write-path sync, so its read index starts empty and the FIRST
-  # chart query on each patient would pay a ~40s lazy projection (getPatientChart -> ensureIndexedSafely
-  # embeds all of that patient's records on the request thread). querystore already has the cure: a
-  # progressive, checkpoint-resumable bootstrap (BootstrapProgress cursor, persisted per page) that runs
-  # on module startup when querystore.bootstrap.autostart=true. Enable it so the next startup pre-indexes
-  # every patient in the background (resuming if interrupted) instead of paying the cost lazily per first
-  # query. No app/auth/post-start hook needed — the module's own autostart does it.
-  seed_sql "$DB_NAME" -e \
-    "INSERT INTO global_property (property, property_value, uuid) VALUES ('querystore.bootstrap.autostart','true', UUID()) ON DUPLICATE KEY UPDATE property_value='true';" || true
-
-  # The dump carries chartsearchai.querystore.enabled=false baked in, so the
-  # blank-only wiring below cannot reach it and a re-seeded demo would come back
-  # with retrieval switched off. Asserted here rather than there because this is
-  # where the demo's intended configuration is being established from scratch —
-  # it runs after the operator-GP snapshot is restored, alongside the autostart
-  # line above, and only on the seed path, so an ordinary boot never overrides a
-  # deliberate false.
-  seed_sql "$DB_NAME" -e \
-    "INSERT INTO global_property (property, property_value, uuid) VALUES ('chartsearchai.querystore.enabled','true', UUID()) ON DUPLICATE KEY UPDATE property_value='true';" || true
-
-  rm -f "$_dump" "$_gp"
-  _count=$(seed_sql -N "$DB_NAME" -e 'SELECT COUNT(*) FROM patient' 2>/dev/null)
-  seed_status "done: $_count patients"
-  echo "[demo-seed] done. patients now: $_count"
-}
+# seed_sql, seed_dump and the demo seed itself (maybe_seed_demo_data): scripts/demo-seed.sh, which
+# scripts/demo-seed.test.sh drives against a real MariaDB.
+. /usr/local/bin/demo-seed.sh
 
 maybe_seed_demo_data || echo "[demo-seed] seed step errored; continuing to start OpenMRS."
 

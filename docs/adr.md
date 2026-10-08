@@ -15059,3 +15059,39 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aScreensAnswerCounts
 (stated exactly where the answer carries the detail whole, in both directions),
 `OrdersSharingASubstanceModuleAnswerContextTest.theSharedSubstanceFollowsARatedMajorAndPrecedesACaution` (the shared
 substance counted on its own) and the scheduled-order case above.
+
+## Decision 172: The demo seed fails safe, and a seed killed part-way is finished with its first backup and snapshot
+
+**Status: Accepted** (October 2026) — implemented, no issue.
+
+### Context
+
+On 2026-10-07 the demo's deploy at 15:48 UTC left the backend on 502 for about 40 minutes, and a redeploy at 16:30 came
+up with `chartsearchai.demo.seedStatus` reading "done: 5284 patients". `backend-init.sh`'s one-shot seed had replaced
+the database with the May dump. Its chartsearchai properties came back with the dump's values (`llm.engine=remote`, the
+E4B model, `drugReference.enabled=false`), so every search failed until they were set back over REST. No deploy used
+`reset=true`, and the demo keeps no log from before 16:39 UTC, so why the 15:48 boot seeded is not established.
+
+`scripts/demo-seed.test.sh` reproduces the outcome: a seed killed during its import is finished by the next boot with
+the dump's engine, and with its backup holding the half import rather than the data replaced. That boot takes its
+"operator" snapshot and its backup from the database the killed boot left.
+
+### The decision
+
+The seed functions move, unchanged, from `backend-init.sh` to `scripts/demo-seed.sh`, which the entrypoint sources. In
+`maybe_seed_demo_data`:
+
+- A lookup of `chartsearchai.demo.seededDataset` that fails stops the seed. It used to read as "not seeded". The tag is
+  read only where `global_property` exists, so an empty database is still seeded.
+- The backup's failure is the dump's exit status. It was gzip's, the pipeline's last command, so a failed backup went on
+  to drop every table.
+- A snapshot of the server's properties that fails stops the seed. It used to fall back to an empty snapshot.
+- The snapshot is kept on the data volume until the seed finishes. A boot that finds it resumes that seed with the
+  first boot's backup and snapshot, rather than taking new ones from a half import.
+
+### The gate
+
+`scripts/demo-seed.test.sh`, run by `build.yml`'s `demo-seed-test` job against a MariaDB service, drives the real
+functions over seven database states. Before the change its four new cases failed: the failed lookup, the failed
+backup and the failed snapshot each seeded, and the killed import restored the dump's engine and lost the backup. Its
+three controls passed: a seeded database, an existing database and an empty database.

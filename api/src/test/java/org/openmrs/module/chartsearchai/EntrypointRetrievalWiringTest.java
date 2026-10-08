@@ -102,8 +102,10 @@ public class EntrypointRetrievalWiringTest {
 	 * The functions the retrieval wiring is composed of, in the order they are pasted into the
 	 * harness. The list is what makes the harness's dependency on the entrypoint explicit: a
 	 * function that stops existing under this name stops the run with a message naming it.
+	 * {@code seed_sql}, which they all call, is the seed library's ({@link #SEED_LIBRARY}), sourced
+	 * whole as the entrypoint sources it.
 	 */
-	private static final List<String> WIRING_FUNCTIONS = List.of("seed_sql", "db_reachable",
+	private static final List<String> WIRING_FUNCTIONS = List.of("db_reachable",
 			"openmrs_schema_present", "schema_absent_because", "gp_set_if_blank", "gp_value",
 			"withdraw_embedder_paths", "quarantine_unverified_embedder", "configure_retrieval_gps");
 
@@ -112,6 +114,9 @@ public class EntrypointRetrievalWiringTest {
 	 * Reconciled against the entrypoint's own {@code require_verified} line before every case, so a
 	 * rename there cannot leave this fixture quietly verifying artifacts nothing asks about.
 	 */
+	/** The demo seed's library, repo-relative, which the entrypoint sources and which defines {@code seed_sql}. */
+	private static final String SEED_LIBRARY = "scripts/demo-seed.sh";
+
 	private static final List<String> GATED_ARTIFACTS = List.of("embedder-e5-base-v2-onnx",
 			"embedder-e5-base-v2-vocab");
 
@@ -1204,6 +1209,7 @@ public class EntrypointRetrievalWiringTest {
 		text = replacingOnce(text, "exec /openmrs/startup.sh", "@@HAND_OFF@@");
 		text = replacingOnce(text, "exec runuser -u openmrs -- \"$0\" \"$@\"", "@@NO_REEXEC@@");
 		text = replacingOnce(text, ". /usr/local/bin/model-manifest.sh", "@@LIBRARY@@");
+		text = replacingOnce(text, ". /usr/local/bin/demo-seed.sh", "@@SEED_LIBRARY@@");
 		// Both search roots collapse to the case's own, so a machine that really carries one of them
 		// cannot hand this start another instance's database credentials.
 		text = replacingOnce(text, "find /openmrs /usr/local/tomcat", "find @@ROOT@@");
@@ -1216,6 +1222,9 @@ public class EntrypointRetrievalWiringTest {
 				"echo '[test] the re-exec as another OS user is not followed here'");
 		text = replacingOnce(text, "@@LIBRARY@@",
 				". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'");
+		// The seed keeps its backup and snapshot on the volume, so it is pointed at the case's own.
+		text = replacingOnce(text, "@@SEED_LIBRARY@@", ". '" + ModuleSourceRoot.repoRoot().resolve(SEED_LIBRARY)
+				+ "'; DEMO_SEED_STATE_DIR='" + root.resolve("data") + "'");
 		text = replacingOnce(text, "@@ROOT@@", root.toString());
 		text = replacingEvery(text, "@@VOLUME@@", root.resolve("data").toString());
 		assertFalse(text.contains("@@"), "a placeholder this rewrite put in is still in the file it is about to"
@@ -1314,6 +1323,7 @@ public class EntrypointRetrievalWiringTest {
 				: "PATH='" + stubs + "':$PATH");
 		script.add("export PATH");
 		script.add(". '" + ModuleSourceRoot.repoRoot().resolve(ModelManifest.LIBRARY) + "'");
+		script.add(". '" + ModuleSourceRoot.repoRoot().resolve(SEED_LIBRARY) + "'");
 		// What the entrypoint assigns around the wiring: the connection the stand-in answers for,
 		// and the two targets the fetches above it write to.
 		script.add("DB_HOST=only-the-stand-in-answers");

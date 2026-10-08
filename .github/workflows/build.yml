@@ -99,8 +99,39 @@ jobs:
       - name: sh -n scripts/model-manifest.sh (sourced by the entrypoint; a failure is the same brick)
         if: always()
         run: sh -n scripts/model-manifest.sh
+      - name: sh -n scripts/demo-seed.sh (sourced by the entrypoint; a failure is the same brick)
+        if: always()
+        run: sh -n scripts/demo-seed.sh
       - name: shellcheck (warnings and above)
-        run: shellcheck -s sh -S warning backend-init.sh scripts/model-manifest.sh
+        run: shellcheck -s sh -S warning backend-init.sh scripts/model-manifest.sh scripts/demo-seed.sh scripts/demo-seed.test.sh
+
+  # The demo seed replaces every table of the demo's database, so what decides whether it runs, and what it keeps,
+  # is driven here against a real MariaDB: scripts/demo-seed.test.sh builds each database state a boot can meet,
+  # among them a seed killed during its import (2026-10-07: the demo came back with the dump's properties).
+  demo-seed-test:
+    name: demo seed against a real MariaDB
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the MariaDB client the seed calls (mariadb, mariadb-dump)
+        run: sudo apt-get update && sudo apt-get install -y mariadb-client
+      - name: Run the seed's cases
+        env:
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASS: root
+        run: sh scripts/demo-seed.test.sh
 
   # Issue #181. `api/pom.xml` declares querystore-api at 1.0.0-SNAPSHOT, so what this module
   # compiles against is whatever snapshot was published remotely last (CI) or `mvn install`ed

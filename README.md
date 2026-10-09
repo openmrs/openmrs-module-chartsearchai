@@ -944,6 +944,21 @@ See [docs/adr.md](docs/adr.md) (Decision 10) for detailed per-model analysis, tr
 
 See [docs/adr.md](docs/adr.md) for architectural decisions and design rationale.
 
+## Provider integration contract
+
+The `api.provider` package defines a shared contract for the bundled answering
+pipeline and an optional Med Agent Hub relay: provider identity and capabilities,
+turn requests and results, ordered events, and cancellation. This package is the
+foundation for provider integration; it does not yet change the running search
+endpoints or enable a Hub connection.
+
+`AnswerEnvelope` preserves the complete provider payload while exposing the answer
+text needed for display, conversation replay and audit. `TurnLifecycleValidator`
+checks event order and advertised capabilities. `TurnCancellation` closes bound
+resources, and `TurnPreemptionRegistry` cancels the previous turn when another
+starts in the same conversation. Their existing tests include the shared
+`api/src/test/resources/conformance/dual-provider-conformance.v1.json` fixture.
+
 ## License
 
 This project is licensed under the [MPL 2.0](http://openmrs.org/license/).

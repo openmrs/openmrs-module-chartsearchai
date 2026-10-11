@@ -263,7 +263,11 @@ public final class HostDiagnostics {
 	 * child the engine abandoned mid-reap is never reported in its place. {@code running} is whether that
 	 * process is alive; the rest is reported only when it is. Its {@code threadsArgument} is the {@code -t}
 	 * it was launched with, {@code "auto"} when it was launched without one, and {@code null} when the
-	 * platform does not expose a child's arguments.
+	 * platform does not expose a child's arguments. Its {@code threadsEnvironment} is the
+	 * {@code LLAMA_ARG_THREADS} in the child's environment, which it inherits from this JVM and which
+	 * llama-server applies when no {@code -t} overrides it: {@code "unset"} when the environment does not
+	 * carry it, and {@code null} when that environment cannot be read. Nothing else is taken from that
+	 * environment, which also carries the server's key.
 	 */
 	private static Map<String, Object> llamaServer(Path root, ProcessHandle process) {
 		Map<String, Object> llama = new LinkedHashMap<String, Object>();
@@ -276,6 +280,7 @@ public final class HostDiagnostics {
 		llama.put("pid", process.pid());
 		llama.put("cpuMillis", cpuMillis(process));
 		llama.put("threadsArgument", info.arguments().map(HostDiagnostics::threadsArgument).orElse(null));
+		llama.put("threadsEnvironment", threadsEnvironment(root, process));
 		Map<String, Long> status = keyValues(root.resolve("proc").resolve(String.valueOf(process.pid()))
 				.resolve("status"), ":");
 		llama.put("osThreads", status == null ? null : status.get("Threads"));
@@ -299,6 +304,20 @@ public final class HostDiagnostics {
 			}
 		}
 		return "auto";
+	}
+
+	/** {@code /proc/<pid>/environ} is NUL-separated {@code NAME=value} entries. */
+	private static String threadsEnvironment(Path root, ProcessHandle process) {
+		String environ = readFile(root.resolve("proc").resolve(String.valueOf(process.pid())).resolve("environ"));
+		if (environ == null) {
+			return null;
+		}
+		for (String entry : environ.split("\0")) {
+			if (entry.startsWith("LLAMA_ARG_THREADS=")) {
+				return entry.substring("LLAMA_ARG_THREADS=".length());
+			}
+		}
+		return "unset";
 	}
 
 	/** {@code key<separator> value [unit]} lines as numbers; a line whose value is not a number is skipped. */

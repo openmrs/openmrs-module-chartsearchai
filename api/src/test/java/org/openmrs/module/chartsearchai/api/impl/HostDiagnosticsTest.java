@@ -251,6 +251,7 @@ public class HostDiagnosticsTest {
 			assertFalse(child.waitFor(500, TimeUnit.MILLISECONDS),
 					"the stand-in exited (" + (child.isAlive() ? "-" : child.exitValue()) + ") instead of running");
 			write("proc/" + child.pid() + "/status", "Name:\tllama-server\nState:\tS (sleeping)\nThreads:\t7\n");
+			write("proc/" + child.pid() + "/environ", "PATH=/usr/bin\0LLAMA_ARG_THREADS=2\0");
 
 			Map<?, ?> llama = (Map<?, ?>) HostDiagnostics.read(root, child.toHandle()).get("llamaServer");
 
@@ -258,6 +259,8 @@ public class HostDiagnosticsTest {
 			assertEquals(child.pid(), llama.get("pid"));
 			assertEquals(7L, llama.get("osThreads"));
 			assertEquals("3", llama.get("threadsArgument"));
+			assertEquals("2", llama.get("threadsEnvironment"),
+					"reported beside the argument it yields to, which llama-server applies after the environment");
 			if (System.getProperty("os.name").startsWith("Linux")) {
 				// macOS (Darwin 24, measured 2026-10-11) reports no CPU time for this child at all.
 				assertNotNull(llama.get("cpuMillis"), "the child's CPU time is what says whether it got the CPU");
@@ -277,6 +280,34 @@ public class HostDiagnosticsTest {
 			Map<?, ?> llama = (Map<?, ?>) HostDiagnostics.read(root, child.toHandle()).get("llamaServer");
 
 			assertEquals("auto", llama.get("threadsArgument"));
+			assertNull(llama.get("threadsEnvironment"), "an environment that cannot be read is not one without the variable");
+
+			write("proc/" + child.pid() + "/environ", "PATH=/usr/bin\0LLAMA_API_KEY=k\0");
+			llama = (Map<?, ?>) HostDiagnostics.read(root, child.toHandle()).get("llamaServer");
+
+			assertEquals("unset", llama.get("threadsEnvironment"));
+		}
+		finally {
+			child.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
+		}
+	}
+
+	/**
+	 * llama-server also takes its thread count from {@code LLAMA_ARG_THREADS}, which the child inherits
+	 * from this JVM, so a server launched without {@code -t} is not necessarily on auto-detect.
+	 */
+	@Test
+	public void read_shouldReportTheThreadCountTheLlamaServerInheritedFromItsEnvironment() throws Exception {
+		Process child = startChild("--", "--port", "8091");
+		try {
+			assertFalse(child.waitFor(500, TimeUnit.MILLISECONDS), "the stand-in exited instead of running");
+			write("proc/" + child.pid() + "/environ", "PATH=/usr/bin\0LLAMA_ARG_THREADS=2\0LLAMA_API_KEY=k\0");
+
+			Map<?, ?> llama = (Map<?, ?>) HostDiagnostics.read(root, child.toHandle()).get("llamaServer");
+
+			assertEquals("auto", llama.get("threadsArgument"));
+			assertEquals("2", llama.get("threadsEnvironment"),
+					"a server pinned by its inherited environment must not read as auto-detect alone");
 		}
 		finally {
 			child.destroyForcibly().waitFor(10, TimeUnit.SECONDS);

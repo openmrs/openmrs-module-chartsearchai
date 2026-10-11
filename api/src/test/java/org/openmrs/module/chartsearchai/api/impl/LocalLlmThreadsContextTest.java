@@ -55,11 +55,13 @@ public class LocalLlmThreadsContextTest extends BaseModuleContextSensitiveTest {
 
 	/**
 	 * The two places the setting takes effect, through the methods {@code startServer} and
-	 * {@code ensureServerRunning} call: the command a start launches carries the configured {@code -t},
-	 * and a later change to it is a configuration change that relaunches the server.
+	 * {@code ensureServerRunning} call: the command {@code currentServerCommand} builds carries the
+	 * configured {@code -t}, and a later change to it is a configuration change that relaunches the
+	 * server. That {@code startServer} launches that command is not seen here; it is
+	 * {@code ArchitectureGuardTest.theLaunchPathLaunchesAndRecordsTheCurrentServerCommand}.
 	 */
 	@Test
-	public void theConfiguredThreadCountReachesTheLaunchedCommandAndAChangeToItRelaunches() {
+	public void theCurrentServerCommandCarriesTheConfiguredThreadCountAndAChangeToItRelaunches() {
 		setThreads("3");
 		LocalLlmEngine engine = new LocalLlmEngine();
 
@@ -82,11 +84,40 @@ public class LocalLlmThreadsContextTest extends BaseModuleContextSensitiveTest {
 				"clearing it must relaunch the server without -t");
 	}
 
+	/**
+	 * What a launch records is what its command carries, not the global properties read again after
+	 * the server became ready: a change made in between leaves the server running the old value, so
+	 * the next query must see it as a change and relaunch.
+	 */
+	@Test
+	public void aChangeMadeWhileTheServerWasStartingRelaunchesItOnTheNextQuery() {
+		setThreads("3");
+		setProperty(ChartSearchAiConstants.GP_LLM_CONTEXT_SIZE, "8192");
+		LocalLlmEngine threadsChanged = new LocalLlmEngine();
+		List<String> command = threadsChanged.currentServerCommand("/bin/llama-server", "/data/model.gguf", 9999,
+				null);
+		setThreads("4");
+		threadsChanged.recordLaunch("/data/model.gguf", threadsChanged.resolveKvCacheDir(), null, command);
+		assertTrue(threadsChanged.configurationChangedSinceLaunch("/data/model.gguf"),
+				"the server was launched with -t 3, so a 4 set during its start is a change");
+
+		setThreads("3");
+		LocalLlmEngine contextChanged = new LocalLlmEngine();
+		command = contextChanged.currentServerCommand("/bin/llama-server", "/data/model.gguf", 9999, null);
+		setProperty(ChartSearchAiConstants.GP_LLM_CONTEXT_SIZE, "16384");
+		contextChanged.recordLaunch("/data/model.gguf", contextChanged.resolveKvCacheDir(), null, command);
+		assertTrue(contextChanged.configurationChangedSinceLaunch("/data/model.gguf"),
+				"the server was launched with -c 8192, so a 16384 set during its start is a change");
+	}
+
 	private static void setThreads(String value) {
-		GlobalProperty gp = Context.getAdministrationService()
-				.getGlobalPropertyObject(ChartSearchAiConstants.GP_LLM_THREADS);
+		setProperty(ChartSearchAiConstants.GP_LLM_THREADS, value);
+	}
+
+	private static void setProperty(String name, String value) {
+		GlobalProperty gp = Context.getAdministrationService().getGlobalPropertyObject(name);
 		if (gp == null) {
-			gp = new GlobalProperty(ChartSearchAiConstants.GP_LLM_THREADS, value);
+			gp = new GlobalProperty(name, value);
 		}
 		else {
 			gp.setPropertyValue(value);

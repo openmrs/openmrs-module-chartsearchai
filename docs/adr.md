@@ -15185,8 +15185,8 @@ which this host may or may not have.
 
 - **`GET /chartsearchai/hostdiagnostics`** (`HostDiagnostics`) reports the kernel's own readings, raw — load
   average, `/proc/stat` CPU ticks including steal, `MemAvailable` and swap, the CPU quota of the cgroup the JVM runs in
-  (v1 or v2) and its throttling — beside `Runtime.availableProcessors()`, which does honour the quota, the CPU time and
-  `-t` of the llama-server the engine holds, and the JVM's own CPU time, so the JVM's share is measured rather than
+  (v1 or v2) and its throttling — beside `Runtime.availableProcessors()`, which does honour the quota, the CPU time,
+  `-t` and inherited `LLAMA_ARG_THREADS` of the llama-server the engine holds, and the JVM's own CPU time, so the JVM's share is measured rather than
   inferred. Sampled before and after a query and diffed, it tells the four causes apart. Gated on
   `View Administration Functions` because it names a host process.
 - **`chartsearchai.llm.threads`** pins llama-server's `-t` (`--threads-batch` follows it). Empty — the default — passes
@@ -15197,8 +15197,10 @@ which this host may or may not have.
   `availableProcessors()` is the change that test names and refuses. Whether pinning helps the demo is unmeasured: the
   diagnostics endpoint is how to find out, and a value is kept only on a measured gain with the answers unchanged.
 
-Pinned by `HostDiagnosticsTest`, `ChartSearchAiHostDiagnosticsTest`, `LocalLlmThreadsContextTest` and
-`LocalLlmEngineTest.serverNeedsRestart_shouldRestartWhenThreadCountChanges`. The live-child cases of `HostDiagnosticsTest`
+Pinned by `HostDiagnosticsTest`, `ChartSearchAiHostDiagnosticsTest`, `LocalLlmThreadsContextTest`,
+`LocalLlmEngineTest.serverNeedsRestart_shouldRestartWhenThreadCountChanges` and
+`ArchitectureGuardTest.theLaunchPathLaunchesAndRecordsTheCurrentServerCommand`, which ties `startServer` to the command
+`LocalLlmThreadsContextTest` reads. The live-child cases of `HostDiagnosticsTest`
 run `/usr/bin/yes` with its arguments after `--`, because GNU `yes` exits 1 on `-t`: as first written, with `-t` first
 and the child skipped whenever it exited, the case skipped in all three Java jobs of CI run 38142167902. They now assert
 the child is alive rather than skip; the child's CPU time is asserted on Linux only, macOS reporting none for it.

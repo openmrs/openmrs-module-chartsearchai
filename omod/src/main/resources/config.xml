@@ -111,7 +111,7 @@
 	<globalProperty>
 		<property>chartsearchai.llm.threads</property>
 		<defaultValue></defaultValue>
-		<description>CPU threads the embedded llama-server uses for prompt processing and generation (passed as -t; local engine only). Empty (default) leaves the count to llama-server's own auto-detect, which is what every install ran before this property existed. Set a positive integer to pin it — e.g. below the core count on a host whose cores are shared with the database, the JVM or other containers, where llama.cpp's threads wait on the slowest of them at every step. Anything that is not a positive integer reads as empty. A change takes effect on the next query, which restarts the server. Read GET /ws/rest/v1/chartsearchai/hostdiagnostics before and after changing it.</description>
+		<description>CPU threads the embedded llama-server uses for prompt processing and generation (passed as -t; local engine only). Empty (default) passes no -t, leaving the count to llama-server's own auto-detect — or to a LLAMA_ARG_THREADS in the environment it inherits — which is what every install ran before this property existed. Set a positive integer to pin it — e.g. below the core count on a host whose cores are shared with the database, the JVM or other containers, where llama.cpp's threads wait on the slowest of them at every step. Anything that is not a positive integer reads as empty. A change takes effect on the next query, which restarts the server. Read GET /ws/rest/v1/chartsearchai/hostdiagnostics before and after changing it.</description>
 	</globalProperty>
 
 	<globalProperty>

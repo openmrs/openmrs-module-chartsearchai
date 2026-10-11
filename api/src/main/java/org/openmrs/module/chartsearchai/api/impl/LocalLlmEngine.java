@@ -1035,13 +1035,13 @@ public class LocalLlmEngine implements LlmEngine {
 
 	/**
 	 * What the server just launched by {@code command} was configured with, which
-	 * {@link #configurationChangedSinceLaunch} compares against. The thread count is read back from
-	 * {@code command} rather than from the global property again, so a change made while the server
-	 * was starting is a change the next query sees.
+	 * {@link #configurationChangedSinceLaunch} compares against. The context size and thread count are
+	 * read back from {@code command} rather than from their global properties again, so a change made
+	 * while the server was starting is a change the next query sees.
 	 */
 	void recordLaunch(String modelPath, String configuredKvCacheDir, String slotSavePath, List<String> command) {
 		loadedModelPath = modelPath;
-		loadedContextSize = getContextSize();
+		loadedContextSize = Integer.parseInt(command.get(command.indexOf("-c") + 1));
 		int threadsAt = command.indexOf("-t");
 		loadedThreads = threadsAt < 0 ? THREADS_AUTO : Integer.parseInt(command.get(threadsAt + 1));
 		loadedKvCacheDir = configuredKvCacheDir;

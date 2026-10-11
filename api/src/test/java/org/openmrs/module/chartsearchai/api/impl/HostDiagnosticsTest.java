@@ -124,8 +124,12 @@ public class HostDiagnosticsTest {
 		write("proc/404/status", "Name:\tsh\nVmRSS:\t     900 kB\n");
 		write("proc/self/status", "Name:\tjava\nVmRSS:\t 4000000 kB\n");
 
-		List<?> processes = (List<?>) HostDiagnostics.read(root, null).get("processes");
+		Map<?, ?> visible = (Map<?, ?>) HostDiagnostics.read(root, null).get("processes");
+		List<?> processes = (List<?>) visible.get("largest");
 
+		assertEquals(Arrays.asList("count", "rssKbTotal", "largest"), new ArrayList<Object>(visible.keySet()));
+		assertEquals(3L, visible.get("count"), "the kernel thread and /proc/self are not counted");
+		assertEquals(5900900L, visible.get("rssKbTotal"));
 		assertEquals(3, processes.size(), "the kernel thread and /proc/self are not listed: " + processes);
 		Map<?, ?> first = (Map<?, ?>) processes.get(0);
 		assertEquals(Arrays.asList("pid", "name", "rssKb"), new ArrayList<Object>(first.keySet()));
@@ -137,13 +141,16 @@ public class HostDiagnosticsTest {
 	}
 
 	@Test
-	public void read_shouldListAtMostTheTenLargestProcesses() throws IOException {
+	public void read_shouldListAtMostTheTenLargestProcessesButCountAndSumThemAll() throws IOException {
 		for (int pid = 1; pid <= 12; pid++) {
 			write("proc/" + pid + "/status", "Name:\tp" + pid + "\nVmRSS:\t " + pid * 1000 + " kB\n");
 		}
 
-		List<?> processes = (List<?>) HostDiagnostics.read(root, null).get("processes");
+		Map<?, ?> visible = (Map<?, ?>) HostDiagnostics.read(root, null).get("processes");
+		List<?> processes = (List<?>) visible.get("largest");
 
+		assertEquals(12L, visible.get("count"), "the count and total cover every process, not only those listed");
+		assertEquals(78000L, visible.get("rssKbTotal"));
 		assertEquals(10, processes.size());
 		assertEquals("p12", ((Map<?, ?>) processes.get(0)).get("name"));
 		assertEquals("p3", ((Map<?, ?>) processes.get(9)).get("name"), "the two smallest are the ones left out");

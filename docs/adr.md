@@ -15217,6 +15217,6 @@ The first reading of those on the demo (2026-10-11): `lockedKb` **0**, so `--mlo
 `rssKb` 1.9–2.1 GB against a 3.1 GB model file, falling while it answered; `majorFaults` 81 → 7,171 across one query; and
 `memAvailable` ~850 MB with no swap. Locking the weights would need ~3.1 GB more than is free, and the JVM (982 MB in use,
 a default 3.7 GB ceiling) and MariaDB (stock settings) do not account for the ~12 GB in use. So the endpoint also reports
-`memoryKb.anonPages` and `memoryKb.shmem`, and `processes`: the ten visible processes holding the most memory, by name and
-size only. In the container the sum of those against what is in use says whether the memory is held inside it or by
-something else on the host. Pinned by `HostDiagnosticsTest.read_shouldReportTheVisibleProcessesHoldingTheMostMemoryLargestFirst`.
+`memoryKb.anonPages` and `memoryKb.shmem`, and `processes`: the count and summed resident memory of every visible process, and the ten
+holding the most, by name and size only. In the container that sum against `anonPages` says whether the memory is held
+inside it or by something else on the host. Pinned by `HostDiagnosticsTest.read_shouldReportTheVisibleProcessesHoldingTheMostMemoryLargestFirst`.

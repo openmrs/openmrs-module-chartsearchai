@@ -346,14 +346,16 @@ public final class HostDiagnostics {
 	}
 
 	/**
-	 * The {@value #MAX_PROCESSES} processes visible under {@code /proc} holding the most resident memory,
-	 * largest first, each as its pid, its {@code Name} and its {@code VmRSS} — never its command line,
-	 * which can carry paths and secrets. In a container only the container's own processes are visible,
-	 * so what {@code memoryKb} shows in use beyond their sum is held outside it. A process the kernel
+	 * Every process visible under {@code /proc}: their {@code count}, the sum of their {@code VmRSS} as
+	 * {@code rssKbTotal}, and the {@value #MAX_PROCESSES} holding the most as {@code largest}, each by pid,
+	 * {@code Name} and {@code VmRSS} — never its command line, which can carry paths and secrets. In a
+	 * container only the container's own processes are visible. {@code rssKbTotal} counts a page shared by
+	 * two processes twice and leaves out kernel memory and page tables, so it is not an exact share of
+	 * what {@code memoryKb} shows in use; a gap of gigabytes is still memory this container does not hold. A process the kernel
 	 * reports no {@code VmRSS} for (a kernel thread) holds no memory of its own and is left out.
 	 * {@code null} when {@code /proc} cannot be listed.
 	 */
-	private static List<Map<String, Object>> processes(Path root) {
+	private static Map<String, Object> processes(Path root) {
 		List<Map<String, Object>> processes = new ArrayList<Map<String, Object>>();
 		try (DirectoryStream<Path> entries = Files.newDirectoryStream(root.resolve("proc"))) {
 			for (Path entry : entries) {
@@ -388,9 +390,17 @@ public final class HostDiagnostics {
 		catch (IOException e) {
 			return null;
 		}
+		long total = 0;
+		for (Map<String, Object> process : processes) {
+			total += (Long) process.get("rssKb");
+		}
 		processes.sort((a, b) -> Long.compare((Long) b.get("rssKb"), (Long) a.get("rssKb")));
-		return processes.size() > MAX_PROCESSES ? new ArrayList<Map<String, Object>>(processes.subList(0, MAX_PROCESSES))
-				: processes;
+		Map<String, Object> visible = new LinkedHashMap<String, Object>();
+		visible.put("count", (long) processes.size());
+		visible.put("rssKbTotal", total);
+		visible.put("largest", processes.size() > MAX_PROCESSES
+				? new ArrayList<Map<String, Object>>(processes.subList(0, MAX_PROCESSES)) : processes);
+		return visible;
 	}
 
 	/** {@code key<separator> value [unit]} lines as numbers; a line whose value is not a number is skipped. */

@@ -52,7 +52,7 @@ public class ChartSearchAiHostDiagnosticsTest {
 		Map<?, ?> body = (Map<?, ?>) response.getBody();
 		assertNotNull(body);
 		assertEquals(Arrays.asList("sampledAtMillis", "jvmAvailableProcessors", "loadAverage", "cpuJiffies",
-				"memoryKb", "cgroupCpu", "llamaServer", "jvmCpuMillis"), new ArrayList<Object>(body.keySet()));
+				"memoryKb", "cgroupCpu", "llamaServer", "jvmCpuMillis", "processes"), new ArrayList<Object>(body.keySet()));
 		assertEquals(Boolean.FALSE, ((Map<?, ?>) body.get("llamaServer")).get("running"),
 				"an engine that has launched nothing has no server to report");
 	}

@@ -42,7 +42,7 @@ public class HostDiagnosticsTest {
 	/** Every key the endpoint documents, in the order it serializes them. A new key is APPENDED. */
 	private static final List<String> DOCUMENTED_FIELDS = Arrays.asList("sampledAtMillis",
 			"jvmAvailableProcessors", "loadAverage", "cpuJiffies", "memoryKb", "cgroupCpu", "llamaServer",
-			"jvmCpuMillis");
+			"jvmCpuMillis", "processes");
 
 	/** {@code /proc/self/mountinfo} of a cgroup-v2 host or container: the unified hierarchy at /sys/fs/cgroup. */
 	private static final String V2_MOUNTINFO = "22 1 259:2 / / rw,relatime - ext4 /dev/root rw\n"
@@ -73,6 +73,7 @@ public class HostDiagnosticsTest {
 		assertNull(body.get("cpuJiffies"));
 		assertNull(body.get("memoryKb"));
 		assertNull(body.get("cgroupCpu"));
+		assertNull(body.get("processes"), "no /proc to read is not a host running no processes");
 	}
 
 	@Test
@@ -83,7 +84,8 @@ public class HostDiagnosticsTest {
 				+ "intr 114930548 113199788 3 0 5 263 0 4 [...]\n");
 		write("proc/meminfo", "MemTotal:       15340872 kB\nMemFree:          412000 kB\n"
 				+ "MemAvailable:    2048000 kB\nBuffers:           10000 kB\nCached:          1650000 kB\n"
-				+ "SwapCached:            0 kB\nMlocked:            3200 kB\nSwapTotal:       4194300 kB\n"
+				+ "SwapCached:            0 kB\nAnonPages:       9120000 kB\nMlocked:            3200 kB\n"
+				+ "Shmem:             40000 kB\nSwapTotal:       4194300 kB\n"
 				+ "SwapFree:        1000000 kB\n");
 
 		Map<String, Object> body = HostDiagnostics.read(root, null);
@@ -99,10 +101,59 @@ public class HostDiagnosticsTest {
 		assertEquals(2048000L, memory.get("memAvailable"));
 		assertEquals(4194300L, memory.get("swapTotal"));
 		assertEquals(1000000L, memory.get("swapFree"));
-		assertEquals(Arrays.asList("memTotal", "memAvailable", "swapTotal", "swapFree", "cached", "mlocked"),
+		assertEquals(Arrays.asList("memTotal", "memAvailable", "swapTotal", "swapFree", "cached", "mlocked",
+				"anonPages", "shmem"),
 				new ArrayList<Object>(memory.keySet()), "new keys are appended");
 		assertEquals(1650000L, memory.get("cached"), "Cached, not SwapCached, which also contains the word");
 		assertEquals(3200L, memory.get("mlocked"));
+		assertEquals(9120000L, memory.get("anonPages"));
+		assertEquals(40000L, memory.get("shmem"));
+	}
+
+	/**
+	 * Which of the processes this JVM can see hold the host's memory, largest first, by name and
+	 * resident size only — never a command line, which can carry paths and secrets. A process that the
+	 * kernel reports no {@code VmRSS} for (a kernel thread) is not a process holding memory, and
+	 * {@code /proc/self} and other non-numeric entries are not processes at all.
+	 */
+	@Test
+	public void read_shouldReportTheVisibleProcessesHoldingTheMostMemoryLargestFirst() throws IOException {
+		write("proc/101/status", "Name:\tjava\nState:\tS (sleeping)\nVmRSS:\t 4000000 kB\nThreads:\t80\n");
+		write("proc/202/status", "Name:\tllama-server\nVmRSS:\t 1900000 kB\n");
+		write("proc/303/status", "Name:\tkthreadd\nState:\tS (sleeping)\nThreads:\t1\n");
+		write("proc/404/status", "Name:\tsh\nVmRSS:\t     900 kB\n");
+		write("proc/self/status", "Name:\tjava\nVmRSS:\t 4000000 kB\n");
+
+		Map<?, ?> visible = (Map<?, ?>) HostDiagnostics.read(root, null).get("processes");
+		List<?> processes = (List<?>) visible.get("largest");
+
+		assertEquals(Arrays.asList("count", "rssKbTotal", "largest"), new ArrayList<Object>(visible.keySet()));
+		assertEquals(3L, visible.get("count"), "the kernel thread and /proc/self are not counted");
+		assertEquals(5900900L, visible.get("rssKbTotal"));
+		assertEquals(3, processes.size(), "the kernel thread and /proc/self are not listed: " + processes);
+		Map<?, ?> first = (Map<?, ?>) processes.get(0);
+		assertEquals(Arrays.asList("pid", "name", "rssKb"), new ArrayList<Object>(first.keySet()));
+		assertEquals(101L, first.get("pid"));
+		assertEquals("java", first.get("name"));
+		assertEquals(4000000L, first.get("rssKb"));
+		assertEquals("llama-server", ((Map<?, ?>) processes.get(1)).get("name"));
+		assertEquals("sh", ((Map<?, ?>) processes.get(2)).get("name"));
+	}
+
+	@Test
+	public void read_shouldListAtMostTheTenLargestProcessesButCountAndSumThemAll() throws IOException {
+		for (int pid = 1; pid <= 12; pid++) {
+			write("proc/" + pid + "/status", "Name:\tp" + pid + "\nVmRSS:\t " + pid * 1000 + " kB\n");
+		}
+
+		Map<?, ?> visible = (Map<?, ?>) HostDiagnostics.read(root, null).get("processes");
+		List<?> processes = (List<?>) visible.get("largest");
+
+		assertEquals(12L, visible.get("count"), "the count and total cover every process, not only those listed");
+		assertEquals(78000L, visible.get("rssKbTotal"));
+		assertEquals(10, processes.size());
+		assertEquals("p12", ((Map<?, ?>) processes.get(0)).get("name"));
+		assertEquals("p3", ((Map<?, ?>) processes.get(9)).get("name"), "the two smallest are the ones left out");
 	}
 
 	/**

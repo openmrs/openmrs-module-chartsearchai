@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -43,7 +44,9 @@ import java.util.Map;
  */
 public final class HostDiagnostics {
 
-	private static final List<String> CPU_FIELDS = Arrays.asList("user", "nice", "system", "idle", "iowait",
+	private static final int MAX_PROCESSES = 10;
+
+	private static final List<String> CPU_FIELDS =Arrays.asList("user", "nice", "system", "idle", "iowait",
 			"irq", "softirq", "steal");
 
 	private HostDiagnostics() {
@@ -71,6 +74,7 @@ public final class HostDiagnostics {
 		body.put("cgroupCpu", cgroupCpu(root));
 		body.put("llamaServer", llamaServer(root, llamaServer));
 		body.put("jvmCpuMillis", cpuMillis(ProcessHandle.current()));
+		body.put("processes", processes(root));
 		return body;
 	}
 
@@ -130,6 +134,8 @@ public final class HostDiagnostics {
 		memory.put("swapFree", meminfo.get("SwapFree"));
 		memory.put("cached", meminfo.get("Cached"));
 		memory.put("mlocked", meminfo.get("Mlocked"));
+		memory.put("anonPages", meminfo.get("AnonPages"));
+		memory.put("shmem", meminfo.get("Shmem"));
 		return memory;
 	}
 
@@ -337,6 +343,64 @@ public final class HostDiagnostics {
 			}
 		}
 		return "unset";
+	}
+
+	/**
+	 * Every process visible under {@code /proc}: their {@code count}, the sum of their {@code VmRSS} as
+	 * {@code rssKbTotal}, and the {@value #MAX_PROCESSES} holding the most as {@code largest}, each by pid,
+	 * {@code Name} and {@code VmRSS} — never its command line, which can carry paths and secrets. In a
+	 * container only the container's own processes are visible. {@code rssKbTotal} counts a page shared by
+	 * two processes twice and leaves out kernel memory and page tables, so it is not an exact share of
+	 * what {@code memoryKb} shows in use; a gap of gigabytes is still memory this container does not hold. A process the kernel
+	 * reports no {@code VmRSS} for (a kernel thread) holds no memory of its own and is left out.
+	 * {@code null} when {@code /proc} cannot be listed.
+	 */
+	private static Map<String, Object> processes(Path root) {
+		List<Map<String, Object>> processes = new ArrayList<Map<String, Object>>();
+		try (DirectoryStream<Path> entries = Files.newDirectoryStream(root.resolve("proc"))) {
+			for (Path entry : entries) {
+				String pid = entry.getFileName().toString();
+				if (!pid.matches("\\d+")) {
+					continue;
+				}
+				String status = readFile(entry.resolve("status"));
+				if (status == null) {
+					continue;
+				}
+				String name = null;
+				Long rss = null;
+				for (String line : status.split("\n")) {
+					if (line.startsWith("Name:")) {
+						name = line.substring("Name:".length()).trim();
+					}
+					else if (line.startsWith("VmRSS:")) {
+						rss = parseLong(line.substring("VmRSS:".length()).trim().split("\\s+")[0]);
+					}
+				}
+				if (rss == null) {
+					continue;
+				}
+				Map<String, Object> process = new LinkedHashMap<String, Object>();
+				process.put("pid", Long.valueOf(pid));
+				process.put("name", name);
+				process.put("rssKb", rss);
+				processes.add(process);
+			}
+		}
+		catch (IOException e) {
+			return null;
+		}
+		long total = 0;
+		for (Map<String, Object> process : processes) {
+			total += (Long) process.get("rssKb");
+		}
+		processes.sort((a, b) -> Long.compare((Long) b.get("rssKb"), (Long) a.get("rssKb")));
+		Map<String, Object> visible = new LinkedHashMap<String, Object>();
+		visible.put("count", (long) processes.size());
+		visible.put("rssKbTotal", total);
+		visible.put("largest", processes.size() > MAX_PROCESSES
+				? new ArrayList<Map<String, Object>>(processes.subList(0, MAX_PROCESSES)) : processes);
+		return visible;
 	}
 
 	/** {@code key<separator> value [unit]} lines as numbers; a line whose value is not a number is skipped. */

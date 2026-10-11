@@ -942,6 +942,67 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * ADR Decision 174: {@code chartsearchai.llm.threads} reaches llama-server only through the command
+	 * {@code startServer} builds, and nothing behavioural sees that command — the subprocess cannot be
+	 * launched in a test, and {@code LocalLlmThreadsContextTest} calls {@code currentServerCommand} and
+	 * {@code recordLaunch} itself. Measured: {@code startServer} building its command with the
+	 * pre-174 {@code buildServerCommand(..., getContextSize(), slotSavePath)} left that class and
+	 * {@code LocalLlmServerAuthTest} green, while launching without {@code -t} and recording
+	 * {@code THREADS_AUTO}, so a configured count relaunched the server on every query.
+	 *
+	 * <p>Read through {@link #methodBodyWithoutLiterals}. What each part does:
+	 * <ul>
+	 * <li>The body has ONE assignment to {@code command}, a statement beginning with
+	 * {@code List<String> command = currentServerCommand(} — so that pre-174 call fails, and so
+	 * does a later reassignment.</li>
+	 * <li>The body names {@code buildServerCommand} nowhere — so an equivalent call passing
+	 * {@code getThreads()} by hand fails too, which is the cost of reading text.</li>
+	 * <li>{@code new ProcessBuilder(command)} is what is launched, and the {@code recordLaunch} call
+	 * ends on {@code command} as its last argument, so what is recorded is read back from what was
+	 * launched.</li>
+	 * </ul>
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> What {@code currentServerCommand} itself
+	 * builds is not read here; {@code LocalLlmThreadsContextTest} calls it. Text cannot see
+	 * reachability or identity: a {@code ProcessBuilder} built from {@code command} and then handed
+	 * another list, or a {@code command} the body mutates in place, satisfies every part above. Read
+	 * this as "the launch names the command the setting reaches", and no more.
+	 */
+	@Test
+	public void theLaunchPathLaunchesAndRecordsTheCurrentServerCommand() throws IOException {
+		String source = String.join("\n", getSourceCache().get("LocalLlmEngine.java"));
+		String launch = methodBodyWithoutLiterals(source, "private void startServer(String modelPath)");
+		assertTrue(launch != null && !launch.isEmpty(),
+				"could not slice the body of startServer(String) out of LocalLlmEngine.java — a guard that"
+						+ " reads nothing reports no violations, so this is a failure and not a pass");
+
+		List<String> violations = new ArrayList<>();
+		int assigned = 0;
+		for (Matcher m = Pattern.compile("\\bcommand\\s*=(?!=)").matcher(launch); m.find();) {
+			assigned++;
+		}
+		if (assigned != 1 || !Pattern.compile(
+				"[;{}]\\s*List\\s*<\\s*String\\s*>\\s+command\\s*=\\s*currentServerCommand\\s*\\(")
+				.matcher(launch).find()) {
+			violations.add("startServer(String) no longer assigns its command once, from"
+					+ " currentServerCommand(...) (" + assigned + " assignment(s)) — chartsearchai.llm.threads"
+					+ " then does not reach llama-server, and a configured count relaunches it on every query");
+		}
+		if (Pattern.compile("\\bbuildServerCommand\\b").matcher(launch).find()) {
+			violations.add("startServer(String) names buildServerCommand — build the command through"
+					+ " currentServerCommand, the one place the thread count is read for a launch");
+		}
+		if (!Pattern.compile("\\bnew\\s+ProcessBuilder\\s*\\(\\s*command\\s*\\)").matcher(launch).find()) {
+			violations.add("startServer(String) no longer launches new ProcessBuilder(command)");
+		}
+		if (!Pattern.compile("[;{}]\\s*recordLaunch\\s*\\([^;]*,\\s*command\\s*\\)\\s*;").matcher(launch).find()) {
+			violations.add("startServer(String) no longer records the launch from the command it launched"
+					+ " — recordLaunch(..., command) — so the restart decision compares against another value");
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
 	 * Issue #512: the local engine's two {@code ReferenceRecords} arities must hand that value to
 	 * the body builder, which is the only place the DRY sampler is decided. Nothing behavioural can
 	 * see this link: {@code ReferenceRecordsReachTheEngineTest} records the value at a stub engine and

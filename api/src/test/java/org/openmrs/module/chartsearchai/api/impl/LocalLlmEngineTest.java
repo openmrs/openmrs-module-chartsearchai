@@ -740,6 +740,47 @@ public class LocalLlmEngineTest {
 	}
 
 	@Test
+	public void buildServerCommand_shouldLeaveThreadCountToAutoDetectWhenNoneIsConfigured() {
+		List<String> cmd = LocalLlmEngine.buildServerCommand(
+				"/bin/llama-server", "/data/model.gguf", 9999, 32768, "/var/kvcache",
+				LocalLlmEngine.THREADS_AUTO);
+
+		assertFalse(cmd.contains("-t"),
+				"an unset chartsearchai.llm.threads must launch exactly what an install launched before "
+				+ "the property existed — llama-server's own auto-detect");
+		assertFalse(cmd.contains("-tb"));
+	}
+
+	@Test
+	public void buildServerCommand_shouldPinTheThreadCountTheOperatorConfigured() {
+		List<String> cmd = LocalLlmEngine.buildServerCommand(
+				"/bin/llama-server", "/data/model.gguf", 9999, 32768, "/var/kvcache", 3);
+
+		int idx = cmd.indexOf("-t");
+		assertTrue(idx >= 0, "a configured thread count must reach llama-server");
+		assertEquals("3", cmd.get(idx + 1));
+		assertFalse(cmd.contains("-tb"),
+				"-tb is left out because llama-server's --threads-batch defaults to --threads, so one "
+				+ "flag sets both prefill and generation");
+	}
+
+	@Test
+	public void serverNeedsRestart_shouldRestartWhenThreadCountChanges() {
+		assertTrue(LocalLlmEngine.serverNeedsRestart("/m.gguf", 32768, "/kv", LocalLlmEngine.THREADS_AUTO,
+				"/m.gguf", 32768, "/kv", 3),
+				"setting chartsearchai.llm.threads at runtime must relaunch the server with -t, or an "
+				+ "operator A/B-testing it over REST measures the old value");
+		assertTrue(LocalLlmEngine.serverNeedsRestart("/m.gguf", 32768, "/kv", 3,
+				"/m.gguf", 32768, "/kv", LocalLlmEngine.THREADS_AUTO),
+				"clearing it must relaunch without -t");
+		assertFalse(LocalLlmEngine.serverNeedsRestart("/m.gguf", 32768, "/kv", 3,
+				"/m.gguf", 32768, "/kv", 3));
+		assertFalse(LocalLlmEngine.serverNeedsRestart(null, -1, null, LocalLlmEngine.THREADS_AUTO,
+				"/m.gguf", 32768, "/kv", 3),
+				"with nothing loaded yet the initial start handles it, not a restart");
+	}
+
+	@Test
 	public void buildServerCommand_shouldNotQuantizeKvCache() {
 		List<String> cmd = LocalLlmEngine.buildServerCommand(
 				"/bin/llama-server", "/data/model.gguf", 9999, 32768);

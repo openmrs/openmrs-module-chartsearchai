@@ -54,6 +54,8 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedDosingCei
 import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
+import org.openmrs.module.chartsearchai.api.impl.HostDiagnostics;
+import org.openmrs.module.chartsearchai.api.impl.LocalLlmEngine;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
@@ -201,6 +203,10 @@ public class ChartSearchAiRestController {
 	@Autowired
 	@Qualifier("chartSearchAi.drugSafetyValidator")
 	private DrugSafetyValidator drugSafetyValidator;
+
+	@Autowired
+	@Qualifier("chartSearchAi.localLlmEngine")
+	private LocalLlmEngine localLlmEngine;
 
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
@@ -409,6 +415,22 @@ public class ChartSearchAiRestController {
 		// is asserted as an ORDERED list, and appending is what keeps that assertion order-sensitive.
 		body.put("crossReactivity", drugReferenceService.getCrossReactivityLoadStatus().toMap());
 		return new ResponseEntity<Object>(body, HttpStatus.OK);
+	}
+
+	/**
+	 * The host's CPU, memory and cgroup counters and the local llama-server's CPU time — what an operator
+	 * with no shell on the host needs to tell a starved inference server from a slow model. The body and
+	 * what each counter is for are {@link HostDiagnostics}'s; ADR Decision 174 is why it exists.
+	 *
+	 * <p>Gated on core's {@code View Administration Functions}, not the {@code Get Global Properties}
+	 * {@link #drugReferenceStatus} accepts: the {@code llamaServer} section names a process id on the
+	 * host, which is server layout, and core keeps that behind this privilege.
+	 */
+	@RequestMapping(value = "/hostdiagnostics", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> hostDiagnostics() {
+		Context.requirePrivilege(PrivilegeConstants.VIEW_ADMIN_FUNCTIONS);
+		return new ResponseEntity<Object>(HostDiagnostics.read(localLlmEngine.serverHandle()), HttpStatus.OK);
 	}
 
 	/**
@@ -1110,6 +1132,11 @@ public class ChartSearchAiRestController {
 
 	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
 		this.drugSafetyValidator = drugSafetyValidator;
+	}
+
+	/** Test seam: production wires {@link LocalLlmEngine} via {@code Autowired}. */
+	void setLocalLlmEngine(LocalLlmEngine localLlmEngine) {
+		this.localLlmEngine = localLlmEngine;
 	}
 
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)

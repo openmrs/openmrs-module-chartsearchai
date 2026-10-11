@@ -141,13 +141,15 @@ public class LocalLlmEngine implements LlmEngine {
 	private static final int REAP_WAIT_SECONDS = 2;
 
 
-	private Process serverProcess;
+	/** Volatile so that {@link #serverHandle()} can read it without the monitor a running query holds. */
+	private volatile Process serverProcess;
 
 	private String loadedModelPath;
 
 	private int loadedContextSize = -1;
 
-	/** {@link #getThreads()} at launch, so a change to {@code chartsearchai.llm.threads} restarts the server. */
+	/** The {@code -t} the running server was launched with, so a change to {@code chartsearchai.llm.threads}
+	 *  restarts it. */
 	private int loadedThreads = THREADS_AUTO;
 
 	/** The resolved KV-cache directory the running server was configured for (the
@@ -827,27 +829,32 @@ public class LocalLlmEngine implements LlmEngine {
 
 	private void ensureServerRunning() {
 		String modelPath = resolveModelPath();
-		int currentContextSize = getContextSize();
-		// The CONFIGURED (intended) directory, not the effective --slot-save-path. The restart
-		// decision must compare intent so a one-time mkdirs failure (which nulls the effective path)
-		// does not differ on every call and loop. Do not swap this for loadedSlotSavePath.
-		String configuredKvCacheDir = resolveKvCacheDir();
-		int currentThreads = getThreads();
 
-		if (serverProcess != null && serverProcess.isAlive()
-				&& !serverNeedsRestart(loadedModelPath, loadedContextSize, loadedKvCacheDir, loadedThreads,
-						modelPath, currentContextSize, configuredKvCacheDir, currentThreads)) {
+		if (serverProcess != null && serverProcess.isAlive() && !configurationChangedSinceLaunch(modelPath)) {
 			return;
 		}
 
 		if (serverProcess != null && serverProcess.isAlive()) {
 			log.info("LLM config changed (model {}→{}, ctx {}→{}, kvCacheDir {}→{}, threads {}→{}), "
-					+ "restarting server", loadedModelPath, modelPath, loadedContextSize, currentContextSize,
-					loadedKvCacheDir, configuredKvCacheDir, loadedThreads, currentThreads);
+					+ "restarting server", loadedModelPath, modelPath, loadedContextSize, getContextSize(),
+					loadedKvCacheDir, resolveKvCacheDir(), loadedThreads, getThreads());
 			stopServer();
 		}
 
 		startServer(modelPath);
+	}
+
+	/**
+	 * Whether the configuration read now differs from the one {@link #recordLaunch} recorded for the
+	 * running server — the restart decision {@link #ensureServerRunning} takes on every query.
+	 * {@code false} when nothing has been recorded.
+	 */
+	boolean configurationChangedSinceLaunch(String modelPath) {
+		// The CONFIGURED (intended) directory, not the effective --slot-save-path. The restart
+		// decision must compare intent so a one-time mkdirs failure (which nulls the effective path)
+		// does not differ on every call and loop. Do not swap this for loadedSlotSavePath.
+		return serverNeedsRestart(loadedModelPath, loadedContextSize, loadedKvCacheDir, loadedThreads,
+				modelPath, getContextSize(), resolveKvCacheDir(), getThreads());
 	}
 
 	/**
@@ -1018,6 +1025,40 @@ public class LocalLlmEngine implements LlmEngine {
 		return cmd;
 	}
 
+	/**
+	 * The command {@link #startServer} launches: {@link #buildServerCommand(String, String, int, int, String, int)}
+	 * with the context size and thread count read from their global properties now.
+	 */
+	List<String> currentServerCommand(String binaryPath, String modelPath, int port, String slotSavePath) {
+		return buildServerCommand(binaryPath, modelPath, port, getContextSize(), slotSavePath, getThreads());
+	}
+
+	/**
+	 * What the server just launched by {@code command} was configured with, which
+	 * {@link #configurationChangedSinceLaunch} compares against. The thread count is read back from
+	 * {@code command} rather than from the global property again, so a change made while the server
+	 * was starting is a change the next query sees.
+	 */
+	void recordLaunch(String modelPath, String configuredKvCacheDir, String slotSavePath, List<String> command) {
+		loadedModelPath = modelPath;
+		loadedContextSize = getContextSize();
+		int threadsAt = command.indexOf("-t");
+		loadedThreads = threadsAt < 0 ? THREADS_AUTO : Integer.parseInt(command.get(threadsAt + 1));
+		loadedKvCacheDir = configuredKvCacheDir;
+		loadedSlotSavePath = slotSavePath;
+	}
+
+	/**
+	 * The llama-server this engine launched, or {@code null} before the first start and after a stop. A
+	 * child that crashed is still returned until the next query replaces it; the caller asks
+	 * {@link ProcessHandle#isAlive()}. Not synchronized: {@code /hostdiagnostics} reads it while a query
+	 * holds the monitor, which is when it is wanted.
+	 */
+	public ProcessHandle serverHandle() {
+		Process process = serverProcess;
+		return process == null ? null : process.toHandle();
+	}
+
 	private void startServer(String modelPath) {
 		// A child this engine could not confirm dead still holds the port, and the port check
 		// below would blame it on a stranger. Try once more before probing.
@@ -1043,9 +1084,7 @@ public class LocalLlmEngine implements LlmEngine {
 			}
 		}
 
-		int threads = getThreads();
-		List<String> command = buildServerCommand(serverBinaryPath, modelPath, serverPort,
-				getContextSize(), slotSavePath, threads);
+		List<String> command = currentServerCommand(serverBinaryPath, modelPath, serverPort, slotSavePath);
 
 		// Nothing may already be listening on the port we are about to hand a patient's chart to
 		// (issue #445). Without this, a local process that bound the port while the server was
@@ -1091,11 +1130,7 @@ public class LocalLlmEngine implements LlmEngine {
 			outputDrain.start();
 
 			waitForServerReady();
-			loadedModelPath = modelPath;
-			loadedContextSize = getContextSize();
-			loadedThreads = threads;
-			loadedKvCacheDir = configuredKvCacheDir;
-			loadedSlotSavePath = slotSavePath;
+			recordLaunch(modelPath, configuredKvCacheDir, slotSavePath, command);
 			log.info("llama-server started successfully on port {}", serverPort);
 		}
 		catch (IOException e) {
@@ -1477,6 +1512,7 @@ public class LocalLlmEngine implements LlmEngine {
 			serverProcess = null;
 			loadedModelPath = null;
 			loadedContextSize = -1;
+			loadedThreads = THREADS_AUTO;
 			loadedKvCacheDir = null;
 			loadedSlotSavePath = null;
 		}

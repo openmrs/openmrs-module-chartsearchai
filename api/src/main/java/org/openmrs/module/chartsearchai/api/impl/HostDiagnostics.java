@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * What the host is doing to the local llama-server, read from the kernel's own counters: the body of
@@ -30,17 +29,19 @@ import java.util.Optional;
  * invisible from the REST side: the same prompt on the public demo answered in 19 s and, twenty minutes
  * later, in 337 s with a byte-identical answer (ADR Decision 174). This reports the counters that tell
  * the causes apart — CPU steal (a contended hypervisor), cgroup CFS throttling (a container quota smaller
- * than the threads llama.cpp starts), load average (local competition), swap (memory pressure) — and
- * llama-server's own CPU time, so an operator without a shell on the host can sample it before and after
- * a query and diff.
+ * than the threads llama.cpp starts), load average (local competition), swap (memory pressure) — and the
+ * CPU time of llama-server and of this JVM, so an operator without a shell on the host can sample it
+ * before and after a query and diff.
  *
- * <p>Every counter is reported raw and cumulative; the reader diffs two samples. A file that cannot be
- * read reports {@code null}, never zero — "could not read" is not "no steal". Nothing here is
- * patient-derived.
+ * <p>Two kinds of reading, reported raw. The {@code cpuJiffies} ticks, the cgroup's {@code periods},
+ * {@code throttledPeriods} and {@code throttledMicros}, {@code llamaServer.cpuMillis} and
+ * {@code jvmCpuMillis} are cumulative counters, which the reader diffs between two samples.
+ * {@code loadAverage} is the kernel's decaying average, and {@code memoryKb} and the cgroup's quota and
+ * period are gauges; each is read as it stands at the sample.
+ * A file that cannot be read reports {@code null}, never zero — "could not read" is not "no steal".
+ * Nothing here is patient-derived.
  */
 public final class HostDiagnostics {
-
-	private static final String LLAMA_SERVER = "llama-server";
 
 	private static final List<String> CPU_FIELDS = Arrays.asList("user", "nice", "system", "idle", "iowait",
 			"irq", "softirq", "steal");
@@ -48,16 +49,19 @@ public final class HostDiagnostics {
 	private HostDiagnostics() {
 	}
 
-	/** This host, as the endpoint reports it. */
-	public static Map<String, Object> read() {
-		return read(Paths.get("/"), ProcessHandle.current());
+	/**
+	 * This host, as the endpoint reports it. {@code llamaServer} is the process the engine launched
+	 * ({@code LocalLlmEngine.serverHandle()}), {@code null} when it holds none.
+	 */
+	public static Map<String, Object> read(ProcessHandle llamaServer) {
+		return read(Paths.get("/"), llamaServer);
 	}
 
 	/**
-	 * The host whose {@code /proc} and {@code /sys/fs/cgroup} sit under {@code root}, and the llama-server
-	 * among {@code jvm}'s descendants.
+	 * The host whose {@code /proc} and {@code /sys/fs/cgroup} sit under {@code root}; {@code /proc/self} there
+	 * stands for this JVM.
 	 */
-	static Map<String, Object> read(Path root, ProcessHandle jvm) {
+	static Map<String, Object> read(Path root, ProcessHandle llamaServer) {
 		Map<String, Object> body = new LinkedHashMap<String, Object>();
 		body.put("sampledAtMillis", System.currentTimeMillis());
 		body.put("jvmAvailableProcessors", Runtime.getRuntime().availableProcessors());
@@ -65,7 +69,8 @@ public final class HostDiagnostics {
 		body.put("cpuJiffies", cpuJiffies(root));
 		body.put("memoryKb", memoryKb(root));
 		body.put("cgroupCpu", cgroupCpu(root));
-		body.put("llamaServer", llamaServer(root, jvm));
+		body.put("llamaServer", llamaServer(root, llamaServer));
+		body.put("jvmCpuMillis", cpuMillis(ProcessHandle.current()));
 		return body;
 	}
 
@@ -128,37 +133,122 @@ public final class HostDiagnostics {
 
 	/**
 	 * The CPU quota of the cgroup this JVM runs in and how often it was throttled, in microseconds for
-	 * both cgroup versions. A {@code null} {@code quotaMicros} is no quota ({@code max} in v2, {@code -1}
-	 * in v1).
+	 * both cgroup versions, with that cgroup's {@code path} as {@code /proc/self/cgroup} names it. A
+	 * {@code null} {@code quotaMicros} is no quota on THIS cgroup ({@code max} in v2, {@code -1} in v1): a
+	 * quota set on an ancestor — a systemd slice above the service, say — is not read, and neither is the
+	 * throttling it causes. {@code null} for the whole section when this JVM's cgroup cannot be located or
+	 * carries no CPU controller files, which is never read as the top of {@code /sys/fs/cgroup} instead.
 	 */
 	private static Map<String, Object> cgroupCpu(Path root) {
-		Path v2 = root.resolve("sys/fs/cgroup");
-		String max = readFile(v2.resolve("cpu.max"));
+		OwnCgroup v2 = ownCgroup(root, null);
+		String max = v2 == null ? null : readFile(v2.dir.resolve("cpu.max"));
 		if (max != null) {
 			String[] fields = max.trim().split("\\s+");
-			Map<String, Long> stat = keyValues(v2.resolve("cpu.stat"), " ");
-			return cgroup("v2", "max".equals(fields[0]) ? null : parseLong(fields[0]),
+			Map<String, Long> stat = keyValues(v2.dir.resolve("cpu.stat"), " ");
+			return cgroup("v2", v2.path, "max".equals(fields[0]) ? null : parseLong(fields[0]),
 					fields.length > 1 ? parseLong(fields[1]) : null, stat, "throttled_usec", 1L);
 		}
-		for (String controller : new String[] { "cpu", "cpu,cpuacct" }) {
-			Path v1 = root.resolve("sys/fs/cgroup").resolve(controller);
-			String quota = readFile(v1.resolve("cpu.cfs_quota_us"));
-			if (quota == null) {
-				continue;
-			}
+		OwnCgroup v1 = ownCgroup(root, "cpu");
+		String quota = v1 == null ? null : readFile(v1.dir.resolve("cpu.cfs_quota_us"));
+		if (quota != null) {
 			Long quotaMicros = parseLong(quota.trim());
-			String period = readFile(v1.resolve("cpu.cfs_period_us"));
-			Map<String, Long> stat = keyValues(v1.resolve("cpu.stat"), " ");
-			return cgroup("v1", quotaMicros == null || quotaMicros < 0 ? null : quotaMicros,
+			String period = readFile(v1.dir.resolve("cpu.cfs_period_us"));
+			Map<String, Long> stat = keyValues(v1.dir.resolve("cpu.stat"), " ");
+			return cgroup("v1", v1.path, quotaMicros == null || quotaMicros < 0 ? null : quotaMicros,
 					period == null ? null : parseLong(period.trim()), stat, "throttled_time", 1000L);
 		}
 		return null;
 	}
 
-	private static Map<String, Object> cgroup(String version, Long quotaMicros, Long periodMicros,
+	/** A cgroup this JVM belongs to: its path in its hierarchy, and the directory that path is under the mount. */
+	private static final class OwnCgroup {
+
+		private final String path;
+
+		private final Path dir;
+
+		private OwnCgroup(String path, Path dir) {
+			this.path = path;
+			this.dir = dir;
+		}
+	}
+
+	/**
+	 * This JVM's cgroup in the v2 hierarchy ({@code controller} null) or in the v1 hierarchy carrying
+	 * {@code controller}: the path {@code /proc/self/cgroup} gives, made relative to the root of the mount
+	 * {@code /proc/self/mountinfo} lists for that hierarchy, under that mount's mount point. A private
+	 * cgroup namespace (a container's) makes both the path and the mount root {@code /}, so it resolves to
+	 * the mount point itself. {@code null} when either file is unreadable, names no such hierarchy, or
+	 * gives a path outside the mount's root. A mount point containing a space, which mountinfo escapes as
+	 * {@code \040}, resolves to no file, so the section reports {@code null}.
+	 */
+	private static OwnCgroup ownCgroup(Path root, String controller) {
+		String membership = readFile(root.resolve("proc/self/cgroup"));
+		String mounts = readFile(root.resolve("proc/self/mountinfo"));
+		if (membership == null || mounts == null) {
+			return null;
+		}
+		String path = null;
+		for (String line : membership.split("\n")) {
+			String[] fields = line.trim().split(":", 3);
+			if (fields.length < 3) {
+				continue;
+			}
+			boolean matches = controller == null ? "0".equals(fields[0]) && fields[1].isEmpty()
+					: Arrays.asList(fields[1].split(",")).contains(controller);
+			if (matches) {
+				path = fields[2];
+				break;
+			}
+		}
+		if (path == null) {
+			return null;
+		}
+		for (String line : mounts.split("\n")) {
+			String[] halves = line.split(" - ", 2);
+			if (halves.length < 2) {
+				continue;
+			}
+			String[] mount = halves[0].trim().split(" ");
+			String[] source = halves[1].trim().split(" ");
+			if (mount.length < 5 || source.length < 3) {
+				continue;
+			}
+			boolean matches = controller == null ? "cgroup2".equals(source[0])
+					: "cgroup".equals(source[0]) && Arrays.asList(source[2].split(",")).contains(controller);
+			if (!matches) {
+				continue;
+			}
+			String relative = relativeTo(mount[3], path);
+			if (relative == null) {
+				return null;
+			}
+			Path mountPoint = root.resolve(withoutLeadingSlash(mount[4]));
+			return new OwnCgroup(path, mountPoint.resolve(withoutLeadingSlash(relative)));
+		}
+		return null;
+	}
+
+	/** {@code path} below the mount root {@code mountRoot}, or {@code null} when it is not below it. */
+	private static String relativeTo(String mountRoot, String path) {
+		if ("/".equals(mountRoot)) {
+			return path;
+		}
+		if (path.equals(mountRoot)) {
+			return "";
+		}
+		return path.startsWith(mountRoot + "/") ? path.substring(mountRoot.length()) : null;
+	}
+
+	private static String withoutLeadingSlash(String path) {
+		return path.startsWith("/") ? path.substring(1) : path;
+	}
+
+	private static Map<String, Object> cgroup(String version, String path, Long quotaMicros, Long periodMicros,
 			Map<String, Long> stat, String throttledKey, long throttledDivisor) {
 		Map<String, Object> cgroup = new LinkedHashMap<String, Object>();
 		cgroup.put("version", version);
+		cgroup.put("path", path);
 		cgroup.put("quotaMicros", quotaMicros);
 		cgroup.put("periodMicros", periodMicros);
 		cgroup.put("periods", stat == null ? null : stat.get("nr_periods"));
@@ -169,21 +259,22 @@ public final class HostDiagnostics {
 	}
 
 	/**
-	 * The llama-server this JVM spawned, found among its descendants by executable name. Its
-	 * {@code threadsArgument} is the {@code -t} it was launched with, {@code "auto"} when it was launched
-	 * without one, and {@code null} when the platform does not expose a child's arguments.
+	 * The llama-server the engine launched, taken from the engine rather than matched by name, so a
+	 * child the engine abandoned mid-reap is never reported in its place. {@code running} is whether that
+	 * process is alive; the rest is reported only when it is. Its {@code threadsArgument} is the {@code -t}
+	 * it was launched with, {@code "auto"} when it was launched without one, and {@code null} when the
+	 * platform does not expose a child's arguments.
 	 */
-	private static Map<String, Object> llamaServer(Path root, ProcessHandle jvm) {
+	private static Map<String, Object> llamaServer(Path root, ProcessHandle process) {
 		Map<String, Object> llama = new LinkedHashMap<String, Object>();
-		Optional<ProcessHandle> found = jvm.descendants().filter(HostDiagnostics::isLlamaServer).findFirst();
-		llama.put("running", found.isPresent());
-		if (!found.isPresent()) {
+		boolean running = process != null && process.isAlive();
+		llama.put("running", running);
+		if (!running) {
 			return llama;
 		}
-		ProcessHandle process = found.get();
 		ProcessHandle.Info info = process.info();
 		llama.put("pid", process.pid());
-		llama.put("cpuMillis", info.totalCpuDuration().map(Duration::toMillis).orElse(null));
+		llama.put("cpuMillis", cpuMillis(process));
 		llama.put("threadsArgument", info.arguments().map(HostDiagnostics::threadsArgument).orElse(null));
 		Map<String, Long> status = keyValues(root.resolve("proc").resolve(String.valueOf(process.pid()))
 				.resolve("status"), ":");
@@ -191,13 +282,13 @@ public final class HostDiagnostics {
 		return llama;
 	}
 
-	private static boolean isLlamaServer(ProcessHandle process) {
-		Optional<String> command = process.info().command();
-		if (!command.isPresent()) {
-			return false;
-		}
-		Path name = Paths.get(command.get()).getFileName();
-		return name != null && name.toString().startsWith(LLAMA_SERVER);
+	/**
+	 * The process's own CPU time, user plus system. A child's is not included: measured on Linux
+	 * (Temurin 17, 2026-10-11), a JVM whose child spent at least 2.1 s of CPU grew by 160 ms. {@code null}
+	 * where the platform does not report it — macOS, for a child of this JVM.
+	 */
+	private static Long cpuMillis(ProcessHandle process) {
+		return process.info().totalCpuDuration().map(Duration::toMillis).orElse(null);
 	}
 
 	private static String threadsArgument(String[] arguments) {

@@ -55,6 +55,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSe
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
 import org.openmrs.module.chartsearchai.api.impl.HostDiagnostics;
+import org.openmrs.module.chartsearchai.api.impl.LocalLlmEngine;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
@@ -202,6 +203,10 @@ public class ChartSearchAiRestController {
 	@Autowired
 	@Qualifier("chartSearchAi.drugSafetyValidator")
 	private DrugSafetyValidator drugSafetyValidator;
+
+	@Autowired
+	@Qualifier("chartSearchAi.localLlmEngine")
+	private LocalLlmEngine localLlmEngine;
 
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
@@ -425,7 +430,7 @@ public class ChartSearchAiRestController {
 	@ResponseBody
 	public ResponseEntity<Object> hostDiagnostics() {
 		Context.requirePrivilege(PrivilegeConstants.VIEW_ADMIN_FUNCTIONS);
-		return new ResponseEntity<Object>(HostDiagnostics.read(), HttpStatus.OK);
+		return new ResponseEntity<Object>(HostDiagnostics.read(localLlmEngine.serverHandle()), HttpStatus.OK);
 	}
 
 	/**
@@ -1127,6 +1132,11 @@ public class ChartSearchAiRestController {
 
 	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
 		this.drugSafetyValidator = drugSafetyValidator;
+	}
+
+	/** Test seam: production wires {@link LocalLlmEngine} via {@code Autowired}. */
+	void setLocalLlmEngine(LocalLlmEngine localLlmEngine) {
+		this.localLlmEngine = localLlmEngine;
 	}
 
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)

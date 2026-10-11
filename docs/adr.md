@@ -15183,10 +15183,11 @@ which this host may or may not have.
 
 ### The decision
 
-- **`GET /chartsearchai/hostdiagnostics`** (`HostDiagnostics`) reports the kernel's raw cumulative counters — load
-  average, `/proc/stat` CPU ticks including steal, `MemAvailable` and swap, the cgroup v1 or v2 CPU quota and its
-  throttling — beside `Runtime.availableProcessors()`, which does honour the quota, and the module's own llama-server's CPU
-  time and `-t`. Sampled before and after a query and diffed, it tells the four causes apart. Gated on
+- **`GET /chartsearchai/hostdiagnostics`** (`HostDiagnostics`) reports the kernel's own readings, raw — load
+  average, `/proc/stat` CPU ticks including steal, `MemAvailable` and swap, the CPU quota of the cgroup the JVM runs in
+  (v1 or v2) and its throttling — beside `Runtime.availableProcessors()`, which does honour the quota, the CPU time and
+  `-t` of the llama-server the engine holds, and the JVM's own CPU time, so the JVM's share is measured rather than
+  inferred. Sampled before and after a query and diffed, it tells the four causes apart. Gated on
   `View Administration Functions` because it names a host process.
 - **`chartsearchai.llm.threads`** pins llama-server's `-t` (`--threads-batch` follows it). Empty — the default — passes
   nothing, the command every install launched before; a change restarts the server on the next query, so it can be A/B-tested
@@ -15196,6 +15197,8 @@ which this host may or may not have.
   `availableProcessors()` is the change that test names and refuses. Whether pinning helps the demo is unmeasured: the
   diagnostics endpoint is how to find out, and a value is kept only on a measured gain with the answers unchanged.
 
-Pinned by `HostDiagnosticsTest` (the live-child case runs where the platform runs a copied `yes`, which CI's Linux does and
-macOS does not), `ChartSearchAiHostDiagnosticsTest`, `LocalLlmThreadsContextTest` and
-`LocalLlmEngineTest.serverNeedsRestart_shouldRestartWhenThreadCountChanges`.
+Pinned by `HostDiagnosticsTest`, `ChartSearchAiHostDiagnosticsTest`, `LocalLlmThreadsContextTest` and
+`LocalLlmEngineTest.serverNeedsRestart_shouldRestartWhenThreadCountChanges`. The live-child cases of `HostDiagnosticsTest`
+run `/usr/bin/yes` with its arguments after `--`, because GNU `yes` exits 1 on `-t`: as first written, with `-t` first
+and the child skipped whenever it exited, the case skipped in all three Java jobs of CI run 38142167902. They now assert
+the child is alive rather than skip; the child's CPU time is asserted on Linux only, macOS reporting none for it.

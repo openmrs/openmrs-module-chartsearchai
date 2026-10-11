@@ -10,6 +10,10 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.GlobalProperty;
@@ -47,6 +51,35 @@ public class LocalLlmThreadsContextTest extends BaseModuleContextSensitiveTest {
 			assertEquals(LocalLlmEngine.THREADS_AUTO, new LocalLlmEngine().getThreads(),
 					"'" + value + "' must not pin llama-server to a thread count");
 		}
+	}
+
+	/**
+	 * The two places the setting takes effect, through the methods {@code startServer} and
+	 * {@code ensureServerRunning} call: the command a start launches carries the configured {@code -t},
+	 * and a later change to it is a configuration change that relaunches the server.
+	 */
+	@Test
+	public void theConfiguredThreadCountReachesTheLaunchedCommandAndAChangeToItRelaunches() {
+		setThreads("3");
+		LocalLlmEngine engine = new LocalLlmEngine();
+
+		List<String> command = engine.currentServerCommand("/bin/llama-server", "/data/model.gguf", 9999, null);
+
+		int at = command.indexOf("-t");
+		assertTrue(at >= 0, "chartsearchai.llm.threads must reach the command llama-server is launched with");
+		assertEquals("3", command.get(at + 1));
+
+		engine.recordLaunch("/data/model.gguf", engine.resolveKvCacheDir(), null, command);
+		assertFalse(engine.configurationChangedSinceLaunch("/data/model.gguf"),
+				"a server launched with the configured count must not restart on every query");
+
+		setThreads("4");
+		assertTrue(engine.configurationChangedSinceLaunch("/data/model.gguf"),
+				"a changed count must relaunch the server, or an operator A/B-testing it measures the old one");
+
+		setThreads("");
+		assertTrue(engine.configurationChangedSinceLaunch("/data/model.gguf"),
+				"clearing it must relaunch the server without -t");
 	}
 
 	private static void setThreads(String value) {

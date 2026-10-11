@@ -82,7 +82,8 @@ public class HostDiagnosticsTest {
 				+ "cpu0 1132 34 1441 11311718 3675 127 438 937 0 0\n"
 				+ "intr 114930548 113199788 3 0 5 263 0 4 [...]\n");
 		write("proc/meminfo", "MemTotal:       15340872 kB\nMemFree:          412000 kB\n"
-				+ "MemAvailable:    2048000 kB\nBuffers:           10000 kB\nSwapTotal:       4194300 kB\n"
+				+ "MemAvailable:    2048000 kB\nBuffers:           10000 kB\nCached:          1650000 kB\n"
+				+ "SwapCached:            0 kB\nMlocked:            3200 kB\nSwapTotal:       4194300 kB\n"
 				+ "SwapFree:        1000000 kB\n");
 
 		Map<String, Object> body = HostDiagnostics.read(root, null);
@@ -98,6 +99,57 @@ public class HostDiagnosticsTest {
 		assertEquals(2048000L, memory.get("memAvailable"));
 		assertEquals(4194300L, memory.get("swapTotal"));
 		assertEquals(1000000L, memory.get("swapFree"));
+		assertEquals(Arrays.asList("memTotal", "memAvailable", "swapTotal", "swapFree", "cached", "mlocked"),
+				new ArrayList<Object>(memory.keySet()), "new keys are appended");
+		assertEquals(1650000L, memory.get("cached"), "Cached, not SwapCached, which also contains the word");
+		assertEquals(3200L, memory.get("mlocked"));
+	}
+
+	/**
+	 * Whether llama-server's weights stay in RAM: what it holds resident and locked, and how many pages it
+	 * has had to read back from disk. {@code --mlock} only locks what the locked-memory limit allows, and on
+	 * a host without swap a weight page that is not locked is page cache the kernel may drop and fault back
+	 * in mid-answer.
+	 */
+	@Test
+	public void read_shouldReportWhatTheLlamaServerHoldsInMemoryAndHowOftenItFaultedFromDisk() throws Exception {
+		Process child = startChild("--", "--port", "8091");
+		try {
+			assertFalse(child.waitFor(500, TimeUnit.MILLISECONDS), "the stand-in exited instead of running");
+			write("proc/" + child.pid() + "/status", "Name:\tllama-server\nVmLck:\t      64 kB\n"
+					+ "VmRSS:\t 3412220 kB\nThreads:\t9\n");
+			// The command name is parenthesised and may itself hold spaces and ')', so fields count from
+			// the LAST ')': state ppid pgrp session tty_nr tpgid flags minflt cminflt majflt.
+			write("proc/" + child.pid() + "/stat", child.pid() + " (llama) server) S 1 2 3 0 -1 4194560 81234 0 5821 0 "
+					+ "77 12 0 0 20 0 9 0 1234 3500000000 853055 18446744073709551615\n");
+
+			Map<?, ?> llama = (Map<?, ?>) HostDiagnostics.read(root, child.toHandle()).get("llamaServer");
+
+			assertEquals(3412220L, llama.get("rssKb"));
+			assertEquals(64L, llama.get("lockedKb"), "VmLck: what --mlock actually locked");
+			assertEquals(5821L, llama.get("majorFaults"), "majflt, the tenth field after the command name");
+		}
+		finally {
+			child.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
+		}
+	}
+
+	@Test
+	public void read_shouldReportNullRatherThanZeroForLlamaServerMemoryItCannotRead() throws Exception {
+		Process child = startChild("--", "--port", "8091");
+		try {
+			assertFalse(child.waitFor(500, TimeUnit.MILLISECONDS), "the stand-in exited instead of running");
+
+			Map<?, ?> llama = (Map<?, ?>) HostDiagnostics.read(root, child.toHandle()).get("llamaServer");
+
+			assertTrue(llama.containsKey("majorFaults"));
+			assertNull(llama.get("majorFaults"), "an unreadable stat file is not a process that never faulted");
+			assertNull(llama.get("lockedKb"));
+			assertNull(llama.get("rssKb"));
+		}
+		finally {
+			child.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
+		}
 	}
 
 	@Test

@@ -173,6 +173,9 @@ public class ChartSearchAiConstants {
 
 	public static final int DEFAULT_LLM_CONTEXT_SIZE = 32768;
 
+	/** CPU threads for the local llama-server ({@code -t}); unset leaves it to llama-server's auto-detect. */
+	public static final String GP_LLM_THREADS = "chartsearchai.llm.threads";
+
 	public static final int DEFAULT_LLM_MAX_OUTPUT_TOKENS = 4096;
 
 	/**

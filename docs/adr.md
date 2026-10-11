@@ -15146,3 +15146,56 @@ under one heading, one item per order.
 Pinned by `AllergyQuestionConflictingOrderContextTest` (both item forms, the mixed item, two orders as two items, the
 streaming answer), `LlmInferenceServiceScheduledOrderContextTest.anAllergyQuestionStatesHerScheduledOrderWithTheDateItStarts`
 and `CurrentMedicationOrdersTest.theAnswerStillNamesEachPrintableDisplayOnce`.
+
+## Decision 174: An operator without a shell can see what the host does to llama-server and pin its threads
+
+**Status: Accepted** (October 2026) — implemented, no issue. Adds `GET /chartsearchai/hostdiagnostics` and
+`chartsearchai.llm.threads`; changes no default.
+
+### Context
+
+On 2026-10-11 the public demo (`chartsearchai.openmrs.org`: 4-vCPU AMD EPYC-Milan, 15 GB, Gemma 4 E2B on CPU,
+`chartMode=fullChart`) took **257 s** to answer *"any eye problems?"* for patient `dd74dc61…`. Timing each SSE event
+client-side against the live demo (the method of `eval/latency/decompose.py`) over the next hour, with every figure also
+recorded server-side as the audit row's `responseTimeMs`:
+
+| Patient | Question | First output | Reasoning | Total |
+| --- | --- | --- | --- | --- |
+| `dd74dc61…` | eye, asked again | 25.3 s | 9.7 s | 37 s |
+| `dd74dc61…` | kidney | 3.8 s | 10.7 s | 19 s |
+| `dd9836d7…` | eye | 204.6 s | 209.3 s | 464 s |
+| `dd9836d7…` | eye, asked again | 38.4 s | 219.9 s | 309 s |
+| `dd74dc61…` | kidney | 35.9 s | 186.1 s | 337 s |
+| `dd9836d7…` | kidney | 34.7 s | 203.2 s | 292 s |
+| `dd74dc61…` | kidney | 38.1 s | 188.5 s | 347 s |
+
+The second and the last three `dd74dc61…` kidney rows returned the **byte-identical** answer and citation, so the model did
+the same work each time: the same prompt decoded at ~40 characters/s and, twenty minutes later, ~2. The audit log shows no
+other chart-search query overlapping any of these, and no drug-reference material in any of their prompts
+(`referenceSliceRecords` 0). Something on the host took the CPU — and nothing reachable over REST could say what: steal from
+a neighbouring VM, a container CPU quota throttling llama.cpp's threads, another process, or swap each fit.
+
+`nproc`, which `chartsearchai.demo.cpuInfo` reports, does not see a CFS quota; llama.cpp's own thread auto-detect does not
+either. A quota smaller than the threads llama.cpp starts throttles all of them, and each step waits for the slowest. On
+macOS that cost is mild — Gemma 4 E2B, CPU-only, `llama-bench -n 48`, with seven busy-loop processes leaving three of ten
+cores free: 30.43 → 23.47 tok/s at 4 threads, 23.77 → 22.52 at 3 — and that measurement does not reach a Linux CFS quota,
+which this host may or may not have.
+
+### The decision
+
+- **`GET /chartsearchai/hostdiagnostics`** (`HostDiagnostics`) reports the kernel's raw cumulative counters — load
+  average, `/proc/stat` CPU ticks including steal, `MemAvailable` and swap, the cgroup v1 or v2 CPU quota and its
+  throttling — beside `Runtime.availableProcessors()`, which does honour the quota, and the module's own llama-server's CPU
+  time and `-t`. Sampled before and after a query and diffed, it tells the four causes apart. Gated on
+  `View Administration Functions` because it names a host process.
+- **`chartsearchai.llm.threads`** pins llama-server's `-t` (`--threads-batch` follows it). Empty — the default — passes
+  nothing, the command every install launched before; a change restarts the server on the next query, so it can be A/B-tested
+  over REST.
+- **No default is changed and no value is recommended.** `buildServerCommand_shouldNotPinThreadCount` still specifies the
+  auto-detected default, for the prefill regression where logical cores outnumber physical ones; defaulting to
+  `availableProcessors()` is the change that test names and refuses. Whether pinning helps the demo is unmeasured: the
+  diagnostics endpoint is how to find out, and a value is kept only on a measured gain with the answers unchanged.
+
+Pinned by `HostDiagnosticsTest` (the live-child case runs where the platform runs a copied `yes`, which CI's Linux does and
+macOS does not), `ChartSearchAiHostDiagnosticsTest`, `LocalLlmThreadsContextTest` and
+`LocalLlmEngineTest.serverNeedsRestart_shouldRestartWhenThreadCountChanges`.

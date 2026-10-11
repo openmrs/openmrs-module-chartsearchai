@@ -15204,3 +15204,11 @@ Pinned by `HostDiagnosticsTest`, `ChartSearchAiHostDiagnosticsTest`, `LocalLlmTh
 run `/usr/bin/yes` with its arguments after `--`, because GNU `yes` exits 1 on `-t`: as first written, with `-t` first
 and the child skipped whenever it exited, the case skipped in all three Java jobs of CI run 38142167902. They now assert
 the child is alive rather than skip; the child's CPU time is asserted on Linux only, macOS reporting none for it.
+
+**Update (2026-10-11, the memory readings).** Read on the demo after deploying the above: `cgroupCpu` has no quota and
+0 throttled periods, steal is 22,049 of ~982 million ticks since boot, and there is **no swap**, with `memAvailable` falling
+from 2.5 GB to 866 MB once llama-server loaded. The backend service in `docker-compose.yml` raises no locked-memory limit,
+so `--mlock` may lock only a sliver of the ~3 GB of weights; what it does not lock is page cache the kernel may drop and read
+back from disk mid-answer. That is a lead, not a finding, so the endpoint now reports what would settle it:
+`memoryKb.cached` and `memoryKb.mlocked`, and llama-server's `rssKb` (`VmRSS`), `lockedKb` (`VmLck`) and `majorFaults`
+(`majflt`, a counter). Pinned by `HostDiagnosticsTest.read_shouldReportWhatTheLlamaServerHoldsInMemoryAndHowOftenItFaultedFromDisk`.

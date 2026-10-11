@@ -817,13 +817,13 @@ GET /ws/rest/v1/chartsearchai/hostdiagnostics
 {"sampledAtMillis": 1791723630368, "jvmAvailableProcessors": 4,
  "loadAverage": [3.92, 4.10, 3.87],
  "cpuJiffies": {"user": 2255, "nice": 34, "system": 2290, "idle": 22625563, "iowait": 6290, "irq": 127, "softirq": 456, "steal": 1873},
- "memoryKb": {"memTotal": 15340872, "memAvailable": 2048000, "swapTotal": 4194300, "swapFree": 1000000},
+ "memoryKb": {"memTotal": 15340872, "memAvailable": 2048000, "swapTotal": 4194300, "swapFree": 1000000, "cached": 1650000, "mlocked": 3200},
  "cgroupCpu": {"version": "v2", "path": "/", "quotaMicros": 200000, "periodMicros": 100000, "periods": 5400, "throttledPeriods": 4100, "throttledMicros": 812345678},
- "llamaServer": {"running": true, "pid": 412, "cpuMillis": 905120, "threadsArgument": "auto", "threadsEnvironment": "unset", "osThreads": 9},
+ "llamaServer": {"running": true, "pid": 412, "cpuMillis": 905120, "threadsArgument": "auto", "threadsEnvironment": "unset", "osThreads": 9, "rssKb": 3412220, "lockedKb": 64, "majorFaults": 5821},
  "jvmCpuMillis": 412300}
 ```
 
-Every reading is the kernel's own, reported raw. The counters — the `cpuJiffies` ticks, `cgroupCpu`'s `periods`, `throttledPeriods` and `throttledMicros`, `llamaServer.cpuMillis` and `jvmCpuMillis` — only grow, so **sample once before a query and once after it, and diff**. `loadAverage` is the kernel's decaying average, and `memoryKb` and `cgroupCpu`'s quota and period are gauges: read them as they stand in each sample.
+Every reading is the kernel's own, reported raw. The counters — the `cpuJiffies` ticks, `cgroupCpu`'s `periods`, `throttledPeriods` and `throttledMicros`, `llamaServer.cpuMillis`, `llamaServer.majorFaults` and `jvmCpuMillis` — only grow, so **sample once before a query and once after it, and diff**. `loadAverage` is the kernel's decaying average, and `memoryKb`, `cgroupCpu`'s quota and period, and `llamaServer`'s `rssKb` and `lockedKb` are gauges: read them as they stand in each sample.
 
 | Reading | Points at |
 | --- | --- |
@@ -832,6 +832,7 @@ Every reading is the kernel's own, reported raw. The counters — the `cpuJiffie
 | `loadAverage` well above `jvmAvailableProcessors` with neither of the above | something on this host competes for the cores |
 | `memoryKb.swapFree` falls during the query | memory pressure |
 | `llamaServer.cpuMillis` grows by far less than the query's wall time × its threads | llama-server is waiting for CPU rather than computing |
+| `llamaServer.majorFaults` grows during the query, with `lockedKb` far below `rssKb` | `--mlock` was refused (the locked-memory limit) and the weights are page cache the kernel drops under memory pressure and reads back from disk mid-answer |
 | `jvmCpuMillis` grows by a large share of the query's wall time | the JVM itself — querystore's in-process embedding, Hibernate, garbage collection — is competing with llama-server |
 
 `jvmAvailableProcessors` honours a container CPU quota, which `nproc` (and so `chartsearchai.demo.cpuInfo`) does not. A file the module cannot read — every one of them off Linux — reports `null`, never zero. `cgroupCpu` is the cgroup this JVM runs in, located from `/proc/self/cgroup` and `/proc/self/mountinfo` (its `path` is what `/proc/self/cgroup` names, `/` inside a container with its own cgroup namespace), and `null` when that cannot be located. A `null` `quotaMicros` is no quota on that cgroup; a quota on an ancestor — a systemd slice above the service — is not read, nor the throttling it causes. Subtracting both `cpuMillis` from the growth of the non-idle `cpuJiffies` (USER_HZ ticks, 100 a second on mainstream kernels) leaves what other processes used. `llamaServer` is the process the engine launched, taken from the engine; `threadsArgument` is the `-t` it was launched with, `"auto"` without one, `null` where the platform does not expose a child's arguments; set it with [`chartsearchai.llm.threads`](#llm-tuning). `threadsEnvironment` is the `LLAMA_ARG_THREADS` the child inherited from the JVM's environment, which llama-server uses when no `-t` is passed, so `"auto"` beside a value there is a server pinned by its environment; `"unset"` when the environment does not carry it, `null` where it cannot be read.

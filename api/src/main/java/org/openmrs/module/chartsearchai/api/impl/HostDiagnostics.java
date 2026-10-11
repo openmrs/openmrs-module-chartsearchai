@@ -128,6 +128,8 @@ public final class HostDiagnostics {
 		memory.put("memAvailable", meminfo.get("MemAvailable"));
 		memory.put("swapTotal", meminfo.get("SwapTotal"));
 		memory.put("swapFree", meminfo.get("SwapFree"));
+		memory.put("cached", meminfo.get("Cached"));
+		memory.put("mlocked", meminfo.get("Mlocked"));
 		return memory;
 	}
 
@@ -284,7 +286,24 @@ public final class HostDiagnostics {
 		Map<String, Long> status = keyValues(root.resolve("proc").resolve(String.valueOf(process.pid()))
 				.resolve("status"), ":");
 		llama.put("osThreads", status == null ? null : status.get("Threads"));
+		llama.put("rssKb", status == null ? null : status.get("VmRSS"));
+		llama.put("lockedKb", status == null ? null : status.get("VmLck"));
+		llama.put("majorFaults", majorFaults(root, process));
 		return llama;
+	}
+
+	/**
+	 * {@code majflt} from {@code /proc/<pid>/stat}: pages the process had to read back from disk, a
+	 * counter. The command name is parenthesised and may itself hold spaces or {@code )}, so the fields are
+	 * counted from the LAST {@code )}, after which {@code majflt} is the tenth.
+	 */
+	private static Long majorFaults(Path root, ProcessHandle process) {
+		String stat = readFile(root.resolve("proc").resolve(String.valueOf(process.pid())).resolve("stat"));
+		if (stat == null || stat.lastIndexOf(')') < 0) {
+			return null;
+		}
+		String[] fields = stat.substring(stat.lastIndexOf(')') + 1).trim().split("\\s+");
+		return fields.length > 9 ? parseLong(fields[9]) : null;
 	}
 
 	/**

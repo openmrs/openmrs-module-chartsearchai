@@ -15611,3 +15611,38 @@ her didanosine (Major), *3TC*, *AZT* and *paracetamol* resolved, *"Any DDIs?"* s
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aDrugNameTheDataDoesNotRecogniseIsSaidToBeUnrecognisedWithItsNearestNames`,
 `.anUnrecognisedNameRaisesNoScreenOfHerOwnOrders` and `.aQuestionNamingNoDrugIsNotSaidToNameAnUnrecognisedOne`.
+
+## Decision 184: One pair of her own orders, raised from each side, is published once
+
+**Status: Accepted** (October 2026) — implemented on the owner's decision, 2026-10-13. Issue #513 item 4.
+
+### Context
+
+A question naming two drugs she already takes puts both in play, and the drug-in-play arm screens each against her
+orders, so the pair between them is raised from each side: on the 3.7.1 standalone *"Is it safe to continue her
+nevirapine and rifampicin together?"* published *"Nevirapine interacts with active order Rifampicin (rifampin) — Major."*
+and *"Rifampicin (rifampin) interacts with active order Nevirapine — Major."* over one mechanism note, and *"Is it ok that
+she is on methotrexate and salicylic acid?"* the same pair twice with a fuller note on one side. Raising only one side at
+the arm was tried and reverted: the scheduled-start date (#553), the current-medication referent (#515) and the checks of
+the answer each ask a finding about EACH drug (`ScheduledOrderInteractionContextTest`,
+`DrugInPlayHerOwnOrderReferentTest`, `InteractionClaimPairFidelityTest`).
+
+### The decision
+
+Both findings stay in the checks and the prompt; what a clinician is SHOWN states the pair once.
+`RestatedReversePairs.folded`, applied where every published chip list is serialised
+(`ChartSearchAiRestController.serializeSafetyWarnings`), folds two INTERACTION chips only where both are about her own
+current medications, each names one partner, subject and partner are each other's partner and subject by SUBSTANCE
+(`subjectRows`, `rowsOfPartner`), the severity is the same, and one mechanism note is the other or begins it. The chip
+kept carries the fuller note, in the first one's place. A chip without substance rows is never folded, nor a
+contraindication, nor two different pairs (Rhoda's rifampicin against the lopinavir and the ritonavir of one
+`Lopinavir / ritonavir` order stays two chips: two substance pairs).
+
+Verified live: Dora's and Helen's pairs publish one chip each; a proposal's and a screen's chip lists are unchanged.
+
+### Residue
+
+The model's own prose may still state the pair from both sides; it reads both findings. The module's composed answers
+do not reach this shape (a question naming two of her own drugs is not a composed proposal).
+
+Pinned by `RestatedReversePairsTest`.

@@ -64,6 +64,7 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
+import org.openmrs.module.chartsearchai.reference.RestatedReversePairs;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.util.PrivilegeConstants;
@@ -1674,6 +1675,10 @@ public class ChartSearchAiRestController {
 	 * field added to fix it.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
+		// One pair of her own orders raised from each side is published once (issue #513 item 4, ADR Decision 184): both
+		// findings stay in the checks, which ask each side for its own date and referent, and the clinician reads the pair
+		// once. RestatedReversePairs folds nothing it cannot prove is the same pair, and no contraindication chip.
+		warnings = RestatedReversePairs.folded(warnings);
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
 		if (warnings == null) {
 			return out;

@@ -129,6 +129,16 @@ public final class QueryScopeRouter {
 	private static final Pattern INTERACTION_CUES = cues("interact(?:s|ed|ing|ion|ions)?");
 
 	/**
+	 * The abbreviation for a DRUG-drug interaction, which names the medication domain and the interaction at once.
+	 * <em>"Any DDIs?"</em> matched neither family above, so on a patient whose orders the module relates in thirteen
+	 * pairs no screen ran and the model answered <em>"No drug-drug interactions are recorded."</em> CASE-SENSITIVE,
+	 * and that is load-bearing: "ddI" is didanosine's own abbreviation, and a question about her ddI is not a request
+	 * to screen. {@link #words} lower-cases, so the screen shapes below spell it {@code ddis?}; only this cue decides
+	 * whether a screen runs.
+	 */
+	private static final Pattern DDI_CUES = Pattern.compile("\\bDDI[sS]?\\b");
+
+	/**
 	 * The SECOND way a question asks for an interaction screen: it asks after the SAFETY of the
 	 * medications the patient is already on, or after CHANGING them, without using the word
 	 * "interact" at all. Word-boundary anchored via {@link #cues} like every other family here.
@@ -189,8 +199,8 @@ public final class QueryScopeRouter {
 	 * {@link #isTemporal} — it deliberately stays out of the enumeration-scope mapping.
 	 */
 	public static boolean isInteractionScreening(String question) {
-		return question != null && asksForADrugSafetyReading(question)
-				&& matchedIntents(question).contains(Intent.MEDICATIONS);
+		return question != null && (DDI_CUES.matcher(question).find() || asksForADrugSafetyReading(question)
+				&& matchedIntents(question).contains(Intent.MEDICATIONS));
 	}
 
 	/**
@@ -248,6 +258,9 @@ public final class QueryScopeRouter {
 	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions)";
 
 	private static final String D = Pattern.quote(DRUG_NAME);
+
+	/** The tail a screen question may close with: what the clinician should know, or worry, about. */
+	private static final String KNOW_ABOUT = "(?: i should (?:know|worry) about)?";
 
 	/**
 	 * The question shapes a proposal of ONE drug may take, over {@link #words} joined by single spaces
@@ -338,8 +351,13 @@ public final class QueryScopeRouter {
 			"(?:are|do) (?:any of )?" + POSSESSIVE + " " + MEDICATIONS + " (?:interact|interacting)"
 					+ "(?: with (?:each other|one another))?",
 			// "Does she have any drug interactions I should know about?"
-			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?interactions?"
-					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?(?: i should know about)?");
+			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?(?:interactions?|ddis?)"
+					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
+			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?"
+			"(?:are there )?any (?:drug )?(?:interactions|ddis)(?: (?:with|between|among) " + POSSESSIVE + " "
+					+ MEDICATIONS + ")?" + KNOW_ABOUT,
+			// "Check her medications for interactions", "Check her meds for drug interactions"
+			"check " + POSSESSIVE + " " + MEDICATIONS + " for (?:any )?(?:drug )?(?:interactions|ddis)");
 
 	private static final String SUBJECT = "(?:she|he|they|the patient|this patient)";
 

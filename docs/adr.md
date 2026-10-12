@@ -15270,3 +15270,35 @@ than a guess. A finding standing alone for its drug and order is unchanged.
   ladder; the chip already carries the mechanism that tells the two apart.
 
 Pinned by `CombinationOrderConstituentLineContextTest`.
+
+## Decision 176: "DDI" asks for a screen, and three more screen phrasings are the module's
+
+**Status: Accepted** (October 2026) — implemented, no issue. Widens
+[Decision 89](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)'s
+`QueryScopeRouter.isInteractionScreening` and issue #469's `SCREEN_SHAPES`.
+
+### Context
+
+On the 3.7.1 standalone, Rhoda Ritonavirb (`84f323da…`), whose orders the module relates in thirteen pairs, two of
+them Major:
+
+- *"Any DDIs?"* ran no screen. "DDI" carries neither an `interact*` word nor a medication word, so the screening arm's
+  gate refused it, nothing was injected, and the model answered *"No drug-drug interactions are recorded."* — a false
+  negative on the abbreviation clinicians use most.
+- *"Any drug interactions I should worry about?"* and *"Check her medications for interactions"* ran the screen but
+  fitted no screen shape, so the model answered them, each opening a screen with *"No —"* and restating whole
+  mechanism notes, where *"Does she have any drug interactions?"* got the module's counted list.
+
+### The decision
+
+- **`DDI_CUES`**: `\bDDI[sS]?\b`, CASE-SENSITIVE, asks for a screen on its own — the abbreviation names the medication
+  domain and the interaction at once. Case-sensitive because "ddI" is didanosine's own abbreviation: *"Is her ddI dose
+  correct?"* runs no screen.
+- **Three shapes**: `any (drug) interactions|ddis` with an optional `with|between|among her medications`, `check her
+  medications for (any) (drug) interactions|ddis`, and the existing *"Does she have any …"* shape admits `ddis`; the
+  first two and that one close with an optional *"I should know about"* or *"I should worry about"*.
+  A shape admitted where the screening arm did not run composes nothing (`answersFromFindings` needs an interaction
+  finding), so *"Any interactions?"*, which names no drug, still reaches the model.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`
+and `.didanosinesAbbreviationDoesNotAskForAScreen`.

@@ -2363,6 +2363,38 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
+	 * Three ways a clinician asks for a screen of her medications, each measured on the 3.7.1 standalone over a patient
+	 * whose orders the module relates in thirteen pairs. <em>"Any DDIs?"</em> ran no screen at all — "DDI" carries
+	 * neither an {@code interact*} word nor a medication word — and the model answered <em>"No drug-drug interactions
+	 * are recorded."</em>; the other two ran the screen but fitted no screen shape, so the model answered them, opening
+	 * a screen with <em>"No —"</em>. Each is now the module's counted answer, as "Does she have any drug
+	 * interactions?" is.
+	 */
+	@Test
+	public void everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Any DDIs?", "Any DDIs with her current medications?",
+				"Any drug interactions I should worry about?", "Check her medications for interactions" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("1 interaction among this patient's active medications:\n"),
+					question + " — the screen's count leads: " + answer.getAnswer());
+		}
+	}
+
+	/** "ddI" is didanosine's own abbreviation, so only the capitalised "DDI" asks for a screen: a question about her
+	 *  ddI dose is not one. */
+	@Test
+	public void didanosinesAbbreviationDoesNotAskForAScreen() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, "Is her ddI dose correct?");
+
+		assertNull(answer.getPairChipExtent(), "no screen ran, so none is stated: " + answer.getPairChipExtent());
+	}
+
+	/**
 	 * The screening arm keeps running for a screen that names something the dataset does not carry,
 	 * and raises her own medications' findings for it; an answer made of those would answer a question
 	 * nobody asked. A drug class resolves nothing either, and its note asks for a drug by name.

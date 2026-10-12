@@ -15465,3 +15465,45 @@ owner's call: issue #469 chose the closed grammar so a question carrying anythin
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`,
 `.moreProposalPhrasingsAreAnsweredFromTheFindings` and `DrugSafetyScreeningPhrasingCorpusTest`.
+
+## Decision 181: A question whether NOT to give a drug, or whether it interacts, is answered without an inverted "No"
+
+**Status: Accepted** (October 2026) — implemented on the owner's decision, 2026-10-12. Amends issue #469's grammar, its
+pinned list of questions left to the model, and issue #592's model call for *"Does X interact with her medications?"*.
+
+### Context
+
+*"Is there any reason not to give her X?"*, *"Is it risky to give her X?"* and *"Is it wrong to give her X?"* were
+pinned to the model (`aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`, *"inverse polarity: a
+'No' lead would answer it backwards"*). On the 3.7.1 standalone the model answered them backwards itself: *"Is
+rifampicin contraindicated?"*, *"Is there any reason not to give her rifampicin?"*, *"Any problem giving her …?"* and
+*"Does X interact with her medications?"* opened *"No — X should not be given: …"* on five of six patients, a first word
+that answers each the other way round.
+
+### The decision
+
+- **Questions asking whether NOT to give one drug** — `QueryScopeRouter.NEGATED_PROPOSAL_SHAPES`: *any reason not to
+  give*, *is X contraindicated*, *any problem/issue/concern giving*, *is it risky/dangerous/unsafe/wrong/harmful to
+  give* — are proposals (`asksWhetherToGiveADrug` admits them), and the composed answer's withholding lead is
+  `DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING`: *"This module's drug-safety check found a reason to withhold
+  X."* — neither "Yes" nor "No". Every other composition they reach already opens neutrally. A list question asking it
+  is never read as a list (`listedBeforeTheProposal`), whose lead *"No if the patient is on …"* would invert it.
+- **"Does X interact with her medications?"** — `INTERACTS_WITH_HER_MEDICATIONS_SHAPES` — is not a proposal. Where an
+  interaction finding answers it, the module answers *"Yes — X interacts with this patient's active medications."*,
+  adding *"This module's drug-safety check found a reason to withhold it."* where a finding withholds, then the findings;
+  where the check relates X to none of her medications, *"The interaction check relates X to none of this patient's N
+  active medications."* (Decision 143's sentence). Below the floor it keeps the model: that sentence is about
+  withholding and leaves "does it interact?" unanswered.
+
+Verified live on seven patients (42 questions): every negated question opens neutrally or with the no-pair sentence,
+every interaction question opens "Yes — …" or with the no-pair sentence.
+
+### Residue
+
+Dora DdiControl's efavirenz questions stay with the model — the finding that withholds it is a class relationship
+folded onto a Moderate row, which Decision 108's "No" does not license — and the model still opens them "No — …".
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWhetherNotToGiveADrugIsAnsweredWithoutAYesOrNo`,
+`.aQuestionWhetherADrugInteractsWithHerMedicationsIsAnsweredYesWithTheFindings`,
+`.aListQuestionAskingWhetherNotToGiveTheDrugIsNotAnsweredNoIfSheIsOnIt`,
+`.aQuestionWhetherADrugOfNoPairInteractsIsAnsweredThatTheCheckRelatesNone` and `.aBelowFloorQuestionThatProposesNothingStillAsksTheModel`.

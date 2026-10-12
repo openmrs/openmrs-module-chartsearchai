@@ -947,7 +947,7 @@ public class DrugReferenceInjector {
 			// gates what the MODEL reads (ADR Decision 77), and no model reads this answer (ADR Decision 140).
 			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					!questionDrugs.isEmpty(), pairExtent.stated());
+					!questionDrugs.isEmpty(), pairExtent.stated(), Lead.of(question, questionDrugs));
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -957,7 +957,10 @@ public class DrugReferenceInjector {
 			moduleAnswer = composeFromBelowFloor(proposes, questionDrugs, screenedSubstances, pairExtent.stated(),
 					mappings, context);
 			if (moduleAnswer == null) {
-				moduleAnswer = composeFromNoPair(proposes, questionDrugs, screenedSubstances, orderEntries,
+				// A question whether the drug interacts with her medications is answered where the check related it to
+				// none of them: "relates X to none of …" answers it as it answers a proposal (ADR Decision 181). Not
+				// below the floor, whose sentence is about withholding and leaves "does it interact?" unanswered.
+				moduleAnswer = composeFromNoPair(proposes || asksWhetherItInteracts(question, questionDrugs), questionDrugs, screenedSubstances, orderEntries,
 						pairExtent.stated(), mappings, matched, context, reading.states(), unidentified.size());
 			}
 			if (moduleAnswer == null) {
@@ -2663,6 +2666,38 @@ public class DrugReferenceInjector {
 	public static final String WITHHOLD_LEAD_CLOSING = ".";
 
 	/**
+	 * {@link #WITHHOLD_LEAD_OPENING} without its "No", for a question asking whether NOT to give the drug —
+	 * {@code QueryScopeRouter.asksWhetherNotToGiveADrug}, ADR Decision 181. "No" answers <em>"Is there any reason not to
+	 * give her rifampicin?"</em> the other way round, so the lead states the finding and answers neither way.
+	 */
+	public static final String NEUTRAL_WITHHOLD_LEAD_OPENING = "This module's drug-safety check found a reason to withhold ";
+
+	/** Which way a proposal's composed answer may open (ADR Decision 181). */
+	enum Lead {
+		/** "Can I give her X?" — "No" answers it. */
+		GIVE,
+		/** "Is there any reason not to give her X?" — "No" would answer it backwards, so the lead says neither. */
+		NOT_GIVE,
+		/** "Does X interact with her medications?" — "Yes" answers it where an interaction finding is about X. */
+		INTERACTS;
+
+		static Lead of(String question, List<DrugReference> questionDrugs) {
+			if (questionDrugs.isEmpty()) {
+				return GIVE;
+			}
+			List<String> words = wordsBesideItsNames(question, questionDrugs);
+			return QueryScopeRouter.asksWhetherNotToGiveADrug(words) ? NOT_GIVE
+					: QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(words) ? INTERACTS : GIVE;
+		}
+	}
+
+	/** Whether {@code question} asks whether its one drug interacts with her medications (ADR Decision 181). */
+	static boolean asksWhetherItInteracts(String question, List<DrugReference> questionDrugs) {
+		return !questionDrugs.isEmpty()
+				&& QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(wordsBesideItsNames(question, questionDrugs));
+	}
+
+	/**
 	 * How the module's own answer opens on a proposal whose findings are all interaction cautions about the drug
 	 * proposed (ADR Decision 140): <em>"2 interaction cautions for Omeprazole:"</em> — the count, what kind of
 	 * finding they are, and the drug. Never "can be given" — the clearance {@link #answersFromFindings}' javadoc
@@ -3448,7 +3483,7 @@ public class DrugReferenceInjector {
 			asked.add(entry.substanceGroupKey());
 		}
 		if (asked.size() != 1 || !Collections.disjoint(asked, herSubstances)
-				|| !questionProposes(question, questionDrugs)) {
+				|| !questionProposes(question, questionDrugs) && !asksWhetherItInteracts(question, questionDrugs)) {
 			return false;
 		}
 		for (SafetyWarning finding : findings) {
@@ -3614,8 +3649,11 @@ public class DrugReferenceInjector {
 		Matcher word = QUESTION_WORD.matcher(folded);
 		while (word.find()) {
 			int from = word.start();
+			// Never a question asking whether NOT to give the drug: the list answer opens "No if the patient is on …",
+			// which would answer it backwards (ADR Decision 181).
 			if (from == 0 || named[from]
-					|| !QueryScopeRouter.asksWhetherToGiveADrug(markedWordsFrom(folded, named, from))) {
+					|| !QueryScopeRouter.asksWhetherToGiveADrug(markedWordsFrom(folded, named, from))
+					|| QueryScopeRouter.asksWhetherNotToGiveADrug(markedWordsFrom(folded, named, from))) {
 				continue;
 			}
 			Set<Object> proposed = new HashSet<Object>();
@@ -3722,7 +3760,7 @@ public class DrugReferenceInjector {
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
 			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
-			PairChipExtent pairs) {
+			PairChipExtent pairs, Lead lead) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -3748,8 +3786,15 @@ public class DrugReferenceInjector {
 					substances.get(findings.get(i))));
 		}
 		SafetyWarning first = findings.get(order.get(0));
-		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
-			lines.add(0, WITHHOLD_LEAD_OPENING + first.getDrug() + WITHHOLD_LEAD_CLOSING);
+		if (proposal && lead == Lead.INTERACTS) {
+			// "Does it interact with her medications?" — every question admitted so has an interaction finding about the
+			// drug, so "Yes" is true of it, and the withholding call follows where a finding makes it (ADR Decision 181).
+			lines.add(0, "Yes — " + first.getDrug() + " interacts with this patient's active medications."
+					+ (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])
+							? " This module's drug-safety check found a reason to withhold it." : ""));
+		} else if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
+			lines.add(0, (lead == Lead.NOT_GIVE ? NEUTRAL_WITHHOLD_LEAD_OPENING : WITHHOLD_LEAD_OPENING) + first.getDrug()
+					+ WITHHOLD_LEAD_CLOSING);
 		} else if (cautions) {
 			// Every line but her own orders sharing a substance is an interaction caution about this drug, which
 			// cautionsOnlyAbout admitted, so the count is of those lines: the duplicate is not a caution about the

@@ -439,6 +439,54 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A question asking whether NOT to give a drug inverts "No" (ADR Decision 181). These were left to the model so that a
+	 * "No" lead could not answer them backwards, and on the 3.7.1 standalone the model answered them backwards anyway —
+	 * <em>"Is rifampicin contraindicated?"</em> and <em>"Is there any reason not to give her rifampicin?"</em> opened
+	 * <em>"No — Rifampicin should not be given …"</em> on five of six patients. The module answers them, opening with the
+	 * finding and neither "Yes" nor "No".
+	 */
+	@Test
+	public void aQuestionWhetherNotToGiveADrugIsAnsweredWithoutAYesOrNo() {
+		for (String question : new String[] { "Is there any reason not to give her ibuprofen?", "Is ibuprofen contraindicated?",
+				"Is ibuprofen contraindicated for her?", "Any problem giving her ibuprofen?", "Is it risky to give her ibuprofen?",
+				"Is it wrong to give her ibuprofen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.NEUTRAL_WITHHOLD_LEAD_OPENING + "Ibuprofen.\n"),
+					question + " — " + answer.getAnswer());
+		}
+	}
+
+	/**
+	 * "Does X interact with her medications?" asks whether there is an interaction, and the model answered it <em>"No —
+	 * X should not be given: it interacts with …"</em> (ADR Decision 181). Where the check relates it, the module answers
+	 * "Yes", with the findings.
+	 */
+	@Test
+	public void aQuestionWhetherADrugInteractsWithHerMedicationsIsAnsweredYesWithTheFindings() {
+		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
+		for (String question : new String[] { "Does ibuprofen interact with her medications?",
+				"Does ibuprofen interact with any of her current medications?", "Will ibuprofen interact with her meds?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("Yes — Ibuprofen interacts with this patient's active medications."),
+					question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().contains("[" + findings.get(0).index + "]"), answer.getAnswer());
+		}
+	}
+
+	/** A list question asking whether NOT to give its drug is never answered "No if the patient is on …", which would
+	 *  answer it backwards. */
+	@Test
+	public void aListQuestionAskingWhetherNotToGiveTheDrugIsNotAnsweredNoIfSheIsOnIt() {
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient,
+				"The patient is currently on Efavirenz, is there any reason not to give fluconazole?");
+		assertFalse(answer.getAnswer().startsWith("No"), answer.getAnswer());
+	}
+
 	@Test
 	public void searchStreaming_takesTheSamePathAndHandsTheComposedAnswerToEverySurface() {
 		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
@@ -1085,11 +1133,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(ChartAnswerTestSupport.referenceIndexes(can), ChartAnswerTestSupport.referenceIndexes(should));
 	}
 
-	/** A question that names the drug without proposing it keeps the model's answer (issue #592). */
+	/** A question whether a drug the check relates to none of her medications interacts with them is answered with what
+	 *  the check established (ADR Decision 181, amending issue #592's model call for this shape); a question naming the drug
+	 *  any other way keeps the model. */
 	@Test
-	public void aQuestionOfNoPairThatProposesNothingStillAsksTheModel() {
-		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "Does mebendazole interact with her medications?",
-				shipped());
+	public void aQuestionWhetherADrugOfNoPairInteractsIsAnsweredThatTheCheckRelatesNone() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Does mebendazole interact with her medications?");
+		assertEquals(0, provider.calls, answer.getAnswer());
+		assertTrue(answer.getAnswer().startsWith("The interaction check relates Mebendazole to none of this patient's 1 active "
+				+ "medication. ["), answer.getAnswer());
+		assertTheModelAnswersWhatTheCheckRelatedToNothing(patient, "What does mebendazole do to her medications?", shipped());
 	}
 
 	/** Without the drug's reference record in the chart the answer would cite nothing for it, so the model answers
@@ -2101,10 +2155,6 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			// a dose: the injected reference record addresses it, the findings do not
 			"Can I give her ibuprofen 400mg?",
 			"What dose of ibuprofen can I give her?",
-			// inverse polarity: a "No" lead would answer it backwards
-			"Is it risky to give her ibuprofen?",
-			"Is it wrong to give her ibuprofen?",
-			"Is there any reason not to give her ibuprofen?",
 			// current use, not a proposal
 			"Does she take ibuprofen?",
 			// two drugs: each would need its own answer

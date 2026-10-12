@@ -338,6 +338,53 @@ public final class QueryScopeRouter {
 					+ PATIENT + ")?(?: now| today)?");
 
 	/**
+	 * The question shapes asking whether NOT to give one drug — ADR Decision 181. Their polarity is the proposal shapes'
+	 * inverted: "No" answers <em>"Is there any reason not to give her ibuprofen?"</em> by saying there is none. They were
+	 * left to the model so that the module's "No" lead could not answer them backwards, and on the 3.7.1 standalone the
+	 * model answered them backwards itself (<em>"No — Rifampicin should not be given …"</em>, five of six patients). So
+	 * {@link #asksWhetherToGiveADrug} admits them — each still proposes the drug — and {@link #asksWhetherNotToGiveADrug}
+	 * tells the composer to open with neither "Yes" nor "No".
+	 */
+	private static final List<Pattern> NEGATED_PROPOSAL_SHAPES = shapes(
+			// "Is there any reason not to give her ibuprofen?"
+			"is there (?:any )?reason not to (?:give|start|prescribe|administer|add|use) (?:" + PATIENT + " )?(?:on )?" + D
+					+ "(?: (?:to|for) " + PATIENT + ")?",
+			// "Is ibuprofen contraindicated?", "Is ibuprofen contraindicated for her?"
+			"is " + D + " contraindicated(?: (?:for|in) " + PATIENT + ")?(?: now| today)?",
+			// "Any problem giving her ibuprofen?", "Are there any concerns with starting ibuprofen?"
+			"(?:(?:is|are) there )?any (?:problems?|issues?|concerns?) (?:with )?(?:giving|starting|prescribing|adding) (?:"
+					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?",
+			// "Is it risky to give her ibuprofen?", "Is it wrong to give her ibuprofen?"
+			"is it (?:risky|dangerous|unsafe|wrong|harmful|a problem) to (?:give|start|prescribe|administer|add) (?:" + PATIENT
+					+ " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?");
+
+	/**
+	 * Whether a question asks whether NOT to give one drug, and nothing else — one of {@link #NEGATED_PROPOSAL_SHAPES}
+	 * (ADR Decision 181). Every such question is also one {@link #asksWhetherToGiveADrug} admits; this says only that a
+	 * "No" would answer it backwards.
+	 */
+	public static boolean asksWhetherNotToGiveADrug(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, NEGATED_PROPOSAL_SHAPES);
+	}
+
+	/**
+	 * The question shapes asking whether ONE drug interacts with her medications — ADR Decision 181. Not a proposal: it
+	 * asks whether there is an interaction, which "Yes" answers where the check relates one. The model answered it
+	 * <em>"No — X should not be given: it interacts with …"</em> on the 3.7.1 standalone.
+	 */
+	private static final List<Pattern> INTERACTS_WITH_HER_MEDICATIONS_SHAPES = shapes(
+			// "Does ibuprofen interact with her medications?", "Will ibuprofen interact with any of her current meds?"
+			"(?:does|will|would|could|can) " + D + " interact with (?:any of )?" + POSSESSIVE + " " + MEDICATIONS);
+
+	/**
+	 * Whether a question asks whether ONE drug interacts with her medications, and nothing else — one of {@link
+	 * #INTERACTS_WITH_HER_MEDICATIONS_SHAPES} (ADR Decision 181). Fail-CLOSED as {@link #asksWhetherToGiveADrug} is.
+	 */
+	public static boolean asksWhetherADrugInteractsWithHerMedications(List<String> wordsWithTheDrugMarked) {
+		return fitsAShape(wordsWithTheDrugMarked, INTERACTS_WITH_HER_MEDICATIONS_SHAPES);
+	}
+
+	/**
 	 * The question shapes asking whether TWO drugs may be given together, over {@link #words} with each drug's name
 	 * marked {@link #DRUG_NAME} — ADR Decision 169. A grammar for the reason {@link #PROPOSAL_SHAPES} is, and kept apart
 	 * from it, since that one's readers answer for ONE drug proposed: its one reader states the findings about either
@@ -524,7 +571,7 @@ public final class QueryScopeRouter {
 	 * 129.
 	 */
 	public static boolean asksWhetherToGiveADrug(List<String> wordsWithTheDrugMarked) {
-		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES);
+		return fitsAShape(wordsWithTheDrugMarked, PROPOSAL_SHAPES) || asksWhetherNotToGiveADrug(wordsWithTheDrugMarked);
 	}
 
 	/**

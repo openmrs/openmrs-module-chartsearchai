@@ -109,6 +109,8 @@
     "Vtol",
     "Zebutal"
    ],
+   "international_names": ["Paracetamol"],
+   "abbreviations": ["APAP"],
    "ciel": [
     {
      "code": "103169",
@@ -836,6 +838,8 @@
     "Vytorin",
     "Zocor"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104633",
@@ -864,6 +868,8 @@
     "Vytorin",
     "Zetia"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104633",

@@ -2529,7 +2529,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 			{ "Can I give her rifampcin?", "\"rifampcin\"", "Did you mean Rifampicin" },
 			{ "Can I give her tenofovir?", "\"tenofovir\"", "Tenofovir disoproxil" },
 			{ "Does zorblatine interact with any of her medications?", "\"zorblatine\"", null },
-			{ "Can I give her TDF?", "\"TDF\"", null } };
+			// "ddI", as the clinician writes it: the knowledge base leaves didanosine's abbreviation out on purpose
+			{ "Can I give her ddI?", "\"ddI\"", null } };
 		for (String[] c : cases) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, c[0]);
@@ -2553,7 +2554,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void anUnrecognisedNameRaisesNoScreenOfHerOwnOrders() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(), "precondition: her own orders interact");
-		for (String question : new String[] { "Does metformn interact with her medications?", "Can I give her TDF?" }) {
+		for (String question : new String[] { "Does metformn interact with her medications?", "Can I give her ddI?" }) {
 			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
 			assertTrue(answer.getAnswer().startsWith("No interaction check was run: "), question + " — " + answer.getAnswer());
 			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());

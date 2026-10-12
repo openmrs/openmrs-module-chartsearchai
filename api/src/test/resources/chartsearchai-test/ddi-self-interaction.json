@@ -53,6 +53,8 @@
     "S01AA24"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "78385",
@@ -155,6 +157,8 @@
     "Zingo",
     "Zionodil"
    ],
+   "international_names": ["Lignocaine"],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103769",
@@ -407,6 +411,8 @@
     "Zingo",
     "Zionodil"
    ],
+   "international_names": ["Lignocaine"],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103769",
@@ -659,6 +665,8 @@
     "Zingo",
     "Zionodil"
    ],
+   "international_names": ["Lignocaine"],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103769",
@@ -837,6 +845,8 @@
     "Pileran",
     "Reglan"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103279",
@@ -876,6 +886,8 @@
     "Letybo",
     "Xeomin"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "72303",

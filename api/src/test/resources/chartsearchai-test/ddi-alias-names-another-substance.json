@@ -42,6 +42,8 @@
     "Spikevax 2024-2025",
     "Spikevax 2025-2026"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "166154",
@@ -92,6 +94,8 @@
     "Phesgo",
     "Trazimera"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167465",
@@ -160,6 +164,8 @@
     "L01FD04"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167465",
@@ -230,6 +236,8 @@
    "brand_names": [
     "KADCYLA"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167465",
@@ -296,6 +304,8 @@
    "drugbank_id": null,
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   },
   {
@@ -314,6 +324,8 @@
     "Letybo",
     "Xeomin"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "72303",
@@ -343,6 +355,8 @@
     "Letybo",
     "Xeomin"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "72303",
@@ -440,6 +454,8 @@
     "Westcort",
     "Xerese"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103309",
@@ -772,6 +788,8 @@
     "Westcort",
     "Xerese"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103309",

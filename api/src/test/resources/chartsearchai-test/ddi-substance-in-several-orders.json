@@ -37,6 +37,8 @@
     "J04AK01"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": ["PZA"],
    "ciel": [
     {
      "code": "1131",
@@ -67,6 +69,8 @@
    "brand_names": [
     "Rifadin"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104943",
@@ -112,6 +116,8 @@
    "brand_names": [
     "Myambutol"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "1108",
@@ -150,6 +156,8 @@
     "J04AC01"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": ["INH"],
    "ciel": [
     {
      "code": "104943",

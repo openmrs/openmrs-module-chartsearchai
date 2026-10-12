@@ -19,6 +19,8 @@
    "drugbank_id": null,
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   },
   {
@@ -29,6 +31,8 @@
    "drugbank_id": null,
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   },
   {
@@ -39,6 +43,8 @@
    "drugbank_id": "DB16611",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   },
   {
@@ -49,6 +55,8 @@
    "drugbank_id": null,
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   }
  ],

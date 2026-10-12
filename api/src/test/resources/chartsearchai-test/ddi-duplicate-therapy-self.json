@@ -22,6 +22,8 @@
     "Nexium",
     "Vimovo"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167977",
@@ -62,6 +64,8 @@
    "brand_names": [
     "Protonix"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "81550",
@@ -87,6 +91,8 @@
    "brand_names": [
     "Priftin"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "83360",
@@ -108,6 +114,8 @@
     "Nexium",
     "Vimovo"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167977",
@@ -146,6 +154,8 @@
     "J04AC01"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": ["INH"],
    "ciel": [
     {
      "code": "104943",

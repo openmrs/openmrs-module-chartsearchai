@@ -29,6 +29,8 @@
    "brand_names": [
     "Sirturo"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "163143",
@@ -57,6 +59,8 @@
     "Truvada",
     "Viread"
    ],
+   "international_names": [],
+   "abbreviations": ["TDF"],
    "ciel": [
     {
      "code": "104565",
@@ -126,6 +130,8 @@
     "Symtuza",
     "Truvada"
    ],
+   "international_names": [],
+   "abbreviations": ["FTC"],
    "ciel": [
     {
      "code": "104565",

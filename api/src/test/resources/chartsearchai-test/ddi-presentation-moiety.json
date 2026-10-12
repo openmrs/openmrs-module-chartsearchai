@@ -19,6 +19,8 @@
    "drugbank_id": null,
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104309",
@@ -58,6 +60,8 @@
     "Multrys",
     "Tralement"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104298",
@@ -86,6 +90,8 @@
    "brand_names": [
     "Shingrix"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "168016",
@@ -104,6 +110,8 @@
    "brand_names": [
     "Palforzia"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   },
   {
@@ -119,6 +127,8 @@
     "ProQuad",
     "Varivax"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "159702",
@@ -145,6 +155,8 @@
    "drugbank_id": "DB01592",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "78218",
@@ -161,6 +173,8 @@
    "drugbank_id": "DB01592",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "78223",
@@ -177,6 +191,8 @@
    "drugbank_id": "DB13964",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "71500",
@@ -195,6 +211,8 @@
     "B05AA05"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104441",
@@ -221,6 +239,8 @@
    "drugbank_id": null,
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "74656",
@@ -246,6 +266,8 @@
     "Humalog Mix",
     "Lyumjev"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104918",
@@ -269,6 +291,8 @@
    "brand_names": [
     "Humalog Mix"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104918",
@@ -290,6 +314,8 @@
    "drugbank_id": "DB01592",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "78218",

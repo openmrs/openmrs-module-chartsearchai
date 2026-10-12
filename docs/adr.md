@@ -15585,7 +15585,20 @@ Verified live: *rifampcin*, *metformn*, *warfrin* (with suggestions), *tenofovir
 files alike: `international_names` (schema 1.4, openmrs-ddi-knowledge-base issue #8 — *Paracetamol* under
 acetaminophen) and `abbreviations` (schema 1.5 — *TDF*, *3TC*, *AZT*, curated one by one upstream; *ddI* is left out
 there because *DDI* names a drug-drug interaction and aliases are matched against prose). The shipped knowledge base is
-still schema 1.3, so until a release carrying both is bundled these words are reported as above. Verified live by
+still schema 1.3, so until a release carrying both is bundled these words are reported as above.
+
+**Bundled the same day, on the owner's decision, before upstream merged it**: the module now ships the schema 1.5 build
+of `dkayiwa/openmrs-ddi-knowledge-base` commit `57d0f8a` (pull requests #9 and #10 of the upstream repository; the
+owner's account cannot merge there). `DdiDrugReferenceSource`'s javadoc carries the commit, size, sha256 and blob id.
+The refresh moved three pinned measurements, each read rather than absorbed — `BridgedConceptLegBoundsTest`: *"Aceclofenac /
+chlorzoxazone / paracetamol"* is now named whole (122 → 121 concepts, 166 → 165 attributions refused), and *"Hyoscine
+butylbromide / Paracetamol"* now also reaches Scopolamine through the international name *Hyoscine*, which the
+intersection keeps out (244 → 245) — a curation question for upstream #9, since hyoscine butylbromide is not
+scopolamine. `ShippedAliasVocabularyTest` treats the declared abbreviations as it treats declared brands and pins them
+by name (`.theShippedVocabularyCarriesExactlyTheAbbreviationsPinnedHere`, which also holds that `ddi` is never an alias),
+and the 28 fixtures `SlicedReferenceRowProvenanceTest` holds to the shipped rows carry the two new fields. Verified live
+from the bundled file: *TDF* withheld tenofovir disoproxil against her didanosine (Major); *3TC*, *INH*, *paracetamol*
+and *glibenclamide* resolved; *"Any DDIs?"* still screened; *ddI* still reported. Verified live by
 pointing `chartsearchai.drugReference.dataFilePath` at a schema 1.5 build: *TDF* withheld tenofovir disoproxil against
 her didanosine (Major), *3TC*, *AZT* and *paracetamol* resolved, *"Any DDIs?"* still screened, *ddI* was still reported
 — then the property was restored and the rig restarted onto the shipped file. Pinned by `DdinterCuratedNameAliasTest`.

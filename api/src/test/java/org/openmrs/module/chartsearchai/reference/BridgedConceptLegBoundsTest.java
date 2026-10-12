@@ -202,7 +202,11 @@ public class BridgedConceptLegBoundsTest {
 		// allowance reads "cytotect" as an inflection of it. A near-identical BRAND is a collision shape
 		// generic names rarely produce, and it is exactly the shape this bound exists to catch: the
 		// intersection with the concepts the bridge FILES keeps Misoprostol out of the answer.
-		assertEquals(244, intersectionNarrows,
+		// 245 since the schema 1.5 refresh added the knowledge base's international names and abbreviations as
+		// aliases (ADR Decision 183). Measured by diffing this walk over the two files: the one concept that joined is
+		// "Hyoscine butylbromide / Paracetamol", whose recorded name now also reaches Scopolamine through the
+		// international name "Hyoscine" — and the intersection keeps Scopolamine out, which is this bound's purpose.
+		assertEquals(245, intersectionNarrows,
 			"concepts where the ranked resolution of the bridge's name reaches an entry it does not file"
 					+ " there");
 		assertEquals(1, resolvesNothing, "concepts the two bounds together leave resolving nothing");
@@ -225,12 +229,12 @@ public class BridgedConceptLegBoundsTest {
 	 * <ul>
 	 *   <li>{@code 1112} answer with more than one {@code substanceGroupKey} — the leg's residue, and
 	 *       what round 1's guard refused whole;</li>
-	 *   <li>{@code 122} of those have a recorded name that does not NAME every substance they answer
-	 *       with — what the guard refuses now. The other 990 are its complement, so that is what they
+	 *   <li>{@code 121} (122 before the schema 1.5 refresh) of those have a recorded name that does not NAME every substance they answer
+	 *       with — what the guard refuses now. The other 991 are its complement, so that is what they
 	 *       are a count OF and not a count of combinations: naming every substance a concept resolves
 	 *       is satisfied by a combination name and by a salt, ester or derivative name alike
 	 *       ({@code Mometasone furoate}, {@code Hydrocortisone butyrate});</li>
-	 *   <li>{@code 166} of the {@code 5826} (concept, substance) attributions the leg can state are
+	 *   <li>{@code 165} (166 before the schema 1.5 refresh) of the {@code 5826} (concept, substance) attributions the leg can state are
 	 *       refused. That is the unit the clause is actually printed in, and it is not the concept
 	 *       count: one concept can have one substance refused and another admitted;</li>
 	 *   <li>{@code 0} concepts answering with exactly ONE substance are named by nothing.</li>
@@ -296,11 +300,15 @@ public class BridgedConceptLegBoundsTest {
 
 		assertEquals(1112, severalSubstances,
 			"bridged concepts answering with more than one substance — the leg's residue, unfiltered");
-		assertEquals(122, severalAndNotAllNamed,
+		// 121 since the schema 1.5 refresh (ADR Decision 183), down from 122: measured by diffing this walk over the two
+		// files, "Aceclofenac / chlorzoxazone / paracetamol" is now named whole, "paracetamol" being acetaminophen's
+		// international name.
+		assertEquals(121, severalAndNotAllNamed,
 			"of those, the ones whose recorded name does not name every substance they answer with");
 		assertEquals(5826, attributions,
 			"(concept, substance) attributions the leg can state at all");
-		assertEquals(166, attributionsRefused,
+		// 165 since the schema 1.5 refresh, down from 166: the same concept, its acetaminophen attribution now admitted.
+		assertEquals(165, attributionsRefused,
 			"of those, the ones the clause refuses");
 		assertEquals(0, oneSubstanceNamedByNothing,
 			"a concept answering with one substance is named by its own recorded name — the premise"

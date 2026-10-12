@@ -50,6 +50,8 @@
     "Vivelle",
     "Yuvafem"
    ],
+   "international_names": ["Oestradiol"],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104597",
@@ -163,6 +165,8 @@
     "Tobradex",
     "Tresaderm"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104317",
@@ -280,6 +284,8 @@
     "Vivelle",
     "Yuvafem"
    ],
+   "international_names": ["Oestradiol"],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104597",
@@ -397,6 +403,8 @@
     "Vivelle",
     "Yuvafem"
    ],
+   "international_names": ["Oestradiol"],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104597",

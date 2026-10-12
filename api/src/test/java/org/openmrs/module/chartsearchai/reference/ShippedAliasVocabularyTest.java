@@ -136,16 +136,26 @@ public class ShippedAliasVocabularyTest {
 	 *
 	 * <p>Asserted as the list, in sorted order, so a knowledge-base refresh reports WHICH word joined
 	 * rather than that a number moved.
+	 *
+	 * <p><b>Clinical abbreviations joined with schema 1.5</b> (ADR Decision 183: "Can I give her TDF?" resolved to
+	 * nothing). They are short by nature — {@code tdf}, {@code 3tc}, {@code inh} — and, like brands, they are declared
+	 * by the file ({@code drugs[].abbreviations}) and curated where they are produced: upstream lists each by hand as a
+	 * token naming that one substance and nothing in ordinary clinical prose, and leaves out the ones that do collide
+	 * ({@code ddI}, whose {@code DDI} is a drug-drug interaction; {@code ABC}, {@code ASA}, {@code CTX}). So they are
+	 * excluded here as brands are, and {@link #theShippedVocabularyCarriesExactlyTheAbbreviationsPinnedHere} pins the
+	 * whole declared set by name, so one joining is read and not absorbed.
 	 */
 	@Test
 	public void everyShortAliasTheShippedVocabularyCarriesIsItselfASubstance() throws Exception {
 		Set<String> brands = shippedBrandNames();
+		Set<String> declared = new LinkedHashSet<String>(brands);
+		declared.addAll(shippedAbbreviations());
 		assertTrue(brands.size() > 1000,
 			"precondition: the shipped file declares brand names (knowledge-base schema 1.3)");
 		List<String> shortNonBrandAliases = new ArrayList<String>();
 		List<String> tooShortBrands = new ArrayList<String>();
 		for (String alias : distinctAliases()) {
-			if (alias.length() <= SHORT && !brands.contains(alias)) {
+			if (alias.length() <= SHORT && !declared.contains(alias)) {
 				shortNonBrandAliases.add(alias);
 			}
 			if (alias.length() <= 3 && brands.contains(alias)) {
@@ -221,6 +231,41 @@ public class ShippedAliasVocabularyTest {
 					+ " — a brand leaving is as much a change to what resolves as one joining");
 		assertEquals(pinned.size(), carried.size(),
 			"and the pinned file must carry each brand exactly once");
+	}
+
+	/**
+	 * Every clinical abbreviation the shipped file declares (schema 1.5, ADR Decision 183), pinned here by name: a short
+	 * alias matches anywhere in prose ({@code DrugReference.matchesText} has no length floor), so one joining on a
+	 * refresh is read for a collision with ordinary clinical usage before the list is updated — and {@code ddi} must
+	 * never be one, since "Any DDIs?" asks for a screen of her own orders and must not put didanosine in play.
+	 */
+	@Test
+	public void theShippedVocabularyCarriesExactlyTheAbbreviationsPinnedHere() throws Exception {
+		List<String> declared = new ArrayList<String>(shippedAbbreviations());
+		Collections.sort(declared);
+		assertEquals(java.util.Arrays.asList("3tc", "apap", "azt", "d4t", "dtg", "efv", "ftc", "hctz", "inh", "mtx",
+			"nvp", "pza", "taf", "tdf", "zdv"), declared,
+			"the abbreviations the shipped knowledge base declares — read a new one for a collision with ordinary"
+					+ " clinical usage before adding it here");
+		Set<String> aliases = distinctAliases();
+		assertTrue(aliases.containsAll(declared), "every declared abbreviation reaches the alias vocabulary");
+		assertTrue(!aliases.contains("ddi"), "\"ddi\" is never an alias: DDI is a drug-drug interaction");
+	}
+
+	/** The clinical abbreviations the shipped file declares ({@code drugs[].abbreviations}, schema 1.5), lower-cased
+	 *  as {@code DdiDrugReferenceSource.DrugRow.addAlias} lower-cases every alias. */
+	private static Set<String> shippedAbbreviations() throws Exception {
+		Set<String> abbreviations = new LinkedHashSet<String>();
+		try (InputStream in = ShippedAliasVocabularyTest.class
+				.getResourceAsStream(DdiDrugReferenceSource.CLASSPATH_DEFAULT)) {
+			assertNotNull(in, DdiDrugReferenceSource.CLASSPATH_DEFAULT + " should be on the classpath");
+			for (JsonNode drug : new ObjectMapper().readTree(in).path("drugs")) {
+				for (JsonNode abbreviation : drug.path("abbreviations")) {
+					abbreviations.add(abbreviation.asText().trim().toLowerCase(Locale.ROOT));
+				}
+			}
+		}
+		return abbreviations;
 	}
 
 	private static List<String> pinnedBrandNames() throws Exception {

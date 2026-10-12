@@ -27,6 +27,8 @@
         "Envarsus",
         "Prograf"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "71307",
@@ -69,6 +71,8 @@
         "Verkazia",
         "Vevye"
       ],
+      "international_names": ["Ciclosporin"],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "74125",
@@ -111,6 +115,8 @@
         "Verkazia",
         "Vevye"
       ],
+      "international_names": ["Ciclosporin"],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "74125",

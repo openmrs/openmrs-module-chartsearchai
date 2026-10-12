@@ -38,6 +38,8 @@
     "Medrol",
     "Solu-Medrol"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104977",
@@ -93,6 +95,8 @@
     "Medrol",
     "Solu-Medrol"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104977",
@@ -163,6 +167,8 @@
     "Temaril-P",
     "Veripred"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103753",
@@ -254,6 +260,8 @@
     "Coumadin",
     "Jantoven"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "86415",
@@ -288,6 +296,8 @@
     "Noctiva",
     "Stimate"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "74291",

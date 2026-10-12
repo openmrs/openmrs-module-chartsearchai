@@ -72,6 +72,8 @@
     "Triumeq",
     "Trizivir"
    ],
+   "international_names": [],
+   "abbreviations": ["3TC"],
    "ciel": [
     {
      "code": "103166",
@@ -162,6 +164,8 @@
    "brand_names": [
     "Viramune"
    ],
+   "international_names": [],
+   "abbreviations": ["NVP"],
    "ciel": [
     {
      "code": "1652",
@@ -192,6 +196,8 @@
    "brand_names": [
     "Rifadin"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104943",
@@ -235,6 +241,8 @@
     "J05AF04"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": ["d4T"],
    "ciel": [
     {
      "code": "161363",
@@ -297,6 +305,8 @@
     "Vazalore",
     "Yosprala"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103170",
@@ -623,6 +633,8 @@
    "brand_names": [
     "Diflucan"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167983",
@@ -662,6 +674,8 @@
     "Twynsta",
     "Widaplik"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103554",

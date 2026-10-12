@@ -41,6 +41,8 @@
    "drugbank_id": "DB10675",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   },
   {
@@ -58,6 +60,8 @@
     "Uricalm",
     "Uristat"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103965",
@@ -118,6 +122,8 @@
     "Finacea",
     "NicAzel"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "71770",
@@ -143,6 +149,8 @@
     "Finacea",
     "NicAzel"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "71770",
@@ -169,6 +177,8 @@
     "Equisul SDT",
     "Uniprim"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "105280",
@@ -197,6 +207,8 @@
     "J01EB03"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "105280",
@@ -277,6 +289,8 @@
     "Vagisil Original Formula",
     "Zilactin B"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103307",
@@ -536,6 +550,8 @@
     "Sulfatrim",
     "Uniprim"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "105145",
@@ -618,6 +634,8 @@
     "Vazalore",
     "Yosprala"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103170",
@@ -943,6 +961,8 @@
    "brand_names": [
     "Bidil"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104827",
@@ -984,6 +1004,8 @@
    "drugbank_id": "DB09401",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103715",

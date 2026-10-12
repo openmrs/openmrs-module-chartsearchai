@@ -80,6 +80,8 @@
     "Trizivir",
     "Ziagen"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103166",
@@ -124,6 +126,8 @@
     "Omidria",
     "Sprix"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "78481",
@@ -153,6 +157,8 @@
     "Omidria",
     "Sprix"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "78481",
@@ -187,6 +193,8 @@
     "Triumeq",
     "Trizivir"
    ],
+   "international_names": [],
+   "abbreviations": ["3TC"],
    "ciel": [
     {
      "code": "103166",
@@ -278,6 +286,8 @@
     "Nexium",
     "Vimovo"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167977",
@@ -318,6 +328,8 @@
    "brand_names": [
     "Protonix"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "81550",
@@ -345,6 +357,8 @@
     "Cytra-K",
     "Urocit-K"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104320",
@@ -421,6 +435,8 @@
     "RenaKare",
     "Renaplus"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "105200",
@@ -471,6 +487,8 @@
     "TriLyte",
     "Zegerid Reformulated Aug 2006"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103706",
@@ -564,6 +582,8 @@
     "J01EB03"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "105280",
@@ -588,6 +608,8 @@
     "S01AB02"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104594",
@@ -683,6 +705,8 @@
     "Vagisil Original Formula",
     "Zilactin B"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "103307",
@@ -942,6 +966,8 @@
     "Sulfatrim",
     "Uniprim"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "105145",
@@ -991,6 +1017,8 @@
     "B05XX02"
    ],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "85590",
@@ -1013,6 +1041,8 @@
     "Retrovir",
     "Trizivir"
    ],
+   "international_names": [],
+   "abbreviations": ["AZT", "ZDV"],
    "ciel": [
     {
      "code": "160123",
@@ -1061,6 +1091,8 @@
     "Kesium",
     "Umbrellin"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "104331",
@@ -1097,6 +1129,8 @@
    "drugbank_id": "DB10672",
    "atc": [],
    "brand_names": [],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": []
   },
   {
@@ -1112,6 +1146,8 @@
     "Nexium",
     "Vimovo"
    ],
+   "international_names": [],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167977",
@@ -1163,6 +1199,8 @@
     "Trimox",
     "Umbrellin"
    ],
+   "international_names": ["Amoxycillin"],
+   "abbreviations": [],
    "ciel": [
     {
      "code": "167977",

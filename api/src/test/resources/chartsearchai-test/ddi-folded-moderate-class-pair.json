@@ -23,6 +23,8 @@
    "brand_names": [
     "Viramune"
    ],
+   "international_names": [],
+   "abbreviations": ["NVP"],
    "ciel": [
     {
      "code": "1652",
@@ -54,6 +56,8 @@
     "Atripla",
     "Symfi"
    ],
+   "international_names": [],
+   "abbreviations": ["EFV"],
    "ciel": [
     {
      "code": "104565",

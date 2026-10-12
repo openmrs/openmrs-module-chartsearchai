@@ -32,6 +32,8 @@
         "Kiprofen",
         "Orudis"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "78479",
@@ -71,6 +73,8 @@
         "Rosadan",
         "Vandazole"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "104492",
@@ -135,6 +139,8 @@
         "Rosadan",
         "Vandazole"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "104492",
@@ -187,6 +193,8 @@
       "brand_names": [
         "Tindamax"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "85151",
@@ -226,6 +234,8 @@
         "Vicoprofen",
         "Wal-Profen"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "104246",

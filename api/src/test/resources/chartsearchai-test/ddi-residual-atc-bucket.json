@@ -31,6 +31,8 @@
         "Wal-itin D",
         "Wal-vert"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "104995",
@@ -63,6 +65,8 @@
         "ThyroShield",
         "Vitafol-One"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "103547",
@@ -135,6 +139,8 @@
       "brand_names": [
         "Acetadote"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "103316",
@@ -197,6 +203,8 @@
         "Vazalore",
         "Yosprala"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "103170",
@@ -523,6 +531,8 @@
         "Clarinex",
         "Clarinex-D"
       ],
+      "international_names": [],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "104420",
@@ -569,6 +579,8 @@
         "Xylocaine with Epinephrine",
         "Zorcaine"
       ],
+      "international_names": ["Adrenaline"],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "103606",
@@ -680,6 +692,8 @@
         "Xylocaine with Epinephrine",
         "Zorcaine"
       ],
+      "international_names": ["Adrenaline"],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "103606",
@@ -791,6 +805,8 @@
         "Xylocaine with Epinephrine",
         "Zorcaine"
       ],
+      "international_names": ["Adrenaline"],
+      "abbreviations": [],
       "ciel": [
         {
           "code": "103606",

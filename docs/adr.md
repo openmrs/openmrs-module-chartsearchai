@@ -15579,10 +15579,16 @@ Rifamycin? Ask again with the name it carries."*, quoting the word as the questi
 Verified live: *rifampcin*, *metformn*, *warfrin* (with suggestions), *tenofovir* (both rows), *TDF*, *ddI*, *ORS*,
 *paracetamol* (no suggestion) — each module-answered with no chip; a recognised drug and a screen unchanged.
 
-### Residue
+### The names themselves are the knowledge base's
 
-An abbreviation or international name the data does not carry is reported, not resolved: making *TDF*, *ddI* or
-*paracetamol* resolve is the knowledge base's curated names (issue #591, the upstream international-names work).
+`DdiDrugReferenceSource` reads the knowledge base's curated names as aliases beside `brand_names`, absent on older
+files alike: `international_names` (schema 1.4, openmrs-ddi-knowledge-base issue #8 — *Paracetamol* under
+acetaminophen) and `abbreviations` (schema 1.5 — *TDF*, *3TC*, *AZT*, curated one by one upstream; *ddI* is left out
+there because *DDI* names a drug-drug interaction and aliases are matched against prose). The shipped knowledge base is
+still schema 1.3, so until a release carrying both is bundled these words are reported as above. Verified live by
+pointing `chartsearchai.drugReference.dataFilePath` at a schema 1.5 build: *TDF* withheld tenofovir disoproxil against
+her didanosine (Major), *3TC*, *AZT* and *paracetamol* resolved, *"Any DDIs?"* still screened, *ddI* was still reported
+— then the property was restored and the rig restarted onto the shipped file. Pinned by `DdinterCuratedNameAliasTest`.
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aDrugNameTheDataDoesNotRecogniseIsSaidToBeUnrecognisedWithItsNearestNames`,
 `.anUnrecognisedNameRaisesNoScreenOfHerOwnOrders` and `.aQuestionNamingNoDrugIsNotSaidToNameAnUnrecognisedOne`.

@@ -40,8 +40,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * duplicated:
  * <ul>
  *   <li>{@code mechanisms}: {@code {groupId: {text, categories}}}, each description stored once;</li>
- *   <li>{@code drugs}: {@code {id, name, rxcui, rxnorm_name, drugbank_id, atc[], brand_names[], ciel[]}}
- *       ({@code brand_names} since knowledge-base schema 1.3; read as aliases, absent on older files);</li>
+ *   <li>{@code drugs}: {@code {id, name, rxcui, rxnorm_name, drugbank_id, atc[], brand_names[], international_names[],
+ *       abbreviations[], ciel[]}} ({@code brand_names} since knowledge-base schema 1.3, {@code international_names} 1.4,
+ *       {@code abbreviations} 1.5; each read as aliases, absent on older files);</li>
  *   <li>{@code interactions}: rows {@code [drug_a_id, drug_b_id, severity, group_id]}.</li>
  * </ul>
  * This source expands that into the module's drug-centric {@link DrugReference} model: one
@@ -690,6 +691,17 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			for (JsonNode b : d.path("brand_names")) {
 				if (b.isTextual()) {
 					addAlias(aliases, b.asText());
+				}
+			}
+			// The knowledge base's curated names, read as brand names are and absent on older files alike (issue #591, ADR
+			// Decision 183): international names (schema 1.4, openmrs-ddi-knowledge-base issue #8 — "Paracetamol" under
+			// acetaminophen) and clinical abbreviations (schema 1.5 — "TDF", "3TC"). Each is listed by hand upstream as a
+			// name of that one substance, which is what lets it stand beside the brands as an alias matched in prose.
+			for (String field : new String[] { "international_names", "abbreviations" }) {
+				for (JsonNode n : d.path(field)) {
+					if (n.isTextual()) {
+						addAlias(aliases, n.asText());
+					}
 				}
 			}
 			// One pass over the bridge, feeding both readings of it: the NAME goes on as an alias, as it

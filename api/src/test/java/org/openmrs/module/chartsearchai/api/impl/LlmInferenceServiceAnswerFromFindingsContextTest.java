@@ -424,6 +424,21 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/** More ways of proposing one drug, measured on the 3.7.1 standalone reaching the model (ADR Decision 180): each is
+	 *  answered with the withholding call, as the shapes above are. */
+	@Test
+	public void moreProposalPhrasingsAreAnsweredFromTheFindings() {
+		for (String question : new String[] { "Can she have ibuprofen?", "Can she use ibuprofen?",
+				"Can I prescribe ibuprofen for her?", "Would it be safe to start ibuprofen?", "OK to give ibuprofen?",
+				"Is it ok to give her ibuprofen?", "Can I add ibuprofen to her medications?",
+				"Is it safe to add ibuprofen to her regimen?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		}
+	}
+
 	@Test
 	public void searchStreaming_takesTheSamePathAndHandsTheComposedAnswerToEverySurface() {
 		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
@@ -2380,7 +2395,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Do her drugs interact?", "Is there any interaction among her current drugs?", "List her drug interactions",
 				"Review her medications for interactions", "Are her medicines okay together?",
 				"Are her medications compatible with each other?", "drug interactions?",
-				"Please screen her current medications for drug interactions.", "Please check her meds for interactions" }) {
+				"Please screen her current medications for drug interactions.", "Please check her meds for interactions",
+				"Any medication interactions?", "Check for drug interactions", "Screen for DDIs", "Interaction check",
+				"Any harmful drug combinations?", "Review her drugs for interactions please",
+				"Any interactions I need to know about?", "What drug interactions should I watch for?",
+				"Is there a problem with her medication combination?", "Is her regimen safe?",
+				"Are there any contraindications among her medicines?", "Is it safe to continue all her current medications?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 

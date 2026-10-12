@@ -74,7 +74,7 @@ public final class QueryScopeRouter {
 	}
 
 	private static final Pattern MEDICATIONS_CUES = cues(
-			"medications?", "medicines?", "meds", "drugs?", "prescriptions?", "prescribed");
+			"medications?", "medicines?", "meds", "drugs?", "prescriptions?", "prescribed", "regimens?");
 
 	/** Beyond the literal allergy words: "adverse", "reaction(s)" and "intolerance" are the
 	 *  allergy-table's own vocabulary (records read "Allergy: X. Reaction: rash"; the OpenMRS
@@ -184,7 +184,9 @@ public final class QueryScopeRouter {
 			"stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
 			"change(?:d|s)?", "adjust(?:ed|ment|ments)?",
 			// "Are her medications compatible with each other?", "Are her medicines okay together?" (ADR Decision 177)
-			"compatib(?:le|ility)", "(?:ok|okay|fine|alright) (?:together|with each other)");
+			"compatib(?:le|ility)", "(?:ok|okay|fine|alright) (?:together|with each other)",
+			// "Are there any contraindications among her medicines?" (ADR Decision 180)
+			"contraindicat(?:ed|ion|ions)");
 
 	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
@@ -273,12 +275,12 @@ public final class QueryScopeRouter {
 
 	private static final String POSSESSIVE = "(?:her|his|their|the patient's|this patient's)";
 
-	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions|drugs)";
+	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions|drugs|regimen)";
 
 	private static final String D = Pattern.quote(DRUG_NAME);
 
 	/** The tail a screen question may close with: what the clinician should know, or worry, about. */
-	private static final String KNOW_ABOUT = "(?: i should (?:know|worry) about)?";
+	private static final String KNOW_ABOUT = "(?: i (?:should|need to) (?:know|worry) about)?";
 
 	/** How a screen question may grade the interactions it asks for: "clinically significant", "serious". */
 	private static final String QUALIFIER = "(?:(?:clinically )?(?:significant|important|relevant|serious|major|dangerous) )?";
@@ -295,10 +297,20 @@ public final class QueryScopeRouter {
 			// "Can I give her ibuprofen?", "Should I start her on clarithromycin?", "Can I give
 			// ibuprofen to her?"
 			"(?:can|could|may|should) (?:i|we) (?:safely )?(?:give|start|prescribe|administer|add) (?:"
-					+ PATIENT + " )?(?:on )?" + D + "(?: to " + PATIENT + ")?(?: now| today)?",
+					+ PATIENT + " )?(?:on )?" + D + "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			// "Can I add ibuprofen to her medications?" (ADR Decision 180)
+			"(?:can|could|may|should) (?:i|we) (?:safely )?add " + D + " to " + POSSESSIVE + " " + MEDICATIONS
+					+ "(?: now| today)?",
 			// "Can this patient take warfarin?", "Can she take ibuprofen?"
-			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on) "
-					+ D + "(?: now| today)?",
+			"(?:can|could|may|should) (?:she|he|they|the patient|this patient) (?:safely )?(?:take|start|be given|be started on"
+					+ "|have|use) " + D + "(?: now| today)?",
+			// "Would it be safe to start ibuprofen?", "OK to give ibuprofen?", "Is it safe to add ibuprofen to her regimen?"
+			// (ADR Decision 180)
+			"would it be (?:safe|ok|okay|appropriate) (?:for " + PATIENT + " )?to (?:(?:give|start|prescribe|administer|add) (?:"
+					+ PATIENT + " )?(?:on )?|take )" + D + "(?: for " + PATIENT + ")?(?: now| today)?",
+			"(?:is it )?(?:ok|okay) to (?:give|start|prescribe|administer|add) (?:" + PATIENT + " )?(?:on )?" + D
+					+ "(?: (?:to|for) " + PATIENT + ")?(?: now| today)?",
+			"is it (?:safe|ok|okay|appropriate) to add " + D + " to " + POSSESSIVE + " " + MEDICATIONS + "(?: now| today)?",
 			// "Is it safe to give her ibuprofen?", "Is it safe to start her on clarithromycin?", "Is it
 			// safe to add prednisone for her?" — the patient after the drug too (issue #548), the
 			// allowance the first and fourth shapes make, as a reordering of "Is it safe for her to add
@@ -376,8 +388,21 @@ public final class QueryScopeRouter {
 					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
 			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?", "Any
 			// clinically significant interactions?", "drug interactions?"
-			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug )?(?:interactions|ddis)(?: (?:with|between|among) "
+			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug |medication )?(?:interactions|ddis)(?: (?:with|between|among) "
 					+ POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
+			// "Check for drug interactions", "Screen for DDIs", "Interaction check" (ADR Decision 180)
+			"(?:please )?(?:check|screen) for (?:any )?" + QUALIFIER + "(?:drug )?(?:interactions|ddis)(?: please)?",
+			"(?:drug )?interactions? check",
+			// "Any harmful drug combinations?", "Is there a problem with her medication combination?"
+			"(?:are there )?any (?:harmful|dangerous|unsafe|bad) (?:drug |medication )?combinations",
+			"is there (?:a|any) problem with " + POSSESSIVE + " (?:drug|medication) combination",
+			// "What drug interactions should I watch for?"
+			"what (?:drug )?interactions should i (?:watch|look out|look) for",
+			// "Are there any contraindications among her medicines?", "Is her regimen safe?", "Is it safe to continue
+			// all her current medications?"
+			"(?:are|is) there (?:any )?contraindications? (?:with|between|among) " + POSSESSIVE + " " + MEDICATIONS,
+			"is " + POSSESSIVE + " (?:\\p{L}+ )?regimen (?:safe|ok|okay)",
+			"is it safe to continue (?:all )?" + POSSESSIVE + " " + MEDICATIONS,
 			// "What interactions does she have?", "What drug interactions does the patient have?"
 			"what " + QUALIFIER + "(?:drug )?(?:interactions|ddis) (?:does|do) (?:she|he|they|the patient|this patient) have",
 			// "List her drug interactions"
@@ -385,7 +410,7 @@ public final class QueryScopeRouter {
 			// "Check her medications for interactions", "Review her meds for drug interactions", "Please screen her current
 			// medications for drug interactions." (issue #337's own question) — an imperative may open with "please"
 			"(?:please )?(?:check|review|screen) " + POSSESSIVE + " " + MEDICATIONS + " for (?:any )?" + QUALIFIER
-					+ "(?:drug )?(?:interactions|ddis)",
+					+ "(?:drug )?(?:interactions|ddis)(?: please)?",
 			// "Are her medicines okay together?", "Are her medications compatible with each other?"
 			"are " + POSSESSIVE + " " + MEDICATIONS + " (?:safe|ok|okay|fine|alright|compatible) (?:together|with each other)");
 

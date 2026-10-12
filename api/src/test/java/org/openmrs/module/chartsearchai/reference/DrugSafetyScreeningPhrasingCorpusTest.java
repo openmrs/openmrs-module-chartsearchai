@@ -88,7 +88,9 @@ public class DrugSafetyScreeningPhrasingCorpusTest {
 				Arguments.of("Should I stop any of the medications he is on?"),
 				Arguments.of("Should I change any of her medications?"),
 				Arguments.of("Should I discontinue any of his medicines?"),
-				Arguments.of("Should I adjust any of her prescriptions?"));
+				Arguments.of("Should I adjust any of her prescriptions?"),
+				// "regimen" names her medications (ADR Decision 180), so this left knownToBeMissed.
+				Arguments.of("Is his current regimen safe?"));
 	}
 
 	/**
@@ -114,7 +116,6 @@ public class DrugSafetyScreeningPhrasingCorpusTest {
 	 */
 	static Stream<Arguments> knownToBeMissed() {
 		return Stream.of(
-				Arguments.of("Is his current regimen safe?"),
 				Arguments.of("Anything risky about her treatment?"),
 				Arguments.of("Is she on anything that should not be combined?"),
 				Arguments.of("Any red flags in what he is taking?"),

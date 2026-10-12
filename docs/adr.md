@@ -15400,3 +15400,51 @@ which read the clinician's question.
 Pinned by `OrdersSharingASubstanceModuleAnswerContextTest.theSharedSubstanceFollowsARatedMajorAndPrecedesACaution`,
 `.aScreenTheCapTruncatedCountsEveryPairItFoundAndSaysHowManyItDoesNotShow` and
 `LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionWithholdingOnlyAgainstAListedDrugIsAnsweredNoIfSheIsOnIt` (its name kept: renaming a test moves the decisions that cite it).
+
+## Decision 180: More screen and proposal phrasings are the module's, "regimen" names her medications, and "contraindications" asks for a screen
+
+**Status: Accepted** (October 2026) — implemented, no issue. Widens the grammars of issue #469 and
+[Decision 177](#decision-177-the-noun-interactions-asks-for-a-screen-without-a-medication-word).
+
+### Context
+
+A sweep of 38 phrasings — 20 proposing a drug, 18 asking for a screen — over six patients on the 3.7.1 standalone
+(228 questions, `main` @ `d31b80ec`). Two failures, plus a class of model-written answers:
+
+- *"Is her regimen safe?"* and *"Are there any contraindications among her medicines?"* ran no screen on any patient:
+  "regimen" was not a medication word and "contraindications" was not a safety cue. The model answered *"The records do
+  not address …"*, beside thirteen interactions on Rhoda Ritonavirb (`84f323da…`).
+- Ten screen phrasings — *"Any medication interactions?"*, *"Check for drug interactions"*, *"Screen for DDIs"*,
+  *"Interaction check"*, *"Any harmful drug combinations?"*, *"Review her drugs for interactions please"*, *"Any
+  interactions I need to know about?"*, *"What drug interactions should I watch for?"*, *"Is there a problem with her
+  medication combination?"*, *"Is it safe to continue all her current medications?"* — fitted no screen shape. On the
+  three patients with one active order every one was answered *"The records do not address …"* (Decision 178 never
+  ran); elsewhere the model answered at length, *"Review her drugs for interactions please"* opening *"No reason to
+  withhold any medications is recorded."* beside thirteen interactions.
+- Seven proposal phrasings — *"Can she have X?"*, *"Can she use X?"*, *"Can I prescribe X for her?"*, *"Would it be
+  safe to start X?"*, *"OK to give X?"*, *"Can I add X to her medications?"*, *"Is it safe to add X to her regimen?"*
+  — reached the model. Its answers were right; the module's state every finding in its record's own words.
+
+### The decision
+
+`regimens?` joins `MEDICATIONS_CUES` (and the screen shapes' medication word), `contraindicat(ed|ion|ions)` joins
+`MEDICATION_SAFETY_CUES` — both still conjoined, so neither screens on its own — and the screen and proposal grammars
+admit the phrasings above. `DrugSafetyScreeningPhrasingCorpusTest`'s *"Is his current regimen safe?"* moves from
+`knownToBeMissed` to `asksForAReading`, as that class asks; `asksForNoReading` stays green.
+
+Re-run live after the change: 133 of the 138 screen and new-proposal questions are the module's, each patient with one
+lead per question type. The five left are Dora DdiControl's efavirenz proposals, which stay with the model because
+the finding that withholds it is a class relationship folded onto a Moderate row (Decision 108's "No").
+
+### Not taken, and why
+
+- **Questions asking whether NOT to give a drug** — *"Is there any reason not to give her X?"*, *"Is X
+  contraindicated?"*, *"Any problem giving her X?"* — and *"Does X interact with her medications?"*. The model answers
+  each *"No — X should not be given …"*, whose first word answers the question the other way round (measured on five of
+  the six patients). A module answer with a lead that is neither "Yes" nor "No" was written and backed out:
+  `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionTheModuleDidNotResolveAsASuitabilityQuestionStillAsksTheModel`
+  pins the first of them to the model ("inverse polarity: a 'No' lead would answer it backwards"), so changing it is the
+  owner's call.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`,
+`.moreProposalPhrasingsAreAnsweredFromTheFindings` and `DrugSafetyScreeningPhrasingCorpusTest`.

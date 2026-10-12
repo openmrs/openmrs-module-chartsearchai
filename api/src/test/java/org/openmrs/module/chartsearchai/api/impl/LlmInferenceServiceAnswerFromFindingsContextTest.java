@@ -468,7 +468,9 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void aQuestionWhetherADrugInteractsWithHerMedicationsIsAnsweredYesWithTheFindings() {
 		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
 		for (String question : new String[] { "Does ibuprofen interact with her medications?",
-				"Does ibuprofen interact with any of her current medications?", "Will ibuprofen interact with her meds?" }) {
+				"Does ibuprofen interact with any of her current medications?", "Will ibuprofen interact with her meds?",
+				// "Any interactions if I give her X?" — measured answered "No — X should not be given: it interacts with …"
+				"Any interactions if I give her ibuprofen?", "Are there any interactions if I start her on ibuprofen?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 			assertEquals(0, provider.calls, question + " — " + answer.getAnswer());

@@ -15504,6 +15504,11 @@ that answers each the other way round.
 Verified live on seven patients (42 questions): every negated question opens neutrally or with the no-pair sentence,
 every interaction question opens "Yes — …" or with the no-pair sentence.
 
+**Amended 2026-10-13, after a regression re-run**: *"Any interactions if I give her X?"* and *"Are there any interactions if
+I start her on X?"* asked the same thing and were still answered by the model *"No — X should not be given: it interacts
+with …"* (Joshua's spironolactone, Mary's clarithromycin), so they join `INTERACTS_WITH_HER_MEDICATIONS_SHAPES`; verified
+live on five patients.
+
 ### Residue
 
 Dora DdiControl's efavirenz questions stay with the model — the finding that withholds it is a class relationship

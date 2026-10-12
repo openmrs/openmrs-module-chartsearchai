@@ -68,17 +68,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * checkable by hash.
  *
  * <p><b>The release it came from, and the hash to check it against.</b> Commit
- * {@code 57d0f8a88918a44d4a31425af7e0e239964f3a3e} of {@code dkayiwa/openmrs-ddi-knowledge-base} branch {@code clinical-abbreviations} —
+ * {@code c70fca0b96a33f57a0b41cbf26a2fbfb2aff7105} of {@code dkayiwa/openmrs-ddi-knowledge-base} branch {@code clinical-abbreviations} —
  * pull requests #9 (international names, schema 1.4) and #10 (clinical abbreviations, schema 1.5) of
  * {@code pbiondich/openmrs-ddi-knowledge-base}, bundled before upstream merged them on the owner's decision
- * (ADR Decision 183) — file {@code out/ddi_knowledge_base.json}: 34,992,393 bytes, sha256
- * {@code 79573531552a71bbc8d18b6532202b2fd2c5915690bec52002c36422f9d5b23e}. Until then it was commit {@code 66489ff3207bcb809968c3de81cfba94d05692ae} of the
+ * (ADR Decision 183) — file {@code out/ddi_knowledge_base.json}: 34,992,419 bytes, sha256
+ * {@code a96d18e76169fcb200027fa0f2665c771a953af117f6a5669018f6c3519f01a8}. Until then it was commit {@code 66489ff3207bcb809968c3de81cfba94d05692ae} of the
  * upstream repository (schema 1.3). In the source and not only
  * in the pull request that copied it in, because this repository squash-merges — a hash recorded in a
  * commit message that is later superseded is not in the permanent record, and the file's own
  * {@code metadata} block carries a {@code schema_version} and no source ref, so nothing in-tree said
  * which release this is. Checkable without fetching 34 MB again: git's own blob id for this resource is
- * {@code b287a15edf4e4a68d92c53a0dd3496a8b3b764d1} ({@code git hash-object}), which is the id that
+ * {@code b897b4b20cf262100be4e6d526ba136e9277a943} ({@code git hash-object}), which is the id that
  * release's {@code out} tree entry carries — that identity is what was verified when this paragraph was
  * written, rather than the claim being taken on trust. A refresh moves every figure in this paragraph
  * and the packed size below, and whoever copies the file in restates them.
@@ -86,7 +86,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>It used to be a 16-drug excerpt with the full file left to the operator to download,
  * which meant an install that enabled the feature and configured nothing got four curated drugs. Measured
  * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar for
- * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes, and the schema 1.5 one to 4,033,158 (each
+ * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes, and the schema 1.5 one to 4,033,159 (each
  * read off the built api jar's entry for it with {@code unzip -v}); all but about 40 KB of the 1.3 of the increase is three tables the schema 1.0 file
  * did not have, {@code disease_notes}, {@code disease_interactions} and {@code derived_interactions}
  * (issue #391). Of those, only {@code derived_interactions} is read, and only its rows whose rated side is

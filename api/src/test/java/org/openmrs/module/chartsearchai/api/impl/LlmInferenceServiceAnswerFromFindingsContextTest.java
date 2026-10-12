@@ -2561,6 +2561,18 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/** A combination's name is not a suggestion for one of its ingredients: "Hyoscine butylbromide / Paracetamol" is a
+	 *  name acetaminophen's row carries, and "Did you mean Acetaminophen?" for hyoscine butylbromide names the wrong drug
+	 *  (ADR Decision 183). */
+	@Test
+	public void aCombinationNameIsNeverSuggestedForAWordItBeginsWith() {
+		for (String question : new String[] { "Can I give her hyoscine butylbromide?", "Can I give her hyoscine?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+			assertTrue(answer.getAnswer().startsWith("No interaction check was run: "), question + " — " + answer.getAnswer());
+			assertFalse(answer.getAnswer().contains("Acetaminophen"), question + " — " + answer.getAnswer());
+		}
+	}
+
 	/** A question naming no drug in a drug's place is not answered so: "this drug" is not a name. */
 	@Test
 	public void aQuestionNamingNoDrugIsNotSaidToNameAnUnrecognisedOne() {

@@ -133,7 +133,10 @@ final class UnrecognisedDrugName {
 			}
 			for (String name : names) {
 				String n = DrugReference.foldedLower(name).trim();
-				if (n.startsWith(w + " ")) {
+				// A name the word begins is suggested only where it names ONE substance: "Hyoscine butylbromide / Paracetamol"
+				// is a name of acetaminophen's row, and suggesting Acetaminophen for "hyoscine butylbromide" names the
+				// wrong drug.
+				if (n.startsWith(w + " ") && n.indexOf('/') < 0 && !n.contains(" and ") && !n.contains(" with ")) {
 					keepCanonical(prefixed, entry);
 				} else if (best > 0 && n.indexOf(' ') < 0) {
 					int distance = editDistance(w, n);

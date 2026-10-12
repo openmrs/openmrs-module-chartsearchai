@@ -202,11 +202,10 @@ public class BridgedConceptLegBoundsTest {
 		// allowance reads "cytotect" as an inflection of it. A near-identical BRAND is a collision shape
 		// generic names rarely produce, and it is exactly the shape this bound exists to catch: the
 		// intersection with the concepts the bridge FILES keeps Misoprostol out of the answer.
-		// 245 since the schema 1.5 refresh added the knowledge base's international names and abbreviations as
-		// aliases (ADR Decision 183). Measured by diffing this walk over the two files: the one concept that joined is
-		// "Hyoscine butylbromide / Paracetamol", whose recorded name now also reaches Scopolamine through the
-		// international name "Hyoscine" — and the intersection keeps Scopolamine out, which is this bound's purpose.
-		assertEquals(245, intersectionNarrows,
+		// Still 244 after the schema 1.5 refresh (ADR Decision 183). Its first build listed scopolamine's international
+		// name as bare "Hyoscine", and this walk read 245: "Hyoscine butylbromide / Paracetamol" reached Scopolamine,
+		// though hyoscine butylbromide is a different drug. The knowledge base now lists "Hyoscine hydrobromide".
+		assertEquals(244, intersectionNarrows,
 			"concepts where the ranked resolution of the bridge's name reaches an entry it does not file"
 					+ " there");
 		assertEquals(1, resolvesNothing, "concepts the two bounds together leave resolving nothing");

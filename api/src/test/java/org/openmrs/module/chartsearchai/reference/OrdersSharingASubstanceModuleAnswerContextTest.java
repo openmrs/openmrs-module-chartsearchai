@@ -101,6 +101,27 @@ public class OrdersSharingASubstanceModuleAnswerContextTest extends BaseModuleCo
 	}
 
 	@Test
+	public void aScreenTheCapTruncatedCountsEveryPairItFoundAndSaysHowManyItDoesNotShow() throws IOException {
+		// The pairs of theSharedSubstanceFollowsARatedMajorAndPrecedesACaution, with the cap at one: the screen
+		// relates two pairs and reports the Major alone. A lead counting the one line it lists would tell a
+		// clinician this patient has one interaction when the module found two.
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_MAX_PAIR_CHIPS, "1");
+		PatientChart chart = screen(
+			DrugReferenceTestSupport.activeOrder("order-rhz", "Isoniazid / pyrazinamide / rifampin"),
+			DrugReferenceTestSupport.activeOrder("order-rif", "Rifampicin 150mg"));
+
+		String answer = chart.getModuleAnswer();
+		assertNotNull(answer, "a pair was related, so the module answers: " + chart.getText());
+		List<String> lines = Arrays.asList(answer.split("\n"));
+		assertEquals("2 interactions among this patient's active medications (the 1 most severe is listed; 1 more is "
+				+ "not shown), and 1 substance carried by more than one of her orders:", lines.get(0),
+			"the lead counts what the screen FOUND, and says how many the cap left out: " + answer);
+		assertTrue(lines.get(1).startsWith("Pyrazinamide interacts with active order Rifampicin (rifampin) — Major."),
+			"the Major is the pair listed: " + answer);
+		assertTrue(!answer.contains(" — Minor."), "the withheld Minor is not listed: " + answer);
+	}
+
+	@Test
 	public void aScreenWhoseOnlyInteractionFindingIsTwoOrdersSharingASubstanceGoesToTheModel()
 			throws IOException {
 		// Two orders of one drug: no pair to relate, and the duplicate is the only interaction finding.

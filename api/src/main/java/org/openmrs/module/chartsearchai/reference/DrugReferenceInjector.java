@@ -942,7 +942,7 @@ public class DrugReferenceInjector {
 			// gates what the MODEL reads (ADR Decision 77), and no model reads this answer (ADR Decision 140).
 			moduleAnswer = composeFromFindings(findings, findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
-					!questionDrugs.isEmpty());
+					!questionDrugs.isEmpty(), pairExtent.stated());
 		} else if (onlyHerOwnOrdersSharingASubstance(findings) && context != null
 				&& ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
@@ -3716,7 +3716,8 @@ public class DrugReferenceInjector {
 	 *         keeps the model call
 	 */
 	private static String composeFromFindings(List<SafetyWarning> findings, List<Integer> numbers,
-			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal) {
+			Map<String, Integer> orderRecordNumbers, Map<String, Integer> herOrderRecords, boolean proposal,
+			PairChipExtent pairs) {
 		final String[] clauses = new String[findings.size()];
 		List<Integer> order = new ArrayList<Integer>(findings.size());
 		for (int i = 0; i < findings.size(); i++) {
@@ -3749,7 +3750,7 @@ public class DrugReferenceInjector {
 			lines.add(0, cautionLead(notHerOwnOrdersSharingASubstance(findings).size(), first.getDrug()));
 		} else if (!proposal) {
 			// A screen opens with what it found, counted, and closes with what it does not cover (ADR Decision 171).
-			lines.add(0, screenLead(findings));
+			lines.add(0, screenLead(findings, pairs));
 			lines.add(SCREEN_SCOPE);
 		}
 		return String.join("\n", lines);
@@ -3765,8 +3766,15 @@ public class DrugReferenceInjector {
 	 * medications, and 2 contraindications:"</em> — counts of what follows, by the finding's type, and never which of
 	 * two medications to change, a choice no finding makes (issue #469). Her orders sharing a substance (issue #477)
 	 * is counted on its own, being no interaction between two drugs.
+	 *
+	 * <p><b>The interactions are counted as the screen FOUND them, not as the lines that follow</b>: where
+	 * {@code chartsearchai.drugSafety.maxPairChips} withheld pairs ({@code pairs} found more than it reported), the
+	 * count is every pair found and says how many are not shown — <em>"13 interactions among this patient's active
+	 * medications (the 10 most severe are listed; 3 more are not shown)"</em>. Counting the lines alone told a
+	 * clinician the patient had 10 interactions when the module had found 13. The screening arm ranks before it caps,
+	 * so what it withholds is rated no higher than what it lists.
 	 */
-	private static String screenLead(List<SafetyWarning> findings) {
+	private static String screenLead(List<SafetyWarning> findings, PairChipExtent pairs) {
 		int interactions = 0;
 		int contraindications = 0;
 		int sharing = 0;
@@ -3780,9 +3788,15 @@ public class DrugReferenceInjector {
 			}
 		}
 		List<String> counts = new ArrayList<String>();
+		int withheld = pairs == null ? 0 : Math.max(0, pairs.getFound() - pairs.getReported());
 		if (interactions > 0) {
-			counts.add(interactions + (interactions == 1 ? " interaction" : " interactions")
-					+ " among this patient's active medications");
+			int found = interactions + withheld;
+			counts.add(found + (found == 1 ? " interaction" : " interactions")
+					+ " among this patient's active medications"
+					+ (withheld == 0 ? ""
+							: " (the " + interactions + " most severe " + (interactions == 1 ? "is" : "are")
+									+ " listed; " + withheld + " more " + (withheld == 1 ? "is" : "are")
+									+ " not shown)"));
 		}
 		if (contraindications > 0) {
 			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications"));

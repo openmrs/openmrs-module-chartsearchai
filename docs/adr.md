@@ -15048,6 +15048,15 @@ orders; three more pairs are listed `Unknown` and four have no row.
 - **It closes with `SCREEN_SCOPE`**: *"Interactions the data does not rate, and anything beyond drug interactions and
   contraindications, are not covered."* — not the below-floor answer's sentence, whose *"anything beyond drug
   interactions"* would be false beside her contraindications.
+- **The count is of the pairs the screen FOUND, and says how many the cap left out** (amended October 2026). Where
+  `chartsearchai.drugSafety.maxPairChips` withheld pairs, the lead counted the lines it listed: Rhoda Ritonavirb
+  (`84f323da…`) on the 3.7.1 standalone was told *"10 interactions among this patient's active medications"* while
+  `interactionPairs` said `{found: 13, reported: 10}`, and Rose Rifadupla (`d0b35635…`) *"10"* beside `found: 15` — a
+  clinician reading the answer and not the key had no sign anything was missing. `screenLead` now takes the screening
+  arm's `PairChipExtent` and opens *"13 interactions among this patient's active medications (the 10 most severe are
+  listed; 3 more are not shown):"*. "Most severe" is the arm's own order: it ranks on `severityPriority` before it
+  caps, so what it withholds is rated no higher than what it lists. The model-answered screen still carries the cap only
+  on `interactionPairs` (#336).
 
 ### Not taken
 
@@ -15061,7 +15070,8 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aScreensAnswerCounts
 `.aScreenThatRaisedFindingsOpensWithItsCountAndChoosesNoDrugToChange`, `.everyChipTheComposedAnswerStatesIsPublishedAsStated`
 (stated exactly where the answer carries the detail whole, in both directions),
 `OrdersSharingASubstanceModuleAnswerContextTest.theSharedSubstanceFollowsARatedMajorAndPrecedesACaution` (the shared
-substance counted on its own) and the scheduled-order case above.
+substance counted on its own), `.aScreenTheCapTruncatedCountsEveryPairItFoundAndSaysHowManyItDoesNotShow` (the cap) and
+the scheduled-order case above.
 
 ## Decision 172: The demo seed fails safe, and a seed killed part-way is finished with its first backup and snapshot
 

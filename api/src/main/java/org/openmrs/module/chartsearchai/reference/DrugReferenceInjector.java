@@ -733,8 +733,14 @@ public class DrugReferenceInjector {
 		// Nor does a screen of ONE order, which has nothing to pair it with (ADR Decision 178).
 		boolean screenOfOneOrder = questionDrugs.isEmpty() && findings.isEmpty()
 				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question) && hasOneActiveOrder(context, screenedSubstances);
+		// A word standing where the question names its drug, which the data does not recognise (ADR Decision 183): said so,
+		// and never a guess at which drug was meant. Only where nothing resolved and no drug class was named.
+		UnrecognisedDrugName unrecognised = questionDrugs.isEmpty() && namedClass == null && drugReferenceService != null
+				&& ChartSearchAiUtils.getBooleanGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_ANSWER_FROM_FINDINGS)
+								? UnrecognisedDrugName.in(question, drugReferenceService.getAll()) : null;
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
-				&& !screenOfOneOrder && listed.stated().isEmpty()) {
+				&& !screenOfOneOrder && listed.stated().isEmpty() && unrecognised == null) {
 			return chart;
 		}
 
@@ -994,6 +1000,9 @@ public class DrugReferenceInjector {
 					findingNumbers, orderRecordNumbers,
 					orderRecordNumbers.isEmpty() ? orderRecordNumbers(findingRecords, context) : orderRecordNumbers,
 					context);
+		}
+		if (moduleAnswer == null && unrecognised != null) {
+			moduleAnswer = unrecognised.statement();
 		}
 		// An order the drug data does not identify no longer gives the question up (ADR Decision 161): the answer says
 		// which, and that it was not checked. History questions are answered below under their own gate, unchanged.

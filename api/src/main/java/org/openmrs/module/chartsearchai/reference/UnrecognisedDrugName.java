@@ -1,0 +1,209 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
+
+/**
+ * A word standing where a question names the drug it asks about, which the interaction data does not recognise — and
+ * the names it does carry that the word is closest to (ADR Decision 183).
+ *
+ * <p><b>The defect.</b> <em>"Can I give her rifampcin?"</em> resolved no drug, so no check ran; the model answered
+ * <em>"The records do not address Rifampicin."</em>, and the post-answer pass, reading the model's corrected spelling,
+ * raised a Major Rifampicin chip beside an answer saying the records did not address it. <em>"Can I give her
+ * tenofovir?"</em> resolved nothing either — the data carries <em>Tenofovir disoproxil</em> and <em>Tenofovir
+ * alafenamide</em>, two substances — and was answered <em>"The records do not address tenofovir."</em>, which reads as
+ * nothing to worry about.
+ *
+ * <p><b>Never a guess.</b> Nothing here puts a drug in play: a wrong guess would screen the wrong drug, silently. The
+ * statement says no check ran and names what the data carries, and the clinician asks again by that name.
+ *
+ * <p><b>Which word.</b> The question must fit one of the closed grammars that name a drug's place —
+ * {@code QueryScopeRouter.asksWhetherToGiveADrug} or {@code asksWhetherADrugInteractsWithHerMedications} — with the word
+ * (one or two of them) in that place, so a question naming no drug is never said to name an unrecognised one. Words that
+ * are not names ("this drug", "it") are refused.
+ *
+ * <p><b>Which suggestions.</b> Of the names the data carries — every entry's name and aliases, folded — those the word
+ * is the first word of (<em>tenofovir</em> → both tenofovir rows), else single-word names within one edit of it (two
+ * for a word of eight letters or more; <em>rifampcin</em> → Rifampicin), one per substance, by the row that names it.
+ */
+final class UnrecognisedDrugName {
+
+	/** Words that stand in a drug's place without naming one. */
+	private static final Set<String> NOT_A_NAME = new HashSet<String>(Arrays.asList("this", "that", "these", "those",
+		"the", "a", "an", "it", "them", "drug", "drugs", "medication", "medications", "medicine", "medicines", "something",
+		"anything", "another", "other", "same", "new", "one", "some", "any", "more", "her", "his", "their", "him", "you",
+		"she", "all", "too", "now", "two", "pain", "help", "food", "water", "fluids", "oxygen", "blood"));
+
+	private static final int MAX_SUGGESTIONS = 4;
+
+	private final String word;
+
+	private final List<String> suggestions;
+
+	private UnrecognisedDrugName(String word, List<String> suggestions) {
+		this.word = word;
+		this.suggestions = suggestions;
+	}
+
+	/**
+	 * @return the unrecognised word standing in {@code question}'s drug place, with its suggestions, or {@code null}
+	 *         where the question names no drug's place or names it with something that is not a name. The caller asks
+	 *         this only where the question resolved no drug.
+	 */
+	static UnrecognisedDrugName in(String question, List<DrugReference> entries) {
+		String word = wordInADrugsPlace(question);
+		return word == null ? null : new UnrecognisedDrugName(asWritten(word, question), suggestionsFor(word, entries));
+	}
+
+	/**
+	 * Whether {@code question} stands a word in a drug's place — see {@link #in} — without reading the data for
+	 * suggestions. The screening arm asks it: such a question is about that drug and not a screen of her own orders, so
+	 * no chip about two of her orders may stand beside "No interaction check was run" (ADR Decision 183).
+	 */
+	static boolean namesAWordInADrugsPlace(String question) {
+		return question != null && wordInADrugsPlace(question) != null;
+	}
+
+	private static String wordInADrugsPlace(String question) {
+		List<String> words = QueryScopeRouter.words(question);
+		for (int length = 1; length <= 2; length++) {
+			for (int i = 0; i + length <= words.size(); i++) {
+				List<String> span = words.subList(i, i + length);
+				List<String> marked = new ArrayList<String>(words.subList(0, i));
+				marked.add(QueryScopeRouter.DRUG_NAME);
+				marked.addAll(words.subList(i + length, words.size()));
+				if (!QueryScopeRouter.asksWhetherToGiveADrug(marked)
+						&& !QueryScopeRouter.asksWhetherADrugInteractsWithHerMedications(marked)) {
+					continue;
+				}
+				return isAName(span) ? String.join(" ", span) : null;
+			}
+		}
+		return null;
+	}
+
+	/** {@code word} as the question spells it — "TDF", not the tokenizer's "tdf" — where it can be found there. */
+	private static String asWritten(String word, String question) {
+		Matcher m = Pattern.compile("(?i)(?<![\\p{L}\\p{N}])"
+				+ Pattern.quote(word).replace(" ", "\\E\\s+\\Q") + "(?![\\p{L}\\p{N}])").matcher(question);
+		return m.find() ? m.group() : word;
+	}
+
+	private static boolean isAName(List<String> span) {
+		for (String w : span) {
+			if (NOT_A_NAME.contains(w) || !w.matches("\\p{L}[\\p{L}\\-]*")) {
+				return false;
+			}
+		}
+		// Three letters, for the abbreviations clinicians write: "TDF", "ddI", "ORS".
+		return String.join("", span).length() >= 3;
+	}
+
+	/** The names of {@code entries} the word begins, else those within an edit of it — one per substance. */
+	private static List<String> suggestionsFor(String word, List<DrugReference> entries) {
+		String w = DrugReference.foldedLower(word).trim();
+		Map<Object, DrugReference> prefixed = new LinkedHashMap<Object, DrugReference>();
+		Map<Object, DrugReference> near = new LinkedHashMap<Object, DrugReference>();
+		int best = w.length() >= 8 ? 2 : w.length() >= 5 ? 1 : 0;
+		for (DrugReference entry : entries) {
+			List<String> names = new ArrayList<String>();
+			if (entry.getName() != null) {
+				names.add(entry.getName());
+			}
+			if (entry.getAliases() != null) {
+				names.addAll(entry.getAliases());
+			}
+			for (String name : names) {
+				String n = DrugReference.foldedLower(name).trim();
+				if (n.startsWith(w + " ")) {
+					keepCanonical(prefixed, entry);
+				} else if (best > 0 && n.indexOf(' ') < 0) {
+					int distance = editDistance(w, n);
+					if (distance > 0 && distance <= best) {
+						if (distance < best) {
+							best = distance;
+							near.clear();
+						}
+						keepCanonical(near, entry);
+					}
+				}
+			}
+		}
+		List<String> labels = new ArrayList<String>();
+		for (DrugReference row : (prefixed.isEmpty() ? near : prefixed).values()) {
+			if (labels.size() < MAX_SUGGESTIONS && !labels.contains(row.displayLabel())) {
+				labels.add(row.displayLabel());
+			}
+		}
+		return labels;
+	}
+
+	/** One row per substance: the one {@code DrugReference.canonicalRow} elects among those seen. */
+	private static void keepCanonical(Map<Object, DrugReference> bySubstance, DrugReference entry) {
+		Object key = entry.substanceGroupKey();
+		DrugReference seen = bySubstance.get(key);
+		bySubstance.put(key, seen == null ? entry : DrugReference.canonicalRow(seen, entry));
+	}
+
+	/** Optimal-string-alignment distance: insertions, deletions, substitutions and adjacent transpositions. */
+	static int editDistance(String a, String b) {
+		if (Math.abs(a.length() - b.length()) > 2) {
+			return Integer.MAX_VALUE;
+		}
+		int[][] d = new int[a.length() + 1][b.length() + 1];
+		for (int i = 0; i <= a.length(); i++) {
+			d[i][0] = i;
+		}
+		for (int j = 0; j <= b.length(); j++) {
+			d[0][j] = j;
+		}
+		for (int i = 1; i <= a.length(); i++) {
+			for (int j = 1; j <= b.length(); j++) {
+				int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+				d[i][j] = Math.min(Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1), d[i - 1][j - 1] + cost);
+				if (i > 1 && j > 1 && a.charAt(i - 1) == b.charAt(j - 2) && a.charAt(i - 2) == b.charAt(j - 1)) {
+					d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+				}
+			}
+		}
+		return d[a.length()][b.length()];
+	}
+
+	/**
+	 * <em>"No interaction check was run: "rifampcin" is not a drug name the interaction data recognises. Did you mean
+	 * Rifampicin (rifampin)? Ask again with the name it carries."</em> — or without the suggestion where there is none.
+	 */
+	String statement() {
+		StringBuilder sb = new StringBuilder("No interaction check was run: \"").append(word)
+				.append("\" is not a drug name the interaction data recognises.");
+		if (!suggestions.isEmpty()) {
+			sb.append(" Did you mean ");
+			for (int i = 0; i < suggestions.size(); i++) {
+				if (i > 0) {
+					sb.append(i == suggestions.size() - 1 ? " or " : ", ");
+				}
+				sb.append(suggestions.get(i));
+			}
+			sb.append("? Ask again with the name it carries.");
+		}
+		return sb.toString();
+	}
+}

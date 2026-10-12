@@ -15545,3 +15545,44 @@ Verified live on four patients: 40 screen questions outside the grammar (10 phra
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenRequestOutsideTheGrammarIsAnsweredWithTheScreensCount`,
 `.aScreenRequestAskingForSomethingElseToo_keepsTheModel`, `.aMedicationQuestionThatIsNotAScreenStillAsksTheModel` and
 `.aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel`.
+
+## Decision 183: A drug name the data does not recognise is said to be unrecognised, with the names it carries, and never guessed
+
+**Status: Accepted** (October 2026) — implemented on the owner's decision, 2026-10-12. Moves *"Does zorblatine interact
+with any of her medications?"* out of `aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel`'s model-only list.
+
+### Context
+
+On the 3.7.1 standalone a drug name the interaction data does not carry, in a question about giving it, resolved
+nothing and reached the model, which answered *"The records do not address X."* — a sentence a clinician reads as
+"nothing to worry about" when no check ran at all. Worse, *"Can I give her rifampcin?"* was answered *"The records do
+not address Rifampicin."* beside a **Major** Rifampicin chip: the post-answer pass read the model's corrected spelling.
+And *"Does metformn interact with her medications?"*, carrying an interaction word and a medication word, ran the screen
+of her own orders and published a Major chip about two of them. *"tenofovir"* (the data carries *Tenofovir disoproxil*
+and *Tenofovir alafenamide*), *"TDF"*, *"ddI"* and *"paracetamol"* behaved the same.
+
+### The decision
+
+`UnrecognisedDrugName`: where a question resolved no drug and named no class, and one or two of its words stand in a
+drug's place in the closed grammars (`asksWhetherToGiveADrug`, `asksWhetherADrugInteractsWithHerMedications`) — and are
+a name, at least three letters, not on a stop-list ("this drug", "it", "her" …) — the module answers *"No interaction
+check was run: "rifampcin" is not a drug name the interaction data recognises. Did you mean Rifampicin (rifampin) or
+Rifamycin? Ask again with the name it carries."*, quoting the word as the question spells it.
+
+- **Suggestions, never a resolution.** Names the word is the first word of (*tenofovir* → both rows), else single-word
+  names or aliases within one edit (two for eight letters or more), one per substance by `canonicalRow`, at most four.
+  Nothing is put in play: a wrong guess would screen the wrong drug, silently.
+- **No screen of her own orders beside it.** `DrugSafetyValidator`'s screening gate refuses a question
+  `UnrecognisedDrugName.namesAWordInADrugsPlace`, so no chip stands beside "No interaction check was run".
+- The module answer's chips are read off its markers, and it carries none, so a suggestion raises no chip either.
+
+Verified live: *rifampcin*, *metformn*, *warfrin* (with suggestions), *tenofovir* (both rows), *TDF*, *ddI*, *ORS*,
+*paracetamol* (no suggestion) — each module-answered with no chip; a recognised drug and a screen unchanged.
+
+### Residue
+
+An abbreviation or international name the data does not carry is reported, not resolved: making *TDF*, *ddI* or
+*paracetamol* resolve is the knowledge base's curated names (issue #591, the upstream international-names work).
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aDrugNameTheDataDoesNotRecogniseIsSaidToBeUnrecognisedWithItsNearestNames`,
+`.anUnrecognisedNameRaisesNoScreenOfHerOwnOrders` and `.aQuestionNamingNoDrugIsNotSaidToNameAnUnrecognisedOne`.

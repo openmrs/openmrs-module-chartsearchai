@@ -1174,8 +1174,12 @@ public class DrugSafetyValidator {
 		// same partnerLabel, the same pairKeyNames/unorderedPairKey keys, the same severityPriority
 		// ordering and the same maxPairChips() bound, so the two cannot
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
+		// Not where the question stands an unrecognised name in a drug's place: it asks about that drug, which the module
+		// says no check ran for, so a screen of her own orders would put chips no one asked for beside that statement
+		// (ADR Decision 183).
 		if (warnInteractions && questionDrugs.isEmpty()
-				&& QueryScopeRouter.isInteractionScreening(question)) {
+				&& QueryScopeRouter.isInteractionScreening(question)
+				&& !UnrecognisedDrugName.namesAWordInADrugsPlace(question)) {
 			int screenedFrom = warnings.size();
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);

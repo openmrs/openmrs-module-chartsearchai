@@ -2516,6 +2516,58 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * A drug name the interaction data does not recognise, in the place a question names the drug it asks about (ADR
+	 * Decision 183). <em>"Can I give her rifampcin?"</em> resolved nothing, the model answered <em>"The records do not
+	 * address Rifampicin."</em>, and the post-answer pass, reading the model's corrected spelling, raised a Major
+	 * Rifampicin chip beside it. The module now says no check ran, names the word, and suggests what the data does carry —
+	 * never guessing which drug was meant, since a wrong guess screens the wrong drug.
+	 */
+	@Test
+	public void aDrugNameTheDataDoesNotRecogniseIsSaidToBeUnrecognisedWithItsNearestNames() {
+		String[][] cases = {
+			{ "Can I give her rifampcin?", "\"rifampcin\"", "Did you mean Rifampicin" },
+			{ "Can I give her tenofovir?", "\"tenofovir\"", "Tenofovir disoproxil" },
+			{ "Does zorblatine interact with any of her medications?", "\"zorblatine\"", null },
+			{ "Can I give her TDF?", "\"TDF\"", null } };
+		for (String[] c : cases) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, c[0]);
+			assertEquals(0, provider.calls, c[0] + " — " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("No interaction check was run: " + c[1]
+					+ " is not a drug name the interaction data recognises."), c[0] + " — " + answer.getAnswer());
+			if (c[2] == null) {
+				assertFalse(answer.getAnswer().contains("Did you mean"), answer.getAnswer());
+			} else {
+				assertTrue(answer.getAnswer().contains(c[2]), answer.getAnswer());
+			}
+			assertTrue(answer.getSafetyWarnings().isEmpty(), "no check ran, so no chip: " + answer.getSafetyWarnings());
+		}
+		ChartAnswer both = serviceWith(new RecordingProvider(), shipped()).search(patient, "Can I give her tenofovir?");
+		assertTrue(both.getAnswer().contains("Tenofovir alafenamide"), "every substance the word begins: " + both.getAnswer());
+	}
+
+	/** An unrecognised name in an interaction question raises no screen of her own orders beside "no check was run": on the
+	 *  3.7.1 standalone "Does metformn interact with her medications?" carried a Major chip about two of her own orders. */
+	@Test
+	public void anUnrecognisedNameRaisesNoScreenOfHerOwnOrders() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(), "precondition: her own orders interact");
+		for (String question : new String[] { "Does metformn interact with her medications?", "Can I give her TDF?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, question);
+			assertTrue(answer.getAnswer().startsWith("No interaction check was run: "), question + " — " + answer.getAnswer());
+			assertTrue(answer.getSafetyWarnings().isEmpty(), question + " — no chip: " + answer.getSafetyWarnings());
+		}
+	}
+
+	/** A question naming no drug in a drug's place is not answered so: "this drug" is not a name. */
+	@Test
+	public void aQuestionNamingNoDrugIsNotSaidToNameAnUnrecognisedOne() {
+		RecordingProvider provider = new RecordingProvider();
+		ChartAnswer answer = serviceWith(provider, shipped()).search(patient, "Can I give her this drug?");
+		assertFalse(answer.getAnswer().startsWith("No interaction check was run"), answer.getAnswer());
+	}
+
 	/** "ddI" is didanosine's own abbreviation, so only the capitalised "DDI" asks for a screen: a question about her
 	 *  ddI dose is not one. */
 	@Test
@@ -2535,8 +2587,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	public void aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		assertFalse(findingsInThePromptFor(SCREEN).isEmpty(), "precondition: her own orders interact");
-		for (String question : new String[] { "Does zorblatine interact with any of her medications?",
-				"Is grapefruit juice safe with her medications?",
+		for (String question : new String[] { "Is grapefruit juice safe with her medications?",
 				"Do NSAIDs interact with any of her medications?",
 				"Which drugs interact with her medications?",
 				"Is there anything that interacts with her medications?",

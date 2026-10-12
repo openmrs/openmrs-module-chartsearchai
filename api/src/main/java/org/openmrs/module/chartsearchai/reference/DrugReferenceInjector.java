@@ -4408,6 +4408,11 @@ public class DrugReferenceInjector {
 			Integer number = orderRecordNumbers.get(bridge.getOrderDisplay());
 			items.add(number == null ? bridge.toString() : bridge.toString() + " [" + number + "]");
 		}
+		// The lead ENDS a sentence, so the first item opens one, and its substance is the chip's partner name — which
+		// can be the knowledge base's lower-case token ("trimethoprim from Cotrimoxazole 960mg"). Its first letter is
+		// raised there and nowhere else: the item's name is the chip's, mid-sentence, and stays as the chip prints it.
+		String first = items.get(0);
+		items.set(0, Character.toUpperCase(first.charAt(0)) + first.substring(1));
 		StringBuilder clause = new StringBuilder();
 		appendSection(clause, FINDING_CHART_ORDER_LEAD, items);
 		return clause.toString();

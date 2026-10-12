@@ -2363,24 +2363,41 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * Three ways a clinician asks for a screen of her medications, each measured on the 3.7.1 standalone over a patient
-	 * whose orders the module relates in thirteen pairs. <em>"Any DDIs?"</em> ran no screen at all — "DDI" carries
-	 * neither an {@code interact*} word nor a medication word — and the model answered <em>"No drug-drug interactions
-	 * are recorded."</em>; the other two ran the screen but fitted no screen shape, so the model answered them, opening
-	 * a screen with <em>"No —"</em>. Each is now the module's counted answer, as "Does she have any drug
-	 * interactions?" is.
+	 * Ways a clinician asks for a screen of her medications, each measured on the 3.7.1 standalone over a patient whose
+	 * orders the module relates in thirteen pairs, two Major (ADR Decisions 176, 177). <em>"Any DDIs?"</em>, <em>"What
+	 * interactions does she have?"</em> and <em>"Any clinically significant interactions?"</em> ran no screen at all —
+	 * none carries both an interaction or safety word and a medication word — and the model answered <em>"No
+	 * clinically significant interactions are recorded."</em>; the rest ran the screen but fitted no screen shape, or
+	 * carried a cue no family had, so the model answered them, opening a screen with <em>"No —"</em>. Each is now the
+	 * module's counted answer, as "Does she have any drug interactions?" is.
 	 */
 	@Test
 	public void everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount() throws Exception {
 		executeDataSet(WARFARIN_ORDER);
 		for (String question : new String[] { "Any DDIs?", "Any DDIs with her current medications?",
-				"Any drug interactions I should worry about?", "Check her medications for interactions" }) {
+				"Any drug interactions I should worry about?", "Check her medications for interactions",
+				"Any interactions?", "What interactions does she have?", "Any clinically significant interactions?",
+				"Do her drugs interact?", "Is there any interaction among her current drugs?", "List her drug interactions",
+				"Review her medications for interactions", "Are her medicines okay together?",
+				"Are her medications compatible with each other?", "drug interactions?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 
 			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
 			assertTrue(answer.getAnswer().startsWith("1 interaction among this patient's active medications:\n"),
 					question + " — the screen's count leads: " + answer.getAnswer());
+		}
+	}
+
+	/** A question about her SOCIAL interactions is not a request to screen her medications, though it names the noun a
+	 *  bare screen request does. */
+	@Test
+	public void aQuestionAboutHerSocialInteractionsAsksForNoScreen() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "How are her social interactions?",
+				"Any concerning interactions with staff or family?" }) {
+			ChartAnswer answer = serviceWith(new RecordingProvider()).search(patient, question);
+			assertNull(answer.getPairChipExtent(), question + " — no screen ran: " + answer.getPairChipExtent());
 		}
 	}
 

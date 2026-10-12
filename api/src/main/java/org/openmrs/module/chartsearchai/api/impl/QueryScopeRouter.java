@@ -139,6 +139,21 @@ public final class QueryScopeRouter {
 	private static final Pattern DDI_CUES = Pattern.compile("\\bDDI[sS]?\\b");
 
 	/**
+	 * The NOUN, which in a question put to a patient's chart asks after her drugs' interactions whether or not the
+	 * question also names her medications (ADR Decision 177). <em>"What interactions does she have?"</em> and
+	 * <em>"Any clinically significant interactions?"</em>, on a patient whose orders relate in thirteen pairs, two
+	 * Major, ran no screen and were answered <em>"No clinically significant interactions are recorded."</em> The noun
+	 * and not the verb: <em>"Does the patient interact well with the care team?"</em> is not one, and neither is a
+	 * question carrying a {@link #SOCIAL_CUES} word.
+	 */
+	private static final Pattern INTERACTION_NOUN_CUES = cues("interactions?");
+
+	/** What makes the noun's interactions a person's rather than her drugs': {@link #INTERACTION_NOUN_CUES}. */
+	private static final Pattern SOCIAL_CUES = cues("social(?:ly)?", "behaviou?rs?", "staff", "family", "families",
+			"caregivers?", "carers?", "team", "peers?", "people", "others", "friends", "relatives", "children", "partner",
+			"nurses?", "doctors?", "providers?", "clinicians?", "communication");
+
+	/**
 	 * The SECOND way a question asks for an interaction screen: it asks after the SAFETY of the
 	 * medications the patient is already on, or after CHANGING them, without using the word
 	 * "interact" at all. Word-boundary anchored via {@link #cues} like every other family here.
@@ -167,7 +182,9 @@ public final class QueryScopeRouter {
 			"worry", "worried", "worrying", "concern(?:s|ed|ing)?",
 			"problem(?:s|atic)?", "wrong",
 			"stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
-			"change(?:d|s)?", "adjust(?:ed|ment|ments)?");
+			"change(?:d|s)?", "adjust(?:ed|ment|ments)?",
+			// "Are her medications compatible with each other?", "Are her medicines okay together?" (ADR Decision 177)
+			"compatib(?:le|ility)", "(?:ok|okay|fine|alright) (?:together|with each other)");
 
 	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
@@ -200,7 +217,8 @@ public final class QueryScopeRouter {
 	 */
 	public static boolean isInteractionScreening(String question) {
 		return question != null && (DDI_CUES.matcher(question).find() || asksForADrugSafetyReading(question)
-				&& matchedIntents(question).contains(Intent.MEDICATIONS));
+				&& matchedIntents(question).contains(Intent.MEDICATIONS)
+				|| INTERACTION_NOUN_CUES.matcher(question).find() && !SOCIAL_CUES.matcher(question).find());
 	}
 
 	/**
@@ -255,12 +273,15 @@ public final class QueryScopeRouter {
 
 	private static final String POSSESSIVE = "(?:her|his|their|the patient's|this patient's)";
 
-	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions)";
+	private static final String MEDICATIONS = "(?:current |active )?(?:medications|meds|medicines|prescriptions|drugs)";
 
 	private static final String D = Pattern.quote(DRUG_NAME);
 
 	/** The tail a screen question may close with: what the clinician should know, or worry, about. */
 	private static final String KNOW_ABOUT = "(?: i should (?:know|worry) about)?";
+
+	/** How a screen question may grade the interactions it asks for: "clinically significant", "serious". */
+	private static final String QUALIFIER = "(?:(?:clinically )?(?:significant|important|relevant|serious|major|dangerous) )?";
 
 	/**
 	 * The question shapes a proposal of ONE drug may take, over {@link #words} joined by single spaces
@@ -353,11 +374,19 @@ public final class QueryScopeRouter {
 			// "Does she have any drug interactions I should know about?"
 			"(?:does|do) (?:she|he|they|the patient|this patient) have any (?:drug )?(?:interactions?|ddis?)"
 					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
-			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?"
-			"(?:are there )?any (?:drug )?(?:interactions|ddis)(?: (?:with|between|among) " + POSSESSIVE + " "
-					+ MEDICATIONS + ")?" + KNOW_ABOUT,
-			// "Check her medications for interactions", "Check her meds for drug interactions"
-			"check " + POSSESSIVE + " " + MEDICATIONS + " for (?:any )?(?:drug )?(?:interactions|ddis)");
+			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?", "Any
+			// clinically significant interactions?", "drug interactions?"
+			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug )?(?:interactions|ddis)(?: (?:with|between|among) "
+					+ POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
+			// "What interactions does she have?", "What drug interactions does the patient have?"
+			"what " + QUALIFIER + "(?:drug )?(?:interactions|ddis) (?:does|do) (?:she|he|they|the patient|this patient) have",
+			// "List her drug interactions"
+			"list " + POSSESSIVE + " " + QUALIFIER + "(?:drug )?(?:interactions|ddis)",
+			// "Check her medications for interactions", "Review her meds for drug interactions"
+			"(?:check|review|screen) " + POSSESSIVE + " " + MEDICATIONS + " for (?:any )?" + QUALIFIER
+					+ "(?:drug )?(?:interactions|ddis)",
+			// "Are her medicines okay together?", "Are her medications compatible with each other?"
+			"are " + POSSESSIVE + " " + MEDICATIONS + " (?:safe|ok|okay|fine|alright|compatible) (?:together|with each other)");
 
 	private static final String SUBJECT = "(?:she|he|they|the patient|this patient)";
 

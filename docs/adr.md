@@ -15302,3 +15302,50 @@ them Major:
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`
 and `.didanosinesAbbreviationDoesNotAskForAScreen`.
+
+## Decision 177: The noun "interactions" asks for a screen without a medication word
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends
+[Decision 89](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact),
+whose `isInteractionScreening` javadoc accepted that *"a bare 'any interactions?' does not trigger; in practice a
+clinician names what might interact"*.
+
+### Context
+
+That premise was measured false on the 3.7.1 standalone, Rhoda Ritonavirb (`84f323da…`), thirteen related pairs, two
+Major. With no screen run, the model answered:
+
+| Question | Answer |
+| --- | --- |
+| *Any interactions?* | *The records do not address drug interactions.* |
+| *What interactions does she have?* | *No drug interaction information is recorded.* |
+| *Any clinically significant interactions?* | *No clinically significant interactions are recorded.* |
+| *Are her medicines okay together?* | *The records do not address the safety of the combination of medicines.* |
+| *Are her medications compatible with each other?* | *The records do not address the compatibility of the medications.* |
+
+Three of them deny what the module would have found. Four more phrasings — *"Do her drugs interact?"*, *"Is there
+any interaction among her current drugs?"*, *"List her drug interactions"*, *"Review her medications for
+interactions"* — did screen, but fitted no screen shape, so the model answered them at length, one opening *"No —"*.
+
+### The decision
+
+- **The NOUN `interactions?` asks for a screen on its own** (`INTERACTION_NOUN_CUES`) unless the question carries a
+  `SOCIAL_CUES` word (`social`, `staff`, `family`, `care team`, …). The noun and not the verb, so *"Does the patient
+  interact well with the care team?"* (`DrugSafetyInteractionScreeningTest`) still screens nothing; a question about
+  her social interactions does not either. In a question put to a patient's chart, the bare noun is the clinician's
+  shorthand for her drugs', and the failure a miss produces — a denial of findings the module holds — is the worse
+  of the two.
+- **`compatible`/`compatibility` and `ok|okay|fine|alright together|with each other`** join `MEDICATION_SAFETY_CUES`,
+  still conjoined with a medication word.
+- **Screen shapes**: `drugs` is a medication word in `MEDICATIONS`; the *"any …"* shape takes an optional grading
+  (`QUALIFIER`: *clinically significant*, *serious*, …) and no longer needs *any*; new shapes for *"what interactions
+  does she have"*, *"list her drug interactions"*, *"check|review|screen her medications for interactions"* and *"are
+  her medications okay|compatible together|with each other"*.
+
+### Residue
+
+A patient with ONE active medication still reaches the model (Decision 162), and *"What interactions does he have?"*
+there was answered with his encounters — the same answer it got before this change, when no screen ran at all.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`
+and `.aQuestionAboutHerSocialInteractionsAsksForNoScreen`.

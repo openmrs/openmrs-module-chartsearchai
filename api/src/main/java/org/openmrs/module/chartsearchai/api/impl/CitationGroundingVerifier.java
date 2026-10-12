@@ -520,6 +520,10 @@ public class CitationGroundingVerifier {
 	 * citation the MODULE attached: such a citation is anchored by no sentence by construction, and
 	 * grading it against a claim selected for it out of the whole answer is exactly what ADR
 	 * Decision 80 refuses (issue #305) — no statement is selected for it and nothing is published.
+	 * Under entailment the selected claim is not the only one judged: a record cited inline for
+	 * several claim units is judged against each that is not compound, and is published {@code false}
+	 * if any is refuted and {@code true} only if every one is entailed — a citation attached to a claim
+	 * its record does not support is wrong however well that record supports another claim.
 	 * References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
 	 * {@code null} verdict ("could not verify"). Citations are also held back deliberately, by
@@ -736,6 +740,9 @@ public class CitationGroundingVerifier {
 		List<Integer> batchPositions = new ArrayList<Integer>();
 		List<String> batchSources = new ArrayList<String>();
 		List<String> batchStatements = new ArrayList<String>();
+		// What each pair's statement rests on, beside it, so the composite-claim rule (issue #284) is
+		// asked of the claim that pair judged rather than of the reference's selected claim.
+		List<ClaimSupport> batchSupport = new ArrayList<ClaimSupport>();
 		// Isolate candidates — the citations of ONE sentence whose per-citation statements overlap: a
 		// clause-scoped compound (prefixes overlapping by length) or an enumeration in either mode
 		// (items sharing a preamble). Each is verified in its OWN single-pair call so the LLM cannot
@@ -743,6 +750,9 @@ public class CitationGroundingVerifier {
 		List<Integer> isolatePositions = new ArrayList<Integer>();
 		List<String> isolateSources = new ArrayList<String>();
 		List<String> isolateStatements = new ArrayList<String>();
+		List<ClaimSupport> isolateSupport = new ArrayList<ClaimSupport>();
+		// How many claim units each reference is cited for and queued to be judged on, capped or not.
+		int[] uses = new int[references.size()];
 		for (int i = 0; i < references.size(); i++) {
 			RecordReference reference = references.get(i);
 			// A citation the MODULE attached selects no claim at all (issue #305) — why, is on
@@ -815,48 +825,80 @@ public class CitationGroundingVerifier {
 			// medication citations as unsupported. EVERY exclusion sits OUTSIDE the budget branch
 			// below, so the skipped pairs do not spend the per-answer cap single-claim citations rely
 			// on.
+			// One pair per claim unit the record is cited FOR, not only the one selected above: a record
+			// cited correctly in one place and wrongly in another is a wrong citation, and grading the
+			// claim nearest the record published it true (the "any allergies?" answer whose shellfish
+			// record [232] was also cited for a sufentanil allergy). The selected claim comes first, so
+			// a record cited once is judged exactly as before.
 			if (entailmentEnabled && tier1.bestSentence != null
 					&& tier1.recordText != null
 					&& disposition[i] == Disposition.GRADED) {
-				if (entailmentBudget > 0) {
+				for (int s : claimUnitsCitedFor(reference.getIndex(), tier1, sentences)) {
+					uses[i]++;
+					if (entailmentBudget <= 0) {
+						cappedCount++;
+						continue;
+					}
 					entailmentBudget--;
-					String statement = stripCitationMarkers(tier1.bestSentence);
-					if (tier1.isolate) {
+					boolean selected = s == tier1.bestSentenceIdx;
+					Sentence claim = sentences.get(s);
+					String statement = stripCitationMarkers(selected ? tier1.bestSentence : claim.text);
+					ClaimSupport support = selected ? tier1.claimRestsOn : citations.restsOn(claim, false);
+					if (selected ? tier1.isolate : claim.isolate) {
 						isolatePositions.add(i);
 						isolateSources.add(tier1.recordText);
 						isolateStatements.add(statement);
+						isolateSupport.add(support);
 					} else {
 						batchPositions.add(i);
 						batchSources.add(tier1.recordText);
 						batchStatements.add(statement);
+						batchSupport.add(support);
 					}
-				} else {
-					cappedCount++;
 				}
 			}
 		}
 
-		Boolean[] tier2Verdict = new Boolean[references.size()];
-		// One batched call confirms all NON-isolate citations at once (the latency win); a null/short
-		// result leaves those verdicts null, i.e. the Tier-1 verdict stands. A null entry in
-		// tier2Verdict means "not a Tier-2 candidate" OR "Tier-2 could not verify" — Pass 2 keeps the
-		// Tier-1 verdict for both, so they collapse to one null with no information lost.
+		// Per reference: whether some use was refuted, how many were entailed, and whether a refusal
+		// was WITHHELD because that use's claim also rests on module-supplied reference material.
+		boolean[] refuted = new boolean[references.size()];
+		int[] entailedUses = new int[references.size()];
+		boolean[] withheld = new boolean[references.size()];
+		int withheldNegatives = 0;
+		// One batched call confirms all NON-isolate pairs at once (the latency win); a null/short
+		// result leaves those pairs unanswered.
 		if (!batchSources.isEmpty()) {
 			List<Boolean> batchVerdicts = safeEntailsBatch(batchSources, batchStatements);
 			for (int k = 0; k < batchPositions.size(); k++) {
-				tier2Verdict[batchPositions.get(k)] = (batchVerdicts != null && k < batchVerdicts.size())
+				Boolean verdict = (batchVerdicts != null && k < batchVerdicts.size())
 						? batchVerdicts.get(k) : null;
+				withheldNegatives += recordUse(batchPositions.get(k), verdict, batchSupport.get(k),
+						demoteOnlyIndexes, refuted, entailedUses, withheld);
 			}
 		}
-		// Isolate citations (one sentence's overlapping fragments — a clause-scoped compound, or an
+		// Isolate pairs (one sentence's overlapping fragments — a clause-scoped compound, or an
 		// enumeration in either mode) get a single-pair call each, so the batched LLM cannot couple
-		// their statements into each other's verdicts. Same null-degrades-to-Tier-1 contract as the
-		// batch.
+		// their statements into each other's verdicts. Same contract as the batch.
 		for (int k = 0; k < isolatePositions.size(); k++) {
 			List<Boolean> verdict = safeEntailsBatch(Collections.singletonList(isolateSources.get(k)),
 					Collections.singletonList(isolateStatements.get(k)));
-			tier2Verdict[isolatePositions.get(k)] = (verdict != null && !verdict.isEmpty())
-					? verdict.get(0) : null;
+			withheldNegatives += recordUse(isolatePositions.get(k),
+					(verdict != null && !verdict.isEmpty()) ? verdict.get(0) : null, isolateSupport.get(k),
+					demoteOnlyIndexes, refuted, entailedUses, withheld);
+		}
+		// A reference is refuted if ANY use was, entailed only if EVERY use was, and otherwise has no
+		// Tier-2 verdict: a use the judge could not answer, or one past the cap, leaves the Tier-1
+		// verdict standing as it always has. A null entry means "not a Tier-2 candidate" OR "Tier-2
+		// could not verify" — Pass 2 keeps the Tier-1 verdict for both, so they collapse to one null
+		// with no information lost. A withheld refusal is not that null: Pass 2 publishes nothing for
+		// it, as it did when a reference had one use.
+		Boolean[] tier2Verdict = new Boolean[references.size()];
+		for (int i = 0; i < references.size(); i++) {
+			if (refuted[i]) {
+				tier2Verdict[i] = Boolean.FALSE;
+			} else if (!withheld[i] && uses[i] > 0 && entailedUses[i] == uses[i]) {
+				tier2Verdict[i] = Boolean.TRUE;
+			}
 		}
 
 		// Lazy Tier-1: references whose cosine verdict was deferred at claim-selection time get it
@@ -869,7 +911,7 @@ public class CitationGroundingVerifier {
 		// exists to avoid on a verdict Pass 2 discards. The guard below reads the DISPOSITION rather
 		// than any one of its reasons, so a reason added to it is covered without an edit here.
 		for (int i = 0; i < references.size(); i++) {
-			if (tier2Verdict[i] == null && tier1Results[i].deferred
+			if (tier2Verdict[i] == null && !withheld[i] && tier1Results[i].deferred
 					&& disposition[i] != Disposition.UNVERIFIABLE) {
 				tier1Results[i] = cosineVerdict(tier1Results[i], floor, references.get(i).getIndex(),
 						sentences, recordVectors, sentenceVectors, embedder, stats);
@@ -880,7 +922,6 @@ public class CitationGroundingVerifier {
 		// one exception is a chart citation whose claim is COMPOSITE, where Tier-2's negative is
 		// withheld rather than published (issue #284, below).
 		List<RecordReference> annotated = new ArrayList<RecordReference>(references.size());
-		int withheldNegatives = 0;
 		for (int i = 0; i < references.size(); i++) {
 			Boolean verdict = tier1Results[i].verdict;
 			Boolean llmVerdict = tier2Verdict[i];
@@ -895,14 +936,11 @@ public class CitationGroundingVerifier {
 			// "yes" still verifies; and with no Tier-2 verdict there is nothing guaranteed to
 			// withhold, which is why Tier-1-only mode is untouched.
 			//
-			// GRADED is what scopes it to a chart citation, and it is redundant twice over rather
-			// than load-bearing: neither of the other dispositions can carry an llmVerdict at all,
-			// since both are excluded from Tier-2 candidacy in Pass 1. Kept because this rule is
-			// about chart citations and should say so where it is applied.
-			if (Boolean.FALSE.equals(llmVerdict) && disposition[i] == Disposition.GRADED
-					&& restsOnReferenceMaterial(tier1Results[i].claimRestsOn, demoteOnlyIndexes)) {
+			// Decided per USE in recordUse, against the claim that use judged, and published here: a
+			// refusal from another of the record's uses still refutes it. Only GRADED references are
+			// judged at all, which is what scopes it to a chart citation.
+			if (withheld[i] && !refuted[i]) {
 				verdict = null;
-				withheldNegatives++;
 			}
 			if (disposition[i] == Disposition.UNVERIFIABLE) {
 				// Every arrangement reaching here publishes nothing, one of them a citation the
@@ -1045,6 +1083,53 @@ public class CitationGroundingVerifier {
 			stats.recordFailure(e);
 			return new Tier1Result(null, null, recordText, false);
 		}
+	}
+
+	/**
+	 * Every claim unit Tier-2 judges a reference against: the one {@link #selectClaim} selected, first,
+	 * then each other unit citing the record inline. A record cited once is judged exactly as before;
+	 * one cited for several claims must hold for each, because a citation attached to a claim its record
+	 * does not support is wrong however well the same record supports another.
+	 *
+	 * <p>A COMPOUND unit is left out, for the reason {@link Sentence#compoundClaim()} gives: the judge's
+	 * answer there says nothing about this citation. Where the SELECTED unit is compound the reference
+	 * never reaches here, since {@link #verify} makes it {@link Disposition#UNVERIFIABLE}.
+	 * A record no sentence cites inline has only its selected (guessed) unit.
+	 */
+	private static List<Integer> claimUnitsCitedFor(int index, Tier1Result selected,
+			List<Sentence> sentences) {
+		List<Integer> units = new ArrayList<Integer>();
+		units.add(Integer.valueOf(selected.bestSentenceIdx));
+		for (int s = 0; s < sentences.size(); s++) {
+			Sentence sentence = sentences.get(s);
+			if (s != selected.bestSentenceIdx && sentence.cites(index) && !sentence.compoundClaim()) {
+				units.add(Integer.valueOf(s));
+			}
+		}
+		return units;
+	}
+
+	/**
+	 * Records one judged use of a reference into the per-reference tallies {@link #verify} combines,
+	 * and answers 1 where it WITHHELD the use's refusal, 0 otherwise, for the summary log line.
+	 *
+	 * <p>A refusal is withheld when the claim that use judged also rests on module-supplied reference
+	 * material (issue #284): the composition guarantees the "no", so it says nothing about the
+	 * citation. Asked of the use's OWN claim, so that a composite claim elsewhere cannot withhold the
+	 * refusal of a plain one, nor the reverse.
+	 */
+	private static int recordUse(int position, Boolean verdict, ClaimSupport support,
+			Set<Integer> demoteOnlyIndexes, boolean[] refuted, int[] entailedUses, boolean[] withheld) {
+		if (Boolean.FALSE.equals(verdict)) {
+			if (restsOnReferenceMaterial(support, demoteOnlyIndexes)) {
+				withheld[position] = true;
+				return 1;
+			}
+			refuted[position] = true;
+		} else if (Boolean.TRUE.equals(verdict)) {
+			entailedUses[position]++;
+		}
+		return 0;
 	}
 
 	/**
@@ -1718,8 +1803,8 @@ public class CitationGroundingVerifier {
 	 * conjunction's refusal as each citation's own verdict.
 	 *
 	 * <p>Returns {@code null} — meaning "not an enumeration" — for a single-citation sentence, for a
-	 * sentence with no colon before its first marker, for one where any item contributes no text of its
-	 * OWN beyond its marker, and for one where any item is longer than
+	 * sentence with no colon before its first marker, for one whose FIRST marker contributes no text of
+	 * its OWN, for one naming fewer than two items, and for one where any item is longer than
 	 * {@link #MAX_ENUMERATION_ITEM_WORDS} words or matches {@link #CLAUSE_MARKER} (either means the
 	 * item is a clause, so the colon is a lead-in rather than a list header and the preamble is not the
 	 * subject — see those two constants, which are independent nets over size and grammar). That last guard is why it tests the MARKER-STRIPPED item: the
@@ -1727,7 +1812,12 @@ public class CitationGroundingVerifier {
 	 * consume, so an emptiness check on the raw item is unreachable. A colon followed immediately by
 	 * a citation ("allergies: [1], Ketoconazole [2]") is not a list of NAMED items, so reading it as
 	 * one is a misread — falling back beats handing that citation a preamble-only claim that asserts
-	 * nothing. It returns {@code null} for one reason that is not about the sentence's SHAPE at all:
+	 * nothing. A LATER marker with no text of its own is different: it follows a named item, so it is
+	 * CO-CITATION of that item ("shellfish [1] [2]") and gets that item's claim with its own marker.
+	 * Refusing the split for it made the whole list one {@link Sentence#compoundClaim()}, so a single
+	 * co-cited item cost every citation in the list its verdict, the wrong co-citation included. With
+	 * only one named item there is nothing to separate, and the unsplit sentence is graded as
+	 * co-citation. It returns {@code null} for one reason that is not about the sentence's SHAPE at all:
 	 * the answer's split allowance cannot pay for the items ({@link #MAX_SPLIT_FRAGMENT_CHARS}), the
 	 * same fallback reached for a different question.
 	 * Each returned item is flagged {@link Sentence#isolate}: the items share a preamble, so
@@ -1763,6 +1853,12 @@ public class CitationGroundingVerifier {
 
 		List<Sentence> items = new ArrayList<Sentence>();
 		int itemStart = colon + 1;
+		// The bare text of the last item that named something, and how many did. A marker naming
+		// nothing of its own AFTER a named item is CO-CITATION of that item ("shellfish [1] [2]"), so
+		// it is asked about that item; only one with no item before it ("allergies: [1], ...") makes
+		// the colon a lead-in rather than a list header.
+		String lastNamed = null;
+		int namedItems = 0;
 		marker.reset();
 		while (marker.find()) {
 			// `item` keeps its marker because the fragment's text is built from it below; `named` is
@@ -1771,11 +1867,21 @@ public class CitationGroundingVerifier {
 			// where this item starts.
 			String item = itemSlice(sentence.text, itemStart, marker.end());
 			String named = stripCitationMarkers(item);
-			if (named.isEmpty() || named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
+			String fragment;
+			if (named.isEmpty()) {
+				if (lastNamed == null) {
+					return null;
+				}
+				fragment = lastNamed + " " + marker.group();
+			} else if (named.split("\\s+").length > MAX_ENUMERATION_ITEM_WORDS
 					|| CLAUSE_MARKER.matcher(named).find()) {
 				return null;
+			} else {
+				fragment = item;
+				lastNamed = named;
+				namedItems++;
 			}
-			Sentence built = newFragment(budget, preamble + " " + item,
+			Sentence built = newFragment(budget, preamble + " " + fragment,
 					Collections.singleton(Integer.valueOf(marker.group(1))),
 					sentence.sourceCitedIndexes);
 			if (built == null) {
@@ -1785,7 +1891,9 @@ public class CitationGroundingVerifier {
 			items.add(built);
 			itemStart = marker.end();
 		}
-		return items;
+		// One named item is already one claim, co-cited or not: there is nothing to separate, and the
+		// unsplit sentence is graded as co-citation.
+		return namedItems > 1 ? items : null;
 	}
 
 	/**

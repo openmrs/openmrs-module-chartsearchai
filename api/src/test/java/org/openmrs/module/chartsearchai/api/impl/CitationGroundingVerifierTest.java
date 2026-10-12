@@ -21,6 +21,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -741,9 +742,10 @@ public class CitationGroundingVerifierTest {
 
 	@Test
 	public void tier2_multiCitingSentences_bestStatementStillChosenByCosine() {
-		// When MORE than one sentence cites the same record, the claim statement is still the
-		// best-matching sentence by cosine — the selection embeds must still run so the Tier-2
-		// statement is identical to the eager path's choice.
+		// When MORE than one sentence cites the same record, the selected claim statement is still the
+		// best-matching sentence by cosine — the selection embeds must still run so it is identical to
+		// the eager path's choice — and it is judged FIRST. The record's other use is judged after it,
+		// because a citation must hold for every claim it is attached to.
 		String answer = "An unrelated remark [1]. Type 2 diabetes is active [1].";
 		embeddings.register("An unrelated remark [1].", AXIS_B);
 		embeddings.register("Type 2 diabetes is active [1].", AXIS_A);
@@ -756,8 +758,9 @@ public class CitationGroundingVerifierTest {
 
 		assertTrue(embeddings.embedCalls > 0,
 				"ambiguous claim selection still requires Tier-1 embeds");
-		assertEquals(Arrays.asList("Type 2 diabetes is active ."), llm.statementsPerCall.get(0),
-				"the cosine-best citing sentence must be the Tier-2 statement");
+		assertEquals(Arrays.asList("Type 2 diabetes is active .", "An unrelated remark ."),
+				llm.statementsPerCall.get(0),
+				"the cosine-best citing sentence is judged first, then the record's other use");
 	}
 
 	@Test
@@ -1843,6 +1846,203 @@ public class CitationGroundingVerifierTest {
 	}
 
 	@Test
+	public void splitIntoCitedSentences_aCoCitedMarkerSharesTheItemItFollows() {
+		// A marker with no text of its own AFTER a named item is a second record cited for that item,
+		// not a list that names nothing. Refusing the split for it left the whole sentence one compound
+		// claim unit, so every citation in the list published no verdict.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Lidocaine [1], Sufentanil [2] [3].");
+
+		assertEquals(3, clauses.size(), "one fragment per marker");
+		assertEquals("Recorded allergies: Lidocaine [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Sufentanil [2]", clauses.get(1).text);
+		assertEquals("Recorded allergies: Sufentanil [3]", clauses.get(2).text,
+				"the co-cited marker is asked about the item it follows, and nothing else");
+		assertEquals(Collections.singleton(Integer.valueOf(3)), clauses.get(2).citedIndexes,
+				"the co-cited fragment is attributed to its own marker alone");
+		for (CitationGroundingVerifier.Sentence clause : clauses) {
+			assertTrue(clause.isolate, "every fragment of the list shares its preamble");
+			assertFalse(clause.compoundClaim(), clause.text);
+		}
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aLeadingMarkerIsNotCoCitationEvenWhenNamedItemsFollow() {
+		// Co-citation needs an item BEFORE the marker. Here [1] follows the colon directly, so there is
+		// nothing for it to share, and splitting would hand it a preamble-only claim that asserts
+		// nothing — however many named items come after it.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: [1], Ketoconazole [2], Aspirin [3].");
+
+		assertEquals(1, sentences.size(), "a leading marker names nothing -> no split");
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void enumeration_aWrongCoCitationInsideAListIsCaughtRatherThanSilencingTheList() {
+		// The live "any allergies?" answer on patient dc8560c9 cited a shellfish-allergy diagnosis
+		// beside the sufentanil one: "Allergy to sufentanil [231] [232]". The co-citation made the
+		// splitter refuse the whole list, so all 12 of its citations published null. Here the wrong
+		// record is cited ONLY for the wrong item. In the live answer [232] is also cited, correctly,
+		// for shellfish, and selectClaim grades the claim nearest the record, so that verdict is true.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "sufentanil", "shellfish");
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Lidocaine [1], Sufentanil [2] [3].";
+
+		List<RecordReference> result = verifier.verify(answer, threeRefs(),
+				Arrays.asList(mapping(1, "Allergy: Lidocaine (drug allergen)"),
+						mapping(2, "Diagnosis: Allergy to sufentanil"),
+						mapping(3, "Diagnosis: Personal history of allergy to shellfish")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] Lidocaine");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] Sufentanil");
+		assertEquals(Boolean.FALSE, result.get(2).getGrounded(),
+				"[3] is a shellfish record cited for sufentanil and must be flagged");
+	}
+
+	@Test
+	public void aRecordCitedForTwoClaimsIsRefutedWhereEitherUseIsUnsupported() {
+		// The live shape exactly: [3] is a shellfish record, cited correctly for shellfish and wrongly
+		// for sufentanil. Grading only the claim nearest the record (shellfish, by cosine) published
+		// true. Every claim the record is cited for has to hold.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("shellfish", "sufentanil");
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Shellfish [1] [3], Sufentanil [2] [3].";
+		String shellfishRecord = "Diagnosis: Personal history of allergy to shellfish";
+		embeddings.register(shellfishRecord, AXIS_A);
+		embeddings.register("Recorded allergies: Shellfish [3]", AXIS_A);
+		embeddings.register("Recorded allergies: Sufentanil [3]", AXIS_B);
+
+		List<RecordReference> result = verifier.verify(answer, threeRefs(),
+				Arrays.asList(mapping(1, "Condition: Personal history of allergy to shellfish"),
+						mapping(2, "Diagnosis: Allergy to sufentanil"), mapping(3, shellfishRecord)),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] shellfish");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] sufentanil");
+		assertEquals(Boolean.FALSE, result.get(2).getGrounded(),
+				"[3] is also cited for sufentanil, which it does not support");
+		List<String> received = new ArrayList<String>();
+		for (List<String> perCall : judge.statementsPerCall) {
+			received.addAll(perCall);
+		}
+		assertTrue(received.contains("Recorded allergies: Sufentanil"), "judge saw: " + received);
+		assertEquals(4, received.size(), "one judgement per use: [1], [2], and both of [3]'s");
+	}
+
+	@Test
+	public void aRecordCitedForTwoClaimsIsGroundedWhereBothUsesHold() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("aspirin", "ketoconazole", "severe");
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Aspirin [1], Ketoconazole [2]. The aspirin reaction was severe [1].";
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "Allergy: Aspirin (drug allergen), severe"),
+						mapping(2, "Allergy: Ketoconazole (drug allergen)")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "both of [1]'s uses hold");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+		int pairs = 0;
+		for (List<String> perCall : judge.statementsPerCall) {
+			pairs += perCall.size();
+		}
+		assertEquals(3, pairs, "[1] is judged once per use, [2] once");
+	}
+
+	@Test
+	public void aRecordIsNotEntailedWhereOnlySomeOfItsUsesWereAnswered() {
+		// The judge entails one use and cannot answer the other. Entailed means EVERY use held, so
+		// Tier-2 has no verdict here and the Tier-1 one stands, as for any use Tier-2 could not
+		// verify. Neither record text nor claim is registered, so that cosine is 0: FALSE.
+		LlmProvider judge = new LlmProvider() {
+
+			@Override
+			public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+				List<Boolean> out = new ArrayList<Boolean>();
+				for (String statement : statements) {
+					out.add(statement.contains("again") ? null : Boolean.TRUE);
+				}
+				return out;
+			}
+		};
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Aspirin [1], Ketoconazole [2]. Aspirin was noted again [1].";
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "Allergy: Aspirin (drug allergen)"),
+						mapping(2, "Allergy: Ketoconazole (drug allergen)")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"one unanswered use leaves [1] on its Tier-1 verdict, never an entailed true");
+	}
+
+	@Test
+	public void aCompoundClaimIsNotOneOfTheUsesARecordIsJudgedOn() {
+		// [1] is cited by its own list item AND by a compound sentence that attaches [2] to other text.
+		// The judge's "no" on the compound sentence says nothing about [1] (issue #302), so that use
+		// is not judged and [1] grounds on its item alone.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("aspirin", "ketoconazole", "rash", "hives");
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Aspirin [1], Ketoconazole [2]. "
+				+ "Aspirin causes rash [1] and ketoconazole causes hives [2].";
+		embeddings.register("Allergy: Aspirin (drug allergen), rash", AXIS_A);
+		embeddings.register("Recorded allergies: Aspirin [1]", AXIS_A);
+		embeddings.register("Allergy: Ketoconazole (drug allergen), hives", AXIS_A);
+		embeddings.register("Recorded allergies: Ketoconazole [2]", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "Allergy: Aspirin (drug allergen), rash"),
+						mapping(2, "Allergy: Ketoconazole (drug allergen), hives")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] grounds on its own item");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] grounds on its own item");
+		for (List<String> perCall : judge.statementsPerCall) {
+			for (String statement : perCall) {
+				assertFalse(statement.contains("causes"), "the compound sentence was judged: " + statement);
+			}
+		}
+	}
+
+	@Test
+	public void enumeration_aCorrectCoCitationGroundsAndIsAskedAboutItsOwnItem() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin");
+		verifier.setLlmProvider(judge);
+		String answer = "Yes — the patient has the following recorded allergies: Lidocaine [1], "
+				+ "Ketoconazole [2], [4], and Aspirin [3].";
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(
+						Arrays.asList(reference(1), reference(2), reference(3), reference(4))),
+				Arrays.asList(mapping(1, "Allergy: Lidocaine (drug allergen)"),
+						mapping(2, "Allergy: Ketoconazole (drug allergen)"),
+						mapping(3, "Allergy: Aspirin (drug allergen)"),
+						mapping(4, "Allergy: Ketoconazole (drug allergen), severe")),
+				FLOOR, TIER2_ON, false);
+
+		for (int i = 0; i < 4; i++) {
+			assertEquals(Boolean.TRUE, result.get(i).getGrounded(), "citation " + (i + 1));
+		}
+		assertEquals(4, judge.statementsPerCall.size(), "every fragment of the list is verified alone");
+		List<String> received = new ArrayList<String>();
+		for (List<String> perCall : judge.statementsPerCall) {
+			assertEquals(1, perCall.size());
+			received.add(perCall.get(0));
+		}
+		// One call per reference, in the references' order: [1], [2], [3], then the co-cited [4].
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertEquals(Arrays.asList(preamble + "Lidocaine", preamble + "Ketoconazole",
+				preamble + "Aspirin", preamble + "Ketoconazole"), received,
+				"[4] is asked about Ketoconazole alone, and no statement names a sibling");
+	}
+
+	@Test
 	public void splitIntoCitedSentences_doesNotSplitWhenTheSubjectSitsInsideTheFirstItem() {
 		// The split is only safe while the shared preamble carries the SUBJECT. Here the colon is a
 		// bare lead-in and the subject ("the patient has") lives inside item 1, so splitting would hand
@@ -2337,7 +2537,7 @@ public class CitationGroundingVerifierTest {
 		// Honest about what this case is worth: it is DOMINATED by the sub-shape case below, which
 		// reddens on every mutation this one does and on one more. compoundClaim() reaches the same
 		// answer by the same route for both — the inter-marker text is ", " either way, and
-		// splitEnumeration's differing exit (no colon here, the no-own-text guard there) has no
+		// splitEnumeration's differing exit (no colon here, the one-named-item guard there) has no
 		// bearing on the classification. It is kept for the register rather than the coverage: this
 		// is the exact shape LlmAnswerExtractor.normalizeSlashCitations emits, which never carries a
 		// colon, so the case that documents the manufactured shape is this one. Do not cite it as a
@@ -2362,8 +2562,9 @@ public class CitationGroundingVerifierTest {
 	@Test
 	public void theSubShapeWhoseSplitIsRefusedForWantOfOwnTextIsCoCitationAndStaysGraded() {
 		// #302's closing bullet names this shape and leaves its remedy unsettled: with the colon present
-		// the split is attempted and refused by splitEnumeration's no-own-text guard, because [2]
-		// contributes nothing of its own beyond its marker. It is left graded
+		// the split is attempted and refused by splitEnumeration's one-named-item guard: [2] names
+		// nothing of its own, so it is co-citation of Salicylic acid and there is nothing to separate.
+		// It is left graded
 		// here deliberately — it is textually indistinguishable from the normalizer's co-citation shape
 		// above, and reading it as a conjunction with an unnamed second item would silence a verdict
 		// that is well-formed whenever it is not.
@@ -2383,8 +2584,8 @@ public class CitationGroundingVerifierTest {
 		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
 		// Pin the refusal itself, not just its downstream verdict: unsplit, the two citations share
 		// ONE claim unit, so they are non-isolate and share one batch carrying one statement twice.
-		// A split would make them isolate fragments — two calls, and two different statements, the
-		// second of them preamble-only. Delete splitEnumeration's no-own-text guard and this reddens;
+		// A split would make them isolate fragments, two calls of one statement each. Delete
+		// splitEnumeration's one-named-item guard and this reddens;
 		// the verdict assertions above do not, because each fragment would still cite one record and
 		// the stub would still say TRUE.
 		assertEquals(1, llm.batches, "a refused split leaves one claim unit, so its citations co-batch");
@@ -2527,6 +2728,39 @@ public class CitationGroundingVerifierTest {
 				"premise of this case: the guessed statement is the sentence that cites nothing");
 		assertNull(result.get(0).getGrounded(),
 				"the rule must not turn on which sentence the cosine argmax happened to pick");
+	}
+
+	@Test
+	public void compositeClaim_aPlainUseOfTheSameRecordStillRefutesIt() {
+		// The order record is cited twice: in the composite list item, whose "no" is withheld because
+		// the finding supplies the relationship (issue #284), and in a plain sentence it does not
+		// support. Withholding is asked of each use's OWN claim, so the composite selected claim
+		// cannot withhold the plain use's refusal.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String compositeItem = "Clarithromycin can be given, with one caution: Clarithromycin interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "]";
+		String answer = compositeEnumeration(order, finding)
+				+ " The patient's blood pressure is controlled [" + order.getIndex() + "].";
+		embeddings.register(order.getText(), AXIS_A);
+		embeddings.register(compositeItem, AXIS_A); // the selected claim is the composite item
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("clarithromycin", "simvastatin", "pressure");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		// The plain sentence goes in the shared batch and the list item in a call of its own, which
+		// runs after the batch.
+		assertEquals(Arrays.asList(Arrays.asList("The patient's blood pressure is controlled ."),
+				Arrays.asList(stripCitationMarkersOf(compositeItem))), judge.statementsPerCall,
+				"premise: both of the order record's uses are judged, each in its own call");
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"the plain use's refusal is not withheld by the composite claim beside it");
+	}
+
+	private static String stripCitationMarkersOf(String text) {
+		return CitationGroundingVerifier.stripCitationMarkers(text);
 	}
 
 	@Test

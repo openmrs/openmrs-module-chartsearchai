@@ -2379,7 +2379,8 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Any interactions?", "What interactions does she have?", "Any clinically significant interactions?",
 				"Do her drugs interact?", "Is there any interaction among her current drugs?", "List her drug interactions",
 				"Review her medications for interactions", "Are her medicines okay together?",
-				"Are her medications compatible with each other?", "drug interactions?" }) {
+				"Are her medications compatible with each other?", "drug interactions?",
+				"Please screen her current medications for drug interactions.", "Please check her meds for interactions" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 

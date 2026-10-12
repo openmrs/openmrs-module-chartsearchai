@@ -381,9 +381,10 @@ public final class QueryScopeRouter {
 			// "What interactions does she have?", "What drug interactions does the patient have?"
 			"what " + QUALIFIER + "(?:drug )?(?:interactions|ddis) (?:does|do) (?:she|he|they|the patient|this patient) have",
 			// "List her drug interactions"
-			"list " + POSSESSIVE + " " + QUALIFIER + "(?:drug )?(?:interactions|ddis)",
-			// "Check her medications for interactions", "Review her meds for drug interactions"
-			"(?:check|review|screen) " + POSSESSIVE + " " + MEDICATIONS + " for (?:any )?" + QUALIFIER
+			"(?:please )?list " + POSSESSIVE + " " + QUALIFIER + "(?:drug )?(?:interactions|ddis)",
+			// "Check her medications for interactions", "Review her meds for drug interactions", "Please screen her current
+			// medications for drug interactions." (issue #337's own question) — an imperative may open with "please"
+			"(?:please )?(?:check|review|screen) " + POSSESSIVE + " " + MEDICATIONS + " for (?:any )?" + QUALIFIER
 					+ "(?:drug )?(?:interactions|ddis)",
 			// "Are her medicines okay together?", "Are her medications compatible with each other?"
 			"are " + POSSESSIVE + " " + MEDICATIONS + " (?:safe|ok|okay|fine|alright|compatible) (?:together|with each other)");

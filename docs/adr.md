@@ -15340,7 +15340,9 @@ interactions"* — did screen, but fitted no screen shape, so the model answered
 - **Screen shapes**: `drugs` is a medication word in `MEDICATIONS`; the *"any …"* shape takes an optional grading
   (`QUALIFIER`: *clinically significant*, *serious*, …) and no longer needs *any*; new shapes for *"what interactions
   does she have"*, *"list her drug interactions"*, *"check|review|screen her medications for interactions"* and *"are
-  her medications okay|compatible together|with each other"*.
+  her medications okay|compatible together|with each other"*. The imperative shapes (*check*, *review*, *screen*,
+  *list*) may open with *"please"* — issue #337's own *"Please screen her current medications for drug interactions."*
+  reached the model without it (amended 2026-10-12).
 
 ### Residue
 

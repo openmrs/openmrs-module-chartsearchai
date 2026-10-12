@@ -21,7 +21,7 @@ import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 
 /**
  * The module's own statement, in the answer, of which of the patient's active orders conflict with her
- * records — on a question that asks only for her ALLERGIES. ADR Decision 121.
+ * records — on a question that asks only for her ALLERGIES. ADR Decision 124.
  *
  * <p><b>The gap this closes.</b> <em>"any allergies?"</em>, asked of a patient prescribed two drugs she is
  * recorded as allergic to, came back with a complete allergy list and two red contraindication chips

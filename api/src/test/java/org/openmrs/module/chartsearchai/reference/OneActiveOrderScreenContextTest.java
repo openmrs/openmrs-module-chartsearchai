@@ -14,7 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -49,6 +52,21 @@ public class OneActiveOrderScreenContextTest extends BaseModuleContextSensitiveT
 
 		assertEquals("This patient has one active medication order, Acetaminophen, so there is no other active medication "
 				+ "to check it against.", chart.getModuleAnswer(), chart.getText());
+	}
+
+	@Test
+	public void aScheduledOrderIsSaidToBeScheduledAndNotActive() {
+		// Issue #553's shape: an order that has not started is the module's "scheduled order" everywhere else, and is
+		// not one she is taking.
+		Date start = new GregorianCalendar(2099, Calendar.JANUARY, 1).getTime();
+		PatientChart chart = screen("Does she have any drug interactions?",
+			PatientClinicalContext.ActiveDrugOrder.named("order-rif", "Rifampicin 150mg",
+				DrugReferenceTestSupport.set("Rifampicin 150mg", "Rifampicin"), null, null, null, start));
+
+		assertEquals("This patient has one medication order, Rifampicin 150mg ("
+				+ PatientChartSerializer.scheduledToStart(start)
+				+ "), so there is no other active medication to check it against.", chart.getModuleAnswer(),
+			chart.getText());
 	}
 
 	@Test

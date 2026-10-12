@@ -15376,6 +15376,11 @@ substances against each other and keeps the screen note; two orders of one drug 
 Pinned by `OneActiveOrderScreenContextTest` (the early return is reached only where the chart carries the order's own
 record, as querystore's does) and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenForAPatientWithOneActiveOrderSaysThereIsNothingToCheckItAgainst`.
 
+**Amended (October 2026): an order that has not started is not called active.** Every other sentence of the module
+calls such an order a scheduled order (issue #553), so the one-order answer for it reads *"This patient has one
+medication order, Rifampicin 150mg (scheduled to start 2099-01-01), so there is no other active medication to check it
+against."* — `OneActiveOrderScreenContextTest.aScheduledOrderIsSaidToBeScheduledAndNotActive`.
+
 ## Decision 179: The module's own answers say "the patient", never "she"
 
 **Status: Accepted** (October 2026) — implemented, no issue. Rewords two lines of

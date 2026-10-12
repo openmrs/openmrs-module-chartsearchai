@@ -3860,8 +3860,14 @@ public class DrugReferenceInjector {
 			String display = order.getDisplay();
 			String name = order.hasKnownName() && display != null && !display.trim().isEmpty() ? display.trim()
 					: "recorded only by its codes";
-			return "This patient has one active medication order, " + name
-					+ ", so there is no other active medication to check it against.";
+			// An order that has not started is a scheduled order, as every other sentence of the module's calls it
+			// (issue #553), and not one she is taking.
+			return order.hasStarted()
+					? "This patient has one active medication order, " + name
+							+ ", so there is no other active medication to check it against."
+					: "This patient has one medication order, " + name + " ("
+							+ PatientChartSerializer.scheduledToStart(order.getScheduledStart())
+							+ "), so there is no other active medication to check it against.";
 		}
 		return null;
 	}

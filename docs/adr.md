@@ -15349,3 +15349,29 @@ there was answered with his encounters — the same answer it got before this ch
 
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`
 and `.aQuestionAboutHerSocialInteractionsAsksForNoScreen`.
+
+## Decision 178: A screen of one active order says there is nothing to check it against
+
+**Status: Accepted** (October 2026) — implemented, no issue. Extends
+[Decision 162](#decision-162-a-screen-that-related-nothing-is-answered-with-the-screen-notes-own-words), which left
+"one substance (no pair to screen)" to the model.
+
+### Context
+
+On the 3.7.1 standalone, with one active order and no note to inject, the injection returned before composing and
+the model answered: Mary Smith (`38beca4a…`, Simvastatin) and Dora DdiExpired (`d3589bb1…`, Nevirapine) got *"The
+records do not address drug interactions."*, and George Anderson (`d5c9cdad…`, Acetaminophen), asked *"What
+interactions does he have?"*, got *"The patient has had the following interactions: Encounter: Vitals at Outpatient
+Clinic [13], …"*.
+
+### The decision
+
+A screen (`asksOnlyToScreenHerMedications`) naming no drug, raising no finding, over a chart whose orders were read
+and that holds exactly ONE active order of at most one screened substance, is answered *"This patient has one active
+medication order, Acetaminophen, so there is no other active medication to check it against."* — the order's display,
+or *"recorded only by its codes"*. `DrugReferenceInjector.hasOneActiveOrder` is the one test, read by the early return
+(which no longer drops the question) and by `composeFromAScreenThatRelatedNothing`. A combination order screens its
+substances against each other and keeps the screen note; two orders of one drug are not one order.
+
+Pinned by `OneActiveOrderScreenContextTest` (the early return is reached only where the chart carries the order's own
+record, as querystore's does) and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenForAPatientWithOneActiveOrderSaysThereIsNothingToCheckItAgainst`.

@@ -2510,6 +2510,34 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				answer.getAnswer());
 	}
 
+	/**
+	 * A patient with ONE active medication order has no pair to screen, and the model, left to answer, did not say so:
+	 * on the 3.7.1 standalone a patient whose one order is acetaminophen was told, for "What interactions does he
+	 * have?", that he "has had the following interactions: Encounter: Vitals at Outpatient Clinic …". The module says
+	 * what is true of the chart, as it does for a patient with none (ADR Decision 178).
+	 */
+	@Test
+	public void aScreenForAPatientWithOneActiveOrderSaysThereIsNothingToCheckItAgainst() {
+		for (String question : new String[] { SCREEN, "What interactions does she have?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider, shipped()).search(patient, question);
+
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.isAnsweredByTheModule());
+			assertTrue(answer.getAnswer().matches("This patient has one active medication order, \\S.*, so there is no "
+					+ "other active medication to check it against\\."), question + " — was: " + answer.getAnswer());
+		}
+	}
+
+	/** Two orders of one drug are not "one active medication order": the module does not say there is nothing to check. */
+	@Test
+	public void aScreenForAPatientWithTwoOrdersIsNotToldThereIsOnlyOne() throws Exception {
+		executeDataSet(METFORMIN_ORDER);
+		ChartAnswer answer = serviceWith(new RecordingProvider(), shipped()).search(patient, SCREEN);
+
+		assertFalse(answer.getAnswer().contains("one active medication order"), answer.getAnswer());
+	}
+
 	/** The screen note's words for two substances, as {@code DrugReferenceInjector} renders them after its finding
 	 *  prefix — pinned here as a literal, so a reword of the note shows up as a changed answer. */
 	private static final String SCREEN_NOTE_WORDS = "No interactions were found among this patient's active medications. "

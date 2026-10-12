@@ -730,8 +730,11 @@ public class DrugReferenceInjector {
 		// 162) — so it does not return early with the chart unstamped.
 		boolean screenOfNoMedications = questionDrugs.isEmpty() && QueryScopeRouter.asksOnlyToScreenHerMedications(question)
 				&& hasNoActiveDrug(context);
+		// Nor does a screen of ONE order, which has nothing to pair it with (ADR Decision 178).
+		boolean screenOfOneOrder = questionDrugs.isEmpty() && findings.isEmpty()
+				&& QueryScopeRouter.asksOnlyToScreenHerMedications(question) && hasOneActiveOrder(context, screenedSubstances);
 		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing && !screenOfNoMedications
-				&& listed.stated().isEmpty()) {
+				&& !screenOfOneOrder && listed.stated().isEmpty()) {
 			return chart;
 		}
 
@@ -3811,6 +3814,18 @@ public class DrugReferenceInjector {
 		return String.join(", and ", counts) + ":";
 	}
 
+	/** Her orders were read and she has exactly ONE active order, of at most one substance the data screened — an order
+	 *  carrying several substances (a combination) screened those against each other, and is the screen note's, never
+	 *  this (ADR Decision 178). */
+	private static boolean hasOneActiveOrder(PatientClinicalContext context, Set<Object> screenedSubstances) {
+		return hasOneActiveOrder(context, screenedSubstances.size());
+	}
+
+	private static boolean hasOneActiveOrder(PatientClinicalContext context, int screened) {
+		return context != null && screened <= 1 && context.activeDrugOrdersRead()
+				&& context.getActiveDrugOrders().size() == 1;
+	}
+
 	/** Her orders were read and she has no active drug in any form — no order, no flattened name or code (issue #118's
 	 *  shape still records a medication). */
 	private static boolean hasNoActiveDrug(PatientClinicalContext context) {
@@ -3825,7 +3840,9 @@ public class DrugReferenceInjector {
 	 * share a substance as a line (ADR Decision 159); the note is a statement about what the SCREEN did, and stating
 	 * it whole keeps the floor and the class limit the model dropped when it quoted it. With no active drug in any
 	 * form and her orders read: <em>"This patient has no active medication orders, so there are none to check against
-	 * each other."</em> Anything else — a contraindication finding, one substance — keeps the model call.
+	 * each other."</em> With ONE active order, read and raising no finding: <em>"This patient has one active medication
+	 * order, Aspirin 81mg, so there is no other active medication to check it against."</em> (ADR Decision 178). Anything
+	 * else — a contraindication finding, one substance in several orders — keeps the model call.
 	 */
 	private static String composeFromAScreenThatRelatedNothing(Integer screenNoteIndex, int screened,
 			List<SafetyWarning> findings, List<Integer> findingNumbers, Map<String, Integer> orderRecordNumbers,
@@ -3836,6 +3853,15 @@ public class DrugReferenceInjector {
 		}
 		if (findings.isEmpty() && hasNoActiveDrug(context)) {
 			return "This patient has no active medication orders, so there are none to check against each other.";
+		}
+		// ONE order has no pair to screen (ADR Decision 178).
+		if (findings.isEmpty() && hasOneActiveOrder(context, screened)) {
+			PatientClinicalContext.ActiveDrugOrder order = context.getActiveDrugOrders().get(0);
+			String display = order.getDisplay();
+			String name = order.hasKnownName() && display != null && !display.trim().isEmpty() ? display.trim()
+					: "recorded only by its codes";
+			return "This patient has one active medication order, " + name
+					+ ", so there is no other active medication to check it against.";
 		}
 		return null;
 	}

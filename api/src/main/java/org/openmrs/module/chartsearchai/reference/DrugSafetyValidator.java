@@ -5027,7 +5027,7 @@ public class DrugSafetyValidator {
 		// stamped as about an ended order: its sentence says orders of hers that have not ended carry the
 		// drug. Its subject rows are stated as every other chip of this arm's are (issue #515), or no check
 		// of the answer can tell which drug it is about.
-		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, coMedications, herOrder, proposedHerOwn);
+		SafetyWarning alreadyTaken = alreadyInSeveralOrders(ref, rows, coMedications, herOrder, proposedHerOwn);
 		if (alreadyTaken != null) {
 			warnings.add(endedOrders.aboutTheSubject(ref, alreadyTaken));
 		}
@@ -5279,8 +5279,8 @@ public class DrugSafetyValidator {
 	 * @param proposedHerOwn where the question proposes this drug in play and it is hers, the orders of hers
 	 *        that establish it; null otherwise
 	 */
-	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, CoMedications coMedications,
-			boolean herOrder, List<PatientClinicalContext.ActiveDrugOrder> proposedHerOwn) {
+	private static SafetyWarning alreadyInSeveralOrders(DrugReference ref, List<DrugReference> rows,
+			CoMedications coMedications, boolean herOrder, List<PatientClinicalContext.ActiveDrugOrder> proposedHerOwn) {
 		List<PatientClinicalContext.ActiveDrugOrder> carriers =
 				coMedications.ordersWhoseDisplayNames(ref.substanceGroupKey());
 		if (carriers.size() < 2) {
@@ -5308,11 +5308,19 @@ public class DrugSafetyValidator {
 		// The one-order finding states the proposal's consequence where the others state duplicate therapy:
 		// SafetyWarning.restsOnTheProposalAlone's condition, which is why its strength is a caution.
 		boolean proposalAlone = alreadyOrdered != null && alreadyOrdered.getOrderCount() == 1;
-		return SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
+		SafetyWarning finding = SafetyWarning.substanceInSeveralActiveOrders(ref.displayLabel(),
 			ref.displayLabel() + (noneHasStarted(carriers) ? " is in " : " is already in ") + ordersNamed(carriers)
 					+ (proposalAlone ? " — " + alreadyOrdered.getConsequence() : " — possible duplicate therapy"),
 			new ArrayList<String>(ordersByDisplay.keySet()), herOrder, alreadyOrdered)
 				.withPartnerScheduledStarts(notStartedByDisplay(carriers));
+		// The ONE order a proposal of her own drug would duplicate is stated by that drug's name: naming the drug
+		// says which order the answer meant, because there is only one. Several orders carry no rows, as before — an
+		// answer writing the substance has not told them apart (SafetyWarning.rowsOfPartner). Without this, "Can I
+		// give her nevirapine?" answered "Nevirapine is already in the patient's active orders" and the module
+		// appended "Also covered by those findings and not named above: active order Nevirapine 200mg".
+		return proposalAlone
+				? finding.withPartnerRows(Collections.singletonMap(ordersByDisplay.keySet().iterator().next(), rows))
+				: finding;
 	}
 
 	/**

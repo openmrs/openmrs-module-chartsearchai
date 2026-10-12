@@ -1629,7 +1629,9 @@ public class SafetyWarning {
 	 *
 	 * <p>Empty, never null, for a partner no {@link #withPartnerRows} site resolved to an entry — the
 	 * orders {@link #substanceInSeveralActiveOrders} and {@link #ordersSharingASubstance} name among them,
-	 * and a rule whose partner the dataset identifies by no entry. Such a partner is stated only where the
+	 * and a rule whose partner the dataset identifies by no entry. Except the ONE order a proposal of her own
+	 * drug would duplicate (issue #548's one-order finding), which carries that drug's rows: naming the drug
+	 * says which order an answer meant where there is only one. Such a partner is stated only where the
 	 * answer contains its printed name. Package-private and not a getter, so it reaches no wire.
 	 */
 	List<DrugReference> rowsOfPartner(String partner) {

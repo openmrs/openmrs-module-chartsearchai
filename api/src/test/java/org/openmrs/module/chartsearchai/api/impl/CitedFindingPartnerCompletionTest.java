@@ -438,6 +438,27 @@ public class CitedFindingPartnerCompletionTest extends BaseModuleContextSensitiv
 	}
 
 	@Test
+	public void theOneOrderAProposalOfHerOwnDrugWouldDuplicateIsStatedByThatDrugsName() {
+		// Measured on the 3.7.1 standalone: "Can I give her nevirapine?" for a patient on Nevirapine 200mg was
+		// answered "Nevirapine is already in the patient's active orders … Adding it would duplicate that order",
+		// and the module appended "Also covered by those findings and not named above: active order Nevirapine
+		// 200mg" — the one order the answer had just named. Issue #548's one-order finding names a single order,
+		// so naming its drug says which order it meant: the reason ordersOfOneSubstanceAreNotStatedByThatSubstancesName
+		// keeps for SEVERAL orders does not reach it.
+		OverShippedData arrangement = new OverShippedData("Can I give her nevirapine?",
+				new String[][] { { "Nevirapine 200mg", "J05AG01" }, { "Rifampicin", "J04AB02" } });
+		RecordMapping already = arrangement.findingNaming(Collections.singletonList("Nevirapine 200mg"));
+		String modelAnswer = "Nevirapine is already in the patient's active orders. Adding it would duplicate that "
+				+ "order [" + already.getIndex() + "].";
+
+		ChartAnswer answer = arrangement.service(modelAnswer).search(patient(), arrangement.question);
+
+		assertEquals(modelAnswer, answer.getAnswer(), "the order the answer named is not named again as \"not "
+				+ "named above\"");
+		assertCoverage(1, 1, answer);
+	}
+
+	@Test
 	public void anOrderTheAnswerNamedOnlyByAnotherNameOfItsRowIsStillListed() {
 		// The residue the #555 credit leaves in the reporting direction, pinned for an interaction rule
 		// finding: the prose states a partner by the NAME of a row it was resolved to, never by the row's

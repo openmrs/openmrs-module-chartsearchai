@@ -1223,7 +1223,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 	/**
 	 * A list question whose findings about the drug proposed withhold it only against a drug the question lists, which
-	 * her chart does not hold, is answered "No if she is on" that drug (ADR Decision 150). Susan, asked of fluconazole
+	 * her chart does not hold, is answered "No if the patient is on" that drug (ADR Decision 150). Susan, asked of fluconazole
 	 * after a list carrying efavirenz, was answered "Fluconazole can be given, with two cautions", leaving out the
 	 * Major the data rates it with efavirenz. One brief line per finding about the drug proposed, strongest first.
 	 */
@@ -1238,7 +1238,7 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 
 		assertEquals(0, provider.calls, "no model is asked: " + answer.getAnswer());
 		assertTrue(answer.isAnsweredByTheModule());
-		assertEquals("No if she is on Efavirenz — this module's drug-safety check found a reason to withhold "
+		assertEquals("No if the patient is on Efavirenz — this module's drug-safety check found a reason to withhold "
 				+ "Fluconazole against it.\n"
 				+ "Fluconazole interacts with Efavirenz, also named in the question — Major. [" + efavirenz.index + "]\n"
 				+ "Fluconazole interacts with Zidovudine, also named in the question — Moderate. [" + zidovudine.index

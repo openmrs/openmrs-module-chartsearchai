@@ -3127,7 +3127,7 @@ public class DrugReferenceInjector {
 	 * <p>One brief line per finding about the drug proposed ({@link #briefDetail}), strongest first and, within a
 	 * strength, those against her own orders before those against a drug the question lists. The lead is the
 	 * strongest call a line licenses: Decision 108's "No" where a finding withholds the drug against one of her
-	 * orders; <em>"No if she is on Efavirenz — this module's drug-safety check found a reason to withhold Fluconazole
+	 * orders; <em>"No if the patient is on Efavirenz — this module's drug-safety check found a reason to withhold Fluconazole
 	 * against it."</em> where every withholding finding is against a listed drug she does not hold, since her chart
 	 * does not say she is on it; else Decision 140's count of cautions.
 	 *
@@ -3197,7 +3197,7 @@ public class DrugReferenceInjector {
 			for (Object key : withholdingListed) {
 				names.add(DrugSafetyValidator.interactionSubject(listedRows.get(key), context).displayLabel());
 			}
-			lines.add(0, "No if she is on " + joinedAsAlternatives(names) + " — this module's drug-safety check found "
+			lines.add(0, "No if the patient is on " + joinedAsAlternatives(names) + " — this module's drug-safety check found "
 					+ "a reason to withhold " + drug + (names.size() == 1 ? " against it." : " against each."));
 		} else {
 			lines.add(0, cautionLead(order.size(), drug));
@@ -3809,7 +3809,7 @@ public class DrugReferenceInjector {
 			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications"));
 		}
 		if (sharing > 0) {
-			counts.add(sharing + (sharing == 1 ? " substance" : " substances") + " carried by more than one of her orders");
+			counts.add(sharing + (sharing == 1 ? " substance" : " substances") + " carried by more than one of this patient's orders");
 		}
 		return String.join(", and ", counts) + ":";
 	}

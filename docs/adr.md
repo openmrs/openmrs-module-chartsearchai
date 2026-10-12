@@ -15375,3 +15375,21 @@ substances against each other and keeps the screen note; two orders of one drug 
 
 Pinned by `OneActiveOrderScreenContextTest` (the early return is reached only where the chart carries the order's own
 record, as querystore's does) and `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenForAPatientWithOneActiveOrderSaysThereIsNothingToCheckItAgainst`.
+
+## Decision 179: The module's own answers say "the patient", never "she"
+
+**Status: Accepted** (October 2026) — implemented, no issue. Rewords two lines of
+[Decision 149](#decision-149-a-proposal-after-a-list-of-drugs-is-answered-with-what-the-check-established-for-the-drug-proposed) and
+[Decision 171](#decision-171-a-screens-answer-counts-its-findings-states-brief-lines-and-says-what-it-does-not-cover).
+
+Two sentences the module composes assumed a female patient: *"No if she is on Efavirenz — …"* and *"… and 1 substance
+carried by more than one of her orders:"*. Every other composed sentence says *"this patient"*, and the module knows
+nothing of the patient's gender when it writes them, so a male patient's answer read *"her orders"*. They now read
+*"No if the patient is on Efavirenz — …"* and *"… carried by more than one of this patient's orders:"*. The quotations
+of those answers in the decisions above are left as they were measured. Sweep for it with a search of the production
+string literals for `her|she|hers|him|his|he` — the composed answers' words — outside `QueryScopeRouter`'s grammars,
+which read the clinician's question.
+
+Pinned by `OrdersSharingASubstanceModuleAnswerContextTest.theSharedSubstanceFollowsARatedMajorAndPrecedesACaution`,
+`.aScreenTheCapTruncatedCountsEveryPairItFoundAndSaysHowManyItDoesNotShow` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aListQuestionWithholdingOnlyAgainstAListedDrugIsAnsweredNoIfSheIsOnIt` (its name kept: renaming a test moves the decisions that cite it).

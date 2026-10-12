@@ -15507,3 +15507,41 @@ Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aQuestionWhetherNotT
 `.aQuestionWhetherADrugInteractsWithHerMedicationsIsAnsweredYesWithTheFindings`,
 `.aListQuestionAskingWhetherNotToGiveTheDrugIsNotAnsweredNoIfSheIsOnIt`,
 `.aQuestionWhetherADrugOfNoPairInteractsIsAnsweredThatTheCheckRelatesNone` and `.aBelowFloorQuestionThatProposesNothingStillAsksTheModel`.
+
+## Decision 182: Every request to screen her medications and nothing else is the module's, whatever its words
+
+**Status: Accepted** (October 2026) — implemented on the owner's decision, 2026-10-12. Widens issue #469's closed
+`SCREEN_SHAPES`, which Decisions 176, 177 and 180 had been extending one phrasing at a time.
+
+### Context
+
+Two sweeps on the 3.7.1 standalone (288 questions) each found screen phrasings the grammar did not list. Every miss
+reached the model: a one-order patient was told *"The records do not address …"*, and a multi-order screen was answered
+at length, sometimes opening *"No —"*. Listing phrasings does not converge.
+
+### The decision
+
+`QueryScopeRouter.asksOnlyToScreenHerMedications` admits, beside the shapes, any question that
+`isInteractionScreening` (the screening arm's own gate), names her medications (or says "DDI"), rests on more than a
+word of change — or asks to change ANY of them (`CHANGE_REQUEST`: *"Should I stop any of her medications?"*; not *"Is
+there a change in her medications?"*, *"Should I stop all her medications?"*) — and asks for nothing else
+(`asksForSomethingElseToo`, fail-closed):
+
+- a second question (two question marks, or *and/also* before a question word);
+- a list of her medications (*what/which/list/show … medications* not followed by *interact*);
+- something OUTSIDE her chart interacting with her medications (*"Which drugs interact with her medications?"*, *"Is
+  grapefruit juice safe with her medications?"*, *"with another drug"*) — not a screen of her own orders, as
+  `aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel` pins;
+- a dose, food, alcohol, or a patient factor the findings do not weigh (pregnancy, kidneys, age …), or *"safe
+  medications"*;
+- another record domain beside her medications (allergies, conditions, visits, programs).
+
+`conflict(s|ing)` also joins `MEDICATION_SAFETY_CUES`, conjoined with a medication word as every member is, so *"Is
+there a conflict in her schedule?"* still screens nothing.
+
+Verified live on four patients: 40 screen questions outside the grammar (10 phrasings) all composed after the
+`conflict` cue, one lead per patient; 48 questions asking for something else (12 phrasings) all left to the model.
+
+Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aScreenRequestOutsideTheGrammarIsAnsweredWithTheScreensCount`,
+`.aScreenRequestAskingForSomethingElseToo_keepsTheModel`, `.aMedicationQuestionThatIsNotAScreenStillAsksTheModel` and
+`.aScreenNamingSomethingTheDatasetDoesNotResolveStillAsksTheModel`.

@@ -189,7 +189,10 @@ public final class QueryScopeRouter {
 			"compatib(?:le|ility)", "(?:ok|okay|fine|alright) (?:together|with each other)",
 			// "Are there any contraindications among her medicines?", "Do her meds clash?", "Can her medications be taken
 			// together?" (ADR Decision 180)
-			"contraindicat(?:ed|ion|ions)", "clash(?:es|ing)?", "(?:taken|given|used) together");
+			"contraindicat(?:ed|ion|ions)", "clash(?:es|ing)?", "(?:taken|given|used) together",
+			// "Do any of her current prescriptions conflict?" — conjoined with a medication word like every cue here, so
+			// the everyday senses INTERACTION_CUES' javadoc keeps out of the bare family do not screen (ADR Decision 182)
+			"conflict(?:s|ing)?");
 
 	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
@@ -593,8 +596,75 @@ public final class QueryScopeRouter {
 	 * raises one.
 	 */
 	public static boolean asksOnlyToScreenHerMedications(String question) {
-		return fitsAShape(words(question), SCREEN_SHAPES);
+		return fitsAShape(words(question), SCREEN_SHAPES)
+				|| question != null && isInteractionScreening(question)
+						&& (MEDICATIONS_CUES.matcher(question).find() || DDI_CUES.matcher(question).find())
+						&& (asksForAReadingBesidesAChange(question) || CHANGE_REQUEST.matcher(question).find())
+						&& !asksForSomethingElseToo(question);
 	}
+
+	/**
+	 * Whether a question that asks for a screen of her medications ALSO asks for something the screen does not answer —
+	 * so it keeps the model (ADR Decision 182). The screen grammar above admitted only the phrasings it listed, and two
+	 * sweeps on the 3.7.1 standalone kept finding screens it had not listed, each left to the model; now a screen request
+	 * ({@link #isInteractionScreening}) naming her medications is the module's unless one of these holds. Fail-closed:
+	 * anything here keeps the model call the question always had.
+	 * <ul>
+	 * <li>A second question: two question marks, or one joined by "and"/"also" to a question word.</li>
+	 * <li>A list of her medications asked for — "what/which/list/show … medications" not followed by "interact".</li>
+	 * <li>Something OUTSIDE her chart interacting with her medications — "with her medications", "with another drug",
+	 *     "Which drugs interact with her medications?" — whose answer is not a screen of her own orders.</li>
+	 * <li>A dose, a food, alcohol, or a patient factor the findings do not weigh (pregnancy, kidneys, age …).</li>
+	 * <li>Another record domain asked about besides her medications: allergies, conditions, visits, programs.</li>
+	 * </ul>
+	 */
+	static boolean asksForSomethingElseToo(String question) {
+		String q = question.toLowerCase(Locale.ROOT);
+		if (q.indexOf('?') != q.lastIndexOf('?') || SECOND_QUESTION.matcher(q).find() || ENUMERATION.matcher(q).find()
+				|| OUTSIDE_AGENT.matcher(q).find() || OTHER_FACTOR.matcher(q).find()) {
+			return true;
+		}
+		Set<Intent> intents = matchedIntents(question);
+		return intents.contains(Intent.ALLERGIES) || intents.contains(Intent.CONDITIONS) || intents.contains(Intent.VISITS)
+				|| intents.contains(Intent.PROGRAMS);
+	}
+
+	/**
+	 * Whether the question's drug-safety reading rests on more than a word of change — an interaction word, "DDI", or a
+	 * safety or concern word. A change word alone asks for a screen only as {@link #CHANGE_REQUEST}: <em>"Should I stop any
+	 * of her medications?"</em> does, <em>"Is there a change in her medications?"</em> and <em>"Should I stop all her
+	 * medications?"</em> do not (ADR Decision 182).
+	 */
+	private static boolean asksForAReadingBesidesAChange(String question) {
+		return INTERACTION_CUES.matcher(question).find() || INTERACTION_NOUN_CUES.matcher(question).find()
+				|| DDI_CUES.matcher(question).find()
+				|| MEDICATION_SAFETY_CUES.matcher(CHANGE_CUES.matcher(question).replaceAll(" ")).find();
+	}
+
+	/** The change family of {@link #MEDICATION_SAFETY_CUES}. */
+	private static final Pattern CHANGE_CUES = cues("stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
+		"change(?:d|s)?", "adjust(?:ed|ment|ments)?");
+
+	/** "Should I stop any of her medications?" — a change asked about ANY of them, which is what a screen informs. */
+	private static final Pattern CHANGE_REQUEST = Pattern.compile("\\b(?:should|do|must|can) (?:i|we) (?:need to )?(?:stop|"
+			+ "change|discontinue|adjust|deprescribe|modify) (?:any|some)\\b", Pattern.CASE_INSENSITIVE);
+
+	private static final String MEDICATION_NOUN = "(?:medications?|meds|medicines?|drugs?|prescriptions?|regimens?)";
+
+	private static final Pattern SECOND_QUESTION = Pattern.compile("\\b(?:and|also|plus)\\s+(?:what|which|when|where|who|how|is"
+			+ "|are|does|do|did|has|have|can|could|should|list|show|tell)\\b");
+
+	private static final Pattern ENUMERATION = Pattern.compile("\\b(?:what|which|list|show|name|tell me)\\b(?:(?!\\binteract)"
+			+ "[^?.])*\\b" + MEDICATION_NOUN + "\\b(?!\\s+(?:interact|interacting|interactions?|have any interactions|clash))");
+
+	private static final Pattern OUTSIDE_AGENT = Pattern.compile("\\b(?:interact\\w*|safe|ok|okay|fine|compatible|combined|"
+			+ "mixed|taken|given) with (?:(?:any of )?(?:her|his|their|the patient's|this patient's) (?:current |active )?"
+			+ MEDICATION_NOUN + "|(?!each other|one another|the patient|this patient)(?:another|other|an?|any|some|this|that|the)"
+			+ " \\w+)");
+
+	private static final Pattern OTHER_FACTOR = Pattern.compile("\\b(?:safe (?:medications|meds|medicines|drugs)|doses?|dosage|dosing|how much|mg|levels?|food|foods|"
+			+ "grapefruit|alcohol|pregnan\\w*|breastfeed\\w*|lactat\\w*|kidneys?|renal|liver|hepatic|heart|cardiac|elderly|"
+			+ "age|weight|surgery|anaesthe\\w*|anesthe\\w*)\\b");
 
 	/**
 	 * Whether {@code question} is in the MEDICATION domain, by the router's own classification.

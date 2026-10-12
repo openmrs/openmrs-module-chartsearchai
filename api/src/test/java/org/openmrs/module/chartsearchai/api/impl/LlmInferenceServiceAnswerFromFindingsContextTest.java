@@ -2480,6 +2480,42 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		}
 	}
 
+	/**
+	 * Every question that asks for a screen of her medications and nothing else is the module's, whatever its words (ADR
+	 * Decision 182): the closed grammar left each phrasing it had not listed to the model, and two sweeps on the 3.7.1
+	 * standalone kept finding more — one-order patients told "The records do not address …", screens opened "No —".
+	 * None of these is a shape of the grammar.
+	 */
+	@Test
+	public void aScreenRequestOutsideTheGrammarIsAnsweredWithTheScreensCount() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "Which of her medications interact?", "Could any of her meds be interacting?",
+				"Do her medications have interactions between them?", "Should I stop any of her medications?",
+				"Is anything wrong with her medications?", "Any interaction concerns about her current meds?",
+				"Her medications, any interactions?", "Do any of her current prescriptions conflict?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(0, provider.calls, question + " — the module answers: " + answer.getAnswer());
+			assertTrue(answer.getAnswer().startsWith("1 interaction among this patient's active medications:\n"),
+					question + " — the screen's count leads: " + answer.getAnswer());
+		}
+	}
+
+	/** A screen request that also asks for something the screen does not answer keeps the model (ADR Decision 182). */
+	@Test
+	public void aScreenRequestAskingForSomethingElseToo_keepsTheModel() throws Exception {
+		executeDataSet(WARFARIN_ORDER);
+		for (String question : new String[] { "What medications is she on and do any interact?",
+				"List her medications and any interactions", "Is her medication dose safe?",
+				"Are her medications safe in pregnancy?", "Any interactions? What is her blood pressure?",
+				"Are her medications safe with alcohol?", "Do any of her medications interact with her kidney function?",
+				"Are her medications and allergies safe together?" }) {
+			RecordingProvider provider = new RecordingProvider();
+			ChartAnswer answer = serviceWith(provider).search(patient, question);
+			assertEquals(1, provider.calls, "the model must be asked: " + question + " — was: " + answer.getAnswer());
+		}
+	}
+
 	/** "ddI" is didanosine's own abbreviation, so only the capitalised "DDI" asks for a screen: a question about her
 	 *  ddI dose is not one. */
 	@Test

@@ -15231,3 +15231,42 @@ a default 3.7 GB ceiling) and MariaDB (stock settings) do not account for the ~1
 `memoryKb.anonPages` and `memoryKb.shmem`, and `processes`: the count and summed resident memory of every visible process, and the ten
 holding the most, by name and size only. In the container that sum against `anonPages` says whether the memory is held
 inside it or by something else on the host. Pinned by `HostDiagnosticsTest.read_shouldReportTheVisibleProcessesHoldingTheMostMemoryLargestFirst`.
+
+## Decision 175: A composed line about one substance of a combination order names that substance
+
+**Status: Accepted** (October 2026) — implemented, no issue. Amends the brief lines of
+[Decision 153](#decision-153-a-modules-no-states-brief-lines-keeping-a-folded-class-sentence) and
+[Decision 171](#decision-171-a-screens-answer-counts-its-findings-states-brief-lines-and-says-what-it-does-not-cover).
+
+### Context
+
+DDInter relates a drug to each substance of a combination in a row of its own, so a combination order can carry two
+findings about one drug. On the 3.7.1 standalone, *"Can I give her dolutegravir?"* for Michelle Lewis (`9fbc77d9…`,
+one `Isoniazid / Rifapentine` order) was answered by the module:
+
+> 2 interaction cautions for Dolutegravir:
+> Dolutegravir interacts with active order Isoniazid / Rifapentine — Minor. [294] [5]
+> Dolutegravir interacts with active order Isoniazid / Rifapentine — Minor. [295] [5]
+
+One line twice under a count of two. The chips differ (an inducer note and an inhibitor note), but the brief line keeps
+only the first sentence, so nothing a clinician read in the answer said they were two interactions. The same shape gave
+Rhoda Ritonavirb (`84f323da…`) two identical Major lines against her `Lopinavir / ritonavir` order under *"Can I start
+her on rifampicin?"*, and on her screen two ratings — Moderate and Minor — for what read as one Didanosine pair.
+
+### The decision
+
+Where two or more interaction findings of one composed answer share their drug and their one named order, each of their
+lines states, after its body, *"The interacting substance is Rifapentine."* —
+`DrugReferenceInjector.interactingSubstancesOfSharedOrders`. The name is read off the rows the chip site resolved the
+partner to (`SafetyWarning.rowsOfPartner`), by `DrugReference.canonicalRow`, and only where each finding's rows are one
+substance and the group's substances differ; a merged chip, or a partner no chip site resolved, states nothing rather
+than a guess. A finding standing alone for its drug and order is unchanged.
+
+### Not taken
+
+- **Merging the lines into one with both citations.** That reads as one interaction, and the two can carry different
+  ratings and different hazards.
+- **Naming the substance in the chip's own sentence.** The chip's partner name is the subject of Decision 63's settled
+  ladder; the chip already carries the mechanism that tells the two apart.
+
+Pinned by `CombinationOrderConstituentLineContextTest`.

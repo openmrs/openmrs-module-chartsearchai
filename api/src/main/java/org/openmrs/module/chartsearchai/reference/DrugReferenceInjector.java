@@ -10,11 +10,13 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -3737,8 +3739,10 @@ public class DrugReferenceInjector {
 		// (ADR Decision 171): the mechanism stays on the chip.
 		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[order.get(0)]);
 		List<String> lines = new ArrayList<String>(order.size());
+		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(findings);
 		for (Integer i : order) {
-			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true));
+			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
+					substances.get(findings.get(i))));
 		}
 		SafetyWarning first = findings.get(order.get(0));
 		if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
@@ -3874,14 +3878,80 @@ public class DrugReferenceInjector {
 	 */
 	private static String findingLine(SafetyWarning finding, Integer number, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, boolean proposal) {
+		return findingLine(finding, number, orderRecordNumbers, herOrderRecords, proposal, null);
+	}
+
+	/** As above, with {@code interactingSubstance} — where not null — stated after the body as {@link
+	 *  #INTERACTING_SUBSTANCE_OPENING}{@code + substance + "."}: see {@link #interactingSubstancesOfSharedOrders}. */
+	private static String findingLine(SafetyWarning finding, Integer number, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, boolean proposal, String interactingSubstance) {
 		boolean currentMedicationContraindication = finding.isAboutACurrentMedication()
 				&& SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())
 				&& finding.orderScheduledStart() == null;
 		String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
 				orderRecordNumbers, true)
 				+ (currentMedicationContraindication ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
+				+ (interactingSubstance == null ? "" : INTERACTING_SUBSTANCE_OPENING + interactingSubstance + ".")
 				+ " [" + number + "]";
 		return line + orderRecordMarkers(finding, herOrderRecords, ChartSearchAiUtils.citedIndexes(line));
+	}
+
+	/** How a composed line names the substance of a combination order it is about — see {@link
+	 *  #interactingSubstancesOfSharedOrders}. */
+	static final String INTERACTING_SUBSTANCE_OPENING = " The interacting substance is ";
+
+	/**
+	 * For each interaction finding that shares its drug and its one named order with another finding of {@code
+	 * findings}, the name of the substance of that order it relates the drug to. The knowledge base relates a drug to
+	 * each substance of a combination in a row of its own, so <em>"Can I give her dolutegravir?"</em> beside an
+	 * {@code Isoniazid / Rifapentine} order raised two findings whose brief lines both read <em>"Dolutegravir
+	 * interacts with active order Isoniazid / Rifapentine — Minor."</em>: one line printed twice under a count of
+	 * two, and on a screen two ratings for what read as one pair (Didanosine against {@code Lopinavir / ritonavir},
+	 * Moderate and Minor). The mechanism that tells them apart stays on the chip, so the line names the substance.
+	 *
+	 * <p>Read off {@link SafetyWarning#rowsOfPartner} — the rows the chip site resolved that partner to — and stated
+	 * only where those rows are ONE substance and the findings of the group name different substances, so a merged
+	 * chip, or a partner no chip site resolved, states nothing rather than a guess. A finding standing alone for its
+	 * drug and order is left as it was.
+	 */
+	private static Map<SafetyWarning, String> interactingSubstancesOfSharedOrders(List<SafetyWarning> findings) {
+		Map<List<String>, List<SafetyWarning>> byDrugAndOrder = new LinkedHashMap<List<String>, List<SafetyWarning>>();
+		for (SafetyWarning finding : findings) {
+			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
+					&& finding.namedPartners().size() == 1) {
+				List<String> key = Arrays.asList(finding.getDrug(), finding.namedPartners().get(0));
+				List<SafetyWarning> group = byDrugAndOrder.get(key);
+				if (group == null) {
+					group = new ArrayList<SafetyWarning>();
+					byDrugAndOrder.put(key, group);
+				}
+				group.add(finding);
+			}
+		}
+		Map<SafetyWarning, String> substances = new IdentityHashMap<SafetyWarning, String>();
+		for (List<SafetyWarning> group : byDrugAndOrder.values()) {
+			if (group.size() < 2) {
+				continue;
+			}
+			Map<SafetyWarning, String> named = new IdentityHashMap<SafetyWarning, String>();
+			Set<Object> keys = new HashSet<Object>();
+			for (SafetyWarning finding : group) {
+				List<DrugReference> rows = finding.rowsOfPartner(finding.namedPartners().get(0));
+				Set<Object> ofRows = new HashSet<Object>();
+				for (DrugReference row : rows) {
+					ofRows.add(row.substanceGroupKey());
+				}
+				if (ofRows.size() != 1) {
+					break;
+				}
+				keys.addAll(ofRows);
+				named.put(finding, DrugReference.canonicalRow(rows).getName());
+			}
+			if (named.size() == group.size() && keys.size() > 1) {
+				substances.putAll(named);
+			}
+		}
+		return substances;
 	}
 
 	/**

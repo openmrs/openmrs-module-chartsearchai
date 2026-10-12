@@ -74,7 +74,9 @@ public final class QueryScopeRouter {
 	}
 
 	private static final Pattern MEDICATIONS_CUES = cues(
-			"medications?", "medicines?", "meds", "drugs?", "prescriptions?", "prescribed", "regimens?");
+			"medications?", "medicines?", "meds", "drugs?", "prescriptions?", "prescribed", "regimens?",
+			// What she takes, as a clinician words it: "Is anything she takes interacting?" (ADR Decision 180)
+			"(?:she|he|they|the patient|this patient) (?:takes|is taking|are taking)");
 
 	/** Beyond the literal allergy words: "adverse", "reaction(s)" and "intolerance" are the
 	 *  allergy-table's own vocabulary (records read "Allergy: X. Reaction: rash"; the OpenMRS
@@ -185,8 +187,9 @@ public final class QueryScopeRouter {
 			"change(?:d|s)?", "adjust(?:ed|ment|ments)?",
 			// "Are her medications compatible with each other?", "Are her medicines okay together?" (ADR Decision 177)
 			"compatib(?:le|ility)", "(?:ok|okay|fine|alright) (?:together|with each other)",
-			// "Are there any contraindications among her medicines?" (ADR Decision 180)
-			"contraindicat(?:ed|ion|ions)");
+			// "Are there any contraindications among her medicines?", "Do her meds clash?", "Can her medications be taken
+			// together?" (ADR Decision 180)
+			"contraindicat(?:ed|ion|ions)", "clash(?:es|ing)?", "(?:taken|given|used) together");
 
 	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
@@ -283,7 +286,11 @@ public final class QueryScopeRouter {
 	private static final String KNOW_ABOUT = "(?: i (?:should|need to) (?:know|worry) about)?";
 
 	/** How a screen question may grade the interactions it asks for: "clinically significant", "serious". */
-	private static final String QUALIFIER = "(?:(?:clinically )?(?:significant|important|relevant|serious|major|dangerous) )?";
+	private static final String QUALIFIER =
+			"(?:(?:clinically )?(?:significant|important|relevant|serious|major|dangerous|adverse) )?";
+
+	/** Who takes the drugs a screen question asks about, as its words read: "she is on", "he takes". */
+	private static final String SUBJECT_TAKES = "(?:she|he|they|the patient|this patient) (?:is on|are on|takes|take|is taking)";
 
 	/**
 	 * The question shapes a proposal of ONE drug may take, over {@link #words} joined by single spaces
@@ -388,11 +395,20 @@ public final class QueryScopeRouter {
 					+ "(?: (?:between|among) " + POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
 			// "Any DDIs?", "Any drug interactions I should worry about?", "Any DDIs with her current medications?", "Any
 			// clinically significant interactions?", "drug interactions?"
-			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug |medication )?(?:interactions|ddis)(?: (?:with|between|among) "
-					+ POSSESSIVE + " " + MEDICATIONS + ")?" + KNOW_ABOUT,
+			"(?:are there )?(?:any )?" + QUALIFIER + "(?:drug drug |drug |medication )?(?:interactions|interaction alerts|ddis?)"
+					+ "(?: (?:with|between|among) (?:" + POSSESSIVE + " " + MEDICATIONS + "|" + POSSESSIVE + " current treatment"
+					+ "|the (?:drugs|medicines|medications) " + SUBJECT_TAKES + "))?" + KNOW_ABOUT,
+			// "Is she on any interacting drugs?", "Is anything she takes interacting?", "What are her drug interactions?"
+			"is (?:she|he|they|the patient|this patient) on any interacting (?:drugs|medications|medicines|meds)",
+			"is anything " + SUBJECT_TAKES + " interacting",
+			"what are " + POSSESSIVE + " (?:drug )?interactions",
+			// "Are any of her drugs contraindicated together?", "Can her medications be taken together?", "Do her meds clash?"
+			"are any of " + POSSESSIVE + " " + MEDICATIONS + " contraindicated (?:together|with each other)",
+			"can " + POSSESSIVE + " " + MEDICATIONS + " be (?:taken|given|used) together",
+			"do " + POSSESSIVE + " " + MEDICATIONS + " clash(?: with (?:each other|one another))?",
 			// "Check for drug interactions", "Screen for DDIs", "Interaction check" (ADR Decision 180)
 			"(?:please )?(?:check|screen) for (?:any )?" + QUALIFIER + "(?:drug )?(?:interactions|ddis)(?: please)?",
-			"(?:drug )?interactions? check",
+			"(?:drug |medication )?interactions? (?:check|review|screen)",
 			// "Any harmful drug combinations?", "Is there a problem with her medication combination?"
 			"(?:are there )?any (?:harmful|dangerous|unsafe|bad) (?:drug |medication )?combinations",
 			"is there (?:a|any) problem with " + POSSESSIVE + " (?:drug|medication) combination",

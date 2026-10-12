@@ -15446,5 +15446,22 @@ the finding that withholds it is a class relationship folded onto a Moderate row
   pins the first of them to the model ("inverse polarity: a 'No' lead would answer it backwards"), so changing it is the
   owner's call.
 
+**Amended the same day, after a second round** of 20 new screen phrasings over three patients (60 questions): 12 were
+the module's, *"Do her meds clash?"*, *"Can her medications be taken together?"* and *"Is anything she takes
+interacting?"* ran no screen (*"The records do not address drug interactions."* beside thirteen interactions), and the
+rest reached the model, one-order patients being told *"The records do not address …"*. `clash`, `taken|given|used
+together` join `MEDICATION_SAFETY_CUES`; *"she takes"*/*"he is taking"* joins `MEDICATIONS_CUES`; the screen grammar
+admits `ddi`, `drug-drug interactions`, *interaction alerts*, *adverse* as a grading, *"the drugs she is on"*, *"her
+current treatment"*, *"is she on any interacting drugs"*, *"what are her drug interactions"*, *"are any of her drugs
+contraindicated together"*, *"can her medications be taken together"*, *"do her meds clash"* and *medication interaction
+review/screen*. Re-run live: 54 of the 60 are the module's; the rest are a malformed question of the sweep's own and
+*"Is there polypharmacy risk?"*, which is not a request for an interaction screen.
+
+**Residue: the grammar is closed, and the sweep is not.** Both rounds found phrasings the grammars did not admit, and a
+third would find more; every miss reaches the model, which answers a multi-order screen correctly but at length and
+sometimes with a *"No —"* lead, and a one-order screen with *"The records do not address …"*. Composing for every
+question `isInteractionScreening` admits — rather than for a closed list of shapes — would close the class, and is the
+owner's call: issue #469 chose the closed grammar so a question carrying anything more keeps the model.
+
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.everyWayOfAskingForAScreenIsAnsweredWithTheScreensCount`,
 `.moreProposalPhrasingsAreAnsweredFromTheFindings` and `DrugSafetyScreeningPhrasingCorpusTest`.

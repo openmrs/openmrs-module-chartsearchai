@@ -2400,7 +2400,15 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 				"Any harmful drug combinations?", "Review her drugs for interactions please",
 				"Any interactions I need to know about?", "What drug interactions should I watch for?",
 				"Is there a problem with her medication combination?", "Is her regimen safe?",
-				"Are there any contraindications among her medicines?", "Is it safe to continue all her current medications?" }) {
+				"Are there any contraindications among her medicines?", "Is it safe to continue all her current medications?",
+				// A second sweep round (ADR Decision 180's amendment)
+				"Any DDI?", "Are there drug-drug interactions?", "Do her meds clash?", "Any interactions between the drugs she is on?",
+				"Is she on any interacting drugs?", "Any drug interaction alerts?", "Medication interaction review",
+				"Are any of her drugs contraindicated together?", "Can her medications be taken together?",
+				"Any interactions among the medicines she takes?", "Are there significant drug interactions?", "Any major interactions?",
+				"Is anything she takes interacting?", "Drug interaction screen", "Any adverse drug interactions?",
+				"Check her prescriptions for interactions", "Are there interactions with her current treatment?",
+				"What are her drug interactions?" }) {
 			RecordingProvider provider = new RecordingProvider();
 			ChartAnswer answer = serviceWith(provider).search(patient, question);
 

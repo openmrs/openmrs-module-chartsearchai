@@ -13761,6 +13761,12 @@ her fluconazole answer the tiotropium one.
 Pinned by `LlmInferenceServiceAnswerFromFindingsContextTest.aProposalRelatedToHerOrdersOnlyBelowTheFloorIsAnsweredWithThoseRows`,
 `.aPairBelowARaisedFloorIsStatedWithItsOwnRating` and `.aSourceSilentOnMechanismsIsNotSaidToCarryNone`.
 
+**Reworded on the owner's decision, 2026-10-13**: "its row(s) against this patient's orders" was the dataset's word, not
+a clinician's. The sentence now reads *"The interaction data gives no rated reason to withhold Ondansetron: it lists
+Ondansetron against 4 of this patient's orders, none with a severity or mechanism on file."* — *"one of this patient's
+orders, with no severity …"* for one, and *"…, rated Minor, below the level this module reports as a finding."* where a
+raised floor filtered a rating. The claims are unchanged; the quotations above are as they were measured.
+
 ## Decision 145: An order a composed answer lists only below the floor does not scope its chips
 
 **Status: Accepted** (October 2026) — implemented, no issue. Since [Decision 146](#decision-146-a-below-floor-statement-cites-the-data-and-not-her-orders) a listing line cites no order of hers at all. Narrows

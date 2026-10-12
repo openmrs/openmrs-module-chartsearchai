@@ -2780,13 +2780,14 @@ public class DrugReferenceInjector {
 		// cover on a line of its own. It cites the data and not her orders (ADR Decision 146): the claim is the
 		// data's, and her order records say nothing of the drug asked about.
 		int n = rows.orders.size();
-		return "The interaction data gives no rated reason to withhold " + rows.drug + ": "
-				+ (!rows.allUnknown ? (n == 1 ? "its row against this patient's orders is rated "
-						: "its " + n + " rows against this patient's orders are rated ") + rows.ratings()
-						+ ", below the level this module reports as a finding"
-						: (n == 1 ? "its row against this patient's orders carries no severity"
-								: "none of its " + n + " rows against this patient's orders carries a severity")
-								+ (rows.noMechanism ? " or mechanism" : ""))
+		// In a clinician's words, not the data's: "rows" was the dataset's term for what a clinician reads as the drug
+		// being listed against her orders (ADR Decision 144, reworded on the owner's decision 2026-10-13).
+		String against = "it lists " + rows.drug + " against " + (n == 1 ? "one" : String.valueOf(n))
+				+ " of this patient's orders, ";
+		return "The interaction data gives no rated reason to withhold " + rows.drug + ": " + against
+				+ (!rows.allUnknown ? "rated " + rows.ratings() + ", below the level this module reports as a finding"
+						: (n == 1 ? "with no severity" : "none with a severity") + (rows.noMechanism ? " or mechanism" : "")
+								+ " on file")
 				+ ". [" + reference + "]\n" + BELOW_FLOOR_SCOPE;
 	}
 

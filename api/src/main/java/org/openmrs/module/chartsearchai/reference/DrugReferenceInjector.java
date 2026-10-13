@@ -3805,9 +3805,23 @@ public class DrugReferenceInjector {
 				.thenComparingInt(i -> strengthRank(clauses[i]))
 				.thenComparingInt(i -> STRENGTH_WITHHOLD.equals(clauses[i]) && licensesTheModulesNo(findings.get(i))
 						? 0 : 1));
+		// The finding the lead is decided by, before the lines are reordered below: the "No" rests on it alone.
+		final int leadIndex = order.get(0);
+		// Under a proposal's "No", a recorded allergy to the very drug proposed is the first line (ADR Decision 192): it
+		// is the most direct reason, and the order above put it after the interactions that license the "No".
+		if (proposal && STRENGTH_WITHHOLD.equals(clauses[leadIndex])) {
+			List<Integer> allergies = new ArrayList<Integer>();
+			for (Integer i : order) {
+				if (isAnAllergyToTheDrugProposed(findings.get(i))) {
+					allergies.add(i);
+				}
+			}
+			order.removeAll(allergies);
+			order.addAll(0, allergies);
+		}
 		// Brief lines, under a proposal's "No" or count of cautions (ADR Decisions 140, 153) and under a screen's count
 		// (ADR Decision 171): the mechanism stays on the chip.
-		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[order.get(0)]);
+		boolean cautions = proposal && !STRENGTH_WITHHOLD.equals(clauses[leadIndex]);
 		List<String> lines = new ArrayList<String>(order.size());
 		Map<SafetyWarning, String> substances = interactingSubstancesOfSharedOrders(findings);
 		// On a screen, what is true of every contraindication line — about a medication she already takes, with no
@@ -3828,14 +3842,14 @@ public class DrugReferenceInjector {
 					: findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true,
 							substances.get(findings.get(i)), saidOnce));
 		}
-		SafetyWarning first = findings.get(order.get(0));
+		SafetyWarning first = findings.get(leadIndex);
 		if (proposal && lead == Lead.INTERACTS) {
 			// "Does it interact with her medications?" — every question admitted so has an interaction finding about the
 			// drug, so "Yes" is true of it, and the withholding call follows where a finding makes it (ADR Decision 181).
 			lines.add(0, "Yes — " + first.getDrug() + " interacts with this patient's active medications."
-					+ (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])
+					+ (STRENGTH_WITHHOLD.equals(clauses[leadIndex])
 							? " This module's drug-safety check found a reason to withhold it." : ""));
-		} else if (STRENGTH_WITHHOLD.equals(clauses[order.get(0)])) {
+		} else if (STRENGTH_WITHHOLD.equals(clauses[leadIndex])) {
 			lines.add(0, (lead == Lead.NOT_GIVE ? NEUTRAL_WITHHOLD_LEAD_OPENING : WITHHOLD_LEAD_OPENING) + first.getDrug()
 					+ WITHHOLD_LEAD_CLOSING);
 		} else if (cautions) {
@@ -4021,8 +4035,10 @@ public class DrugReferenceInjector {
 			Map<String, Integer> herOrderRecords, boolean proposal, String interactingSubstance, boolean saidOnce) {
 		boolean currentMedicationContraindication = isCurrentMedicationContraindication(finding);
 		boolean onceForThis = saidOnce && SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
+		// A recorded allergy to the drug itself has no severity to rate, and beside rated lines the sentence read as the
+		// least of them (ADR Decision 192). The record the model reads keeps it.
 		String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
-				orderRecordNumbers, true, onceForThis)
+				orderRecordNumbers, true, onceForThis || finding.isARecordedAllergyToItsOwnDrug())
 				+ (currentMedicationContraindication && !onceForThis ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 				+ (interactingSubstance == null ? "" : INTERACTING_SUBSTANCE_OPENING + interactingSubstance + ".")
 				+ " [" + number + "]";
@@ -4032,6 +4048,13 @@ public class DrugReferenceInjector {
 	/** How a composed line names the substance of a combination order it is about — see {@link
 	 *  #interactingSubstancesOfSharedOrders}. */
 	static final String INTERACTING_SUBSTANCE_OPENING = " The interacting substance is ";
+
+	/** A recorded allergy whose name names the drug the question proposes — not one of her own orders (ADR Decision
+	 *  192). */
+	private static boolean isAnAllergyToTheDrugProposed(SafetyWarning finding) {
+		return SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType()) && finding.isARecordedAllergyToItsOwnDrug()
+				&& !finding.isAboutACurrentMedication();
+	}
 
 	/** A contraindication about an order of hers that has started — the finding a composed line names with
 	 *  {@link #COMPOSED_CURRENT_MEDICATION_REFERENT}. */

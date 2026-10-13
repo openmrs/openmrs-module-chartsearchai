@@ -1949,13 +1949,13 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 	}
 
 	/**
-	 * The sentence under the "No" is the finding that licensed it. A recorded allergy to the proposed
-	 * drug states the same withholding clause as the Major interaction, and the drug-in-play arm
-	 * appends its contraindications first — but a contraindication never decides the module's "No"
-	 * (ADR Decision 108), so it must not be what reads as the reason for it. It is still stated, after.
+	 * A contraindication never decides the module's "No" (ADR Decision 108): the Major interaction licenses it, and
+	 * without one the model answers. But a recorded allergy to the very drug proposed is the most direct reason, so the
+	 * line under the "No" is that allergy, without "No severity is rated", and the interaction that licensed the "No"
+	 * follows it (ADR Decision 192, on the owner's decision 2026-10-13, which reversed this case's earlier order).
 	 */
 	@Test
-	public void theLineUnderTheNoIsTheInteractionThatLicensedIt() {
+	public void theLineUnderTheNoIsTheAllergyToTheDrugThenTheInteractionThatLicensedIt() {
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Ibuprofen");
 		List<Finding> findings = findingsInThePromptFor(PROPOSAL);
 		Finding interaction = null;
@@ -1981,12 +1981,12 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertEquals(0, provider.calls, "the Major interaction still licenses the module's answer");
 		String[] lines = answer.getAnswer().split("\n");
 		assertTrue(lines[0].startsWith(DrugReferenceInjector.WITHHOLD_LEAD_OPENING), answer.getAnswer());
+		assertEquals("The patient has a recorded allergy to Ibuprofen. [" + allergy.index + "]", lines[1],
+				"the sentence under the \"No\" is the allergy to the drug proposed: " + answer.getAnswer());
 		assertEquals("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. Ibuprofen is in the same "
 				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — possible additive or "
-				+ "duplicate-class therapy. [" + interaction.index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", lines[1],
-				"the sentence under the \"No\" is the interaction that licensed it: " + answer.getAnswer());
-		assertTrue(answer.getAnswer().contains("\nThe patient has a recorded allergy to Ibuprofen. No severity is rated "
-				+ "for this finding. [" + allergy.index + "]"), "and the allergy is still stated: " + answer.getAnswer());
+				+ "duplicate-class therapy. [" + interaction.index + "] [" + recordOf(answer, ASPIRIN_ORDER_UUID) + "]", lines[2],
+				"then the interaction that licensed it: " + answer.getAnswer());
 	}
 
 	/**

@@ -1,0 +1,163 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter slice for ADR Decision 192: clarithromycin proposed beside her methylprednisolone and prednisone orders. Rows are field-for-field their rows in the shipped ddi-knowledge-base.json, in KB order, and the interaction rows are every KB pair among these three drugs, with the mechanisms they cite."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "3270": {
+   "text": "Coadministration with inhibitors of CYP450 3A4 may increase the plasma concentrations and pharmacologic effects of corticosteroids, which are primarily metabolized by the isoenzyme. The interaction has been reported with potent inhibitors such as clarithromycin, erythromycin, itraconazole, nefazodone, cobicistat, and ritonavir during concomitant use of various corticosteroids, including inhaled, nasal, and ophthalmic formulations. Systemic corticosteroid adverse effects may occur following intensive or long-term continuous ophthalmic corticosteroid therapy. Cushing's syndrome and adrenal insufficiency have been attributed to the interaction.",
+   "categories": [
+    "metabolism"
+   ]
+  },
+  "4717": {
+   "text": "Coadministration with potent inhibitors of CYP450 3A4 may significantly increase the plasma concentrations of methylprednisolone. Various CYP450 3A4 inhibitors including clarithromycin, diltiazem, erythromycin, itraconazole, ketoconazole, mibefradil, nefazodone, and troleandomycin have been shown to increase methylprednisolone systemic exposure (AUC) by approximately 100% to 300%, with increased adrenal suppression as evidenced by reduced plasma cortisol levels.",
+   "categories": [
+    "metabolism"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1191",
+   "name": "Methylprednisolone",
+   "rxcui": "6902",
+   "rxnorm_name": "methylprednisolone",
+   "drugbank_id": "DB00959",
+   "atc": [
+    "D07AA01",
+    "D10AA02",
+    "H02AB04"
+   ],
+   "brand_names": [
+    "Depo-Medrol",
+    "HybriSil",
+    "Medrol",
+    "Solu-Medrol"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "105069",
+     "uuid": "105069AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone / neomycin"
+    },
+    {
+     "code": "70035",
+     "uuid": "70035AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "6 alpha-methylprednisolone sodium hemisuccinate"
+    },
+    {
+     "code": "79743",
+     "uuid": "79743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone"
+    },
+    {
+     "code": "79744",
+     "uuid": "79744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone aceponate"
+    },
+    {
+     "code": "79745",
+     "uuid": "79745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone acetate"
+    },
+    {
+     "code": "79746",
+     "uuid": "79746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone sodium phosphate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1515",
+   "name": "Prednisone",
+   "rxcui": "8640",
+   "rxnorm_name": "prednisone",
+   "drugbank_id": "DB00635",
+   "atc": [
+    "A07EA03",
+    "H02AB07"
+   ],
+   "brand_names": [
+    "Deltasone",
+    "Rayos"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "82453",
+     "uuid": "82453AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisone"
+    }
+   ]
+  },
+  {
+   "id": "DDInter393",
+   "name": "Clarithromycin",
+   "rxcui": "21212",
+   "rxnorm_name": "clarithromycin",
+   "drugbank_id": "DB01211",
+   "atc": [
+    "J01FA09"
+   ],
+   "brand_names": [
+    "Biaxin"
+   ],
+   "international_names": [],
+   "abbreviations": [],
+   "ciel": [
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "73498",
+     "uuid": "73498AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clarithromycin"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1191",
+   "DDInter1515",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1191",
+   "DDInter393",
+   "Major",
+   "4717"
+  ],
+  [
+   "DDInter1515",
+   "DDInter393",
+   "Moderate",
+   "3270"
+  ]
+ ]
+}

@@ -172,7 +172,8 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		// Review round 2 of PR #559: a module-composed answer (ADR Decision 113) follows a contraindication
 		// about her own medication with the referent "This finding is about a medication this patient is
 		// already taking." — said of the Rifampicin she has not started, one sentence after its chip says
-		// so. The started order's line beside it is the other value, and keeps the referent.
+		// so. The started order's line beside it is the other value, and keeps the referent. Neither says "No severity is
+		// rated": a recorded allergy to the drug itself has none to rate (ADR Decision 192).
 		DrugReferenceTestSupport.recordFreeTextAllergy(patient, 88, "Rifampicin");
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_ANSWER_FROM_FINDINGS, "true");
@@ -183,10 +184,10 @@ public class LlmInferenceServiceScheduledOrderContextTest extends BaseModuleCont
 		List<String> lines = Arrays.asList(answer.getAnswer().split("\n"));
 		assertTrue(lines.stream().anyMatch(l -> l.matches(Pattern.quote("The patient has a recorded allergy to "
 				+ "Rifampicin (rifampin). Her order for Rifampicin (rifampin) has not started: it is " + STARTS
-				+ ". No severity is rated for this finding.") + " \\[\\d+\\]")),
+				+ ".") + " \\[\\d+\\]")),
 				"the scheduled order's line says it has not started and no more: " + answer.getAnswer());
 		assertTrue(lines.stream().anyMatch(l -> l.matches(Pattern.quote("The patient has a recorded allergy to "
-				+ "Acetylsalicylic acid (aspirin). No severity is rated for this finding. This finding is about a "
+				+ "Acetylsalicylic acid (aspirin). This finding is about a "
 				+ "medication this patient is already taking.") + " \\[\\d+\\]")),
 				"the started order's line keeps its referent: " + answer.getAnswer());
 	}

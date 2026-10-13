@@ -15933,3 +15933,32 @@ line keeps both. The record the model reads is unchanged.
 
 Pinned by `ScreenSharedMechanismContextTest` (the grid; a not-a-grid slice, red with the cross-pair count removed) and
 `ScreenInteractionsOnlyContextTest.aQuestionAboutSafetyStillStatesThem` (the count).
+
+## Decision 192: Under a proposal's "No", a recorded allergy to the drug proposed is the first line, and no allergy line says it has no severity
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It changes the line order
+[Decision 108](#decision-108-a-drug-safety-question-the-module-resolved-itself-is-answered-from-its-own-findings-and-the-model-is-not-asked-to-restate-them)
+gave a proposal's composed "No", and nothing about what licenses it.
+
+### Context
+
+On the 3.7.1 standalone Sarah Taylor's *"Is it safe to start her on clarithromycin?"* was answered *"No — this module's
+drug-safety check found a reason to withhold Clarithromycin."*, then two Major interactions, then *"The patient has a
+recorded allergy to Clarithromycin. No severity is rated for this finding."*, then a Moderate. A recorded allergy to the
+very drug proposed is the most direct reason not to give it, and the one line saying it had no severity, between two
+Majors, read as the least of them. The order was deliberate — a contraindication never decides the module's "No",
+because curated rule tokens drove false ones — but this finding is the allergen arm's identity match, which
+[Decision 188](#decision-188-an-allergy-answer-states-only-the-orders-her-records-directly-conflict-with) already states
+as a direct conflict.
+
+### The decision
+
+`DrugReferenceInjector.composeFromFindings` decides the lead off the finding it always did, then, under a proposal's
+"No", moves every recorded allergy whose name names the drug proposed (`SafetyWarning.isARecordedAllergyToItsOwnDrug`,
+about no order of hers) to the first lines. A composed line for such an allergy leaves out `FINDING_NO_SEVERITY`, on a
+proposal or a screen: an allergy to the drug itself has no severity to rate. The record the model reads keeps it. A
+proposal whose only withholding finding is such an allergy is still the model's, as before.
+
+`LlmInferenceServiceAnswerFromFindingsContextTest.theLineUnderTheNoIsTheInteractionThatLicensedIt` pinned the earlier
+order and is now `theLineUnderTheNoIsTheAllergyToTheDrugThenTheInteractionThatLicensedIt`. Pinned by
+`ProposalOwnAllergyLineContextTest`, over a verbatim slice of the shipped knowledge base.

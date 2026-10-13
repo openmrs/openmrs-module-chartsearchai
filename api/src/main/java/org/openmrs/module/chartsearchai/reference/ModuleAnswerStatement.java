@@ -41,7 +41,12 @@ public final class ModuleAnswerStatement {
 		List<SafetyWarning> marked = new ArrayList<SafetyWarning>(warnings.size());
 		for (SafetyWarning chip : warnings) {
 			String detail = chip.getDetail() == null ? "" : chip.getDetail().trim();
-			marked.add(!detail.isEmpty() && composed.contains(detail) ? chip.asStatedInTheAnswer() : chip);
+			// The finding that a drug she takes is already in her orders (issue #548) is what an answer about her own
+			// medication opens by saying — "Ibuprofen is one of this patient's active medications (Advil 400mg)" — in
+			// words of its own, its chip's "adding it would duplicate that order" being a proposal's (ADR Decision 194).
+			boolean leadStatesIt = chip.alreadyOrdered() != null && chip.getDrug() != null
+					&& composed.startsWith(chip.getDrug() + DrugReferenceInjector.OWN_MEDICATION_LEAD);
+			marked.add(!detail.isEmpty() && composed.contains(detail) || leadStatesIt ? chip.asStatedInTheAnswer() : chip);
 		}
 		return Collections.unmodifiableList(marked);
 	}

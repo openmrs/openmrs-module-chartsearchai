@@ -2383,6 +2383,17 @@ public class LlmInferenceServiceAnswerFromFindingsContextTest extends BaseModule
 		assertFalse(answer.getAnswer().contains(DrugReferenceInjector.WITHHOLD_LEAD_OPENING.trim())
 				|| answer.getAnswer().contains("withhold") || answer.getAnswer().contains("adding it"),
 				"never a proposal's clause about her own drug (issue #402): " + answer.getAnswer());
+		// The finding that the drug is already in her order is what the lead states, so its chip — "adding it would
+		// duplicate that order" — is published as stated, and drawn as read rather than beside the answer (ADR Decision
+		// 194).
+		boolean sawIt = false;
+		for (org.openmrs.module.chartsearchai.reference.SafetyWarning chip : answer.getSafetyWarnings()) {
+			if (chip.getDetail().contains("is already in active order")) {
+				sawIt = true;
+				assertTrue(chip.isStatedInTheAnswer(), "the lead states it: " + chip.getDetail());
+			}
+		}
+		assertTrue(sawIt, "precondition: the already-ordered chip is raised: " + answer.getSafetyWarnings());
 	}
 
 	/** A screen beside an order the data cannot identify is answered from the pairs it related and says that order

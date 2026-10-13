@@ -73,6 +73,19 @@ public class OwnMedicationSafetyContextTest extends BaseModuleContextSensitiveTe
 	}
 
 	@Test
+	public void anUnratedLineSaysNothingTheCountDoesNotSayOnce() throws IOException {
+		// Her dexamethasone shares an ATC class with her prednisone — a duplicate-therapy finding with no rating. The
+		// count says how many lines are unrated, once, and the line does not repeat it (ADR Decision 194).
+		String answer = answer("Is dexamethasone safe for her?");
+
+		assertNotNull(answer, "the module answers");
+		assertTrue(answer.split("\n")[0].endsWith(" interactions with this patient's other active medications, 1 of them "
+				+ "with no severity rated:"), "was: " + answer);
+		assertTrue(answer.contains("possible duplicate therapy. ["), "the class line ends with its marker: " + answer);
+		assertTrue(!answer.contains("No severity is rated"), "and no line repeats it: " + answer);
+	}
+
+	@Test
 	public void herOwnDrugWithNoInteractionIsLeftToTheModel() throws IOException {
 		// No finding relates it to another of her orders, and the module states findings, never a clearance.
 		assertEquals(null, answer("Is ibuprofen safe for her?", null,

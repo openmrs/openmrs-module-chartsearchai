@@ -15995,3 +15995,26 @@ now `aDrugSheAlreadyTakesIsAnsweredAsHerOwnMedicationAndNeverAsAProposal`, asser
 ### Residue
 
 The chip of the #548 finding still reads "adding it would duplicate that order" beside this answer.
+
+## Decision 194: An answer about her own medication states its already-ordered finding, and says once which lines carry no rating
+
+**Status: Accepted** (October 2026) — the owner's decision, 2026-10-13. It completes
+[Decision 193](#decision-193-a-safety-question-about-a-drug-she-already-takes-is-answered-by-the-module-as-her-own-medication).
+
+### Context
+
+Beside the module's answer to *"Is ibuprofen safe for her?"*, the issue #548 chip — *"Ibuprofen is already in active order
+Advil 400mg — adding it would duplicate that order"* — was still drawn in the main safety box, a proposal's sentence about
+a drug she takes. And the answer to *"Is dexamethasone safe for her?"* ended four duplicate-therapy lines with the same
+*"No severity is rated for this finding."*
+
+### The decision
+
+`ModuleAnswerStatement.markStated` also marks the chip carrying `SafetyWarning.alreadyOrdered` stated where the composed
+answer opens with that drug and `DrugReferenceInjector.OWN_MEDICATION_LEAD` — the lead states that the drug is in her
+orders, in words of its own — so a client draws it as read. And `composeAboutHerOwnMedication` counts the interactions
+that carry no rating and says so once in the count — *"7 interactions with this patient's other active medications, 4 of
+them with no severity rated"* — leaving `FINDING_NO_SEVERITY` off those lines.
+
+Pinned by `OwnMedicationSafetyContextTest.anUnratedLineSaysNothingTheCountDoesNotSayOnce` and
+`LlmInferenceServiceAnswerFromFindingsContextTest.aDrugSheAlreadyTakesIsAnsweredAsHerOwnMedicationAndNeverAsAProposal`.

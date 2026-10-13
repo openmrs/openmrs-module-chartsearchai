@@ -4043,12 +4043,21 @@ public class DrugReferenceInjector {
 	 *  instead ({@link #contraindicationsAllCurrentAndUnrated}, ADR Decision 191). */
 	private static String findingLine(SafetyWarning finding, Integer number, Map<String, Integer> orderRecordNumbers,
 			Map<String, Integer> herOrderRecords, boolean proposal, String interactingSubstance, boolean saidOnce) {
+		return findingLine(finding, number, orderRecordNumbers, herOrderRecords, proposal, interactingSubstance, saidOnce,
+				false);
+	}
+
+	/** As above; {@code severitySaidOnce} leaves out {@link #FINDING_NO_SEVERITY} on this line whatever its type, the
+	 *  answer's count having said it (ADR Decision 194). */
+	private static String findingLine(SafetyWarning finding, Integer number, Map<String, Integer> orderRecordNumbers,
+			Map<String, Integer> herOrderRecords, boolean proposal, String interactingSubstance, boolean saidOnce,
+			boolean severitySaidOnce) {
 		boolean currentMedicationContraindication = isCurrentMedicationContraindication(finding);
 		boolean onceForThis = saidOnce && SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType());
 		// A recorded allergy to the drug itself has no severity to rate, and beside rated lines the sentence read as the
 		// least of them (ADR Decision 192). The record the model reads keeps it.
 		String line = findingBody(finding, proposal ? briefDetail(finding) : finding.getDetail(),
-				orderRecordNumbers, true, onceForThis || finding.isARecordedAllergyToItsOwnDrug())
+				orderRecordNumbers, true, onceForThis || severitySaidOnce || finding.isARecordedAllergyToItsOwnDrug())
 				+ (currentMedicationContraindication && !onceForThis ? COMPOSED_CURRENT_MEDICATION_REFERENT : "")
 				+ (interactingSubstance == null ? "" : INTERACTING_SUBSTANCE_OPENING + interactingSubstance + ".")
 				+ " [" + number + "]";
@@ -4150,9 +4159,22 @@ public class DrugReferenceInjector {
 		// the lines say neither (ADR Decision 191's rule).
 		boolean saidOnce = contraindicationsAllCurrentAndUnrated(statedFindings);
 		Collections.sort(stated, Comparator.comparingInt(rank::get));
+		// How many of the interactions carry no rating, said once here and not on each line (ADR Decision 194).
+		int unrated = 0;
+		for (Integer i : stated) {
+			SafetyWarning finding = findings.get(i);
+			if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType()) && !finding.statesOrdersSharingASubstance()
+					&& statesNoSeverity(finding)) {
+				unrated += Math.max(1, finding.namedPartners().size());
+			}
+		}
+		boolean unratedSaidOnce = unrated > 0;
 		List<String> counts = new ArrayList<String>();
 		counts.add(interactions + (interactions == 1 ? " interaction" : " interactions")
-				+ " with this patient's other active medications");
+				+ " with this patient's other active medications"
+				+ (unrated == 0 ? ""
+						: unrated == interactions ? (interactions == 1 ? ", with no severity rated" : ", none with a severity rated")
+								: ", " + unrated + " of them with no severity rated"));
 		if (contraindications > 0) {
 			counts.add(contraindications + (contraindications == 1 ? " contraindication" : " contraindications")
 					+ (!saidOnce ? "" : contraindications == 1 ? ", with no severity rated" : ", none with a severity rated"));
@@ -4161,13 +4183,19 @@ public class DrugReferenceInjector {
 			counts.add("its substance in more than one of this patient's orders");
 		}
 		List<String> lines = new ArrayList<String>();
-		lines.add(drug + " is one of this patient's active medications" + orders + ". " + String.join(", and ", counts) + ":");
+		lines.add(drug + OWN_MEDICATION_LEAD + orders + ". " + String.join(", and ", counts) + ":");
 		for (Integer i : stated) {
-			lines.add(findingLine(findings.get(i), numbers.get(i), orderRecordNumbers, herOrderRecords, true, null, saidOnce));
+			SafetyWarning finding = findings.get(i);
+			lines.add(findingLine(finding, numbers.get(i), orderRecordNumbers, herOrderRecords, true, null, saidOnce,
+					unratedSaidOnce && SafetyWarning.TYPE_INTERACTION.equals(finding.getType())));
 		}
 		lines.add(contraindications > 0 ? SCREEN_SCOPE : BELOW_FLOOR_SCOPE);
 		return String.join("\n", lines);
 	}
+
+	/** What follows the drug's name in the lead of {@link #composeAboutHerOwnMedication} — read by
+	 *  {@link ModuleAnswerStatement} too, which marks the finding it states (ADR Decision 194). */
+	static final String OWN_MEDICATION_LEAD = " is one of this patient's active medications";
 
 	/** A recorded allergy whose name names the drug the question proposes — not one of her own orders (ADR Decision
 	 *  192). */
